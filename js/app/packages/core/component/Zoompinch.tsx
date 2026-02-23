@@ -1,62 +1,66 @@
-import { Zoompinch } from '@zoompinch/core';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Zoompinch as ZoompinchEngine } from '@zoompinch/core';
+import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 
-export type ZoompinchOptions = {
+export type ZoompinchHandle = {
+  engine: ZoompinchEngine;
+  wrapperElement: HTMLDivElement;
+};
+
+export type ZoompinchProps = {
+  handle?: (handle: ZoompinchHandle | undefined) => void;
   minScale?: number;
   maxScale?: number;
   clampBounds?: boolean;
   rotation?: boolean;
   /** Called on every transform update. */
-  onUpdate?: (engine: Zoompinch) => void;
+  onUpdate?: (engine: ZoompinchEngine) => void;
   /**
-   * Override the wheel handler. Defaults to forwarding the event to the engine,
-   * which zooms when ctrlKey is held and pans otherwise (trackpad-friendly).
-   * Override to e.g. always zoom regardless of ctrlKey.
+   * Override the wheel handler. Defaults to forwarding to the engine, which
+   * zooms when ctrlKey is held and pans otherwise (trackpad-friendly).
    */
-  onWheel?: (e: WheelEvent, engine: Zoompinch) => void;
+  onWheel?: (e: WheelEvent, engine: ZoompinchEngine) => void;
   /**
-   * Override individual touch handlers. Each defaults to forwarding the event
-   * directly to the engine. Useful for e.g. swipe-to-navigate at scale 1.
-   * The engine is passed as the second argument so callers can fall back to it.
+   * Override individual touch handlers. Each defaults to forwarding directly
+   * to the engine. Useful for intercepting swipes for gallery navigation.
    */
   touch?: {
-    onStart?: (e: TouchEvent, engine: Zoompinch) => void;
-    onWindowMove?: (e: TouchEvent, engine: Zoompinch) => void;
-    onWindowEnd?: (e: TouchEvent, engine: Zoompinch) => void;
+    onStart?: (e: TouchEvent, engine: ZoompinchEngine) => void;
+    onWindowMove?: (e: TouchEvent, engine: ZoompinchEngine) => void;
+    onWindowEnd?: (e: TouchEvent, engine: ZoompinchEngine) => void;
   };
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
 };
 
 /**
- * SolidJS primitive that creates and manages a Zoompinch instance on a wrapper
- * element. Wires mouse, wheel, touch, and Safari gesture event handlers and
- * cleans up on unmount.
+ * SolidJS component that wraps a Zoompinch engine. Renders a wrapper div with
+ * a .canvas child and wires all mouse, wheel, touch, and gesture event handlers.
  *
- * The wrapper element must contain a child with class "canvas" (Zoompinch
- * targets it via querySelector).
- *
- * Returns a signal accessor for the current engine instance.
+ * Exposes an imperative handle via `ref` for calling `applyTransform` etc.
+ * The handle is set when the engine initialises and cleared on unmount.
  */
-export function createZoompinch(
-  getWrapper: Accessor<HTMLElement | undefined>,
-  options: ZoompinchOptions = {}
-): Accessor<Zoompinch | null> {
-  const [engine, setEngine] = createSignal<Zoompinch | null>(null);
+export function Zoompinch(props: ZoompinchProps) {
+  const [wrapperRef, setWrapperRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  // Snapshot stable config at component init — not reactive.
+  // The engine doesn't support hot-reloading options, so this is intentional.
+  const minScale = props.minScale ?? 1;
+  const maxScale = props.maxScale ?? 5;
+  const clampBounds = props.clampBounds ?? false;
+  const rotation = props.rotation ?? false;
+  const onUpdate = props.onUpdate;
+  const onWheelOverride = props.onWheel;
+  const touch = props.touch ?? {};
+  const ref = props.handle;
 
   createEffect(() => {
-    const wrapper = getWrapper();
+    const wrapper = wrapperRef();
     if (!wrapper) return;
 
-    const {
-      minScale = 1,
-      maxScale = 5,
-      clampBounds = false,
-      rotation = false,
-      onUpdate,
-      onWheel: onWheelOverride,
-      touch = {},
-    } = options;
-
-    const e = new Zoompinch(
+    const e = new ZoompinchEngine(
       wrapper,
       { top: 0, right: 0, bottom: 0, left: 0 },
       0, // translateX
@@ -78,15 +82,10 @@ export function createZoompinch(
       e.wrapperBounds = wrapper.getBoundingClientRect();
     }
 
-    e.addEventListener('init', () => {
-      e.applyTransform(1, [0.5, 0.5], [0.5, 0.5]);
-    });
-
-    if (onUpdate) {
-      e.addEventListener('update', () => onUpdate(e));
-    }
-
-    setEngine(e);
+    e.addEventListener('init', () =>
+      e.applyTransform(1, [0.5, 0.5], [0.5, 0.5])
+    );
+    if (onUpdate) e.addEventListener('update', () => onUpdate(e));
 
     // Mouse pan (mousedown on wrapper, move/up on window)
     const handleMouseDown = (ev: MouseEvent) => e.handleMousedown(ev);
@@ -111,7 +110,7 @@ export function createZoompinch(
     window.addEventListener('gesturechange', handleGestureChange);
     window.addEventListener('gestureend', handleGestureEnd);
 
-    // Touch — override-able so callers can intercept for e.g. swipe navigation
+    // Touch — overrideable for swipe navigation etc.
     const onTouchStart = touch.onStart ?? ((ev) => e.handleTouchstart(ev));
     const onWindowTouchMove =
       touch.onWindowMove ?? ((ev) => e.handleTouchmove(ev));
@@ -128,9 +127,11 @@ export function createZoompinch(
       passive: true,
     });
 
+    ref?.({ engine: e, wrapperElement: wrapper });
+
     onCleanup(() => {
+      ref?.(undefined);
       e.destroy();
-      setEngine(null);
       wrapper.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
@@ -144,5 +145,15 @@ export function createZoompinch(
     });
   });
 
-  return engine;
+  return (
+    <div
+      ref={setWrapperRef}
+      class={props.class}
+      style={{ ...props.style, 'touch-action': 'none' }}
+    >
+      <div class="canvas w-full h-full will-change-transform">
+        {props.children}
+      </div>
+    </div>
+  );
 }

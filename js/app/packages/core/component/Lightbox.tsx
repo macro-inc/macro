@@ -2,7 +2,6 @@ import * as stackingContext from '@core/constant/stackingContext';
 import { cn } from '@ui/utils/classname';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createZoompinch } from '@core/util/createZoompinch';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -13,6 +12,7 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   onCleanup,
@@ -22,6 +22,7 @@ import {
 import { platformFetch } from '../util/platformFetch';
 import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { toast } from './Toast/Toast';
+import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
 
 type LightboxProps = {
   // Current image to display
@@ -39,20 +40,17 @@ type LightboxProps = {
 };
 
 export function Lightbox(props: LightboxProps) {
-  const [wrapperRef, setWrapperRef] = createSignal<
-    HTMLDivElement | undefined
+  const [zoompinchHandle, setZoompinchHandle] = createSignal<
+    ZoompinchHandle | undefined
   >();
   const [isToolbarVisible, setIsToolbarVisible] = createSignal(false);
-  let hideToolbarTimeout: number | undefined;
+  let hideToolbarTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const handleMouseMove = () => {
     if (isTouchDevice()) return;
     setIsToolbarVisible(true);
     if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = setTimeout(
-      () => setIsToolbarVisible(false),
-      1000
-    ) as unknown as number;
+    hideToolbarTimeout = setTimeout(() => setIsToolbarVisible(false), 1000);
   };
 
   const fetchBlob = async (): Promise<Blob | undefined> => {
@@ -113,22 +111,14 @@ export function Lightbox(props: LightboxProps) {
     }
   };
 
-  // Tracks whether the user is mid-drag (used for cursor and click-to-zoom).
-  let isDragging = false;
-
-  const updateCursor = (engine: {
-    scale: number;
-    canvasElement: HTMLElement;
-  }) => {
-    const canvas = engine.canvasElement;
-    if (isDragging && engine.scale > 1.01) {
-      canvas.style.cursor = 'grab';
-    } else if (engine.scale > 1.01) {
-      canvas.style.cursor = 'zoom-out';
-    } else {
-      canvas.style.cursor = 'zoom-in';
-    }
-  };
+  // Reactive cursor state — drives the cursor style on the Zoompinch wrapper.
+  const [isDragging, setIsDragging] = createSignal(false);
+  const [currentScale, setCurrentScale] = createSignal(1);
+  const cursor = createMemo(() => {
+    if (isDragging() && currentScale() > 1.01) return 'grab';
+    if (currentScale() > 1.01) return 'zoom-out';
+    return 'zoom-in';
+  });
 
   // Swipe-to-navigate state (used inside the touch override callbacks below)
   let swipeTouchStartX = 0;
@@ -136,70 +126,69 @@ export function Lightbox(props: LightboxProps) {
   let isSwiping = false;
   let zoompinchHandlingTouch = false;
 
-  const getEngine = createZoompinch(wrapperRef, {
-    clampBounds: true,
-    onUpdate: (engine) => updateCursor(engine),
-    touch: {
-      // At scale 1 on mobile with gallery nav: intercept single-finger swipes
-      // for navigation. Otherwise fall through to zoompinch.
-      onStart: (e, engine) => {
-        const hasNav = props.onPrevious != null || props.onNext != null;
-        const doSwipeDetection =
-          isMobile() &&
-          hasNav &&
-          e.touches.length === 1 &&
-          engine.scale <= 1.01;
-        if (doSwipeDetection) {
-          swipeTouchStartX = e.touches[0].clientX;
-          isSwiping = false;
-          zoompinchHandlingTouch = false;
-        } else {
-          engine.handleTouchstart(e);
-          zoompinchHandlingTouch = true;
-        }
-      },
-      onWindowMove: (e, engine) => {
-        if (zoompinchHandlingTouch) {
-          engine.handleTouchmove(e);
-          return;
-        }
-        // Second finger appeared mid-gesture: switch to zoompinch
-        if (e.touches.length > 1) {
-          engine.handleTouchstart(e);
-          zoompinchHandlingTouch = true;
-          isSwiping = false;
-          return;
-        }
-        swipeTouchEndX = e.touches[0].clientX;
-        if (Math.abs(swipeTouchStartX - e.touches[0].clientX) > 30)
-          isSwiping = true;
-        if (isSwiping) e.preventDefault();
-      },
-      onWindowEnd: (e, engine) => {
-        if (zoompinchHandlingTouch) {
-          engine.handleTouchend(e);
-          zoompinchHandlingTouch = false;
-          return;
-        }
-        if (isSwiping && engine.scale <= 1.01) {
-          const diff = swipeTouchStartX - swipeTouchEndX;
-          if (Math.abs(diff) > 50) {
-            if (diff > 0) props.onNext?.();
-            else props.onPrevious?.();
-          }
-        }
-        isSwiping = false;
-        swipeTouchStartX = 0;
-        swipeTouchEndX = 0;
-        zoompinchHandlingTouch = false;
-      },
-    },
-  });
+  // Touch override handlers for swipe-to-navigate
+  const touchOnStart = (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
+    const hasNav = props.onPrevious != null || props.onNext != null;
+    const doSwipeDetection =
+      isMobile() && hasNav && e.touches.length === 1 && engine.scale <= 1.01;
+    if (doSwipeDetection) {
+      swipeTouchStartX = e.touches[0].clientX;
+      isSwiping = false;
+      zoompinchHandlingTouch = false;
+    } else {
+      engine.handleTouchstart(e);
+      zoompinchHandlingTouch = true;
+    }
+  };
 
-  // Keyboard nav + toolbar fade — active while the image wrapper is mounted
+  const touchOnWindowMove = (
+    e: TouchEvent,
+    engine: ZoompinchHandle['engine']
+  ) => {
+    if (zoompinchHandlingTouch) {
+      engine.handleTouchmove(e);
+      return;
+    }
+    // Second finger appeared mid-gesture: switch to zoompinch
+    if (e.touches.length > 1) {
+      engine.handleTouchstart(e);
+      zoompinchHandlingTouch = true;
+      isSwiping = false;
+      return;
+    }
+    swipeTouchEndX = e.touches[0].clientX;
+    if (Math.abs(swipeTouchStartX - e.touches[0].clientX) > 30)
+      isSwiping = true;
+    if (isSwiping) e.preventDefault();
+  };
+
+  const touchOnWindowEnd = (
+    e: TouchEvent,
+    engine: ZoompinchHandle['engine']
+  ) => {
+    if (zoompinchHandlingTouch) {
+      engine.handleTouchend(e);
+      zoompinchHandlingTouch = false;
+      return;
+    }
+    if (isSwiping && engine.scale <= 1.01) {
+      const diff = swipeTouchStartX - swipeTouchEndX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) props.onNext?.();
+        else props.onPrevious?.();
+      }
+    }
+    isSwiping = false;
+    swipeTouchStartX = 0;
+    swipeTouchEndX = 0;
+    zoompinchHandlingTouch = false;
+  };
+
+  // Keyboard nav + toolbar fade — active while the Zoompinch handle is set
   createEffect(() => {
-    const wrapper = wrapperRef();
-    if (!wrapper) return;
+    const handle = zoompinchHandle();
+    if (!handle) return;
+    const { engine, wrapperElement: wrapper } = handle;
 
     const hasNav = props.onPrevious != null || props.onNext != null;
 
@@ -230,30 +219,24 @@ export function Lightbox(props: LightboxProps) {
         isMouseDown = true;
         mouseDownX = e.clientX;
         mouseDownY = e.clientY;
-        isDragging = false;
+        setIsDragging(false);
       };
       const handleWindowMouseMove = (e: MouseEvent) => {
         if (!isMouseDown) return;
         if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > 5) {
-          isDragging = true;
+          setIsDragging(true);
         }
       };
       const handleWindowMouseUp = () => {
         isMouseDown = false;
         // Delay reset so the click event (which fires after mouseup) can still
         // read isDragging=true and suppress the zoom-out action.
-        setTimeout(() => {
-          isDragging = false;
-          const engine = getEngine();
-          if (engine) updateCursor(engine);
-        }, 0);
+        setTimeout(() => setIsDragging(false), 0);
       };
 
       // Click-to-zoom: zoom in at cursor position, or reset if already zoomed
       const handleClick = (e: MouseEvent) => {
-        if (isDragging) return;
-        const engine = getEngine();
-        if (!engine) return;
+        if (isDragging()) return;
         const b = engine.wrapperBounds;
         const relX = (e.clientX - b.x) / b.width;
         const relY = (e.clientY - b.y) / b.height;
@@ -288,7 +271,11 @@ export function Lightbox(props: LightboxProps) {
   // Reset zoom when navigating to a different image.
   createEffect(() => {
     props.src();
-    untrack(() => getEngine())?.applyTransform(1, [0.5, 0.5], [0.5, 0.5]);
+    untrack(() => zoompinchHandle())?.engine.applyTransform(
+      1,
+      [0.5, 0.5],
+      [0.5, 0.5]
+    );
   });
 
   const navButtonClass =
@@ -388,21 +375,25 @@ export function Lightbox(props: LightboxProps) {
               </div>
             }
           >
-            {/* Zoompinch wrapper — must contain a .canvas child */}
-            <div
-              ref={(el) => setWrapperRef(el)}
+            <Zoompinch
+              handle={setZoompinchHandle}
+              clampBounds
+              onUpdate={(engine) => setCurrentScale(engine.scale)}
+              touch={{
+                onStart: touchOnStart,
+                onWindowMove: touchOnWindowMove,
+                onWindowEnd: touchOnWindowEnd,
+              }}
               class="w-full h-full relative overflow-hidden rounded-2xl"
-              style={{ 'touch-action': 'none' }}
+              style={{ cursor: cursor() }}
             >
-              <div class="canvas w-full h-full will-change-transform">
-                <img
-                  class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
-                  style={{ '-webkit-touch-callout': 'none' }}
-                  src={props.src()}
-                  alt="preview"
-                />
-              </div>
-            </div>
+              <img
+                class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
+                style={{ '-webkit-touch-callout': 'none' }}
+                src={props.src()}
+                alt="preview"
+              />
+            </Zoompinch>
           </Show>
         </div>
       </Dialog.Content>
