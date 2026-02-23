@@ -1,50 +1,114 @@
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { createSignal } from 'solid-js';
 import { attributesToSelector } from './attributeToSelector';
 
-let previouslyFocusedElement = document.activeElement;
-export const createControlledOpenSignal = (value?: boolean) => {
+const activeFocusOwners = new Set<string>();
+let rootFocusElement: Element | null = null;
+let ownerIdCounter = 0;
+let pendingFocusReturn: (() => void) | null = null;
+
+function generateOwnerId(prefix?: string): string {
+  return `${prefix ?? 'menu'}-${++ownerIdCounter}`;
+}
+
+function acquireFocusLock(id: string): void {
+  if (pendingFocusReturn) {
+    pendingFocusReturn = null;
+  }
+
+  const wasEmpty = activeFocusOwners.size === 0;
+
+  if (wasEmpty && rootFocusElement === null) {
+    rootFocusElement = document.activeElement;
+  }
+  activeFocusOwners.add(id);
+}
+
+function releaseFocusLock(id: string, shouldReturnFocus: boolean): void {
+  activeFocusOwners.delete(id);
+
+  if (activeFocusOwners.size === 0 && rootFocusElement) {
+    if (shouldReturnFocus) {
+      // Defer focus return to allow another menu to acquire first
+      const elementToFocus = rootFocusElement;
+
+      pendingFocusReturn = () => {
+        // Only return focus if no one else has acquired
+        if (activeFocusOwners.size === 0) {
+          focusLast(elementToFocus);
+          rootFocusElement = null;
+        }
+        pendingFocusReturn = null;
+      };
+
+      // Use queueMicrotask so it runs after synchronous code but before setTimeout
+      queueMicrotask(() => {
+        if (pendingFocusReturn) {
+          pendingFocusReturn();
+        }
+      });
+    } else {
+      rootFocusElement = null;
+    }
+  }
+}
+
+// ============================================================================
+// Focus Restoration Utility
+// ============================================================================
+
+function focusLast(element: Element) {
+  // has to fire two tasks after to prevent Kobalte menus stealing focus and opening menu on up/down keypress
+  // i guess not - until it does once again
+  setTimeout(() => {
+    // Don't steal focus if another menu has acquired in the meantime
+    if (activeFocusOwners.size > 0) {
+      return;
+    }
+
+    if (element instanceof HTMLElement) {
+      if (element.isConnected) {
+        element.focus();
+      } else {
+        // This only works for restoring previously focused entity in UnifiedList, this a workaround previous focused Entity nodes being removed from the dom and focusing to body
+
+        // attributeToSelector still doesn't guarentee node is unique for all cases
+        // new rendered node might have different arribute value
+        const selector = attributesToSelector(element);
+        const fallbackElement = document.querySelector(selector) as HTMLElement;
+
+        if (fallbackElement instanceof HTMLElement) {
+          fallbackElement.focus();
+        }
+      }
+    }
+  });
+}
+
+export const createControlledOpenSignal = (
+  value?: boolean,
+  options?: {
+    id?: string;
+  }
+) => {
+  const ownerId = generateOwnerId(options?.id);
   const [createMenuOpen, setCreateMenuOpen] = createSignal(value ?? false);
 
   const customSetter = (
     next: boolean | ((prev: boolean) => boolean),
     shouldReturnFocusToPreviousElement = true
   ) => {
-    const activeElement = document.activeElement;
+    const prevOpen = createMenuOpen();
     const isOpenResult = setCreateMenuOpen(next);
 
-    if (isOpenResult) {
-      previouslyFocusedElement = activeElement;
-
-      if (DEV_MODE_ENV)
-        console.info('Borrowing focus from', previouslyFocusedElement);
+    if (!prevOpen && isOpenResult) {
+      acquireFocusLock(ownerId);
       return;
     }
 
-    if (!shouldReturnFocusToPreviousElement) return;
-
-    // has to fire two tasks after to prevent Kobalte menus stealing focus and opening menu on up/down keypress
-    // i guess not - until it does once again
-    setTimeout(() => {
-      if (previouslyFocusedElement instanceof HTMLElement) {
-        if (previouslyFocusedElement.isConnected) {
-          previouslyFocusedElement.focus();
-        } else {
-          // This only works for restoring previously focused entity in UnifiedList, this a workaround previous focused Entity nodes being removed from the dom and focusing to body
-
-          // attributeToSelector still doesn't guarentee node is unique for all cases
-          // new rendered node might have different arribute value
-          previouslyFocusedElement = document.querySelector(
-            attributesToSelector(previouslyFocusedElement)
-          ) as HTMLElement;
-          if (previouslyFocusedElement instanceof HTMLElement) {
-            previouslyFocusedElement.focus();
-            if (DEV_MODE_ENV)
-              console.info('returning focus to', previouslyFocusedElement);
-          }
-        }
-      }
-    });
+    if (prevOpen && !isOpenResult) {
+      releaseFocusLock(ownerId, shouldReturnFocusToPreviousElement);
+    }
   };
+
   return [createMenuOpen, customSetter] as const;
 };
