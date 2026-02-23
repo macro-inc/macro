@@ -44,9 +44,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   const copyLinkAction = makeCopyLinkAction();
 
-  const shareAction = makeShareAction({
-    userId: () => userId(),
-  });
+  const shareAction = makeShareAction();
 
   const canExecuteAny = (canExecute: (e: EntityData) => boolean) =>
     props.entities.some(canExecute);

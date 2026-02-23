@@ -52,9 +52,7 @@ export const useEntityActionHotkeys = (
 
   const copyLinkAction = makeCopyLinkAction();
 
-  const shareAction = makeShareAction({
-    userId: () => userId(),
-  });
+  const shareAction = makeShareAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     const selected = soup.selection.selected();
@@ -214,7 +212,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length > 0 && copyLinkAction.canExecute(entities[0]);
+      return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
@@ -232,12 +230,9 @@ export const useEntityActionHotkeys = (
       return true;
     },
     condition: () => {
-      return true;
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      // Show command for shareable entity types (like context menu pattern)
-      // Ownership is checked in the keyDownHandler
-      return entities.length > 0 && isShareableEntityType(entities[0].type);
+      return entities.length === 1 && isShareableEntityType(entities[0].type);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

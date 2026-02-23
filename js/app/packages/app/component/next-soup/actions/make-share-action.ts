@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -6,39 +5,17 @@ import {
   openGlobalShareModal,
 } from '@app/component/global-share-modal/GlobalShareModal';
 
-type MakeShareOptions = {
-  userId: () => string | undefined;
-};
-
-export const makeShareAction = (options: MakeShareOptions) => {
-  const { userId } = options;
-
+export const makeShareAction = () => {
   /**
    * Check if the share action can be executed
-   * Requires shareable type AND ownership
+   * Only requires shareable type - the modal handles permissions
    */
   const canExecute = (entity: EntityData): boolean => {
-    // Can only share entities of shareable types
-    if (!isShareableEntityType(entity.type)) {
-      return false;
-    }
-
-    // Only owners can share
-    return entity.ownerId === userId();
+    return isShareableEntityType(entity.type);
   };
 
-  const execute = async (entities: EntityData[], currentUserId?: string) => {
-    // Share only works on single entity
-    const entity = entities[0];
-    if (!entity) return;
-
+  const execute = async (entity: EntityData) => {
     if (!isShareableEntityType(entity.type)) {
-      toast.alert('Cannot share this item type');
-      return;
-    }
-
-    if (entity.ownerId !== currentUserId) {
-      toast.alert('Only the owner can share this item');
       return;
     }
 
@@ -48,7 +25,10 @@ export const makeShareAction = (options: MakeShareOptions) => {
   };
 
   const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
-    await execute(entities, userId());
+    const entity = entities[0];
+    if (!entity) return;
+
+    await execute(entity);
     // Don't clear selection or change focus for share
   };
 

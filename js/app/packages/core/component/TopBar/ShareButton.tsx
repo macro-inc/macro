@@ -76,7 +76,6 @@ import { ClippedPanel } from '../ClippedPanel';
 import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
-import { MENU_ITEM_CLASS } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
@@ -576,8 +575,8 @@ export function ShareModal(props: ShareModalProps) {
                   </div>
                   <div class="grid gap-3 text-ink text-sm select-none overflow-y-auto scrollbar-hidden pt-[52px] pb-3 px-3 max-h-[159px] h-min">
                     <Show when={props.owner}>
-                      <div class="contents rounded-md">
-                        <div class="flex items-centeroverflow-hidden">
+                      <div class="flex justify-between bg-panel">
+                        <div class="flex items-center gap-2 overflow-hidden">
                           <UserIcon
                             isDeleted={false}
                             id={props.owner!}
@@ -588,7 +587,9 @@ export function ShareModal(props: ShareModalProps) {
                           </div>
                         </div>
                         <div class="flex items-center">
-                          <div class={MENU_ITEM_CLASS}>Owner</div>
+                          <div class="font-medium text-ink-muted text-xs">
+                            Owner
+                          </div>
                         </div>
                       </div>
                     </Show>
