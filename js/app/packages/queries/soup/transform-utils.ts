@@ -391,6 +391,12 @@ export const mapSoupPageToEntityList: (
             name: p.name ?? '',
           }));
 
+          const hasIcsAttachment = item.data.attachments?.some(
+            (a) =>
+              a.mimeType === 'text/calendar' ||
+              a.filename?.toLowerCase().endsWith('.ics')
+          );
+
           return {
             ...item.data,
             createdAt: item.data.createdAt,
@@ -404,6 +410,7 @@ export const mapSoupPageToEntityList: (
             frecencyScore: item.frecency_score,
             viewedAt: item.data.viewedAt,
             participants,
+            hasIcsAttachment,
           };
         }
 

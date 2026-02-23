@@ -22,7 +22,7 @@ import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
-import { DraftBadge, SharedBadge } from '../components/Badges';
+import { DraftBadge, InviteBadge, SharedBadge } from '../components/Badges';
 import { DisplayName } from '../components/DisplayName';
 import { useIsShared } from '../utils/shared';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
@@ -110,7 +110,14 @@ function NarrowLayout(props: LayoutProps) {
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <Show when={entity().isDraft}>
+                <Show
+                  when={entity().isDraft}
+                  fallback={
+                    <Show when={entity().hasIcsAttachment}>
+                      <InviteBadge />
+                    </Show>
+                  }
+                >
                   <DraftBadge />
                 </Show>
                 <span class="truncate">
@@ -261,7 +268,14 @@ function WideLayout(props: LayoutProps) {
                   }
                 >
                   <span class="w-(--title-width) truncate shrink-0 flex gap-2">
-                    <Show when={entity().isDraft}>
+                    <Show
+                      when={entity().isDraft}
+                      fallback={
+                        <Show when={entity().hasIcsAttachment}>
+                          <InviteBadge />
+                        </Show>
+                      }
+                    >
                       <DraftBadge />
                     </Show>
                     <span class="truncate">
