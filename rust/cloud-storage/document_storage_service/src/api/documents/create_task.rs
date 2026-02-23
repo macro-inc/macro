@@ -33,7 +33,7 @@ pub struct CreateTaskRequest {
     /// The name of the task
     pub task_name: String,
     /// Optional project id to associate the task with
-    pub project_id: Option<String>,
+    pub project_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task
     pub property_values: Option<Vec<PropertyInput>>,
 }
