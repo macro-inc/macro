@@ -88,8 +88,6 @@ export class MentionsMenuController {
   });
 
   combinedItems = createLazyMemo((): MentionItem[] => {
-    console.trace('MENTIONS CONTROLLER COMBINED ITEMS');
-
     const buckets = this.buckets();
     const currentBins = this.bins();
     if (!buckets || !currentBins) return [];
