@@ -172,7 +172,6 @@ function NarrowLayout(props: LayoutProps) {
                 return (
                   <Show when={entity().latestMessage}>
                     {(msg) => {
-                      console.log({ message: msg() });
                       const hasContent = () => Boolean(msg().content?.trim());
 
                       return (
