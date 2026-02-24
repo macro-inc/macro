@@ -112,18 +112,12 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
     );
   };
 
-  const searchTerms = () => {
-    if (!isSearchEntity(props.entity)) return [];
-    const { searchQuery } = props.entity.search;
-    if (!searchQuery) return [];
-    return searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
-  };
-
   const highlighted = () => {
+    if (!isSearchEntity(props.entity)) return undefined;
+    const terms = props.entity.search.senderHighlightTerms;
+    if (!terms?.length) return undefined;
     const names = displayNames();
     if (!names) return undefined;
-    const terms = searchTerms();
-    if (!terms.length) return undefined;
     const result = mergeAdjacentMacroEmTags(highlightTermsInText(names, terms));
     return result !== names ? result : undefined;
   };

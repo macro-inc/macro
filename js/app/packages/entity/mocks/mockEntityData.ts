@@ -505,7 +505,7 @@ export const MOCK_SEARCH_DOCUMENT: WithSearch<DocumentEntity> = {
   ...MOCK_DOCUMENT_BASIC,
   search: {
     nameHighlight: 'Meeting **Notes**',
-    searchQuery: null,
+    senderHighlightTerms: null,
     contentHitData: [
       {
         type: 'md',
@@ -526,7 +526,7 @@ export const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
   ...MOCK_CHANNEL_PUBLIC,
   search: {
     nameHighlight: '**general**',
-    searchQuery: null,
+    senderHighlightTerms: null,
     contentHitData: [
       {
         type: 'channel',
@@ -559,7 +559,7 @@ export const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
   ...MOCK_EMAIL_THREAD,
   search: {
     nameHighlight: '**Design** Review',
-    searchQuery: null,
+    senderHighlightTerms: null,
     contentHitData: [
       {
         type: 'email',
@@ -592,7 +592,7 @@ export const MOCK_SEARCH_PDF: WithSearch<DocumentEntity> = {
   ...MOCK_DOCUMENT_PDF,
   search: {
     nameHighlight: '**Design** Specifications.pdf',
-    searchQuery: null,
+    senderHighlightTerms: null,
     contentHitData: [
       {
         type: 'pdf',
