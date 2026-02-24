@@ -966,7 +966,6 @@ export function createSplitLayout(
   }
 
   function closeAllPopovers(): void {
-    setState('popovers', (prev) => {
     const popovers = Array.from(state.popovers.values());
     for (const popover of popovers) {
       popover.handle.close();
