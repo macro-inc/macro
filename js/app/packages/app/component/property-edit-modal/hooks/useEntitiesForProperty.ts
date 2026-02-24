@@ -1,7 +1,7 @@
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityTypeToBuckets,
+  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -28,11 +28,6 @@ import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
-import {
-  useQuickAccess,
-  type Bucket,
-  type QuickAccessItem,
-} from '@core/context/quickAccess';
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
@@ -47,8 +42,6 @@ export function useEntitiesForProperty(
   );
   createEffect(() => debouncedSetSearchTerm(searchQuery()));
 
-  // Use quickAccess for entity data
-  const quickAccess = useQuickAccess();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
   // Get current user domain for same-domain boost in search
@@ -60,34 +53,9 @@ export function useEntitiesForProperty(
 
   const specificEntityType = () => property()?.specificEntityType;
 
-  // Determine which buckets to use based on config
-  const buckets = createMemo(() => entityTypeToBuckets(specificEntityType()));
-
   // Get items from quickAccess based on entity type
-  const quickAccessItems = createMemo((): QuickAccessItem[] => {
-    const b = buckets();
-    if (b === null) {
-      // All entity types - exclude commands
-      return quickAccess.useList(
-        'person',
-        'channel',
-        'dm',
-        'document',
-        'note',
-        'task',
-        'chat',
-        'project'
-      )();
-    }
-    if (b.length === 0) {
-      return [];
-    }
-    if (b.length === 1) {
-      return quickAccess.useList(b[0])();
-    }
-    // Multiple buckets
-    return quickAccess.useList(...(b as [Bucket, ...Bucket[]]))();
-  });
+  const { items: quickAccessItems } =
+    useQuickAccessEntities(specificEntityType);
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>

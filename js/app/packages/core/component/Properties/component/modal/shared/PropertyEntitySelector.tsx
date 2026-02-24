@@ -22,7 +22,7 @@ import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityTypeToBuckets,
+  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -34,11 +34,6 @@ import {
 import { OptionCheckBox } from './OptionCheckBox';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import type { EntitySelectorConfig } from './types';
-import {
-  useQuickAccess,
-  type Bucket,
-  type QuickAccessItem,
-} from '@core/context/quickAccess';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 type EntityInputProps = {
@@ -114,8 +109,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const selfFilterEntityType = () => props.config.selfFilter?.entityType;
   const selfFilterBlockId = () => props.config.selfFilter?.blockId;
 
-  // Use quickAccess for entity data
-  const quickAccess = useQuickAccess();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
   // Get current user domain for same-domain boost in search
@@ -125,36 +118,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return email ? email.split('@')[1] : undefined;
   });
 
-  // Determine which buckets to use based on config
-  const buckets = createMemo(() =>
-    entityTypeToBuckets(props.config.specificEntityType)
-  );
-
   // Get items from quickAccess based on entity type
-  const quickAccessItems = createMemo((): QuickAccessItem[] => {
-    const b = buckets();
-    if (b === null) {
-      // All entity types - exclude commands
-      return quickAccess.useList(
-        'person',
-        'channel',
-        'dm',
-        'document',
-        'note',
-        'task',
-        'chat',
-        'project'
-      )();
-    }
-    if (b.length === 0) {
-      return [];
-    }
-    if (b.length === 1) {
-      return quickAccess.useList(b[0])();
-    }
-    // Multiple buckets
-    return quickAccess.useList(...(b as [Bucket, ...Bucket[]]))();
-  });
+  const { items: quickAccessItems, isLoading: isQuickAccessLoading } =
+    useQuickAccessEntities(() => props.config.specificEntityType);
 
   // Fetch emails for browsing (only when THREAD type or generic ENTITY)
   const needsEmailSearch = () =>
@@ -200,7 +166,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         emailSearchQuery.isFetching
       );
     }
-    return quickAccess.isLoading();
+    return isQuickAccessLoading();
   });
 
   // Convert quickAccess items to CombinedEntity format

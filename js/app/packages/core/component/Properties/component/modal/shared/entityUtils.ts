@@ -2,8 +2,13 @@ import type { IUser } from '@core/user';
 import type { EntityData, EmailEntity } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
+import { createMemo } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
-import type { QuickAccessItem, Bucket } from '@core/context/quickAccess';
+import {
+  useQuickAccess,
+  type QuickAccessItem,
+  type Bucket,
+} from '@core/context/quickAccess';
 
 /**
  * Maps EntityType to quickAccess buckets
@@ -32,6 +37,29 @@ export function entityTypeToBuckets(
     default:
       return null;
   }
+}
+
+/**
+ * Hook to get QuickAccessItems for a given EntityType.
+ * Returns items from the appropriate buckets based on entity type.
+ */
+export function useQuickAccessEntities(
+  entityType: Accessor<EntityType | null | undefined>
+): { items: Accessor<QuickAccessItem[]>; isLoading: Accessor<boolean> } {
+  const quickAccess = useQuickAccess();
+
+  const buckets = () => entityTypeToBuckets(entityType());
+  const items = (): QuickAccessItem[] => {
+    const b = buckets();
+    if (b === null) {
+      return quickAccess.useList()();
+    }
+    if (b.length === 0) {
+      return [];
+    }
+    return quickAccess.useList(...b)();
+  };
+  return { items, isLoading: quickAccess.isLoading };
 }
 
 /** Combined entity type for unified handling across entity selectors */

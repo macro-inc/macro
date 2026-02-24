@@ -4,6 +4,7 @@ export {
   type CombinedEntity,
   createEntitySearchConfig,
   entityTypeToBuckets,
+  useQuickAccessEntities,
   getEntityName,
   getEntitySearchText,
   getEntityType,
