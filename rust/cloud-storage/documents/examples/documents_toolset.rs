@@ -32,12 +32,8 @@ use entity_access::outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
-use std::fs::File;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt;
-use tracing_subscriber::prelude::*;
 
 /// No-op task properties service (not needed for toolset example).
 #[derive(Clone)]
@@ -55,14 +51,6 @@ const PROMPT: &str = "You are an assistant that helps users explore, create and 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
-
-    let log_file = File::create("documents_toolset.log").expect("Failed to create log file");
-    tracing_subscriber::registry()
-        .with(EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "warn,documents=debug".to_string()),
-        ))
-        .with(fmt::layer().with_writer(log_file).with_ansi(false))
-        .init();
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
