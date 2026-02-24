@@ -1,4 +1,4 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -278,7 +278,7 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
+          <ClippedPanel active tl class="py-2">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
@@ -290,8 +290,7 @@ export function ActionMenu(props: {
             >
               {inner()}
             </div>
-          </div>
-          <BozzyBracketInnerSibling animOnOpen={true} />
+          </ClippedPanel>
         </div>
       </ScopedPortal>
     </Show>
