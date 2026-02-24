@@ -16,20 +16,11 @@ import {
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useNotificationsForEntity } from '@notifications';
 import {
-  applyInboxQueryFilters,
-  applyOtherQueryFilters,
-} from '@app/component/next-soup/filters/inbox-query-filters';
-import { throwOnErr } from '@core/util/maybeResult';
-import { queryClient } from '@queries/client';
-import {
   type SoupParams,
-  type SoupItemsQueryArgs,
   useSoupItemsQuery,
   type SoupItemsQueryFilters,
   type SoupBody,
 } from '@queries/soup/items';
-import { soupKeys } from '@queries/soup/keys';
-import { storageServiceClient } from '@service-storage/client';
 import {
   type Accessor,
   createContext,
