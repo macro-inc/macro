@@ -473,7 +473,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": {
-            "number_of_fragments": 500,
+            "number_of_fragments": 0,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
@@ -875,7 +875,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": {
-            "number_of_fragments": 500,
+            "number_of_fragments": 0,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
