@@ -138,18 +138,12 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   }
 
   const nameHighlight = data.results.at(0)?.highlight.name ?? null;
-  const senderHighlight =
-    data.type === 'email'
-      ? (data.results.find((r) => r.highlight.sender)?.highlight.sender ?? null)
-      : null;
 
   return {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
-    senderHighlight: senderHighlight
-      ? mergeAdjacentMacroEmTags(senderHighlight)
-      : null,
+    searchQuery: null,
     contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
@@ -197,7 +191,7 @@ export const useSearchResponseItemMapper = () => {
           updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.metadata?.project_id ?? undefined,
-          search,
+          search: { ...search, searchQuery },
         };
       }
       case 'email': {
@@ -226,7 +220,7 @@ export const useSearchResponseItemMapper = () => {
           isDraft: result.is_draft,
           done: !result.inbox_visible,
           participants,
-          search,
+          search: { ...search, searchQuery },
           snippet: result.snippet ?? undefined,
         };
       }
@@ -252,7 +246,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
           projectId: result.metadata?.project_id ?? undefined,
-          search,
+          search: { ...search, searchQuery },
         };
       }
       case 'channel': {
@@ -277,7 +271,7 @@ export const useSearchResponseItemMapper = () => {
           participantIds: channelWithLatest?.participants?.map(
             (p) => p.user_id
           ),
-          search,
+          search: { ...search, searchQuery },
         };
       }
 
@@ -295,7 +289,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           projectId: result.metadata?.parent_project_id ?? undefined,
-          search,
+          search: { ...search, searchQuery },
         };
       }
     }

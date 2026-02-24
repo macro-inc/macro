@@ -67,7 +67,7 @@ export const nameFuzzySearchFilter = (
         ...item,
         search: {
           nameHighlight: mergeAdjacentMacroEmTags(matchResult.nameHighlight),
-          senderHighlight: null,
+          searchQuery: query || null,
           contentHitData: null,
           source: 'local',
         },

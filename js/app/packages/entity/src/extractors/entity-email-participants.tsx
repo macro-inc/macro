@@ -122,10 +122,9 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
 
   const searchTerms = () => {
     if (!isSearchEntity(props.entity)) return [];
-    const { senderHighlight } = props.entity.search;
-    if (!senderHighlight) return [];
-    // senderHighlight is the raw matched term from OpenSearch (not wrapped in <macro_em>)
-    return senderHighlight.toLowerCase().split(/\s+/).filter(Boolean);
+    const { searchQuery } = props.entity.search;
+    if (!searchQuery) return [];
+    return searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
   };
 
   const highlighted = () => {
