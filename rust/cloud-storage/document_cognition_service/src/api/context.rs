@@ -196,7 +196,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use soup::domain::service::SoupImpl;
     use soup::outbound::pg_soup_repo::PgSoupRepo;
     use notification::domain::models::email_notification_digest::{
-        EmailBlockList, ExplicitInviteAllowList, StateMachineDriverA,
+        EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
     };
     use notification::domain::service::NotificationIngressService;
     use notification::outbound::{
@@ -212,7 +212,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let sqs_config = aws_sdk_sqs::Config::builder()
         .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
         .build();
-    let aws_sqs_client = aws_sdk_sqs::Client::from_conf(sqs_config);
+    let aws_sqs_client = aws_sdk_sqs::Client::from_conf(sqs_config.clone());
     let sqs_client = SQS::new(aws_sqs_client);
 
     let document_storage_client = Arc::new(DocumentStorageServiceClient::new(
