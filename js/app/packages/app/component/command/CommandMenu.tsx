@@ -35,6 +35,8 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import { debouncedDependent } from '@core/util/debounce';
 import { Hotkey } from '@core/component/Hotkey';
 import { InlineEntity, type EntityData } from '@entity';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { createIsActiveSplitContentMemo } from '../split-layout/layoutUtils';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -63,9 +65,20 @@ function getBlockNameForEntity(
 
 export function CommandMenu() {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
+  const splitManager = globalSplitManager();
+  const isListMode = splitManager
+    ? createIsActiveSplitContentMemo(
+        splitManager.activeSplit,
+        'component',
+        'unified-list'
+      )
+    : () => true; // assume list mode
 
   createEffect(() => {
     const open = CommandState.isOpen();
+    if (!isListMode()) {
+      CommandState.clearEntityActionEntities();
+    }
     if (open) {
       CommandState.onMenuOpen();
     } else {

@@ -200,6 +200,7 @@ function attachAliasContext(content: SplitContent): SplitContent {
 export type SplitManager = {
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
   readonly activeSplitId: Accessor<SplitId | undefined>;
+  readonly activeSplit: Accessor<SplitHandle | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType>;
   readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
@@ -1040,9 +1041,15 @@ export function createSplitLayout(
     }
   }
 
+  const activeSplit = () => {
+    const id = state.activeSplitId;
+    return id ? getSplit(id) : undefined;
+  };
+
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
+    activeSplit,
     lastActiveSplitId: () => state.lastActiveSplitId,
     events: lastEvent,
     reconcile: reconcileSplits,

@@ -150,18 +150,6 @@ export function createIsViewOpenMemo(
 }
 
 /**
- * Reactive accessor for the currently active split (via the global split manager).
- */
-export function createActiveSplitMemo(manager?: SplitManager) {
-  return createMemo<SplitHandle | undefined>(() => {
-    const resolvedManager = manager ?? globalSplitManager();
-    if (!resolvedManager) return;
-    const activeSplitId = resolvedManager.activeSplitId();
-    return activeSplitId ? resolvedManager.getSplit(activeSplitId) : undefined;
-  });
-}
-
-/**
  * Reactive boolean accessor indicating whether the active split is currently
  * showing a specific component content id.
  */
