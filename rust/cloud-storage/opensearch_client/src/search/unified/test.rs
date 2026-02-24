@@ -669,6 +669,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     "term": {
                       "labels": "TRASH"
                     }
+                  },
+                  {
+                    "term": {
+                      "labels": "SPAM"
+                    }
                   }
                 ]
               }
