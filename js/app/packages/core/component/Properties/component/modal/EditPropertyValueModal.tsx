@@ -205,7 +205,13 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   return (
     <ScopedPortal scope="local">
-      <div class="fixed inset-0 z-modal" onClick={handleClose}>
+      <div
+        class="fixed inset-0 z-modal"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleClose();
+        }}
+      >
         <div
           ref={mergeRefs((ref) => {
             modalRef = ref;
