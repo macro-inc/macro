@@ -1,5 +1,6 @@
 //! Toolset inbound adapter for Documents.
 
+mod create_document;
 mod read_content;
 mod read_metadata;
 
@@ -8,7 +9,9 @@ mod test;
 
 use crate::{
     domain::ports::DocumentService,
-    inbound::toolset::{read_content::ReadContent, read_metadata::ReadMetadata},
+    inbound::toolset::{
+        create_document::CreateDocument, read_content::ReadContent, read_metadata::ReadMetadata,
+    },
 };
 use ai::tool::AsyncToolSet;
 use entity_access::domain::ports::EntityAccessService;
@@ -58,4 +61,6 @@ where
         .expect("failed to add ReadMetadata tool")
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc>>()
         .expect("failed to add ReadContent tool")
+        .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc>>()
+        .expect("failed to add CreateDocument tool")
 }
