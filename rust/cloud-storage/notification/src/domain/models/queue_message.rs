@@ -144,11 +144,11 @@ pub struct ConnGatewayInnerNotif<T> {
 
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConnGatewayNotification<'a, T> {
+pub(crate) struct ConnGatewayNotification<'a, T> {
     /// The notification payload to send.
-    pub notif: ConnGatewayInnerNotif<T>,
+    pub(crate) notif: ConnGatewayInnerNotif<T>,
     /// The recipients to deliver to.
-    pub recipients: Vec<MacroUserIdStr<'a>>,
+    pub(crate) recipients: Vec<MacroUserIdStr<'a>>,
 }
 
 impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
@@ -218,7 +218,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
 
 /// The delivery channel variants.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum NotificationChannel<'a, T, U> {
+pub(crate) enum NotificationChannel<'a, T, U> {
     /// Delivering to an iOS device with APNS.
     Ios(Box<APNSTargets<U>>),
     /// Delivering to a user's email inbox.
@@ -241,7 +241,7 @@ impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
     /// Create a new queue message. Only valid notification types can be published.
     ///
     /// The `message_type` is derived from [`Notification::TYPE_NAME`].
-    pub fn new(content: NotificationChannel<'a, T, U>) -> Self {
+    pub(crate) fn new(content: NotificationChannel<'a, T, U>) -> Self {
         Self {
             message_type: T::TYPE_NAME.to_string(),
             content,
@@ -251,7 +251,7 @@ impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
 
 impl<'a, T, U> QueueMessage<'a, T, U> {
     /// Consume the message and return its content.
-    pub fn into_inner(self) -> NotificationChannel<'a, T, U> {
+    pub(crate) fn into_inner(self) -> NotificationChannel<'a, T, U> {
         self.content
     }
 }
