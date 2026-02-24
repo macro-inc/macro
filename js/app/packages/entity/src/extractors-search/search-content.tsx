@@ -25,7 +25,7 @@ export function SearchContent(props: SearchContentProps) {
             <StaticMarkdown
               markdown={trimmedContent()}
               theme={unifiedListMarkdownTheme}
-              singleLine={props.singleLine ?? true}
+              singleLine={props.singleLine}
             />
           )}
         </Show>

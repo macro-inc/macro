@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import { visibleLength } from '@core/util/searchHighlight';
 import { Entity } from '../entity';
 import {
   isChannelEntity,
@@ -36,9 +37,22 @@ import { mergeRefs } from '@solid-primitives/refs';
 const hasSearchContentHits = (entity: EntityData) =>
   isSearchEntity(entity) && !!entity.search.contentHitData?.length;
 
-const getFirstContentHitContent = (entity: EntityData) => {
+const getBestContentHitContent = (entity: EntityData) => {
   if (!isSearchEntity(entity)) return undefined;
-  return entity.search.contentHitData?.at(0)?.content;
+  const hits = entity.search.contentHitData;
+  if (!hits?.length) return undefined;
+  if (hits.length === 1) return hits[0].content;
+
+  let bestIdx = 0;
+  let bestLen = visibleLength(hits[0].content);
+  for (let i = 1; i < hits.length; i++) {
+    const len = visibleLength(hits[i].content);
+    if (len > bestLen) {
+      bestLen = len;
+      bestIdx = i;
+    }
+  }
+  return hits[bestIdx].content;
 };
 
 interface ListEntityProps {
@@ -169,7 +183,7 @@ function NarrowLayout(props: LayoutProps) {
                     <Show
                       when={
                         props.showContentHits &&
-                        getFirstContentHitContent(entity())
+                        getBestContentHitContent(entity())
                       }
                       fallback={
                         <span class="truncate">{entity().snippet}</span>
@@ -179,7 +193,6 @@ function NarrowLayout(props: LayoutProps) {
                         <StaticMarkdown
                           markdown={content()}
                           theme={unifiedListMarkdownTheme}
-                          singleLine
                         />
                       )}
                     </Show>
@@ -274,23 +287,21 @@ function WideLayout(props: LayoutProps) {
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <Show when={!props.showContentHits}>
-                  <span class="w-(--title-width) truncate shrink-0 flex gap-2">
-                    <Show
-                      when={entity().isDraft}
-                      fallback={
-                        <Show when={entity().hasIcsAttachment}>
-                          <InviteBadge />
-                        </Show>
-                      }
-                    >
-                      <DraftBadge />
-                    </Show>
-                    <span class="truncate">
-                      <Entity.EmailParticipants entity={entity()} />
-                    </span>
+                <span class="w-(--title-width) truncate shrink-0 flex gap-2">
+                  <Show
+                    when={entity().isDraft}
+                    fallback={
+                      <Show when={entity().hasIcsAttachment}>
+                        <InviteBadge />
+                      </Show>
+                    }
+                  >
+                    <DraftBadge />
+                  </Show>
+                  <span class="truncate">
+                    <Entity.EmailParticipants entity={entity()} />
                   </span>
-                </Show>
+                </span>
                 <span class="truncate">
                   <Entity.Title entity={entity()} />
                 </span>
@@ -298,7 +309,7 @@ function WideLayout(props: LayoutProps) {
                   <Show
                     when={
                       props.showContentHits &&
-                      getFirstContentHitContent(entity())
+                      getBestContentHitContent(entity())
                     }
                     fallback={entity().snippet}
                   >
@@ -306,7 +317,6 @@ function WideLayout(props: LayoutProps) {
                       <StaticMarkdown
                         markdown={content()}
                         theme={unifiedListMarkdownTheme}
-                        singleLine
                       />
                     )}
                   </Show>
