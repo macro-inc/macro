@@ -157,7 +157,7 @@ export const SoupViewContextProvider: FlowComponent<
   const soupBody = createMemo(
     (): SoupBody => ({
       ...queryFilters(),
-      emailView: 'all',
+      emailView: soup.filters.isActive('signal') ? 'inbox' : 'all',
     })
   );
 

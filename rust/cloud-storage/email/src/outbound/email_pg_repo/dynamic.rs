@@ -130,6 +130,8 @@ fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> String {
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
             // Signal: has a priority label OR does not have a depriority label
             r#"(
+                m.is_draft = TRUE
+                OR
                 EXISTS (
                     SELECT 1 FROM email_message_labels ml
                     JOIN email_labels l ON ml.label_id = l.id
