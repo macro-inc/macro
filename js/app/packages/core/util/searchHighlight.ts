@@ -79,3 +79,61 @@ export function extractSearchSnippet(highlightedContent: string): string {
 export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
   return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
 }
+
+/**
+ * Creates a single-line window around the first <macro_em> highlight.
+ * - Collapses newlines and invisible chars into a clean single line
+ * - If the highlight is within `chars` of the start, keeps the start
+ * - Otherwise, trims the front to show context before the highlight
+ * - Trims the end to keep total visible length reasonable
+ *
+ * @param text - Content with <macro_em> tags
+ * @param chars - Max visible characters to show on each side of the highlight
+ */
+export function windowSearchMatch(text: string, chars: number = 200): string {
+  let line = stripInvisibleChars(text);
+
+  const macroOpen = '<macro_em>';
+  const tagIndex = line.indexOf(macroOpen);
+  if (tagIndex === -1) return line;
+
+  const visibleBefore = line
+    .slice(0, tagIndex)
+    .replace(/<\/?macro_em>/g, '').length;
+
+  // Trim from front if highlight is far from the start
+  if (visibleBefore > chars) {
+    const targetStart = Math.max(0, tagIndex - chars);
+    let cutIndex = targetStart;
+    for (let i = targetStart; i < tagIndex; i++) {
+      if (/\s/.test(line[i])) {
+        cutIndex = i + 1;
+        break;
+      }
+    }
+    line = '...' + line.slice(cutIndex);
+  }
+
+  // Trim from end to keep total length reasonable
+  const macroClose = '</macro_em>';
+  const lastCloseIndex = line.lastIndexOf(macroClose);
+  if (lastCloseIndex !== -1) {
+    const afterLastTag = lastCloseIndex + macroClose.length;
+    const remainingVisible = line
+      .slice(afterLastTag)
+      .replace(/<\/?macro_em>/g, '')
+      .replace(INVISIBLE_CHARS_RE, '').length;
+    if (remainingVisible > chars) {
+      let endCut = afterLastTag + chars;
+      for (let i = endCut; i < line.length; i++) {
+        if (/\s/.test(line[i])) {
+          endCut = i;
+          break;
+        }
+      }
+      line = line.slice(0, endCut) + '...';
+    }
+  }
+
+  return line;
+}

@@ -1,5 +1,5 @@
 import type { DateValue } from '@core/util/date';
-import { stripInvisibleChars, visibleLength } from '@core/util/searchHighlight';
+import { visibleLength, windowSearchMatch } from '@core/util/searchHighlight';
 import { Entity } from '../entity';
 import {
   isChannelEntity,
@@ -124,7 +124,7 @@ function EmailSnippet(props: {
     >
       {(content) => (
         <StaticMarkdown
-          markdown={stripInvisibleChars(content())}
+          markdown={windowSearchMatch(content())}
           theme={unifiedListMarkdownTheme}
           singleLine
         />
