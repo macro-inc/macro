@@ -6,7 +6,8 @@
 const INVISIBLE_CHARS_RE =
   /(?:[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF\u00AD\u2800-\u28FF]|\u034F)+/g;
 
-export function stripInvisibleChars(text: string): string {
+/** Collapses newlines, extra whitespace, and invisible Unicode characters into a clean single line. */
+function stripInvisibleChars(text: string): string {
   return text
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
@@ -14,6 +15,7 @@ export function stripInvisibleChars(text: string): string {
     .trim();
 }
 
+/** Returns the visible character count after stripping invisible chars and `<macro_em>` tags. */
 export function visibleLength(content: string): number {
   return stripInvisibleChars(content)
     .replace(/<\/?macro_em>/g, '')
@@ -78,6 +80,14 @@ export function extractSearchSnippet(highlightedContent: string): string {
  */
 export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
   return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
+}
+
+/** Wraps each occurrence of the given terms in `<macro_em>` tags (case-insensitive). */
+export function highlightTermsInText(text: string, terms: string[]): string {
+  if (!terms.length) return text;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  return text.replace(pattern, '<macro_em>$1</macro_em>');
 }
 
 /**

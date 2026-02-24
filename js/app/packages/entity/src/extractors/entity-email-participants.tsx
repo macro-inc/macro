@@ -2,7 +2,10 @@ import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
+import {
+  mergeAdjacentMacroEmTags,
+  highlightTermsInText,
+} from '@core/util/searchHighlight';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 import { Show } from 'solid-js';
@@ -91,13 +94,6 @@ export function formatDisplayNames(names: string[]): string | undefined {
 
   // For 4+ participants: "First .. SecondLast, Last"
   return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
-}
-
-function highlightTermsInText(text: string, terms: string[]): string {
-  if (!terms.length) return text;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
-  return text.replace(pattern, '<macro_em>$1</macro_em>');
 }
 
 /**
