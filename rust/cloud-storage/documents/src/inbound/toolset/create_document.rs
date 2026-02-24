@@ -27,7 +27,7 @@ pub struct CreateDocumentResponse {
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-#[schemars(title = "CreateDocument", description = "Retrieve a documents content")]
+#[schemars(title = "CreateDocument", description = "Create a document")]
 pub struct CreateDocument {
     #[schemars(description = "The name of the document without the file extension")]
     pub document_name: String,
