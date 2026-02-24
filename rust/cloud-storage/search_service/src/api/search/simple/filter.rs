@@ -133,6 +133,13 @@ impl FilterVariantToSearchArgs for item_filters::ProjectFilters {
     }
 }
 
+const DEPRIORITY_LABELS: &[&str] = &[
+    "CATEGORY_UPDATES",
+    "CATEGORY_PROMOTIONS",
+    "CATEGORY_SOCIAL",
+    "CATEGORY_FORUMS",
+];
+
 impl FilterVariantToSearchArgs for item_filters::EmailFilters {
     type Output = UnifiedEmailSearchArgs;
 
@@ -146,6 +153,29 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
         if !should_include {
             Ok(UnifiedEmailSearchArgs::default())
         } else {
+            let mut include_labels = self.include_labels.clone();
+            let mut exclude_labels = self.exclude_labels.clone();
+
+            match self.importance {
+                Some(false) => {
+                    for label in DEPRIORITY_LABELS {
+                        let label = label.to_string();
+                        if !include_labels.contains(&label) {
+                            include_labels.push(label);
+                        }
+                    }
+                }
+                // Default to excluding depriority labels in search (importance = true behavior)
+                _ => {
+                    for label in DEPRIORITY_LABELS {
+                        let label = label.to_string();
+                        if !exclude_labels.contains(&label) {
+                            exclude_labels.push(label);
+                        }
+                    }
+                }
+            }
+
             Ok(UnifiedEmailSearchArgs {
                 thread_ids: vec![],
                 link_ids: vec![],
@@ -153,8 +183,8 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
                 cc: self.cc.clone(),
                 bcc: self.bcc.clone(),
                 recipients: self.recipients.clone(),
-                include_labels: self.include_labels.clone(),
-                exclude_labels: self.exclude_labels.clone(),
+                include_labels,
+                exclude_labels,
             })
         }
     }
