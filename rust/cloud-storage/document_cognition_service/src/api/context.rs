@@ -1,9 +1,17 @@
 use crate::config::Config;
 use ai_tools::ToolSoupService;
 use axum::extract::FromRef;
+use connection_gateway_client::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use notification::domain::models::email_notification_digest::StateMachineDriverA;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
@@ -17,6 +25,21 @@ use stream::domain::StreamRepo;
 pub type DcsScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
+type StateMachine = StateMachineDriverA<
+    DbUserExistenceChecker,
+    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
+    LastOnlineCheckerImpl<
+        last_online_tracker::outbound::time::DefaultTime,
+        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
+    >,
+    RedisDigestBatcher,
+>;
+pub(crate) type NotificationIngressType = NotificationIngressService<
+    DbNotificationRepository<PgPool>,
+    SqsNotificationQueue,
+    StateMachine,
+>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub db: PgPool,
@@ -29,11 +52,87 @@ pub struct ApiContext {
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub notification_ingress_service: Arc<NotificationIngressType>,
+    pub connection_repo: Arc<dyn ConnectionRepo>,
     pub soup_service: Arc<ToolSoupService>,
     pub stream_repo: Arc<dyn StreamRepo>,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
+
+#[cfg(test)]
+mod mock_connection_repo {
+    use connection_gateway_client::model::connection::StoredConnectionEntity;
+    use connection_gateway_client::model::tracking::{EntityConnection, UserEntityConnection};
+    use connection_gateway_client::service::connection::ConnectionRepo;
+    use std::sync::Arc;
+
+    pub struct MockConnectionRepo;
+
+    impl MockConnectionRepo {
+        pub fn new() -> Arc<dyn ConnectionRepo> {
+            Arc::new(Self)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ConnectionRepo for MockConnectionRepo {
+        async fn insert_connection_entry(
+            &self,
+            _connection: UserEntityConnection<'_>,
+        ) -> anyhow::Result<StoredConnectionEntity> {
+            unimplemented!()
+        }
+        async fn get_entries_by_entity(
+            &self,
+            _entity: &model_entity::Entity<'_>,
+        ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
+            Ok(vec![])
+        }
+        async fn get_entries_by_connection_id(
+            &self,
+            _connection_id: &str,
+        ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
+            Ok(vec![])
+        }
+        async fn get_connection(
+            &self,
+            _connection_id: &str,
+        ) -> anyhow::Result<StoredConnectionEntity> {
+            unimplemented!()
+        }
+        async fn get_entry_for_connection_entity(
+            &self,
+            _entity: EntityConnection<'_>,
+        ) -> anyhow::Result<Option<StoredConnectionEntity>> {
+            Ok(None)
+        }
+        async fn remove_all_entries_for_by_connection_id(
+            &self,
+            _connection_id: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn remove_entity(&self, _entity: &EntityConnection<'_>) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_last_entity_ping(
+            &self,
+            _entity: &EntityConnection<'_>,
+            _timestamp: u64,
+        ) -> anyhow::Result<StoredConnectionEntity> {
+            unimplemented!()
+        }
+        async fn update_user_connection_last_ping(
+            &self,
+            _connection_id: &str,
+            _user: &str,
+            _timestamp: u64,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+}
 
 #[cfg(test)]
 mod mock_stream {
@@ -96,6 +195,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
     use soup::outbound::pg_soup_repo::PgSoupRepo;
+    use notification::domain::models::email_notification_digest::{
+        EmailBlockList, ExplicitInviteAllowList, StateMachineDriverA,
+    };
+    use notification::domain::service::NotificationIngressService;
+    use notification::outbound::{
+        digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+        push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+        repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+    };
     use sqs_client::SQS;
     use static_file_service_client::StaticFileServiceClient;
     use std::sync::Arc;
@@ -171,6 +279,42 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
+    let redis_client = redis::Client::open("redis://localhost:6379").unwrap();
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+
+    let notification_ingress_service = Arc::new({
+        let notification_repository = DbNotificationRepository::new(pool.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::from_conf(sqs_config),
+            "test-notification-queue".to_string(),
+        );
+        let state_machine = StateMachineDriverA {
+            user_checker: DbUserExistenceChecker::new(pool.clone()),
+            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
+                pool.clone(),
+            )),
+            online_checker: LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        redis_multiplexed_conn.clone(),
+                    ),
+                ),
+            ),
+            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
+            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
+            )
+            .append::<model_notifications::ChannelInviteMetadata>(),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
+        };
+        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
+    });
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
@@ -182,6 +326,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
+        notification_ingress_service,
+        connection_repo: mock_connection_repo::MockConnectionRepo::new(),
         soup_service,
         stream_repo: mock_stream::MockStreamRepo::new(),
     };
