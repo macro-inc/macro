@@ -5,6 +5,8 @@ import {
   isChannelEntity,
   isEmailEntity,
   isProjectContainedEntity,
+  type ChannelEntity,
+  type EmailEntity,
   type ProjectEntity,
   type EntityData,
   isTaskEntity,
@@ -91,6 +93,67 @@ interface LayoutProps {
   ) => void;
 }
 
+function EmailIdentity(props: { entity: EmailEntity }) {
+  return (
+    <>
+      <Show
+        when={props.entity.isDraft}
+        fallback={
+          <Show when={props.entity.hasIcsAttachment}>
+            <InviteBadge />
+          </Show>
+        }
+      >
+        <DraftBadge />
+      </Show>
+      <span class="truncate">
+        <Entity.EmailParticipants entity={props.entity} />
+      </span>
+    </>
+  );
+}
+
+function EmailSnippet(props: {
+  entity: EmailEntity;
+  showContentHits: boolean;
+}) {
+  return (
+    <Show
+      when={props.showContentHits && getBestContentHitContent(props.entity)}
+      fallback={props.entity.snippet}
+    >
+      {(content) => (
+        <StaticMarkdown markdown={content()} theme={unifiedListMarkdownTheme} />
+      )}
+    </Show>
+  );
+}
+
+function ChannelMessage(props: {
+  message: NonNullable<ChannelEntity['latestMessage']>;
+}) {
+  const hasContent = () => Boolean(props.message.content?.trim());
+  return (
+    <>
+      <span class="font-semibold truncate min-w-min max-w-1/3">
+        <DisplayName id={props.message.senderId} format="firstName" />
+      </span>
+      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
+        <Show
+          when={hasContent()}
+          fallback={<span class="italic">Attached Items</span>}
+        >
+          <StaticMarkdown
+            theme={unifiedListMarkdownTheme}
+            markdown={props.message.content}
+            singleLine
+          />
+        </Show>
+      </span>
+    </>
+  );
+}
+
 function NarrowLayout(props: LayoutProps) {
   return (
     <Entity.Layout
@@ -127,23 +190,7 @@ function NarrowLayout(props: LayoutProps) {
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <>
-                <Show
-                  when={entity().isDraft}
-                  fallback={
-                    <Show when={entity().hasIcsAttachment}>
-                      <InviteBadge />
-                    </Show>
-                  }
-                >
-                  <DraftBadge />
-                </Show>
-                <span class="truncate">
-                  <Entity.EmailParticipants entity={entity()} />
-                </span>
-              </>
-            )}
+            {(entity) => <EmailIdentity entity={entity()} />}
           </Match>
           <Match when={props.entity}>
             {(entity) => <Entity.Title entity={entity()} />}
@@ -180,62 +227,24 @@ function NarrowLayout(props: LayoutProps) {
                     </span>
                   </div>
                   <div class="text-ink/50 font-medium w-full truncate inline-flex items-center">
-                    <Show
-                      when={
-                        props.showContentHits &&
-                        getBestContentHitContent(entity())
-                      }
-                      fallback={
-                        <span class="truncate">{entity().snippet}</span>
-                      }
-                    >
-                      {(content) => (
-                        <StaticMarkdown
-                          markdown={content()}
-                          theme={unifiedListMarkdownTheme}
-                        />
-                      )}
-                    </Show>
+                    <EmailSnippet
+                      entity={entity()}
+                      showContentHits={props.showContentHits}
+                    />
                   </div>
                 </>
               )}
             </Match>
             <Match when={isChannelEntity(props.entity) && props.entity}>
-              {(entity) => {
-                return (
-                  <Show when={entity().latestMessage}>
-                    {(msg) => {
-                      console.log({ message: msg() });
-                      const hasContent = () => Boolean(msg().content?.trim());
-
-                      return (
-                        <div class="flex items-center gap-2 w-full truncate">
-                          <span class="font-semibold truncate min-w-min max-w-1/3">
-                            <DisplayName
-                              id={msg().senderId}
-                              format="firstName"
-                            />
-                          </span>
-                          <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
-                            <Show
-                              when={hasContent()}
-                              fallback={
-                                <span class="italic">Attached Items</span>
-                              }
-                            >
-                              <StaticMarkdown
-                                theme={unifiedListMarkdownTheme}
-                                markdown={msg().content}
-                                singleLine
-                              />
-                            </Show>
-                          </span>
-                        </div>
-                      );
-                    }}
-                  </Show>
-                );
-              }}
+              {(entity) => (
+                <Show when={entity().latestMessage}>
+                  {(msg) => (
+                    <div class="flex items-center gap-2 w-full truncate">
+                      <ChannelMessage message={msg()} />
+                    </div>
+                  )}
+                </Show>
+              )}
             </Match>
           </Switch>
         </Entity.Slot>
@@ -288,38 +297,16 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <>
                 <span class="w-(--title-width) truncate shrink-0 flex gap-2">
-                  <Show
-                    when={entity().isDraft}
-                    fallback={
-                      <Show when={entity().hasIcsAttachment}>
-                        <InviteBadge />
-                      </Show>
-                    }
-                  >
-                    <DraftBadge />
-                  </Show>
-                  <span class="truncate">
-                    <Entity.EmailParticipants entity={entity()} />
-                  </span>
+                  <EmailIdentity entity={entity()} />
                 </span>
                 <span class="truncate">
                   <Entity.Title entity={entity()} />
                 </span>
                 <span class="text-ink/50 font-medium truncate flex-1 inline-flex items-center">
-                  <Show
-                    when={
-                      props.showContentHits &&
-                      getBestContentHitContent(entity())
-                    }
-                    fallback={entity().snippet}
-                  >
-                    {(content) => (
-                      <StaticMarkdown
-                        markdown={content()}
-                        theme={unifiedListMarkdownTheme}
-                      />
-                    )}
-                  </Show>
+                  <EmailSnippet
+                    entity={entity()}
+                    showContentHits={props.showContentHits}
+                  />
                 </span>
               </>
             )}
@@ -331,28 +318,7 @@ function WideLayout(props: LayoutProps) {
                   <Entity.Title entity={entity()} />
                 </span>
                 <Show when={!props.hasNotifications && entity().latestMessage}>
-                  {(msg) => {
-                    const hasContent = () => Boolean(msg().content?.trim());
-                    return (
-                      <>
-                        <DisplayName id={msg().senderId} format="firstName" />
-                        <span class="text-ink/50 font-medium truncate inline-flex shrink items-center">
-                          <Show
-                            when={hasContent()}
-                            fallback={
-                              <span class="italic">Attached Items</span>
-                            }
-                          >
-                            <StaticMarkdown
-                              theme={unifiedListMarkdownTheme}
-                              markdown={msg().content}
-                              singleLine
-                            />
-                          </Show>
-                        </span>
-                      </>
-                    );
-                  }}
+                  {(msg) => <ChannelMessage message={msg()} />}
                 </Show>
               </>
             )}
