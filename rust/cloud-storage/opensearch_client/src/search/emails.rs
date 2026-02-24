@@ -92,9 +92,6 @@ impl EmailQueryBuilder {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-        // We don't want to include trash items in your email search
-        content_bool_query.must_not(QueryType::term("labels", "TRASH"));
-
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
