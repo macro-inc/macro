@@ -1,5 +1,5 @@
 import type { DateValue } from '@core/util/date';
-import { visibleLength } from '@core/util/searchHighlight';
+import { stripInvisibleChars, visibleLength } from '@core/util/searchHighlight';
 import { Entity } from '../entity';
 import {
   isChannelEntity,
@@ -123,7 +123,11 @@ function EmailSnippet(props: {
       fallback={props.entity.snippet}
     >
       {(content) => (
-        <StaticMarkdown markdown={content()} theme={unifiedListMarkdownTheme} />
+        <StaticMarkdown
+          markdown={stripInvisibleChars(content())}
+          theme={unifiedListMarkdownTheme}
+          singleLine
+        />
       )}
     </Show>
   );
