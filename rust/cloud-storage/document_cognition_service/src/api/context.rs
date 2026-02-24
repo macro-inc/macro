@@ -38,12 +38,12 @@ pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
 #[cfg(test)]
 mod mock_stream {
     use std::sync::Arc;
-    use stream::domain::{ItemId, ItemStream, Result, StreamId, StreamRepo};
+    use stream::domain::{ItemId, ItemStream, Result, StreamEvent, StreamId, StreamRepo};
     use tokio::sync::broadcast::{self, Receiver};
 
     /// Mock StreamRepo for testing - does nothing but satisfies the interface
     pub struct MockStreamRepo {
-        tx: broadcast::Sender<StreamId>,
+        tx: broadcast::Sender<StreamEvent>,
     }
 
     impl MockStreamRepo {
@@ -71,7 +71,7 @@ mod mock_stream {
             Ok(vec![])
         }
 
-        async fn notify(&self) -> Receiver<StreamId> {
+        async fn notify(&self) -> Receiver<StreamEvent> {
             self.tx.subscribe()
         }
     }
