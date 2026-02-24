@@ -2,7 +2,6 @@ import type { IUser } from '@core/user';
 import type { EntityData, EmailEntity } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
-import { createMemo } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import {
   useQuickAccess,
