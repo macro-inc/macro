@@ -43,7 +43,6 @@ describe('inbox-query-filters', () => {
         document_filters: {
           task_filters: {
             include_cbm_atm_nc: true,
-            status: ['todo'],
           },
         },
       });
