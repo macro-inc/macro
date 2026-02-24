@@ -1,0 +1,16 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  fusionauth-instance:authentication-service-domain: https://auth-service.macro.com
+  fusionauth-instance:authentication-service-internal-secret-key: authentication-service-internal-api-key-prod
+  fusionauth-instance:fusionauth-license-key-secret-key: fusionauth-license-key-prod
+  fusionauth-instance:fusionauth-default-tenant-id: a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be
+  fusionauth-instance:fusionauth-client-id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  fusionauth-instance:fusionauth-client-secret-key: fusionauth-client-secret-prod
+  fusionauth-instance:fusionauth-signing-key-id: 32bf13d6-8006-4a1f-b5e9-e8aa7b99922b
+  fusionauth-instance:smtp-user-secret-key: smtp-user
+  fusionauth-instance:fusionauth-issuer: auth.macro.com
+  fusionauth-instance:default-from-email: auth@macro.com
+  fusionauth:host: https://auth.macro.com
+  fusionauth:apiKey:
+    secure: AAABANOJD8AOmyME2/j2t2nmudnPjYIszfItHGubEm2ZmKaErrrrqRydP7udMstGDgi0inuUCRj819+S1tXXVZF0E7BP9bL1cTxmhf0+nMbO6CHkdyRycQ==
