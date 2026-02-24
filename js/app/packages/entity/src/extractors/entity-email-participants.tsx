@@ -96,11 +96,7 @@ export function formatDisplayNames(names: string[]): string | undefined {
   return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
 }
 
-/**
- * Get a nicely formatted list of participants from an email entity.
- * @param props
- * @returns
- */
+/** Get a nicely formatted list of participants from an email entity. */
 export function EntityEmailParticipants(props: { entity: EmailEntity }) {
   const userEmail = useEmail();
   const fetchDisplayName = (email: string) =>
