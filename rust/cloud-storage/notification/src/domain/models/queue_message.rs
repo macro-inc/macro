@@ -1,7 +1,8 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
-    Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
+    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, SendNotificationRequest,
+    TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
@@ -53,9 +54,63 @@ pub struct EmailContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
-    pub to: MacroUserIdStr<'a>,
+    to: MacroUserIdStr<'a>,
     /// The email content (subject and body).
     pub content: EmailContent,
+
+    rate_limit_config: RateLimitConfig,
+
+    rate_limit_key: RateLimitKey,
+}
+
+pub(crate) struct EmailCreateBundle {
+    /// The email content (subject and body).
+    content: EmailContent,
+
+    /// the configuration for the rate limit of the email
+    rate_limit_config: RateLimitConfig,
+
+    /// the key for this particular rate limit bucket
+    rate_limit_key: RateLimitKey,
+}
+
+impl EmailCreateBundle {
+    pub(crate) fn new<T: NotificationExtEmail>(notif: &T) -> Self {
+        let rate_limit_config = T::rate_limit_config();
+        let rate_limit_key = notif.rate_limit_key();
+        let content = notif.into_email();
+        EmailCreateBundle {
+            content,
+            rate_limit_config,
+            rate_limit_key,
+        }
+    }
+
+    pub(crate) fn with_recipient<'a>(self, to: MacroUserIdStr<'a>) -> EmailNotification<'a> {
+        let EmailCreateBundle {
+            content,
+            rate_limit_config,
+            rate_limit_key,
+        } = self;
+        EmailNotification {
+            to,
+            content,
+            rate_limit_config,
+            rate_limit_key,
+        }
+    }
+}
+
+impl<'a> EmailNotification<'a> {
+    /// return the value of the recipient of the email
+    pub fn to(&'a self) -> MacroUserIdStr<'a> {
+        self.to.copied()
+    }
+
+    /// return the rate limit configuration
+    pub fn rate_limit(&self) -> (&RateLimitConfig, &RateLimitKey) {
+        (&self.rate_limit_config, &self.rate_limit_key)
+    }
 }
 
 /// the value of the inner payload inside [ConnGatewayNotification]
@@ -179,7 +234,6 @@ pub enum NotificationChannel<'a, T, U> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueueMessage<'a, T, U> {
     message_type: String,
-    rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
     content: NotificationChannel<'a, T, U>,
 }
 
@@ -187,41 +241,27 @@ impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
     /// Create a new queue message. Only valid notification types can be published.
     ///
     /// The `message_type` is derived from [`Notification::TYPE_NAME`].
-    pub fn new(
-        rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
-        content: NotificationChannel<'a, T, U>,
-    ) -> Self {
+    pub fn new(content: NotificationChannel<'a, T, U>) -> Self {
         Self {
             message_type: T::TYPE_NAME.to_string(),
-            rate_limit,
             content,
         }
     }
 }
 
 impl<'a, T, U> QueueMessage<'a, T, U> {
-    /// Consume the message and return its rate limit and content.
-    pub fn into_parts(
-        self,
-    ) -> (
-        Option<(RateLimitKey, RateLimitConfig)>,
-        NotificationChannel<'a, T, U>,
-    ) {
-        (self.rate_limit, self.content)
+    /// Consume the message and return its content.
+    pub fn into_inner(self) -> NotificationChannel<'a, T, U> {
+        self.content
     }
 }
 
 #[cfg(test)]
 impl<'a, T, U> QueueMessage<'a, T, U> {
     /// Test-only constructor that doesn't require `T: Notification`.
-    pub(crate) fn new_test(
-        message_type: String,
-        rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
-        content: NotificationChannel<'a, T, U>,
-    ) -> Self {
+    pub(crate) fn new_test(message_type: String, content: NotificationChannel<'a, T, U>) -> Self {
         Self {
             message_type,
-            rate_limit,
             content,
         }
     }
@@ -262,7 +302,6 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
         let map_msg = move |msg: QueueMessage<'a, T, U>| {
             let QueueMessage {
                 message_type,
-                rate_limit,
                 mut content,
             } = msg;
 
@@ -279,7 +318,6 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
 
             QueueMessage {
                 message_type,
-                rate_limit,
                 content,
             }
         };
@@ -298,14 +336,6 @@ pub struct ClearPushIdentifier {
 
 impl Notification for ClearPushIdentifier {
     const TYPE_NAME: &'static str = "clear_push_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 /// Raw message received from SQS.

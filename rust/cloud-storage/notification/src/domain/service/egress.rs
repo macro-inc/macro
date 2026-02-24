@@ -3,19 +3,19 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
-use crate::domain::models::RateLimitResult;
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{
-    ClaimResult, DigestBatcher, MessageId, NotificationSendChecker,
+    ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
 };
 use crate::domain::models::email_notification_digest::{
     BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
 use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::queue_message::{
-    APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
-    NotificationChannel, QueueMessage,
+    APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
+    EmailNotification, NotificationChannel, QueueMessage,
 };
+use crate::domain::models::{NotificationExtEmail, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitPort, WebSocketSender,
@@ -83,7 +83,6 @@ where
     S: BulkDigestEgressStateMachine,
     D: DigestBatcher,
 {
-
     /// Deliver a notification from a queue message.
     ///
     /// Processes the delivery chain, attempting each channel and falling back
@@ -94,35 +93,25 @@ where
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
-        let (rate_limit, content) = message.into_parts();
-
-        // Check rate limit if configured
-        if let Some((key, config)) = rate_limit {
-            match self.rate_limiter.check_and_increment(key, config).await {
-                Ok(RateLimitResult::Exceeded(exceeded)) => {
-                    return vec![Err(report!(exceeded).context(DeliveryFailure::RateLimit))];
-                }
-                Ok(RateLimitResult::Allowed { .. }) => {
-                    // Rate limit allowed, continue
-                }
-                Err(e) => return vec![Err(e.context(DeliveryFailure::Other))],
-            }
-        }
+        let content = message.into_inner();
 
         let results = match content {
-            NotificationChannel::ConnGateway(ref conn) => {
-                Either::Left([self.deliver_conn_gateway(conn).await])
-            }
+            NotificationChannel::ConnGateway(ref conn) => Either::Left([self
+                .deliver_conn_gateway(conn)
+                .await
+                .context(DeliveryFailure::Other)]),
             NotificationChannel::Email(ref email) => {
                 Either::Left([self.deliver_email(email).await])
             }
-            NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(&apns).await),
+            NotificationChannel::Ios(apns) => Either::Right(
+                self.deliver_ios(&apns)
+                    .await
+                    .into_iter()
+                    .map(|r| r.context(DeliveryFailure::Other)),
+            ),
         };
 
-        results
-            .into_iter()
-            .map(|r| r.context(DeliveryFailure::Other))
-            .collect()
+        results.into_iter().collect()
     }
 
     /// Deliver via connection gateway (WebSocket).
@@ -202,15 +191,29 @@ where
     async fn deliver_email(
         &self,
         email: &EmailNotification<'static>,
-    ) -> Result<DeliverySuccess, Report> {
+    ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
+        let (config, key) = email.rate_limit();
+
+        match self.rate_limiter.check_and_increment(key, config).await {
+            Ok(RateLimitResult::Exceeded(exceeded)) => {
+                return Err(report!(exceeded).context(DeliveryFailure::RateLimit));
+            }
+            Ok(RateLimitResult::Allowed { .. }) => {
+                // Rate limit allowed, continue
+            }
+            Err(e) => return Err(e.context(DeliveryFailure::Other)),
+        }
+
         self.email
-            .send_email(email.to.clone(), &email.content)
-            .await?;
+            .send_email(email.to().clone(), &email.content)
+            .await
+            .context(DeliveryFailure::Other)?;
         Ok(DeliverySuccess::Email)
     }
 }
 
-impl<Q, N, W, M, E, R, S, D> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R, S, D>
+impl<Q, N, W, M, E, R, S, D> NotificationEgress
+    for NotificationEgressService<Q, N, W, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -257,30 +260,24 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn poll_email_digests(&self) -> Result<(), Report> {
+    async fn poll_email_digests<T: NotificationExtEmail>(
+        &self,
+        f: fn(DigestBatch) -> Result<T, Report>,
+    ) -> Result<(), Report> {
         let batch = match self.digest_batcher.claim_ready_digest().await? {
             ClaimResult::Ready(batch) => batch,
             ClaimResult::Empty | ClaimResult::Wait(_) => return Ok(()),
         };
 
-        let count = batch.notifications.len();
-        let body = serde_json::to_string_pretty(&batch.notifications)
-            .unwrap_or_else(|e| format!("failed to serialize digest: {e}"));
+        let recipient = batch.user_id.clone();
+        let email_notif: T = f(batch)?;
+        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
-        let content = EmailContent {
-            subject: format!("You have {count} new notification(s)"),
-            body,
-        };
+        let message: QueueMessage<'_, T, ()> =
+            QueueMessage::new(NotificationChannel::Email(email_content));
 
         self.queue
-            .publish(std::iter::once(QueueMessage::<(), ()> {
-                message_type: "email_digest".to_string(),
-                rate_limit: None,
-                content: NotificationChannel::Email(EmailNotification {
-                    to: batch.user_id,
-                    content,
-                }),
-            }))
+            .publish(std::iter::once(message))
             .await
             .inspect_err(|e| {
                 tracing::error!(error=?e, "failed to queue digest email");

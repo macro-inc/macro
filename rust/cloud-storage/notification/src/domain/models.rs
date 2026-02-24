@@ -218,17 +218,17 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
-
-    /// The configuration for how often the notification can be triggered on a certain key.
-    fn rate_limit_config() -> Option<RateLimitConfig>;
-    /// The actual key for the rate limit bucket.
-    fn rate_limit_key(&self) -> Option<RateLimitKey>;
 }
 
 /// Extension trait for notifications that can be delivered via email.
 pub trait NotificationExtEmail: Notification {
     /// Convert this notification into email content.
-    fn into_email(self) -> EmailContent;
+    fn into_email(&self) -> EmailContent;
+
+    /// The configuration for how often the notification can be triggered on a certain key.
+    fn rate_limit_config() -> RateLimitConfig;
+    /// The actual key for the rate limit bucket.
+    fn rate_limit_key(&self) -> RateLimitKey;
 }
 
 /// Extension trait for notifications that can be delivered via iOS push (APNS).

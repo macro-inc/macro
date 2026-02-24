@@ -2,6 +2,7 @@
 
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
+use crate::domain::models::email_notification_digest::ports::DigestBatch;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatcher};
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
@@ -14,10 +15,9 @@ use crate::domain::models::{
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
     RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
-use crate::domain::models::email_notification_digest::ports::DigestBatch;
 use crate::domain::ports::{
-    EmailSender, NotificationEgress, NotificationQueue, NotificationRepository,
-    NotificationSender, RateLimitPort, WebSocketSender,
+    EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
+    RateLimitPort, WebSocketSender,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
@@ -43,14 +43,6 @@ struct TestNotification {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl NotificationExtIos for TestNotification {
@@ -74,11 +66,22 @@ impl NotificationExtIos for TestNotification {
 }
 
 impl NotificationExtEmail for TestNotification {
-    fn into_email(self) -> crate::domain::models::queue_message::EmailContent {
+    fn into_email(&self) -> crate::domain::models::queue_message::EmailContent {
         EmailContent {
             subject: "Test".to_string(),
-            body: self.message,
+            body: self.message.clone(),
         }
+    }
+
+    fn rate_limit_config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: u64::MAX,
+            window: Duration::from_hours(1),
+        }
+    }
+
+    fn rate_limit_key(&self) -> RateLimitKey {
+        RateLimitKey::from_str_hashed("test-key")
     }
 }
 
@@ -942,8 +945,8 @@ impl MockRateLimiter {
 impl RateLimitPort for MockRateLimiter {
     async fn check_and_increment(
         &self,
-        _key: RateLimitKey,
-        config: RateLimitConfig,
+        _key: &RateLimitKey,
+        config: &RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         if self.should_exceed {
             Ok(RateLimitResult::Exceeded(RateLimitExceeded {
