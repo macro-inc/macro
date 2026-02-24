@@ -157,40 +157,40 @@ const SoupFilters = () => {
   const toggleFocus = (id: 'signal' | 'noise') => {
     const comb = { id, isActive: soup.filters.isActive(id) };
 
-    const activateFocus = () =>
-      batch(() => {
-        soup.filters.toggle(id);
-        soup.filters.activate('not-done');
-      });
+    const activateFocus = () => {
+      soup.filters.toggle(id);
+      soup.filters.activate('not-done');
+    };
 
-    const deactivateFocus = () =>
-      batch(() => {
-        soup.filters.toggle('explicit-noise');
-        soup.filters.deactivate('not-done');
-      });
+    const deactivateFocus = () => {
+      soup.filters.toggle('explicit-noise');
+      soup.filters.deactivate('not-done');
+    };
 
-    match(comb)
-      .with({ id: 'signal', isActive: false }, () => {
-        setQueryFilters((prev) =>
-          applyInboxQueryFilters(removeOtherQueryFilters(prev))
-        );
-        activateFocus();
-      })
-      .with({ id: 'noise', isActive: false }, () => {
-        setQueryFilters((prev) =>
-          applyOtherQueryFilters(removeInboxQueryFilters(prev))
-        );
-        activateFocus();
-      })
-      .with({ id: 'signal', isActive: true }, () => {
-        setQueryFilters(removeInboxQueryFilters);
-        deactivateFocus();
-      })
-      .with({ id: 'noise', isActive: true }, () => {
-        setQueryFilters(removeOtherQueryFilters);
-        deactivateFocus();
-      })
-      .exhaustive();
+    batch(() => {
+      match(comb)
+        .with({ id: 'signal', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyInboxQueryFilters(removeOtherQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'noise', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyOtherQueryFilters(removeInboxQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'signal', isActive: true }, () => {
+          setQueryFilters(removeInboxQueryFilters);
+          deactivateFocus();
+        })
+        .with({ id: 'noise', isActive: true }, () => {
+          setQueryFilters(removeOtherQueryFilters);
+          deactivateFocus();
+        })
+        .exhaustive();
+    });
   };
 
   const toggleUnread = () => {
