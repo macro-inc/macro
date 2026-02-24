@@ -50,7 +50,10 @@ type TypedInnerSearchResult =
   | { results: ChannelSearchResult[]; type: 'channel' }
   | { results: EmailSearchResult[]; type: 'email' };
 
-const getSearchData = (data: TypedInnerSearchResult): SearchData => {
+const getSearchData = (
+  data: TypedInnerSearchResult,
+  searchQuery: string
+): SearchData => {
   let contentHitData: ContentHitData[] = [];
 
   switch (data.type) {
@@ -143,7 +146,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
-    searchQuery: null,
+    searchQuery,
     contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
@@ -166,20 +169,24 @@ export const useSearchResponseItemMapper = () => {
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         let search: SearchData;
         if (searchFileType === 'md') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'md',
-          });
+          search = getSearchData(
+            { results: result.document_search_results, type: 'md' },
+            searchQuery
+          );
         } else if (searchFileType === 'pdf') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'pdf',
-            searchQuery,
-          });
+          search = getSearchData(
+            {
+              results: result.document_search_results,
+              type: 'pdf',
+              searchQuery,
+            },
+            searchQuery
+          );
         } else {
-          search = getSearchData({
-            results: result.document_search_results,
-          });
+          search = getSearchData(
+            { results: result.document_search_results },
+            searchQuery
+          );
         }
         return {
           type: 'document',
@@ -191,14 +198,14 @@ export const useSearchResponseItemMapper = () => {
           updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.metadata?.project_id ?? undefined,
-          search: { ...search, searchQuery },
+          search,
         };
       }
       case 'email': {
-        const search = getSearchData({
-          results: result.email_message_search_results,
-          type: 'email',
-        });
+        const search = getSearchData(
+          { results: result.email_message_search_results, type: 'email' },
+          searchQuery
+        );
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
@@ -220,15 +227,16 @@ export const useSearchResponseItemMapper = () => {
           isDraft: result.is_draft,
           done: !result.inbox_visible,
           participants,
-          search: { ...search, searchQuery },
+          search,
           snippet: result.snippet ?? undefined,
         };
       }
       case 'chat': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getSearchData({
-          results: result.chat_search_results,
-        });
+        const search = getSearchData(
+          { results: result.chat_search_results },
+          searchQuery
+        );
         let name = result.name;
         if (!name || name === blockNameToDefaultFile('chat')) {
           const chat = (historyQuery.data ?? []).find(
@@ -246,7 +254,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
           projectId: result.metadata?.project_id ?? undefined,
-          search: { ...search, searchQuery },
+          search,
         };
       }
       case 'channel': {
@@ -254,10 +262,10 @@ export const useSearchResponseItemMapper = () => {
           (c) => c.id === result.channel_id
         );
 
-        const search = getSearchData({
-          type: 'channel',
-          results: result.channel_message_search_results,
-        });
+        const search = getSearchData(
+          { type: 'channel', results: result.channel_message_search_results },
+          searchQuery
+        );
 
         return {
           type: 'channel',
@@ -271,15 +279,16 @@ export const useSearchResponseItemMapper = () => {
           participantIds: channelWithLatest?.participants?.map(
             (p) => p.user_id
           ),
-          search: { ...search, searchQuery },
+          search,
         };
       }
 
       case 'project': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getSearchData({
-          results: result.project_search_results,
-        });
+        const search = getSearchData(
+          { results: result.project_search_results },
+          searchQuery
+        );
 
         return {
           type: 'project',
@@ -289,7 +298,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           projectId: result.metadata?.parent_project_id ?? undefined,
-          search: { ...search, searchQuery },
+          search,
         };
       }
     }
