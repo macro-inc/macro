@@ -1,4 +1,4 @@
-message_id,channel_id,sender_id,content,thread_id
+message_id,channel_id,sender_id,content,thread_id,entity_mentions
 00000000-0000-0000-0001-000000000001,00000000-0000-0000-0000-000000000001,macro|bob@example.com,Welcome to the general channel everyone!,
 00000000-0000-0000-0001-000000000002,00000000-0000-0000-0000-000000000001,macro|charlie@example.com,Thanks Bob! Glad to be here.,
 00000000-0000-0000-0001-000000000003,00000000-0000-0000-0000-000000000001,macro|dana@example.com,Hey all - quick question about the onboarding doc?,

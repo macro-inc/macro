@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::entity::utils::deserialize_semicolon_list;
 use std::path::Path;
 
 use anyhow::Context;
@@ -122,17 +123,6 @@ struct CsvChannelRow {
     /// Semicolon-separated list of participant user IDs
     #[serde(default, deserialize_with = "deserialize_semicolon_list")]
     participants: Vec<String>,
-}
-
-fn deserialize_semicolon_list<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(s.split(';').map(|s| s.trim().to_string()).collect())
 }
 
 impl ChannelArgs {

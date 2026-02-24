@@ -11,9 +11,12 @@ use mockall::automock;
 use comms_db_client::channels::create_channel::CreateChannelOptions;
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::create_message::CreateMessageOptions;
+use comms_db_client::messages::create_message_mentions::CreateMessageMentionOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
+use comms_db_client::model::SimpleMention;
 use model::document::DocumentMetadata;
 use models_email::email::service;
+use models_permissions::share_permission::access_level::AccessLevel;
 
 /// Wrapper around the database connection pool.
 pub struct SeedDb {
@@ -73,6 +76,77 @@ impl SeedDb {
         let message =
             comms_db_client::messages::seed_message::seed_message(&self.inner, options).await?;
         Ok(message.id)
+    }
+
+    /// Create entity mentions for a message.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn create_message_mentions(
+        &self,
+        message_id: uuid::Uuid,
+        mentions: Vec<SimpleMention>,
+    ) -> anyhow::Result<Vec<String>> {
+        let options = CreateMessageMentionOptions {
+            message_id,
+            mentions,
+        };
+        comms_db_client::messages::create_message_mentions::create_message_mentions(
+            &self.inner,
+            options,
+        )
+        .await
+    }
+
+    /// Update channel share permissions for a mentioned entity (seed-data only, no access check).
+    #[tracing::instrument(skip(self), err)]
+    pub async fn update_share_permissions_for_mention(
+        &self,
+        channel_id: uuid::Uuid,
+        item_id: &str,
+        item_type: &str,
+    ) -> anyhow::Result<()> {
+        let share_permission_id = macro_db_client::share_permission::get::get_share_permission_id(
+            &self.inner,
+            item_id,
+            item_type,
+        )
+        .await?;
+
+        let channel_id_str = channel_id.to_string();
+        if let Err(e) =
+            macro_db_client::share_permission::channel_permission::create::insert_channel_share_permission(
+                &self.inner,
+                &share_permission_id,
+                &channel_id_str,
+                &AccessLevel::View,
+            )
+            .await
+        {
+            tracing::warn!(error=?e, "channel share permission may already exist, continuing");
+        }
+
+        let participants = comms_db_client::participants::get_participants::get_participants(
+            &self.inner,
+            &channel_id,
+        )
+        .await?;
+
+        let active_user_ids: Vec<_> = participants
+            .into_iter()
+            .filter(|p| p.left_at.is_none())
+            .map(|p| p.user_id)
+            .collect();
+
+        macro_db_client::item_access::insert::upsert_user_item_access_bulk(
+            &self.inner,
+            &active_user_ids,
+            item_id,
+            item_type,
+            AccessLevel::View,
+            Some(channel_id),
+        )
+        .await?;
+
+        Ok(())
     }
 
     /// Fetch an email link by its ID.
