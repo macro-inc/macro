@@ -4,6 +4,7 @@ import type {
   BlockComponentProps,
   BlockName,
 } from '@core/block';
+import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
@@ -283,6 +284,7 @@ export type SplitManager = {
       mount: SplitMount;
       isOpen: boolean;
       options: PopoverSplitOptions;
+      handle: PopoverSplitHandle;
     }
   >;
 } & UrlCapabilities;
@@ -407,6 +409,7 @@ export function createSplitLayout(
         mount: SplitMount;
         isOpen: boolean;
         options: PopoverSplitOptions;
+        handle: PopoverSplitHandle;
       }
     >;
   }>({
@@ -900,25 +903,19 @@ export function createSplitLayout(
     options: PopoverSplitOptions
   ): PopoverSplitHandle {
     const id = `popover-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Acquire focus lock BEFORE any state updates to capture the correct element
+    const focusLock = useFocusLock(`popover-${id}`);
+    focusLock.acquire();
+
     const mount = createPinnedMount(orchestrator, options.content);
-
-    const popoverData = {
-      id,
-      content: options.content,
-      mount,
-      isOpen: true,
-      options,
-    };
-
-    setState('popovers', (prev) => {
-      const newMap = new Map(prev);
-      newMap.set(id, popoverData);
-      return newMap;
-    });
 
     const handle: PopoverSplitHandle = {
       id,
       close: () => {
+        // Release focus lock to return focus to previously focused element
+        focusLock.release();
+
         setState('popovers', (prev) => {
           const newMap = new Map(prev);
           const popover = newMap.get(id);
@@ -944,53 +941,36 @@ export function createSplitLayout(
       content: () => options.content,
     };
 
+    const popoverData = {
+      id,
+      content: options.content,
+      mount,
+      isOpen: true,
+      options,
+      handle, // Store the handle so getActivePopovers can return it
+    };
+
+    setState('popovers', (prev) => {
+      const newMap = new Map(prev);
+      newMap.set(id, popoverData);
+      return newMap;
+    });
+
     return handle;
   }
 
   function getActivePopovers(): PopoverSplitHandle[] {
     return Array.from(state.popovers.values())
       .filter((popover) => popover.isOpen)
-      .map((popover) => ({
-        id: popover.id,
-        close: () => {
-          setState('popovers', (prev) => {
-            const newMap = new Map(prev);
-            const p = newMap.get(popover.id);
-            if (p) {
-              newMap.set(popover.id, { ...p, isOpen: false });
-              setTimeout(() => {
-                setState('popovers', (prev) => {
-                  const cleanupMap = new Map(prev);
-                  cleanupMap.delete(popover.id);
-                  return cleanupMap;
-                });
-              }, 300);
-            }
-            return newMap;
-          });
-          popover.options.onClose?.();
-        },
-        isOpen: () => {
-          const p = state.popovers.get(popover.id);
-          return p?.isOpen ?? false;
-        },
-        content: () => popover.content,
-      }));
+      .map((popover) => popover.handle);
   }
 
   function closeAllPopovers(): void {
     setState('popovers', (prev) => {
-      const newMap = new Map();
-      for (const [id, popover] of prev) {
-        newMap.set(id, { ...popover, isOpen: false });
-        popover.options.onClose?.();
-      }
-      // Schedule cleanup
-      setTimeout(() => {
-        setState('popovers', () => new Map());
-      }, 300);
-      return newMap;
-    });
+    const popovers = Array.from(state.popovers.values());
+    for (const popover of popovers) {
+      popover.handle.close();
+    }
   }
 
   function openWithSplit(

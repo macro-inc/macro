@@ -92,6 +92,21 @@ function focusLast(element: Element) {
   });
 }
 
+/**
+ * Hook for managing focus lock lifecycle externally.
+ * Useful for components that manage their own open state (like PopoverSplit)
+ * but still need to participate in the focus return system.
+ */
+export function useFocusLock(id: string) {
+  const ownerId = generateOwnerId(id);
+
+  return {
+    acquire: () => acquireFocusLock(ownerId),
+    release: (shouldReturnFocus = true) =>
+      releaseFocusLock(ownerId, shouldReturnFocus),
+  };
+}
+
 export const createControlledOpenSignal = (
   value?: boolean,
   options?: {
@@ -106,6 +121,13 @@ export const createControlledOpenSignal = (
     shouldReturnFocusToPreviousElement = true
   ) => {
     const prevOpen = createMenuOpen();
+    const nextValue = typeof next === 'function' ? next(prevOpen) : next;
+
+    // IMPORTANT: Capture focus BEFORE updating the signal!
+    if (!prevOpen && nextValue) {
+      acquireFocusLock(ownerId);
+    }
+
     const isOpenResult = setCreateMenuOpen(next);
 
     if (!prevOpen && isOpenResult) {

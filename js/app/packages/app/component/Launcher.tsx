@@ -104,12 +104,17 @@ const createComponent = async (spec: {
   shouldInsert?: boolean;
   asPopover?: boolean;
 }) => {
-  setCreateMenuOpen(false, false);
   const { openWithSplit, popoverSplit } = useSplitLayout();
+
+  // For popovers, create the popover BEFORE closing launcher
+  // so the popover can acquire the focus lock while launcher still owns rootFocusElement
   if (spec.asPopover) {
     popoverSplit({ type: 'component', id: spec.componentId });
+    setCreateMenuOpen(false, false);
     return;
   }
+
+  setCreateMenuOpen(false, false);
 
   openWithSplit(
     { type: 'component', id: spec.componentId },
