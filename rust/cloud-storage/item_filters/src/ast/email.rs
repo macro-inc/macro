@@ -46,6 +46,8 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             email_thread_ids,
             importance,
             notification_filters,
+            include_labels: _,
+            exclude_labels: _,
         } = input;
 
         fn map_email(s: String) -> Email {

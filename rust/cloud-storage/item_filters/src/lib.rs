@@ -5,6 +5,40 @@ use non_empty::IsEmpty;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
+/// Gmail system label IDs. Serializes to/from the Gmail label string (e.g. "INBOX", "SPAM").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumString, Display)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum SystemLabel {
+    /// INBOX label
+    Inbox,
+    /// SPAM label
+    Spam,
+    /// TRASH label
+    Trash,
+    /// UNREAD label
+    Unread,
+    /// STARRED label
+    Starred,
+    /// IMPORTANT label
+    Important,
+    /// SENT label
+    Sent,
+    /// DRAFT label
+    Draft,
+    /// CATEGORY_PERSONAL label
+    CategoryPersonal,
+    /// CATEGORY_SOCIAL label
+    CategorySocial,
+    /// CATEGORY_PROMOTIONS label
+    CategoryPromotions,
+    /// CATEGORY_UPDATES label
+    CategoryUpdates,
+    /// CATEGORY_FORUMS label
+    CategoryForums,
+}
+
 pub mod ast;
 
 /// Fields that can be searched on in search queries
@@ -192,6 +226,16 @@ pub struct EmailFilters {
     /// Filter by email notification state.
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
+
+    /// Only include emails that have at least one of these labels. Examples: ["INBOX", "CATEGORY_PROMOTIONS"]. Empty to not filter by included labels.
+    /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include_labels: Vec<SystemLabel>,
+
+    /// Exclude emails that have any of these labels. Examples: ["CATEGORY_PROMOTIONS"]. Empty to not exclude any labels.
+    /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_labels: Vec<SystemLabel>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -204,6 +248,8 @@ impl IsEmpty for EmailFilters {
             email_thread_ids,
             importance,
             notification_filters,
+            include_labels,
+            exclude_labels,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -212,6 +258,8 @@ impl IsEmpty for EmailFilters {
             && email_thread_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()
+            && include_labels.is_empty()
+            && exclude_labels.is_empty()
     }
 }
 
