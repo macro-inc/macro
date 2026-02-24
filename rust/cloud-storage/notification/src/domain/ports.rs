@@ -22,7 +22,6 @@ use crate::domain::models::{
     RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
     apple::APNSPushNotification, mobile::MessageAttributes,
 };
-use crate::domain::models::{NotificationExtEmail, TaggedContent};
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
 pub trait NotificationSender: Send + Sync + 'static {

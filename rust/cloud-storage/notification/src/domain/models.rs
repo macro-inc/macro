@@ -223,7 +223,7 @@ pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
 /// Extension trait for notifications that can be delivered via email.
 pub trait NotificationExtEmail: Notification {
     /// Convert this notification into email content.
-    fn into_email(&self) -> EmailContent;
+    fn format_email(&self) -> EmailContent;
 
     /// The configuration for how often the notification can be triggered on a certain key.
     fn rate_limit_config() -> RateLimitConfig;

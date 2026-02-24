@@ -6,8 +6,8 @@ use crate::domain::models::email_notification_digest::ports::DigestBatch;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatcher};
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, NotificationChannel,
-    QueueMessage, RawQueueMessage,
+    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, EmailCreateBundle,
+    NotificationChannel, QueueMessage, RawQueueMessage,
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
@@ -66,7 +66,7 @@ impl NotificationExtIos for TestNotification {
 }
 
 impl NotificationExtEmail for TestNotification {
-    fn into_email(&self) -> crate::domain::models::queue_message::EmailContent {
+    fn format_email(&self) -> crate::domain::models::queue_message::EmailContent {
         EmailContent {
             subject: "Test".to_string(),
             body: self.message.clone(),
@@ -951,7 +951,7 @@ impl RateLimitPort for MockRateLimiter {
         if self.should_exceed {
             Ok(RateLimitResult::Exceeded(RateLimitExceeded {
                 key: "test_key".to_string(),
-                current_count: config.max_count + 1,
+                current_count: config.max_count.saturating_add(1),
                 max_count: config.max_count,
             }))
         } else {
@@ -1066,21 +1066,13 @@ async fn test_egress_rate_limit_exceeded() {
     let service = create_egress_service(MockRateLimiter::exceeding());
 
     let recipient = test_user_id("user@example.com");
+    let email = EmailCreateBundle::new(&TestNotification {
+        message: "Hello".to_string(),
+    })
+    .with_recipient(recipient);
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
-        Some((
-            RateLimitKey::from_str_hashed("test"),
-            RateLimitConfig::new(10, Duration::from_secs(3600)),
-        )),
-        NotificationChannel::ConnGateway(
-            ConnGatewayNotification {
-                notif: create_mock_notif(TestNotification {
-                    message: "Hello".to_string(),
-                }),
-                recipients: vec![recipient],
-            }
-            .testing_to_value(),
-        ),
+        NotificationChannel::Email(email),
     );
 
     let results = service.deliver_notification(message).await;
@@ -1102,22 +1094,13 @@ async fn test_egress_rate_limit_allowed() {
     let service = create_egress_service(MockRateLimiter::allowing());
 
     let recipient = test_user_id("user@example.com");
+    let email = EmailCreateBundle::new(&TestNotification {
+        message: "Hello".to_string(),
+    })
+    .with_recipient(recipient);
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
-        Some((
-            RateLimitKey::from_str_hashed("test"),
-            RateLimitConfig::new(10, Duration::from_secs(3600)),
-        )),
-        NotificationChannel::ConnGateway(
-            ConnGatewayNotification {
-                notif: create_mock_notif(TestNotification {
-                    message: "Hello".to_string(),
-                }),
-
-                recipients: vec![recipient],
-            }
-            .testing_to_value(),
-        ),
+        NotificationChannel::Email(email),
     );
 
     let results = service.deliver_notification(message).await;
@@ -1128,13 +1111,12 @@ async fn test_egress_rate_limit_allowed() {
 }
 
 #[tokio::test]
-async fn test_egress_no_rate_limit_configured() {
+async fn test_egress_conn_gateway_not_rate_limited() {
     let service = create_egress_service(MockRateLimiter::exceeding());
 
     let recipient = test_user_id("user@example.com");
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
-        None, // No rate limit configured
         NotificationChannel::ConnGateway(
             ConnGatewayNotification {
                 notif: create_mock_notif(TestNotification {
@@ -1148,7 +1130,7 @@ async fn test_egress_no_rate_limit_configured() {
 
     let results = service.deliver_notification(message).await;
 
-    // Should succeed even though rate limiter would exceed - because no rate limit is configured
+    // Should succeed - ConnGateway messages are not rate limited
     assert_eq!(results.len(), 1);
     assert!(results[0].is_ok());
 }
@@ -1478,7 +1460,6 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let user2 = test_user_id("bob@example.com");
     let message = QueueMessage::new_test(
         "test_notification".to_string(),
-        None,
         NotificationChannel::Ios(Box::new(APNSTargets {
             notif: APNSPushNotification {
                 aps: Aps::default(),
@@ -1567,10 +1548,10 @@ impl DigestBatcher for ReadyDigestBatcher {
     }
 }
 
-// TODO: update this test once poll_email_digests routes through the ingress service
 #[tokio::test]
-#[should_panic(expected = "poll_email_digests: route through ingress service")]
 async fn test_poll_email_digests_sends_email_for_ready_batch() {
+    use std::sync::Arc;
+
     let user = test_user_id("digest@example.com");
     let notif = UserNotificationRow {
         owner_id: user.clone(),
@@ -1599,8 +1580,9 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
         batch: Mutex::new(Some(batch)),
     };
 
+    let queue = Arc::new(MockQueue::new());
     let service = NotificationEgressService {
-        queue: MockQueue::new(),
+        queue: queue.clone(),
         repository: MockRepository::new(),
         websocket: MockWebSocketSender,
         mobile: MockMobileSender,
@@ -1610,14 +1592,29 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
         digest_batcher: batcher,
     };
 
-    service.poll_email_digests().await.unwrap();
+    fn digest_to_notif(batch: DigestBatch) -> Result<TestNotification, Report> {
+        Ok(TestNotification {
+            message: format!("You have {} notification(s)", batch.notifications.len()),
+        })
+    }
+
+    service.poll_email_digests(digest_to_notif).await.unwrap();
+
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert!(published[0]["content"]["Email"].is_object());
 }
 
 #[tokio::test]
 async fn test_poll_email_digests_noop_when_empty() {
     let service = create_egress_service(MockRateLimiter::allowing());
+
+    fn digest_to_notif(_batch: DigestBatch) -> Result<TestNotification, Report> {
+        panic!("should not be called when empty")
+    }
+
     // MockDigestBatcher always returns Empty
-    service.poll_email_digests().await.unwrap();
+    service.poll_email_digests(digest_to_notif).await.unwrap();
 }
 
 impl NotificationSender for std::sync::Arc<TrackingMobileSender> {

@@ -213,12 +213,6 @@ impl notification::domain::models::Notification for ChannelInviteMetadata {
 
 impl notification::domain::models::Notification for AiResponseMetadata {
     const TYPE_NAME: &'static str = "ai_response";
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {

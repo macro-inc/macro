@@ -1,20 +1,16 @@
 //! Request and response models for the notification service.
 
-use crate::domain::{
-    models::{
-        ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-        RateLimitConfig, RateLimitKey, RecipientExclusion,
-        apple::APNSPushNotification,
-        mobile::{self, MessageAttributes},
-        queue_message::{EmailContent, EmailCreateBundle},
-    },
-    service::SendNotificationError,
+use crate::domain::models::{
+    ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
+    RecipientExclusion,
+    apple::APNSPushNotification,
+    mobile::{self, MessageAttributes},
+    queue_message::EmailCreateBundle,
 };
 use cowlike::CowLike;
 use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;

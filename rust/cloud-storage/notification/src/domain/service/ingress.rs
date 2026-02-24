@@ -7,8 +7,8 @@ use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification,
-    NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine, UserApnsEndpoints,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, NotificationChannel, QueueMessage,
+    QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
     GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,

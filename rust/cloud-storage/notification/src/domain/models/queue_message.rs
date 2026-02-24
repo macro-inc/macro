@@ -78,7 +78,7 @@ impl EmailCreateBundle {
     pub(crate) fn new<T: NotificationExtEmail>(notif: &T) -> Self {
         let rate_limit_config = T::rate_limit_config();
         let rate_limit_key = notif.rate_limit_key();
-        let content = notif.into_email();
+        let content = notif.format_email();
         EmailCreateBundle {
             content,
             rate_limit_config,
