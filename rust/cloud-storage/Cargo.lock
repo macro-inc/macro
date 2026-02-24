@@ -6325,7 +6325,7 @@ dependencies = [
 name = "notification_sandbox"
 version = "0.1.0"
 dependencies = [
- "anyhow",
+ "aws-sdk-sesv2",
  "aws-sdk-sns",
  "chrono",
  "either",
@@ -6333,6 +6333,7 @@ dependencies = [
  "macro_aws_config",
  "macro_user_id",
  "model-entity",
+ "models_pagination",
  "notification",
  "redis",
  "rootcause",
@@ -6340,6 +6341,8 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
