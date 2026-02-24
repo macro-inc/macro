@@ -223,13 +223,12 @@ async fn test_dynamic_query_drafts_view(pool: Pool<Postgres>) -> anyhow::Result<
     let results =
         dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    // Should get draft messages (thread 3)
-    assert_eq!(results.len(), 1, "Drafts view should return 1 thread");
-    assert_eq!(
-        results[0].id.to_string(),
-        "20000003-0000-0000-0000-000000000003"
+    // Should get draft messages (threads 3 and 8)
+    assert_eq!(results.len(), 2, "Drafts view should return 2 threads");
+    assert!(
+        results.iter().all(|r| r.is_draft),
+        "All messages should be drafts"
     );
-    assert!(results[0].is_draft, "Message should be marked as draft");
 
     Ok(())
 }
@@ -276,8 +275,8 @@ async fn test_dynamic_query_important_view(pool: Pool<Postgres>) -> anyhow::Resu
     let results =
         dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    // Should get important messages and drafts (threads 5 and 3)
-    assert_eq!(results.len(), 2, "Important view should return 2 threads");
+    // Should get important messages and drafts (threads 3, 5, and 8)
+    assert_eq!(results.len(), 3, "Important view should return 3 threads");
 
     let result_ids: std::collections::HashSet<String> =
         results.iter().map(|r| r.id.to_string()).collect();
@@ -289,6 +288,10 @@ async fn test_dynamic_query_important_view(pool: Pool<Postgres>) -> anyhow::Resu
     assert!(
         result_ids.contains("20000005-0000-0000-0000-000000000005"),
         "Should include important thread 5"
+    );
+    assert!(
+        result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "Should include draft thread 8"
     );
     assert!(results.iter().all(|r| r.is_important));
 
@@ -309,8 +312,8 @@ async fn test_static_important_query_includes_drafts(pool: Pool<Postgres>) -> an
 
     assert_eq!(
         results.len(),
-        2,
-        "Static important query should return both important and draft threads"
+        3,
+        "Static important query should return important and draft threads"
     );
 
     let result_ids: std::collections::HashSet<String> =
@@ -323,6 +326,10 @@ async fn test_static_important_query_includes_drafts(pool: Pool<Postgres>) -> an
     assert!(
         result_ids.contains("20000005-0000-0000-0000-000000000005"),
         "Should include important thread 5"
+    );
+    assert!(
+        result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "Should include draft thread 8"
     );
     assert!(results.iter().all(|r| r.is_important));
     assert!(results.iter().any(|r| r.is_draft));
@@ -528,13 +535,13 @@ async fn test_dynamic_query_drafts_with_recipient_filter(
     let results =
         dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    // Should get draft messages to alice@example.com (thread 3)
+    // Should get draft messages to alice@example.com (threads 3 and 8)
     assert_eq!(
         results.len(),
-        1,
-        "Should return 1 draft thread to alice@example.com"
+        2,
+        "Should return 2 draft threads to alice@example.com"
     );
-    assert!(results[0].is_draft, "Should be a draft");
+    assert!(results.iter().all(|r| r.is_draft), "All should be drafts");
 
     Ok(())
 }
@@ -668,11 +675,12 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
 // The fixture has:
 //   Thread 1 (msg 1): INBOX + CATEGORY_PERSONAL → important (has priority label)
 //   Thread 2 (msg 2): SENT → important (has priority label)
-//   Thread 3 (msg 3): DRAFT → important (no depriority label)
+//   Thread 3 (msg 3): DRAFT → important (DRAFT is a priority label)
 //   Thread 4 (msg 4): STARRED + INBOX → important (no depriority label)
 //   Thread 5 (msg 5): IMPORTANT + INBOX → important (no depriority label)
 //   Thread 6 (msg 6): Work + CATEGORY_UPDATES → NOT important (depriority, no priority)
 //   Thread 7 (msg 7): INBOX + CATEGORY_PROMOTIONS → NOT important (depriority, no priority)
+//   Thread 8 (msg 8): DRAFT + CATEGORY_UPDATES → important (DRAFT priority overrides depriority)
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
@@ -690,11 +698,11 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
         let results =
             dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-        // Threads 1 (CATEGORY_PERSONAL), 2 (SENT), 3 (no depriority), 4 (no depriority), 5 (no depriority)
+        // Threads 1 (CATEGORY_PERSONAL), 2 (SENT), 3 (DRAFT), 4 (no depriority), 5 (no depriority), 8 (DRAFT overrides depriority)
         assert_eq!(
             results.len(),
-            5,
-            "importance=true should return 5 important threads"
+            6,
+            "importance=true should return 6 important threads"
         );
 
         let result_ids: std::collections::HashSet<String> =
@@ -710,7 +718,7 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
         );
         assert!(
             result_ids.contains("20000003-0000-0000-0000-000000000003"),
-            "Should include thread 3 (no depriority)"
+            "Should include thread 3 (DRAFT)"
         );
         assert!(
             result_ids.contains("20000004-0000-0000-0000-000000000004"),
@@ -719,6 +727,10 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
         assert!(
             result_ids.contains("20000005-0000-0000-0000-000000000005"),
             "Should include thread 5 (no depriority)"
+        );
+        assert!(
+            result_ids.contains("20000008-0000-0000-0000-000000000008"),
+            "Should include thread 8 (DRAFT overrides CATEGORY_UPDATES depriority)"
         );
 
         // Threads 6 and 7 should be excluded (depriority labels, no priority)
@@ -741,10 +753,11 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
             dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
         // Threads 6 (CATEGORY_UPDATES) and 7 (CATEGORY_PROMOTIONS)
+        // Thread 8 has CATEGORY_UPDATES but is excluded because DRAFT is a priority label
         assert_eq!(
             results.len(),
             2,
-            "importance=false should return 2 unimportant threads"
+            "importance=false should return 2 unimportant threads (drafts excluded)"
         );
 
         let result_ids: std::collections::HashSet<String> =
@@ -758,7 +771,55 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
             result_ids.contains("20000007-0000-0000-0000-000000000007"),
             "Should include thread 7 (CATEGORY_PROMOTIONS)"
         );
+        assert!(
+            !result_ids.contains("20000008-0000-0000-0000-000000000008"),
+            "Should exclude thread 8 (DRAFT priority overrides CATEGORY_UPDATES depriority)"
+        );
     }
+
+    Ok(())
+}
+
+// Inbox view + importance=false: the "Other" toggle in the UI.
+// Thread 6 (CATEGORY_UPDATES) has importance=false but inbox_visible=false → excluded by Inbox view.
+// Thread 7 (CATEGORY_PROMOTIONS) has importance=false AND inbox_visible=true → included.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_inbox_view_with_importance_false(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(false)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    // Only thread 7: inbox_visible=true AND importance=false
+    assert_eq!(
+        results.len(),
+        1,
+        "Inbox view with importance=false should return only 1 thread"
+    );
+
+    assert_eq!(
+        results[0].id.to_string(),
+        "20000007-0000-0000-0000-000000000007",
+        "Should be thread 7 (CATEGORY_PROMOTIONS, inbox_visible=true)"
+    );
+
+    // Thread 6 should be excluded (inbox_visible=false)
+    assert!(
+        !results
+            .iter()
+            .any(|r| r.id.to_string() == "20000006-0000-0000-0000-000000000006"),
+        "Should exclude thread 6 (inbox_visible=false)"
+    );
 
     Ok(())
 }
@@ -818,6 +879,96 @@ async fn test_dynamic_query_thread_id_with_sender_filter(
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id, id1);
     assert_eq!(results[0].sender_email.as_deref(), Some("john@example.com"));
+
+    Ok(())
+}
+
+// Thread 8 is a draft with CATEGORY_UPDATES (depriority label).
+// DRAFT is a priority label, so it should appear in importance=true results
+// even though it has a depriority label.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_importance_true_includes_drafts_with_depriority_label(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Thread 8 has DRAFT + CATEGORY_UPDATES. DRAFT is a priority label,
+    // so it should be included despite the depriority label.
+    assert!(
+        result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "importance=true should include draft thread 8 even though it has CATEGORY_UPDATES"
+    );
+
+    // Thread 3 is a plain draft (no depriority label) — should also be included
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "importance=true should include draft thread 3"
+    );
+
+    Ok(())
+}
+
+// Thread 8 is a draft with CATEGORY_UPDATES (depriority label).
+// DRAFT is a priority label, so it should NOT appear in importance=false results.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_importance_false_excludes_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(false)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Thread 8 has CATEGORY_UPDATES (depriority) but also DRAFT (priority).
+    // Since DRAFT is a priority label, it should be excluded from importance=false.
+    assert!(
+        !result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "importance=false should exclude draft thread 8 despite having CATEGORY_UPDATES"
+    );
+
+    // Thread 3 is a plain draft — should also be excluded (DRAFT is a priority label)
+    assert!(
+        !result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "importance=false should exclude draft thread 3"
+    );
+
+    // Only non-draft threads with depriority labels should appear
+    assert!(
+        result_ids.contains("20000006-0000-0000-0000-000000000006"),
+        "Should include thread 6 (CATEGORY_UPDATES, not a draft)"
+    );
+    assert!(
+        result_ids.contains("20000007-0000-0000-0000-000000000007"),
+        "Should include thread 7 (CATEGORY_PROMOTIONS, not a draft)"
+    );
+    assert_eq!(
+        results.len(),
+        2,
+        "Only non-draft depriority threads should appear"
+    );
 
     Ok(())
 }

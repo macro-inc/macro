@@ -154,10 +154,16 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
+  // Signal/noise only show emails in the user's inbox (aka not-done emails). All shows all emails.
+  const emailView = () =>
+    soup.filters.isActive('signal') || soup.filters.isActive('noise')
+      ? 'inbox'
+      : 'all';
+
   const soupBody = createMemo(
     (): SoupBody => ({
       ...queryFilters(),
-      emailView: soup.filters.isActive('signal') ? 'inbox' : 'all',
+      emailView: emailView(),
     })
   );
 
