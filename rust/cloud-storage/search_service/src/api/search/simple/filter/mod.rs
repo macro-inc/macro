@@ -140,6 +140,32 @@ const DEPRIORITY_LABELS: &[&str] = &[
     "CATEGORY_FORUMS",
 ];
 
+fn apply_email_importance(
+    importance: Option<bool>,
+    include_labels: &mut Vec<String>,
+    exclude_labels: &mut Vec<String>,
+) {
+    match importance {
+        Some(false) => {
+            for label in DEPRIORITY_LABELS {
+                let label = label.to_string();
+                if !include_labels.contains(&label) {
+                    include_labels.push(label);
+                }
+            }
+        }
+        // Default to excluding depriority labels in search (importance = true behavior)
+        _ => {
+            for label in DEPRIORITY_LABELS {
+                let label = label.to_string();
+                if !exclude_labels.contains(&label) {
+                    exclude_labels.push(label);
+                }
+            }
+        }
+    }
+}
+
 impl FilterVariantToSearchArgs for item_filters::EmailFilters {
     type Output = UnifiedEmailSearchArgs;
 
@@ -155,26 +181,7 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
         } else {
             let mut include_labels = self.include_labels.clone();
             let mut exclude_labels = self.exclude_labels.clone();
-
-            match self.importance {
-                Some(false) => {
-                    for label in DEPRIORITY_LABELS {
-                        let label = label.to_string();
-                        if !include_labels.contains(&label) {
-                            include_labels.push(label);
-                        }
-                    }
-                }
-                // Default to excluding depriority labels in search (importance = true behavior)
-                _ => {
-                    for label in DEPRIORITY_LABELS {
-                        let label = label.to_string();
-                        if !exclude_labels.contains(&label) {
-                            exclude_labels.push(label);
-                        }
-                    }
-                }
-            }
+            apply_email_importance(self.importance, &mut include_labels, &mut exclude_labels);
 
             Ok(UnifiedEmailSearchArgs {
                 thread_ids: vec![],
@@ -189,3 +196,7 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
+
