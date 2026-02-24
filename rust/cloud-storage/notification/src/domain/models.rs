@@ -5,7 +5,7 @@ use std::sync::Arc;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub(crate) mod android;
+pub mod android;
 pub mod apple;
 
 pub mod email_notification_digest;

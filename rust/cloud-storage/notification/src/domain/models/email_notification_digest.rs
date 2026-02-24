@@ -9,13 +9,11 @@
 
 use crate::domain::{
     models::{
-        Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, TaggedContent,
-        UserNotificationRow,
+        Notification, UserNotificationRow,
         email_notification_digest::ports::{
             DigestBatcher, LastOnlineChecker, MessageId, MessageReceiptRepo,
             NotificationSendChecker, PushNotificationChecker, UserExistenceChecker,
         },
-        queue_message::EmailContent,
     },
     ports::NotificationRepository,
 };
