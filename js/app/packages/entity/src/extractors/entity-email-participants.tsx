@@ -1,6 +1,11 @@
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
+import { isSearchEntity } from '../types/search';
+import { Show } from 'solid-js';
 
 /** Checks if a value is likely an email address */
 export function isLikelyEmail(value?: string): boolean {
@@ -88,6 +93,13 @@ export function formatDisplayNames(names: string[]): string | undefined {
   return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
 }
 
+function highlightTermsInText(text: string, terms: string[]): string {
+  if (!terms.length) return text;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  return text.replace(pattern, '<macro_em>$1</macro_em>');
+}
+
 /**
  * Get a nicely formatted list of participants from an email entity.
  * @param props
@@ -108,5 +120,32 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
     );
   };
 
-  return <>{displayNames()}</>;
+  const searchTerms = () => {
+    if (!isSearchEntity(props.entity)) return [];
+    const { senderHighlight } = props.entity.search;
+    if (!senderHighlight) return [];
+    // senderHighlight is the raw matched term from OpenSearch (not wrapped in <macro_em>)
+    return senderHighlight.toLowerCase().split(/\s+/).filter(Boolean);
+  };
+
+  const highlighted = () => {
+    const names = displayNames();
+    if (!names) return undefined;
+    const terms = searchTerms();
+    if (!terms.length) return undefined;
+    const result = mergeAdjacentMacroEmTags(highlightTermsInText(names, terms));
+    return result !== names ? result : undefined;
+  };
+
+  return (
+    <Show when={highlighted()} fallback={displayNames()}>
+      {(md) => (
+        <StaticMarkdown
+          markdown={md()}
+          theme={unifiedListMarkdownTheme}
+          singleLine
+        />
+      )}
+    </Show>
+  );
 }

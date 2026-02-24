@@ -138,10 +138,17 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   }
 
   const nameHighlight = data.results.at(0)?.highlight.name ?? null;
+  const senderHighlight =
+    data.type === 'email'
+      ? (data.results.find((r) => r.highlight.sender)?.highlight.sender ?? null)
+      : null;
 
   return {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
+    senderHighlight: senderHighlight
+      ? mergeAdjacentMacroEmTags(senderHighlight)
       : null,
     contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
