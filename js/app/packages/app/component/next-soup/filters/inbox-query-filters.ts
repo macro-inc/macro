@@ -5,6 +5,7 @@ import { EXCLUDE } from './filters';
 const INBOX_DONE = false;
 const INBOX_IMPORTANCE = true;
 const INBOX_TASK_BYPASS = true;
+const OTHER_IMPORTANCE = false;
 
 const isNonEmptyObject = (obj: Record<string, unknown>) =>
   Object.keys(obj).length > 0;
@@ -98,9 +99,11 @@ export function removeInboxQueryFilters(
         }
       : undefined;
 
+  // Strip `importance` if it was set by Inbox (true) or Other (false).
+  // If importance was set externally, leave email_filters untouched.
   const { importance, ...emailRest } = filters.email_filters ?? {};
   const email_filters =
-    importance === INBOX_IMPORTANCE
+    importance === INBOX_IMPORTANCE || importance === OTHER_IMPORTANCE
       ? isNonEmptyObject(emailRest)
         ? emailRest
         : undefined

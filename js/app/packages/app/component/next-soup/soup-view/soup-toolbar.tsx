@@ -151,6 +151,9 @@ const SoupFilters = () => {
     setQueryFilters(removeInboxQueryFilters(filters));
   };
 
+  // Batch filter + query updates so the prefetch effect in soup-view-context
+  // sees the final query filters and active filter state in a single tick,
+  // avoiding intermediate re-renders with mismatched query keys.
   const toggleFocus = (id: 'signal' | 'noise') => {
     const comb = { id, isActive: soup.filters.isActive(id) };
 

@@ -62,7 +62,11 @@ VALUES
 
     -- Thread 7: Inbox with CC to bob@example.com
     ('20000007-0000-0000-0000-000000000007', 'thread7', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-     true, false, '2024-01-09 04:00:00+00', NULL, '2024-01-09 04:00:00+00', NOW(), NOW());
+     true, false, '2024-01-09 04:00:00+00', NULL, '2024-01-09 04:00:00+00', NOW(), NOW()),
+
+    -- Thread 8: Draft with depriority label (CATEGORY_UPDATES) - tests that DRAFT priority overrides depriority
+    ('20000008-0000-0000-0000-000000000008', 'thread8', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, NULL, NULL, '2024-01-08 03:00:00+00', NOW(), NOW());
 
 -- Insert test messages
 INSERT INTO email_messages (
@@ -112,7 +116,13 @@ VALUES
     ('30000007-0000-0000-0000-000000000007', '20000007-0000-0000-0000-000000000007',
      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg7', '40000002-0000-0000-0000-000000000002',
      'Team Update', 'FYI for everyone', '2024-01-09 04:00:00+00',
-     false, false, false, false, NOW(), NOW());
+     false, false, false, false, NOW(), NOW()),
+
+    -- Message 8: Draft with depriority label from bob@example.com
+    ('30000008-0000-0000-0000-000000000008', '20000008-0000-0000-0000-000000000008',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg8', '40000003-0000-0000-0000-000000000003',
+     'Draft With Updates Label', 'Draft that also has a depriority label', '2024-01-08 03:00:00+00',
+     true, false, false, false, NOW(), NOW());
 
 -- Insert message recipients
 INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
@@ -137,7 +147,10 @@ VALUES
 
     -- Message 7: To alice@example.com, CC bob@example.com
     ('30000007-0000-0000-0000-000000000007', '40000004-0000-0000-0000-000000000004', 'TO'),
-    ('30000007-0000-0000-0000-000000000007', '40000003-0000-0000-0000-000000000003', 'CC');
+    ('30000007-0000-0000-0000-000000000007', '40000003-0000-0000-0000-000000000003', 'CC'),
+
+    -- Message 8: To alice@example.com
+    ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO');
 
 -- Insert message-label relationships
 INSERT INTO email_message_labels (message_id, label_id)
@@ -171,4 +184,7 @@ VALUES
     -- Message 6 (thread 6): CATEGORY_UPDATES (depriority label, no priority → NOT important)
     ('30000006-0000-0000-0000-000000000006', '10000009-0000-0000-0000-000000000009'),
     -- Message 7 (thread 7): CATEGORY_PROMOTIONS (depriority label, no priority → NOT important)
-    ('30000007-0000-0000-0000-000000000007', '10000010-0000-0000-0000-000000000010');
+    ('30000007-0000-0000-0000-000000000007', '10000010-0000-0000-0000-000000000010'),
+    -- Message 8 (thread 8): DRAFT + CATEGORY_UPDATES (draft with depriority label → important because DRAFT is priority)
+    ('30000008-0000-0000-0000-000000000008', '10000005-0000-0000-0000-000000000005'),
+    ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009');
