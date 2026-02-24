@@ -56,12 +56,15 @@ describe('createEntitySearchConfig', () => {
     const config = createEntitySearchConfig(domain);
 
     const channelEntity: CombinedEntity = {
-      kind: 'channel',
+      kind: 'entity',
       id: 'channel-1',
       data: {
+        type: 'channel',
         id: 'channel-1',
         name: 'Test Channel',
-      } as any,
+        ownerId: 'owner-1',
+        channelType: 'public',
+      },
     };
 
     const boost = config.boostFn!(channelEntity);

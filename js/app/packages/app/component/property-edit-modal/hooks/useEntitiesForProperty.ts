@@ -1,21 +1,22 @@
-import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityMapper,
+  entityTypeToBuckets,
   getEntitySearchText,
   getEntityTimestampedItem,
+  getEntityType,
   isChannelEntity,
   threadMapper,
+  quickAccessItemToEntity,
+  userToEntity,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
-import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useEmail } from '@core/context/user';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistoryQuery } from '@queries/history/history';
+
 import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
@@ -27,6 +28,11 @@ import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
+import {
+  useQuickAccess,
+  type Bucket,
+  type QuickAccessItem,
+} from '@core/context/quickAccess';
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
@@ -41,14 +47,47 @@ export function useEntitiesForProperty(
   );
   createEffect(() => debouncedSetSearchTerm(searchQuery()));
 
-  // Data sources
-  const contacts = useContacts();
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
-  const historyQuery = useHistoryQuery();
-  const history = () => historyQuery.data ?? [];
+  // Use quickAccess for entity data
+  const quickAccess = useQuickAccess();
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+
+  // Get current user domain for same-domain boost in search
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
 
   const specificEntityType = () => property()?.specificEntityType;
+
+  // Determine which buckets to use based on config
+  const buckets = createMemo(() => entityTypeToBuckets(specificEntityType()));
+
+  // Get items from quickAccess based on entity type
+  const quickAccessItems = createMemo((): QuickAccessItem[] => {
+    const b = buckets();
+    if (b === null) {
+      // All entity types - exclude commands
+      return quickAccess.useList(
+        'person',
+        'channel',
+        'dm',
+        'document',
+        'note',
+        'task',
+        'chat',
+        'project'
+      )();
+    }
+    if (b.length === 0) {
+      return [];
+    }
+    if (b.length === 1) {
+      return quickAccess.useList(b[0])();
+    }
+    // Multiple buckets
+    return quickAccess.useList(...(b as [Bucket, ...Bucket[]]))();
+  });
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -85,64 +124,49 @@ export function useEntitiesForProperty(
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
-  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
-  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
-  const augmentUsersWithDmActivity = (): CombinedEntity[] => {
-    return contacts().map((user) =>
-      entityMapper('user')(augmentUserWithDmActivity(user))
-    );
-  };
-
-  // Get entities based on specific entity type
+  // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
 
-    // Generic entity - include all types
-    if (!entityType) {
-      return [
-        ...augmentUsersWithDmActivity(),
-        ...history().map(entityMapper('item')),
-        ...channels().map(entityMapper('channel')),
-        ...emails().map(threadMapper),
-      ];
-    }
-
-    if (entityType === 'USER') {
-      return augmentUsersWithDmActivity();
-    }
-
-    if (entityType === 'CHANNEL') {
-      return channels().map(entityMapper('channel'));
-    }
-
+    // For THREAD type, use email data (not in quickAccess yet)
     if (entityType === 'THREAD') {
       return emails().map(threadMapper);
     }
 
-    // Item-based types: DOCUMENT, PROJECT, CHAT
-    const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
-    if (itemTypes.includes(entityType)) {
-      return history()
-        .filter((item) => item.type.toUpperCase() === entityType)
-        .map(entityMapper('item'));
+    // For COMPANY type, return empty (not in quickAccess)
+    if (entityType === 'COMPANY') {
+      return [];
     }
 
-    if (entityType === 'TASK') {
-      return history()
-        .filter(
-          (item) => item.type === 'document' && item.subType?.type === 'task'
-        )
-        .map(entityMapper('item'));
+    // Convert quickAccess items to CombinedEntity
+    const items = quickAccessItems();
+    const converted: CombinedEntity[] = [];
+
+    for (const item of items) {
+      // Augment users with DM activity
+      if (item.kind === 'user') {
+        const augmentedUser = augmentUserWithDmActivity(item.data);
+        converted.push(userToEntity(augmentedUser));
+      } else {
+        const entity = quickAccessItemToEntity(item);
+        // Filter by specific entity type if needed
+        if (entityType) {
+          const type = getEntityType(entity);
+          if (type === entityType) {
+            converted.push(entity);
+          }
+        } else {
+          converted.push(entity);
+        }
+      }
     }
 
-    // COMPANY not yet implemented
-    return [];
-  });
+    // For generic entity type, also include emails
+    if (!entityType) {
+      converted.push(...emails().map(threadMapper));
+    }
 
-  const currentUserEmail = useEmail();
-  const currentUserDomain = createMemo(() => {
-    const email = currentUserEmail();
-    return email ? email.split('@')[1] : undefined;
+    return converted;
   });
 
   // search function for fuzzy matching

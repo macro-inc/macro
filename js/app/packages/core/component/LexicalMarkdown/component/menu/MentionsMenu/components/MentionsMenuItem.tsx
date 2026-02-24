@@ -61,9 +61,6 @@ export function MentionsMenuItem(props: {
             size="xs"
           />
         );
-
-      case 'command':
-        return null;
     }
   };
 

@@ -1,10 +1,10 @@
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
-  type QuickAccessItem,
-  isEntityItem,
   isCommandItem,
-} from '@core/context/quickAccess';
+  isEntityItem,
+  type CommandMenuItem,
+} from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
@@ -55,7 +55,7 @@ const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
 function getBlockNameForEntity(
-  item: QuickAccessItem
+  item: CommandMenuItem
 ): BlockName | BlockAlias | undefined {
   if (isEntityItem(item)) {
     return itemToBlockName(item.data);
@@ -135,7 +135,7 @@ function CommandMenuInner(props: {
     return items[index];
   };
 
-  function handleItemAction(item: QuickAccessItem, openInNewSplit = false) {
+  function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
 
     if (isCommandItem(item)) {
@@ -461,9 +461,9 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
 }
 
 function ResultsContainer(props: {
-  items: QuickAccessItem[];
+  items: CommandMenuItem[];
   selectedIndex: number;
-  onSelect: (item: QuickAccessItem, openInNewSplit: boolean) => void;
+  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onMouseEnter: (index: number) => void;
 }) {
   const containerHeight = () => {
@@ -499,9 +499,9 @@ function ResultsContainer(props: {
 
 /** Virtualized command list component */
 function VirtualizedCommandList(props: {
-  items: QuickAccessItem[];
+  items: CommandMenuItem[];
   selectedIndex: number;
-  onSelect: (item: QuickAccessItem, openInNewSplit: boolean) => void;
+  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onMouseEnter: (index: number) => void;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
@@ -552,7 +552,7 @@ function HotkeyHint(props: { shortcut: string; label: string }) {
 }
 
 function CommandMenuFooter(props: {
-  selectedItem: QuickAccessItem | undefined;
+  selectedItem: CommandMenuItem | undefined;
   isInCommandScope: boolean;
   isEntityActionMode?: boolean;
 }) {
