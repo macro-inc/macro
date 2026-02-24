@@ -1,6 +1,9 @@
 import { Show } from 'solid-js';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  searchContentHitMarkdownTheme,
+  unifiedListMarkdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
 import type { ContentHitData } from '../types/search';
 
 interface SearchContentProps {
@@ -24,7 +27,11 @@ export function SearchContent(props: SearchContentProps) {
           {(trimmedContent) => (
             <StaticMarkdown
               markdown={trimmedContent()}
-              theme={unifiedListMarkdownTheme}
+              theme={
+                props.singleLine
+                  ? unifiedListMarkdownTheme
+                  : searchContentHitMarkdownTheme
+              }
               singleLine={props.singleLine}
             />
           )}

@@ -437,8 +437,10 @@ export function ListEntity(props: ListEntityProps) {
       </Show>
 
       <Show when={showContentHits()}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
-          <div class={cn('min-w-0 flex-1 truncate ml-4 @lg/entity:ml-6')}>
+        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
+          <div
+            class={cn('min-w-0 flex-1 overflow-hidden ml-4 @lg/entity:ml-6')}
+          >
             <Entity.Search.ContentHits
               entity={props.entity}
               onClick={props.onContentHitClick}
