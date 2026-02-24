@@ -137,8 +137,7 @@ impl EmailQueryBuilder {
         }
 
         if !self.include_labels.is_empty() {
-            content_bool_query
-                .filter(QueryType::terms("labels", self.include_labels.clone()));
+            content_bool_query.filter(QueryType::terms("labels", self.include_labels.clone()));
         }
 
         for label in &self.exclude_labels {
