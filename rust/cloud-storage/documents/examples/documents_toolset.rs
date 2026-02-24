@@ -13,6 +13,8 @@
 //! DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL=...
 //! DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME=THE PRIVATE KEY
 //! DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID=...
+//! DOCUMENT_STORAGE_BUCKET=...
+//! DOCX_DOCUMENT_UPLOAD_BUCKET=...
 //! cargo run --example documents_toolset
 //! ```
 
@@ -20,42 +22,18 @@ use ai::tool::tool_loop::cli::Cli;
 use ai::tool::types::RequestContext;
 use ai::types::Model;
 use documents::domain::models::CloudFrontConfig;
-use documents::domain::ports::{PresignedUploadUrlPort, TaskPropertiesPort};
+use documents::domain::ports::TaskPropertiesPort;
 use documents::domain::service::DocumentServiceImpl;
 use documents::inbound::toolset::{DocumentToolContext, document_toolset};
 use documents::outbound::pg_document_repo::PgDocumentRepo;
+use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::ContentType;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-
-/// No-op presigned upload URL service (not needed for toolset example).
-#[derive(Clone)]
-struct NoOpUploadUrl;
-
-impl PresignedUploadUrlPort for NoOpUploadUrl {
-    async fn put_document_storage_presigned_url(
-        &self,
-        _key: &str,
-        _sha: &str,
-        _content_type: ContentType,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("not implemented in example")
-    }
-
-    async fn put_docx_upload_presigned_url(
-        &self,
-        _key: &str,
-        _sha: &str,
-        _content_type: ContentType,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("not implemented in example")
-    }
-}
 
 /// No-op task properties service (not needed for toolset example).
 #[derive(Clone)]
@@ -68,11 +46,12 @@ impl TaskPropertiesPort for NoOpTaskProperties {
 }
 
 /// The prompt to use in the example.
-const PROMPT: &str = "You are an assistant that helps users explore and manage their documents. Use the available tools to read document metadata.";
+const PROMPT: &str = "You are an assistant that helps users explore, create and manage their documents. Use the available tools to create and read documents.";
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
+
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let usr = std::env::var("LOCAL_USER_ID").expect("LOCAL_USER_ID must bes set");
@@ -97,6 +76,15 @@ async fn main() {
     let entity_access_repo = PgAccessRepository::new(pool.clone());
     let entity_access_service = EntityAccessServiceImpl::new(entity_access_repo);
 
+    let document_storage_bucket =
+        std::env::var("DOCUMENT_STORAGE_BUCKET").expect("DOCUMENT_STORAGE_BUCKET must be set");
+    let docx_upload_bucket = std::env::var("DOCX_DOCUMENT_UPLOAD_BUCKET")
+        .expect("DOCX_DOCUMENT_UPLOAD_BUCKET must be set");
+
+    let s3_client = macro_aws_config::s3_client().await;
+    let s3_upload_adapter =
+        S3UploadUrlAdapter::new(s3_client, document_storage_bucket, docx_upload_bucket);
+
     let documents_repo = PgDocumentRepo::new(pool.clone());
     let documents_service = DocumentServiceImpl::new(
         documents_repo,
@@ -117,7 +105,7 @@ async fn main() {
             browser_cache_expiry_seconds: 900,
         },
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url),
-        NoOpUploadUrl,
+        s3_upload_adapter,
         NoOpTaskProperties,
         pool,
     );

@@ -1,4 +1,4 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -226,8 +226,8 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
-            <div class="flex flex-col gap-1 pl-1 w-full">
+          <ClippedPanel active tl class="py-2">
+            <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}
                 fallback={
@@ -237,6 +237,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 <VList
                   data={emojiOptions()}
                   ref={setVirtualHandle}
+                  class="scrollbar-hidden"
                   style={{
                     height:
                       contentMaxHeight() !== undefined
@@ -263,8 +264,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 </VList>
               </Show>
             </div>
-          </div>
-          <BozzyBracketInnerSibling animOnOpen={true} />
+          </ClippedPanel>
         </div>
       </ScopedPortal>
     </Show>

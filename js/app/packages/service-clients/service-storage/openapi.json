@@ -5309,6 +5309,10 @@
             },
             "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by channel notification state."
+          },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -5496,6 +5500,10 @@
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by chat notification state."
           },
           "owners": {
             "type": "array",
@@ -6105,6 +6113,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by document notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -6118,6 +6130,10 @@
               "type": "string"
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "task_filters": {
+            "$ref": "#/components/schemas/TaskFilters",
+            "description": "Task-specific filters that only apply to task subtype documents."
           }
         }
       },
@@ -6688,6 +6704,10 @@
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by email notification state."
           },
           "recipients": {
             "type": "array",
@@ -7577,6 +7597,20 @@
           }
         }
       },
+      "NotificationFilters": {
+        "type": "object",
+        "description": "Notification-level filters that apply to an entity type.",
+        "properties": {
+          "done": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+          },
+          "seen": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          }
+        }
+      },
       "Params": {
         "type": "object",
         "properties": {
@@ -8298,6 +8332,10 @@
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by project notification state."
           },
           "owners": {
             "type": "array",
@@ -9589,6 +9627,16 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "TaskFilters": {
+        "type": "object",
+        "description": "Task-only filters nested under document filters.",
+        "properties": {
+          "include_cbm_atm_nc": {
+            "type": ["boolean", "null"],
+            "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
           }
         }
       },

@@ -411,14 +411,13 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    // Build highlight
     let highlight = Highlight::new().require_field_match(true).field(
         "content",
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(500),
+            .number_of_fragments(0),
     );
 
     search_request_builder.highlight(highlight);

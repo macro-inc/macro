@@ -5,7 +5,7 @@ use crate::{
         tracking::{EntityConnectionExt, TrackingData},
         websocket::ToWebsocketMessage,
     },
-    service::tracker,
+    service::{stream_event::handle_stream_events, tracker},
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
@@ -105,6 +105,9 @@ pub async fn handle_message(
             )
             .await
             .ok();
+        }
+        ToWebsocketMessage::StreamEvents(message) => {
+            handle_stream_events(connection_context, sender.clone(), message)
         }
     };
 

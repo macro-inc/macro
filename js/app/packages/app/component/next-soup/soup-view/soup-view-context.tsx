@@ -102,7 +102,6 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
-
   const soupParams = createMemo(
     (): SoupParams => ({
       limit: 100,
@@ -158,7 +157,7 @@ export const SoupViewContextProvider: FlowComponent<
   const soupBody = createMemo(
     (): SoupBody => ({
       ...queryFilters(),
-      emailView: 'all',
+      emailView: soup.filters.isActive('signal') ? 'inbox' : 'all',
     })
   );
 

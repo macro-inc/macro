@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailFiltersImportance } from './emailFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The email filters used to filter down what emails you search over.
@@ -18,6 +19,8 @@ export interface EmailFilters {
   email_thread_ids?: string[];
   /** Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: EmailFiltersImportance;
+  /** Filter by email notification state. */
+  notification_filters?: NotificationFilters;
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];
   /** Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders. */

@@ -31,6 +31,7 @@ pub(crate) async fn important_preview_cursor(
         QualifyingMessages AS (
             SELECT m.thread_id,
                    m.internal_date_ts,
+                   m.created_at AS fallback_ts,
                    m.is_draft,
                    m.subject,
                    m.snippet,
@@ -56,6 +57,7 @@ pub(crate) async fn important_preview_cursor(
 
             SELECT m.thread_id,
                    m.internal_date_ts,
+                   m.created_at AS fallback_ts,
                    m.is_draft,
                    m.subject,
                    m.snippet,
@@ -70,26 +72,28 @@ pub(crate) async fn important_preview_cursor(
             SELECT DISTINCT ON (thread_id)
                    thread_id,
                    internal_date_ts,
+                   fallback_ts,
                    is_draft,
                    subject,
                    snippet,
                    from_contact_id,
                    from_name
             FROM QualifyingMessages
-            ORDER BY thread_id, internal_date_ts DESC
+            ORDER BY thread_id, COALESCE(internal_date_ts, fallback_ts) DESC
         ),
         ImportantWithSortKey AS (
             -- Join with user_history to calculate the final effective sort key.
             SELECT
                 ait.thread_id,
                 ait.internal_date_ts,
+                ait.fallback_ts,
                 ait.is_draft,
                 ait.subject,
                 ait.snippet,
                 ait.from_contact_id,
                 ait.from_name,
-                ait.internal_date_ts as created_at,
-                ait.internal_date_ts as updated_at,
+                COALESCE(ait.internal_date_ts, ait.fallback_ts) as created_at,
+                COALESCE(ait.internal_date_ts, ait.fallback_ts) as updated_at,
                 uh.updated_at as viewed_at,
                 -- This CASE statement dynamically selects the correct timestamp for sorting.
                 -- For 'updated_at' and 'created_at', we use the important message timestamp
@@ -97,14 +101,12 @@ pub(crate) async fn important_preview_cursor(
                 -- For 'viewed_updated', we use the history timestamp if it exists, otherwise the important message timestamp.
                 CASE $5 -- sort_method_str
                     WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, ait.internal_date_ts)
-                    ELSE ait.internal_date_ts
+                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, COALESCE(ait.internal_date_ts, ait.fallback_ts))
+                    ELSE COALESCE(ait.internal_date_ts, ait.fallback_ts)
                 END AS effective_ts
             FROM AllImportantThreads ait
             -- This has to be a left join to support all sort methods.
             LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = $1
-            -- user_history updated_at (aka last time opened) has to exist when viewed_at sort method is selected.
-            WHERE ait.is_draft = FALSE 
         )
         SELECT
                isk.thread_id as "id!",

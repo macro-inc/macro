@@ -5,7 +5,6 @@ import {
 import { useChannelsContext } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
-  truncateSearchMatch,
   mergeAdjacentMacroEmTags,
   extractSearchSnippet,
   extractSearchTerms,
@@ -37,8 +36,6 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
 
-const SEARCH_MATCH_LENGTH = 60;
-
 type InnerSearchResult =
   | DocumentSearchResult
   | EmailSearchResult
@@ -66,10 +63,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         return contents.map((content) => ({
           type: 'channel' as const,
           id: r.message_id!,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           senderId: r.sender_id!,
           sentAt: r.created_at!,
           location: {
@@ -88,10 +82,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           const mergedContent = mergeAdjacentMacroEmTags(content);
           return {
             type: 'pdf' as const,
-            content: truncateSearchMatch(
-              mergeAdjacentMacroEmTags(content),
-              SEARCH_MATCH_LENGTH
-            ),
+            content: mergeAdjacentMacroEmTags(content),
             location: {
               type: 'pdf' as const,
               searchPage: Number(r.node_id),
@@ -112,10 +103,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'md' as const,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           location: { type: 'md' as const, nodeId: r.node_id! },
         }));
       });
@@ -126,10 +114,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'email' as const,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           sender: r.pretty_sender!,
           senderId: emailToId(r.sender),
           sentAt: r.sent_at!,
@@ -145,10 +130,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           location: undefined,
         }));
       });
@@ -157,10 +139,23 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 
   const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
+  let senderHighlightTerms: string[] | null = null;
+  if (data.type === 'email') {
+    const terms = [
+      ...new Set(
+        data.results
+          .flatMap((r) => (r.highlight.sender ?? '').toLowerCase().split(/\s+/))
+          .filter(Boolean)
+      ),
+    ];
+    senderHighlightTerms = terms.length > 0 ? terms : null;
+  }
+
   return {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
+    senderHighlightTerms,
     contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };

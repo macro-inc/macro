@@ -29,6 +29,12 @@ import {
   getEntityTypeFilterIcon,
   QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
+import {
+  applyInboxQueryFilters,
+  applyOtherQueryFilters,
+  removeInboxQueryFilters,
+  removeOtherQueryFilters,
+} from '@app/component/next-soup/filters/inbox-query-filters';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -45,6 +51,8 @@ import {
   TaskStatusDropdown,
   TaskAssigneeDropdown,
 } from '@app/component/next-soup/soup-view/task-sub-filters';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import { match } from 'ts-pattern';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -131,14 +139,55 @@ const SoupFilters = () => {
   const [statusDropdownOpen, setStatusDropdownOpen] = createSignal(false);
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = createSignal(false);
 
-  const toggleFocus = (id: 'signal' | 'noise') => {
-    if (soup.filters.isActive(id)) {
-      soup.filters.toggle('explicit-noise');
-      soup.filters.deactivate('not-done');
-    } else {
-      soup.filters.toggle(id);
-      soup.filters.activate('not-done');
+  const setQueryFiltersInboxAware = (filters: SoupItemsQueryFilters) => {
+    if (soup.filters.isActive('signal')) {
+      setQueryFilters(applyInboxQueryFilters(filters));
+      return;
     }
+    if (soup.filters.isActive('noise')) {
+      setQueryFilters(applyOtherQueryFilters(removeInboxQueryFilters(filters)));
+      return;
+    }
+    setQueryFilters(removeInboxQueryFilters(filters));
+  };
+
+  const toggleFocus = (id: 'signal' | 'noise') => {
+    const comb = { id, isActive: soup.filters.isActive(id) };
+
+    const activateFocus = () =>
+      batch(() => {
+        soup.filters.toggle(id);
+        soup.filters.activate('not-done');
+      });
+
+    const deactivateFocus = () =>
+      batch(() => {
+        soup.filters.toggle('explicit-noise');
+        soup.filters.deactivate('not-done');
+      });
+
+    match(comb)
+      .with({ id: 'signal', isActive: false }, () => {
+        setQueryFilters((prev) =>
+          applyInboxQueryFilters(removeOtherQueryFilters(prev))
+        );
+        activateFocus();
+      })
+      .with({ id: 'noise', isActive: false }, () => {
+        setQueryFilters((prev) =>
+          applyOtherQueryFilters(removeInboxQueryFilters(prev))
+        );
+        activateFocus();
+      })
+      .with({ id: 'signal', isActive: true }, () => {
+        setQueryFilters(removeInboxQueryFilters);
+        deactivateFocus();
+      })
+      .with({ id: 'noise', isActive: true }, () => {
+        setQueryFilters(removeOtherQueryFilters);
+        deactivateFocus();
+      })
+      .exhaustive();
   };
 
   const toggleUnread = () => {
@@ -149,7 +198,9 @@ const SoupFilters = () => {
     const willBeActive = !soup.filters.isActive(id);
     batch(() => {
       soup.filters.toggle(id);
-      setQueryFilters(willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default);
+      setQueryFiltersInboxAware(
+        willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default
+      );
     });
   };
 
@@ -160,14 +211,14 @@ const SoupFilters = () => {
       soup.filters.toggle('email');
       if (willBeActive) {
         const shouldIncludeEmails = emailActive();
-        setQueryFilters({
+        setQueryFiltersInboxAware({
           ...QUERY_FILTERS.email,
           email_filters: {
             recipients: shouldIncludeEmails ? [] : EXCLUDE,
           },
         });
       } else {
-        setQueryFilters(QUERY_FILTERS.default);
+        setQueryFiltersInboxAware(QUERY_FILTERS.default);
       }
     });
   };

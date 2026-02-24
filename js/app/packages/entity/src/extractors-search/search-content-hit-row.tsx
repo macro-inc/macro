@@ -29,7 +29,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
       onClick={handleClick}
       role="button"
     >
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-3 min-w-0">
         <Show when={props.hit.type === 'channel' || props.hit.type === 'email'}>
           <div class="flex items-center gap-1">
             <Show when={senderId()}>

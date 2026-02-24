@@ -137,6 +137,11 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "term": {
               "labels": "TRASH"
             }
+          },
+          {
+            "term": {
+              "labels": "SPAM"
+            }
           }
         ]
       }

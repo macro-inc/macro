@@ -276,16 +276,56 @@ async fn test_dynamic_query_important_view(pool: Pool<Postgres>) -> anyhow::Resu
     let results =
         dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    // Should get important messages (thread 5)
-    assert_eq!(results.len(), 1, "Important view should return 1 thread");
-    assert_eq!(
-        results[0].id.to_string(),
-        "20000005-0000-0000-0000-000000000005"
+    // Should get important messages and drafts (threads 5 and 3)
+    assert_eq!(results.len(), 2, "Important view should return 2 threads");
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "Should include draft thread 3"
     );
     assert!(
-        results[0].is_important,
-        "Message should be marked as important"
+        result_ids.contains("20000005-0000-0000-0000-000000000005"),
+        "Should include important thread 5"
     );
+    assert!(results.iter().all(|r| r.is_important));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_static_important_query_includes_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let limit = 50;
+    let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+
+    let results =
+        queries::important::important_preview_cursor(&pool, &link_id, limit, &query).await?;
+
+    assert_eq!(
+        results.len(),
+        2,
+        "Static important query should return both important and draft threads"
+    );
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "Should include draft thread 3"
+    );
+    assert!(
+        result_ids.contains("20000005-0000-0000-0000-000000000005"),
+        "Should include important thread 5"
+    );
+    assert!(results.iter().all(|r| r.is_important));
+    assert!(results.iter().any(|r| r.is_draft));
 
     Ok(())
 }

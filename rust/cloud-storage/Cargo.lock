@@ -2974,6 +2974,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "sync_service_client",
  "thiserror 2.0.17",
@@ -9162,6 +9163,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "utoipa",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ use super::{StreamId, StreamItem};
 use async_trait::async_trait;
 use futures::stream::Stream;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
@@ -30,8 +31,8 @@ pub trait StreamRepo: Send + Sync + 'static {
     async fn close(&self, id: &StreamId) -> Result<()>;
     /// List active streams for an entity (implementations may treat all streams as active).
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>>;
-    /// A receiver that receives StreamId's when new streams are created
-    async fn notify(&self) -> Receiver<StreamId>;
+    /// A receiver that receives stream lifecycle events.
+    async fn notify(&self) -> Receiver<StreamEvent>;
 }
 
 /// Subscribe to all streams on an entity, returning a merged item stream.
@@ -43,4 +44,6 @@ pub trait StreamManager: Send + Sync + 'static {
     async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream>;
     /// Cancel the subscription for the given sender, stopping its stream.
     async fn unsubscribe(&self, sender_id: String) -> Result<()>;
+    /// access to the lower-level repo api
+    fn repo(&self) -> Arc<dyn StreamRepo>;
 }

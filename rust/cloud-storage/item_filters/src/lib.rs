@@ -22,6 +22,45 @@ pub enum SearchOn {
     NameContent,
 }
 
+/// Notification-level filters that apply to an entity type.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct NotificationFilters {
+    /// Filter by notification done state.
+    /// None to ignore, true to include only done notifications, false to include only not-done notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done: Option<bool>,
+
+    /// Filter by notification seen state.
+    /// None to ignore, true to include only seen notifications, false to include only unseen notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen: Option<bool>,
+}
+
+impl IsEmpty for NotificationFilters {
+    fn is_empty(&self) -> bool {
+        let NotificationFilters { done, seen } = self;
+        done.is_none() && seen.is_none()
+    }
+}
+
+/// Task-only filters nested under document filters.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct TaskFilters {
+    /// Include tasks that are created by me, assigned to me, and not completed,
+    /// even when they do not match other document filters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_cbm_atm_nc: Option<bool>,
+}
+
+impl IsEmpty for TaskFilters {
+    fn is_empty(&self) -> bool {
+        // false is equivalent to "disabled" and should not affect filtering.
+        self.include_cbm_atm_nc != Some(true)
+    }
+}
+
 /// The document filters used to filter down what documents you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -46,6 +85,14 @@ pub struct DocumentFilters {
     /// Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// Filter by document notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
+
+    /// Task-specific filters that only apply to task subtype documents.
+    #[serde(default, skip_serializing_if = "TaskFilters::is_empty")]
+    pub task_filters: TaskFilters,
 }
 
 impl IsEmpty for DocumentFilters {
@@ -56,12 +103,16 @@ impl IsEmpty for DocumentFilters {
             project_ids,
             owners,
             importance,
+            notification_filters,
+            task_filters,
         } = self;
         file_types.is_empty()
             && document_ids.is_empty()
             && project_ids.is_empty()
             && owners.is_empty()
             && importance.is_none()
+            && notification_filters.is_empty()
+            && task_filters.is_empty()
     }
 }
 
@@ -88,6 +139,10 @@ pub struct ChatFilters {
     /// Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// Filter by chat notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ChatFilters {
@@ -98,12 +153,14 @@ impl IsEmpty for ChatFilters {
             project_ids,
             owners,
             importance,
+            notification_filters,
         } = self;
         role.is_empty()
             && chat_ids.is_empty()
             && project_ids.is_empty()
             && owners.is_empty()
             && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -131,6 +188,10 @@ pub struct EmailFilters {
     /// Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// Filter by email notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for EmailFilters {
@@ -142,6 +203,7 @@ impl IsEmpty for EmailFilters {
             recipients,
             email_thread_ids,
             importance,
+            notification_filters,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -149,6 +211,7 @@ impl IsEmpty for EmailFilters {
             && recipients.is_empty()
             && email_thread_ids.is_empty()
             && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -179,6 +242,10 @@ pub struct ChannelFilters {
     /// Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// Filter by channel notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ChannelFilters {
@@ -191,6 +258,7 @@ impl IsEmpty for ChannelFilters {
             sender_ids,
             channel_types,
             importance,
+            notification_filters,
         } = self;
         thread_ids.is_empty()
             && mentions.is_empty()
@@ -199,6 +267,7 @@ impl IsEmpty for ChannelFilters {
             && sender_ids.is_empty()
             && channel_types.is_empty()
             && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -217,6 +286,10 @@ pub struct ProjectFilters {
     /// Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// Filter by project notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ProjectFilters {
@@ -225,8 +298,12 @@ impl IsEmpty for ProjectFilters {
             project_ids,
             owners,
             importance,
+            notification_filters,
         } = self;
-        project_ids.is_empty() && owners.is_empty() && importance.is_none()
+        project_ids.is_empty()
+            && owners.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 

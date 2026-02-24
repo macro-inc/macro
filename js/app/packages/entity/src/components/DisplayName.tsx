@@ -4,9 +4,8 @@ export function DisplayName(props: {
   id: string;
   format?: 'firstName' | 'lastName' | 'fullName';
 }) {
-  const parts = useDisplayNameParts(tryMacroId(props.id));
-
   const name = () => {
+    const parts = useDisplayNameParts(tryMacroId(props.id));
     const format = props.format ?? 'fullName';
 
     if (format === 'fullName') {

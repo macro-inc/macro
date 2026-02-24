@@ -3959,6 +3959,23 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -3996,6 +4013,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4039,6 +4073,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4051,6 +4102,17 @@ export const postItemsSoupBody = zod
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           ),
+        task_filters: zod
+          .object({
+            include_cbm_atm_nc: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
+              ),
+          })
+          .optional()
+          .describe('Task-only filters nested under document filters.'),
       })
       .optional()
       .describe(
@@ -4082,6 +4144,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -4107,6 +4186,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()

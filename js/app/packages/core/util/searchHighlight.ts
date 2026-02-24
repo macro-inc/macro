@@ -3,6 +3,25 @@
  * that contains <macro_em> tags marking matched terms.
  */
 
+const INVISIBLE_CHARS_RE =
+  /(?:[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF\u00AD\u2800-\u28FF]|\u034F)+/g;
+
+/** Collapses newlines, extra whitespace, and invisible Unicode characters into a clean single line. */
+function stripInvisibleChars(text: string): string {
+  return text
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(INVISIBLE_CHARS_RE, '')
+    .trim();
+}
+
+/** Returns the visible character count after stripping invisible chars and `<macro_em>` tags. */
+export function visibleLength(content: string): number {
+  return stripInvisibleChars(content)
+    .replace(/<\/?macro_em>/g, '')
+    .trim().length;
+}
+
 /**
  * Extracts terms from macro_em tags in the highlighted content.
  * Returns array of text strings that should be highlighted, preserving order and duplicates.
@@ -63,52 +82,68 @@ export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
   return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
 }
 
+/** Wraps each occurrence of the given terms in `<macro_em>` tags (case-insensitive). */
+export function highlightTermsInText(text: string, terms: string[]): string {
+  if (!terms.length) return text;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  return text.replace(pattern, '<macro_em>$1</macro_em>');
+}
+
 /**
- * Truncate markdown returned from the search service so that the *first*
- * <macro_em> match is visible within a fixed character window.
+ * Creates a single-line window around the first <macro_em> highlight.
+ * - Collapses newlines and invisible chars into a clean single line
+ * - If the highlight is within `chars` of the start, keeps the start
+ * - Otherwise, trims the front to show context before the highlight
+ * - Trims the end to keep total visible length reasonable
  *
- * Behavior:
- * - Only the first line containing a <macro_em> tag is considered.
- * - Other <macro_em> tags on the same line are preserved verbatim.
- * - If the match line is not the first line, the result is prefixed with "...".
- * - If the opening <macro_em> tag starts beyond the allowed window,
- *   content is trimmed from the front (preferably at a word boundary)
- *   until the tag is within the window.
- * - When front-trimming occurs, "..." is prepended.
- *
- * @param text - Markdown source content from search results.
- * @param chars - Maximum visible character window (excluding ellipsis).
- * @returns A truncated string that guarantees visibility of the first match.
+ * @param text - Content with <macro_em> tags
+ * @param chars - Max visible characters to show on each side of the highlight
  */
-export function truncateSearchMatch(text: string, chars: number): string {
-  const lines = text.split('\n');
+export function windowSearchMatch(text: string, chars: number = 200): string {
+  let line = stripInvisibleChars(text);
+
   const macroOpen = '<macro_em>';
-
-  const lineIndex = lines.findIndex((l) => l.includes(macroOpen));
-  if (lineIndex === -1) {
-    return text;
-  }
-
-  let line = lines[lineIndex];
-  let needsEllipsis = lineIndex > 0;
-
   const tagIndex = line.indexOf(macroOpen);
+  if (tagIndex === -1) return line;
 
-  if (tagIndex <= chars) {
-    return (needsEllipsis ? '...' : '') + line;
+  const visibleBefore = line
+    .slice(0, tagIndex)
+    .replace(/<\/?macro_em>/g, '').length;
+
+  // Trim from front if highlight is far from the start
+  if (visibleBefore > chars) {
+    const targetStart = Math.max(0, tagIndex - chars);
+    let cutIndex = targetStart;
+    for (let i = targetStart; i < tagIndex; i++) {
+      if (/\s/.test(line[i])) {
+        cutIndex = i + 1;
+        break;
+      }
+    }
+    line = '...' + line.slice(cutIndex);
   }
 
-  const targetStart = Math.max(0, tagIndex - chars);
-
-  // prefer trimming at a word boundary
-  let cutIndex = targetStart;
-  for (let i = targetStart; i < tagIndex; i++) {
-    if (/\s/.test(line[i])) {
-      cutIndex = i + 1;
-      break;
+  // Trim from end to keep total length reasonable
+  const macroClose = '</macro_em>';
+  const lastCloseIndex = line.lastIndexOf(macroClose);
+  if (lastCloseIndex !== -1) {
+    const afterLastTag = lastCloseIndex + macroClose.length;
+    const remainingVisible = line
+      .slice(afterLastTag)
+      .replace(/<\/?macro_em>/g, '')
+      .replace(INVISIBLE_CHARS_RE, '').length;
+    if (remainingVisible > chars) {
+      let endCut = afterLastTag + chars;
+      for (let i = endCut; i < line.length; i++) {
+        if (/\s/.test(line[i])) {
+          endCut = i;
+          break;
+        }
+      }
+      line = line.slice(0, endCut) + '...';
     }
   }
 
-  line = line.slice(cutIndex);
-  return '...' + line;
+  return line;
 }

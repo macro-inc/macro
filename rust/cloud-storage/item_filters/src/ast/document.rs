@@ -32,6 +32,15 @@ pub enum DocumentLiteral {
     /// this node value filters by document importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
+    /// this node value filters by notification done state for the document.
+    #[serde(rename = "nd")]
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for the document.
+    #[serde(rename = "ns")]
+    NotificationSeen(bool),
+    /// include tasks that are created by me, assigned to me, and not completed.
+    #[serde(rename = "cbm")]
+    IncludeCbmAtmNc(bool),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -124,6 +133,8 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             project_ids,
             owners,
             importance,
+            notification_filters,
+            task_filters,
         } = filter_request;
 
         let file_types_node = file_types
@@ -148,14 +159,35 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 
         let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));
 
-        Ok([
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(DocumentLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(DocumentLiteral::NotificationSeen(seen)));
+
+        let normal_expr = [
             file_types_node,
             document_id_nodes,
             project_ids,
             owners,
             importance_node,
+            notification_done_node,
+            notification_seen_node,
         ]
         .into_iter()
-        .fold_with(Expr::and))
+        .fold_with(Expr::and);
+
+        let include_cbm_expr = match task_filters.include_cbm_atm_nc {
+            Some(true) => Some(Expr::Literal(DocumentLiteral::IncludeCbmAtmNc(true))),
+            Some(false) | None => None,
+        };
+
+        Ok(match (normal_expr, include_cbm_expr) {
+            (Some(normal), Some(include_cbm)) => Some(Expr::or(normal, include_cbm)),
+            (Some(normal), None) => Some(normal),
+            (None, Some(include_cbm)) => Some(include_cbm),
+            (None, None) => None,
+        })
     }
 }

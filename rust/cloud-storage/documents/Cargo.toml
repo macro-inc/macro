@@ -16,6 +16,7 @@ ai_tools = [
     "dep:lexical_client",
     "dep:model_file_type",
     "dep:reqwest",
+    "dep:sha2",
     "ports",
     "outbound"
 ]
@@ -45,7 +46,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -75,6 +76,7 @@ schemars = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

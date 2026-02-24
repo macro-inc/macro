@@ -130,6 +130,8 @@ fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> String {
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
             // Signal: has a priority label OR does not have a depriority label
             r#"(
+                m.is_draft = TRUE
+                OR
                 EXISTS (
                     SELECT 1 FROM email_message_labels ml
                     JOIN email_labels l ON ml.label_id = l.id
@@ -163,6 +165,10 @@ fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> String {
             )"#
                 .to_string()
         }
+        // Email notification filters are accepted for cross-entity API compatibility
+        // but are not currently applied by email thread query logic.
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => "TRUE".to_string(),
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(_)) => "TRUE".to_string(),
     });
 
     if formatting.is_empty() {
@@ -188,7 +194,9 @@ fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> String {
             | EmailLiteral::Cc(_)
             | EmailLiteral::Bcc(_)
             | EmailLiteral::Recipient(_)
-            | EmailLiteral::Importance(_),
+            | EmailLiteral::Importance(_)
+            | EmailLiteral::NotificationDone(_)
+            | EmailLiteral::NotificationSeen(_),
         ) => "TRUE".to_string(),
     });
 
@@ -264,12 +272,15 @@ fn build_view_message_filter(view: &PreviewView, link_id_param: &str) -> String 
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important) => {
             format!(
-                r#" AND EXISTS (
-                    SELECT 1 FROM email_message_labels ml
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE ml.message_id = m.id
-                    AND l.name = 'IMPORTANT'
-                    AND l.link_id = {}
+                r#" AND (
+                    m.is_draft = TRUE
+                    OR EXISTS (
+                        SELECT 1 FROM email_message_labels ml
+                        JOIN email_labels l ON ml.label_id = l.id
+                        WHERE ml.message_id = m.id
+                        AND l.name = 'IMPORTANT'
+                        AND l.link_id = {}
+                    )
                 )"#,
                 link_id_param
             )
@@ -310,7 +321,7 @@ fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
             "t.latest_inbound_message_ts"
         }
-        _ => "t.latest_non_spam_message_ts",
+        _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
 }
 
@@ -337,17 +348,20 @@ fn build_query<'a>(
             lmp.subject AS name,
             lmp.snippet,
             lmp.is_draft,
-            (
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM email_messages m_imp
-                    JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE m_imp.thread_id = t.id
-                      AND l.name = 'IMPORTANT'
-                      AND l.link_id = t.link_id
+            CASE
+                WHEN $6 THEN TRUE
+                ELSE (
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM email_messages m_imp
+                        JOIN email_message_labels ml ON m_imp.id = ml.message_id
+                        JOIN email_labels l ON ml.label_id = l.id
+                        WHERE m_imp.thread_id = t.id
+                          AND l.name = 'IMPORTANT'
+                          AND l.link_id = t.link_id
+                    )
                 )
-            ) AS is_important,
+            END AS is_important,
             c.email_address AS sender_email,
             c.name AS sender_name,
             c.sfs_photo_url as sender_photo_url
@@ -436,7 +450,7 @@ fn build_query<'a>(
 
     builder.push(
         r#"
-            ORDER BY m.internal_date_ts DESC
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC
             LIMIT 1
         ) AS lmp
         -- Step 3: Join to get the sender's details
@@ -496,6 +510,10 @@ pub(crate) async fn dynamic_email_thread_cursor(
         .bind(query_limit) // $3
         .bind(cursor_timestamp) // $4
         .bind(cursor_id_str) // $5
+        .bind(matches!(
+            view,
+            PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
+        )) // $6
         .try_map(|row| {
             Ok(ThreadPreviewCursorDbRow {
                 id: row.try_get("id")?,
