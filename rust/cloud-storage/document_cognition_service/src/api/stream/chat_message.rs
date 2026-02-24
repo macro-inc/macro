@@ -9,8 +9,8 @@ use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::core::model::FALLBACK_MODEL;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::ai::name::maybe_rename_chat;
-use crate::service::notification::summarize_and_notify;
 use crate::service::get_chat::get_chat;
+use crate::service::notification::notify;
 use ai::tool::ToolLoop;
 use ai::tool::types::StreamPart;
 use ai::types::{AssistantMessagePart, Model};
@@ -511,7 +511,7 @@ fn stream_and_save_message(
 
         // Summarize and send notification in a background task
         if let Some(text) = assistant_text {
-            summarize_and_notify(
+            notify(
                 ctx.connection_repo.clone(),
                 ctx.notification_ingress_service.clone(),
                 chat_id.clone(),

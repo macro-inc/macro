@@ -191,10 +191,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
-    use scribe::ScribeClient;
-    use search_service_client::SearchServiceClient;
-    use soup::domain::service::SoupImpl;
-    use soup::outbound::pg_soup_repo::PgSoupRepo;
     use notification::domain::models::email_notification_digest::{
         EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
     };
@@ -204,6 +200,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
         repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
     };
+    use scribe::ScribeClient;
+    use search_service_client::SearchServiceClient;
+    use soup::domain::service::SoupImpl;
+    use soup::outbound::pg_soup_repo::PgSoupRepo;
     use sqs_client::SQS;
     use static_file_service_client::StaticFileServiceClient;
     use std::sync::Arc;

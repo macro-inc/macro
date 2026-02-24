@@ -101,6 +101,12 @@ function getSupportedHandler(
         (lm: SplitManager, newSplit: boolean = false) =>
           openChannelNotification(notification, lm, newSplit)
     )
+    .with(
+      'ai_response',
+      () =>
+        async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, 'chat', notification.entity_id, newSplit)
+    )
     .with('new_email', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'new_email') return null;

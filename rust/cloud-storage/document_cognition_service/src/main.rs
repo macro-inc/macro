@@ -236,8 +236,9 @@ async fn main() -> anyhow::Result<()> {
             ),
             digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
             block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
-                .append::<model_notifications::ChannelInviteMetadata>(),
+            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
+            )
+            .append::<model_notifications::ChannelInviteMetadata>(),
             digest_window: std::time::Duration::from_secs(30 * 60),
             online_duration_threshold: std::time::Duration::from_secs(60 * 60),
         };

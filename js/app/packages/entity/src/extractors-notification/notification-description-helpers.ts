@@ -1,6 +1,6 @@
+import type { NotificationType } from '@core/types';
 import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
-import type { NotificationType } from '@core/types';
 
 /**
  * Gets unique sender IDs from a notification stack
@@ -27,6 +27,7 @@ export function getActionVerb(type: NotificationType): string {
     .with('mentioned_in_document_comment', () => 'mentioned you')
     .with('channel_message_reply', () => 'replied')
     .with('channel_message_send', () => 'sent a message')
+    .with('ai_response', () => 'AI responded')
     .with('new_email', () => 'sent an email')
     .with('channel_invite', () => 'invited you')
     .with('invite_to_team', () => 'invited you')
@@ -42,6 +43,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
     .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
+    .with('ai_response', () => (count === 1 ? 'response' : 'responses'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('document_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('mentioned_in_document_comment', () =>
