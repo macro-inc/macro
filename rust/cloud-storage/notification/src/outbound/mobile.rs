@@ -60,7 +60,13 @@ impl MobilePushOps for aws_sdk_sns::Client {
             .message(payload)
             .set_message_attributes(Some(attributes))
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                rootcause::report!(
+                    "SNS publish to {endpoint_arn} failed: {}",
+                    aws_sdk_sns::error::DisplayErrorContext(&e)
+                )
+            })?;
 
         Ok(output.message_id.unwrap_or_default())
     }
