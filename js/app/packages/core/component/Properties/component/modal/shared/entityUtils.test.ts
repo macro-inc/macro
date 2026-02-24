@@ -1,5 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
+
+// Mock @core/context/quickAccess to break the import chain that pulls in
+// LexicalMarkdown plugins -> themeSignals -> window.matchMedia
+vi.mock('@core/context/quickAccess', () => ({
+  useQuickAccess: () => ({
+    useList: () => () => [],
+    isLoading: () => false,
+    refresh: () => {},
+    getById: () => undefined,
+  }),
+  ALL_BUCKETS: [],
+  isEntityItem: () => false,
+  isUserItem: () => false,
+  isEntityOfType: () => false,
+  isFromBucket: () => false,
+  exclude: () => () => true,
+}));
+
 import { createEntitySearchConfig } from './entityUtils';
 import type { CombinedEntity } from './entityUtils';
 import type { IUser } from '@core/user';
