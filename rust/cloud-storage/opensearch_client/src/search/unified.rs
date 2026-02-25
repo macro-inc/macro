@@ -87,6 +87,8 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            include_labels: args.email_search_args.include_labels,
+            exclude_labels: args.email_search_args.exclude_labels,
         }
     }
 }
@@ -150,6 +152,8 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]

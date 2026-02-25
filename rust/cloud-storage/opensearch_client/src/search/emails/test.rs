@@ -132,18 +132,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
             }
           }
         ],
-        "must_not": [
-          {
-            "term": {
-              "labels": "TRASH"
-            }
-          },
-          {
-            "term": {
-              "labels": "SPAM"
-            }
-          }
-        ]
       }
     },
         });

@@ -151,43 +151,46 @@ const SoupFilters = () => {
     setQueryFilters(removeInboxQueryFilters(filters));
   };
 
+  // Batch filter + query updates so the prefetch effect in soup-view-context
+  // sees the final query filters and active filter state in a single tick,
+  // avoiding intermediate re-renders with mismatched query keys.
   const toggleFocus = (id: 'signal' | 'noise') => {
     const comb = { id, isActive: soup.filters.isActive(id) };
 
-    const activateFocus = () =>
-      batch(() => {
-        soup.filters.toggle(id);
-        soup.filters.activate('not-done');
-      });
+    const activateFocus = () => {
+      soup.filters.toggle(id);
+      soup.filters.activate('not-done');
+    };
 
-    const deactivateFocus = () =>
-      batch(() => {
-        soup.filters.toggle('explicit-noise');
-        soup.filters.deactivate('not-done');
-      });
+    const deactivateFocus = () => {
+      soup.filters.toggle('explicit-noise');
+      soup.filters.deactivate('not-done');
+    };
 
-    match(comb)
-      .with({ id: 'signal', isActive: false }, () => {
-        setQueryFilters((prev) =>
-          applyInboxQueryFilters(removeOtherQueryFilters(prev))
-        );
-        activateFocus();
-      })
-      .with({ id: 'noise', isActive: false }, () => {
-        setQueryFilters((prev) =>
-          applyOtherQueryFilters(removeInboxQueryFilters(prev))
-        );
-        activateFocus();
-      })
-      .with({ id: 'signal', isActive: true }, () => {
-        setQueryFilters(removeInboxQueryFilters);
-        deactivateFocus();
-      })
-      .with({ id: 'noise', isActive: true }, () => {
-        setQueryFilters(removeOtherQueryFilters);
-        deactivateFocus();
-      })
-      .exhaustive();
+    batch(() => {
+      match(comb)
+        .with({ id: 'signal', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyInboxQueryFilters(removeOtherQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'noise', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyOtherQueryFilters(removeInboxQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'signal', isActive: true }, () => {
+          setQueryFilters(removeInboxQueryFilters);
+          deactivateFocus();
+        })
+        .with({ id: 'noise', isActive: true }, () => {
+          setQueryFilters(removeOtherQueryFilters);
+          deactivateFocus();
+        })
+        .exhaustive();
+    });
   };
 
   const toggleUnread = () => {

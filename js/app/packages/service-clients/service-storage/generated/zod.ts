@@ -4138,11 +4138,23 @@ export const postItemsSoupBody = zod
           .describe(
             "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
           ),
+        exclude_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
+          ),
         importance: zod
           .boolean()
           .nullish()
           .describe(
             'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        include_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
           ),
         notification_filters: zod
           .object({

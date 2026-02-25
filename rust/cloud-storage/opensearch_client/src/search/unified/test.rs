@@ -446,6 +446,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             cc: vec!["id1".to_string(), "id2".to_string()],
             bcc: vec!["id1".to_string(), "id2".to_string()],
             recipients: vec!["id1".to_string(), "id2".to_string()],
+            ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -664,18 +665,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "must_not": [
-                  {
-                    "term": {
-                      "labels": "TRASH"
-                    }
-                  },
-                  {
-                    "term": {
-                      "labels": "SPAM"
-                    }
-                  }
-                ]
               }
             },
             {
@@ -827,6 +816,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             cc: vec!["id1".to_string(), "id2".to_string()],
             bcc: vec!["id1".to_string(), "id2".to_string()],
             recipients: vec!["id1".to_string(), "id2".to_string()],
+            ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
