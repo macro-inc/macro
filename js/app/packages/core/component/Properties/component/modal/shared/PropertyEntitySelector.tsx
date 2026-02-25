@@ -216,7 +216,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return converted;
   });
 
-
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain, currentUserId),
     getEntitySearchText,

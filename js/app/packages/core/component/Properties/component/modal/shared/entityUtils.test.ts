@@ -19,7 +19,10 @@ vi.mock('@core/context/quickAccess', () => ({
   exclude: () => () => true,
 }));
 
-import { createEntitySearchConfig, sortEntitiesWithSelfFirst } from './entityUtils';
+import {
+  createEntitySearchConfig,
+  sortEntitiesWithSelfFirst,
+} from './entityUtils';
 import type { CombinedEntity } from './entityUtils';
 import type { IUser } from '@core/user';
 
@@ -194,17 +197,29 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
       {
         kind: 'user',
         id: 'current-user',
-        data: { id: 'current-user', email: 'me@example.com', name: 'Me' } as IUser,
+        data: {
+          id: 'current-user',
+          email: 'me@example.com',
+          name: 'Me',
+        } as IUser,
       },
       {
         kind: 'user',
         id: 'user-2',
-        data: { id: 'user-2', email: 'user2@example.com', name: 'User 2' } as IUser,
+        data: {
+          id: 'user-2',
+          email: 'user2@example.com',
+          name: 'User 2',
+        } as IUser,
       },
     ];
 
@@ -220,12 +235,20 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'user',
         id: 'current-user',
-        data: { id: 'current-user', email: 'me@example.com', name: 'Me' } as IUser,
+        data: {
+          id: 'current-user',
+          email: 'me@example.com',
+          name: 'Me',
+        } as IUser,
       },
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
     ];
 
@@ -239,12 +262,20 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
       {
         kind: 'user',
         id: 'user-2',
-        data: { id: 'user-2', email: 'user2@example.com', name: 'User 2' } as IUser,
+        data: {
+          id: 'user-2',
+          email: 'user2@example.com',
+          name: 'User 2',
+        } as IUser,
       },
     ];
 
@@ -258,7 +289,11 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
     ];
 
@@ -272,12 +307,20 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'entity',
         id: 'current-user',
-        data: { type: 'channel', id: 'current-user', name: 'Channel' } as EntityData,
+        data: {
+          type: 'channel',
+          id: 'current-user',
+          name: 'Channel',
+        } as EntityData,
       },
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
     ];
 
@@ -293,12 +336,20 @@ describe('sortEntitiesWithSelfFirst', () => {
       {
         kind: 'user',
         id: 'user-1',
-        data: { id: 'user-1', email: 'user1@example.com', name: 'User 1' } as IUser,
+        data: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User 1',
+        } as IUser,
       },
       {
         kind: 'user',
         id: 'current-user',
-        data: { id: 'current-user', email: 'me@example.com', name: 'Me' } as IUser,
+        data: {
+          id: 'current-user',
+          email: 'me@example.com',
+          name: 'Me',
+        } as IUser,
       },
     ];
 
