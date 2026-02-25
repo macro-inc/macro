@@ -100,6 +100,7 @@ dependencies = [
  "email",
  "email_service_client",
  "frecency",
+ "item_filters",
  "lazy_static",
  "macro_db_client",
  "model",
