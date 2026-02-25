@@ -109,22 +109,35 @@ export const useSoupNavigationHotkeys = (
 
   const group = createHotkeyGroup();
 
+  const navigateDown = () => {
+    const next = soup.navigate.down();
+
+    if (!next) return true;
+
+    scrollTo(next.index);
+    openEntity(next.item);
+
+    return true;
+  };
+
+  const navigateUp = () => {
+    const next = soup.navigate.up();
+
+    if (!next) return true;
+
+    scrollTo(next.index);
+    openEntity(next.item);
+
+    return true;
+  };
+
   // Used outside soup view, does not need to be disposed
   registerHotkey({
     hotkey: ['j'],
     scopeId,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
-    keyDownHandler: () => {
-      const next = soup.navigate.down();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateDown,
     hide: true,
   });
 
@@ -132,16 +145,7 @@ export const useSoupNavigationHotkeys = (
     hotkey: ['arrowdown'],
     scopeId,
     description: 'Down',
-    keyDownHandler: () => {
-      const next = soup.navigate.down();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateDown,
     hide: true,
   }).withGroup(group);
 
@@ -151,16 +155,7 @@ export const useSoupNavigationHotkeys = (
     scopeId,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
-    keyDownHandler: () => {
-      const next = soup.navigate.up();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateUp,
     hide: true,
   });
 
@@ -168,16 +163,7 @@ export const useSoupNavigationHotkeys = (
     hotkey: ['arrowup'],
     scopeId,
     description: 'Up',
-    keyDownHandler: () => {
-      const next = soup.navigate.up();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateUp,
     hide: true,
   }).withGroup(group);
 
