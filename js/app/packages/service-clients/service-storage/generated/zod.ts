@@ -1030,6 +1030,66 @@ export const getChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
+ * @summary Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+ */
+export const getThreadRepliesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+  message_id: zod
+    .string()
+    .uuid()
+    .describe('Message ID (thread parent or reply id)'),
+});
+
+export const getThreadRepliesResponseItem = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the attachment was created.'),
+            entity_id: zod.string().describe('Entity id.'),
+            entity_type: zod.string().describe('Type of entity.'),
+            id: zod.string().uuid().describe('Attachment id.'),
+          })
+          .describe('An attachment on a message.')
+      )
+      .describe('Attachments on this reply.'),
+    content: zod.string().describe('Reply content.'),
+    created_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was created.'),
+    edited_at: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the reply was edited.'),
+    id: zod.string().uuid().describe('Reply id.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('The emoji string.'),
+            users: zod
+              .array(zod.string())
+              .describe('User ids who added this reaction.'),
+          })
+          .describe('A reaction with emoji and user list.')
+      )
+      .describe('Reactions on this reply.'),
+    sender_id: zod.string().describe('Sender user id.'),
+    updated_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was last updated.'),
+  })
+  .describe('A thread reply shown in preview.');
+export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
+
+/**
  * @summary Handler for `GET /channels/:channel_id/participants`.
  */
 export const getChannelParticipantsParams = zod.object({
