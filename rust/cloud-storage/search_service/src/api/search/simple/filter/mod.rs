@@ -146,6 +146,14 @@ fn apply_email_importance(
     exclude_labels: &mut Vec<String>,
 ) {
     match importance {
+        Some(true) => {
+            for label in DEPRIORITY_LABELS {
+                let label = label.to_string();
+                if !exclude_labels.contains(&label) {
+                    exclude_labels.push(label);
+                }
+            }
+        }
         Some(false) => {
             for label in DEPRIORITY_LABELS {
                 let label = label.to_string();
@@ -154,15 +162,7 @@ fn apply_email_importance(
                 }
             }
         }
-        // Default to excluding depriority labels in search (importance = true behavior)
-        _ => {
-            for label in DEPRIORITY_LABELS {
-                let label = label.to_string();
-                if !exclude_labels.contains(&label) {
-                    exclude_labels.push(label);
-                }
-            }
-        }
+        None => {}
     }
 }
 

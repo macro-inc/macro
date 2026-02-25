@@ -188,7 +188,6 @@ pub struct EmailFilters {
     /// Filter by email importance. None to not filter. True to show only important emails
     /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
     /// (those categorized as promotions, social, updates, or forums).
-    /// In search, None defaults to true (important only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
 

@@ -5,13 +5,13 @@ fn depriority_labels() -> Vec<String> {
 }
 
 #[test]
-fn test_importance_none_excludes_depriority_labels() {
+fn test_importance_none_is_noop() {
     let mut include = vec![];
     let mut exclude = vec![];
     apply_email_importance(None, &mut include, &mut exclude);
 
     assert!(include.is_empty());
-    assert_eq!(exclude, depriority_labels());
+    assert!(exclude.is_empty());
 }
 
 #[test]
@@ -35,10 +35,10 @@ fn test_importance_false_includes_depriority_labels() {
 }
 
 #[test]
-fn test_importance_does_not_duplicate_existing_labels() {
+fn test_importance_true_does_not_duplicate_existing_labels() {
     let mut include = vec![];
     let mut exclude = vec!["CATEGORY_PROMOTIONS".to_string()];
-    apply_email_importance(None, &mut include, &mut exclude);
+    apply_email_importance(Some(true), &mut include, &mut exclude);
 
     assert!(include.is_empty());
     assert_eq!(
