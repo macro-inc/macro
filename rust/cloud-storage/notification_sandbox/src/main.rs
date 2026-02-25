@@ -3,6 +3,7 @@ mod interactive;
 mod sandbox_notification;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use macro_user_id::cowlike::CowLike;
@@ -28,7 +29,9 @@ use sandbox_notification::{NeverMatchNotification, SandboxNotification};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
-use adapters::interactive_mobile::{InteractiveMobileSender, SandboxMobileSender};
+use adapters::interactive_mobile::{
+    InteractiveMobileSender, PushPromptRequest, SandboxMobileSender,
+};
 use adapters::logging_websocket::LoggingWebSocketSender;
 use adapters::mpsc_queue::MpscQueue;
 use adapters::noop_rate_limiter::NoOpRateLimiter;
@@ -133,8 +136,9 @@ async fn main() -> Result<(), Report> {
 
     // Egress: interactive mobile push, SES email, real state machine B
     let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let (prompt_tx, mut prompt_rx) = tokio::sync::mpsc::unbounded_channel::<PushPromptRequest>();
     let mobile_sender = match &config.sns_mode {
-        SnsMode::Mock => SandboxMobileSender::Interactive(InteractiveMobileSender),
+        SnsMode::Mock => SandboxMobileSender::Interactive(InteractiveMobileSender { prompt_tx }),
         SnsMode::Real {
             sns_client,
             endpoint_arn: _,
@@ -148,7 +152,7 @@ async fn main() -> Result<(), Report> {
         "notif-sandbox@macro.com".to_string(),
     );
 
-    let egress_service = NotificationEgressService {
+    let egress_service = Arc::new(NotificationEgressService {
         queue: queue.clone(),
         repository: DbNotificationRepository::new(db.clone()),
         websocket: LoggingWebSocketSender,
@@ -161,7 +165,29 @@ async fn main() -> Result<(), Report> {
             digest_window: config.digest_window,
         },
         digest_batcher: RedisDigestBatcher::new(redis_conn.clone()),
-    };
+    });
+
+    // Shared log buffer so background egress output doesn't corrupt inquire prompts
+    let egress_log: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    // Spawn background egress loop to continuously deliver queued messages
+    let egress_bg = egress_service.clone();
+    let egress_log_bg = egress_log.clone();
+    tokio::spawn(async move {
+        loop {
+            let results = egress_bg.poll_and_deliver().await;
+            if !results.is_empty() {
+                let mut log = egress_log_bg.lock().unwrap();
+                for result in &results {
+                    match result {
+                        Ok(success) => log.push(format!("  [egress] SUCCESS ({success:?})")),
+                        Err(e) => log.push(format!("  [egress] FAILED ({e})")),
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    });
 
     // StateMachineC for interactive SNS failure reconciliation
     let state_machine_c = StateMachineDriverC {
@@ -175,6 +201,11 @@ async fn main() -> Result<(), Report> {
 
     // --- Interactive loop ---
     loop {
+        // Drain buffered egress log and handle any stale push prompts
+        drain_egress_log(&egress_log);
+        handle_pending_prompts(&mut prompt_rx);
+        drain_egress_log(&egress_log);
+
         let action = inquire::Select::new(
             "What would you like to do?",
             vec![
@@ -188,18 +219,21 @@ async fn main() -> Result<(), Report> {
 
         match action {
             "Create and send a notification" => {
-                run_notification_cycle(&user_id, &ingress_service, &egress_service).await?;
+                run_notification_cycle(&user_id, &ingress_service).await?;
+                // Handle push prompts from the background egress task until it's done
+                drain_push_prompts(&mut prompt_rx, &egress_log).await;
             }
             "Run StateMachineC (SNS failure reconciliation)" => {
                 run_state_machine_c(&state_machine_c).await?;
             }
             "Poll digest status" => {
-                poll_email_digests(&egress_service).await?;
+                poll_email_digests(&*egress_service).await?;
             }
             "Quit" => break,
             _ => unreachable!(),
         }
 
+        drain_egress_log(&egress_log);
         println!();
     }
 
@@ -207,16 +241,58 @@ async fn main() -> Result<(), Report> {
     Ok(())
 }
 
-/// Create a notification via the ingress service, then deliver via the egress service.
-async fn run_notification_cycle<I, E>(
+/// Print any buffered egress log lines.
+fn drain_egress_log(log: &Arc<Mutex<Vec<String>>>) {
+    let lines: Vec<String> = log.lock().unwrap().drain(..).collect();
+    for line in lines {
+        println!("{line}");
+    }
+}
+
+/// Handle any push-prompt requests already queued (non-blocking).
+fn handle_pending_prompts(rx: &mut tokio::sync::mpsc::UnboundedReceiver<PushPromptRequest>) {
+    while let Ok(req) = rx.try_recv() {
+        prompt_push_result(req);
+    }
+}
+
+/// Wait for push prompts from the background egress task until it's idle.
+///
+/// After ingress publishes to the queue, the background egress picks it up and may send
+/// multiple push prompt requests (one per endpoint). We wait for each one, answer it,
+/// and continue until no more arrive within a short timeout.
+async fn drain_push_prompts(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<PushPromptRequest>,
+    egress_log: &Arc<Mutex<Vec<String>>>,
+) {
+    while let Ok(Some(req)) = tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+        prompt_push_result(req);
+        drain_egress_log(egress_log);
+    }
+}
+
+/// Show an interactive prompt for a single push result and send the reply.
+fn prompt_push_result(req: PushPromptRequest) {
+    let succeeded =
+        inquire::Confirm::new(&format!("Did push to \"{}\" succeed?", req.endpoint_arn))
+            .with_default(true)
+            .prompt()
+            .unwrap_or(false);
+
+    if succeeded {
+        println!("  -> SUCCESS");
+    } else {
+        println!("  -> FAILED");
+    }
+
+    let _ = req.reply.send(succeeded);
+}
+
+/// Create a notification via the ingress service. The background egress task delivers it.
+async fn run_notification_cycle<I: NotificationIngress>(
     user_id: &MacroUserIdStr<'static>,
     ingress: &I,
-    egress: &E,
-) -> Result<(), Report>
-where
-    I: NotificationIngress,
-    E: NotificationEgress,
-{
+) -> Result<(), Report> {
     println!("\n--- Ingress: Creating notification ---\n");
 
     let request = SendNotificationRequestBuilder {
@@ -240,28 +316,9 @@ where
         }
         Ok(None) => {
             println!("\nIngress: no recipients remaining after filtering.");
-            return Ok(());
         }
         Err(e) => {
             println!("\nIngress failed: {e}");
-            return Ok(());
-        }
-    }
-
-    // Now process the queued message via the egress service
-    println!("\n--- Egress: Delivering notification ---\n");
-
-    let results = egress.poll_and_deliver().await;
-
-    if results.is_empty() {
-        println!("  No messages in queue to deliver.");
-    } else {
-        println!("\nDelivery results:");
-        for (i, result) in results.iter().enumerate() {
-            match result {
-                Ok(success) => println!("  {}: SUCCESS ({success:?})", i + 1),
-                Err(e) => println!("  {}: FAILED ({e})", i + 1),
-            }
         }
     }
 

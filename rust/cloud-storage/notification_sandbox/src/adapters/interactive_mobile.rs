@@ -5,9 +5,21 @@ use notification::domain::ports::NotificationSender;
 use notification::outbound::mobile::MobilePushAdapter;
 use rootcause::Report;
 use serde::Serialize;
+use tokio::sync::mpsc;
 
-/// Mobile push sender that interactively prompts the user for success/failure.
-pub struct InteractiveMobileSender;
+/// A prompt request sent from the background egress task to the foreground.
+pub struct PushPromptRequest {
+    /// The endpoint ARN being pushed to.
+    pub endpoint_arn: String,
+    /// Channel to send back whether the push "succeeded".
+    pub reply: tokio::sync::oneshot::Sender<bool>,
+}
+
+/// Mobile push sender that delegates interactive prompts to the foreground via a channel.
+pub struct InteractiveMobileSender {
+    /// Sender half — sends prompt requests to the foreground loop.
+    pub prompt_tx: mpsc::UnboundedSender<PushPromptRequest>,
+}
 
 impl NotificationSender for InteractiveMobileSender {
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
@@ -16,30 +28,33 @@ impl NotificationSender for InteractiveMobileSender {
         _notification: &APNSPushNotification<T>,
         _attributes: &MessageAttributes,
     ) -> Result<String, Report> {
-        let succeeded =
-            inquire::Confirm::new(&format!("Did push to \"{endpoint_arn}\" succeed?"))
-                .with_default(true)
-                .prompt()
-                .map_err(|e| rootcause::report!("{e}"))?;
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        self.prompt_tx
+            .send(PushPromptRequest {
+                endpoint_arn: endpoint_arn.to_string(),
+                reply: reply_tx,
+            })
+            .map_err(|_| rootcause::report!("foreground prompt channel closed"))?;
+
+        let succeeded = reply_rx
+            .await
+            .map_err(|_| rootcause::report!("foreground prompt reply dropped"))?;
 
         if succeeded {
             let msg_id = format!("mock-msg-{}", uuid::Uuid::new_v4());
-            println!("  -> SUCCESS (message_id: {msg_id})");
             Ok(msg_id)
         } else {
-            println!("  -> FAILED");
             rootcause::bail!("Simulated push failure for {endpoint_arn}");
         }
     }
 
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
-        endpoint_arn: &str,
+        _endpoint_arn: &str,
         _notification: &FCMMessage<T>,
         _attributes: &MessageAttributes,
     ) -> Result<String, Report> {
         let msg_id = format!("mock-msg-{}", uuid::Uuid::new_v4());
-        println!("  [egress] Android push: endpoint={endpoint_arn} -> message_id={msg_id}");
         Ok(msg_id)
     }
 }
