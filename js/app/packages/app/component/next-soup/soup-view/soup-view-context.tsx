@@ -234,6 +234,8 @@ export const SoupViewContextProvider: FlowComponent<
         if (!prev) return;
 
         if ('pages' in prev) {
+          // Just to avoid spreading and new array creation, works the same but slightly
+          // better performance
           prev.pages.splice(1, prev.pages.length);
           return prev;
         }
