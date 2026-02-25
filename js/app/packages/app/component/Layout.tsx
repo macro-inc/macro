@@ -25,6 +25,7 @@ import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+import { AppSidebar } from '@app/component/app-sidebar/sidebar';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -119,7 +120,9 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="grow-1">
+      <div class="grow-1 flex">
+        <AppSidebar />
+
         <Resize.Zone
           gutter={4}
           direction="horizontal"
