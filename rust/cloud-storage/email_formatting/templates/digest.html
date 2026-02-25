@@ -43,7 +43,7 @@
       >
         <!--<SvgNotification/>-->
       </div>
-      You have --- unread messages
+      You have {{ notifs.len() }} unread messages
     </div>
     <hr
       style="
@@ -60,6 +60,7 @@
         padding: 0 20px;
       "
     >
+      {% for notif in notifs %}
       <a
         style="
           text-decoration: none;
@@ -83,9 +84,9 @@
           "
         >
         </div>
-        YYYY-MM-DD HH:MM:SS message
+        {{ notif.created_at.format("%Y-%m-%d %H:%M:%S") }} {{ notif.message }}
       </a>
-
+      {% if !loop.last %}
       <hr
         style="
           border-top: 1px dashed #333;
@@ -95,140 +96,8 @@
           margin: 0;
         "
       />
-
-      <a
-        style="
-          text-decoration: none;
-          padding: 10px 17px;
-          color: #999;
-          display: block;
-        "
-        href="https://macro.com"
-        target="_blank"
-      >
-        <div
-          style="
-            background-color: #f038;
-            border: 1px solid #f03;
-            box-sizing: border-box;
-            display: inline-block;
-            border-radius: 100%;
-            margin-right: 10px;
-            height: 8px;
-            width: 8px;
-          "
-        >
-        </div>
-        YYYY-MM-DD HH:MM:SS message
-      </a>
-
-      <hr
-        style="
-          border-top: 1px dashed #333;
-          border-bottom: none;
-          border-right: none;
-          border-left: none;
-          margin: 0;
-        "
-      />
-
-      <a
-        style="
-          text-decoration: none;
-          padding: 10px 17px;
-          color: #999;
-          display: block;
-        "
-        href="https://macro.com"
-        target="_blank"
-      >
-        <div
-          style="
-            background-color: #f038;
-            border: 1px solid #f03;
-            box-sizing: border-box;
-            display: inline-block;
-            border-radius: 100%;
-            margin-right: 10px;
-            height: 8px;
-            width: 8px;
-          "
-        >
-        </div>
-        YYYY-MM-DD HH:MM:SS message
-      </a>
-
-      <hr
-        style="
-          border-top: 1px dashed #333;
-          border-bottom: none;
-          border-right: none;
-          border-left: none;
-          margin: 0;
-        "
-      />
-
-      <a
-        style="
-          text-decoration: none;
-          padding: 10px 17px;
-          color: #999;
-          display: block;
-        "
-        href="https://macro.com"
-        target="_blank"
-      >
-        <div
-          style="
-            background-color: #f038;
-            border: 1px solid #f03;
-            box-sizing: border-box;
-            display: inline-block;
-            border-radius: 100%;
-            margin-right: 10px;
-            height: 8px;
-            width: 8px;
-          "
-        >
-        </div>
-        YYYY-MM-DD HH:MM:SS message
-      </a>
-
-      <hr
-        style="
-          border-top: 1px dashed #333;
-          border-bottom: none;
-          border-right: none;
-          border-left: none;
-          margin: 0;
-        "
-      />
-
-      <a
-        style="
-          text-decoration: none;
-          padding: 10px 17px;
-          color: #999;
-          display: block;
-        "
-        href="https://macro.com"
-        target="_blank"
-      >
-        <div
-          style="
-            background-color: #f038;
-            border: 1px solid #f03;
-            box-sizing: border-box;
-            display: inline-block;
-            border-radius: 100%;
-            margin-right: 10px;
-            height: 8px;
-            width: 8px;
-          "
-        >
-        </div>
-        YYYY-MM-DD HH:MM:SS message
-      </a>
+      {% endif %}
+      {% endfor %}
 
       <hr
         style="
