@@ -314,7 +314,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   const debouncedFetchMore = debounce(() => {
-    if (source.isFetchingNextPage() || !source.hasNextPage()) return;
+    if (
+      source.isFetching() ||
+      source.isFetchingNextPage() ||
+      !source.hasNextPage()
+    )
+      return;
 
     source.fetchNextPage();
   }, 15);
