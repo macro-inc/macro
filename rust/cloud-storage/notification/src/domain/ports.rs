@@ -15,12 +15,12 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
-use crate::domain::models::NotificationExtEmail;
-use crate::domain::models::email_notification_digest::ports::DigestBatch;
+use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, RateLimitConfig, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    DeviceEndpoint, Notification, NotificationExtEmail, NotificationIdAndCollapseKey,
+    RateLimitConfig, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
+    UserNotificationRow, android::FCMMessage, apple::APNSPushNotification,
+    mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -229,7 +229,7 @@ pub trait NotificationEgress: Send + Sync + 'static {
     fn poll_email_digests<T: NotificationExtEmail>(
         &self,
         f: fn(DigestBatch) -> Result<T, Report>,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send;
 }
 
 /// Port for deleting a device registration from the database by its SNS endpoint ARN.

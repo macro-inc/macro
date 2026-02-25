@@ -972,7 +972,7 @@ impl DigestBatcher for MockDigestBatcher {
         Ok(())
     }
 
-    async fn claim_ready_digest(&self) -> Result<ClaimResult, Report> {
+    async fn claim_ready_digest(&self) -> Result<ClaimResult<DigestBatch>, Report> {
         Ok(ClaimResult::Empty)
     }
 }
@@ -1540,7 +1540,7 @@ impl DigestBatcher for ReadyDigestBatcher {
         Ok(())
     }
 
-    async fn claim_ready_digest(&self) -> Result<ClaimResult, Report> {
+    async fn claim_ready_digest(&self) -> Result<ClaimResult<DigestBatch>, Report> {
         match self.batch.lock().unwrap().take() {
             Some(batch) => Ok(ClaimResult::Ready(batch)),
             None => Ok(ClaimResult::Empty),

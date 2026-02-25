@@ -320,8 +320,8 @@ async fn poll_email_digests(egress: &impl NotificationEgress) -> Result<(), Repo
         })
     }
 
-    egress.poll_email_digests(digest_to_sandbox).await?;
-    println!("Done.");
+    let res = egress.poll_email_digests(digest_to_sandbox).await?;
+    println!("{res:?}");
     Ok(())
 }
 
