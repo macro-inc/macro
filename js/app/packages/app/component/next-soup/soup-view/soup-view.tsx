@@ -269,9 +269,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Property editor
-  usePropertyEditorHotkeys({
+  const propertyHotkeys = usePropertyEditorHotkeys({
     scopeId: scopeId(),
     soup,
+  });
+
+  onCleanup(() => {
+    propertyHotkeys.disposeHotkeys();
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
