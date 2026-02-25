@@ -1,182 +1,111 @@
-use crate::config::Config;
-use ai_tools::ToolSoupService;
-use axum::extract::FromRef;
+use super::*;
+use connection_gateway_client::model::connection::StoredConnectionEntity;
+use connection_gateway_client::model::tracking::{EntityConnection, UserEntityConnection};
 use connection_gateway_client::service::connection::ConnectionRepo;
-use document_storage_service_client::DocumentStorageServiceClient;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use notification::domain::models::email_notification_digest::StateMachineDriverA;
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+use std::sync::Arc;
+use stream::domain::{
+    ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
 };
-use scribe::{
-    ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
-    email::EmailClient, static_file::StaticFileClient,
-};
-use search_service_client::SearchServiceClient;
-use secretsmanager_client::LocalOrRemoteSecret;
-use sqlx::PgPool;
-use std::sync::{Arc, OnceLock};
-use stream::domain::StreamRepo;
+use tokio::sync::broadcast::{self, Receiver};
 
-pub type DcsScribe =
-    ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
+pub struct MockConnectionRepo;
 
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
-pub(crate) type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
-
-#[derive(Clone, FromRef)]
-pub struct ApiContext {
-    pub db: PgPool,
-    pub sqs_client: Arc<sqs_client::SQS>,
-    pub document_storage_client: Arc<DocumentStorageServiceClient>,
-    pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
-    pub search_service_client: Arc<SearchServiceClient>,
-    pub scribe: Arc<DcsScribe>,
-    pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
-    pub jwt_args: JwtValidationArgs,
-    pub config: Arc<Config>,
-    pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
-    pub notification_ingress_service: Arc<NotificationIngressType>,
-    pub connection_repo: Arc<dyn ConnectionRepo>,
-    pub soup_service: Arc<ToolSoupService>,
-    pub stream_repo: Arc<dyn StreamRepo>,
-}
-
-pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
-
-#[cfg(test)]
-mod mock_connection_repo {
-    use connection_gateway_client::model::connection::StoredConnectionEntity;
-    use connection_gateway_client::model::tracking::{EntityConnection, UserEntityConnection};
-    use connection_gateway_client::service::connection::ConnectionRepo;
-    use std::sync::Arc;
-
-    pub struct MockConnectionRepo;
-
-    impl MockConnectionRepo {
-        pub fn new() -> Arc<dyn ConnectionRepo> {
-            Arc::new(Self)
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl ConnectionRepo for MockConnectionRepo {
-        async fn insert_connection_entry(
-            &self,
-            _connection: UserEntityConnection<'_>,
-        ) -> anyhow::Result<StoredConnectionEntity> {
-            unimplemented!()
-        }
-        async fn get_entries_by_entity(
-            &self,
-            _entity: &model_entity::Entity<'_>,
-        ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
-            Ok(vec![])
-        }
-        async fn get_entries_by_connection_id(
-            &self,
-            _connection_id: &str,
-        ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
-            Ok(vec![])
-        }
-        async fn get_connection(
-            &self,
-            _connection_id: &str,
-        ) -> anyhow::Result<StoredConnectionEntity> {
-            unimplemented!()
-        }
-        async fn get_entry_for_connection_entity(
-            &self,
-            _entity: EntityConnection<'_>,
-        ) -> anyhow::Result<Option<StoredConnectionEntity>> {
-            Ok(None)
-        }
-        async fn remove_all_entries_for_by_connection_id(
-            &self,
-            _connection_id: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn remove_entity(&self, _entity: &EntityConnection<'_>) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn update_last_entity_ping(
-            &self,
-            _entity: &EntityConnection<'_>,
-            _timestamp: u64,
-        ) -> anyhow::Result<StoredConnectionEntity> {
-            unimplemented!()
-        }
-        async fn update_user_connection_last_ping(
-            &self,
-            _connection_id: &str,
-            _user: &str,
-            _timestamp: u64,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
+impl MockConnectionRepo {
+    pub fn new() -> Arc<dyn ConnectionRepo> {
+        Arc::new(Self)
     }
 }
 
-#[cfg(test)]
-mod mock_stream {
-    use std::sync::Arc;
-    use stream::domain::{ItemId, ItemStream, Result, StreamEvent, StreamId, StreamRepo};
-    use tokio::sync::broadcast::{self, Receiver};
-
-    /// Mock StreamRepo for testing - does nothing but satisfies the interface
-    pub struct MockStreamRepo {
-        tx: broadcast::Sender<StreamEvent>,
+#[async_trait::async_trait]
+impl ConnectionRepo for MockConnectionRepo {
+    async fn insert_connection_entry(
+        &self,
+        _connection: UserEntityConnection<'_>,
+    ) -> anyhow::Result<StoredConnectionEntity> {
+        unimplemented!()
     }
-
-    impl MockStreamRepo {
-        pub fn new() -> Arc<dyn StreamRepo> {
-            let (tx, _) = broadcast::channel(16);
-            Arc::new(Self { tx })
-        }
+    async fn get_entries_by_entity(
+        &self,
+        _entity: &model_entity::Entity<'_>,
+    ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
+        Ok(vec![])
     }
-
-    #[async_trait::async_trait]
-    impl StreamRepo for MockStreamRepo {
-        async fn append(&self, _id: &StreamId, _payload: serde_json::Value) -> Result<ItemId> {
-            Ok("mock-item-id".to_string())
-        }
-
-        async fn stream_from_beginning(&self, _id: &StreamId) -> Result<ItemStream> {
-            Ok(Box::pin(futures::stream::empty()))
-        }
-
-        async fn close(&self, _id: &StreamId) -> Result<()> {
-            Ok(())
-        }
-
-        async fn active_streams(&self, _entity_id: &str) -> Result<Vec<StreamId>> {
-            Ok(vec![])
-        }
-
-        async fn notify(&self) -> Receiver<StreamEvent> {
-            self.tx.subscribe()
-        }
+    async fn get_entries_by_connection_id(
+        &self,
+        _connection_id: &str,
+    ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
+        Ok(vec![])
+    }
+    async fn get_connection(&self, _connection_id: &str) -> anyhow::Result<StoredConnectionEntity> {
+        unimplemented!()
+    }
+    async fn get_entry_for_connection_entity(
+        &self,
+        _entity: EntityConnection<'_>,
+    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
+        Ok(None)
+    }
+    async fn remove_all_entries_for_by_connection_id(
+        &self,
+        _connection_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn remove_entity(&self, _entity: &EntityConnection<'_>) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn update_last_entity_ping(
+        &self,
+        _entity: &EntityConnection<'_>,
+        _timestamp: u64,
+    ) -> anyhow::Result<StoredConnectionEntity> {
+        unimplemented!()
+    }
+    async fn update_user_connection_last_ping(
+        &self,
+        _connection_id: &str,
+        _user: &str,
+        _timestamp: u64,
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 
-#[cfg(test)]
+/// Mock StreamRepo for testing - does nothing but satisfies the interface
+pub struct MockStreamRepo {
+    tx: broadcast::Sender<StreamEvent>,
+}
+
+impl MockStreamRepo {
+    pub fn new() -> Arc<dyn StreamRepo> {
+        let (tx, _) = broadcast::channel(16);
+        Arc::new(Self { tx })
+    }
+}
+
+#[async_trait::async_trait]
+impl StreamRepo for MockStreamRepo {
+    async fn append(&self, _id: &StreamId, _payload: serde_json::Value) -> StreamResult<ItemId> {
+        Ok("mock-item-id".to_string())
+    }
+
+    async fn stream_from_beginning(&self, _id: &StreamId) -> StreamResult<ItemStream> {
+        Ok(Box::pin(futures::stream::empty()))
+    }
+
+    async fn close(&self, _id: &StreamId) -> StreamResult<()> {
+        Ok(())
+    }
+
+    async fn active_streams(&self, _entity_id: &str) -> StreamResult<Vec<StreamId>> {
+        Ok(vec![])
+    }
+
+    async fn notify(&self) -> Receiver<StreamEvent> {
+        self.tx.subscribe()
+    }
+}
+
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
     use comms::domain::service::ChannelServiceImpl;
@@ -206,7 +135,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use soup::outbound::pg_soup_repo::PgSoupRepo;
     use sqs_client::SQS;
     use static_file_service_client::StaticFileServiceClient;
-    use std::sync::Arc;
     use sync_service_client::SyncServiceClient;
 
     let sqs_config = aws_sdk_sqs::Config::builder()
@@ -327,9 +255,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         config: Arc::new(Config::new_empty_for_test()),
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
         notification_ingress_service,
-        connection_repo: mock_connection_repo::MockConnectionRepo::new(),
+        connection_repo: MockConnectionRepo::new(),
         soup_service,
-        stream_repo: mock_stream::MockStreamRepo::new(),
+        stream_repo: MockStreamRepo::new(),
     };
     Arc::new(api_context)
 }
