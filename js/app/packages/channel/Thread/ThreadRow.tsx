@@ -4,7 +4,7 @@ import {
   DateDivider,
   NewDivider,
   type ChannelMessageListMeta,
-} from './Message';
+} from '../Message';
 
 type ThreadRowProps = ParentProps & {
   message: ApiChannelMessage;

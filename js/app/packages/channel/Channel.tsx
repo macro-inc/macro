@@ -9,7 +9,6 @@ import {
   Suspense,
   type Accessor,
 } from 'solid-js';
-import { Thread } from './Thread';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -24,7 +23,7 @@ import { createTargetMessageControlledSignal } from './target-message';
 import { useUserId } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
-import { ThreadRow } from './ThreadRow';
+import { Thread, ThreadRow } from './Thread';
 
 type ChannelProps = {
   channelId: string;
