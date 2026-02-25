@@ -153,42 +153,6 @@ fn parse_channel_message_create_invalid_channel_id_fails() {
     assert!(result.is_err());
 }
 
-// ── parse_entity_mentions tests ───────────────────────────
-
-#[test]
-fn parse_entity_mentions_valid() {
-    let raw = vec![
-        "user|macro|alice@example.com".to_string(),
-        "document|doc-123".to_string(),
-    ];
-    let mentions = parse_entity_mentions(&raw).unwrap();
-    assert_eq!(mentions.len(), 2);
-    assert_eq!(mentions[0].entity_type, "user");
-    assert_eq!(mentions[0].entity_id, "macro|alice@example.com");
-    assert_eq!(mentions[1].entity_type, "document");
-    assert_eq!(mentions[1].entity_id, "doc-123");
-}
-
-#[test]
-fn parse_entity_mentions_empty() {
-    let raw: Vec<String> = vec![];
-    let mentions = parse_entity_mentions(&raw).unwrap();
-    assert!(mentions.is_empty());
-}
-
-#[test]
-fn parse_entity_mentions_invalid_format() {
-    let raw = vec!["no-pipe-here".to_string()];
-    let result = parse_entity_mentions(&raw);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid entity mention format")
-    );
-}
-
 // ── Helpers ────────────────────────────────────────────────
 
 fn mock_ctx(db: Db) -> SeedCliContext {
@@ -199,7 +163,7 @@ fn mock_ctx(db: Db) -> SeedCliContext {
     }
 }
 
-fn write_temp_csv(content: &str) -> NamedTempFile {
+fn write_temp_json(content: &str) -> NamedTempFile {
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(content.as_bytes()).unwrap();
     file.flush().unwrap();
@@ -289,19 +253,29 @@ async fn create_message_db_failure_propagates_error() {
     assert!(err.to_string().contains("db connection failed"));
 }
 
-// ── Seed CSV tests ────────────────────────────────────────
+// ── Seed JSON tests ────────────────────────────────────────
 
 #[tokio::test]
 async fn seed_creates_all_messages() {
     let msg1 = Uuid::new_v4();
     let msg2 = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg1},{channel_id},macro|alice@example.com,Hello world,,\n\
-         {msg2},{channel_id},macro|bob@example.com,Hi there,,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg1,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "Hello world"
+        },
+        {
+            "message_id": msg2,
+            "channel_id": channel_id,
+            "sender_id": "macro|bob@example.com",
+            "content": "Hi there"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -317,11 +291,16 @@ async fn seed_creates_all_messages() {
 async fn seed_uses_provided_message_id() {
     let msg_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg_id},{channel_id},macro|alice@example.com,Test message,,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg_id,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "Test message"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -339,11 +318,17 @@ async fn seed_with_thread_id() {
     let msg_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg_id},{channel_id},macro|alice@example.com,Thread reply,{thread_id},\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg_id,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "Thread reply",
+            "thread_id": thread_id
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -357,9 +342,9 @@ async fn seed_with_thread_id() {
 }
 
 #[tokio::test]
-async fn seed_empty_csv_fails() {
-    let csv = "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n";
-    let file = write_temp_csv(csv);
+async fn seed_empty_json_fails() {
+    let json = "[]";
+    let file = write_temp_json(json);
 
     let mock_db = Db::default();
 
@@ -374,13 +359,28 @@ async fn seed_continues_on_failure() {
     let msg2 = Uuid::new_v4();
     let msg3 = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg1},{channel_id},macro|alice@example.com,Good 1,,\n\
-         {msg2},{channel_id},macro|bad@example.com,Bad,,\n\
-         {msg3},{channel_id},macro|bob@example.com,Good 2,,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg1,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "Good 1"
+        },
+        {
+            "message_id": msg2,
+            "channel_id": channel_id,
+            "sender_id": "macro|bad@example.com",
+            "content": "Bad"
+        },
+        {
+            "message_id": msg3,
+            "channel_id": channel_id,
+            "sender_id": "macro|bob@example.com",
+            "content": "Good 2"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db.expect_seed_message().times(3).returning(|opts| {
@@ -401,11 +401,20 @@ async fn seed_continues_on_failure() {
 async fn seed_with_mentions_calls_create_message_mentions() {
     let msg_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg_id},{channel_id},macro|alice@example.com,Check this doc,,document|doc-123;user|macro|bob@example.com\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg_id,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "Check this doc",
+            "entity_mentions": [
+                { "entity_type": "document", "entity_id": "doc-123" },
+                { "entity_type": "user", "entity_id": "macro|bob@example.com" }
+            ]
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -446,11 +455,16 @@ async fn seed_with_mentions_calls_create_message_mentions() {
 async fn seed_without_mentions_does_not_call_mention_methods() {
     let msg_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg_id},{channel_id},macro|alice@example.com,No mentions here,,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg_id,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "No mentions here"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -475,12 +489,25 @@ async fn seed_mention_failure_does_not_prevent_message_creation() {
     let msg1 = Uuid::new_v4();
     let msg2 = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
-    let csv = format!(
-        "message_id,channel_id,sender_id,content,thread_id,entity_mentions\n\
-         {msg1},{channel_id},macro|alice@example.com,With mentions,,document|doc-123\n\
-         {msg2},{channel_id},macro|bob@example.com,After mention fail,,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "message_id": msg1,
+            "channel_id": channel_id,
+            "sender_id": "macro|alice@example.com",
+            "content": "With mentions",
+            "entity_mentions": [
+                { "entity_type": "document", "entity_id": "doc-123" }
+            ]
+        },
+        {
+            "message_id": msg2,
+            "channel_id": channel_id,
+            "sender_id": "macro|bob@example.com",
+            "content": "After mention fail"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db

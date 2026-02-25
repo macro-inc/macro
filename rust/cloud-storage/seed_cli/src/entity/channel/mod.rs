@@ -31,11 +31,11 @@ pub enum ChannelCommand {
     Create(CreateArgs),
     /// Bulk create multiple channels
     BulkCreate(BulkCreateArgs),
-    /// Seed channels from a fixed CSV file with pre-defined UUIDs
+    /// Seed channels from a fixed JSON file with pre-defined UUIDs
     Seed(SeedArgs),
 }
 
-/// Arguments for seeding channels from a fixed CSV file.
+/// Arguments for seeding channels from a fixed JSON file.
 #[derive(Debug, Args)]
 pub struct SeedArgs {
     /// The user ID to set as channel owner and append to participants
@@ -43,17 +43,17 @@ pub struct SeedArgs {
     pub user_id: String,
 }
 
-/// A row in the seed CSV file.
+/// A row in the seed JSON file.
 #[derive(Debug, Deserialize)]
-struct CsvSeedChannelRow {
+struct SeedChannelRow {
     /// Pre-defined channel UUID.
     channel_id: Uuid,
     /// Channel name (optional).
     channel_name: Option<String>,
     /// Channel type.
     channel_type: ChannelType,
-    /// Semicolon-separated list of participant user IDs.
-    #[serde(default, deserialize_with = "deserialize_semicolon_list")]
+    /// List of participant user IDs.
+    #[serde(default)]
     participants: Vec<String>,
 }
 
@@ -210,23 +210,20 @@ async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Resul
 
 #[tracing::instrument(skip(ctx), err)]
 async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(args, ctx, Path::new("seed/channels.csv")).await
+    seed_from_file(args, ctx, Path::new("seed/channels.json")).await
 }
 
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
     tracing::info!("seeding channels");
 
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read csv file: {}", path.display()))?;
+        .with_context(|| format!("failed to read json file: {}", path.display()))?;
 
-    let mut reader = csv::Reader::from_reader(content.as_bytes());
-    let rows: Vec<CsvSeedChannelRow> = reader
-        .deserialize()
-        .collect::<Result<Vec<_>, _>>()
-        .context("failed to parse csv")?;
+    let rows: Vec<SeedChannelRow> =
+        serde_json::from_str(&content).context("failed to parse json")?;
 
     if rows.is_empty() {
-        anyhow::bail!("no channels found in csv file");
+        anyhow::bail!("no channels found in json file");
     }
 
     println!("Found {} channels to seed", rows.len());

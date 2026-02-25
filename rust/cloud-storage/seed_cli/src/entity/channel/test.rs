@@ -201,6 +201,13 @@ fn write_temp_csv(content: &str) -> NamedTempFile {
     file
 }
 
+fn write_temp_json(content: &str) -> NamedTempFile {
+    let mut file = NamedTempFile::new().unwrap();
+    file.write_all(content.as_bytes()).unwrap();
+    file.flush().unwrap();
+    file
+}
+
 // ── Integration tests (single create) ─────────────────────
 
 #[tokio::test]
@@ -412,18 +419,27 @@ async fn bulk_create_invalid_csv_fails() {
     assert!(result.is_err());
 }
 
-// ── Seed CSV tests ────────────────────────────────────────
+// ── Seed JSON tests ────────────────────────────────────────
 
 #[tokio::test]
 async fn seed_creates_all_channels() {
     let id1 = uuid::Uuid::new_v4();
     let id2 = uuid::Uuid::new_v4();
-    let csv = format!(
-        "channel_id,channel_name,channel_type,participants\n\
-         {id1},general,public,macro|bob@example.com;macro|charlie@example.com\n\
-         {id2},,direct_message,macro|bob@example.com\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "channel_id": id1,
+            "channel_name": "general",
+            "channel_type": "public",
+            "participants": ["macro|bob@example.com", "macro|charlie@example.com"]
+        },
+        {
+            "channel_id": id2,
+            "channel_type": "direct_message",
+            "participants": ["macro|bob@example.com"]
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -442,11 +458,16 @@ async fn seed_creates_all_channels() {
 #[tokio::test]
 async fn seed_sets_user_id_as_owner_and_appends_to_participants() {
     let id = uuid::Uuid::new_v4();
-    let csv = format!(
-        "channel_id,channel_name,channel_type,participants\n\
-         {id},general,public,macro|bob@example.com\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "channel_id": id,
+            "channel_name": "general",
+            "channel_type": "public",
+            "participants": ["macro|bob@example.com"]
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -474,11 +495,16 @@ async fn seed_sets_user_id_as_owner_and_appends_to_participants() {
 #[tokio::test]
 async fn seed_does_not_duplicate_user_in_participants() {
     let id = uuid::Uuid::new_v4();
-    let csv = format!(
-        "channel_id,channel_name,channel_type,participants\n\
-         {id},general,public,macro|alice@example.com;macro|bob@example.com\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "channel_id": id,
+            "channel_name": "general",
+            "channel_type": "public",
+            "participants": ["macro|alice@example.com", "macro|bob@example.com"]
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -502,9 +528,9 @@ async fn seed_does_not_duplicate_user_in_participants() {
 }
 
 #[tokio::test]
-async fn seed_empty_csv_fails() {
-    let csv = "channel_id,channel_name,channel_type,participants\n";
-    let file = write_temp_csv(csv);
+async fn seed_empty_json_fails() {
+    let json = "[]";
+    let file = write_temp_json(json);
 
     let mock_db = Db::default();
 
@@ -522,13 +548,25 @@ async fn seed_continues_on_failure() {
     let id1 = uuid::Uuid::new_v4();
     let id2 = uuid::Uuid::new_v4();
     let id3 = uuid::Uuid::new_v4();
-    let csv = format!(
-        "channel_id,channel_name,channel_type,participants\n\
-         {id1},good-1,public,\n\
-         {id2},bad,public,\n\
-         {id3},good-2,private,\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        {
+            "channel_id": id1,
+            "channel_name": "good-1",
+            "channel_type": "public"
+        },
+        {
+            "channel_id": id2,
+            "channel_name": "bad",
+            "channel_type": "public"
+        },
+        {
+            "channel_id": id3,
+            "channel_name": "good-2",
+            "channel_type": "private"
+        }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db.expect_seed_channel().times(3).returning(|opts| {

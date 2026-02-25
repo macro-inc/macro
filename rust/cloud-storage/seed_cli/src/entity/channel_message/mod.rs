@@ -6,7 +6,6 @@ mod test;
 use std::path::Path;
 use std::str::FromStr;
 
-use crate::entity::utils::deserialize_semicolon_list;
 use anyhow::Context;
 use clap::{Args, Subcommand};
 use comms_db_client::messages::create_message::CreateMessageOptions;
@@ -31,13 +30,13 @@ pub struct ChannelMessageArgs {
 pub enum ChannelMessageCommand {
     /// Create a single channel message
     Create(CreateArgs),
-    /// Seed channel messages from a fixed CSV file with pre-defined UUIDs
+    /// Seed channel messages from a fixed JSON file with pre-defined UUIDs
     Seed,
 }
 
-/// A row in the seed CSV file.
+/// A row in the seed JSON file.
 #[derive(Debug, Deserialize)]
-struct CsvSeedMessageRow {
+struct SeedMessageRow {
     /// Pre-defined message UUID.
     message_id: Uuid,
     /// The channel ID to post the message to.
@@ -48,10 +47,9 @@ struct CsvSeedMessageRow {
     content: String,
     /// Optional thread ID if this is a reply.
     thread_id: Option<Uuid>,
-    /// Entity mentions in the message
-    /// Each entity mention is {ENTITY_TYPE}|{ENTITY_ID}
-    #[serde(default, deserialize_with = "deserialize_semicolon_list")]
-    entity_mentions: Vec<String>,
+    /// Entity mentions in the message.
+    #[serde(default)]
+    entity_mentions: Vec<SimpleMention>,
 }
 
 /// Arguments for creating a single channel message.
@@ -100,37 +98,20 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(ctx), err)]
 async fn seed(ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(ctx, Path::new("seed/channel_messages.csv")).await
-}
-
-fn parse_entity_mentions(raw: &[String]) -> anyhow::Result<Vec<SimpleMention>> {
-    raw.iter()
-        .map(|s| {
-            let (entity_type, entity_id) = s
-                .split_once('|')
-                .with_context(|| format!("invalid entity mention format: {s}"))?;
-            Ok(SimpleMention {
-                entity_type: entity_type.to_string(),
-                entity_id: entity_id.to_string(),
-            })
-        })
-        .collect()
+    seed_from_file(ctx, Path::new("seed/channel_messages.json")).await
 }
 
 async fn seed_from_file(ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
     tracing::info!("seeding channel messages");
 
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read csv file: {}", path.display()))?;
+        .with_context(|| format!("failed to read json file: {}", path.display()))?;
 
-    let mut reader = csv::Reader::from_reader(content.as_bytes());
-    let rows: Vec<CsvSeedMessageRow> = reader
-        .deserialize()
-        .collect::<Result<Vec<_>, _>>()
-        .context("failed to parse csv")?;
+    let rows: Vec<SeedMessageRow> =
+        serde_json::from_str(&content).context("failed to parse json")?;
 
     if rows.is_empty() {
-        anyhow::bail!("no messages found in csv file");
+        anyhow::bail!("no messages found in json file");
     }
 
     println!("Found {} messages to seed", rows.len());
@@ -169,25 +150,16 @@ async fn seed_from_file(ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> 
             continue;
         }
 
-        let mentions = match parse_entity_mentions(&entity_mentions) {
-            Ok(m) => m,
-            Err(e) => {
-                tracing::error!(error=?e, message = message_label, "failed to parse entity mentions");
-                println!("Warning: failed to parse mentions for {message_label}: {e}");
-                continue;
-            }
-        };
-
         if let Err(e) = ctx
             .db
-            .create_message_mentions(message_id, mentions.clone())
+            .create_message_mentions(message_id, entity_mentions.clone())
             .await
         {
             tracing::error!(error=?e, message = message_label, "failed to create message mentions");
             println!("Warning: failed to create mentions for {message_label}: {e}");
         }
 
-        for mention in &mentions {
+        for mention in &entity_mentions {
             if mention.entity_type == "user" {
                 continue;
             }
