@@ -380,11 +380,20 @@ export function BaseInput(props: {
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
-  >(props.draft?.db_id ?? (undoReplySnapshot?.threadId === ctx.thread()?.db_id ? undoReplySnapshot?.draftId : undefined) ?? undefined);
+  >(
+    props.draft?.db_id ??
+      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
+        ? undoReplySnapshot?.draftId
+        : undefined) ??
+      undefined
+  );
 
   // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
   // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
-  const restoredSnapshot = undoReplySnapshot?.threadId === ctx.thread()?.db_id ? undoReplySnapshot : null;
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
