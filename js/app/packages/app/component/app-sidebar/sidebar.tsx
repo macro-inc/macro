@@ -9,6 +9,7 @@ import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { A } from '@solidjs/router';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 
 interface SidebarItem {
   label: string;
@@ -58,10 +59,19 @@ export const SIDEBAR_LINKS = [
 
 export const AppSidebar = () => {
   return (
-    <div class="w-56 h-full border-r-edge-muted border-r-1 bg-panel py-2">
-      <div class="w-full h-full px-2 flex flex-col">
-        <For each={SIDEBAR_LINKS}>{(link) => <SidebarLink {...link} />}</For>
+    <div class="w-56 h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-6">
+      <div class="py-2 px-4">
+        <LogoIcon class="size-8" />
       </div>
+      <ul class="w-full h-full px-2 flex flex-col">
+        <For each={SIDEBAR_LINKS}>
+          {(link) => (
+            <li>
+              <SidebarLink {...link} />
+            </li>
+          )}
+        </For>
+      </ul>
     </div>
   );
 };
