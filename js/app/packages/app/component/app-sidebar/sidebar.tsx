@@ -18,7 +18,7 @@ interface SidebarItem {
   >;
 }
 
-const SIDEBAR_LINKS: SidebarItem[] = [
+export const SIDEBAR_LINKS = [
   {
     label: 'Inbox',
     href: '/inbox',
@@ -54,7 +54,7 @@ const SIDEBAR_LINKS: SidebarItem[] = [
     href: '/files',
     icon: AnimatedFolderIcon,
   },
-];
+] as const satisfies SidebarItem[];
 
 export const AppSidebar = () => {
   return (
@@ -73,7 +73,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <A
       class="w-full p-2 rounded-lg hover:bg-edge-muted active:bg-edge flex items-center gap-2 text-sm text-ink"
-      href={props.href}
+      href={`/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       activeClass="bg-accent text-panel hover:!bg-accent"

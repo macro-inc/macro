@@ -1,4 +1,4 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { batch, createMemo, createSignal, type Accessor } from 'solid-js';
 
 export type FilterPredicate<T> = (entity: T, ...args: any[]) => boolean;
 
@@ -42,6 +42,8 @@ export type FilterState<T, TFilter extends FilterConfig<T>> = {
   readonly clear: () => void;
   /** Set filters directly */
   readonly set: (filters: TFilter[]) => void;
+  /** Bulk activate filters */
+  readonly bulkActivate: (filterIDs: string[]) => void;
   /** Get a filter config by ID */
   readonly getFilter: (id: string) => TFilter | undefined;
   /** All available filter configs */
@@ -171,6 +173,15 @@ export function createFilterState<T, TFilter extends FilterConfig<T>>(
     updateFilters(filters);
   };
 
+  // Set filters directly
+  const bulkActivate = (filtersIDs: string[]) => {
+    batch(() => {
+      for (const id of filtersIDs) {
+        activate(id);
+      }
+    });
+  };
+
   return {
     active: activeFilters,
     activeIds,
@@ -180,6 +191,7 @@ export function createFilterState<T, TFilter extends FilterConfig<T>>(
     deactivate,
     clear,
     set,
+    bulkActivate,
     getFilter,
     available: availableFilters,
   };

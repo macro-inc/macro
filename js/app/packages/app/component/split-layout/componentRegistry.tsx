@@ -8,6 +8,7 @@ import { EmailCompose } from '../../../block-email/component/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { SOUP_FILTERS_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -56,6 +57,52 @@ export function resolveComponent(
 }
 
 registerComponent('unified-list', () => <SoupView />);
+
+/** BEGIN - APP ROUTES */
+registerComponent('inbox', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/inbox'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/inbox'].clientFilters}
+  />
+));
+registerComponent('agents', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/agents'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/agents'].clientFilters}
+  />
+));
+registerComponent('mail', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/mail'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/mail'].clientFilters}
+  />
+));
+registerComponent('documents', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/documents'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/documents'].clientFilters}
+  />
+));
+registerComponent('tasks', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/tasks'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/tasks'].clientFilters}
+  />
+));
+registerComponent('channels', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/channels'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/channels'].clientFilters}
+  />
+));
+registerComponent('files', () => (
+  <SoupView
+    queryFilters={SOUP_FILTERS_PRESETS['/files'].queryFilters}
+    initialClientFilters={SOUP_FILTERS_PRESETS['/files'].clientFilters}
+  />
+));
+/** END - APP ROUTES */
+
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', (params) => (

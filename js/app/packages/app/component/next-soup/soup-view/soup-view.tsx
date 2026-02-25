@@ -47,6 +47,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createRenderEffect,
@@ -55,6 +56,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -77,6 +79,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import { FilterID } from '@app/component/next-soup/filters/filters';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -130,11 +133,23 @@ const stateCache = new Map<
   }
 >();
 
-export const SoupView = () => {
+interface SoupViewProps {
+  initialClientFilters?: FilterID[];
+  queryFilters?: SoupItemsQueryFilters;
+}
+
+export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   useSoupNotificationInvalidators();
+
+  onMount(() => {
+    if (!props.initialClientFilters || !props.initialClientFilters.length)
+      return;
+
+    soup.filters.bulkActivate(props.initialClientFilters);
+  });
 
   return (
     <SplitPanelContext.Provider
@@ -144,7 +159,7 @@ export const SoupView = () => {
           soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
       }}
     >
-      <SoupViewContextProvider soup={soup}>
+      <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
         <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <SoupToolbar />
