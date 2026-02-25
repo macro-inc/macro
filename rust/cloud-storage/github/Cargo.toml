@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "github"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["ports", "outbound"]
+ports = []
+outbound = [
+  "dep:sqlx", 
+  "ports"
+]
+
+[dependencies]
+anyhow = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true, optional = true }
+mockall = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true}
+
+macro_uuid = { path = "../macro_uuid" }
+macro_user_id = { path = "../macro_user_id" }

@@ -4042,6 +4042,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "github"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
