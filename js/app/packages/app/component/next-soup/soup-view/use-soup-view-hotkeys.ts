@@ -37,7 +37,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   const splitIsUnifiedList = () => splitHandle.content().id === 'unified-list';
 
   // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
-  const clearMultiCondition = () => soup.selection.count() > 0;
+  const clearMultiCondition = () =>
+    soup.selection.count() > 0 && splitIsUnifiedList();
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
   const goHomeCondition = () => !splitIsUnifiedList();
   const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
@@ -270,7 +271,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return false;
     },
-  }).withGroup(group);
+  });
 
   // shift+enter - Open in new split
   registerHotkey({
