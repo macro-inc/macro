@@ -78,7 +78,7 @@ function getEntityName(entity: CombinedEntity): string {
   if (entity.kind === 'user') {
     const { name, email } = entity.data;
     if (name === email) return email;
-    return name;
+    return `${name} | ${email}`;
   }
   const data = entity.data;
   if (data.type === 'email') {
