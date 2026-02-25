@@ -1,3 +1,4 @@
+use email_formatting::EmailDigestNotification;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::APNSPushNotification;
 use notification::domain::models::mobile::NotifCollapseKey;
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxNotification {
     /// A test message.
-    pub message: String,
+    pub inner: EmailDigestNotification,
 }
 
 impl Notification for SandboxNotification {
@@ -39,10 +40,7 @@ impl NotificationExtIos for SandboxNotification {
 
 impl NotificationExtEmail for SandboxNotification {
     fn format_email(&self) -> EmailContent {
-        EmailContent {
-            subject: "Sandbox Notification".to_string(),
-            body: self.message.clone(),
-        }
+        self.inner.format_email()
     }
 
     fn rate_limit_config() -> RateLimitConfig {

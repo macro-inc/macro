@@ -14,6 +14,7 @@ inquire = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification" }
 redis = { workspace = true, features = [

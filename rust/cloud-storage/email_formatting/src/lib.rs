@@ -33,7 +33,7 @@ impl NotifPreview {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailDigestNotification {
     /// the templated html string of the email
     inner_html_string: String,
@@ -44,7 +44,7 @@ pub struct EmailDigestNotification {
 impl EmailDigestNotification {
     pub fn new_from_digest_batch(digest: DigestBatch) -> Result<Self, Report> {
         let DigestBatch {
-            user_id,
+            user_id: _,
             notifications,
             ..
         } = digest;

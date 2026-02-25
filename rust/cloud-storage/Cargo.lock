@@ -6398,6 +6398,7 @@ dependencies = [
  "macro_aws_config",
  "macro_user_id",
  "model-entity",
+ "model_notifications",
  "models_pagination",
  "notification",
  "redis",
