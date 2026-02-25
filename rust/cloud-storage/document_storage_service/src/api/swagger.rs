@@ -186,6 +186,7 @@ use utoipa::OpenApi;
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
 
