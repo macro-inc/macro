@@ -1,0 +1,8 @@
+[package]
+edition = "2024"
+name = "email_formatting"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+askama = "0.14"
