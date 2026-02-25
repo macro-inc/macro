@@ -578,6 +578,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   class="overflow-hidden flex min-w-0"
                   virtualizerRef={registerVirtualizerHandler}
                   onScrollBottom={debouncedFetchMore}
+                  scrollBottomOffset={300}
                   rows={rows()}
                 >
                   {(row, i) => {
