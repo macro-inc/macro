@@ -17,6 +17,7 @@ pub fn clean_threads(threads: &mut Vec<service::thread::Thread>) {
 }
 
 // cleans the html of a message
+#[tracing::instrument(skip(message))]
 pub fn clean_message(message: &mut service::message::Message) {
     clean_message_subject_snippet(message);
 
