@@ -156,11 +156,11 @@ impl EmailQueryBuilder {
             content_bool_query.must_not(QueryType::term("labels", label.clone()));
         }
 
+        // Importance filter. Source of truth for the label logic is in
+        // email/src/outbound/email_pg_repo/dynamic.rs (EmailLiteral::Importance).
         match self.importance {
             Some(true) => {
                 // Exclude emails that have depriority labels UNLESS they also have a priority label.
-                // This matches the PG/soup behavior where SENT/DRAFT/CATEGORY_PERSONAL emails
-                // are always considered important regardless of category labels.
                 let importance_exclude = BoolQuery::new()
                     .filter(QueryType::terms(
                         "labels",
