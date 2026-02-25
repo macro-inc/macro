@@ -4148,7 +4148,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+            'Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums).'
           ),
         include_labels: zod
           .array(zod.string())
