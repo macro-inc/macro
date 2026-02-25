@@ -17,8 +17,9 @@ import {
 const BASE_NAME = 'authentication-service';
 const BASE_PATH = '../../../rust/cloud-storage';
 
-export const SERVICE_DOMAIN_NAME = `auth-service${stack === 'prod' ? '' : `-${stack}`
-  }.${BASE_DOMAIN}`;
+export const SERVICE_DOMAIN_NAME = `auth-service${
+  stack === 'prod' ? '' : `-${stack}`
+}.${BASE_DOMAIN}`;
 
 type Args = {
   secretKeyArns: (pulumi.Output<string> | string)[];
@@ -257,10 +258,11 @@ export class AuthenticationService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${platform.architecture === 'amd64'
+            cpuArchitecture: `${
+              platform.architecture === 'amd64'
                 ? 'X86_64'
                 : platform.architecture.toUpperCase()
-              }`,
+            }`,
           },
         },
         desiredCount: 1,
