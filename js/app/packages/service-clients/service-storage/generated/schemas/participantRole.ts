@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The role a user has within a channel.
+ */
 export type ParticipantRole =
   (typeof ParticipantRole)[keyof typeof ParticipantRole];
 

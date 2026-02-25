@@ -19,6 +19,7 @@ import {
   isCodeEditorLanguageSupported,
 } from './languageQuery';
 import { err, isErr, ok } from './maybeResult';
+import { refetchSoupEntity } from '@queries/soup/cache';
 
 /**
  * Generate a fake sha256 hash
@@ -78,6 +79,7 @@ export async function createMarkdownFile(
   if (isErr(res)) {
     return;
   }
+  refetchSoupEntity(documentId, 'document');
   return documentId;
 }
 
@@ -128,6 +130,7 @@ export async function createTask(
     // Task was created, just without content - still return the id
   }
 
+  refetchSoupEntity(documentId, 'document');
   return documentId;
 }
 
@@ -194,6 +197,7 @@ export async function createCodeFileFromText({
   });
   if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
   postNewHistoryItem('document', document.metadata.documentId);
+  refetchSoupEntity(document.metadata.documentId, 'document');
   return ok({ documentId: document.metadata.documentId });
 }
 
@@ -227,6 +231,7 @@ export async function createCanvasFileFromJsonString(args: {
   if (isErr(uploadResult)) return { error: 'Failed to upload file.' };
 
   postNewHistoryItem('document', canvas.metadata.documentId);
+  refetchSoupEntity(canvas.metadata.documentId, 'document');
   return { documentId: canvas.metadata.documentId };
 }
 
@@ -243,6 +248,7 @@ export async function createChat(args?: CreateChatRequest) {
   }
   const [, chat] = maybeChat;
   postNewHistoryItem('chat', chat.id);
+  refetchSoupEntity(chat.id, 'chat');
   return { chatId: chat.id };
 }
 

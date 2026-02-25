@@ -55,7 +55,10 @@ pub async fn handler(
         document,
         email,
         project,
-    } = results.into_iter().split_search_response();
+    } = {
+        let _span = tracing::info_span!("split_search_response_by_type").entered();
+        results.into_iter().split_search_response()
+    };
 
     let (
         enriched_document_results,
@@ -97,15 +100,19 @@ pub async fn handler(
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
-    let mut results = vec![];
+    let results = {
+        let _span = tracing::info_span!("combine_and_sort_enriched_results").entered();
 
-    results.extend(enriched_document_results);
-    results.extend(enriched_chat_results);
-    results.extend(enriched_channel_results);
-    results.extend(enriched_project_results);
-    results.extend(enriched_email_results);
+        let mut results = vec![];
 
-    results = sort_unified_search_results(results);
+        results.extend(enriched_document_results);
+        results.extend(enriched_chat_results);
+        results.extend(enriched_channel_results);
+        results.extend(enriched_project_results);
+        results.extend(enriched_email_results);
+
+        sort_unified_search_results(results)
+    };
 
     Ok(Json(UnifiedSearchResponse {
         results,
@@ -115,6 +122,7 @@ pub async fn handler(
 
 /// Sorts the unified results
 /// This method is so we can more easily test sorting
+#[tracing::instrument(skip(results), fields(count = results.len()))]
 fn sort_unified_search_results(
     mut results: Vec<UnifiedSearchResponseItem>,
 ) -> Vec<UnifiedSearchResponseItem> {

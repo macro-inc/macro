@@ -8,4 +8,4 @@
 /**
  * The time the chat was last viewed
  */
-export type SoupChatViewedAt = number | null;
+export type SoupChatViewedAt = string | null;

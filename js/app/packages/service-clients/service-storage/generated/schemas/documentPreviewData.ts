@@ -6,6 +6,7 @@
  */
 import type { DocumentPreviewDataFileType } from './documentPreviewDataFileType';
 import type { DocumentPreviewDataSubTypeProperty } from './documentPreviewDataSubTypeProperty';
+import type { DocumentPreviewDataUpdatedAt } from './documentPreviewDataUpdatedAt';
 
 export interface DocumentPreviewData {
   /** The document id */
@@ -18,5 +19,5 @@ export interface DocumentPreviewData {
   owner: string;
   sub_type?: DocumentPreviewDataSubTypeProperty;
   /** The time the document was last updated */
-  updated_at: number;
+  updated_at?: DocumentPreviewDataUpdatedAt;
 }

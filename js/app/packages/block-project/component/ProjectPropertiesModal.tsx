@@ -9,28 +9,27 @@ import { Suspense } from 'solid-js';
 
 const DRAWER_ID = 'properties';
 
-export function ProjectPropertiesModal(props: {
-  buttonSize?: 'sm' | 'base';
-  name?: string;
-}) {
+export function ProjectPropertiesButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
-  const canEdit = useCanEdit();
-
   return (
-    <>
-      <DeprecatedIconButton
-        icon={TagIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'Properties' }}
-        onClick={drawerControl.toggle}
-      />
-      <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
-        <Suspense fallback={<LoadingFallback />}>
-          <ProjectPropertiesContent canEdit={canEdit()} name={props.name} />
-        </Suspense>
-      </SplitDrawer>
-    </>
+    <DeprecatedIconButton
+      icon={TagIcon}
+      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+      size={props.buttonSize ?? 'base'}
+      tooltip={{ label: 'Properties' }}
+      onClick={drawerControl.toggle}
+    />
+  );
+}
+
+export function ProjectPropertiesDrawer(props: { name?: string }) {
+  const canEdit = useCanEdit();
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
+      <Suspense fallback={<LoadingFallback />}>
+        <ProjectPropertiesContent canEdit={canEdit()} name={props.name} />
+      </Suspense>
+    </SplitDrawer>
   );
 }
 

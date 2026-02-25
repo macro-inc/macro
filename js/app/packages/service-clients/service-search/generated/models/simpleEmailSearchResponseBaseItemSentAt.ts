@@ -8,4 +8,4 @@
 /**
  * The time the email was sent
  */
-export type SimpleEmailSearchResponseBaseItemSentAt = null | number;
+export type SimpleEmailSearchResponseBaseItemSentAt = null | string;

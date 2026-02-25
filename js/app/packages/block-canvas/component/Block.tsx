@@ -35,7 +35,7 @@ import { isAnimating, renderStateStore } from '../store/RenderState';
 import { CanvasController } from './CanvasController';
 import { CanvasRenderer } from './CanvasRenderer';
 import { Loading } from './Loading';
-import { LoadingMindMap } from './LoadingMindMap';
+import { ModalsProvider } from './ModalsProvider';
 import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
 
@@ -297,18 +297,19 @@ export default function BlockCanvas(props: BlockCanvasProps) {
           }
         }}
       >
-        <Show when={!isNestedBlock}>
-          <TopBar />
-        </Show>
-        <Show when={dataState() === 'initialized'} fallback={<LoadingView />}>
-          <CanvasController>
-            <Show when={visible()}>
-              <CanvasRenderer />
-              <ToolBar />
-            </Show>
-          </CanvasController>
-        </Show>
-        <LoadingMindMap />
+        <ModalsProvider>
+          <Show when={!isNestedBlock}>
+            <TopBar />
+          </Show>
+          <Show when={dataState() === 'initialized'} fallback={<LoadingView />}>
+            <CanvasController>
+              <Show when={visible()}>
+                <CanvasRenderer />
+                <ToolBar />
+              </Show>
+            </CanvasController>
+          </Show>
+        </ModalsProvider>
       </div>
     </DocumentBlockContainer>
   );

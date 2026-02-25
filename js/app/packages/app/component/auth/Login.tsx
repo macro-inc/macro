@@ -43,11 +43,8 @@ export function Login() {
       setStage(Stage.Email);
     }
     // block copied from Mobile.tsx
-    if (
-      searchParams.session_code &&
-      typeof searchParams.session_code === 'string'
-    ) {
-      const session_code = searchParams.session_code;
+    if (searchParams.token && typeof searchParams.token === 'string') {
+      const session_code = searchParams.token;
       console.log({ session_code });
       unsetTokenPromise();
       invalidateUserInfo();

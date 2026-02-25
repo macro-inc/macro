@@ -5,10 +5,8 @@ import {
   commsServiceClient,
   type MessageResponse,
 } from '@service-comms/client';
-import type {
-  GetChannelResponse,
-  PostReactionRequest,
-} from '@service-comms/generated/models';
+import type { PostReactionRequest } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';

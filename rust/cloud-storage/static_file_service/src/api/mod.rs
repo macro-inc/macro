@@ -34,7 +34,7 @@ pub async fn setup_and_serve(
     let metadata_client = DynamodbClient::new(&aws_config, config.dynamodb_table.clone());
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
-    let inner_client = aws_sdk_s3::Client::new(&aws_config);
+    let inner_client = macro_aws_config::s3_client().await;
     let storage_client = S3Client::new(inner_client, config.storage_bucket_name.clone());
 
     let state = AppState {

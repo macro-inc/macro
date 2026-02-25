@@ -2,7 +2,7 @@ import { type AllTrackingEventValues, withAnalytics } from '@coparse/analytics';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
-import { createEffect, type JSX, onCleanup } from 'solid-js';
+import { createEffect, type JSX, onCleanup, useContext } from 'solid-js';
 import {
   type BlockDefinition,
   type BlockName,
@@ -26,6 +26,7 @@ import {
 import type { Source, SourcePreload } from '../source';
 import { err, isErr, type ObjectLike, ok } from '../util/maybeResult';
 import { useQueryClient } from '@queries/client';
+import { SplitPanelContext } from '@app/component/split-layout/context';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -74,6 +75,9 @@ export function BlockLoader<
   const setEditPermissionEnabled = blockEditPermissionEnabledSignal.set;
   const setHandle = blockHandleSignal.set;
   const isNested = useIsNestedBlock();
+  const splitPanelContext = useContext(SplitPanelContext);
+  // NOTE: not reactive but PreviewPanel component manually creates a true signal for the context provider
+  const isPreview = splitPanelContext?.previewState?.[0]() ?? false;
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
@@ -133,10 +137,14 @@ Check that the load function does not return a preload source when the intent is
       return null;
     });
 
-    if (!isNested && data) {
+    if (!isNested && !isPreview && data) {
       // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
       import('./trackBlockOpened').then(({ track }) => {
-        track(props.id, data.__block, useQueryClient);
+        track({
+          itemId: props.id,
+          blockName: data.__block,
+          client: useQueryClient,
+        });
       });
 
       // for analytics

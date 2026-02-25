@@ -2,7 +2,6 @@
 mod test;
 
 use crate::parse::db_to_service::map_db_contact_to_service;
-use anyhow::Context;
 use chrono::{DateTime, Utc};
 use email_utils::{dedupe_emails, is_generic_email};
 use models_email::service::address;
@@ -10,6 +9,8 @@ use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
+
+pub type ThreadContactsMap = HashMap<Uuid, Vec<(String, Option<String>)>>;
 
 /// fetch message sender from db
 #[tracing::instrument(skip(pool), err)]
@@ -118,7 +119,7 @@ pub async fn fetch_db_recipients(
     })
     .fetch_all(pool)
     .await
-    .context("Failed to fetch recipients")
+    .map_err(Into::into)
 }
 
 /// Fetches all recipients for a given list of message IDs in a single query
@@ -158,8 +159,7 @@ where
         message_ids
     )
     .fetch_all(executor)
-    .await
-    .context("Failed to fetch recipients in bulk")?;
+    .await?;
 
     let mut recipients_map = HashMap::new();
     for row in results {
@@ -201,12 +201,7 @@ pub async fn fetch_id_by_email(
     )
     .fetch_optional(pool)
     .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch contact ID for email address {}",
-            email_address
-        )
-    })
+    .map_err(Into::into)
 }
 
 /// Fetch contact for a given email address
@@ -227,13 +222,7 @@ pub async fn fetch_contact_by_email(
         link_id
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch contact for email address {}",
-                email_address
-            )
-        })?;
+        .await?;
 
     Ok(contact.and_then(|c| map_db_contact_to_service(Some(c))))
 }
@@ -293,12 +282,7 @@ where
     )
     .fetch_all(executor)
     .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch email addresses with IDs: {:?}",
-            unique_ids_vec
-        )
-    })
+    .map_err(Into::into)
 }
 
 /// Fetches sender contacts for multiple messages and returns a map keyed by message_id
@@ -348,8 +332,7 @@ where
         message_ids
     )
     .fetch_all(executor)
-    .await
-    .context("Failed to fetch senders by message IDs")?;
+    .await?;
 
     let mut senders_map = HashMap::new();
     for row in results {
@@ -367,6 +350,54 @@ where
     }
 
     Ok(senders_map)
+}
+
+/// Fetches all unique sender contacts for given thread IDs, ordered by message creation time.
+/// Returns a map of thread_id -> Vec<(email, name)>.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_contacts_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> anyhow::Result<ThreadContactsMap> {
+    if thread_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    struct Row {
+        thread_id: Uuid,
+        email_address: String,
+        name: Option<String>,
+    }
+
+    let rows = sqlx::query_as!(
+        Row,
+        r#"
+        SELECT
+            m.thread_id,
+            c.email_address as "email_address!",
+            COALESCE(m.from_name, c.name) as "name"
+        FROM email_messages m
+        JOIN email_contacts c ON m.from_contact_id = c.id
+        WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL
+        ORDER BY m.created_at ASC
+        "#,
+        thread_ids
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut result: ThreadContactsMap = HashMap::new();
+    for row in rows {
+        let contacts = result.entry(row.thread_id).or_default();
+        if !contacts
+            .iter()
+            .any(|(e, n)| *e == row.email_address && *n == row.name)
+        {
+            contacts.push((row.email_address, row.name));
+        }
+    }
+
+    Ok(result)
 }
 
 /// returns all email addresses and names the passed link has sent emails to.
@@ -425,8 +456,7 @@ pub async fn fetch_contacts_by_link_id(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch contacts for link ID")?;
+    .await?;
 
     Ok(db_contacts.into_iter().map(Into::into).collect())
 }
@@ -457,8 +487,7 @@ pub async fn fetch_contacts_emails_by_link_id(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch contacts for link ID")?;
+    .await?;
 
     let deduped = dedupe_emails(rows.into_iter().map(|row| row.email_address).collect());
     Ok(deduped

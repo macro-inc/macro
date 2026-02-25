@@ -10,7 +10,7 @@ import type { ProjectSearchResult } from './projectSearchResult';
  * A single response item, part of the ProjectSearchResponse object
  */
 export interface ProjectSearchResponseItem {
-  created_at: number;
+  created_at: string;
   /** Standardized fields that all item types will share.
 These field names are being aligned across all item types
 for consistency in our data model. */
@@ -18,5 +18,5 @@ for consistency in our data model. */
   name: string;
   owner_id: string;
   project_search_results: ProjectSearchResult[];
-  updated_at: number;
+  updated_at: string;
 }

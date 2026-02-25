@@ -5,6 +5,7 @@ import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
+  ArrayQueue,
   createSocketEffect,
   JsonSerializer,
   LinearBackoff,
@@ -43,6 +44,7 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   .withSerializer(
     new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
   )
+  .withBuffer(new ArrayQueue())
   .withBackoff(new LinearBackoff(500, 500))
   .withMaxRetries(20)
   .withHeartbeat({
@@ -55,7 +57,6 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   .build();
 
 export const state = createWebsocketStateSignal(ws);
-
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(
   callback: (data: FromWebsocketMessage) => void

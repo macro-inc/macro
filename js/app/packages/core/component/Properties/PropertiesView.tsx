@@ -64,7 +64,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
         property,
         apiValues: {
           valueType: 'DATE',
-          value: date.toISOString(),
+          value: date,
         },
       }),
   };

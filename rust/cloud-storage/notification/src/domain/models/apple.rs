@@ -1,6 +1,7 @@
 //! Apple Push Notification Service (APNS) payload models.
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// The APNS payload container.
 #[derive(Serialize, Debug, Deserialize)]
@@ -153,4 +154,13 @@ pub struct APNSPushNotification<T> {
     /// This data has no effect on 'how' the notification is delivered.
     #[serde(flatten)]
     pub push_notification_data: T,
+}
+
+/// the value we send as the payload in the ios notification
+/// This data is accessible to the client
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PushNotificationData {
+    /// The id of the notification record (UserNotification.id)
+    pub notification_id: Uuid,
 }

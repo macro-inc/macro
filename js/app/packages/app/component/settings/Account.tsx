@@ -208,7 +208,7 @@ export function Account() {
           >
             <div class="text-sm">Email</div>
             <Show
-              when={!emailActive() && DEV_MODE_ENV}
+              when={!emailActive()}
               fallback={
                 <DeprecatedTextButton
                   theme="base"

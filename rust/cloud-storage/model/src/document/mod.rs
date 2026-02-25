@@ -1,10 +1,10 @@
-#[cfg(test)]
-mod test;
-use chrono::serde::ts_seconds_option;
 pub mod list;
 pub mod response;
+#[cfg(test)]
+mod test;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use schemars::JsonSchema;
 use utoipa::ToSchema;
 
 mod file_type;
@@ -103,17 +103,11 @@ pub struct BasicDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_family_id: Option<i64>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The time the document was deleted
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
@@ -149,7 +143,15 @@ pub struct BackfillSearchDocumentInformation {
     pub file_type: FileType,
 }
 #[derive(
-    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
+    sqlx::FromRow,
+    serde::Serialize,
+    serde::Deserialize,
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    ToSchema,
+    JsonSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMetadata {
@@ -162,6 +164,7 @@ pub struct DocumentMetadata {
     /// The owner of the document
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
+    #[schemars(with = "String")]
     pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     pub document_name: String,
@@ -198,17 +201,11 @@ pub struct DocumentMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modification_data: Option<serde_json::Value>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The time the document was deleted
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
@@ -344,8 +341,6 @@ pub struct DocumentPreviewData {
     /// The id of the owner of the document
     pub owner: String,
     /// The time the document was last updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
     /// Task-related properties are encoded within the variant.

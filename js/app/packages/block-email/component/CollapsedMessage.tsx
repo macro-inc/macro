@@ -7,6 +7,7 @@ import {
   getSenderDisplayName,
   isMessageFromCurrentUser,
 } from '../util/emailUser';
+import { formatShortDate } from './EmailMessageTopBar';
 
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
@@ -55,7 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   return (
     <div class="shrink-0 flex justify-center w-full">
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
-      <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
+      <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
@@ -108,21 +109,15 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
-              <span class="text-ink w-16 shrink-0 truncate text-sm">
+              <span class="text-ink font-semibold w-16 shrink-0 truncate text-sm">
                 {senderDisplay()}
               </span>
               <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
+            <div class="text-xs text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
-                new Date(props.message.internal_date_ts).toLocaleDateString(
-                  'en-US',
-                  {
-                    month: 'short',
-                    day: 'numeric',
-                  }
-                )}
+                formatShortDate(props.message.internal_date_ts)}
             </div>
           </div>
         </BozzyBracket>

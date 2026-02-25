@@ -202,11 +202,15 @@ export const authServiceClient = {
       },
     });
   },
-  async postProfilePictures(args: GetProfilePicturesRequestBody) {
+  async postProfilePictures(
+    args: GetProfilePicturesRequestBody,
+    init?: SafeFetchInit
+  ) {
     return mapOk(
       await fetchWithAuth<ProfilePictures>(
         `${authHost}/user/profile_pictures`,
         {
+          ...init,
           method: 'POST',
           body: JSON.stringify(args),
         }
@@ -322,6 +326,16 @@ export const authServiceClient = {
     );
   },
 
+  async patchAiConsent(args: { aiDataConsent: boolean }) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/ai_consent`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
   // HTTP methods (migrated from RPC)
   async getLegacyUserPermissions() {
     const result = await fetchWithAuth<GetLegacyUserPermissionsResponse>(
@@ -341,6 +355,7 @@ export const authServiceClient = {
       authenticated: !!data.userId,
       userId: data.userId,
       hasTrialed: data.hasTrialed,
+      aiDataConsent: data.aiDataConsent,
     }));
   },
 

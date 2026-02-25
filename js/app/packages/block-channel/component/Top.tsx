@@ -15,8 +15,9 @@ import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { createMemo, Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
@@ -37,7 +38,7 @@ function TopIcon(props: TopIconProps) {
 
   return (
     <Show
-      when={props.channelType === 'direct_message' && recipient()}
+      when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
       fallback={<HashIcon class="w-4 h-4" />}
     >
       {(recipient) => {
@@ -87,7 +88,7 @@ export function Top(props: TopProps) {
   return (
     <>
       <SplitHeaderLeft>
-        <div class="h-full my-auto flex gap-2 justify-center items-center">
+        <div class="h-full my-auto flex gap-2 justify-start items-center">
           <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
             <TopIcon
               channelType={props.channelType}
@@ -98,7 +99,8 @@ export function Top(props: TopProps) {
               id={props.channelId}
               itemType="channel"
               lockRename={
-                props.channelType === 'direct_message' || !isAdminOrOwner()
+                props.channelType === ChannelTypeEnum.DirectMessage ||
+                !isAdminOrOwner()
               }
             />
           </div>
@@ -108,31 +110,29 @@ export function Top(props: TopProps) {
         <BlockLiveIndicators />
       </SplitHeaderRight>
       <SplitToolbarRight>
-        <div class="p-1 flex flex-row gap-1 items-center h-full">
-          <Show when={props.channelType === 'public'}>
-            <DeprecatedIconButton
-              theme="clear"
-              size="sm"
-              tooltip={{ label: 'Copy Link to Public Channel' }}
-              icon={LinkIcon}
-              onClick={handleCopyLink}
-            />
-          </Show>
-          <NotificationsModal
-            entity={{ id: blockId, type: 'channel' }}
-            notificationSource={notificationSource}
-            buttonSize="sm"
+        <Show when={props.channelType === ChannelTypeEnum.Public}>
+          <DeprecatedIconButton
+            theme="clear"
+            size="sm"
+            tooltip={{ label: 'Copy Link to Public Channel' }}
+            icon={LinkIcon}
+            onClick={handleCopyLink}
           />
-          <AttachmentsModal />
-          <Show when={props.channelType !== 'direct_message'}>
-            <ParticipantManager
-              channelId={props.channelId}
-              channelType={props.channelType}
-              participants={props.participants}
-              participantCount={participantCount()}
-            />
-          </Show>
-        </div>
+        </Show>
+        <NotificationsModal
+          entity={{ id: blockId, type: 'channel' }}
+          notificationSource={notificationSource}
+          buttonSize="sm"
+        />
+        <AttachmentsModal />
+        <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
+          <ParticipantManager
+            channelId={props.channelId}
+            channelType={props.channelType}
+            participants={props.participants}
+            participantCount={participantCount()}
+          />
+        </Show>
       </SplitToolbarRight>
     </>
   );

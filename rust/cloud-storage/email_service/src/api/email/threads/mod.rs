@@ -1,5 +1,6 @@
 pub(crate) mod archived;
 pub(crate) mod get;
+pub(crate) mod labels;
 pub(crate) mod seen;
 
 use axum::Router;
@@ -29,6 +30,13 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     state.clone(),
                     crate::api::middleware::gmail_token::attach_gmail_token,
                 ),
+            )),
+        )
+        .route(
+            "/:id/labels",
+            patch(labels::handler).layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::api::middleware::gmail_token::attach_gmail_token,
             )),
         )
         .layer(axum::middleware::from_fn_with_state(

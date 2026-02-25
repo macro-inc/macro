@@ -1,22 +1,25 @@
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
-import type { Attachment, Model, Send } from '@core/component/AI/types';
-import { asEditRequest } from '@core/component/AI/types/util';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
+import type { Attachment, Model } from '@core/component/AI/types';
 import { onMount } from 'solid-js';
 
-export function EditableChatMessage(props: {
+function EditableChatMessageInner(props: {
   chatId: string;
   initialText: string;
   attachments: Attachment[];
-  onAccept: (r: Send) => void;
+  onAccept: (r: ChatSendInput) => void;
   onCancel: () => void;
   model: Model;
 }) {
-  const { ChatInput, chatMarkdownArea } = useChatInput({
-    initialAttachments: props.attachments,
-    chatId: props.chatId,
+  const input = useChatInputContext();
+  const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.initialText,
-    model: props.model,
-    isGenerating: false,
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   onMount(() => {
@@ -32,10 +35,36 @@ export function EditableChatMessage(props: {
   return (
     <div onKeyDown={handleKey} class="w-full">
       <ChatInput
-        onSend={(request) => {
-          if (request.type === 'send') props.onAccept(asEditRequest(request));
-        }}
+        markdown={chatMarkdownArea}
+        chatId={props.chatId}
+        onSend={(request) => props.onAccept(request)}
       />
     </div>
+  );
+}
+
+export function EditableChatMessage(props: {
+  chatId: string;
+  initialText: string;
+  attachments: Attachment[];
+  onAccept: (r: ChatSendInput) => void;
+  onCancel: () => void;
+  model: Model;
+}) {
+  return (
+    <ChatInputProvider
+      model={props.model}
+      isGenerating={false}
+      initialAttachments={props.attachments}
+    >
+      <EditableChatMessageInner
+        chatId={props.chatId}
+        initialText={props.initialText}
+        attachments={props.attachments}
+        onAccept={props.onAccept}
+        onCancel={props.onCancel}
+        model={props.model}
+      />
+    </ChatInputProvider>
   );
 }

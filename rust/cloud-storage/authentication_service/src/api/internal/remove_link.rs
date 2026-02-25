@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
+use fusionauth::error::FusionAuthClientError;
 
 use axum::{
     Json,

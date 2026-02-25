@@ -359,7 +359,7 @@ impl Read {
         let id = self.provide_single_id()?;
         let history = scribe
             .chat
-            .get_chat_history(&id, Some(&*request_context.jwt))
+            .get_chat_history(&id, &request_context.jwt)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch chat thread: {}", e),
@@ -379,7 +379,7 @@ impl Read {
 
         let history = scribe
             .chat
-            .get_chat_history_for_messages(message_ids, Some(&*request_context.jwt))
+            .get_chat_history_for_messages(message_ids, &request_context.jwt)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch chat messages: {}", e),

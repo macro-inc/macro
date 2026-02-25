@@ -59,9 +59,11 @@ import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/nod
 import { textPastePlugin } from 'core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import {
   $getRoot,
+  COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
@@ -217,6 +219,7 @@ type MarkdownAreaProps = {
 export type ConsumableChatMarkdownAreaProps = {
   onChange?: (value: string) => void;
   onEnter?: (e: KeyboardEvent) => boolean;
+  onEscape?: (e: KeyboardEvent) => boolean;
   onBlur?: () => void;
   initialValue?: string;
   placeholder?: string;
@@ -376,6 +379,16 @@ function MarkdownArea(
     );
   }
 
+  if (props.onEscape !== undefined) {
+    autoRegister(
+      editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (e) => (props.onEscape ? props.onEscape(e) : false),
+        COMMAND_PRIORITY_CRITICAL
+      )
+    );
+  }
+
   onCleanup(() => {
     cleanup();
   });
@@ -430,12 +443,11 @@ function MarkdownArea(
           editor={editor}
           menu={mentionsMenuOperations}
           users={() => []}
-          // NOTE: we use default channel history
-          history={props.history}
           block={'chat'}
           useBlockBoundary={true}
           portalScope={props.portalScope}
           useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
+          showOpenTabs
         />
         <FloatingMenuGroup>
           <FloatingLinkMenu />

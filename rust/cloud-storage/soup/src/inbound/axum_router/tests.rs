@@ -623,3 +623,79 @@ async fn it_parses_channel_filters() {
         }
     )
 }
+
+#[tokio::test]
+async fn it_parses_notification_and_task_filters() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "document_filters": {
+                    "notification_filters": { "done": false, "seen": false },
+                    "task_filters": { "include_cbm_atm_nc": true }
+                },
+                "chat_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                },
+                "project_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                },
+                "channel_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard.pop().unwrap()
+    };
+
+    assert_matches!(
+        arg,
+        SoupRequest {
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+                _,
+                EntityFilters {
+                    document_filters,
+                    chat_filters,
+                    project_filters,
+                    channel_filters,
+                    ..
+                },
+            ))),
+            ..
+        } => {
+            assert_eq!(document_filters.notification_filters.done, Some(false));
+            assert_eq!(document_filters.notification_filters.seen, Some(false));
+            assert_eq!(document_filters.task_filters.include_cbm_atm_nc, Some(true));
+            assert_eq!(chat_filters.notification_filters.done, Some(false));
+            assert_eq!(chat_filters.notification_filters.seen, Some(false));
+            assert_eq!(project_filters.notification_filters.done, Some(false));
+            assert_eq!(project_filters.notification_filters.seen, Some(false));
+            assert_eq!(channel_filters.notification_filters.done, Some(false));
+            assert_eq!(channel_filters.notification_filters.seen, Some(false));
+        }
+    )
+}

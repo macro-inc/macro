@@ -14,7 +14,7 @@ export interface SimpleChannelSearchReponseBaseItem {
   /** The channel type */
   channel_type: string;
   /** The time the channel message was created */
-  created_at: number;
+  created_at: string;
   /** The highlights on the channel message */
   highlight: SearchHighlight;
   /** The mentions */
@@ -28,5 +28,5 @@ export interface SimpleChannelSearchReponseBaseItem {
   /** The thread id */
   thread_id?: SimpleChannelSearchReponseBaseItemThreadId;
   /** The time the channel message was last updated */
-  updated_at: number;
+  updated_at: string;
 }

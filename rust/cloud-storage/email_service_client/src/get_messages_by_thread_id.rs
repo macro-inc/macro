@@ -69,34 +69,4 @@ impl EmailServiceClient {
             }
         }
     }
-
-    pub async fn get_search_messages_by_thread_id_internal(
-        &self,
-        id: &str,
-        message_offset: i64,
-        message_limit: i64,
-    ) -> anyhow::Result<Vec<message::ParsedSearchMessage>> {
-        let res = self
-            .client
-            .get(format!(
-                "{}/internal/threads/{}/messages/search?message_offset={}&message_limit={}",
-                self.url, id, message_offset, message_limit
-            ))
-            .send()
-            .await?;
-
-        match res.status() {
-            reqwest::StatusCode::OK => {
-                let result = res.json::<Vec<message::ParsedSearchMessage>>().await?;
-                Ok(result)
-            }
-            status_code => {
-                let body: String = res.text().await?;
-                anyhow::bail!(format!(
-                    "unexpected response from email service status code {}: {}",
-                    status_code, body
-                ))
-            }
-        }
-    }
 }

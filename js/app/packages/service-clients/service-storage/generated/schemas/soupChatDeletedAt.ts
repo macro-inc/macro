@@ -8,4 +8,4 @@
 /**
  * The time the chat was deleted
  */
-export type SoupChatDeletedAt = number | null;
+export type SoupChatDeletedAt = string | null;

@@ -1,19 +1,22 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
+import { toast } from '@core/component/Toast/Toast';
+import type { EntityData } from '@entity';
 import {
   optimisticUpdateChannelName,
   rollbackUpdateChannelName,
   type UpdateChannelNameContext,
 } from '@queries/channel/channel';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ItemType } from '@service-storage/client';
-import type { EntityData } from '../types/entity';
-import { queryClient } from './client';
-import { queryKeys } from './key';
-import { type InfiniteData, useMutation } from '@tanstack/solid-query';
-import { toast } from '@core/component/Toast/Toast';
-import type { SoupPage } from '@service-storage/generated/schemas';
-import { setPreviewData } from '@queries/preview';
 import { setHistoryItemName } from '@queries/history/history';
+import { setPreviewName } from '@queries/preview';
+import {
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  type SoupTransaction,
+} from '@queries/soup/cache';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { ChannelTypeEnum } from '@service-comms/client';
+import type { ItemType } from '@service-storage/client';
+import { useMutation } from '@tanstack/solid-query';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
@@ -30,8 +33,12 @@ type EntityRenameOperationResult = {
 // Maps channel ID to its update context, which lets us rollback the updated at timestamp as well as name
 type ChannelRenameContexts = Map<string, UpdateChannelNameContext | undefined>;
 
+// Keyed by entity ID so rollback indices stay aligned even when flatMap filters out types
+type SoupTransactionMap = Map<string, SoupTransaction>;
+
 type RenameRollbackContext = {
   channels: ChannelRenameContexts;
+  soupTransactions: SoupTransactionMap;
 };
 
 type EntityRenameData = {
@@ -41,7 +48,7 @@ type EntityRenameData = {
   newName: string;
 };
 
-type EntityIdToNameMap = Map<string, string>;
+type EntityRenameOptimisticInfo = Omit<EntityRenameData, 'oldName'>;
 
 type RenameDssEntityMutationVariables = EntityRenameOperation;
 
@@ -78,7 +85,7 @@ const validateEntityRename = (entity: EntityData): void => {
   switch (entity.type) {
     case 'channel':
       // NOTE: channel type is undefined if provided from the split modal due to casting in createEntityData
-      if (entity.channelType === 'direct_message') {
+      if (entity.channelType === ChannelTypeEnum.DirectMessage) {
         throw new Error('Direct messages do not support renaming');
       }
       break;
@@ -91,63 +98,38 @@ const validateEntityRename = (entity: EntityData): void => {
   }
 };
 
-// TODO: move item to front of list with updatedAt timestamp
-function updateEntityNamesInDssQueryData(
-  prev: InfiniteData<SoupPage, unknown> | undefined,
-  updates: EntityIdToNameMap
-): InfiniteData<SoupPage, unknown> | undefined {
-  if (!prev) return prev;
-  const pages = prev.pages.map((page) => ({
-    ...page,
-    items: page.items.map((item) => {
-      // NOTE: reactivity does not seem to be a problem here so no spread is needed?
-      switch (item.tag) {
-        case 'channel': {
-          const itemId = item.data.channel.id;
-          const newName = updates.get(itemId);
-          if (!newName) return item;
-          item.data.channel.name = newName;
-          break;
-        }
-        case 'document':
-        case 'chat':
-        case 'project': {
-          const itemId = item.data.id;
-          const newName = updates.get(itemId);
-          if (!newName) return item;
-          item.data.name = newName;
-          break;
-        }
-        default:
-          break;
-      }
-      return item;
-    }),
-  }));
-  return {
-    ...prev,
-    pages,
-  };
-}
-
-const renameDssSetData = (entities: EntityRenameData[]) => {
-  const updates: EntityIdToNameMap = new Map(
-    entities.map((e) => [e.id, e.newName])
-  );
-
-  queryClient.cancelQueries({
-    queryKey: queryKeys.all.dss,
-  });
-  queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
-    updateEntityNamesInDssQueryData(
-      prev as InfiniteData<SoupPage, unknown> | undefined,
-      updates
-    )
-  );
+const renameDssSetData = (
+  entities: EntityRenameOptimisticInfo[]
+): SoupTransactionMap => {
+  const txns: SoupTransactionMap = new Map();
+  for (const { id, itemType, newName } of entities) {
+    const current = getSoupEntityById(id);
+    const score = current?.frecency_score ?? 0;
+    if (itemType === 'channel') {
+      txns.set(
+        id,
+        optimisticUpdateSoupEntity({
+          tag: 'channel',
+          data: { channel: { id, name: newName } },
+          frecency_score: score,
+        })
+      );
+    } else if (itemType !== 'email') {
+      txns.set(
+        id,
+        optimisticUpdateSoupEntity({
+          tag: itemType,
+          data: { id, name: newName },
+          frecency_score: score,
+        })
+      );
+    }
+  }
+  return txns;
 };
 
 const renameChannelSetData = (
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): ChannelRenameContexts => {
   const contexts: ChannelRenameContexts = new Map();
 
@@ -166,43 +148,44 @@ const renameChannelSetData = (
   return contexts;
 };
 
-const renamePreviewSetData = (entities: EntityRenameData[]) => {
-  entities.forEach(({ id, newName }) => {
-    setPreviewData(id, (prev) => ({
-      ...prev,
+const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
+  entities.forEach(({ id, newName, itemType }) => {
+    setPreviewName({
+      itemId: id,
       name: newName,
-    }));
+      itemType,
+    });
   });
 };
 
-const renameHistorySetData = (entities: EntityRenameData[]) => {
+const renameHistorySetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName }) => {
     setHistoryItemName(id, newName);
   });
 };
 
 function performOptimisticRenameUpdates(
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): RenameRollbackContext {
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
-  renameDssSetData(entities);
-  const channelContexts = renameChannelSetData(entities);
+  const soupTransactions = renameDssSetData(entities);
+  const channels = renameChannelSetData(entities);
 
-  return {
-    channels: channelContexts,
-  };
+  return { channels, soupTransactions };
 }
 
 function rollbackOptimisticRenameUpdates({
   contexts,
   updates,
 }: RenameOnMutateResult): void {
+  for (const [, txn] of contexts.soupTransactions) {
+    txn.rollback();
+  }
+
   updates.forEach(({ id, oldName, itemType }) => {
-    const reverseUpdate = { id, itemType, newName: oldName, oldName };
-    renameDssSetData([reverseUpdate]);
-    renameHistorySetData([reverseUpdate]);
-    renamePreviewSetData([reverseUpdate]);
+    renameHistorySetData([{ id, itemType, newName: oldName }]);
+    renamePreviewSetData([{ id, itemType, newName: oldName }]);
 
     if (itemType === 'channel') {
       const context = contexts.channels.get(id);
@@ -258,16 +241,18 @@ const bulkRenameOnSettled = (
     return;
   }
 
-  // Rollback only the failed items by matching indices
+  // Rollback only the failed items by entity ID
   const failedUpdates: EntityRenameData[] = [];
   const failedChannelContexts: ChannelRenameContexts = new Map();
+  const failedSoupTransactions: SoupTransactionMap = new Map();
 
   data.forEach((result, index) => {
     if (!result.success) {
       const update = onMutateResult.updates[index];
       if (update) {
         failedUpdates.push(update);
-        // Preserve channel context for failed channels
+        const txn = onMutateResult.contexts.soupTransactions.get(update.id);
+        if (txn) failedSoupTransactions.set(update.id, txn);
         if (update.itemType === 'channel') {
           const context = onMutateResult.contexts.channels.get(update.id);
           if (context !== undefined) {
@@ -281,7 +266,10 @@ const bulkRenameOnSettled = (
   // Rollback only the failed items
   if (failedUpdates.length > 0) {
     rollbackOptimisticRenameUpdates({
-      contexts: { channels: failedChannelContexts },
+      contexts: {
+        channels: failedChannelContexts,
+        soupTransactions: failedSoupTransactions,
+      },
       updates: failedUpdates,
     });
   }

@@ -1,6 +1,6 @@
 import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import type { EntityType } from '@core/types';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { ItemType } from '@service-storage/client';
@@ -30,12 +30,10 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
 };
 
 const getPreview = async (id: string, type: EntityType) => {
-  const [preview] = useItemPreview(() => ({ id, type: type as ItemType }));
-  await raceTimeout(
-    until(() => preview() && !preview()!.loading),
+  return await raceTimeout(
+    getItemPreview({ id, type: type as ItemType }),
     RESOLVER_TIMEOUT
   );
-  return preview();
 };
 
 export const DefaultDocumentNameResolver: DocumentNameResolver = async (
@@ -43,14 +41,14 @@ export const DefaultDocumentNameResolver: DocumentNameResolver = async (
   type: string
 ) => {
   const preview = await getPreview(id, type as EntityType);
-  if (!isAccessiblePreviewItem(preview)) return undefined;
+  if (!preview || !isAccessiblePreviewItem(preview)) return undefined;
   return preview.name;
 };
 
 export const DefaultNotificationBlockNameResolver: NotificationBlockNameResolver =
   async (entityId: string, entityType: EntityType) => {
     const preview = await getPreview(entityId, entityType);
-    if (!isAccessiblePreviewItem(preview)) return undefined;
+    if (!preview || !isAccessiblePreviewItem(preview)) return undefined;
 
     return itemToResolvedBlockName({
       type: preview.type,

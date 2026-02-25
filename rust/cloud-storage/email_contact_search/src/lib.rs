@@ -122,22 +122,52 @@ pub async fn search_email_contacts<'a>(
                   OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
               )
               AND EXISTS (
-                  -- Check for sender matches
+                  -- Check sender contact name
                   SELECT 1
                   FROM email_messages m
                   JOIN email_contacts c ON c.id = m.from_contact_id
-                  WHERE m.thread_id = t.id
-                    AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR m.from_name ILIKE $2)
+                  WHERE m.thread_id = t.id AND c.name ILIKE $2
 
                   UNION ALL
 
-                  -- Check for recipient matches
+                  -- Check sender email address
+                  SELECT 1
+                  FROM email_messages m
+                  JOIN email_contacts c ON c.id = m.from_contact_id
+                  WHERE m.thread_id = t.id AND c.email_address ILIKE $2
+
+                  UNION ALL
+
+                  -- Check message from_name
+                  SELECT 1
+                  FROM email_messages m
+                  WHERE m.thread_id = t.id AND m.from_name ILIKE $2
+
+                  UNION ALL
+
+                  -- Check recipient contact name
                   SELECT 1
                   FROM email_messages m
                   JOIN email_message_recipients mr ON mr.message_id = m.id
                   JOIN email_contacts c ON c.id = mr.contact_id
-                  WHERE m.thread_id = t.id
-                    AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR mr.name ILIKE $2)
+                  WHERE m.thread_id = t.id AND c.name ILIKE $2
+
+                  UNION ALL
+
+                  -- Check recipient email address
+                  SELECT 1
+                  FROM email_messages m
+                  JOIN email_message_recipients mr ON mr.message_id = m.id
+                  JOIN email_contacts c ON c.id = mr.contact_id
+                  WHERE m.thread_id = t.id AND c.email_address ILIKE $2
+
+                  UNION ALL
+
+                  -- Check recipient name
+                  SELECT 1
+                  FROM email_messages m
+                  JOIN email_message_recipients mr ON mr.message_id = m.id
+                  WHERE m.thread_id = t.id AND mr.name ILIKE $2
               )
             ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
             LIMIT $3

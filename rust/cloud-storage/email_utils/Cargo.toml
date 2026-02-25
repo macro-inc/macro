@@ -5,3 +5,5 @@ publish = false
 edition = "2024"
 
 [dependencies]
+lazy_static = { workspace = true }
+regex = { workspace = true }

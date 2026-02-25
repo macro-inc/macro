@@ -89,10 +89,10 @@ pub fn construct_search_result(
             if let Some(info) = channel_histories.get(&entity_id) {
                 let info = info.clone();
                 let metadata = models_search::channel::ChannelMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
-                    interacted_at: info.interacted_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
+                    interacted_at: info.interacted_at,
                 };
                 Some(ChannelSearchResponseItemWithMetadata {
                     metadata: Some(metadata),

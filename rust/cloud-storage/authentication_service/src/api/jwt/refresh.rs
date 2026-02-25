@@ -2,15 +2,13 @@ use crate::api::{
     context::TokenContext,
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
-use authentication_service::service::fusionauth_client::{
-    FusionAuthClient, error::FusionAuthClientError,
-};
 use axum::{
     Extension, Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use fusionauth::{FusionAuthClient, error::FusionAuthClientError};
 use macro_auth::{error::MacroAuthError, middleware::decode_jwt::JwtValidationArgs};
 use model::response::UserTokensResponse;
 use std::sync::Arc;

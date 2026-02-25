@@ -105,15 +105,22 @@ async fn owner_search<'a>(
 
     let rows = sqlx::query!(
         r#"
-            WITH oldest_messages AS (
+            WITH user_link_ids AS (
+                SELECT id FROM email_links WHERE macro_id = $1
+            ),
+            matching_threads AS (
+                SELECT DISTINCT thread_id
+                FROM email_messages em
+                WHERE em.link_id IN (SELECT id FROM user_link_ids)
+                AND (thread_id = ANY($2) OR $3)
+                AND em.subject ILIKE $4
+            ),
+            oldest_messages AS (
                 SELECT DISTINCT ON (thread_id)
                     thread_id,
                     subject
                 FROM email_messages
-                WHERE link_id IN (
-                    SELECT id FROM email_links WHERE macro_id = $1
-                )
-                AND (thread_id = ANY($2) OR $3)
+                WHERE thread_id IN (SELECT thread_id FROM matching_threads)
                 ORDER BY thread_id, internal_date_ts ASC
             )
             SELECT
@@ -128,10 +135,7 @@ async fn owner_search<'a>(
                 t.latest_non_spam_message_ts as updated_at
             FROM email_threads t
             INNER JOIN oldest_messages om ON om.thread_id = t.id
-            WHERE t.link_id IN (
-                SELECT id FROM email_links WHERE macro_id = $1
-            )
-            AND om.subject ILIKE $4
+            WHERE t.link_id IN (SELECT id FROM user_link_ids)
             AND (
                 $6::timestamptz IS NULL
                 OR (t.latest_non_spam_message_ts, t.id) < ($6, $7)

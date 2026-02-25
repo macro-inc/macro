@@ -22,6 +22,14 @@ const ModelResponseSchema = z.object({
 type ModelResponse = z.infer<typeof ModelResponseSchema>;
 
 async function fetchModels(): Promise<ModelResponse> {
+  // If MODELS_JSON env var is set, read from that file instead of fetching from a server
+  const modelsFile = process.env.MODELS_JSON;
+  if (modelsFile) {
+    console.log(`Reading models from local file: ${modelsFile}`);
+    const file = Bun.file(modelsFile);
+    const json = await file.json();
+    return ModelResponseSchema.parse(json);
+  }
 
   const baseUrl = serviceUrl(documentCognitionBase)
 

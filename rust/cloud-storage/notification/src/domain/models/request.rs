@@ -8,9 +8,10 @@ use crate::domain::{
     },
     service::SendNotificationError,
 };
+use cowlike::CowLike;
 use itertools::Itertools;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::{Entity, as_owned::IntoOwned};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -46,7 +47,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 }
 
 type BuildApns<T, U> =
-    Box<dyn FnMut(T) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
+    Box<dyn FnMut(T, uuid::Uuid) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
 
 /// Full notification request with optional delivery channel builders.
 ///
@@ -77,13 +78,13 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 
         SendNotificationRequest {
             req,
-            build_apns: Some(Box::new(move |notif: T| {
+            build_apns: Some(Box::new(move |notif: T, notification_id: uuid::Uuid| {
                 let collapse_key = notif.collapse_key(&entity).into_hashed().into_inner();
                 let attrs = MessageAttributes {
                     push_type: mobile::PushType::Alert,
                     collapse_key,
                 };
-                let apns = notif.into_apns(sender.clone())?;
+                let apns = notif.into_apns(sender.clone(), &entity, notification_id)?;
 
                 Some((apns, attrs))
             })),

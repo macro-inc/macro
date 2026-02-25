@@ -54,10 +54,9 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     >
       <div
         class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted/50 px-1.5',
+          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors px-1.5',
           {
-            'cursor-pointer hover:border-edge-muted hover:bg-hover/50':
-              props.canEdit,
+            'hover:border-edge-muted hover:bg-hover/50': props.canEdit,
             'opacity-50': !validValue(),
           }
         )}

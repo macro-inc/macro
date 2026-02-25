@@ -8,6 +8,8 @@ import type { GetLegacyUserPermissionsResponseGroup } from './getLegacyUserPermi
 import type { GetLegacyUserPermissionsResponseName } from './getLegacyUserPermissionsResponseName';
 
 export interface GetLegacyUserPermissionsResponse {
+  /** Whether the user has consented to AI data sharing */
+  aiDataConsent: boolean;
   /** The user's email */
   email: string;
   group?: GetLegacyUserPermissionsResponseGroup;

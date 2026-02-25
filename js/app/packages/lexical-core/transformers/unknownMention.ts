@@ -11,10 +11,11 @@ import {
 export const UNKNOWN_MENTION: TextMatchTransformer = {
   dependencies: [UnknownMentionNode],
   type: 'text-match',
-  // Match any XML tag that starts with 'm-' or other prefixes we don't recognize
+  // Match only XML tags that start with 'm-' prefix (e.g., <m-something>...</m-something>)
+  // Plain XML tags like <whatever> should be treated as visible text
   // This should be registered AFTER all known transformers to act as a fallback
-  regExp: /<([a-zA-Z0-9_-]+)>(.*?)<\/\1>/s,
-  importRegExp: /<([a-zA-Z0-9_-]+)>(.*?)<\/\1>/s,
+  regExp: /<(m-[a-zA-Z0-9_-]+)>(.*?)<\/\1>/s,
+  importRegExp: /<(m-[a-zA-Z0-9_-]+)>(.*?)<\/\1>/s,
 
   export: (node: LexicalNode) => {
     if (!$isUnknownMentionNode(node)) return null;

@@ -1,5 +1,4 @@
 import {
-  type BlockName,
   defineBlock,
   type ExtractLoadType,
   LoadErrors,
@@ -75,9 +74,5 @@ export type CanvasData = ExtractLoadType<(typeof definition)['load']>;
 
 export type CanvasSpec = {
   exportCanvas: () => Promise<Canvas>;
-  generateMindMap: (
-    documentType: BlockName,
-    documentId: string
-  ) => Promise<void>;
   renderMermaid: (args: { code: string }) => Promise<void>;
 };

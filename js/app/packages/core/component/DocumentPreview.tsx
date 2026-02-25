@@ -14,15 +14,12 @@ import {
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  type AccessiblePreviewItem,
   isAccessiblePreviewItem,
   isChannelPreviewItem,
-  type PreviewChannelAccess,
-  type PreviewDocumentAccess,
-  type PreviewItem,
-  type PreviewItemAccess,
   type PreviewItemNoAccess,
-  type PreviewProjectAccess,
 } from '@queries/preview';
+import { blockNameToItemType } from '@service-storage/client';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 // Icon imports
@@ -48,14 +45,14 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
-import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { formatDate, isoToUnixTimestamp } from '../util/date';
+import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
-import { EntityIcon } from './EntityIcon';
 import { Tooltip } from './Tooltip';
+import { useItemPreviewData } from './ItemPreview';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -268,7 +265,6 @@ function UserInfo(props: { userId: string }) {
  * Popup preview component for document references
  */
 export function PopupPreview(props: {
-  item: Accessor<PreviewItem>;
   mouseEnter: () => void;
   mouseLeave: () => void;
   delete?: () => void;
@@ -279,6 +275,7 @@ export function PopupPreview(props: {
   };
   documentInfo: {
     id: string;
+    name?: string;
     type: BlockName | BlockAlias;
     params: Record<string, string>;
     isOpenable?: boolean;
@@ -298,6 +295,20 @@ export function PopupPreview(props: {
 
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
+
+  const itemPreviewEntity = () => {
+    const type = blockNameToItemType(props.documentInfo.type);
+    let messageId: string | undefined;
+    if (
+      type === 'channel' &&
+      URL_PARAMS_CHANNEL.message in props.documentInfo.params
+    ) {
+      messageId = props.documentInfo.params[URL_PARAMS_CHANNEL.message];
+    }
+    return { id: props.documentInfo.id, type, messageId };
+  };
+
+  const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
 
   // Derived state
   const canOpenInChat = createCallback(() => {
@@ -488,12 +499,7 @@ export function PopupPreview(props: {
    * Renders the metadata info for the document
    */
   const renderDocumentMetadata = (
-    accessibleItem: NonNullable<
-      | PreviewItemAccess
-      | PreviewDocumentAccess
-      | PreviewProjectAccess
-      | PreviewChannelAccess
-    >
+    accessibleItem: NonNullable<AccessiblePreviewItem>
   ) => {
     const accessories = mentionsAccessories(
       props.documentInfo.type,
@@ -507,7 +513,7 @@ export function PopupPreview(props: {
     return (
       <>
         <div class="text-sm font-semibold select-text">
-          {accessibleItem.name}
+          {props.documentInfo.name || accessibleItem.name}
           {accessories && (
             <div class="relative text-[0.8em] text-current/60 rounded-md mt-1.5 select-none">
               {`${accessories.note} `}
@@ -534,7 +540,7 @@ export function PopupPreview(props: {
           <Show
             when={messageContext}
             fallback={
-              <Show when={props.item().owner}>
+              <Show when={item().owner}>
                 {(owner) => (
                   <MetadataInfo icon={UserIcon} align="left">
                     {owner().replace('macro|', '')}
@@ -549,7 +555,7 @@ export function PopupPreview(props: {
           <Show
             when={messageContext}
             fallback={
-              <Show when={props.item().updatedAt}>
+              <Show when={item().updatedAt}>
                 {(time) => (
                   <MetadataInfo icon={ClockIcon} align="right">
                     {formatDate(time())}
@@ -560,7 +566,7 @@ export function PopupPreview(props: {
           >
             {(context) => (
               <MetadataInfo icon={ClockIcon} align="right">
-                {formatDate(isoToUnixTimestamp(context().created_at))}
+                {formatDate(context().created_at)}
               </MetadataInfo>
             )}
           </Show>
@@ -571,7 +577,7 @@ export function PopupPreview(props: {
 
   return (
     <div
-      class="select-none overflow-hidden w-80 bg-dialog text-ink"
+      class="select-none overflow-hidden w-80 text-ink"
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
@@ -579,79 +585,50 @@ export function PopupPreview(props: {
         <div class="p-3">
           <Switch>
             {/* Loading state */}
-            <Match when={props.item().loading}>
+            <Match when={item().loading}>
               <Loading />
             </Match>
 
             {/* Accessible preview */}
-            <Match when={matches(props.item(), isAccessiblePreviewItem)}>
-              {(accessibleItem) => {
-                const { type, fileType, subType } = accessibleItem();
-                return (
-                  <div class="w-full h-full flex-col">
-                    {/* Header with icon and actions */}
-                    <div class="flex w-full mb-2">
-                      <div class="w-full size-10">
-                        <Show
-                          when={type === 'channel'}
-                          fallback={
-                            <EntityIcon
-                              targetType={
-                                type === 'document'
-                                  ? (subType?.type ?? fileType)
-                                  : type
-                              }
-                              size="md"
-                            />
-                          }
-                        >
-                          <EntityIcon
-                            size="md"
-                            targetType={
-                              accessibleItem().channelType === 'direct_message'
-                                ? 'directMessage'
-                                : accessibleItem().channelType ===
-                                    'organization'
-                                  ? 'company'
-                                  : 'channel'
-                            }
-                          />
-                        </Show>
-                      </div>
-                      <div class="flex w-fit h-full justify-right">
-                        {renderActionButtons()}
-                      </div>
+            <Match when={matches(item(), isAccessiblePreviewItem)}>
+              {(accessibleItem) => (
+                <div class="w-full h-full flex-col">
+                  {/* Header with icon and actions */}
+                  <div class="flex w-full mb-2">
+                    <div class="w-full size-10">
+                      <ItemEntityIcon size="md" />
                     </div>
-
-                    {/* Document metadata */}
-                    {renderDocumentMetadata(accessibleItem())}
-
-                    {/* Snapshot info */}
-                    <Show when={props.snapshotInfo}>
-                      {(snapshot) => (
-                        <div class="mt-3 pt-2 border-t border-edge">
-                          <div class="flex items-center gap-1.5 text-ink-muted">
-                            <ClockIcon class="size-4" />
-                            <span class="text-xs font-medium">
-                              Snapshot from{' '}
-                              {formatDate(isoToUnixTimestamp(snapshot().date), {
-                                showTime: true,
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
+                    <div class="flex w-fit h-full justify-right">
+                      {renderActionButtons()}
+                    </div>
                   </div>
-                );
-              }}
+
+                  {/* Document metadata */}
+                  {renderDocumentMetadata(accessibleItem())}
+
+                  {/* Snapshot info */}
+                  <Show when={props.snapshotInfo}>
+                    {(snapshot) => (
+                      <div class="mt-3 pt-2 border-t border-edge">
+                        <div class="flex items-center gap-1.5 text-ink-muted">
+                          <ClockIcon class="size-4" />
+                          <span class="text-xs font-medium">
+                            Snapshot from{' '}
+                            {formatDate(new Date(snapshot().date), {
+                              showTime: true,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+              )}
             </Match>
 
             {/* No access error */}
             <Match
-              when={
-                (props.item() as PreviewItemNoAccess).access === 'no_access'
-              }
+              when={(item() as PreviewItemNoAccess).access === 'no_access'}
             >
               <div class="text-sm p-4">
                 <Unauthorized />
@@ -660,10 +637,7 @@ export function PopupPreview(props: {
 
             {/* Does not exist error */}
             <Match
-              when={
-                (props.item() as PreviewItemNoAccess).access ===
-                'does_not_exist'
-              }
+              when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}
             >
               <div class="text-sm p-4">
                 <NotFound />

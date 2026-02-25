@@ -13,6 +13,7 @@ use crate::api::{
 };
 
 /// Enriches search results with metadat and converts to UnifiedSearchResponseItem
+#[tracing::instrument(skip(ctx, results), fields(result_count = results.len()), err)]
 pub async fn enrich_search_response(
     ctx: &SearchHandlerState,
     user_id: &str,

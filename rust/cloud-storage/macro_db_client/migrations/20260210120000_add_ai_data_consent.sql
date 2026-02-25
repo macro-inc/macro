@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "aiDataConsent" BOOLEAN NOT NULL DEFAULT false;

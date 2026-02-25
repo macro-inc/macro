@@ -24,23 +24,15 @@ pub struct SoupProject {
     pub parent_id: Option<Uuid>,
 
     /// The time the project was created
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub created_at: chrono::DateTime<Utc>,
 
     /// The time the project was updated
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub updated_at: chrono::DateTime<Utc>,
 
     /// The time the document was last viewed
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// The time the project was deleted
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub deleted_at: Option<chrono::DateTime<Utc>>,
 
     /// Properties

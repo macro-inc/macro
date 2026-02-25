@@ -5,25 +5,29 @@ use frecency::{
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
     outbound::postgres::FrecencyPgStorage,
 };
+use last_online_tracker::inbound::LastOnlineWorker;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use redis::{RedisError, aio::MultiplexedConnection};
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
+use stream::domain::StreamManager;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub connection_manager: crate::service::connection::ConnectionManager,
     pub frecency_ingestor_service: EventIngestorImpl<FrecencyPgStorage>,
     pub redis_client: Arc<redis::Client>,
+    pub stream_manager: Arc<dyn StreamManager + Send + Sync>,
+    pub last_online_worker: Arc<LastOnlineWorker>,
 }
 
 impl ApiContext {
     #[tracing::instrument(err, skip(self))]
-    pub async fn get_multiplexed_tokio_connection(
+    pub async fn get_multiplexed_async_connection(
         &self,
     ) -> Result<MultiplexedConnection, RedisError> {
-        self.redis_client.get_multiplexed_tokio_connection().await
+        self.redis_client.get_multiplexed_async_connection().await
     }
 }
 

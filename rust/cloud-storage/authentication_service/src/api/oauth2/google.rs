@@ -17,10 +17,8 @@ use crate::api::{
         login::{self},
     },
 };
-use authentication_service::service::{
-    fusionauth_client::identity_provider::{IdentityProviderLink, LinkUserRequest},
-    user::create_user::create_user_profile,
-};
+use authentication_service::service::user::create_user::create_user_profile;
+use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 async fn link_user(
     ctx: &ApiContext,

@@ -1,9 +1,9 @@
 import type {
-  Attachment,
+  Attachment as ApiAttachment,
   CountedReaction,
-  GetChannelResponse,
-  Message,
+  Message as ApiMessage,
 } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -12,7 +12,7 @@ import { consumeNonce } from '../nonce';
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = Message & { channel_id: string; nonce: string };
+type CommsMessagePayload = ApiMessage & { channel_id: string; nonce: string };
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -24,7 +24,7 @@ type CommsReactionPayload = {
 type CommsAttachmentPayload = {
   channel_id: string;
   message_id: string;
-  attachments: Attachment[];
+  attachments: ApiAttachment[];
   nonce: string;
 };
 

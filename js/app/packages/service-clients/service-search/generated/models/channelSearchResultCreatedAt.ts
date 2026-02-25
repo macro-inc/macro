@@ -9,4 +9,4 @@
  * When the channel message was created
 This is only prsent if the search result is on the message content
  */
-export type ChannelSearchResultCreatedAt = number | null;
+export type ChannelSearchResultCreatedAt = string | null;

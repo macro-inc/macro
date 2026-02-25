@@ -24,7 +24,7 @@ export function UnfurlLink(props: UnfurlLinkProps) {
 
   return (
     <div
-      class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer"
+      class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none"
       onClick={() => window.open(props.unfurled.url)}
     >
       <div class="flex flex-row items-center gap-1.5 w-full h-full">

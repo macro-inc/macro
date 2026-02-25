@@ -14,10 +14,6 @@ name = "generate_keys"
 path = "src/bin/generate_keys.rs"
 
 [[bin]]
-name = "backfill_null_macro_user_id"
-path = "src/bin/backfill_null_macro_user_id.rs"
-
-[[bin]]
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
 
@@ -45,6 +41,7 @@ cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
+fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -61,6 +58,7 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
   "account_merge_request",
   "team",
 ] }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env", features = ["frontend_url"] }
 macro_env_var = { path = "../macro_env_var" }
@@ -84,6 +82,7 @@ notification = { path = "../notification" }
 notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
 rand = { workspace = true }
+redis = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }
@@ -91,7 +90,6 @@ rsa = "0.9.10"
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_urlencoded = "0.7.1"
 serde_utils = { path = "../serde_utils", features = ["urlencode"] }
 ses_client = { path = "../ses_client" }
 sha1 = "0.10.6"

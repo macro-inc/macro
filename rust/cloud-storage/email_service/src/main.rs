@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),

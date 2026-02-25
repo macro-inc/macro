@@ -1,11 +1,11 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { compareDateDesc } from '@core/util/date';
 import Bell from '@icon/regular/bell.svg';
 import {
   type NotificationSource,
   openNotification,
-  tryToTypedNotification,
   useUnreadNotifications,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -29,18 +29,19 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
   const unreadCount = () => unreadNotifications().length;
 
   const mostRecent = () =>
-    unreadNotifications().sort((a, b) => b.createdAt - a.createdAt)[0];
+    unreadNotifications().sort((a, b) =>
+      compareDateDesc(a.created_at, b.created_at)
+    )[0];
 
   const handleNotificationClick = async () => {
     const notification = mostRecent();
 
     if (!notification) return;
 
-    const nm = tryToTypedNotification(notification);
     const layoutManager = globalSplitManager();
-    if (!nm || !layoutManager) return;
+    if (!layoutManager) return;
 
-    openNotification(nm, layoutManager);
+    openNotification(notification, layoutManager);
 
     notificationSource.markAsRead(notification);
 

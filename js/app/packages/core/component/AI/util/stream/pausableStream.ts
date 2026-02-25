@@ -1,6 +1,7 @@
-import type { MessageStream, StreamItem } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import type { Accessor } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
+import type { StreamItem } from '.';
 import { MOCK_ID } from './mockStream';
 
 export interface PausableStreamOptions {
@@ -12,9 +13,9 @@ export interface PausableStreamOptions {
 }
 
 export function pausableStream(
-  source: MessageStream,
+  source: ChatMessageStream,
   options: PausableStreamOptions
-): MessageStream {
+): ChatMessageStream {
   const {
     isPaused,
     isSlow,
@@ -25,7 +26,7 @@ export function pausableStream(
 
   const [messages, setMessages] = createSignal<StreamItem[]>([]);
   const [isDone, setIsDone] = createSignal(false);
-  const [isClosed, setIsClosed] = createSignal(false);
+  const [isClosed, _setIsClosed] = createSignal(false);
 
   let emittedCount = 0;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -90,15 +91,12 @@ export function pausableStream(
   });
 
   return {
-    close: () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      setIsClosed(true);
-      setIsDone(true);
-    },
     data: messages,
     isDone,
-    isErr: source.isErr,
-    request: source.request,
-    err: source.err,
+    id: () => ({
+      entity_id: MOCK_ID,
+      stream_id: MOCK_ID,
+      entity_type: 'chat',
+    }),
   };
 }

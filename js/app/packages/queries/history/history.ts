@@ -2,7 +2,6 @@ import { isOk, throwOnErr, catchToResult } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
   useMutation,
   useQuery,
@@ -10,14 +9,14 @@ import {
   type QueryClient,
   type Updater,
 } from '@tanstack/solid-query';
-import { createEffect, type Accessor, type Setter } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
+  transformHistoryItem,
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
-import { queryReadyGate } from '@queries/gate';
 import type { HistoryItem } from './types';
 
 // re-export history item type from this file
@@ -80,26 +79,6 @@ export function useHistoryQuery() {
   return baseQuery;
 }
 
-// TODO: this is a temporary side effect to remove the instructions item from history
-// load this at the app root level to prevent duplicate work
-// this will be removed from the backend
-export function RemoveInstructionsMdFromHistorySideEffect() {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-  const historyQuery = useHistoryQuery();
-  createEffect(() => {
-    const instructionsReady = queryReadyGate(instructionsIdQuery);
-    if (!instructionsReady) return;
-    const instructionsId = instructionsIdQuery.data;
-    const history = historyQuery.data;
-    if (!instructionsId || !history || !history.length) return;
-    if (!history.some((item) => item.id === instructionsId)) return;
-    return setHistoryData((prev) => {
-      return prev.filter((item) => item.id !== instructionsId);
-    });
-  });
-  return null;
-}
-
 export async function prefetchHistory() {
   void (await catchToResult(
     async () => await queryClient.prefetchQuery(historyQueryOptions)
@@ -115,7 +94,7 @@ export function refetchHistory() {
 // @ts-ignore
 // biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
 function optimisticUpdateViewedAt(itemId: string) {
-  const now = Date.now();
+  const now = new Date();
 
   setHistoryData((old) => {
     return updateViewedAtAndMoveItemToFront(old, itemId, now);
@@ -285,7 +264,9 @@ export async function insertProjectIntoHistory(projectId: string) {
           return acc;
         }, [])
       );
-      newData.push(...projectContent[1].data.map(({ item }) => item));
+      newData.push(
+        ...projectContent[1].data.map(({ item }) => transformHistoryItem(item))
+      );
     }
   }
 

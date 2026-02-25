@@ -1,5 +1,5 @@
 import { isStaticAttachmentType } from '@core/store/cacheChannelInput';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { Attachment } from '@queries/channel/types';
 import { isItemType } from '@service-storage/client';
 
 /**

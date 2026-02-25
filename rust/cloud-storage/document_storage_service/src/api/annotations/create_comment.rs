@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::{
-        annotations::{NotifLocationType, build_mention_notif},
-        context::ApiContext,
-    },
+    api::{annotations::build_mention_notif, context::ApiContext},
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -24,8 +21,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use notification::domain::service::{NotificationIngress, NotificationIngressService};
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -53,9 +49,7 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
-    State(notification_ingress_service): State<
-        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
-    >,
+    State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
@@ -74,11 +68,12 @@ pub async fn create_comment_handler(
     }
     match create_document_comment(&db, &document_id, &user_id, &req).await {
         Ok(res) => {
-            if let Some(Mentions { users, mention_id }) = &req.mentions {
+            if let Some(Mentions { users, mention_id }) = &req.mentions
+                && let Some(comment) = res.comment_thread.comments.first()
+            {
                 let request = build_mention_notif(
-                    NotifLocationType::CreateComment,
                     req.text,
-                    res.comment_thread.comments.first(),
+                    comment,
                     res.comment_thread.thread.thread_id,
                     users,
                     document_context.document_name.clone(),

@@ -30,8 +30,6 @@ import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';
-import type { EntityData } from '@macro-entity';
-import { InlineEntity } from '../../../macro-entity/src/components/InlineEntity';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type {
   Property,
@@ -65,6 +63,7 @@ import type { PropertyApiValues } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
+import { InlineEntity, type EntityData } from '@entity';
 
 /* Styled wrapper for list items in each menu. */
 function ListItem(props: {
@@ -338,7 +337,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge/20 px-2 py-1 truncate', {
+              class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
                 'max-w-[50%]': props.entities.length === 2,
               })}
             >
@@ -348,7 +347,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         }}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-muted-foreground px-2 py-1">
+        <div class="text-muted-foreground text-xs px-2 py-1">
           +{remainingCount()} more
         </div>
       </Show>

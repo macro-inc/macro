@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id AS \"id!\", thread_id AS \"thread_id!\", sender_id AS \"sender_id!\",\n                content AS \"content!\", created_at AS \"created_at!\", updated_at AS \"updated_at!\",\n                edited_at::timestamptz AS \"edited_at?\",\n                reply_count AS \"reply_count!\", latest_reply_at AS \"latest_reply_at?\"\n            FROM (\n                SELECT\n                    r.id,\n                    r.thread_id,\n                    r.sender_id,\n                    r.content,\n                    r.created_at,\n                    r.updated_at,\n                    r.edited_at,\n                    COUNT(*) OVER (PARTITION BY r.thread_id) AS reply_count,\n                    MAX(r.created_at) OVER (PARTITION BY r.thread_id)::timestamptz AS latest_reply_at,\n                    ROW_NUMBER() OVER (PARTITION BY r.thread_id ORDER BY r.created_at DESC) AS rn\n                FROM comms_messages r\n                WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL\n            ) sub\n            WHERE rn <= $2\n            ORDER BY thread_id, created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "edited_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "latest_reply_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e07a1b0b46445b02321a5a64420ed6d987af073a0868db4aaf9dd3cd5b78eddd"
+}

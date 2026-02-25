@@ -11,9 +11,9 @@ import type { SoupProperty } from './soupProperty';
 
 export interface SoupProject {
   /** The time the project was created */
-  createdAt: number;
+  createdAt: string;
   /** The time the project was deleted */
-  deletedAt: SoupProjectDeletedAt;
+  deletedAt?: SoupProjectDeletedAt;
   /** The id of the project */
   id: string;
   /** The name of the project */
@@ -25,7 +25,7 @@ export interface SoupProject {
   /** Properties */
   properties: SoupProperty[];
   /** The time the project was updated */
-  updatedAt: number;
+  updatedAt: string;
   /** The time the document was last viewed */
-  viewedAt: SoupProjectViewedAt;
+  viewedAt?: SoupProjectViewedAt;
 }

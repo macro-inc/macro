@@ -55,16 +55,16 @@ jobs:
     name: Run Database Migrations
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: db-migrator
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/
 
-      - name: Run migrations for dev
+      - name: Run migrations
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
           environment: dev
-          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   deploy-services:
     name: Deploy ${{ matrix.service }}

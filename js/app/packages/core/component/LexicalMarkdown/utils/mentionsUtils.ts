@@ -1,14 +1,14 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { QuickAccessItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
-import type { EmailEntity } from '@macro-entity';
+import type { DateOption } from '@core/util/dateSearch/useDateSearch';
+import type { EmailEntity } from '@entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
-import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
-import type { Item } from '@service-storage/generated/schemas/item';
-import type { Project } from '@service-storage/generated/schemas/project';
+import type { HistoryItem as Item } from '@queries/history/history';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
 import { v7 } from 'uuid';
@@ -243,20 +243,20 @@ export async function handleEmailMention(
  * Converts a UploadSuccess to an Item. Folder UploadSuccesses contain a promise for the projectId, so we need to wait for that to resolve.
  */
 export async function documentUploadToItem(upload: UploadSuccess) {
-  const now = Date.now();
+  const now = new Date();
 
   if (upload.type === 'document') {
     return {
       id: upload.documentId,
       name: upload.name,
-      type: 'document',
+      type: 'document' as const,
       fileType: upload.fileType,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
       documentVersionId: 0,
-      owner: '',
-    } satisfies BasicDocument;
+      ownerId: '',
+    };
   }
 
   const projectId = await waitBulkUploadStatus(upload.requestId);
@@ -265,12 +265,12 @@ export async function documentUploadToItem(upload: UploadSuccess) {
   return {
     id: projectId,
     name: upload.name,
-    type: 'project',
+    type: 'project' as const,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
-    userId: '',
-  } satisfies Project;
+    ownerId: '',
+  };
 }
 
 /**
@@ -352,4 +352,53 @@ export async function handleChannelMention(
     mentionUuid: mentionId,
     channelType: channel.channel_type,
   });
+}
+
+// ============================================================================
+// MentionItem Types
+// ============================================================================
+// These types extend QuickAccessItem to support dates and groups in the
+// mentions menu, which aren't part of the standard quick access system.
+
+/**
+ * Date mention item using DateOption from useDateSearch.
+ */
+export type DateMentionItem = {
+  kind: 'date';
+  id: string;
+  data: DateOption;
+};
+
+/**
+ * Group mention item (e.g., @here).
+ */
+export type GroupMentionItem = {
+  kind: 'group';
+  id: string;
+  data: {
+    id: string;
+    groupAlias: string;
+  };
+};
+
+/**
+ * MentionItem = QuickAccessItem + Date + Group.
+ * Used in MentionsMenu to unify all mentionable item types.
+ */
+export type MentionItem = QuickAccessItem | DateMentionItem | GroupMentionItem;
+
+/**
+ * Type guard for DateMentionItem.
+ */
+export function isDateMentionItem(item: MentionItem): item is DateMentionItem {
+  return item.kind === 'date';
+}
+
+/**
+ * Type guard for GroupMentionItem.
+ */
+export function isGroupMentionItem(
+  item: MentionItem
+): item is GroupMentionItem {
+  return item.kind === 'group';
 }

@@ -274,7 +274,7 @@ export class NotificationService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `notification-service-${stack}`,
+                  dd_service: 'notification-service',
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',

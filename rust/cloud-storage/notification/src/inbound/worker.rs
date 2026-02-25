@@ -34,7 +34,7 @@ where
         // Log any failures
         for result in &results {
             if let Err(e) = result {
-                tracing::error!(error = ?e, "failed to deliver notification");
+                tracing::error!(error = ?e.preformat(), "failed to deliver notification");
             }
         }
 

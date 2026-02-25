@@ -14,19 +14,16 @@ use utoipa_swagger_ui::SwaggerUi;
 mod citations;
 mod completions;
 pub mod context;
-mod document_text;
 mod health;
 mod id_mapping;
-mod internal;
 mod models;
 mod preview;
+pub mod stream;
 pub(crate) mod swagger;
 pub mod utils;
-mod ws;
 
 mod attachments;
 mod chats;
-mod notification;
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -74,12 +71,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 fn api_router(api_context: ApiContext) -> Router {
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
-        .nest("/", ws::router(api_context.clone()))
-        .nest(
-            "/internal",
-            internal::router(api_context.clone()).nest("/notifications", notification::router()),
-        )
-        .nest("/document_text", document_text::router())
+        .nest("/stream", stream::router(api_context.clone()))
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())

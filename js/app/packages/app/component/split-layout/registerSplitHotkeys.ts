@@ -1,10 +1,4 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
-import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
@@ -21,7 +15,6 @@ export function registerSplitHotkeys(args: {
   goBack: () => void;
   canGoForward: () => boolean;
   goForward: () => void;
-  setSelectedView: (view: ViewId) => void;
   replaceSplit: (options: {
     content: SplitContent;
     referredFrom?: ReferredFrom;
@@ -38,10 +31,10 @@ export function registerSplitHotkeys(args: {
     goBack,
     canGoForward,
     goForward,
-    replaceSplit,
     splitName,
     getSplitCount,
     isNotUnifiedList,
+    replaceSplit,
   } = args;
   const splitManager = globalSplitManager();
   registerHotkey({
@@ -81,23 +74,6 @@ export function registerSplitHotkeys(args: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'h',
-    description: 'Go home',
-    condition: isNotUnifiedList,
-    keyDownHandler: () => {
-      replaceSplit({
-        content: { type: 'component', id: 'unified-list' },
-        referredFrom: 'hotkey',
-      });
-      return true;
-    },
-    registrationType: 'add',
-    hotkeyToken: TOKENS.split.goHome,
-    displayPriority: 8,
-  });
-
   // History back/forward - legacy bindings.
   registerHotkey({
     scopeId: splitHotkeyScope,
@@ -125,25 +101,6 @@ export function registerSplitHotkeys(args: {
     runWithInputFocused: true,
   });
 
-  // AI side panel - legacy binding.
-  const [bigChatOpen] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.toggleRightPanel,
-    hotkey: 'cmd+/',
-    scopeId: splitHotkeyScope,
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
-    },
-    keyDownHandler: () => {
-      // Always allow closing. Only allow opening when big chat is not open.
-      toggleRightPanel(!isRightPanelOpen());
-      return true;
-    },
-    condition: () => !bigChatOpen() || isRightPanelOpen(),
-    runWithInputFocused: true,
-  });
-
   // Macro Jump - legacy binding.
   registerHotkey({
     hotkeyToken: TOKENS.split.go.macroJump,
@@ -159,7 +116,7 @@ export function registerSplitHotkeys(args: {
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitRight,
-    hotkey: ['arrowright'],
+    hotkey: ['l', 'arrowright'],
     scopeId: splitHotkeyScope,
     description: 'Focus split right',
     condition: () => getSplitCount() > 1,
@@ -172,7 +129,7 @@ export function registerSplitHotkeys(args: {
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitLeft,
-    hotkey: ['arrowleft'],
+    hotkey: ['h', 'arrowleft'],
     scopeId: splitHotkeyScope,
     description: 'Focus split left',
     condition: () => getSplitCount() > 1,

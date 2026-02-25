@@ -5,12 +5,14 @@
 
 mod chat;
 mod document;
+mod entity_permission;
 mod history;
 mod project;
 mod thread;
 
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
+pub use entity_permission::EntityPermissionExtractor;
 pub use history::HistoryAccessExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
 pub use thread::ThreadAccessLevelExtractor;
@@ -19,6 +21,15 @@ use crate::domain::models::{AccessError, AccessLevel};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model_error_response::ErrorResponse;
+
+/// Marker struct for internal service-to-service requests.
+///
+/// Middleware inserts this into request extensions for authenticated internal callers.
+#[derive(Debug, Clone)]
+pub struct InternalUser {
+    /// The access level granted to the internal user.
+    pub access_level: AccessLevel,
+}
 
 /// Trait to convert a unit struct marker into an [`AccessLevel`].
 ///
@@ -70,6 +81,10 @@ pub enum ExtractorError {
     #[error("Bad request: {0}")]
     BadRequest(&'static str),
 
+    /// Requested resource was not found.
+    #[error("Not found: {0}")]
+    NotFound(&'static str),
+
     /// Internal server error.
     #[error("Internal server error")]
     Internal,
@@ -87,6 +102,7 @@ impl From<AccessError> for ExtractorError {
                 ExtractorError::UnauthorizedWithMessage(msg)
             }
             AccessError::BadRequest(msg) => ExtractorError::BadRequest(msg),
+            AccessError::NotFound(msg) => ExtractorError::NotFound(msg),
             AccessError::DatabaseError(_) => ExtractorError::Database,
             AccessError::Internal => ExtractorError::Internal,
         }
@@ -101,6 +117,7 @@ impl IntoResponse for ExtractorError {
                 (StatusCode::UNAUTHORIZED, self.to_string())
             }
             ExtractorError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ExtractorError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             ExtractorError::Internal | ExtractorError::Database => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }

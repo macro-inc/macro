@@ -32,13 +32,7 @@ where
         link_id
     )
     .fetch_optional(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update replying_to_id for message {} for link_id {}",
-            message_id, link_id
-        )
-    })?;
+    .await?;
 
     // Return true if a message was updated, false otherwise
     let updated = result.is_some();
@@ -89,14 +83,7 @@ where
         link_id
     )
     .execute(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to bulk update replying_to_id for {} messages for link_id {}",
-            updates.len(),
-            link_id
-        )
-    })?;
+    .await?;
 
     let rows_affected = result.rows_affected();
 

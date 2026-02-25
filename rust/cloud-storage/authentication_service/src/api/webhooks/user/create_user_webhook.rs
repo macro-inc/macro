@@ -14,9 +14,8 @@ use rand::Rng;
 use sqlx::{Pool, Postgres};
 
 use crate::api::context::ApiContext;
-use authentication_service::service::{
-    fusionauth_client::error::FusionAuthClientError, user::create_user::create_user,
-};
+use authentication_service::service::user::create_user::create_user;
+use fusionauth::error::FusionAuthClientError;
 use model::authentication::webhooks::FusionAuthUserWebhook;
 
 /// FusionAuth create user webhook

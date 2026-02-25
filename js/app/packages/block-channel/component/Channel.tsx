@@ -1,15 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
-import {
-  isDraggingOverChannelSignal,
-  isValidChannelDragSignal,
-} from '@block-channel/signal/attachment';
-import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragEvent } from '@entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelActivity } from '@core/context/channels';
@@ -29,8 +24,11 @@ import {
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
-import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
-import type { Message } from '@service-comms/generated/models';
+import {
+  invalidateChannelsActivity,
+  useUpdateChannelsActivityMutation,
+} from '@queries/channel/activity';
+import type { Message } from '@queries/channel/types';
 import { connectionGatewayClient } from '@service-connection/client';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -85,15 +83,17 @@ export function Channel(props: {
   channelId: string;
   target?: TargetMessageInfo;
 }) {
-  const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-
   const channelContext = useChannelContext();
   const channelQuery = useChannelQuery(() => props.channelId);
   const latestActivity = useChannelActivity(props.channelId);
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
 
-  const updateActivityMutation = useUpdateChannelsActivityMutation();
+  const updateActivityMutation = useUpdateChannelsActivityMutation({
+    onSuccess: () => {
+      invalidateChannelsActivity();
+    },
+  });
 
   const updateActivityOnOpen = () => {
     setOpenedChannel(new Date());
@@ -118,8 +118,8 @@ export function Channel(props: {
   const [orderedMessages, setOrderedMessages] = createSignal<Message[]>([]);
   const scopeId = blockHotkeyScopeSignal.get;
   const blockRef = blockElementSignal.get;
-  const setIsDraggingOverChannel = isDraggingOverChannelSignal.set;
-  const setIsValidChannelDrag = isValidChannelDragSignal.set;
+  const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
+  const [isValidChannelDrag, setIsValidChannelDrag] = createSignal(true);
   const notificationSource = useGlobalNotificationSource();
 
   const blockHandle = blockHandleSignal.get;
@@ -148,9 +148,6 @@ export function Channel(props: {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
       const threadId = params[URL_PARAMS.thread] as string | undefined;
       const messageId = params[URL_PARAMS.message] as string | undefined;
-      if (threadId) {
-        setActiveThreadId(threadId);
-      }
       if (messageId) {
         setTargetMessage({
           messageId,
@@ -442,9 +439,9 @@ export function Channel(props: {
             setOrderedMessages={setOrderedMessages}
             onNavigationReady={setMessageListNav}
           />
-          <div class="shrink-0 w-full px-4 pb-2">
+          <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
-            <div class="mx-auto -translate-x-1 w-full macro-message-width">
+            <div class="mx-auto w-full macro-message-width macro-message-padding">
               <Suspense>
                 <ChannelInput
                   channelId={props.channelId}
@@ -456,6 +453,8 @@ export function Channel(props: {
                   onFocusLeaveStart={onChannelInputFocusLeaveStart}
                   autoFocusOnMount={autoFocusOnMount()}
                   domRef={setChannelInputRef}
+                  isDraggingOverChannel={isDraggingOverChannel}
+                  isValidChannelDrag={isValidChannelDrag}
                 />
               </Suspense>
             </div>

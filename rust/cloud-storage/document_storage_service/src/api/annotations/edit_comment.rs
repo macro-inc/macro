@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::{NotifLocationType, build_mention_notif},
-    service::conn_gateway::update_live_comment_state,
+    api::annotations::build_mention_notif, service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
@@ -20,8 +19,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use notification::domain::service::{NotificationIngress, NotificationIngressService};
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -48,9 +46,7 @@ pub struct Params {
     )]
 pub async fn edit_comment_handler(
     State(db): State<PgPool>,
-    State(notification_ingress_service): State<
-        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
-    >,
+    State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
     Path(Params { comment_id }): Path<Params>,
@@ -61,9 +57,8 @@ pub async fn edit_comment_handler(
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = req.mentions {
                 let request = build_mention_notif(
-                    NotifLocationType::EditComment,
                     req.text.clone().unwrap_or_else(|| "".to_string()),
-                    Some(&res.comment),
+                    &res.comment,
                     req.thread_id,
                     &users,
                     res.document_name.clone(),

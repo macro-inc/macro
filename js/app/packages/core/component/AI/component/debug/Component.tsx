@@ -1,17 +1,24 @@
-import type {
-  CreateAndSend,
-  MessageStream,
-  Model,
-  Send,
-} from '@core/component/AI/types';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import type { Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { isErr } from '@core/util/maybeResult';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { ChatMessageStream } from '@service-connection/stream';
+import { subscribe } from '@service-connection/stream';
 import { createEffect, createSignal } from 'solid-js';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '../../context';
 import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
+import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
-import { useChatInput } from '../input/useChatInput';
 import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
-import { useChatMessages } from '../message/ChatMessages';
+import { ChatMessages } from '../message/ChatMessages';
+
 import {
   blockDone,
   createStream,
@@ -84,69 +91,106 @@ function ChatModelSelector() {
 }
 
 function ChatInputBox() {
-  const { ChatInput, setIsGenerating: setGen } = useChatInput();
+  return (
+    <ChatInputProvider>
+      <ChatInputBoxInner />
+    </ChatInputProvider>
+  );
+}
+
+function ChatInputBoxInner() {
+  const input = useChatInputContext();
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
 
   return (
     <Item label="Chat input - not connected to backend">
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
           <DeprecatedTextButton
-            onClick={() => setGen(true)}
+            onClick={() => input.setIsGenerating(true)}
             theme="accent"
             text="Generate"
           />
           <DeprecatedTextButton
-            onClick={() => setGen(false)}
+            onClick={() => input.setIsGenerating(false)}
             theme="accent"
             text="Stop"
           />
         </div>
-        <ChatInput onSend={(request) => console.log('request', request)} />
+        <ChatInput
+          markdown={chatMarkdownArea}
+          onSend={(request) => console.log('request', request)}
+        />
       </div>
     </Item>
   );
 }
 
 function ChatInputBoxConnected() {
-  const [_gen, setGen] = createSignal(false);
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        console.log('error creating chat', response);
-        return;
-      } else {
-        console.log('created chat ', response.chat_id);
-        return onSend(response);
-      }
-    } else {
-      const stream = request.call();
-      setGen(true);
-      createEffect(() => {
-        const items = stream.data();
-        const latest = items.at(-1);
-        if (latest) console.log(JSON.stringify(latest, null, 2));
-        if (stream.isDone()) setGen(false);
-      });
-    }
-  };
+  return (
+    <ChatInputProvider>
+      <ChatInputBoxConnectedInner />
+    </ChatInputProvider>
+  );
+}
 
-  const { ChatInput } = useChatInput();
+function ChatInputBoxConnectedInner() {
+  const input = useChatInputContext();
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
+  const [_gen, setGen] = createSignal(false);
+  const onSend = async (input: ChatSendInput) => {
+    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+      content: input.content,
+      model: input.model,
+      attachments: input.attachments.length > 0 ? input.attachments : undefined,
+      toolset: input.toolset,
+    });
+    if (isErr(response)) {
+      console.log('error sending message', response);
+      return;
+    }
+    const [, { stream_id, chat_id }] = response;
+    const connectionStream = subscribe('chat', chat_id, stream_id);
+    if (!connectionStream) {
+      console.log('no connection stream');
+      return;
+    }
+    setGen(true);
+    createEffect(() => {
+      const items = connectionStream.data();
+      const latest = items.at(-1);
+      if (latest) console.log(JSON.stringify(latest, null, 2));
+      if (connectionStream.isDone()) setGen(false);
+    });
+  };
 
   return (
     <Item label="Chat input - connected (console)">
       <div class="w-full h-full">
-        <ChatInput onSend={onSend} />
+        <ChatInput markdown={chatMarkdownArea} onSend={onSend} />
       </div>
     </Item>
   );
 }
 
 function StreamMessages() {
-  const { ChatMessages, setStream: setMessageStream } = useChatMessages({
-    messages: [],
-  });
-  const [stream, setStream] = createSignal<MessageStream>();
+  return (
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={[]}>
+        <StreamMessagesInner />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
+
+function StreamMessagesInner() {
+  const chat = useChatContext();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const makeStream = () => delayStream(poem(), slowFirst);
 
   return (
@@ -156,7 +200,7 @@ function StreamMessages() {
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);
-          setMessageStream(poemStream);
+          chat.setStream(poemStream);
         }}
       >
         Stream
@@ -171,62 +215,81 @@ function StreamMessages() {
 
 function StaticMessages() {
   const messages = simpleMessageChain();
-  const { ChatMessages } = useChatMessages({ messages: messages });
   console.log(JSON.stringify(messages, null, 2));
   return (
-    <Item col label="Chat messages - static render">
-      <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
-        <ChatMessages />
-      </div>
-    </Item>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={messages}>
+        <Item col label="Chat messages - static render">
+          <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+            <ChatMessages />
+          </div>
+        </Item>
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function FullChat() {
-  const [_isGen, setIsGen] = createSignal(false);
-  const [stream, setDebugStream] = createSignal<MessageStream>();
-  const { ChatMessages, addMessage, setStream } = useChatMessages({
-    messages: [],
+  return (
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={[]}>
+        <FullChatInner />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
+
+function FullChatInner() {
+  const input = useChatInputContext();
+  const chat = useChatContext();
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
+  const [_isGen, setIsGen] = createSignal(false);
+  const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
 
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        console.log('error creating chat', response);
-        return;
-      } else {
-        console.log('created chat ', response.chat_id);
-        return onSend(response);
-      }
-    } else {
-      addMessage({
-        attachments: request.request.attachments ?? [],
-        content: request.request.content,
-        role: 'user',
-        id: '',
-      });
-      const stream = request.call();
-      console.log('set stream');
-      setStream(stream);
-      setDebugStream(stream);
-      setIsGen(true);
-      createEffect(() => {
-        if (stream.isErr()) {
-          console.log('stream error');
-        }
-        if (stream.isDone()) {
-          console.log('stream done');
-          setIsGen(false);
-        }
-      });
-      createEffect(() => {
-        console.log('stream', JSON.stringify(stream.data(), null, 2));
-      });
+  const onSend = async (input: ChatSendInput) => {
+    chat.addMessage({
+      attachments: input.attachments,
+      content: input.content,
+      role: 'user',
+      id: '',
+    });
+    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+      content: input.content,
+      model: input.model,
+      chat_id: chat.chatId(),
+      attachments: input.attachments.length > 0 ? input.attachments : undefined,
+      toolset: input.toolset,
+    });
+    if (isErr(response)) {
+      console.log('error sending message', response);
+      return;
     }
+    const [, { stream_id, chat_id }] = response;
+    const connectionStream = subscribe('chat', chat_id, stream_id);
+    if (!connectionStream) {
+      console.log('no connection stream');
+      return;
+    }
+    const chatStream: ChatMessageStream = {
+      data: connectionStream.data,
+      isDone: connectionStream.isDone,
+      id: () => ({ stream_id, entity_id: chat_id, entity_type: 'chat' }),
+    };
+    console.log('set stream');
+    chat.setStream(chatStream);
+    setIsGen(true);
+    createEffect(() => {
+      if (connectionStream.isDone()) {
+        console.log('stream done');
+        setIsGen(false);
+      }
+    });
+    createEffect(() => {
+      console.log('stream', JSON.stringify(connectionStream.data(), null, 2));
+    });
   };
-
-  const { ChatInput } = useChatInput();
 
   return (
     <Item label="Input and messages - connected">
@@ -234,9 +297,14 @@ function FullChat() {
         data-chat-scroll
         class="size-full min-h-0 max-h-[400px] overflow-y-auto"
       >
-        <StreamStatus stream={stream} />
+        <StreamStatus stream={debugStream} />
         <ChatMessages />
-        <ChatInput onSend={onSend} onStop={() => {}} />
+        <ChatInput
+          markdown={chatMarkdownArea}
+          chatId={chat.chatId()}
+          onSend={onSend}
+          onStop={() => {}}
+        />
       </div>
     </Item>
   );
@@ -244,24 +312,30 @@ function FullChat() {
 
 function ToolCallRender() {
   const stream = toolCall(() => 1);
+  const initialMessages = mockMessages([
+    { text: 'read this file for me', type: 'user' },
+  ]);
 
-  const { ChatMessages, setStream } = useChatMessages({
-    messages: mockMessages([
-      {
-        text: 'read this file for me',
-        type: 'user',
-      },
-    ]),
-  });
+  return (
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={initialMessages}>
+        <ToolCallRenderInner stream={stream} />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
 
-  setStream(stream);
+function ToolCallRenderInner(props: { stream: ChatMessageStream }) {
+  const chat = useChatContext();
+  chat.setStream(props.stream);
+
   return (
     <Item label="Tool call - static">
       <div
         data-chat-scroll
         class="size-full flex space-y-1 flex-col overflow-y-auto max-h-[400px]"
       >
-        <StreamStatus stream={() => stream} />
+        <StreamStatus stream={() => props.stream} />
         <ChatMessages />
       </div>
     </Item>
@@ -368,27 +442,33 @@ function LoadingMessageScroll() {
 }
 
 function TableStream() {
+  const initialMessages = mockMessages([
+    {
+      type: 'user',
+      text: 'Can you show me a comparison of frontend frameworks?',
+    },
+  ]);
+
+  return (
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={initialMessages}>
+        <TableStreamInner />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
+
+function TableStreamInner() {
+  const chat = useChatContext();
   const [isPaused, setIsPaused] = createSignal(false);
   const [isSlow, setIsSlow] = createSignal(false);
   const [showRaw, setShowRaw] = createSignal(false);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const [rawText, setRawText] = createSignal('');
 
-  const {
-    ChatMessages,
-    setStream: setMessageStream,
-    reset,
-  } = useChatMessages({
-    messages: mockMessages([
-      {
-        type: 'user',
-        text: 'Can you show me a comparison of frontend frameworks?',
-      },
-    ]),
-  });
-
   const startStream = () => {
-    reset();
+    chat.setMessages([]);
+    chat.setStream(undefined);
     setRawText('');
     const baseStream = table();
     const controlled = pausableStream(baseStream, {
@@ -397,7 +477,7 @@ function TableStream() {
       onChunk: (text) => setRawText((prev) => prev + text),
     });
     setStream(controlled);
-    setMessageStream(controlled);
+    chat.setStream(controlled);
   };
 
   return (
@@ -435,7 +515,8 @@ function TableStream() {
           onClick={() => {
             setStream(undefined);
             setRawText('');
-            reset();
+            chat.setMessages([]);
+            chat.setStream(undefined);
           }}
         />
       </div>

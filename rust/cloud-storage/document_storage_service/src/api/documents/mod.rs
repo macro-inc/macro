@@ -7,7 +7,6 @@ use tower::ServiceBuilder;
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod copy_document;
-pub(in crate::api) mod create_document;
 pub(in crate::api) mod create_task;
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod edit_document;
@@ -55,23 +54,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 macro_middleware::auth::ensure_user_exists::handler,
             )),
         )
-        .route(
-            "/",
-            post(create_document::create_document_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::document_handler,
-                    )),
-            ),
-        )
+        // NOTE: POST / (create_document) is now served by the documents hex crate router
         .route(
             "/create_task",
             post(create_task::create_task_handler).layer(
@@ -117,10 +100,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/:document_id/location",
             get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/:document_id/location_v3",
-            get(location::get_location_handler_v3).layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: /:document_id/location_v3 is now served by the documents hex crate router
         .route(
             "/:document_id/text",
             get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
@@ -148,10 +128,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     )),
             ),
         )
-        .route(
-            "/:document_id",
-            get(get_document::handler).layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: GET /:document_id is now served by the documents hex crate router
         .route(
             "/:document_id/views",
             get(get_document_views::get_document_views_handler)
@@ -185,11 +162,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/:document_id/simple_save",
             put(simple_save::handler).layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/:document_id",
-            delete(delete_document::delete_document_handler)
-                .layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: DELETE /:document_id is now served by the documents hex crate router
         .route(
             "/:document_id/permanent",
             delete(delete_document::permanently_delete_document_handler)

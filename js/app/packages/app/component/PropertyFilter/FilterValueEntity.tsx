@@ -1,27 +1,25 @@
-import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityMapper,
+  useQuickAccessEntities,
   getEntityName,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
   threadMapper,
+  quickAccessItemToEntity,
+  userToEntity,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
 import { useEmail } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import {
-  createEmailsInfiniteQuery,
-  createUnifiedSearchInfiniteQuery,
-  type EmailEntity,
-} from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import type { EmailEntity } from '@entity';
+import { useSearchSoupQuery } from '@queries/soup/search';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import type { Component } from 'solid-js';
 import {
@@ -87,11 +85,19 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   let containerRef!: HTMLDivElement;
   let dropdownRef!: HTMLDivElement;
 
-  // Data sources (same pattern as PropertyEntitySelector)
-  const contacts = useContacts();
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
-  const historyQuery = useHistoryQuery();
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+
+  // Get current user domain for same-domain boost in search
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
+  // Get items from quickAccess based on entity type
+  const { items: quickAccessItems } = useQuickAccessEntities(
+    () => props.specificEntityType
+  );
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -103,19 +109,19 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const emails = () => emailsQuery.data ?? [];
 
   // Server-side email search
-  const emailSearchQuery = createUnifiedSearchInfiniteQuery(
+  const emailSearchQuery = useSearchSoupQuery(
     () => ({
-      params: { page: 0, page_size: 20 },
-      request: {
+      params: { page_size: 20 },
+      body: {
         query: searchTerm(),
         match_type: 'partial' as const,
         include: ['emails' as const],
         search_on: 'name' as const,
       },
     }),
-    {
-      disabled: () => !needsEmailSearch(),
-    }
+    () => ({
+      enabled: needsEmailSearch(),
+    })
   );
 
   // Server search results mapped to our format
@@ -128,65 +134,49 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
-  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
-  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
-  const augmentUsersWithDmActivity = (): CombinedEntity[] => {
-    return contacts().map((user) =>
-      entityMapper('user')(augmentUserWithDmActivity(user))
-    );
-  };
-
-  // Get entities based on specific entity type (same logic as PropertyEntitySelector)
+  // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
-    const entityType = props.specificEntityType;
+    const specificEntityType = props.specificEntityType;
 
-    // Generic entity - include all types
-    if (!entityType) {
-      return [
-        ...augmentUsersWithDmActivity(),
-        ...(historyQuery.data ?? []).map(entityMapper('item')),
-        ...channels().map(entityMapper('channel')),
-        ...emails().map(threadMapper),
-      ];
-    }
-
-    if (entityType === 'USER') {
-      return augmentUsersWithDmActivity();
-    }
-
-    if (entityType === 'CHANNEL') {
-      return channels().map(entityMapper('channel'));
-    }
-
-    if (entityType === 'THREAD') {
+    // For THREAD type, use email data (not in quickAccess yet)
+    if (specificEntityType === 'THREAD') {
       return emails().map(threadMapper);
     }
 
-    // Item-based types: DOCUMENT, PROJECT, CHAT
-    const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
-    if (itemTypes.includes(entityType)) {
-      return (historyQuery.data ?? [])
-        .filter((item) => item.type.toUpperCase() === entityType)
-        .map(entityMapper('item'));
+    // For COMPANY type, return empty (not in quickAccess)
+    if (specificEntityType === 'COMPANY') {
+      return [];
     }
 
-    if (entityType === 'TASK') {
-      return (historyQuery.data ?? [])
-        .filter(
-          (item) => item.type === 'document' && item.subType?.type === 'task'
-        )
-        .map(entityMapper('item'));
+    // Convert quickAccess items to CombinedEntity
+    const items = quickAccessItems();
+    const converted: CombinedEntity[] = [];
+
+    for (const item of items) {
+      // Augment users with DM activity
+      if (item.kind === 'user') {
+        const augmentedUser = augmentUserWithDmActivity(item.data);
+        converted.push(userToEntity(augmentedUser));
+      } else {
+        const entity = quickAccessItemToEntity(item);
+        // Filter by specific entity type if needed
+        if (specificEntityType) {
+          const entityType = getEntityType(entity);
+          if (entityType === specificEntityType) {
+            converted.push(entity);
+          }
+        } else {
+          converted.push(entity);
+        }
+      }
     }
 
-    // COMPANY not yet implemented
-    return [];
-  });
+    // For generic entity type, also include emails
+    if (!specificEntityType) {
+      converted.push(...emails().map(threadMapper));
+    }
 
-  // Get current user domain for same-domain boost
-  const currentUserEmail = useEmail();
-  const currentUserDomain = createMemo(() => {
-    const email = currentUserEmail();
-    return email ? email.split('@')[1] : undefined;
+    return converted;
   });
 
   // Search function for fuzzy matching (same config as PropertyEntitySelector)

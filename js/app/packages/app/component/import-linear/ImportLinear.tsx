@@ -4,10 +4,8 @@ import { parseCsv } from '@core/util/csv';
 import { createTask } from '@core/util/create';
 import { linearCsvRecordToMacroTaskDraft } from '@core/util/linearImport';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import {
-  queryKeys,
-  useQueryClient as useEntityQueryClient,
-} from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useContacts } from '@core/user';
 import { Button } from '@ui/components/Button';
@@ -30,7 +28,7 @@ function lower(s: string): string {
 export default function ImportLinear() {
   const contacts = useContacts();
   const upsertToHistory = useUpsertToHistoryMutation();
-  const entityQueryClient = useEntityQueryClient();
+  const queryClient = useQueryClient();
 
   const [fileName, setFileName] = createSignal<string>('');
   const [parseError, setParseError] = createSignal<string>('');
@@ -187,8 +185,8 @@ export default function ImportLinear() {
         setProgress({ type: 'running', done: i + 1, total: rows.length });
       }
 
-      // Refresh DSS-backed lists so the new tasks appear.
-      entityQueryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
+      // Refresh soup items so the new tasks appear.
+      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
 
       setCreatedIds(createdList);
       setProgress({ type: 'done', created, skipped, failed });

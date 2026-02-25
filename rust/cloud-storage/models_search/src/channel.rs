@@ -1,4 +1,5 @@
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
+use chrono::{DateTime, Utc};
 use item_filters::ChannelFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,10 +18,10 @@ pub struct ChannelSearchResult {
     pub sender_id: Option<String>,
     /// When the channel message was created
     /// This is only prsent if the search result is on the message content
-    pub created_at: Option<i64>,
+    pub created_at: Option<DateTime<Utc>>,
     /// When the channel message was last updated
     /// This is only prsent if the search result is on the message content
-    pub updated_at: Option<i64>,
+    pub updated_at: Option<DateTime<Utc>>,
     /// The highlights for the channel message
     pub highlight: SearchHighlight,
     /// The score of the result
@@ -50,10 +51,10 @@ pub struct ChannelSearchResponseItem {
 /// Metadata for a channel fetched from the database
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub interacted_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
+    pub interacted_at: Option<DateTime<Utc>>,
 }
 
 /// ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
@@ -148,7 +149,7 @@ pub struct SimpleChannelSearchReponseBaseItem<T> {
 }
 
 pub type SimpleChannelSearchReponseItem =
-    SimpleChannelSearchReponseBaseItem<crate::TimestampSeconds>;
+    SimpleChannelSearchReponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChannelSearchResponse {

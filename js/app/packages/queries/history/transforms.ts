@@ -1,14 +1,15 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
+import type { DateValue } from '@core/util/date';
+import type { Item } from '@service-storage/generated/schemas/item';
 import type { HistoryItem, HistoryQueryResponse } from './types';
 
-export function transformHistoryItem(item: HistoryItem): HistoryItem {
+export function transformHistoryItem(item: Item): HistoryItem {
   const base = {
     id: item.id,
     name: itemToSafeName(item),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt,
-    viewedAt: item.viewedAt,
     rawName: item.name,
   };
 
@@ -19,6 +20,7 @@ export function transformHistoryItem(item: HistoryItem): HistoryItem {
         type: 'document',
         fileType: item.fileType,
         subType: item.subType,
+        ownerId: item.owner,
       };
 
     case 'chat':
@@ -26,12 +28,14 @@ export function transformHistoryItem(item: HistoryItem): HistoryItem {
         ...base,
         type: 'chat',
         isPersistent: item.isPersistent,
+        ownerId: item.userId,
       };
 
     case 'project':
       return {
         ...base,
         type: 'project',
+        ownerId: item.userId,
       };
   }
 }
@@ -49,7 +53,7 @@ export function transformHistoryResponse(
 export function updateViewedAtAndMoveItemToFront(
   items: HistoryItem[],
   itemId: string,
-  timestamp: number
+  timestamp: DateValue
 ): HistoryItem[] {
   const itemIndex = items.findIndex((item) => item.id === itemId);
 

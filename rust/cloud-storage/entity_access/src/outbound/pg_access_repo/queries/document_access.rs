@@ -13,9 +13,9 @@ use std::str::FromStr;
 pub async fn get_document_access(
     pool: &PgPool,
     document_id: &str,
-    user_id: &MacroUserId<Lowercase<'_>>,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    let user_id = user_id.as_ref();
+    let user_id = user_id.map(AsRef::as_ref).unwrap_or("");
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
         WITH RECURSIVE project_hierarchy AS (

@@ -9,7 +9,6 @@ import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {
@@ -31,7 +30,7 @@ type AttachMenuProps = {
   trigger: JSX.Element;
   onAttach: (items: HistoryItem[]) => void;
   onAttachDocuments?: (items: DocumentMentionInfo[]) => void;
-  attachedItems?: () => Item[];
+  attachedItems?: () => HistoryItem[];
   setIsPending?: Setter<boolean>;
 };
 
@@ -141,7 +140,7 @@ export function AttachMenu(props: AttachMenuProps) {
                         item.blockName !== 'project'
                           ? item.blockName
                           : undefined,
-                    })) as Item[];
+                    })) as HistoryItem[];
 
                     props.onAttach(itemsToAttach);
                   });

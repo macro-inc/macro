@@ -12,7 +12,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let config = Config::from_env().context("all necessary env vars should be available")?;
 
     let s3_client = service::s3::S3::new(
-        aws_sdk_s3::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        macro_aws_config::s3_client().await,
         &config.document_storage_bucket,
     );
 

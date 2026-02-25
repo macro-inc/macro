@@ -93,7 +93,7 @@ async fn it_writes_session_code_to_db() {
     let p = query.collect::<Vec<_>>();
     assert!(
         p.iter()
-            .find(|e| e.0 == "session_code" && !e.1.is_empty())
+            .find(|e| e.0 == "token" && !e.1.is_empty())
             .is_some()
     );
 }

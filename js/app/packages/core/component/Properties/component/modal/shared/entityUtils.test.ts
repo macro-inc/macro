@@ -1,5 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
+
+// Mock @core/context/quickAccess to break the import chain that pulls in
+// LexicalMarkdown plugins -> themeSignals -> window.matchMedia
+vi.mock('@core/context/quickAccess', () => ({
+  useQuickAccess: () => ({
+    useList: () => () => [],
+    isLoading: () => false,
+    refresh: () => {},
+    getById: () => undefined,
+  }),
+  ALL_BUCKETS: [],
+  isEntityItem: () => false,
+  isUserItem: () => false,
+  isEntityOfType: () => false,
+  isFromBucket: () => false,
+  exclude: () => () => true,
+}));
+
 import { createEntitySearchConfig } from './entityUtils';
 import type { CombinedEntity } from './entityUtils';
 import type { IUser } from '@core/user';
@@ -56,12 +74,15 @@ describe('createEntitySearchConfig', () => {
     const config = createEntitySearchConfig(domain);
 
     const channelEntity: CombinedEntity = {
-      kind: 'channel',
+      kind: 'entity',
       id: 'channel-1',
       data: {
+        type: 'channel',
         id: 'channel-1',
         name: 'Test Channel',
-      } as any,
+        ownerId: 'owner-1',
+        channelType: 'public',
+      },
     };
 
     const boost = config.boostFn!(channelEntity);

@@ -99,7 +99,7 @@ export function SplitContainer(
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }
-            edgeMutedColor="transparent"
+            edgeColor="transparent"
           >
             <div class="flex flex-col min-h-0 size-full bg-panel">
               <SplitHeader ref={setHeaderRef} />

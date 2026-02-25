@@ -35,6 +35,8 @@ type UseTaskModeReturn = {
     propertyDefinitionId: string,
     value: PropertyApiValues
   ) => void;
+  /** Clear all task property values (call after send) */
+  resetTaskProperties: () => void;
 };
 
 /**
@@ -107,11 +109,16 @@ export function useTaskMode(
     }));
   };
 
+  const resetTaskProperties = () => {
+    setTaskPropertyValues(reconcile({}));
+  };
+
   return {
     taskModeEnabled,
     toggleTaskMode,
     setTaskModeEnabled,
     potentialTasks,
     updateTaskPropertyValue,
+    resetTaskProperties,
   };
 }

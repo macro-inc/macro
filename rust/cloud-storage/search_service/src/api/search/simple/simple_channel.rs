@@ -8,6 +8,7 @@ pub(in crate::api::search) struct FilterChannelResponse {
     pub channel_ids: Vec<sqlx::types::Uuid>,
 }
 
+#[tracing::instrument(skip(ctx, filters), err)]
 pub(in crate::api::search) async fn filter_channels(
     ctx: &SearchHandlerState,
     user_id: &str,

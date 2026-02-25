@@ -26,6 +26,7 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateThreadLabelRequest,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
@@ -83,23 +84,28 @@ export const emailClient = {
       (result) => result
     );
   },
-  async getPreviews(args: {
-    view: string;
-    limit: number;
-    sort_method: string;
-    cursor?: string;
-  }) {
+  async getPreviews(
+    args: {
+      view: string;
+      limit?: number;
+      sort_method?: string;
+      cursor?: string;
+    },
+    init?: SafeFetchInit
+  ) {
     const { view, ...params } = args;
     const p = Object.entries(params)
+      .filter(([, v]) => v != null)
       .map(([k, v]) => `${k}=${v}`)
       .join('&');
-    const qp = p.length > 0 ? '?' + p : p;
+    const qp = p.length > 0 ? '?' + p : '';
 
     return mapOk(
       await emailFetch<ApiPaginatedThreadCursor>(
         `/email/threads/previews/cursor/${view}${qp}`,
         {
           method: 'GET',
+          ...init,
         }
       ),
       (result) => result
@@ -112,6 +118,21 @@ export const emailClient = {
         method: 'PATCH',
         body: JSON.stringify({ value, label_id, message_ids }),
       }),
+      (result) => result
+    );
+  },
+  async updateThreadLabel(
+    args: { thread_id: string } & UpdateThreadLabelRequest
+  ) {
+    const { thread_id, label_id, value } = args;
+    return mapOk(
+      await emailFetch<UpdateLabelBatchResponse>(
+        `/email/threads/${thread_id}/labels`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ label_id, value }),
+        }
+      ),
       (result) => result
     );
   },
@@ -253,6 +274,37 @@ export const emailClient = {
     return mapOk(
       await emailFetch<EmptyResponse>(
         `/email/drafts/${args.draftID}/attachments/${args.attachmentID}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+      (result) => result
+    );
+  },
+  async addForwardedAttachment(args: {
+    draftID: string;
+    attachmentID: string;
+  }) {
+    return mapOk(
+      await emailFetch<{
+        attachment_id: string;
+        filename: string | null;
+        mime_type: string | null;
+        size_bytes: number | null;
+      }>(`/email/drafts/${args.draftID}/forwarded-attachments`, {
+        method: 'POST',
+        body: JSON.stringify({ attachment_id: args.attachmentID }),
+      }),
+      (result) => result
+    );
+  },
+  async removeForwardedAttachment(args: {
+    draftID: string;
+    attachmentID: string;
+  }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/${args.draftID}/forwarded-attachments/${args.attachmentID}`,
         {
           method: 'DELETE',
         }

@@ -36,7 +36,9 @@ export function glueToElement(
 
   async function updatePosition() {
     const el = propAccessor().element();
-    if (!el) {
+    const root = propAccessor().editor.getRootElement();
+
+    if (!el || !root) {
       style(floatingElement, { display: 'none' });
       return;
     }
@@ -46,10 +48,13 @@ export function glueToElement(
     });
 
     const rect = el.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    const offsetLeft = rect.left - rootRect.left;
+    const offsetTop = rect.top - rootRect.top;
 
     style(floatingElement, {
-      left: `${el.offsetLeft}px`,
-      top: `${el.offsetTop}px`,
+      left: `${offsetLeft}px`,
+      top: `${offsetTop}px`,
       width: `${rect.width}px`,
       height: `${rect.height}px`,
       visibility: middlewareData.hide?.referenceHidden ? 'hidden' : 'visible',

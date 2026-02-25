@@ -236,6 +236,164 @@ async fn test_get_user_channels_dynamic_filter_by_importance(pool: Pool<sqlx::Po
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("channels"))
 )]
+async fn test_get_user_channels_dynamic_filter_by_notification_done(pool: Pool<sqlx::Postgres>) {
+    use filter_ast::ExpandFrame;
+    use item_filters::{ChannelFilters, NotificationFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let channel_filters = ChannelFilters {
+        notification_filters: NotificationFilters {
+            done: Some(false),
+            seen: None,
+        },
+        ..Default::default()
+    };
+
+    let filter_ast = ChannelFilters::expand_ast(channel_filters)
+        .unwrap()
+        .map(std::sync::Arc::new);
+
+    let params = GetChannelsRequest {
+        macro_id: user_id.into_owned(),
+        limit: Some(20),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+    }
+    .into_params();
+
+    let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+
+    assert_eq!(
+        channels.len(),
+        1,
+        "done=false should return exactly one channel"
+    );
+    assert_eq!(
+        channels[0].channel.id.0.to_string(),
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
+async fn test_get_user_channels_dynamic_filter_by_notification_seen_and_done(
+    pool: Pool<sqlx::Postgres>,
+) {
+    use filter_ast::ExpandFrame;
+    use item_filters::{ChannelFilters, NotificationFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let channel_filters = ChannelFilters {
+        notification_filters: NotificationFilters {
+            done: Some(true),
+            seen: Some(true),
+        },
+        ..Default::default()
+    };
+
+    let filter_ast = ChannelFilters::expand_ast(channel_filters)
+        .unwrap()
+        .map(std::sync::Arc::new);
+
+    let params = GetChannelsRequest {
+        macro_id: user_id.into_owned(),
+        limit: Some(20),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+    }
+    .into_params();
+
+    let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+
+    assert_eq!(
+        channels.len(),
+        1,
+        "done=true + seen=true should return exactly one channel"
+    );
+    assert_eq!(
+        channels[0].channel.id.0.to_string(),
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
+async fn test_get_user_channels_dynamic_filter_by_channel_type(pool: Pool<sqlx::Postgres>) {
+    use filter_ast::ExpandFrame;
+    use item_filters::ChannelFilters;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for organization channels only
+    let channel_filters = ChannelFilters {
+        channel_types: vec!["organization".to_string()],
+        ..Default::default()
+    };
+
+    let filter_ast = ChannelFilters::expand_ast(channel_filters)
+        .unwrap()
+        .map(std::sync::Arc::new);
+
+    let params = GetChannelsRequest {
+        macro_id: user_id.into_owned(),
+        limit: Some(20),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+    }
+    .into_params();
+
+    let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+
+    // Channels A and B are organization type
+    assert_eq!(channels.len(), 2, "Should return 2 organization channels");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
+async fn test_get_user_channels_dynamic_filter_by_multiple_channel_types(
+    pool: Pool<sqlx::Postgres>,
+) {
+    use filter_ast::ExpandFrame;
+    use item_filters::ChannelFilters;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for public and direct_message channels
+    let channel_filters = ChannelFilters {
+        channel_types: vec!["public".to_string(), "direct_message".to_string()],
+        ..Default::default()
+    };
+
+    let filter_ast = ChannelFilters::expand_ast(channel_filters)
+        .unwrap()
+        .map(std::sync::Arc::new);
+
+    let params = GetChannelsRequest {
+        macro_id: user_id.into_owned(),
+        limit: Some(20),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+    }
+    .into_params();
+
+    let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+
+    // Channel C is public, Channel D is direct_message
+    assert_eq!(
+        channels.len(),
+        2,
+        "Should return 2 channels (public + direct_message)"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
 async fn test_get_latest_channel_messages_batch(pool: Pool<sqlx::Postgres>) -> Result<(), Report> {
     let ids = vec![
         ChannelId(uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")),

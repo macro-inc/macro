@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailFiltersImportance } from './emailFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The email filters used to filter down what emails you search over.
@@ -14,8 +15,18 @@ export interface EmailFilters {
   bcc?: string[];
   /** Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC. */
   cc?: string[];
+  /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
+  email_thread_ids?: string[];
+  /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
+Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default. */
+  exclude_labels?: string[];
   /** Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: EmailFiltersImportance;
+  /** Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
+Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter. */
+  include_labels?: string[];
+  /** Filter by email notification state. */
+  notification_filters?: NotificationFilters;
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];
   /** Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders. */

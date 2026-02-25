@@ -22,12 +22,12 @@ impl SqsNotificationQueue {
 }
 
 impl NotificationQueue for SqsNotificationQueue {
-    async fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+    async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> Result<(), Report> {
         for message in messages {
-            let body = serde_json::to_string(message)?;
+            let body = serde_json::to_string(&message)?;
             self.client
                 .send_message()
                 .queue_url(&self.queue_url)
@@ -100,15 +100,15 @@ impl FileQueue {
 }
 
 impl NotificationQueue for FileQueue {
-    async fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+    async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> Result<(), Report> {
         for message in messages {
             let id = uuid::Uuid::new_v4();
             let filename = format!("{}.json", id);
             let path = self.dir.join(&filename);
-            let content = serde_json::to_string_pretty(message)?;
+            let content = serde_json::to_string_pretty(&message)?;
             tokio::fs::write(&path, content).await?;
         }
         Ok(())

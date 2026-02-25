@@ -1,9 +1,12 @@
-import type { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
+import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 
-export type SendBuilder = Parameters<
-  ReturnType<typeof useBuildChatSendRequest>
->[0] & {
-  chatId: string;
+export type SendBuilder = {
+  userRequest: string;
+  chatId?: string;
+  isPersistent?: boolean;
+  model?: Model;
+  attachments?: Attachment[];
+  toolset?: ToolSet;
 };
 
 export type BlockChatSpec = {

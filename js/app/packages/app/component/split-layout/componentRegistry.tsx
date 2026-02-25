@@ -5,9 +5,9 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { Soup } from '../Soup';
-import { SettingsPanel } from '../settings/Settings';
+import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
+import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -55,16 +55,18 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
+registerComponent('unified-list', () => <SoupView />);
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
-registerComponent('email-compose', () => <EmailCompose />);
+registerComponent('email-compose', (params) => (
+  <EmailCompose draftID={params?.draftID} />
+));
 registerComponent('task-compose', () => <ComposeTask />);
 registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsPanel />);
+registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
 
 if (LOCAL_ONLY) {
@@ -105,6 +107,10 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/component/AI/component/debug/Tool'))
   );
   registerComponent(
+    'http-stream',
+    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
+  );
+  registerComponent(
     'new-form-primitives',
     lazy(
       () => import('@core/component/FormControls/debug/NewFormPrimitivesDemo')
@@ -136,6 +142,16 @@ if (LOCAL_ONLY) {
   registerComponent(
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
+  );
+
+  registerComponent(
+    'entity-debug',
+    lazy(() => import('@entity/debug/DebugEntityView'))
+  );
+
+  registerComponent(
+    'quick-access-list',
+    lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
 }
 

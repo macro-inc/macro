@@ -14,7 +14,7 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
 
     const constrainedWidth = node.getConstrainedWidth();
     const constrainedHeight = node.getConstrainedHeight();
-    if (constrainedWidth === undefined && constrainedHeight === undefined) {
+    if (constrainedWidth == null && constrainedHeight == null) {
       return null;
     }
 
@@ -45,8 +45,8 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
         width: data.width || 0,
         height: data.height || 0,
         scale: data.scale || 1,
-        constrainedWidth: data.constrainedWidth,
-        constrainedHeight: data.constrainedHeight,
+        constrainedWidth: data.constrainedWidth ?? undefined,
+        constrainedHeight: data.constrainedHeight ?? undefined,
       });
       parent.append(imageNode);
     } catch (e) {

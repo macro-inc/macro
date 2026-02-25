@@ -153,7 +153,12 @@ async fn insertable_attachments_condition_1_user_sent_message(pool: Pool<Postgre
 
     // Test condition 1: user sent the message
     let message_provider_id = "target-msg-101";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 1 attachment (sent_message_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -176,7 +181,12 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
 
     // Test condition 2: message has IMPORTANT label
     let message_provider_id = "target-msg-201";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 1 attachment (important_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -199,7 +209,12 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
 
     // Test condition 3: message from same domain as user
     let message_provider_id = "target-msg-301";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 1 attachment (same_domain_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -222,7 +237,12 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
 
     // Test condition 4: message from whitelisted domain
     let message_provider_id = "target-msg-801";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 1 attachment (whitelisted_domain_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -250,7 +270,12 @@ async fn insertable_attachments_condition_5_previously_contacted(
 
     // Test condition 4: user has previously contacted a thread participant
     let message_provider_id = "target-msg-401";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 1 attachment (previously_contacted_doc.pdf)
     // This should be found by the second query (condition 4)
@@ -277,7 +302,12 @@ async fn insertable_attachments_no_conditions_met(pool: Pool<Postgres>) -> Resul
 
     // Test control case: no conditions met
     let message_provider_id = "target-msg-601";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments
     assert_eq!(res.len(), 0);
@@ -297,7 +327,12 @@ async fn insertable_attachments_excludes_already_uploaded(pool: Pool<Postgres>) 
 
     // Test document_email exclusion
     let message_provider_id = "target-msg-701";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments (attachment already exists in document_email)
     assert_eq!(res.len(), 0);
@@ -317,7 +352,12 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 
     // Test that filtered mime types are excluded
     let message_provider_id = "target-msg-101";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should only return PDF, not image or zip
     assert_eq!(res.len(), 1);
@@ -350,7 +390,12 @@ async fn insertable_attachments_thread_exists_logic(pool: Pool<Postgres>) -> Res
 
     // target-msg-202 is in Thread 2, which contains target-msg-201 with IMPORTANT label
     let message_provider_id = "other-msg-202";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 because other-msg-202 has no attachments
     // But the EXISTS clause should still evaluate to true due to target-msg-201 having IMPORTANT
@@ -376,7 +421,12 @@ async fn insertable_attachments_returns_first_query_when_available(
 
     // Use a message that meets condition 1 (is_sent = true)
     let message_provider_id = "target-msg-101";
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return result from first query
     assert_eq!(res.len(), 1);
@@ -496,7 +546,12 @@ async fn thread_media_for_backfill_returns_empty_for_thread_without_media(
 )]
 async fn new_email_media_includes_non_inline_attachments(pool: Pool<Postgres>) -> Result<()> {
     let message_provider_id = "new-media-msg-301";
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000003a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 2 attachments: new_photo.jpg and new_video.mp4
     assert_eq!(res.len(), 2);
@@ -522,7 +577,12 @@ async fn new_email_media_includes_non_inline_attachments(pool: Pool<Postgres>) -
 )]
 async fn new_email_media_excludes_already_uploaded_to_sfs(pool: Pool<Postgres>) -> Result<()> {
     let message_provider_id = "new-media-msg-302";
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000003a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments (attachment already exists in email_attachments_sfs)
     assert_eq!(res.len(), 0);
@@ -536,7 +596,12 @@ async fn new_email_media_excludes_already_uploaded_to_sfs(pool: Pool<Postgres>) 
 )]
 async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<()> {
     let message_provider_id = "new-media-msg-303";
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000003a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 2 attachment: attachment_image.png
     // Should include inline_image.png (has content_id)
@@ -555,7 +620,12 @@ async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<(
 )]
 async fn new_email_media_returns_empty_for_nonexistent_message(pool: Pool<Postgres>) -> Result<()> {
     let message_provider_id = "nonexistent-msg-id";
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000003a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments
     assert_eq!(res.len(), 0);
@@ -577,7 +647,12 @@ async fn new_email_document_atts_claims_attachments(pool: Pool<Postgres>) -> Res
     let message_provider_id = "claim-test-doc-msg";
 
     // First call should return attachments and claim them
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap(),
+        message_provider_id,
+    )
+    .await?;
     assert_eq!(res.len(), 2);
 
     // Verify the attachments were claimed (upload_claimed_at is now set)
@@ -595,7 +670,12 @@ async fn new_email_document_atts_claims_attachments(pool: Pool<Postgres>) -> Res
     }
 
     // Second call should return empty (attachments already claimed)
-    let res2 = new_email_document_atts(&pool, message_provider_id).await?;
+    let res2 = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap(),
+        message_provider_id,
+    )
+    .await?;
     assert_eq!(
         res2.len(),
         0,
@@ -615,7 +695,12 @@ async fn new_email_media_atts_claims_attachments(pool: Pool<Postgres>) -> Result
     let message_provider_id = "claim-test-media-msg";
 
     // First call should return attachments and claim them
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap(),
+        message_provider_id,
+    )
+    .await?;
     assert_eq!(res.len(), 2);
 
     // Verify the attachments were claimed (upload_claimed_at is now set)
@@ -633,7 +718,12 @@ async fn new_email_media_atts_claims_attachments(pool: Pool<Postgres>) -> Result
     }
 
     // Second call should return empty (attachments already claimed)
-    let res2 = new_email_media_atts(&pool, message_provider_id).await?;
+    let res2 = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap(),
+        message_provider_id,
+    )
+    .await?;
     assert_eq!(
         res2.len(),
         0,
@@ -655,7 +745,12 @@ async fn new_email_document_atts_excludes_preclaimed_attachments(
     // This message has an attachment that was pre-claimed (upload_claimed_at already set)
     let message_provider_id = "claim-test-preclaimed-msg";
 
-    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments since the attachment is already claimed
     assert_eq!(
@@ -677,7 +772,12 @@ async fn new_email_media_atts_excludes_preclaimed_attachments(pool: Pool<Postgre
     // This message has an attachment that was pre-claimed (upload_claimed_at already set)
     let message_provider_id = "claim-test-preclaimed-media-msg";
 
-    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    let res = new_email_media_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap(),
+        message_provider_id,
+    )
+    .await?;
 
     // Should return 0 attachments since the attachment is already claimed
     assert_eq!(

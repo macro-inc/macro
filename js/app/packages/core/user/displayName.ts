@@ -195,3 +195,21 @@ export function useDisplayName(
 
   return [accessor, { refetch, mutate }];
 }
+
+/**
+ * Seeds the display name cache with mock user data.
+ * Useful for debug views and testing.
+ */
+export function seedMockDisplayNames(
+  users: Array<{ id: string; firstName?: string; lastName?: string }>
+) {
+  for (const user of users) {
+    setUserDisplayNames(user.id, {
+      _createdAt: new Date(),
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      loading: false,
+    });
+  }
+}

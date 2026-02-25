@@ -8,14 +8,13 @@ use model::{
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommonChannelMetadata, DeviceType, DocumentMentionMetadata,
-    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata, Notification, NotificationEvent,
-    NotificationEventType, UserNotification, UserUnsubscribe,
+    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata, UserUnsubscribe,
 };
 use utoipa::OpenApi;
 
 use crate::{
     api::{
-        device, health, notification,
+        device, health,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
         user_notification,
     },
@@ -35,8 +34,6 @@ use crate::{
                 /// /health
                 health::health_handler,
 
-                /// /notifications
-                notification::create_notification::handler,
 
                 /// /user_notifications
                 user_notification::list_typed_notifications,
@@ -62,9 +59,7 @@ use crate::{
                         NotificationServiceApiVersion,
                         EmptyResponse,
                         ErrorResponse,
-                        Notification,
                         CreateNotification,
-                        UserNotification,
                         UnsubscribeItemPathParams,
                         UserUnsubscribe,
                         DeviceType,
@@ -72,8 +67,6 @@ use crate::{
                         PushNotificationData,
                         NewEmailMetadata,
 
-                        NotificationEvent,
-                        NotificationEventType,
 
                         // Metadata
                         CommonChannelMetadata,
@@ -86,7 +79,7 @@ use crate::{
                         DocumentMentionMetadata,
 
                         // v2 typed notifications
-                        user_notification::NotifEvent,
+                        model_notifications::NotifEvent,
                         user_notification::ApiUserNotification,
                         user_notification::GetAllUserNotificationsResponse,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,

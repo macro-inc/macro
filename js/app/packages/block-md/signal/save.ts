@@ -12,7 +12,7 @@ import { refetchHistory } from '@queries/history/history';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
-import { createRenameDssEntityMutation } from '../../macro-entity/src/queries/rename';
+import { createRenameDssEntityMutation } from '@macro-entity';
 
 export const useBlockSave = () => {
   const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);

@@ -10,6 +10,15 @@ maybe_env_var! {
     pub struct LocalAwsUrl;
 }
 
+/// Creates an S3 client
+#[cfg(feature = "s3")]
+pub async fn s3_client() -> aws_sdk_s3::Client {
+    let s3_config = aws_sdk_s3::config::Builder::from(&get_macro_aws_config().await)
+        .force_path_style(is_local_aws())
+        .build();
+    aws_sdk_s3::Client::from_conf(s3_config)
+}
+
 /// Creates a aws_config to use.
 /// If you provide `LOCAL_AWS_URL` environment variable we create a local aws
 /// config with test credentials.

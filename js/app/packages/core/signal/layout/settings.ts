@@ -1,4 +1,3 @@
-import { createCallback } from '@solid-primitives/rootless';
 import { createSignal } from 'solid-js';
 
 const DEFAULT_SETTINGS_PANEL_SIZE = 600;
@@ -15,12 +14,3 @@ export const [isSettingsPanelOpen, setIsSettingsPanelOpen] =
 export const [persistedSettingsSizes, setPersistedSettingsSizes] = createSignal<
   [number, number]
 >([1, 0]);
-
-export function useToggleSettingsPanel() {
-  return createCallback((next?: boolean) => {
-    setIsSettingsPanelOpen((prev) => {
-      if (next !== undefined) return next;
-      return !prev;
-    });
-  });
-}

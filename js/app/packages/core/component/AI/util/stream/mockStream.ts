@@ -1,8 +1,7 @@
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import type { MessageStream, StreamItem } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { uuid } from 'short-uuid';
 import { createEffect, createSignal } from 'solid-js';
-import { DEFAULT_MODEL } from '../../constant';
 import { characters } from './splitStream';
 import type { NetworkDelay, Splitter } from './types';
 
@@ -11,23 +10,21 @@ type Response =
   | { type: 'toolCall'; tool: Omit<NamedTool, 'id'> }
   | { type: 'toolResponse'; tool: Omit<NamedTool, 'id'> };
 
+type StreamItem = ReturnType<ChatMessageStream['data']>[number];
+
 // type Message = { type: 'userMessage'; text: string } | Response;
 export const MOCK_ID = 'mock';
 
-const makeFakeRequst = () =>
-  ({
-    chat_id: MOCK_ID,
-    content: 'test',
-    model: DEFAULT_MODEL,
-    type: 'send_chat_message',
-    token: '??',
-    stream_id: MOCK_ID,
-  }) satisfies MessageStream['request'];
+const mock_id = () => ({
+  stream_id: MOCK_ID,
+  entity_id: MOCK_ID,
+  entity_type: 'chat' as const,
+});
 
-function baseStream(items: StreamItem[]): MessageStream {
+function baseStream(items: StreamItem[]): ChatMessageStream {
   const [messages, setMessages] = createSignal<StreamItem[]>([]);
   const [isDone, setIsDone] = createSignal(false);
-  const [isClosed, setIsClosed] = createSignal(false);
+  const [isClosed, _setIsClosed] = createSignal(false);
 
   const handleMessage = (data: StreamItem) => {
     if (isClosed()) return;
@@ -40,29 +37,24 @@ function baseStream(items: StreamItem[]): MessageStream {
     }
   };
 
-  items.forEach((item) => handleMessage(item));
+  items.forEach((item) => {
+    handleMessage(item);
+  });
 
   return {
-    close: () => {
-      setIsClosed(true);
-      setIsDone(true);
-    },
     data: messages,
     isDone: isDone,
-    // TODO
-    isErr: () => false,
-    request: makeFakeRequst(),
-    err: () => undefined,
+    id: mock_id,
   };
 }
 
 export function delayStream(
-  stream: MessageStream,
+  stream: ChatMessageStream,
   delay: NetworkDelay
-): MessageStream {
+): ChatMessageStream {
   const [messages, setMessages] = createSignal<StreamItem[]>([]);
   const [isDone, setIsDone] = createSignal(false);
-  const [isClosed, setIsClosed] = createSignal(false);
+  const [isClosed, _setIsClosed] = createSignal(false);
   let totalDelay = 0;
 
   const handleMessage = (data: StreamItem) => {
@@ -89,60 +81,46 @@ export function delayStream(
   });
 
   return {
-    close: () => {
-      setIsDone(true);
-      setIsClosed(true);
-    },
     data: messages,
     isDone,
-    isErr: stream.isErr,
-    request: stream.request,
-    err: stream.err,
+    id: mock_id,
   };
 }
 
 // stop a stream at chunk n
 export function limitStream(
-  stream: MessageStream,
+  stream: ChatMessageStream,
   itemLimit: number
-): MessageStream {
+): ChatMessageStream {
   const [data, setData] = createSignal<StreamItem[]>(stream.data());
-  const [isErr, setIsErr] = createSignal<boolean>(stream.isErr());
   const [isDone, setIsDone] = createSignal<boolean>(stream.isDone());
 
   createEffect(() => {
     const data = stream.data();
     if (data.length > itemLimit) return;
     setData(data);
-    setIsErr(stream.isErr());
     setIsDone(stream.isDone());
   });
 
   return {
-    close: stream.close,
-    request: stream.request,
     data,
     isDone,
-    isErr,
-    err: () => undefined,
+    id: mock_id,
   };
 }
 
-export function blockDone(stream: MessageStream): MessageStream {
+export function blockDone(stream: ChatMessageStream): ChatMessageStream {
   return {
     isDone: () => false,
-    close: stream.close,
     data: stream.data,
-    isErr: stream.isErr,
-    request: stream.request,
-    err: stream.err,
+    id: mock_id,
   };
 }
 
 export function splitStream(
-  stream: MessageStream,
+  stream: ChatMessageStream,
   split: Splitter
-): MessageStream {
+): ChatMessageStream {
   const [messages, setMessages] = createSignal<StreamItem[]>([]);
 
   createEffect(() => {
@@ -152,12 +130,9 @@ export function splitStream(
   });
 
   return {
-    close: stream.close,
     data: messages,
     isDone: stream.isDone,
-    isErr: stream.isErr,
-    request: stream.request,
-    err: stream.err,
+    id: mock_id,
   };
 }
 
@@ -189,7 +164,7 @@ function makeItems(response: Response[]): StreamItem[] {
 export function createStream(
   assistantResponse: Response[],
   splitter: Splitter = characters(4)
-): MessageStream {
+): ChatMessageStream {
   const items = makeItems(assistantResponse);
   const stream = baseStream(items);
   return splitStream(stream, splitter);

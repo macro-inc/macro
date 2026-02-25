@@ -76,6 +76,9 @@ impl ModelWithMetadataAndProvider for Model {
             Model::Claude45Opus => ModelMetadata {
                 context_window: 200_000,
             },
+            Model::Claude46Opus => ModelMetadata {
+                context_window: 200_000,
+            },
             Model::Claude4Sonnet => ModelMetadata {
                 context_window: 200_000,
             },
@@ -110,6 +113,7 @@ impl ModelWithMetadataAndProvider for Model {
             Model::Claude45Sonnet => Provider::Anthropic,
             Model::Claude45Haiku => Provider::Anthropic,
             Model::Claude45Opus => Provider::Anthropic,
+            Model::Claude46Opus => Provider::Anthropic,
             // XAI models //
         }
     }

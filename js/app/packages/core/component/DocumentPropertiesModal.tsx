@@ -11,35 +11,6 @@ import { Suspense } from 'solid-js';
 
 const DRAWER_ID = 'properties';
 
-export function DocumentPropertiesModal(props: {
-  documentId: string;
-  blockType: BlockName;
-  buttonSize?: 'sm' | 'base';
-}) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
-  const canEdit = useCanEdit();
-
-  return (
-    <>
-      <DeprecatedIconButton
-        icon={TagIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'Properties' }}
-        onClick={drawerControl.toggle}
-      />
-      <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
-        <Suspense fallback={<LoadingFallback />}>
-          <DocumentPropertiesContent
-            blockType={props.blockType}
-            canEdit={canEdit()}
-          />
-        </Suspense>
-      </SplitDrawer>
-    </>
-  );
-}
-
 function DocumentPropertiesContent(props: {
   blockType: BlockName;
   canEdit: boolean;
@@ -53,6 +24,35 @@ function DocumentPropertiesContent(props: {
       entityType={'DOCUMENT' as EntityType}
       documentName={documentName()}
     />
+  );
+}
+
+export function DocumentPropertiesButton(props: {
+  buttonSize?: 'sm' | 'base';
+}) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  return (
+    <DeprecatedIconButton
+      icon={TagIcon}
+      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+      size={props.buttonSize ?? 'base'}
+      tooltip={{ label: 'Properties' }}
+      onClick={drawerControl.toggle}
+    />
+  );
+}
+
+export function DocumentPropertiesDrawer(props: { blockType: BlockName }) {
+  const canEdit = useCanEdit();
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
+      <Suspense fallback={<LoadingFallback />}>
+        <DocumentPropertiesContent
+          blockType={props.blockType}
+          canEdit={canEdit()}
+        />
+      </Suspense>
+    </SplitDrawer>
   );
 }
 

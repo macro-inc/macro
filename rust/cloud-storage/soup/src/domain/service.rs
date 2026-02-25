@@ -6,6 +6,7 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
+use cowlike::CowLike;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
@@ -17,8 +18,7 @@ use frecency::domain::{
     ports::FrecencyQueryService,
 };
 use item_filters::{EntityFilters, ast::EntityFilterAst};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::as_owned::ShallowClone;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
@@ -226,7 +226,7 @@ where
             })
             .await?;
 
-        let entities: Vec<_> = res.ids().map(|f| f.entity.shallow_clone()).collect();
+        let entities: Vec<_> = res.ids().map(|f| f.entity.copied()).collect();
 
         let res = self
             .handle_soup_by_ids(

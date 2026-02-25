@@ -76,7 +76,6 @@ export function test() {
 
   createEffect(() => {
     if (stream.isDone()) console.log('Stream Done');
-    if (stream.isErr()) console.log('Stream Error');
   });
 }
 

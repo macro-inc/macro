@@ -6,8 +6,6 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-macro_db_client = { path = "../macro_db_client" }
-model = { path = "../model" }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

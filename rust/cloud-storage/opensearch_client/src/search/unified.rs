@@ -87,6 +87,8 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            include_labels: args.email_search_args.include_labels,
+            exclude_labels: args.email_search_args.exclude_labels,
         }
     }
 }
@@ -150,6 +152,8 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -244,8 +248,10 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     channel_message_id: a.message_id,
                     thread_id: a.thread_id,
                     sender_id: a.sender_id,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
+                    created_at: DateTime::from_timestamp(a.created_at_seconds, 0)
+                        .unwrap_or_default(),
+                    updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0)
+                        .unwrap_or_default(),
                 })),
                 updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
             },
@@ -294,7 +300,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     bcc: a.bcc,
                     cc: a.cc,
                     labels: a.labels,
-                    sent_at: a.sent_at_seconds,
+                    sent_at: a
+                        .sent_at_seconds
+                        .and_then(|ts| DateTime::from_timestamp(ts, 0)),
                     sender: a.sender,
                     recipients: a.recipients,
                 })),
@@ -407,14 +415,13 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    // Build highlight
     let highlight = Highlight::new().require_field_match(true).field(
         "content",
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(500),
+            .number_of_fragments(0),
     );
 
     search_request_builder.highlight(highlight);

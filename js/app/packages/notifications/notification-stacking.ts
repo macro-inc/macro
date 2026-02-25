@@ -1,16 +1,10 @@
-import {
-  getMetadata,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  type TypedNotification,
-  tryToTypedNotification,
-} from './notification-metadata';
+import { compareDateDesc } from '@core/util/date';
 import type { UnifiedNotification } from './types';
+import type { NotificationType } from '@core/types';
 
 export interface NotificationStack {
-  type: TypedNotification['notificationEventType'];
-  notifications: TypedNotification[];
+  type: NotificationType;
+  notifications: UnifiedNotification[];
 }
 
 /**
@@ -36,11 +30,8 @@ export function getAllNotificationsFromGroup(
  */
 export function getThreadId(group: NotificationStack): string {
   const notification = group.notifications[0];
-  if (notification.notificationEventType === 'channel_message_reply') {
-    const metadata = getMetadata(
-      notification as TypedNotification<'channel_message_reply'>
-    );
-    return metadata?.threadId ?? '';
+  if (notification.notification_metadata.tag === 'channel_message_reply') {
+    return notification.notification_metadata.content.threadId ?? '';
   }
   return '';
 }
@@ -51,32 +42,48 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  // Do no stack and document_mention type notifications
+  const filteredNotifications = notifications.filter(
+    (n) => n.notification_metadata.tag !== 'document_mention'
+  );
+
+  const isChannelMention = (n: UnifiedNotification) =>
+    n.notification_metadata.tag === 'channel_mention';
+  const isChannelMessageSend = (n: UnifiedNotification) =>
+    n.notification_metadata.tag === 'channel_message_send';
+  const isChannelMessageReply = (n: UnifiedNotification) =>
+    n.notification_metadata.tag === 'channel_message_reply';
+
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
-    notifications
+    filteredNotifications
       .filter(isChannelMention)
-      .map((n) => getMetadata(n).messageId)
+      .flatMap((n) =>
+        n.notification_metadata.tag === 'channel_mention'
+          ? [n.notification_metadata.content.messageId]
+          : []
+      )
       .filter(Boolean)
   );
 
-  const isShadowed = (
-    n:
-      | TypedNotification<'channel_message_send'>
-      | TypedNotification<'channel_message_reply'>
-  ) => {
-    const metadata = getMetadata(n);
-    return metadata.messageId && mentionedMsgIds.has(metadata.messageId);
+  const isShadowed = (n: UnifiedNotification) => {
+    const tag = n.notification_metadata.tag;
+    if (tag === 'channel_message_send' || tag === 'channel_message_reply') {
+      const messageId = n.notification_metadata.content.messageId;
+      return messageId && mentionedMsgIds.has(messageId);
+    }
+    return false;
   };
 
   // Partition by type
-  const mentions = notifications.filter(isChannelMention);
-  const newMsgs = notifications
+  const mentions = filteredNotifications.filter(isChannelMention);
+  const newMsgs = filteredNotifications
     .filter(isChannelMessageSend)
     .filter((n) => !isShadowed(n));
-  const replies = notifications
+  const replies = filteredNotifications
     .filter(isChannelMessageReply)
     .filter((n) => !isShadowed(n));
-  const others = notifications.filter(
+  const others = filteredNotifications.filter(
     (n) =>
       !isChannelMention(n) &&
       !isChannelMessageSend(n) &&
@@ -88,24 +95,20 @@ export function stackNotifications(
     ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
-    ...others.flatMap((n) => {
-      const typed = tryToTypedNotification(n);
-      if (!typed) return [];
-      return makeStack(typed.notificationEventType, [typed]);
-    }),
+    ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
 
-  // Sort: mentions first, then by recency
-  return groups.sort((a, b) => {
-    if ((a.type === 'channel_mention') !== (b.type === 'channel_mention')) {
-      return a.type === 'channel_mention' ? -1 : 1;
-    }
-    return b.notifications[0].createdAt - a.notifications[0].createdAt;
-  });
+  // Sort by newest notification in each stack
+  return groups.sort((a, b) =>
+    compareDateDesc(
+      a.notifications[0].created_at,
+      b.notifications[0].created_at
+    )
+  );
 }
 
-function sortByRecency<T extends { createdAt: number }>(items: T[]): T[] {
-  return [...items].sort((a, b) => b.createdAt - a.createdAt);
+function sortByRecency(items: UnifiedNotification[]): UnifiedNotification[] {
+  return [...items].sort((a, b) => compareDateDesc(a.created_at, b.created_at));
 }
 
 const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =
@@ -125,17 +128,20 @@ const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =
   });
 
 function makeStack(
-  type: TypedNotification['notificationEventType'],
-  notifications: TypedNotification[]
+  type: NotificationType,
+  notifications: UnifiedNotification[]
 ): NotificationStack[] {
   if (notifications.length === 0) return [];
   return [{ type, notifications: sortByRecency(notifications) }];
 }
 
-function makeReplyStacks(
-  replies: TypedNotification<'channel_message_reply'>[]
-): NotificationStack[] {
-  const byThread = groupBy(replies, (r) => getMetadata(r)?.threadId ?? '');
+function makeReplyStacks(replies: UnifiedNotification[]): NotificationStack[] {
+  const byThread = groupBy(replies, (r) => {
+    if (r.notification_metadata.tag === 'channel_message_reply') {
+      return r.notification_metadata.content.threadId ?? '';
+    }
+    return '';
+  });
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
     .map(([, group]) => ({

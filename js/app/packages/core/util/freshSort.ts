@@ -5,8 +5,13 @@
 import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
+import { differenceInMilliseconds } from 'date-fns';
+import type { DateValue } from './date';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
-import type { LastInteractionTimestamp } from '@core/user';
+import {
+  type ParsedDuration,
+  parsedDurationToMilliseconds,
+} from './dateSearch/dateParser';
 
 type BoostFn<T> = (item: T) => number;
 
@@ -27,8 +32,8 @@ export interface FreshSortConfig<T> {
   brevityWeight?: number;
   /** Time decay factor. Higher values make older items decay faster. Default: 0.5 */
   timeDecayFactor?: number;
-  /** Maximum age in milliseconds to consider for scoring. Items older than this get minimum time score. Default: 30 days */
-  maxAgeMs?: number;
+  /** Maximum age to consider for scoring. Items older than this get minimum time score. Default: 30 days */
+  maxAge?: ParsedDuration;
   /** Minimum fuzzy score threshold (0-1). Items below this are heavily penalized. Default: 0.1 */
   minFuzzyThreshold?: number;
   /** Use viewedAt instead of updatedAt for time scoring. Default: false */
@@ -44,9 +49,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: number | string;
-  viewedAt?: number | string;
-  lastInteraction?: LastInteractionTimestamp | string;
+  updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
+  lastInteraction?: DateValue | null;
 }
 
 export interface FreshSortResult<T> {
@@ -63,7 +68,7 @@ const DEFAULT_CONFIG = {
   timeWeight: 0.3,
   brevityWeight: 0.0,
   timeDecayFactor: 0.5,
-  maxAgeMs: 30 * 24 * 60 * 60 * 1000, // 30 days
+  maxAge: { value: 30, unit: 'd' },
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
@@ -74,50 +79,30 @@ const DEFAULT_CONFIG = {
 function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
-): number {
-  let timestamp: number | string | undefined;
-
+): DateValue | null {
   if (useViewedAt) {
-    timestamp = item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
-  } else {
-    timestamp = item.updatedAt ?? item.lastInteraction;
+    return item.viewedAt ?? item.updatedAt ?? item.lastInteraction ?? null;
   }
 
-  if (timestamp === undefined || timestamp === null) return 0;
-
-  if (typeof timestamp === 'number') {
-    return timestamp;
-  }
-
-  if (typeof timestamp === 'string') {
-    const isoDate = new Date(timestamp);
-    const isoDateTime = isoDate.getTime();
-    if (!isNaN(isoDateTime)) {
-      return isoDateTime;
-    }
-
-    const parsed = parseInt(timestamp, 10);
-    if (!isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return 0;
+  return item.updatedAt ?? item.lastInteraction ?? null;
 }
 
 function calculateTimeScore(
-  timestamp: number,
+  timestamp: DateValue | null,
   config: FreshSortConfigWithDefaults
 ): number {
-  const now = Date.now();
-  const itemTime = timestamp;
-  const age = Math.max(0, now - itemTime);
-  if (age >= config.maxAgeMs) {
+  if (!timestamp) return 0;
+
+  const now = new Date();
+  const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
+  const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
+
+  if (ageMs >= maxAgeMs) {
     return 0;
   }
 
   // exponential decay: e^(-decay * normalizedAge)
-  const normalizedAge = age / config.maxAgeMs;
+  const normalizedAge = ageMs / maxAgeMs;
   return Math.exp(-config.timeDecayFactor * normalizedAge);
 }
 

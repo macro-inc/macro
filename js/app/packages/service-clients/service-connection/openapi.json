@@ -343,6 +343,82 @@
           }
         }
       },
+      "StreamEvent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StreamId",
+                "description": "A new stream was created."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["created"]
+                  }
+                }
+              }
+            ],
+            "description": "A new stream was created."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StreamId",
+                "description": "A stream was closed."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["closed"]
+                  }
+                }
+              }
+            ],
+            "description": "A stream was closed."
+          }
+        ],
+        "description": "Events published through the notification channel."
+      },
+      "StreamEvents": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity"
+          }
+        ],
+        "description": "subscribe to stream events from entity"
+      },
+      "StreamId": {
+        "type": "object",
+        "required": ["entity_type", "entity_id", "stream_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "stream_id": {
+            "type": "string"
+          }
+        }
+      },
+      "StreamItem": {
+        "type": "object",
+        "required": ["id", "payload"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/StreamId"
+          },
+          "payload": {}
+        }
+      },
       "StringIDResponse": {
         "type": "object",
         "required": ["id"],
@@ -366,6 +442,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["track_entity"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StreamEvents"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["stream_events"]
                   }
                 }
               }

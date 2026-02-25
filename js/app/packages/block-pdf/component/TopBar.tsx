@@ -20,17 +20,16 @@ import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
+import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
@@ -51,7 +50,6 @@ export function TopBar() {
   const hasModificationData = useHasModificationData();
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
-  const userPermissions = useGetPermissions();
 
   const fileType = blockMetadataSignal()?.fileType;
 
@@ -191,30 +189,17 @@ export function TopBar() {
         </Show>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <Show when={ENABLE_REFERENCES_MODAL}>
-            <ReferencesModal
-              documentId={documentId}
-              documentName={fileName()}
-              buttonSize="sm"
-            />
-          </Show>
-          <DocumentPropertiesModal
+        <Show when={ENABLE_REFERENCES_MODAL}>
+          <ReferencesButton
             documentId={documentId}
-            blockType="pdf"
+            documentName={fileName()}
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={documentId}
-              name={fileName()}
-              userPermissions={userPermissions()}
-              copyLink={copyLink}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+        </Show>
+        <DocumentPropertiesButton buttonSize="sm" />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareTrigger copyLink={copyLink} />
         </div>
       </SplitToolbarRight>
     </>

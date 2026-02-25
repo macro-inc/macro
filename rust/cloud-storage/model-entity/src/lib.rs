@@ -3,6 +3,7 @@
 //! Please avoid writing real business logic in this crate unless it is applicable specifically to only the
 //! types that exist inside this crate.
 
+use cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 pub use strum::ParseError;
@@ -11,8 +12,6 @@ use utoipa::ToSchema;
 
 #[cfg(test)]
 mod tests;
-
-pub mod as_owned;
 
 /// The type of an entity in Macro
 #[derive(
@@ -90,90 +89,20 @@ pub struct Entity<'a> {
     pub entity_id: Cow<'a, str>,
 }
 
-impl<'a> Entity<'a> {
-    /// provide a connection_id string slice to upgrade this type into a [ConnectionEntity]
-    pub fn with_connection_str(self, connection_id: &'a str) -> EntityConnection<'a> {
-        EntityConnection {
-            extra: self,
-            connection_id: Cow::Borrowed(connection_id),
+impl<'a> CowLike<'a> for Entity<'a> {
+    type Owned<'b> = Entity<'b>;
+
+    fn into_owned(self) -> Entity<'static> {
+        Entity {
+            entity_type: self.entity_type,
+            entity_id: Cow::Owned(self.entity_id.into_owned()),
         }
     }
-    /// provide a connection_id string to upgrade this type into a [ConnectionEntity]
-    pub fn with_connection_string(self, connection_id: String) -> EntityConnection<'a> {
-        EntityConnection {
-            extra: self,
-            connection_id: Cow::Owned(connection_id),
+
+    fn copied(&'a self) -> Self {
+        Entity {
+            entity_type: self.entity_type,
+            entity_id: Cow::Borrowed(&self.entity_id),
         }
     }
-}
-
-/// Uniquely describes a connection to an [Entity]
-#[non_exhaustive]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct EntityConnection<'a> {
-    /// the [Entity] we are connected to with this connection
-    #[serde(flatten)]
-    pub extra: Entity<'a>,
-    /// the id of this connection
-    pub connection_id: Cow<'a, str>,
-}
-
-impl<'a> EntityConnection<'a> {
-    /// provide a user id string slice to upgrade this type into a [NewConnectionEntity]
-    pub fn with_user_str(self, user_id: &'a str) -> UserEntityConnection<'a> {
-        UserEntityConnection {
-            user_id: Cow::Borrowed(user_id),
-            extra: self,
-        }
-    }
-    /// provides a user id string to upgrade this type into a [NewConnectionEntity]
-    pub fn with_user_string(self, user_id: String) -> UserEntityConnection<'a> {
-        UserEntityConnection {
-            user_id: Cow::Owned(user_id),
-            extra: self,
-        }
-    }
-}
-
-/// Uniquely describes a user and their connection id to an [Entity]
-#[non_exhaustive]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct UserEntityConnection<'a> {
-    /// The user id of the connection we are describing
-    pub user_id: Cow<'a, str>,
-    /// the [ConnectionEntity]
-    #[serde(flatten)]
-    pub extra: EntityConnection<'a>,
-}
-
-/// The type of action that can occur on an [Entity]
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    ToSchema,
-    Clone,
-    Copy,
-    Display,
-    IntoStaticStr,
-    EnumString,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum TrackAction {
-    /// the [Entity] was opened
-    Open,
-    /// the [Entity] was pinged
-    Ping,
-    /// the [Entity] was closed
-    Close,
-}
-
-/// The data that describes an action a user has taken on a document
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrackingData<'a> {
-    /// the [UserEntityConnection] where the event occurred
-    pub entity: UserEntityConnection<'a>,
-    /// the event that occurred
-    pub action: TrackAction,
 }

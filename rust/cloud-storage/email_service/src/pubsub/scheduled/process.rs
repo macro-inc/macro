@@ -1,7 +1,8 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
-    cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
+    cleanup_draft_attachments, fetch_and_attach_draft_attachments,
+    fetch_and_attach_forwarded_attachments, generate_email_threading_headers,
 };
 use anyhow::Context;
 use chrono::Utc;
@@ -26,25 +27,27 @@ pub async fn process_message(
             error = ?e,
             message_id = %data.message_id,
             link_id = %data.link_id,
-            "Failed to process scheduled message - clearing processing flag"
+            "Failed to process scheduled message"
         );
-        if let Err(clear_err) =
-            email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
-                &ctx.db,
-                data.link_id,
-                data.message_id,
-            )
-            .await
-        {
-            tracing::error!(
-                error = ?clear_err,
-                message_id = %data.message_id,
-                link_id = %data.link_id,
-                "Failed to clear processing flag"
-            );
-        }
-        return result;
     }
+
+    if let Err(clear_err) =
+        email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
+            &ctx.db,
+            data.link_id,
+            data.message_id,
+        )
+        .await
+    {
+        tracing::error!(
+            error = ?clear_err,
+            message_id = %data.message_id,
+            link_id = %data.link_id,
+            "Failed to clear processing flag"
+        );
+    }
+
+    result?;
 
     cleanup_message(&ctx.sqs_worker, message).await?;
 
@@ -127,11 +130,21 @@ async fn process_scheduled_message_inner(
         generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, data.link_id)
             .await;
 
-    // Include attachments for message
+    // Include draft attachments (user-uploaded files from S3)
     let db_attachments = fetch_and_attach_draft_attachments(
         &ctx.db,
         &ctx.s3_client,
         ctx.attachment_bucket.as_str(),
+        &link,
+        &mut message_to_send,
+    )
+    .await?;
+
+    // Include forwarded attachments (fetched from Gmail at send time)
+    fetch_and_attach_forwarded_attachments(
+        &ctx.db,
+        &ctx.gmail_client,
+        &gmail_access_token,
         &link,
         &mut message_to_send,
     )

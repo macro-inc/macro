@@ -109,11 +109,15 @@ export const SearchToolResponse = z.object({
           metadata: z
             .union([
               z.object({
-                created_at: z.number().int(),
-                deleted_at: z.union([z.number().int(), z.null()]).optional(),
+                created_at: z.string().datetime({ offset: true }),
+                deleted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
                 project_id: z.union([z.string(), z.null()]).optional(),
-                updated_at: z.number().int(),
-                viewed_at: z.union([z.number().int(), z.null()]).optional(),
+                updated_at: z.string().datetime({ offset: true }),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
               }),
               z.null(),
             ])
@@ -147,11 +151,15 @@ export const SearchToolResponse = z.object({
           metadata: z
             .union([
               z.object({
-                created_at: z.number().int(),
-                deleted_at: z.union([z.number().int(), z.null()]).optional(),
+                created_at: z.string().datetime({ offset: true }),
+                deleted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
                 project_id: z.union([z.string(), z.null()]).optional(),
-                updated_at: z.number().int(),
-                viewed_at: z.union([z.number().int(), z.null()]).optional(),
+                updated_at: z.string().datetime({ offset: true }),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
               }),
               z.null(),
             ])
@@ -162,7 +170,7 @@ export const SearchToolResponse = z.object({
           user_id: z.string(),
         }),
         z.object({
-          created_at: z.number().int(),
+          created_at: z.string().datetime({ offset: true }),
           email_message_search_results: z.array(
             z.object({
               bcc: z.array(z.string()),
@@ -182,25 +190,41 @@ export const SearchToolResponse = z.object({
               recipients: z.array(z.string()),
               score: z.union([z.number(), z.null()]).optional(),
               sender: z.string(),
-              sent_at: z.union([z.number().int(), z.null()]).optional(),
+              sent_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
             })
           ),
           id: z.string().uuid(),
+          inbox_visible: z.boolean(),
+          is_draft: z.boolean(),
+          is_important: z.boolean(),
+          is_read: z.boolean(),
           name: z.union([z.string(), z.null()]).optional(),
           owner_id: z.string(),
+          participants: z.array(
+            z.object({
+              email: z.string(),
+              name: z.union([z.string(), z.null()]).optional(),
+            })
+          ),
           snippet: z.union([z.string(), z.null()]).optional(),
           subject: z.union([z.string(), z.null()]).optional(),
           thread_id: z.string().uuid(),
           type: z.literal('email'),
-          updated_at: z.number().int(),
+          updated_at: z.string().datetime({ offset: true }),
           user_id: z.string(),
-          viewed_at: z.union([z.number().int(), z.null()]).optional(),
+          viewed_at: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
         }),
         z.object({
           channel_id: z.string().uuid(),
           channel_message_search_results: z.array(
             z.object({
-              created_at: z.union([z.number().int(), z.null()]).optional(),
+              created_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
               highlight: z.object({
                 bcc: z.array(z.string()).optional(),
                 cc: z.array(z.string()).optional(),
@@ -214,7 +238,9 @@ export const SearchToolResponse = z.object({
               score: z.union([z.number(), z.null()]).optional(),
               sender_id: z.union([z.string(), z.null()]).optional(),
               thread_id: z.union([z.string().uuid(), z.null()]).optional(),
-              updated_at: z.union([z.number().int(), z.null()]).optional(),
+              updated_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
             })
           ),
           channel_type: z.string(),
@@ -222,10 +248,14 @@ export const SearchToolResponse = z.object({
           metadata: z
             .union([
               z.object({
-                created_at: z.number().int(),
-                interacted_at: z.union([z.number().int(), z.null()]).optional(),
-                updated_at: z.number().int(),
-                viewed_at: z.union([z.number().int(), z.null()]).optional(),
+                created_at: z.string().datetime({ offset: true }),
+                interacted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                updated_at: z.string().datetime({ offset: true }),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
               }),
               z.null(),
             ])
@@ -234,16 +264,20 @@ export const SearchToolResponse = z.object({
           type: z.literal('channel'),
         }),
         z.object({
-          created_at: z.number().int(),
+          created_at: z.string().datetime({ offset: true }),
           id: z.string().uuid(),
           metadata: z
             .union([
               z.object({
-                created_at: z.number().int(),
-                deleted_at: z.union([z.number().int(), z.null()]).optional(),
+                created_at: z.string().datetime({ offset: true }),
+                deleted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
                 parent_project_id: z.union([z.string(), z.null()]).optional(),
-                updated_at: z.number().int(),
-                viewed_at: z.union([z.number().int(), z.null()]).optional(),
+                updated_at: z.string().datetime({ offset: true }),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
               }),
               z.null(),
             ])
@@ -265,7 +299,7 @@ export const SearchToolResponse = z.object({
             })
           ),
           type: z.literal('project'),
-          updated_at: z.number().int(),
+          updated_at: z.string().datetime({ offset: true }),
         }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(

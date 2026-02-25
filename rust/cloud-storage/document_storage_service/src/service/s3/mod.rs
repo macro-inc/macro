@@ -1,3 +1,7 @@
+// S3Client is replaced by MockS3Client in test builds via automock,
+// so the real struct and all helper functions appear unused during `cargo test`.
+#![cfg_attr(test, allow(dead_code))]
+
 mod copy_document;
 mod delete;
 mod exists;

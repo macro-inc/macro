@@ -184,6 +184,13 @@
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
+          "channel_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
@@ -194,6 +201,10 @@
               "type": "string"
             },
             "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by channel notification state."
           },
           "org_id": {
             "type": ["integer", "null"],
@@ -222,20 +233,20 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "interacted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -368,8 +379,8 @@
         "required": ["highlight"],
         "properties": {
           "created_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
           "highlight": {
@@ -396,8 +407,8 @@
             "description": "The channel message thread id"
           },
           "updated_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
         }
@@ -416,6 +427,10 @@
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by chat notification state."
           },
           "owners": {
             "type": "array",
@@ -471,23 +486,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -640,6 +655,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by document notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -653,6 +672,10 @@
               "type": "string"
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "task_filters": {
+            "$ref": "#/components/schemas/TaskFilters",
+            "description": "Task-specific filters that only apply to task subtype documents."
           }
         }
       },
@@ -662,23 +685,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -871,9 +894,34 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          },
+          "exclude_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "include_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by email notification state."
           },
           "recipients": {
             "type": "array",
@@ -888,6 +936,19 @@
               "type": "string"
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          }
+        }
+      },
+      "EmailSearchParticipant": {
+        "type": "object",
+        "description": "A participant (sender) in an email thread",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -961,7 +1022,8 @@
           "owner_id",
           "thread_id",
           "user_id",
-          "email_message_search_results"
+          "email_message_search_results",
+          "participants"
         ],
         "properties": {
           "email_message_search_results": {
@@ -982,6 +1044,13 @@
           },
           "owner_id": {
             "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchParticipant"
+            },
+            "description": "The participants (senders) in this email thread"
           },
           "subject": {
             "type": ["string", "null"],
@@ -1005,22 +1074,41 @@
           },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
+            "required": [
+              "created_at",
+              "updated_at",
+              "is_read",
+              "inbox_visible",
+              "is_draft",
+              "is_important"
+            ],
             "properties": {
               "created_at": {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time"
+              },
+              "inbox_visible": {
+                "type": "boolean"
+              },
+              "is_draft": {
+                "type": "boolean"
+              },
+              "is_important": {
+                "type": "boolean"
+              },
+              "is_read": {
+                "type": "boolean"
               },
               "snippet": {
                 "type": ["string", "null"]
               },
               "updated_at": {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time"
               },
               "viewed_at": {
-                "type": ["integer", "null"],
-                "format": "int64"
+                "type": ["string", "null"],
+                "format": "date-time"
               }
             }
           }
@@ -1091,8 +1179,8 @@
             "description": "The sender.\nIf the match is on the subject, the sender is the latest sender on the thread."
           },
           "sent_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the email message was sent\nThis is only present if the search result is on the message content"
           }
         }
@@ -1151,6 +1239,17 @@
           "tgz",
           "gz",
           "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
           "xls",
           "ppt",
           "pptx",
@@ -1161,6 +1260,20 @@
         "type": "string",
         "enum": ["exact", "partial", "regexp", "query"]
       },
+      "NotificationFilters": {
+        "type": "object",
+        "description": "Notification-level filters that apply to an entity type.",
+        "properties": {
+          "done": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+          },
+          "seen": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          }
+        }
+      },
       "ProjectFilters": {
         "type": "object",
         "description": "The project filters used to filter down what projects you search over.",
@@ -1168,6 +1281,10 @@
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by project notification state."
           },
           "owners": {
             "type": "array",
@@ -1191,23 +1308,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "parent_project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -1223,8 +1340,8 @@
         ],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "owner_id": {
             "type": "string"
@@ -1237,8 +1354,8 @@
             "type": "string"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -1303,8 +1420,8 @@
         ],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -1324,8 +1441,8 @@
             }
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -1453,8 +1570,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was created"
@@ -1490,15 +1608,16 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was last updated"
           }
         }
       },
-      "SimpleChannelSearchReponseBaseItem_TimestampSeconds": {
+      "SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "channel_id",
@@ -1522,8 +1641,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was created"
@@ -1559,8 +1679,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was last updated"
@@ -1628,8 +1749,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the chat was last updated"
@@ -1640,7 +1762,7 @@
           }
         }
       },
-      "SimpleChatSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleChatSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "chat_id",
@@ -1675,8 +1797,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the chat was last updated"
@@ -1743,15 +1866,16 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the document was last updated"
           }
         }
       },
-      "SimpleDocumentSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "document_id",
@@ -1794,8 +1918,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the document was last updated"
@@ -1881,8 +2006,9 @@
                 "type": "null"
               },
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was sent"
@@ -1898,8 +2024,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was last updated"
@@ -1910,7 +2037,7 @@
           }
         }
       },
-      "SimpleEmailSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "thread_id",
@@ -1976,8 +2103,9 @@
                 "type": "null"
               },
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was sent"
@@ -1993,8 +2121,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was last updated"
@@ -2032,8 +2161,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was created"
@@ -2053,8 +2183,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was last updated"
@@ -2065,7 +2196,7 @@
           }
         }
       },
-      "SimpleProjectSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "project_id",
@@ -2079,8 +2210,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was created"
@@ -2100,8 +2232,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was last updated"
@@ -2119,7 +2252,7 @@
           "results": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SimpleUnifiedSearchResponseBaseItem_TimestampSeconds"
+              "$ref": "#/components/schemas/SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp"
             }
           }
         }
@@ -2129,7 +2262,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2146,7 +2279,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2163,7 +2296,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2180,7 +2313,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2197,7 +2330,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2213,12 +2346,12 @@
           }
         ]
       },
-      "SimpleUnifiedSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp": {
         "oneOf": [
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2235,7 +2368,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2252,7 +2385,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2269,7 +2402,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2286,7 +2419,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2301,6 +2434,16 @@
             ]
           }
         ]
+      },
+      "TaskFilters": {
+        "type": "object",
+        "description": "Task-only filters nested under document filters.",
+        "properties": {
+          "include_cbm_atm_nc": {
+            "type": ["boolean", "null"],
+            "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
       },
       "UnifiedSearchFilters": {
         "type": "object",

@@ -25,7 +25,7 @@ type MenuItemProps = {
 };
 
 function MenuItem(props: MenuItemProps) {
-  const selectedColor = getIconConfig(props.blockName ?? 'pdf').foreground;
+  const selectedColor = getIconConfig(props.blockName).foreground;
 
   return (
     <DropdownMenu.Item
@@ -53,7 +53,7 @@ function MenuContent(props: { projectId: string }) {
   }) => {
     const { blockName, createFn, loading } = spec;
 
-    const shouldInsert = pressedKeys().has('opt');
+    const shouldInsert = pressedKeys().has('shift');
 
     const tryCreate = async () => {
       try {

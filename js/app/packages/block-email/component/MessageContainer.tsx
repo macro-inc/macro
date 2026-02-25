@@ -13,7 +13,7 @@ import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type {
@@ -134,12 +134,14 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
+  const { openWithSplit } = useSplitLayout();
   const draftAttachments = createMemo(() => {
     return props.message.attachments_draft ?? [];
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const entityQueryClient = useQueryClient();
+  const forwardedAttachments = createMemo(() => {
+    return props.message.attachments_forwarded ?? [];
+  });
 
   const onClickAttachment = async (
     attachment: Attachment,
@@ -177,15 +179,13 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
-    });
+    refetchSoupEntity(document_id, 'document');
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    replaceOrInsertSplit({
-      type: blockName,
-      id: document_id,
-    })?.activate?.();
+    openWithSplit(
+      { type: blockName, id: document_id },
+      { preferNewSplit: true }
+    );
   };
 
   const handleExpand = () => {
@@ -209,7 +209,7 @@ export function MessageContainer(props: MessageContainerProps) {
     >
       {/* Expanded message view */}
       <div class="shrink-0 flex justify-center w-full">
-        <div class="macro-message-width w-full">
+        <div class="macro-message-width macro-message-padding w-full">
           <Message
             id={props.message.db_id ?? undefined}
             focused={props.isFocused}
@@ -293,7 +293,12 @@ export function MessageContainer(props: MessageContainerProps) {
             </Show>
 
             {/* Draft attachments. Needed to display attachments of sent messages before they actually get sent (undo window). */}
-            <Show when={draftAttachments().length > 0}>
+            <Show
+              when={
+                draftAttachments().length > 0 ||
+                forwardedAttachments().length > 0
+              }
+            >
               <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
                 <For each={draftAttachments()}>
                   {(attachment) => (
@@ -301,6 +306,16 @@ export function MessageContainer(props: MessageContainerProps) {
                       attachment={{
                         fileName: attachment.file_name,
                         mimeType: attachment.content_type,
+                      }}
+                    />
+                  )}
+                </For>
+                <For each={forwardedAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.filename ?? '',
+                        mimeType: attachment.mime_type ?? undefined,
                       }}
                     />
                   )}

@@ -21,7 +21,7 @@ pub(crate) mod user_notification;
 
 pub(crate) mod swagger;
 
-pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIngress>(
+pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> anyhow::Result<()> {
@@ -58,7 +58,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIng
         .context("error starting service")
 }
 
-fn api_router<S: ::notification::domain::service::NotificationIngress>(
+fn api_router<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> Router<ApiContext> {

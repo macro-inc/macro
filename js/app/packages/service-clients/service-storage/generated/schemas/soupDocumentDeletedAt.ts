@@ -8,4 +8,4 @@
 /**
  * The time the document was deleted
  */
-export type SoupDocumentDeletedAt = number | null;
+export type SoupDocumentDeletedAt = string | null;

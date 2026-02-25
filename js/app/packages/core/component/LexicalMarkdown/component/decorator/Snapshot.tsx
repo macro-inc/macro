@@ -87,7 +87,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       props.blockName,
       props.documentId,
       {},
-      openInNewSplitForMention(e?.altKey, e != null)
+      openInNewSplitForMention(e?.shiftKey, e != null)
     );
   });
 
@@ -186,12 +186,12 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       }
       content={
         <PopupPreview
-          item={item}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
+            name: props.documentName,
             type: verifyBlockName(props.blockName),
             params: {},
             isOpenable: currentBlockId !== props.documentId,

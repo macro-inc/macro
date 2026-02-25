@@ -1,4 +1,4 @@
-import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
+import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -6,15 +6,26 @@ import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
-import type { ItemEntity, PreviewItem } from './types';
+import type { ItemEntity, PreviewItem, AccessiblePreviewItem } from './types';
 import { queryReadyGate } from '@queries/gate';
 
+const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
+
+function itemPreviewQueryOptions(item: ItemEntity) {
+  return {
+    queryKey: previewKeys.item(item.id).queryKey,
+    queryFn: () => previewDataLoader.load(item),
+    staleTime: PREVIEW_STALE_TIME,
+  };
+}
+
+export async function getItemPreview(item: ItemEntity): Promise<PreviewItem> {
+  const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
+  return defaultNameTransform(preview);
+}
+
 export function useItemPreview(item: Accessor<ItemEntity>) {
-  const previewQuery = useQuery(() => ({
-    queryKey: previewKeys.item(item().id).queryKey,
-    queryFn: () => previewDataLoader.load(item()),
-    staleTime: 60 * 1000 * 60 * 24, // 24 hours
-  }));
+  const previewQuery = useQuery(() => itemPreviewQueryOptions(item()));
 
   const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();
@@ -23,7 +34,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       queryKey: previewKeys.item(item().id)._ctx.channelMessage(messageId!)
         .queryKey,
       queryFn: () => fetchMessageContext(messageId!),
-      staleTime: 60 * 1000 * 60 * 24, // 24 hours
+      staleTime: PREVIEW_STALE_TIME,
       enabled: !!messageId && previewQuery.isSuccess,
     };
   });
@@ -65,10 +76,54 @@ export function invalidatePreview(itemId?: string) {
   });
 }
 
+function getPreviewData(itemId: string): PreviewItem | undefined {
+  return queryClient.getQueryData<PreviewItem>(
+    previewKeys.item(itemId).queryKey
+  );
+}
+
 /** Directly update preview data in the cache without refetching */
-export function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
+function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   return queryClient.setQueryData<PreviewItem>(
     previewKeys.item(itemId).queryKey,
     updater
   );
+}
+
+/** Sets the preview name in the cache. If the item is not in the cache,
+ * we will optimistically update the name and prefetch the item. */
+export function setPreviewName({
+  itemId,
+  name,
+  itemType,
+}: {
+  itemId: string;
+  name: string;
+  itemType?: ItemType;
+}) {
+  const prev = getPreviewData(itemId);
+  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, name }));
+
+  if (!itemType) {
+    console.warn('no preview item type provided for cache miss, using default');
+  }
+
+  let defaultPreviewItem: AccessiblePreviewItem = {
+    id: itemId,
+    name,
+    loading: false,
+    access: 'access',
+    type: itemType ?? DEFAULT_ITEM_TYPE,
+  };
+
+  // if the item isn't in the cache, we can optimistically create a new item
+  const res = setPreviewData(itemId, (_prev) => defaultPreviewItem);
+
+  // invalidate the item so that we can refetch on next render
+  // note that we cannot directly call the fetch here because the item name is not necessarily updated on the backend
+  queryClient.invalidateQueries({
+    queryKey: previewKeys.item(itemId).queryKey,
+  });
+
+  return res;
 }

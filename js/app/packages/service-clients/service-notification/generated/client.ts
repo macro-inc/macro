@@ -8,14 +8,12 @@ import type {
   ApiUserNotification,
   BulkGetByEventItemIdsRequest,
   BulkGetTypedNotificationsByEventItemIdsParams,
-  CreateNotification,
   DeviceRequest,
   EmptyResponse,
   ErrorResponse,
   GetAllUserNotificationsResponse,
   GetTypedNotificationsByEventItemIdParams,
   ListTypedNotificationsParams,
-  Notification,
   NotificationBulkRequest,
   UserUnsubscribe,
 } from './schemas';
@@ -180,47 +178,6 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
-};
-
-/**
- * @summary Creates a notification.
-Will generate an id for the notification.
- */
-export type createNotificationResponse200 = {
-  data: Notification;
-  status: 200;
-};
-
-export type createNotificationResponseSuccess =
-  createNotificationResponse200 & {
-    headers: Headers;
-  };
-
-export type createNotificationResponse = createNotificationResponseSuccess;
-
-export const getCreateNotificationUrl = () => {
-  return `/notifications`;
-};
-
-export const createNotification = async (
-  createNotification: CreateNotification,
-  options?: RequestInit
-): Promise<createNotificationResponse> => {
-  const res = await fetch(getCreateNotificationUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createNotification),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createNotificationResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createNotificationResponse;
 };
 
 /**

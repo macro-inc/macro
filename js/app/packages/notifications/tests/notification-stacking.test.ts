@@ -1,4 +1,4 @@
-import type { NotificationEventType } from '@service-notification/generated/schemas';
+import type { NotifEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,
@@ -8,30 +8,26 @@ import {
 } from '../notification-stacking';
 import type { UnifiedNotification } from '../types';
 
-// Helper to create a base notification
-function createNotification(
+// Helper to create a base notification with proper typing
+function createBaseNotification(
   id: string,
-  type: NotificationEventType,
   createdAt: number,
-  metadata: Record<string, unknown> = {}
+  notificationMetadata: NotifEvent
 ): UnifiedNotification {
   return {
     id,
     entity_id: 'channel-1',
     entity_type: 'channel',
-    createdAt,
-    updatedAt: 0,
-    viewedAt: 0,
-    deletedAt: 0,
+    created_at: new Date(createdAt).toISOString(),
+    updated_at: null,
+    viewed_at: null,
+    deleted_at: null,
     done: false,
     sent: true,
-    senderId: 'user-1',
-    notificationEventType: type,
-    notificationMetadata: {
-      tag: type,
-      content: metadata,
-    },
-  } as UnifiedNotification;
+    sender_id: 'user-1',
+    notification_event_type: notificationMetadata.tag,
+    notification_metadata: notificationMetadata,
+  };
 }
 
 function createNewMessageNotification(
@@ -39,11 +35,14 @@ function createNewMessageNotification(
   messageId: string,
   createdAt: number
 ): UnifiedNotification {
-  return createNotification(id, 'channel_message_send', createdAt, {
-    messageId,
-    messageContent: `Message ${id}`,
-    sender: 'user-1',
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_send',
+    content: {
+      messageId,
+      messageContent: `Message ${id}`,
+      sender: 'user-1',
+      channelType: 'organization',
+    },
   });
 }
 
@@ -53,12 +52,15 @@ function createReplyNotification(
   threadId: string,
   createdAt: number
 ): UnifiedNotification {
-  return createNotification(id, 'channel_message_reply', createdAt, {
-    messageId,
-    threadId,
-    messageContent: `Reply ${id}`,
-    userId: 'user-1',
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_reply',
+    content: {
+      messageId,
+      threadId,
+      messageContent: `Reply ${id}`,
+      userId: 'user-1',
+      channelType: 'organization',
+    },
   });
 }
 
@@ -68,11 +70,14 @@ function createMentionNotification(
   createdAt: number,
   threadId?: string
 ): UnifiedNotification {
-  return createNotification(id, 'channel_mention', createdAt, {
-    messageId,
-    messageContent: `Mention ${id}`,
-    threadId: threadId ?? null,
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_mention',
+    content: {
+      messageId,
+      messageContent: `Mention ${id}`,
+      threadId: threadId ?? null,
+      channelType: 'organization',
+    },
   });
 }
 
@@ -194,7 +199,7 @@ describe('stackNotifications', () => {
   });
 
   describe('sorting', () => {
-    it('sorts mentions first', () => {
+    it('sorts stacks by newest notification first', () => {
       const notifications = [
         createNewMessageNotification('n1', 'msg-1', 5000), // Most recent overall
         createMentionNotification('m1', 'msg-2', 1000), // Oldest
@@ -203,8 +208,8 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('channel_mention'); // Mention first despite being older
-      expect(result[1].type).toBe('channel_message_send');
+      expect(result[0].type).toBe('channel_message_send'); // Most recent first
+      expect(result[1].type).toBe('channel_mention');
     });
 
     it('sorts non-mention groups by timestamp descending', () => {
@@ -248,7 +253,7 @@ describe('stackNotifications', () => {
       expect(newMessages).toHaveLength(1);
       expect(replies).toHaveLength(2);
 
-      // Check mentions come first
+      // Check ordering by recency (mentions are newest in this scenario)
       expect(result[0].type).toBe('channel_mention');
       expect(result[1].type).toBe('channel_mention');
 

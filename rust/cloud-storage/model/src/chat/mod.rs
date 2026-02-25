@@ -2,7 +2,6 @@ mod message;
 pub mod preview;
 pub mod utils;
 
-use chrono::serde::ts_seconds_option;
 use macro_user_id::user_id::MacroUserIdStr;
 pub use message::*;
 use serde::{Deserialize, Serialize};
@@ -27,20 +26,14 @@ pub struct Chat {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
     /// The time the chat was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the chat was last updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     // count of tokens in the chat
     pub token_count: Option<i64>,
     // whether the chat is persistent or not
     pub is_persistent: bool,
     /// The time the chat was deleted
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

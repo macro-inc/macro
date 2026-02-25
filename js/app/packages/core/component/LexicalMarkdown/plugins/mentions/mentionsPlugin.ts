@@ -117,7 +117,7 @@ export type ItemMention = {
     | 'rss'
     | 'contact'
     | 'date'
-    | 'email'
+    | 'thread'
     | 'unknown'
     | 'color'
     | 'group';
@@ -172,7 +172,7 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
       fileType = 'rss';
     } else if (blockName === 'email') {
       fileType = 'email';
-      itemType = 'email';
+      itemType = 'thread';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }
@@ -246,8 +246,9 @@ const getDocumentMentionItemType = (
     case 'chat':
     case 'channel':
     case 'project':
-    case 'email':
       return itemType;
+    case 'email':
+      return 'thread';
     default:
       console.error(`Invalid item type: ${itemType} for document mention node`);
       return 'document';
@@ -679,7 +680,7 @@ function registerMentionsPlugin(
                 fileType = 'unknown';
               }
               onCreateMention({
-                itemType: blockName === 'email' ? 'email' : itemType,
+                itemType: blockName === 'email' ? 'thread' : itemType,
                 itemId: node.getDocumentId(),
                 fileType,
                 documentName,
