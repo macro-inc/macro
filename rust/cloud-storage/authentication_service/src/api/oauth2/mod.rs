@@ -21,18 +21,18 @@ use axum::{
 use model::response::ErrorResponse;
 use tower_cookies::Cookies;
 
-pub(in crate::api::oauth2) fn format_redirect_uri(provider: &str) -> String {
+pub(in crate::api) fn format_redirect_uri(provider: &str) -> String {
     format!("{}/oauth2/{provider}/callback", *BASE_URL)
 }
 
 #[derive(Debug, serde::Deserialize)]
-pub(in crate::api::oauth2) struct OAuthState {
+pub(in crate::api) struct OAuthState {
     /// The identity provider id to use to complete the login
-    identity_provider_id: String,
+    pub identity_provider_id: String,
     /// The link id to use to complete the login
     /// If the link id is provided, this means we need to link this idp to a specific user before
     /// performing the login process
-    link_id: Option<String>,
+    pub link_id: Option<String>,
     /// The original url you came from
     pub original_url: Option<String>,
     /// If the authentication request is from a mobile device
