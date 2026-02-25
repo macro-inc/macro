@@ -180,7 +180,11 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
             },
           ],
         },
-        managedPolicyArns: [sqsPolicy.arn, secretsManagerPolicy.arn, connectionTablePolicyArn],
+        managedPolicyArns: [
+          sqsPolicy.arn,
+          secretsManagerPolicy.arn,
+          connectionTablePolicyArn,
+        ],
         tags: this.tags,
       },
       { parent: this }

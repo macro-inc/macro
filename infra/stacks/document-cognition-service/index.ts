@@ -111,10 +111,9 @@ const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
   .getOutput('connectionGatewayRedisUrl')
   .apply((url) => url as string);
 
-const connectionGatewayTableName: pulumi.Output<string> =
-  connectionGatewayStack
-    .getOutput('connectionGatewayTableName')
-    .apply((name) => name as string);
+const connectionGatewayTableName: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayTableName')
+  .apply((name) => name as string);
 
 const connectionGatewayTablePolicyArn: pulumi.Output<string> =
   connectionGatewayStack
