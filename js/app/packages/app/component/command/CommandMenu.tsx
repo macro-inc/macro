@@ -21,7 +21,6 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
 import { CommandState } from './state';

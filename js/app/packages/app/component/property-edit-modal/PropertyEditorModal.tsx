@@ -25,7 +25,6 @@ import {
   setPropertyEditorTarget,
   togglePropertyEditor,
 } from './state/propertyEditor';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';

@@ -24,7 +24,6 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
 type ParticipantManagerProps = {

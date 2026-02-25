@@ -129,6 +129,7 @@ function PopoverSplitModal(props: {
       <div class={`fixed inset-0 z-modal flex pointer-events-none isolate`}>
         <DialogWrapper
           contentRef={(r) => {
+            setPanelRef(r);
             clickOutside(r, () => () => props.onClose());
             bindHotKeyDom(r);
           }}

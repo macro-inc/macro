@@ -79,7 +79,6 @@ import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { VerticalScrollIndicators } from '../VerticalScrollIndicators';
-import { cn } from '@ui/utils/classname';
 
 false && clickOutside;
 
