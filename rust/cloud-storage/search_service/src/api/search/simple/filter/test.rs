@@ -42,7 +42,10 @@ fn test_importance_does_not_duplicate_existing_labels() {
 
     assert!(include.is_empty());
     assert_eq!(
-        exclude.iter().filter(|l| *l == "CATEGORY_PROMOTIONS").count(),
+        exclude
+            .iter()
+            .filter(|l| *l == "CATEGORY_PROMOTIONS")
+            .count(),
         1
     );
     assert_eq!(exclude.len(), DEPRIORITY_LABELS.len());

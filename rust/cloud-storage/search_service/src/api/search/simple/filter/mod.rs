@@ -199,4 +199,3 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
 
 #[cfg(test)]
 mod test;
-
