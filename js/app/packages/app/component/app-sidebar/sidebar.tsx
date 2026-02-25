@@ -1,4 +1,4 @@
-import { Component, createSignal, For, JSX, Show } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 import TrayIcon from '@phosphor-icons/core/regular/tray.svg?component-solid';
@@ -8,6 +8,7 @@ import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { A } from '@solidjs/router';
 
 interface SidebarItem {
   label: string;
@@ -20,37 +21,37 @@ interface SidebarItem {
 const SIDEBAR_LINKS: SidebarItem[] = [
   {
     label: 'Inbox',
-    href: '',
+    href: '/inbox',
     icon: TrayIcon,
   },
   {
     label: 'Agents',
-    href: '',
+    href: '/agents',
     icon: AnimatedChatIcon,
   },
   {
     label: 'Email',
-    href: '',
+    href: '/mail',
     icon: AnimatedEmailIcon,
   },
   {
     label: 'Documents',
-    href: '',
+    href: '/documents',
     icon: AnimatedFileMdIcon,
   },
   {
     label: 'Tasks',
-    href: '',
+    href: '/tasks',
     icon: AnimatedTaskIcon,
   },
   {
     label: 'Channels',
-    href: '',
+    href: '/channels',
     icon: AnimatedChannelIcon,
   },
   {
     label: 'Files',
-    href: '',
+    href: '/files',
     icon: AnimatedFolderIcon,
   },
 ];
@@ -70,11 +71,12 @@ interface SidebarLinkProps extends SidebarItem {}
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
   return (
-    <a
+    <A
       class="w-full p-2 rounded-lg hover:bg-edge-muted active:bg-edge flex items-center gap-2 text-sm text-ink"
       href={props.href}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
+      activeClass="bg-accent"
     >
       <Show when={props.icon}>
         <div class="size-4">
@@ -82,6 +84,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
         </div>
       </Show>
       {props.label}
-    </a>
+    </A>
   );
 };
