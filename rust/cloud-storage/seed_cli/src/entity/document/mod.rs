@@ -30,7 +30,7 @@ pub struct DocumentArgs {
 pub enum DocumentCommand {
     /// Create a single document
     Create(CreateArgs),
-    /// Seed documents from a fixed CSV file with pre-defined UUIDs
+    /// Seed documents from a fixed JSON file with pre-defined UUIDs
     Seed(SeedArgs),
 }
 
@@ -62,7 +62,7 @@ pub struct CreateArgs {
     pub skip_history: bool,
 }
 
-/// Arguments for seeding documents from a fixed CSV file.
+/// Arguments for seeding documents from a fixed JSON file.
 #[derive(Debug, Args)]
 pub struct SeedArgs {
     /// The user ID to set as document owner
@@ -70,9 +70,9 @@ pub struct SeedArgs {
     pub user_id: String,
 }
 
-/// A row in the seed CSV file.
+/// A row in the seed JSON file.
 #[derive(Debug, Deserialize)]
-struct CsvSeedDocumentRow {
+struct SeedDocumentRow {
     /// Pre-defined document UUID.
     document_id: Uuid,
     /// Document name.
@@ -158,23 +158,20 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(ctx), err)]
 async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(args, ctx, Path::new("seed/documents/documents.csv")).await
+    seed_from_file(args, ctx, Path::new("seed/documents/documents.json")).await
 }
 
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
     tracing::info!("seeding documents");
 
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read csv file: {}", path.display()))?;
+        .with_context(|| format!("failed to read json file: {}", path.display()))?;
 
-    let mut reader = csv::Reader::from_reader(content.as_bytes());
-    let rows: Vec<CsvSeedDocumentRow> = reader
-        .deserialize()
-        .collect::<Result<Vec<_>, _>>()
-        .context("failed to parse csv")?;
+    let rows: Vec<SeedDocumentRow> =
+        serde_json::from_str(&content).context("failed to parse json")?;
 
     if rows.is_empty() {
-        anyhow::bail!("no documents found in csv file");
+        anyhow::bail!("no documents found in json file");
     }
 
     println!("Found {} documents to seed", rows.len());

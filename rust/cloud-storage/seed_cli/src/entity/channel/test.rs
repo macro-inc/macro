@@ -135,28 +135,6 @@ fn parse_channel_create_invalid_type_fails() {
 }
 
 #[test]
-fn parse_channel_bulk_create() {
-    let cli = Cli::try_parse_from([
-        "seed_cli",
-        "channel",
-        "bulk-create",
-        "--file-path",
-        "test.csv",
-    ])
-    .unwrap();
-
-    match cli.command {
-        crate::entity::EntityCommand::Channel(args) => match args.command {
-            ChannelCommand::BulkCreate(bulk) => {
-                assert_eq!(bulk.file_path, "test.csv");
-            }
-            other => panic!("expected BulkCreate, got {other:?}"),
-        },
-        other => panic!("expected Channel, got {other:?}"),
-    }
-}
-
-#[test]
 fn parse_channel_seed() {
     let cli = Cli::try_parse_from([
         "seed_cli",
@@ -192,13 +170,6 @@ fn mock_ctx(db: Db) -> SeedCliContext {
         fusionauth_client: Auth::default(),
         s3: S3::default(),
     }
-}
-
-fn write_temp_csv(content: &str) -> NamedTempFile {
-    let mut file = NamedTempFile::new().unwrap();
-    file.write_all(content.as_bytes()).unwrap();
-    file.flush().unwrap();
-    file
 }
 
 fn write_temp_json(content: &str) -> NamedTempFile {
@@ -281,142 +252,6 @@ async fn create_channel_db_failure_propagates_error() {
     let result = args.execute(mock_ctx(mock_db)).await;
     let err = result.unwrap_err();
     assert!(err.to_string().contains("db connection failed"));
-}
-
-// ── Bulk CSV tests ────────────────────────────────────────
-
-#[tokio::test]
-async fn bulk_create_creates_all_channels() {
-    let csv = "\
-name,owner_id,channel_type,org_id,participants
-general,macro|alice@example.com,public,,macro|bob@example.com;macro|charlie@example.com
-,macro|alice@example.com,direct_message,,macro|bob@example.com
-";
-    let file = write_temp_csv(csv);
-
-    let mut mock_db = Db::default();
-    mock_db
-        .expect_create_channel()
-        .times(2)
-        .returning(|_| Ok(uuid::Uuid::nil()));
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn bulk_create_with_optional_fields() {
-    let csv = "\
-name,owner_id,channel_type,org_id,participants
-team-chat,macro|alice@example.com,organization,42,macro|bob@example.com
-";
-    let file = write_temp_csv(csv);
-
-    let mut mock_db = Db::default();
-    mock_db
-        .expect_create_channel()
-        .times(1)
-        .withf(|opts| {
-            opts.name.as_deref() == Some("team-chat")
-                && opts.channel_type == ChannelType::Organization
-                && opts.org_id == Some(42)
-                && opts.participants == vec!["macro|bob@example.com"]
-        })
-        .returning(|_| Ok(uuid::Uuid::nil()));
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn bulk_create_empty_file_fails() {
-    let csv = "name,owner_id,channel_type,org_id,participants\n";
-    let file = write_temp_csv(csv);
-
-    let mock_db = Db::default();
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    let err = result.unwrap_err();
-    assert!(err.to_string().contains("no channels found"));
-}
-
-#[tokio::test]
-async fn bulk_create_missing_file_fails() {
-    let mock_db = Db::default();
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: "/nonexistent/path.csv".to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    let err = result.unwrap_err();
-    assert!(err.to_string().contains("failed to read csv file"));
-}
-
-#[tokio::test]
-async fn bulk_create_continues_on_failure() {
-    let csv = "\
-name,owner_id,channel_type,org_id,participants
-good-1,macro|alice@example.com,public,,
-bad,macro|bad@example.com,public,,
-good-2,macro|bob@example.com,private,,
-";
-    let file = write_temp_csv(csv);
-
-    let mut mock_db = Db::default();
-    mock_db.expect_create_channel().times(3).returning(|opts| {
-        if opts.owner_id == "macro|bad@example.com" {
-            Err(anyhow::anyhow!("db error"))
-        } else {
-            Ok(uuid::Uuid::nil())
-        }
-    });
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn bulk_create_invalid_csv_fails() {
-    let csv = "not,a,valid,header,set\nfoo,bar,baz,qux,quux\n";
-    let file = write_temp_csv(csv);
-
-    let mock_db = Db::default();
-
-    let args = ChannelArgs {
-        command: ChannelCommand::BulkCreate(BulkCreateArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
-        }),
-    };
-
-    let result = args.execute(mock_ctx(mock_db)).await;
-    assert!(result.is_err());
 }
 
 // ── Seed JSON tests ────────────────────────────────────────

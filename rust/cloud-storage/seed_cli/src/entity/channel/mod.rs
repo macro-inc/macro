@@ -3,7 +3,6 @@
 #[cfg(test)]
 mod test;
 
-use crate::entity::utils::deserialize_semicolon_list;
 use std::path::Path;
 
 use anyhow::Context;
@@ -29,8 +28,6 @@ pub struct ChannelArgs {
 pub enum ChannelCommand {
     /// Create a single channel
     Create(CreateArgs),
-    /// Bulk create multiple channels
-    BulkCreate(BulkCreateArgs),
     /// Seed channels from a fixed JSON file with pre-defined UUIDs
     Seed(SeedArgs),
 }
@@ -101,36 +98,11 @@ pub struct CreateArgs {
     pub org_id: Option<i64>,
 }
 
-/// Arguments for bulk creating channels.
-#[derive(Debug, Args)]
-pub struct BulkCreateArgs {
-    /// Path to the CSV file containing channels to create
-    #[arg(long)]
-    pub file_path: String,
-}
-
-/// A row in the bulk-create CSV file.
-#[derive(Debug, Deserialize)]
-struct CsvChannelRow {
-    /// Channel name (optional)
-    name: Option<String>,
-    /// User ID of the channel owner
-    owner_id: String,
-    /// Channel type
-    channel_type: ChannelType,
-    /// Organization ID (optional)
-    org_id: Option<i64>,
-    /// Semicolon-separated list of participant user IDs
-    #[serde(default, deserialize_with = "deserialize_semicolon_list")]
-    participants: Vec<String>,
-}
-
 impl ChannelArgs {
     /// Execute the channel command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
             ChannelCommand::Create(args) => create(args, ctx).await,
-            ChannelCommand::BulkCreate(args) => bulk_create(args, ctx).await,
             ChannelCommand::Seed(args) => seed(args, ctx).await,
         }
     }
@@ -150,60 +122,6 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 
     let channel_id = ctx.db.create_channel(options).await?;
     println!("Created channel with id {channel_id}");
-
-    Ok(())
-}
-
-#[tracing::instrument(skip(ctx), err)]
-async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    tracing::info!("bulk creating channels");
-
-    let content = std::fs::read_to_string(Path::new(&args.file_path))
-        .with_context(|| format!("failed to read csv file: {}", args.file_path))?;
-
-    let mut reader = csv::Reader::from_reader(content.as_bytes());
-    let rows: Vec<CsvChannelRow> = reader
-        .deserialize()
-        .collect::<Result<Vec<_>, _>>()
-        .context("failed to parse csv")?;
-
-    if rows.is_empty() {
-        anyhow::bail!("no channels found in csv file");
-    }
-
-    println!("Found {} channels to create", rows.len());
-
-    let mut created = 0;
-    let mut failed = 0;
-
-    for row in rows {
-        let channel_label = row
-            .name
-            .as_deref()
-            .map_or_else(|| format!("{:?}", row.channel_type), str::to_string);
-
-        let options = CreateChannelOptions {
-            name: row.name,
-            owner_id: row.owner_id,
-            channel_type: row.channel_type,
-            org_id: row.org_id,
-            participants: row.participants,
-        };
-
-        match ctx.db.create_channel(options).await {
-            Ok(channel_id) => {
-                println!("Created channel {channel_label} with id {channel_id}");
-                created += 1;
-            }
-            Err(e) => {
-                tracing::error!(error=?e, channel = channel_label, "failed to create channel");
-                println!("Failed to create channel {channel_label}: {e}");
-                failed += 1;
-            }
-        }
-    }
-
-    println!("\nBulk create complete: {created} created, {failed} failed");
 
     Ok(())
 }

@@ -5,7 +5,6 @@ pub mod channel_message;
 pub mod document;
 pub mod email;
 pub mod user;
-mod utils;
 
 use clap::Subcommand;
 
