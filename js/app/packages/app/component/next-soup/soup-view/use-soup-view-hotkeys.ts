@@ -9,7 +9,7 @@ import {
   runCommand,
 } from '@core/hotkey/utils';
 import { isSearchEntity } from '@entity';
-import type { Accessor } from 'solid-js';
+import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
