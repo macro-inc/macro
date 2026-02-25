@@ -32,12 +32,15 @@ pub enum ChannelCommand {
     Seed(SeedArgs),
 }
 
-/// Arguments for seeding channels from a fixed JSON file.
+/// Arguments for seeding channels from a JSON file.
 #[derive(Debug, Args)]
 pub struct SeedArgs {
     /// The user ID to set as channel owner and append to participants
     #[arg(long)]
     pub user_id: String,
+    /// Path to the JSON file containing channels to seed (defaults to seed/channels.json)
+    #[arg(long)]
+    pub file_path: Option<String>,
 }
 
 /// A row in the seed JSON file.
@@ -128,7 +131,13 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(ctx), err)]
 async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(args, ctx, Path::new("seed/channels.json")).await
+    let default_path = Path::new("seed/channels.json").to_path_buf();
+    let path = args
+        .file_path
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_path);
+    seed_from_file(args, ctx, &path).await
 }
 
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {

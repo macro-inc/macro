@@ -30,8 +30,16 @@ pub struct ChannelMessageArgs {
 pub enum ChannelMessageCommand {
     /// Create a single channel message
     Create(CreateArgs),
-    /// Seed channel messages from a fixed JSON file with pre-defined UUIDs
-    Seed,
+    /// Seed channel messages from a JSON file with pre-defined UUIDs
+    Seed(SeedArgs),
+}
+
+/// Arguments for seeding channel messages from a JSON file.
+#[derive(Debug, Args)]
+pub struct SeedArgs {
+    /// Path to the JSON file containing messages to seed (defaults to seed/channel_messages.json)
+    #[arg(long)]
+    pub file_path: Option<String>,
 }
 
 /// A row in the seed JSON file.
@@ -74,7 +82,7 @@ impl ChannelMessageArgs {
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
             ChannelMessageCommand::Create(args) => create(args, ctx).await,
-            ChannelMessageCommand::Seed => seed(ctx).await,
+            ChannelMessageCommand::Seed(args) => seed(args, ctx).await,
         }
     }
 }
@@ -97,8 +105,13 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 }
 
 #[tracing::instrument(skip(ctx), err)]
-async fn seed(ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(ctx, Path::new("seed/channel_messages.json")).await
+async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
+    let default_path = Path::new("seed/channel_messages.json").to_path_buf();
+    let path = args
+        .file_path
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_path);
+    seed_from_file(ctx, &path).await
 }
 
 async fn seed_from_file(ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {

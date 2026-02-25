@@ -284,6 +284,7 @@ async fn seed_creates_all_channels() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db), file.path()).await;
@@ -321,6 +322,7 @@ async fn seed_sets_user_id_as_owner_and_appends_to_participants() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db), file.path()).await;
@@ -356,6 +358,7 @@ async fn seed_does_not_duplicate_user_in_participants() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db), file.path()).await;
@@ -371,6 +374,7 @@ async fn seed_empty_json_fails() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db), file.path()).await;
@@ -414,6 +418,7 @@ async fn seed_continues_on_failure() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db), file.path()).await;

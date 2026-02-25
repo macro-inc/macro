@@ -344,6 +344,7 @@ async fn seed_creates_all_documents() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -360,6 +361,7 @@ async fn seed_empty_json_fails() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -402,6 +404,7 @@ async fn seed_continues_on_db_failure() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -441,6 +444,7 @@ async fn seed_continues_on_s3_failure() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -474,6 +478,7 @@ async fn seed_handles_all_file_types() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;

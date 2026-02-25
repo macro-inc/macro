@@ -21,7 +21,9 @@ fn parse_channel_message_seed() {
 
     match cli.command {
         crate::entity::EntityCommand::ChannelMessage(args) => match args.command {
-            ChannelMessageCommand::Seed => {}
+            ChannelMessageCommand::Seed(seed) => {
+                assert!(seed.file_path.is_none());
+            }
             other => panic!("expected Seed, got {other:?}"),
         },
         other => panic!("expected ChannelMessage, got {other:?}"),
