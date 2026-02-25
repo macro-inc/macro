@@ -154,9 +154,18 @@ export interface HotkeyRegistrationOptions {
   shouldReturnFocusOnClose?: boolean;
 }
 
+export type HotkeyGroup = {
+  /** Add a hotkey registration to this group */
+  add: <T extends RegisterHotkeyReturn>(registration: T) => T;
+  /** Dispose all hotkeys in this group */
+  dispose: () => void;
+};
+
 export type RegisterHotkeyReturn = {
   dispose: () => void;
   commandScopeId?: string;
+  /** Add this registration to a group for grouped disposal */
+  withGroup: (group: HotkeyGroup) => RegisterHotkeyReturn;
 };
 
 export type ScopeNodeBase = {
