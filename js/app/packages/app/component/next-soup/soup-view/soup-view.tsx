@@ -64,7 +64,7 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
-import { SoupToolbar } from './soup-toolbar';
+import { SoupSearchbar, SoupToolbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
@@ -80,6 +80,8 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { FilterID } from '@app/component/next-soup/filters/filters';
+import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -160,13 +162,20 @@ export const SoupView = (props: SoupViewProps) => {
       }}
     >
       <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
-        <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
-          <Suspense>
-            <SoupToolbar />
-          </Suspense>
-          <SoupViewFileDropzone>
-            <SoupViewList />
-          </SoupViewFileDropzone>
+        <div class="size-full flex flex-col">
+          <SplitHeaderLeft>
+            <div class="w-full flex items-center justify-between p-2">
+              <SoupViewTabs />
+              <div class="max-w-56 w-full">
+                <SoupSearchbar />
+              </div>
+            </div>
+          </SplitHeaderLeft>
+          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full p-4">
+            <SoupViewFileDropzone>
+              <SoupViewList />
+            </SoupViewFileDropzone>
+          </div>
         </div>
         <Suspense>
           <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>

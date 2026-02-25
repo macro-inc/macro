@@ -60,7 +60,7 @@ export const SIDEBAR_LINKS = [
 
 export const AppSidebar = () => {
   return (
-    <div class="w-56 h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
+    <div class="max-w-56 w-full h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
       <div class="py-2 px-4">
         <LogoIcon class="size-8" />
       </div>

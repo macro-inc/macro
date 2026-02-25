@@ -98,7 +98,7 @@ export const SoupToolbar = () => {
             class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs mobile:text-sm"
           >
             <SoupFilters />
-            <SearchBar />
+            <SoupSearchbar />
           </div>
         </div>
       </SplitHeaderLeft>
@@ -551,7 +551,7 @@ const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   );
 };
 
-const SearchBar = () => {
+export const SoupSearchbar = () => {
   const { searchText, setSearchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
@@ -590,12 +590,12 @@ const SearchBar = () => {
   return (
     <div class="flex items-center shrink-0 grow min-w-0 mobile:-order-2">
       <Tooltip
-        class="w-fit"
+        class="w-full"
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 rounded-full mobile:min-w-35"
+          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 mobile:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
