@@ -17,6 +17,7 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { onCleanup } from 'solid-js';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -69,172 +70,180 @@ export const useEntityActionHotkeys = (
     openEntityInSplitFromUnifiedList(entity, { splitHandle });
   };
 
-  // Mark Done - 'e'
-  registerHotkey({
-    hotkey: ['e'],
-    hotkeyToken: TOKENS.entity.action.markDone,
-    scopeId,
-    description: 'Mark done',
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.some(markDone.canExecute)) return false;
+  const registeredHotkeys = [
+    // Mark Done - 'e'
+    registerHotkey({
+      hotkey: ['e'],
+      hotkeyToken: TOKENS.entity.action.markDone,
+      scopeId,
+      description: 'Mark done',
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.some(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, soup, openNextEntity);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.some(markDone.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+        markDone.executeWithSoup(entities, soup, openNextEntity);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.some(markDone.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  // Delete - 'delete', 'backspace'
-  registerHotkey({
-    hotkey: ['delete', 'backspace'],
-    hotkeyToken: TOKENS.entity.action.delete,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Delete items' : 'Delete item';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.every(deleteAction.canExecute)) return false;
+    // Delete - 'delete', 'backspace'
+    registerHotkey({
+      hotkey: ['delete', 'backspace'],
+      hotkeyToken: TOKENS.entity.action.delete,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Delete items' : 'Delete item';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(deleteAction.canExecute)) return false;
 
-      deleteAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(deleteAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+        deleteAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length > 0 && entities.every(deleteAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  // Rename - 'r'
-  registerHotkey({
-    hotkey: ['r'],
-    hotkeyToken: TOKENS.entity.action.rename,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Rename items' : 'Rename item';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.every(renameAction.canExecute)) return false;
+    // Rename - 'r'
+    registerHotkey({
+      hotkey: ['r'],
+      hotkeyToken: TOKENS.entity.action.rename,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Rename items' : 'Rename item';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(renameAction.canExecute)) return false;
 
-      renameAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(renameAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+        renameAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length > 0 && entities.every(renameAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  // Copy - 'cmd+d'
-  registerHotkey({
-    hotkey: ['cmd+d'],
-    hotkeyToken: TOKENS.entity.action.copy,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Duplicate items' : 'Duplicate item';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.some(copyAction.canExecute)) return false;
+    // Copy - 'cmd+d'
+    registerHotkey({
+      hotkey: ['cmd+d'],
+      hotkeyToken: TOKENS.entity.action.copy,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Duplicate items' : 'Duplicate item';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.some(copyAction.canExecute)) return false;
 
-      copyAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.some(copyAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+        copyAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.some(copyAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  // Move to folder - 'm'
-  registerHotkey({
-    hotkey: ['m'],
-    hotkeyToken: TOKENS.entity.action.moveToFolder,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Move items to folder' : 'Move to folder';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.some(moveToProjectAction.canExecute)) return false;
+    // Move to folder - 'm'
+    registerHotkey({
+      hotkey: ['m'],
+      hotkeyToken: TOKENS.entity.action.moveToFolder,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Move items to folder' : 'Move to folder';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.some(moveToProjectAction.canExecute)) return false;
 
-      moveToProjectAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.some(moveToProjectAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+        moveToProjectAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.some(moveToProjectAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  // Copy link - 'shift+cmd+c'
-  registerHotkey({
-    hotkey: ['shift+cmd+c'],
-    hotkeyToken: TOKENS.entity.action.copyLink,
-    scopeId,
-    description: 'Copy link',
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!copyLinkAction.canExecute(entities[0])) return false;
-      copyLinkAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
+    // Copy link - 'shift+cmd+c'
+    registerHotkey({
+      hotkey: ['shift+cmd+c'],
+      hotkeyToken: TOKENS.entity.action.copyLink,
+      scopeId,
+      description: 'Copy link',
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!copyLinkAction.canExecute(entities[0])) return false;
+        copyLinkAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
 
-  registerHotkey({
-    hotkeyToken: TOKENS.entity.action.share,
-    scopeId,
-    description: 'Share',
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!shareAction.canExecute(entities[0])) return false;
-      shareAction.executeWithSoup(entities, soup);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length === 1 && isShareableEntityType(entities[0].type);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
+    registerHotkey({
+      hotkeyToken: TOKENS.entity.action.share,
+      scopeId,
+      description: 'Share',
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!shareAction.canExecute(entities[0])) return false;
+        shareAction.executeWithSoup(entities, soup);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length === 1 && isShareableEntityType(entities[0].type);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }),
+  ];
+
+  onCleanup(() => {
+    for (const registration of registeredHotkeys) {
+      registration.dispose();
+    }
   });
 };
