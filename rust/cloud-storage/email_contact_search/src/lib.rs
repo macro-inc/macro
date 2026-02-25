@@ -113,48 +113,50 @@ pub async fn search_email_contacts<'a>(
     let rows = sqlx::query!(
         r#"
         WITH link AS (
-            SELECT id FROM email_links WHERE macro_id = $1
+            SELECT id AS link_id FROM email_links WHERE macro_id = $1
         ),
         matching_contacts AS (
             SELECT c.id
             FROM email_contacts c
-            WHERE c.link_id = (SELECT id FROM link)
-              AND (c.name ILIKE $2 OR c.email_address ILIKE $2)
+            JOIN link l ON c.link_id = l.link_id
+            WHERE c.name ILIKE $2 OR c.email_address ILIKE $2
         ),
         matching_thread_ids AS (
-            SELECT m.thread_id
-            FROM email_messages m
-            WHERE m.link_id = (SELECT id FROM link)
-              AND m.from_contact_id IN (SELECT id FROM matching_contacts)
+            SELECT DISTINCT thread_id FROM (
+                SELECT m.thread_id
+                FROM email_messages m
+                JOIN link l ON m.link_id = l.link_id
+                WHERE m.from_contact_id IN (SELECT id FROM matching_contacts)
 
-            UNION
+                UNION ALL
 
-            SELECT m.thread_id
-            FROM email_messages m
-            WHERE m.link_id = (SELECT id FROM link)
-              AND m.from_name ILIKE $2
+                SELECT m.thread_id
+                FROM email_messages m
+                JOIN link l ON m.link_id = l.link_id
+                WHERE m.from_name ILIKE $2
 
-            UNION
+                UNION ALL
 
-            SELECT m.thread_id
-            FROM email_message_recipients mr
-            JOIN email_messages m ON m.id = mr.message_id
-            WHERE mr.contact_id IN (SELECT id FROM matching_contacts)
-              AND m.link_id = (SELECT id FROM link)
+                SELECT m.thread_id
+                FROM email_message_recipients mr
+                JOIN email_messages m ON m.id = mr.message_id
+                JOIN link l ON m.link_id = l.link_id
+                WHERE mr.contact_id IN (SELECT id FROM matching_contacts)
 
-            UNION
+                UNION ALL
 
-            SELECT m.thread_id
-            FROM email_message_recipients mr
-            JOIN email_messages m ON m.id = mr.message_id
-            WHERE mr.name ILIKE $2
-              AND m.link_id = (SELECT id FROM link)
+                SELECT m.thread_id
+                FROM email_message_recipients mr
+                JOIN email_messages m ON m.id = mr.message_id
+                JOIN link l ON m.link_id = l.link_id
+                WHERE mr.name ILIKE $2
+            ) all_matches
         ),
         paginated_threads AS (
             SELECT t.id, t.latest_non_spam_message_ts
             FROM email_threads t
-            WHERE t.id IN (SELECT thread_id FROM matching_thread_ids)
-              AND t.latest_non_spam_message_ts IS NOT NULL
+            JOIN matching_thread_ids mt ON mt.thread_id = t.id
+            WHERE t.latest_non_spam_message_ts IS NOT NULL
               AND (
                   $4::timestamptz IS NULL
                   OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
