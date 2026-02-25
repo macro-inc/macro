@@ -10,7 +10,7 @@ import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { A } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
-import { VIEW_PATHS } from '@app/constants/views';
+import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 
 interface SidebarItem {
   label: string;
@@ -23,37 +23,37 @@ interface SidebarItem {
 export const SIDEBAR_LINKS = [
   {
     label: 'Inbox',
-    href: VIEW_PATHS.inbox,
+    href: LIST_VIEW_PATHS.inbox,
     icon: TrayIcon,
   },
   {
     label: 'Agents',
-    href: VIEW_PATHS.agents,
+    href: LIST_VIEW_PATHS.agents,
     icon: AnimatedChatIcon,
   },
   {
     label: 'Email',
-    href: VIEW_PATHS.mail,
+    href: LIST_VIEW_PATHS.mail,
     icon: AnimatedEmailIcon,
   },
   {
     label: 'Documents',
-    href: VIEW_PATHS.documents,
+    href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
   },
   {
     label: 'Tasks',
-    href: VIEW_PATHS.tasks,
+    href: LIST_VIEW_PATHS.tasks,
     icon: AnimatedTaskIcon,
   },
   {
     label: 'Channels',
-    href: VIEW_PATHS.channels,
+    href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
   },
   {
     label: 'Files',
-    href: VIEW_PATHS.files,
+    href: LIST_VIEW_PATHS.files,
     icon: AnimatedFolderIcon,
   },
 ] as const satisfies SidebarItem[];
