@@ -4,6 +4,7 @@
 # Docker
 .dockerignore
 Dockerfile*
+.env*
 
 # Rust
 target/

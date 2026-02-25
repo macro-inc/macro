@@ -10,9 +10,8 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-release,sharing=locked \
-    cargo build --release --bin search_processing_service \
-    && cargo strip \
-    && cp /app/target/release/search_processing_service /app/svc
+    cargo build --bin search_processing_service \
+    && cp /app/target/debug/search_processing_service /app/svc
 
 # Runtime image
 FROM debian:trixie-slim AS search_processing_service

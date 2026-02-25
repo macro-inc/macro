@@ -10,7 +10,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-debug,sharing=locked \
-    cargo build \
+    cargo build -j 2 \
         --bin authentication_service \
         --bin connection_gateway_service \
         --bin contacts_service \
