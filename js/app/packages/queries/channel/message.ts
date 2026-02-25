@@ -1,5 +1,6 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
 import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -9,13 +10,11 @@ import {
   type MessageResponse,
 } from '@service-comms/client';
 import type {
-  Attachment,
   ChannelMessage,
   CountedReaction,
-  GetChannelResponse,
-  Message,
   PostMessageRequest,
 } from '@service-comms/generated/models';
+import type { Attachment, GetChannelResponse, Message } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -52,8 +51,8 @@ export type DeleteMessageContext = {
 export type UpdateMessageContext = {
   messageId: string;
   previousContent: string;
-  previousEditedAt: string | null | undefined;
-  previousUpdatedAt: string;
+  previousEditedAt: DateValue | null | undefined;
+  previousUpdatedAt: DateValue;
 };
 
 /**
@@ -91,7 +90,7 @@ export function optimisticInsertChannelMessage(
       const newAttachments: Attachment[] = vars.attachments.map((a) => ({
         id: crypto.randomUUID(),
         channel_id: vars.channelId,
-        created_at: String(Date.now()),
+        created_at: new Date().toISOString(),
         message_id: vars.optimisticId,
         ...a,
       }));

@@ -802,10 +802,6 @@ export function StaticMarkdown(props: {
     }
   });
 
-  const content = createMemo(() => {
-    return props.markdown;
-  });
-
   createEffect(() => {
     const editor = currentEditor();
     if (!editor) {
@@ -813,7 +809,7 @@ export function StaticMarkdown(props: {
       return;
     }
 
-    setEditorStateFromMarkdown(editor, content(), props.target);
+    setEditorStateFromMarkdown(editor, props.markdown, props.target);
     if (props.singleLine) {
       forceSingleLine(editor);
     }
@@ -825,7 +821,7 @@ export function StaticMarkdown(props: {
     const editor = currentEditor();
 
     // Handle citations without affecting mentions
-    replaceCitations(content()).then((content: string) => {
+    replaceCitations(props.markdown).then((content: string) => {
       setEditorStateFromMarkdown(editor, content, props.target);
       if (props.singleLine) {
         forceSingleLine(editor);

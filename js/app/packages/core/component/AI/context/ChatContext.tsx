@@ -1,22 +1,24 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAttachments } from '@core/component/AI/signal/attachment';
-import { useTabAttachments } from '@core/component/AI/signal/tabAttachments';
+import { globalTabAttachments } from '@core/component/AI/signal/globalAttachments';
 import type {
   Attachment,
   Attachments,
   ChatMessageWithAttachments,
-  MessageStream,
   Model,
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
+import type { ChatMessageStream } from '@service-connection/stream';
+import { getEntityStreams } from '@service-connection/stream';
 import type { Accessor, ParentProps, Setter } from 'solid-js';
 import {
   createContext,
   createEffect,
   createSignal,
   on,
+  untrack,
   useContext,
 } from 'solid-js';
 
@@ -51,10 +53,9 @@ export function ChatInputProvider(
   const attachments = useAttachments(props.initialAttachments);
   const uploadQueue = useUploadAttachment();
 
-  const tabAttachments = useTabAttachments();
   if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && props.autoAttach !== false) {
     createEffect(
-      on(tabAttachments, (tabs, p) => {
+      on(globalTabAttachments, (tabs, p) => {
         for (const prev of p ?? []) {
           if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
             attachments.removeAttachment(prev.attachmentId);
@@ -100,8 +101,10 @@ export type ChatState = {
   messages: Accessor<ChatMessageWithAttachments[]>;
   setMessages: Setter<ChatMessageWithAttachments[]>;
   addMessage: (msg: ChatMessageWithAttachments) => void;
-  stream: Accessor<MessageStream | undefined>;
-  setStream: Setter<MessageStream | undefined>;
+  stream: Accessor<ChatMessageStream | undefined>;
+  setStream: Setter<ChatMessageStream | undefined>;
+  waitingForStream: Accessor<boolean>;
+  setWaitingForStream: Setter<boolean>;
 };
 
 const ChatCtx = createContext<ChatState>();
@@ -116,35 +119,73 @@ export function ChatProvider(
         Setter<ChatMessageWithAttachments[]>,
       ];
       stream: [
-        Accessor<MessageStream | undefined>,
-        Setter<MessageStream | undefined>,
+        Accessor<ChatMessageStream | undefined>,
+        Setter<ChatMessageStream | undefined>,
       ];
+      waitingForStream?: [Accessor<boolean>, Setter<boolean>];
     };
   }
 ) {
   let messages: Accessor<ChatMessageWithAttachments[]>;
   let setMessages: Setter<ChatMessageWithAttachments[]>;
-  let stream: Accessor<MessageStream | undefined>;
-  let setStream: Setter<MessageStream | undefined>;
+  let stream: Accessor<ChatMessageStream | undefined>;
+  let setStream: Setter<ChatMessageStream | undefined>;
+  let waitingForStream: Accessor<boolean>;
+  let setWaitingForStream: Setter<boolean>;
 
   if (props.external) {
     [messages, setMessages] = props.external.messages;
     [stream, setStream] = props.external.stream;
+    if (props.external.waitingForStream) {
+      [waitingForStream, setWaitingForStream] = props.external.waitingForStream;
+    } else {
+      [waitingForStream, setWaitingForStream] = createSignal(false);
+    }
   } else {
     const [_messages, _setMessages] = createSignal<
       ChatMessageWithAttachments[]
     >(props.messages ?? []);
-    const [_stream, _setStream] = createSignal<MessageStream>();
+    const [_stream, _setStream] = createSignal<ChatMessageStream>();
     messages = _messages;
     setMessages = _setMessages;
     stream = _stream;
     setStream = _setStream;
+    [waitingForStream, setWaitingForStream] = createSignal(false);
   }
 
   const _setMessages = setMessages;
   const addMessage = (msg: ChatMessageWithAttachments) => {
     _setMessages((p) => [...p, msg]);
   };
+
+  // --- Reconnect active streams on page refresh ---
+  // Reactive to props.chatId (ChatProvider may not remount on chat switch).
+  // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
+  createEffect(() => {
+    const activeStreams = getEntityStreams('chat', props.chatId)();
+    const currentStream = untrack(stream);
+
+    for (const s of activeStreams) {
+      const sid = s.id()?.stream_id;
+      if (!sid) {
+        console.warn('reject chat stream: no id');
+        continue;
+      }
+      if (currentStream?.isDone() && currentStream?.id()?.stream_id === sid) {
+        console.warn('reject chat stream: duplicate stream');
+        continue;
+      }
+
+      const isInMessages = untrack(() => messages().some((m) => m.id === sid));
+      if (isInMessages) {
+        console.warn('reject chat stream: already has message');
+        continue;
+      }
+
+      setStream(s);
+      break;
+    }
+  });
 
   return (
     <ChatCtx.Provider
@@ -155,6 +196,8 @@ export function ChatProvider(
         addMessage,
         stream,
         setStream,
+        waitingForStream,
+        setWaitingForStream,
       }}
     >
       {props.children}

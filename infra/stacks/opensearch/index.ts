@@ -1,4 +1,5 @@
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { config, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 
@@ -73,23 +74,27 @@ const opensearchLogsPolicy = new aws.cloudwatch.LogResourcePolicy(
   `opensearch-logs-policy-${stack}`,
   {
     policyName: `opensearch-logs-policy-${stack}`,
-    policyDocument: JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Principal: {
-            Service: 'es.amazonaws.com',
-          },
-          Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-          Resource: [
-            indexSlowLogGroup.arn.apply((arn) => `${arn}:*`),
-            searchSlowLogGroup.arn.apply((arn) => `${arn}:*`),
-            applicationLogGroup.arn.apply((arn) => `${arn}:*`),
+    policyDocument: pulumi
+      .all([
+        indexSlowLogGroup.arn,
+        searchSlowLogGroup.arn,
+        applicationLogGroup.arn,
+      ])
+      .apply(([indexArn, searchArn, appArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'es.amazonaws.com',
+              },
+              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+              Resource: [`${indexArn}:*`, `${searchArn}:*`, `${appArn}:*`],
+            },
           ],
-        },
-      ],
-    }),
+        })
+      ),
   }
 );
 

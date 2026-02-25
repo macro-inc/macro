@@ -1,7 +1,7 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
-import type { UnifiedNotification } from '@service-notification/client';
+import type { UnifiedNotification } from './types';
 import { themeReactive } from '../block-theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import {
@@ -42,7 +42,7 @@ export async function toPlatformNotificationData(
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
-  const actorId = notification.senderId;
+  const actorId = notification.sender_id;
   const actor =
     (actorId ? await resolveUserName(actorId) : undefined) ??
     USER_NAME_FALLBACK;
@@ -80,6 +80,11 @@ export async function maybeHandlePlatformNotification(
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
+  // Ignore document_mention notifications - they should not show as browser notifications
+  if (notification.notification_metadata.tag === 'document_mention') {
+    return;
+  }
+
   const platformNotificationData = await toPlatformNotificationData(
     notification,
     DefaultUserNameResolver,

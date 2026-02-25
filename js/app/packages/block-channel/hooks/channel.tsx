@@ -5,12 +5,14 @@ import {
   getTopLevelMessages,
 } from '@queries/channel/derived';
 import type {
-  Attachment,
   ChannelType,
-  GetChannelResponse,
   GetChannelResponseReactions,
 } from '@service-comms/generated/models';
-import type { Message } from '@service-comms/generated/models/message';
+import type {
+  Attachment,
+  GetChannelResponse,
+  Message,
+} from '@queries/channel/types';
 import { createMemo, type Accessor } from 'solid-js';
 
 export type MessageSenderLookup = Map<string, string>;

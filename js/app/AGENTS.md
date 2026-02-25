@@ -21,6 +21,7 @@
 - **Before navigating with Playwright**, always generate an access token first using `bun scripts/generate-access-token.ts` or prompt the user to authenticate. Never navigate without authentication set up.
 - You can use `console.trace` to debug state and changes in the ui and logic.
 - When building out UI features, use playwright to verify UI behavior.
+- Use the `bun run test` command to use the vitest test runner. For example, `bun run test -- packages/core/tests/date.test.ts -c packages/core`
 
 ### Playwright Authentication
 The app uses cookie-based authentication (`credentials: 'include'`) since `ENABLE_BEARER_TOKEN_AUTH` is false. For Playwright testing, intercept requests and add the Authorization header.

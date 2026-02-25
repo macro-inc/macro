@@ -214,7 +214,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `document-cognition-service-${stack}`,
+                  dd_service: 'document-cognition-service',
                   dd_source: 'fargate',
                   dd_tags: `project:documentcognition, env:${stack}`,
                   provider: 'ecs',

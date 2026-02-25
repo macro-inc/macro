@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CommentDeletedAt = number | null;
+export type CommentDeletedAt = string | null;

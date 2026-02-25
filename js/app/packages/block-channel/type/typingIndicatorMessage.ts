@@ -1,6 +1,6 @@
-import type { Message } from '@service-comms/generated/models/message';
+import type { Message } from '@queries/channel/types';
 
 export type TypingIndicatorMessage = Partial<Message> & {
   typingUsers: string[];
-  created_at: string;
+  created_at: Date;
 };

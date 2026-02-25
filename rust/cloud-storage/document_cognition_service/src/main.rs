@@ -4,7 +4,7 @@ use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::http::user_repo::UserRepoImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms_service_client::CommsServiceClient;
-use config::{Config, Environment};
+use config::{Config, EnvVars, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::domain::service::EmailServiceImpl;
@@ -15,6 +15,15 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use notification::domain::models::email_notification_digest::{
+    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
+};
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -23,6 +32,7 @@ use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
 
 mod api;
@@ -37,7 +47,8 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
-    let config = Config::from_env().context("failed to parse config from environment")?;
+    let config = Config::from_env(EnvVars::unwrap_new())
+        .context("failed to parse config from environment")?;
 
     tracing::info!("initialized config");
 
@@ -61,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
@@ -171,6 +183,70 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized soup service");
 
+    // Initialize Redis client for stream service
+    let redis_client = Arc::new(
+        redis::Client::open(config.redis_host.as_ref())
+            .inspect(|client| {
+                client
+                    .get_connection()
+                    .map(|_| tracing::trace!("initialized redis connection"))
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to connect to redis");
+                    })
+                    .expect("redis connetion required");
+            })
+            .context("failed to connect to redis")?,
+    );
+    let stream_repo = RedisPostgresStreamRepo::new((*redis_client).clone(), db.clone()).obj();
+
+    tracing::info!("initialized stream repo");
+
+    let connection_manager =
+        connection_gateway_client::service::dynamodb::create_dynamo_db_connection_manager(
+            dynamodb_client,
+        )
+        .await
+        .context("failed to create connection manager")?;
+
+    tracing::info!("initialized connection repo");
+
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for notification state machine")?;
+
+    let notification_ingress_service = Arc::new({
+        let notification_repository = DbNotificationRepository::new(db.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.notification_queue.clone(),
+        );
+        let state_machine = StateMachineDriverA {
+            user_checker: DbUserExistenceChecker::new(db.clone()),
+            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
+                db.clone(),
+            )),
+            online_checker: LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        redis_multiplexed_conn.clone(),
+                    ),
+                ),
+            ),
+            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
+            )
+            .append::<model_notifications::ChannelInviteMetadata>(),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
+        };
+        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
+    });
+
+    tracing::info!("initialized notification ingress service");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -198,7 +274,10 @@ async fn main() -> anyhow::Result<()> {
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,
+        notification_ingress_service,
+        connection_repo: connection_manager.persistence,
         soup_service,
+        stream_repo,
     })
     .await
     .context("failed to setup and serve api")?;

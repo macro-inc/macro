@@ -104,6 +104,40 @@ impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
     }
 }
 
+/// A forwarded attachment linking a draft to an original message's attachment.
+/// Data is fetched from Gmail at send time rather than stored in S3.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentForwarded {
+    /// The UUID of the original attachment in email_attachments.
+    pub attachment_id: Uuid,
+    /// The ID of the draft message this forwarded attachment belongs to.
+    pub draft_id: Uuid,
+    /// The Gmail attachment ID for fetching data from Gmail API.
+    pub provider_attachment_id: Option<String>,
+    /// The Gmail message ID of the original message containing the attachment.
+    pub message_provider_id: String,
+    /// Original file name of the attachment.
+    pub filename: Option<String>,
+    /// MIME type of the attachment.
+    pub mime_type: Option<String>,
+    /// File size in bytes.
+    pub size_bytes: Option<i64>,
+}
+
+impl From<crate::db::attachment::AttachmentForwarded> for AttachmentForwarded {
+    fn from(db: crate::db::attachment::AttachmentForwarded) -> Self {
+        Self {
+            attachment_id: db.attachment_id,
+            draft_id: db.draft_id,
+            provider_attachment_id: db.provider_attachment_id,
+            message_provider_id: db.message_provider_id,
+            filename: db.filename,
+            mime_type: db.mime_type,
+            size_bytes: db.size_bytes,
+        }
+    }
+}
+
 /// The attachment data we need to include when sending a message to a provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AttachmentToSend {

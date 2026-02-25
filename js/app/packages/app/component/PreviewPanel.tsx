@@ -2,7 +2,7 @@ import type { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isTaskEntity } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import {
   type Component,
   createRenderEffect,

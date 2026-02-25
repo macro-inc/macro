@@ -416,7 +416,6 @@ export function InstructionsEditor() {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           disableMentionTracking={true}
-          emails={() => []}
         />
 
         <Show when={DEBUG}>

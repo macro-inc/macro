@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO document_sub_type (document_id, sub_type)\n                VALUES ($1, $2)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31dbb9af47386234da706e7c3175a7a2e43c2231040cc399488418eab9f6023a"
+}

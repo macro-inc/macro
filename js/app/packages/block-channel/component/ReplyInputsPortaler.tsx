@@ -13,7 +13,7 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { channelParticipantInfo } from '@core/user/util';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import type { ChannelParticipant } from '@queries/channel/types';
 import {
   createEffect,
   createMemo,

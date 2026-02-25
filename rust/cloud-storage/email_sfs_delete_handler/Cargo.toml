@@ -13,9 +13,10 @@ lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 sqlx = { workspace = true }
-sqs_client = { path = "../sqs_client", default-features = false, features = ["sfs_delete"] }
+sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "sfs_delete"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
+openssl = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["openssl"]

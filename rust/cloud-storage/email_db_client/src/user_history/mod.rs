@@ -73,7 +73,28 @@ pub async fn get_thread_summary_info(
                 l.macro_id,
                 latest_msg.sender as sender,
                 latest_msg.pretty_sender as "pretty_sender!",
-                latest_msg.trash_label as trash_label
+                latest_msg.trash_label as trash_label,
+                (
+                    SELECT m_latest.is_draft
+                    FROM email_messages m_latest
+                    WHERE m_latest.thread_id = t.id
+                      AND m_latest.link_id = $1
+                    ORDER BY m_latest.internal_date_ts DESC NULLS LAST
+                    LIMIT 1
+                ) AS "is_draft!",
+                t.is_read,
+                t.inbox_visible,
+                (
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM email_messages m_imp
+                        JOIN email_message_labels ml ON m_imp.id = ml.message_id
+                        JOIN email_labels l ON ml.label_id = l.id
+                        WHERE m_imp.thread_id = t.id
+                          AND l.link_id = t.link_id
+                          AND l.name = 'IMPORTANT'
+                    )
+                ) AS "is_important!"
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
             LEFT JOIN email_links l ON l.id = t.link_id
@@ -154,6 +175,10 @@ pub async fn get_thread_summary_info(
             }),
             sender: row.sender,
             pretty_sender: row.pretty_sender,
+            is_read: row.is_read,
+            inbox_visible: row.inbox_visible,
+            is_draft: row.is_draft,
+            is_important: row.is_important,
         };
         result.insert(row.thread_id, summary_info);
     }

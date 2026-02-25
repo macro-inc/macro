@@ -7,6 +7,10 @@ import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
+import {
+  type ParsedDuration,
+  parsedDurationToMilliseconds,
+} from '@core/util/dateSearch/dateParser';
 
 type PersistenceKey = `${string}-persist-v${number}`;
 
@@ -20,7 +24,7 @@ export function createPersistenceKey(
 
 export type PersistScope = Readonly<{
   store: PerQueryPersistence;
-  maxAgeMs: number;
+  maxAge: ParsedDuration;
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
 }>;
@@ -44,7 +48,7 @@ type QueryClientLike = {
  * Returns 'valid' if the entry can be restored, or a reason string
  * explaining why it should be discarded.
  */
-export function validatePersistedEntry(
+function validatePersistedEntry(
   entry: PersistedQueryEntry,
   buster: string,
   maxAgeMs: number
@@ -77,7 +81,8 @@ async function handleRestore(
 
   if (!entry) return;
 
-  if (validatePersistedEntry(entry, scope.buster, scope.maxAgeMs) !== 'valid') {
+  const maxAgeMs = parsedDurationToMilliseconds(scope.maxAge);
+  if (validatePersistedEntry(entry, scope.buster, maxAgeMs) !== 'valid') {
     scope.store.remove(query.queryHash);
     return;
   }

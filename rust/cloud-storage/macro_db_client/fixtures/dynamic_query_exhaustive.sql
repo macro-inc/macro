@@ -105,7 +105,7 @@ VALUES
   ('bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Doc Task Incomplete', 'macro|user-1@test.com',
    'aa000001-ffff-ffff-ffff-ffffffffffff', 107, 'txt',
    '2024-01-06 10:00:00', '2024-02-06 10:00:00', NULL),
-  -- doc-task-no-status: in root, txt, user-1, task, no status, no assignee
+  -- doc-task-no-status: in root, txt, user-1, task, no status, assigned to user-1
   ('bb000008-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Doc Task No Status', 'macro|user-1@test.com',
    'aa000001-ffff-ffff-ffff-ffffffffffff', 108, 'txt',
    '2024-01-07 10:00:00', '2024-02-07 10:00:00', NULL),
@@ -166,7 +166,7 @@ VALUES ('bb000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'task'),
        ('bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'task'),
        ('bb000008-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'task');
 
--- Entity properties: Status for completed task
+-- Entity properties: status + assignees
 INSERT INTO public."entity_properties" ("id", "entity_id", "entity_type", "property_definition_id", "values")
 VALUES
   -- Completed task: Status = Completed
@@ -176,8 +176,20 @@ VALUES
   -- Incomplete task: Status = In Progress
   (gen_random_uuid(), 'bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK',
    '00000001-0000-0000-0000-000000000002',
-   '{"type": "SelectOption", "value": ["00000001-0000-0000-0002-000000000002"]}'::jsonb);
--- No entity_properties for doc-task-no-status (to test false case)
+   '{"type": "SelectOption", "value": ["00000001-0000-0000-0002-000000000002"]}'::jsonb),
+  -- Completed task: assigned to user-1
+  (gen_random_uuid(), 'bb000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK',
+   '00000001-0000-0000-0000-000000000001',
+   '{"type": "EntityReference", "value": [{"entity_id": "macro|user-1@test.com", "entity_type": "USER"}]}'::jsonb),
+  -- Incomplete task: assigned to user-2
+  (gen_random_uuid(), 'bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK',
+   '00000001-0000-0000-0000-000000000001',
+   '{"type": "EntityReference", "value": [{"entity_id": "macro|user-2@test.com", "entity_type": "USER"}]}'::jsonb),
+  -- No-status task: assigned to user-1 (used by include_cbm_atm_nc path)
+  (gen_random_uuid(), 'bb000008-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK',
+   '00000001-0000-0000-0000-000000000001',
+   '{"type": "EntityReference", "value": [{"entity_id": "macro|user-1@test.com", "entity_type": "USER"}]}'::jsonb);
+-- No status property for doc-task-no-status (to test incomplete status fallback)
 
 ---------------------------------
 -- USER ACCESS PERMISSIONS
@@ -231,6 +243,42 @@ VALUES
   -- project-deep: viewed_at = 2024-03-01
   ('macro|user-1@test.com', 'aa000003-ffff-ffff-ffff-ffffffffffff', 'project',
    '2024-01-01 00:00:00', '2024-03-01 10:00:00');
+
+---------------------------------
+-- NOTIFICATIONS
+-- Used by inbox-style done/seen backend filters.
+---------------------------------
+
+INSERT INTO public."notification" (
+  "id",
+  "notification_event_type",
+  "event_item_id",
+  "event_item_type",
+  "service_sender",
+  "metadata",
+  "sender_id"
+)
+VALUES
+  -- Document notifications
+  ('dd000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'bb000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
+  ('dd000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'bb000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
+  -- Chat notifications
+  ('dd000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'cc000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
+  ('dd000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'cc000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'test', '{}'::jsonb, 'macro|user-1@test.com'),
+  -- Project notifications
+  ('dd000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'aa000001-ffff-ffff-ffff-ffffffffffff', 'project', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
+  ('dd000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'test', 'aa000003-ffff-ffff-ffff-ffffffffffff', 'project', 'test', '{}'::jsonb, 'macro|user-2@test.com');
+
+INSERT INTO public."user_notification" ("user_id", "notification_id", "created_at", "seen_at", "done")
+VALUES
+  -- not done + unread
+  ('macro|user-1@test.com', 'dd000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:00:00', NULL, false),
+  ('macro|user-1@test.com', 'dd000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:01:00', NULL, false),
+  ('macro|user-1@test.com', 'dd000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:02:00', NULL, false),
+  -- done + seen
+  ('macro|user-1@test.com', 'dd000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:03:00', '2024-03-09 11:00:00', true),
+  ('macro|user-1@test.com', 'dd000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:04:00', '2024-03-09 11:01:00', true),
+  ('macro|user-1@test.com', 'dd000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-03-09 10:05:00', '2024-03-09 11:02:00', true);
 
 ---------------------------------
 -- FRECENCY RECORDS

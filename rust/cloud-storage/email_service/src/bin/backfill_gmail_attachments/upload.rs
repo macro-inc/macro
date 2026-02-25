@@ -40,7 +40,7 @@ impl AttachmentProcessor {
         link_id: Uuid,
         attachment: &AttachmentUploadMetadata,
     ) -> anyhow::Result<()> {
-        let exists = email_db_client::attachments::provider::get_document_id_by_attachment_id(
+        let exists = email_db_client::attachments::provider::get_document_id_by_att_id_and_link(
             &self.db,
             link_id,
             attachment.attachment_db_id,

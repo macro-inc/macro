@@ -25,7 +25,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Since the list is reversed, calculate scroll from visual top
@@ -113,7 +113,7 @@ export function MessageList(props: MessageListProps) {
       </StaticMarkdownContext>
       <Show when={isMobile() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
-          <div class="macro-message-width w-full">
+          <div class="macro-message-width macro-message-padding w-full">
             <h1 class="text-3xl font-semibold text-ink pt-1 pb-4">
               {props.title}
             </h1>

@@ -1,12 +1,17 @@
+/**
+   date: 02/19/2026
+   note: Temporarily disabled pending port to connection-gateway
+   guy: Eric Hayes
+ */
 import { createBlockSignal } from '@core/block';
-import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
+// import { replaceCitations } from "@core/component/LexicalMarkdown/citationsUtils";
 import type { generateCallback } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import type {
   Completion,
   GenerateMenuOpen,
 } from '@core/component/LexicalMarkdown/plugins';
-import { cognitionWebsocketServiceClient } from '@service-cognition/client';
-import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
+// import { cognitionWebsocketServiceClient } from '@service-cognition/client';
+// import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
 import { uuid } from 'short-uuid';
 
 // Generating simple completion
@@ -23,67 +28,66 @@ export const generateCompletionId = createBlockSignal('');
 export const generateNotesSignal = createBlockSignal<boolean>(false);
 
 export const generateContentCallback: generateCallback = (
-  userRequest: string
+  _userRequest: string
 ) => {
-  const context = generateContextSignal() ?? '';
-  const id = uuid();
-  generateCompletionId.set(id.toString());
-
-  cognitionWebsocketServiceClient.streamSimpleCompletion({
-    prompt: `${PROMPT}${context}`,
-    user_request: userRequest,
-    completion_id: id,
-  });
+  // const context = generateContextSignal() ?? "";
+  // const id = uuid();
+  // generateCompletionId.set(id.toString());
+  // cognitionWebsocketServiceClient.streamSimpleCompletion({
+  // 	prompt: `${PROMPT}${context}`,
+  // 	user_request: userRequest,
+  // 	completion_id: id,
+  // });
 };
 
-createCognitionWebsocketBlockEffect('completion_stream_chunk', (data) => {
-  if (!isGeneratingSignal()) {
-    return;
-  }
-  const setIsGeneratingSignal = isGeneratingSignal.set;
-  const setGeneratedAndWaitingSignal = generatedAndWaitingSignal.set;
-  const [, setCompletionSignal] = completionSignal;
-  let text = data.content;
+// createCognitionWebsocketBlockEffect("completion_stream_chunk", (data) => {
+// 	if (!isGeneratingSignal()) {
+// 		return;
+// 	}
+// 	const setIsGeneratingSignal = isGeneratingSignal.set;
+// 	const setGeneratedAndWaitingSignal = generatedAndWaitingSignal.set;
+// 	const [, setCompletionSignal] = completionSignal;
+// 	let text = data.content;
 
-  if (data.done) {
-    replaceCitations(text).then((replacedText) => {
-      setCompletionSignal((prev) => {
-        if (prev) {
-          return {
-            ...prev,
-            text: replacedText,
-            doneGenerating: data.done,
-          };
-        }
-      });
+// 	if (data.done) {
+// 		replaceCitations(text).then((replacedText) => {
+// 			setCompletionSignal((prev) => {
+// 				if (prev) {
+// 					return {
+// 						...prev,
+// 						text: replacedText,
+// 						doneGenerating: data.done,
+// 					};
+// 				}
+// 			});
 
-      setGeneratedAndWaitingSignal(true);
-      setIsGeneratingSignal(false);
-    });
-  } else {
-    text = text.replace(/\[\[.*?\]\]/g, '');
-    setCompletionSignal((prev) => {
-      if (prev) {
-        return {
-          ...prev,
-          text,
-          doneGenerating: data.done,
-        };
-      }
-    });
-  }
-});
+// 			setGeneratedAndWaitingSignal(true);
+// 			setIsGeneratingSignal(false);
+// 		});
+// 	} else {
+// 		text = text.replace(/\[\[.*?\]\]/g, "");
+// 		setCompletionSignal((prev) => {
+// 			if (prev) {
+// 				return {
+// 					...prev,
+// 					text,
+// 					doneGenerating: data.done,
+// 				};
+// 			}
+// 		});
+// 	}
+// });
 
-export const generateNotesContentCallback = (documentIds: string[]) => {
+export const generateNotesContentCallback = (_documentIds: string[]) => {
   const id = uuid();
   generateCompletionId.set(id);
-  cognitionWebsocketServiceClient.streamSimpleCompletion({
-    prompt: PROMPT,
-    user_request: NOTES_PROMPTS,
-    model: 'anthropic/claude-sonnet-4',
-    content_document_ids: documentIds,
-    completion_id: id,
-  });
+  // cognitionWebsocketServiceClient.streamSimpleCompletion({
+  // 	prompt: PROMPT,
+  // 	user_request: NOTES_PROMPTS,
+  // 	model: "anthropic/claude-sonnet-4",
+  // 	content_document_ids: documentIds,
+  // 	completion_id: id,
+  // });
 };
 
 export const PROMPT = `You are a helpful writing assistant. You will use provided context with a user selection to answer user queries.
@@ -96,7 +100,7 @@ Your context is as follows:
 
 `;
 
-const NOTES_PROMPTS = `Take the provided document and create clear, well-structured, and CONCISE notes that:
+const _NOTES_PROMPTS = `Take the provided document and create clear, well-structured, and CONCISE notes that:
 Identify key concepts, themes, and their relationships.
 Organize ideas hierarchically with clear headings and subheadings.
 Use bullet points and numbered lists for readability.

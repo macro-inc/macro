@@ -6,6 +6,7 @@
  */
 import type { ChannelFiltersImportance } from './channelFiltersImportance';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The channel message filters used to filter down what channel messages you search over.
@@ -13,10 +14,14 @@ import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 export interface ChannelFilters {
   /** Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels. */
   channel_ids?: string[];
+  /** Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types. */
+  channel_types?: string[];
   /** Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: ChannelFiltersImportance;
   /** Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions. */
   mentions?: string[];
+  /** Filter by channel notification state. */
+  notification_filters?: NotificationFilters;
   /** Channel organization ID to search within. Empty to ignore organization filtering. */
   org_id?: ChannelFiltersOrgId;
   /** Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders. */

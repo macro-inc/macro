@@ -3,431 +3,18 @@ import {
   deleteItem,
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
-import { itemToSafeName } from '@core/constant/allBlocks';
 import { toast } from '@core/component/Toast/Toast';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
-import type {
-  PostItemsSoupParams,
-  PostSoupRequest,
-  SoupApiItem,
-  SoupApiSort,
-  SoupDocument,
-} from '@service-storage/generated/schemas';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas/getItemsSoupParams';
-import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import {
-  hashKey,
-  type InfiniteData,
-  type UseQueryResult,
-  useInfiniteQuery,
-  useMutation,
-} from '@tanstack/solid-query';
-import { SERVER_HOSTS } from 'core/constant/servers';
-import { platformFetch } from 'core/util/platformFetch';
-import type { Accessor } from 'solid-js';
-import type {
-  ChannelEntity,
-  ChatEntity,
-  DocumentEntity,
-  EmailEntity,
-  EntityData,
-  ProjectEntity,
-} from '../types/entity';
-import {
-  createApiTokenQuery,
-  handleFetchResponse,
-  withApiTokenRetry,
-} from './auth';
-import { queryClient } from './client';
-import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
+import { useMutation } from '@tanstack/solid-query';
+import type { EntityData } from '@entity';
+import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
-
-const getSoupItemId = (item: SoupApiItem): string => {
-  switch (item.tag) {
-    case 'channel':
-      return item.data.channel.id;
-    default:
-      return item.data.id;
-  }
-};
-
-const resolveDocumentEntityName = (
-  entity: DocumentEntity | SoupDocument
-): string => {
-  return itemToSafeName({
-    type: 'document',
-    name: entity.name,
-    fileType: entity.fileType,
-    subType:
-      entity.subType === null || entity.subType === undefined
-        ? null
-        : {
-            type: entity.subType.type,
-            is_completed: entity.subType.is_completed,
-          },
-  });
-};
-
-const fetchPaginatedDocumentsGet = async ({
-  apiToken,
-  ...params
-}: GetItemsSoupParams & {
-  apiToken?: string;
-}) => {
-  if (!apiToken) throw new Error('No API token provided');
-  const Authorization = `Bearer ${apiToken}`;
-
-  const url = new URL(`${SERVER_HOSTS['document-storage-service']}/items/soup`);
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value.toString());
-  });
-
-  const response = await platformFetch(url, { headers: { Authorization } });
-  await handleFetchResponse(response, 'Failed to fetch documents');
-
-  const result: SoupPage = await response.json();
-  return result;
-};
-
-const fetchPaginatedDocumentsPost = async ({
-  apiToken,
-  params,
-  requestBody,
-  signal,
-}: {
-  apiToken?: string;
-  requestBody?: PostSoupRequest;
-  params?: PostItemsSoupParams;
-  signal?: AbortSignal;
-}) => {
-  if (!apiToken) throw new Error('No API token provided');
-  const Authorization = `Bearer ${apiToken}`;
-
-  const url = new URL(`${SERVER_HOSTS['document-storage-service']}/items/soup`);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value) url.searchParams.set(key, value.toString());
-    });
-  }
-
-  const response = await platformFetch(url, {
-    headers: { Authorization, 'Content-Type': 'application/json' },
-    method: 'POST',
-    body: requestBody ? JSON.stringify(requestBody) : undefined,
-    signal,
-  });
-
-  await handleFetchResponse(response, 'Failed to fetch documents');
-
-  const result: SoupPage = await response.json();
-  return result;
-};
-
-export function createDssInfiniteQuery(
-  initialParams?: Accessor<PostItemsSoupParams>,
-  getRequestBody?: Accessor<PostSoupRequest>,
-  options?: {
-    disabled?: Accessor<boolean>;
-  }
-) {
-  const params = () => {
-    const argParams = initialParams?.();
-    let limit = 100;
-    let sort_method;
-    let emailView;
-
-    if (getRequestBody) {
-      const body = getRequestBody();
-      if (body?.limit) {
-        limit = body.limit;
-      }
-      if (body?.sort_method) {
-        sort_method = body.sort_method;
-      }
-      if (body?.emailView) {
-        emailView = body.emailView;
-      }
-    }
-
-    return {
-      ...argParams,
-      limit,
-      sort_method,
-      emailView,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => {
-    const requestBody = getRequestBody?.();
-    // Include all filters in query key so query refetches when any filter changes
-    const documentFilters = requestBody?.document_filters;
-    const projectFilters = requestBody?.project_filters;
-    const chatFilters = requestBody?.chat_filters;
-    const emailFilters = requestBody?.email_filters;
-    const channelFilters = requestBody?.channel_filters;
-
-    const queryKey = queryKeys.dss({
-      infinite: true,
-      ...params(),
-      documentFilters: documentFilters
-        ? JSON.stringify(documentFilters)
-        : undefined,
-      projectFilters: projectFilters
-        ? JSON.stringify(projectFilters)
-        : undefined,
-      chatFilters: chatFilters ? JSON.stringify(chatFilters) : undefined,
-      emailFilters: emailFilters ? JSON.stringify(emailFilters) : undefined,
-      channelFilters: channelFilters
-        ? JSON.stringify(channelFilters)
-        : undefined,
-    });
-
-    return {
-      queryKey,
-      queryKeyHashFn: hashKey,
-      queryFn: ({ pageParam, signal }) =>
-        withApiTokenRetry(authQuery, (apiToken) =>
-          fetchPaginatedDocumentsPost({
-            apiToken,
-            requestBody,
-            params: { cursor: pageParam.cursor },
-            signal,
-          })
-        ),
-      initialPageParam: params(),
-      getNextPageParam: ({ next_cursor: cursor }) =>
-        cursor ? { ...params(), cursor } : undefined,
-      select: (data) => selectData(data, { instructionsIdQuery }),
-      enabled: authQuery.isSuccess && !options?.disabled?.(),
-    };
-  });
-}
-
-const selectData: (
-  data: InfiniteData<
-    SoupPage,
-    {
-      limit: number;
-      expand?: boolean;
-      sort_method?: SoupApiSort;
-      cursor?: string;
-    }
-  >,
-  options: {
-    instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
-  }
-) => (
-  | DocumentEntity
-  | ChatEntity
-  | ProjectEntity
-  | EmailEntity
-  | ChannelEntity
-)[] = (data, options) => {
-  return data.pages.flatMap(({ items }) =>
-    items
-      .filter(
-        (item) =>
-          item.tag !== 'document' ||
-          !options.instructionsIdQuery.isSuccess ||
-          item.data.id !== options.instructionsIdQuery.data
-      )
-      .map(
-        (
-          item
-        ):
-          | DocumentEntity
-          | ChatEntity
-          | ProjectEntity
-          | EmailEntity
-          | ChannelEntity => {
-          if (item.tag === 'chat') {
-            return {
-              ...item.data,
-              type: item.tag,
-              name: item.data.name || 'New Chat',
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-            };
-          }
-
-          if (item.tag === 'project') {
-            return {
-              createdAt: item.data.createdAt,
-              updatedAt: item.data.updatedAt,
-              id: item.data.id,
-              ownerId: item.data.ownerId,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              projectId: item.data.parentId ?? undefined,
-              type: item.tag,
-              name: item.data.name || 'New Project',
-            };
-          }
-
-          if (item.tag === 'emailThread') {
-            const participants = item.data.participants?.map((p) => ({
-              email: p.emailAddress ?? '',
-              name: p.name ?? '',
-            }));
-
-            return {
-              ...item.data,
-              senderEmail: item.data.senderEmail ?? undefined,
-              senderName: item.data.senderName ?? undefined,
-              snippet: item.data.snippet ?? undefined,
-              done: !item.data.inboxVisible,
-              type: 'email',
-              name: item.data.name || 'Email Thread',
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              participants,
-            };
-          }
-
-          if (item.tag === 'channel') {
-            const out: ChannelEntity = {
-              type: 'channel',
-              id: item.data.channel.id,
-              name: item.data.channel.name || 'Unknown Channel',
-              channelType: item.data.channel.channel_type,
-              ownerId: item.data.channel.owner_id,
-              frecencyScore: item.frecency_score ?? 0,
-              updatedAt: Date.parse(item.data.channel.updated_at),
-              createdAt: Date.parse(item.data.channel.created_at),
-              participantIds: item.data.participants.map((p) => p.user_id),
-              viewedAt: item.data.viewed_at
-                ? Date.parse(item.data.viewed_at)
-                : item.data.interacted_at
-                  ? Date.parse(item.data.interacted_at)
-                  : undefined,
-              latestMessage: item.data.latest_non_thread_message
-                ? {
-                    content: item.data.latest_non_thread_message.content,
-                    senderId: item.data.latest_non_thread_message.sender_id,
-                    createdAt: Date.parse(
-                      item.data.latest_non_thread_message.created_at
-                    ),
-                  }
-                : undefined,
-            };
-            return out;
-          }
-
-          return {
-            ...item.data,
-            type: item.tag,
-            frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
-            fileType: item.data.fileType ?? undefined,
-            projectId: item.data.projectId ?? undefined,
-            subType:
-              item.data.subType === null || item.data.subType === undefined
-                ? undefined
-                : {
-                    type: item.data.subType.type as 'task',
-                    is_completed: item.data.subType.is_completed,
-                  },
-            name: resolveDocumentEntityName(item.data),
-          };
-        }
-      )
-  );
-};
-
-export function createChatsInfiniteQuery(
-  args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
-) {
-  const params = () => {
-    const argParams = typeof args === 'function' ? args() : args;
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  return useInfiniteQuery(() => ({
-    queryKey: queryKeys.chat({ infinite: true, ...params() }),
-    queryHash: dssQueryKeyHashFn(
-      queryKeys.chat({ infinite: true, ...params() }) as DssQueryKey
-    ),
-    queryFn: ({ pageParam }) =>
-      withApiTokenRetry(authQuery, (apiToken) =>
-        fetchPaginatedDocumentsGet({ apiToken, ...pageParam })
-      ),
-    initialPageParam: params(),
-    getNextPageParam: ({ next_cursor: cursor }) =>
-      cursor ? { ...params(), cursor } : undefined,
-    select: (data) =>
-      data.pages.flatMap(({ items }) =>
-        items
-          .filter((item) => item.tag === 'chat')
-          .filter((item) => !item.data.isPersistent)
-          .map(
-            (item): ChatEntity => ({
-              ...item.data,
-              type: item.tag,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-            })
-          )
-      ),
-    enabled: authQuery.isSuccess,
-  }));
-}
-
-export function createDeleteDssItemMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({ id, type }: EntityData) => {
-      const success = await deleteItem({ id, itemType: type });
-      return { success };
-    },
-    onMutate: async ({ id }: EntityData) => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-
-      function removeEntityFromQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.filter((item) => item.id !== id),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
-      queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
-        removeEntityFromQueryData(
-          prev as { pages: { items: EntityData[] }[] } | undefined
-        )
-      );
-    },
-    onSettled: (data, error, entity) => {
-      if (data?.success === false || error) {
-        console.error(`Failed to delete dss item ${entity}`, data, error);
-        toast.failure('Failed to delete item');
-      }
-
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.items._def,
-      });
-    },
-  }));
-}
+import {
+  removeSoupEntities,
+  removeSearchEntities,
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+} from '@queries/soup/cache';
 
 export function createBulkDeleteDssItemsMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
@@ -447,122 +34,32 @@ export function createBulkDeleteDssItemsMutation() {
       );
     },
     onMutate: async (entities: EntityData[]) => {
-      const deletedIDs = entities.map((e) => e.id);
-
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-      queryClient.cancelQueries({
-        queryKey: soupKeys.search._def,
-      });
-
-      function removeEntitiesFromQueryData(
-        prev: InfiniteData<SoupPage, unknown> | undefined
-      ): InfiniteData<SoupPage, unknown> | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.filter((item) => {
-            const itemId = getSoupItemId(item);
-            return !deletedIDs.includes(itemId);
-          }),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
-
-      function getSearchResultId(result: UnifiedSearchResponseItem): string {
-        switch (result.type) {
-          case 'document':
-            return result.document_id;
-          case 'chat':
-            return result.chat_id;
-          case 'channel':
-            return result.channel_id;
-          case 'email':
-            return result.thread_id;
-          case 'project':
-            return result.id;
-        }
-      }
-
-      function removeEntitiesFromSearchData(
-        prev:
-          | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
-          | undefined
-      ):
-        | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
-        | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          results: page.results.filter((result) => {
-            const id = getSearchResultId(result);
-            return !deletedIDs.includes(id);
-          }),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
-
-      queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
-        removeEntitiesFromQueryData(
-          prev as InfiniteData<SoupPage, unknown> | undefined
-        )
-      );
-
-      queryClient.setQueriesData({ queryKey: soupKeys.search._def }, (prev) =>
-        removeEntitiesFromSearchData(
-          prev as
-            | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
-            | undefined
-        )
-      );
+      const ids = new Set(entities.map((e) => e.id));
+      const soupSnapshot = removeSoupEntities(ids);
+      const searchSnapshot = removeSearchEntities(ids);
+      return { soupSnapshot, searchSnapshot };
     },
-    onError: (error, entities, _context) => {
+    onError: (error, entities, context) => {
+      context?.soupSnapshot.rollback();
+      context?.searchSnapshot.rollback();
       console.error(`Failed to delete dss items`, entities, error);
       toast.failure('Failed to delete items');
-      // Rollback on error - restore the deleted items
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.items._def,
-      });
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.search._def,
-      });
     },
   }));
 }
 
-function createMoveOptimisticUpdate(entityIds: string[], projectId: string) {
-  return (
-    prev: { pages: { items: EntityData[] }[] } | undefined
-  ): { pages: { items: EntityData[] }[] } | undefined => {
-    if (!prev) return prev;
-    const pages = prev.pages.map((page) => ({
-      ...page,
-      items: page.items.map((item) =>
-        entityIds.includes(item.id) ? { ...item, projectId } : item
-      ),
-    }));
-    return {
-      ...prev,
-      pages,
-    };
-  };
-}
-
-function invalidateAfterMove(hasProjects: boolean, failed?: boolean) {
+function invalidateAfterMove(
+  entityIds: string[],
+  hasProjects: boolean,
+  failed?: boolean
+) {
   if (failed) {
     toast.failure('Failed to move item');
   }
 
-  queryClient.invalidateQueries({
-    queryKey: soupKeys.items._def,
-  });
+  for (const id of entityIds) {
+    invalidateSoupEntity(id);
+  }
   queryClient.invalidateQueries({ queryKey: ['entity'] });
   // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
   if (hasProjects) {
@@ -596,65 +93,23 @@ export function createMoveToProjectDssEntityMutation() {
       entity: EntityData & { type: 'document' | 'chat' | 'project' };
       project: { id: string };
     }) => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-
-      // Only do optimistic updates for documents and chats
-      // Projects have complex path data that we can't compute client-side
       if (type !== 'project') {
-        queryClient.setQueriesData(
-          { queryKey: soupKeys.items._def },
-          createMoveOptimisticUpdate([id], projectId)
-        );
+        const current = getSoupEntityById(id);
+        return optimisticUpdateSoupEntity({
+          tag: type,
+          data: { id, projectId },
+          frecency_score: current?.frecency_score ?? 0,
+        });
       }
     },
-    onSettled: (data, error, { entity: { id, type } }) => {
+    onSettled: (data, error, { entity: { id, type } }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
+        context?.rollback();
         console.error(`Failed to move dss item ${id}`, data, error);
       }
 
-      invalidateAfterMove(type === 'project', failed);
-    },
-  }));
-}
-
-export function createCopyDssEntityMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type, name },
-    }: {
-      entity: EntityData & { type: 'document' | 'chat' };
-    }) => {
-      const newId = await copyItem({
-        itemType: type,
-        id,
-        name,
-      });
-
-      if (!newId) {
-        throw new Error(`Failed to copy ${type} with id ${id}`);
-      }
-
-      return newId;
-    },
-    onMutate: async () => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-      // For copy operations, we don't need optimistic updates since we're creating a new item
-      // The new item will be added when the mutation completes and queries are invalidated
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (error) {
-        console.error(`Failed to copy dss item ${id}`, data, error);
-        toast.failure('Failed to copy item');
-      }
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.items._def,
-      });
-      queryClient.invalidateQueries({ queryKey: ['entity'] });
+      invalidateAfterMove([id], type === 'project', failed);
     },
   }));
 }
@@ -759,109 +214,32 @@ export function createBulkMoveToProjectDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
     }) => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
+      const moveableEntities = entities.filter(
+        (e): e is typeof e & { type: 'document' | 'chat' } =>
+          e.type === 'document' || e.type === 'chat'
+      );
+      return moveableEntities.map((e) => {
+        const current = getSoupEntityById(e.id);
+        return optimisticUpdateSoupEntity({
+          tag: e.type,
+          data: { id: e.id, projectId: project.id },
+          frecency_score: current?.frecency_score ?? 0,
+        });
       });
-
-      // Only do optimistic updates for documents and chats
-      // Projects have complex path data that we can't compute client-side
-      const nonProjectIds = entities
-        .filter((e) => e.type !== 'project')
-        .map((e) => e.id);
-
-      if (nonProjectIds.length > 0) {
-        queryClient.setQueriesData(
-          { queryKey: soupKeys.items._def },
-          createMoveOptimisticUpdate(nonProjectIds, project.id)
-        );
-      }
     },
 
-    onSettled: (data, error, { entities }) => {
+    onSettled: (data, error, { entities }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
+        context?.forEach((txn) => txn.rollback());
         console.error(`Failed to bulk move dss items`, entities, data, error);
       }
 
       invalidateAfterMove(
+        entities.map((e) => e.id),
         entities.some((e) => e.type === 'project'),
         failed
       );
     },
   }));
-}
-
-/**
- * Optimistically update the viewedAt timestamp for a DSS item.
- * Updates the item across all DSS queries if it exists.
- */
-export function optimisticUpdateDssItemViewedAt(itemId: string) {
-  const now = new Date();
-
-  queryClient.setQueriesData(
-    { queryKey: soupKeys.items._def },
-    (prev: InfiniteData<SoupPage, unknown> | undefined) => {
-      if (!prev) return prev;
-
-      const pages = prev.pages.map((page) => {
-        return {
-          ...page,
-          items: page.items.map((item): SoupApiItem => {
-            const currentItemId = getSoupItemId(item);
-            if (currentItemId !== itemId) return item;
-
-            switch (item.tag) {
-              case 'document':
-              case 'chat':
-              case 'project':
-              case 'emailThread':
-                item.data.viewedAt = now.getTime();
-                break;
-              case 'channel':
-                item.data.viewed_at = now.toISOString();
-                break;
-            }
-
-            return item;
-          }),
-        };
-      });
-
-      return {
-        ...prev,
-        pages,
-      };
-    }
-  );
-}
-
-/** Finds a soup item in the cache and returns its location. */
-export function hasSoupItem(itemId: string) {
-  const queries = queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: soupKeys.items._def,
-  });
-
-  for (const [, data] of queries) {
-    if (!data) continue;
-
-    for (let pageIndex = 0; pageIndex < data.pages.length; pageIndex++) {
-      const page = data.pages[pageIndex];
-      const itemIndex = page.items.findIndex(
-        (item) => getSoupItemId(item) === itemId
-      );
-      if (itemIndex >= 0) return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Invalidates all DSS soup queries, marking them as stale.
- * If the query is currently being rendered, it will also be refetched in the background
- */
-export function invalidateSoup() {
-  queryClient.invalidateQueries({
-    queryKey: soupKeys.items._def,
-  });
 }

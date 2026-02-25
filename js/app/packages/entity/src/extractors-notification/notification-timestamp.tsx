@@ -15,10 +15,10 @@ interface NotificationTimestampProps {
 export function NotificationTimestamp(props: NotificationTimestampProps) {
   const timestamp = () => {
     if (props.notification) {
-      return props.notification.createdAt;
+      return props.notification.created_at;
     }
     if (props.stack && props.stack.notifications.length > 0) {
-      return props.stack.notifications[0].createdAt;
+      return props.stack.notifications[0].created_at;
     }
     return undefined;
   };

@@ -14,6 +14,7 @@ pub fn remove_trailing_br_tags_threads(threads: &mut [Thread]) {
 }
 
 // removes any trailing brs from body_html_sanitized
+#[tracing::instrument(skip(message))]
 pub fn remove_trailing_br_tags(message: &mut Message) {
     // Clean body_html_sanitized if it exists
     if let Some(body_html_sanitized) = message.body_html_sanitized.as_ref() {
@@ -144,6 +145,7 @@ mod tests {
             body_text: None,
             attachments: vec![],
             attachments_draft: vec![],
+            attachments_forwarded: vec![],
             headers_json: None,
             created_at: Default::default(),
             labels: vec![],

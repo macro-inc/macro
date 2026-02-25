@@ -4,17 +4,19 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    RequestPartsExt, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
-use super::ExtractorError;
+use super::{ExtractorError, InternalUser};
 use crate::domain::{
-    models::{EntityPermission, EntityType},
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Path parameters for entity permission routes.
 #[derive(serde::Deserialize)]
@@ -29,8 +31,8 @@ struct EntityPermissionParams {
 /// the user's permission via `EntityAccessService::get_entity_permission`.
 #[derive(Debug)]
 pub struct EntityPermissionExtractor<Svc> {
-    /// The resolved permission.
-    pub permission: EntityPermission,
+    /// The entity access receipt
+    pub entity_access_receipt: EntityAccessReceipt,
     _marker: PhantomData<Svc>,
 }
 
@@ -47,7 +49,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor {
+        let OptionalMacroUserExtractor {
             macro_user_id,
             user_context,
             ..
@@ -64,15 +66,64 @@ where
             .map_err(|_| ExtractorError::BadRequest("Missing entity_type or entity_id in path"))?;
 
         let parsed_type = parse_entity_type(&entity_type)?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id,
+                        entity_type: parsed_type,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                _marker: PhantomData,
+            });
+        }
+
         let user_org_id = user_context.organization_id.map(|id| id as i64);
 
-        let permission = service
-            .get_entity_permission(&macro_user_id, &entity_id, parsed_type, user_org_id)
-            .await
-            .map_err(ExtractorError::from)?;
+        let permission = match macro_user_id.as_ref() {
+            Some(macro_user_id) => service
+                .get_entity_permission(Some(macro_user_id), &entity_id, parsed_type, user_org_id)
+                .await
+                .map_err(ExtractorError::from)?,
+            None => {
+                // For unauthenticated users, check public access at View level
+                let access_level = service
+                    .check_public_access(
+                        &entity_id,
+                        parsed_type,
+                        crate::domain::models::AccessLevel::View,
+                    )
+                    .await
+                    .map_err(ExtractorError::from)?;
+                EntityPermission::AccessLevel { access_level }
+            }
+        };
 
         Ok(Self {
-            permission,
+            entity_access_receipt: EntityAccessReceipt {
+                entity: Entity {
+                    entity_id,
+                    entity_type: parsed_type,
+                },
+                auth: macro_user_id
+                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                entity_permission: permission,
+            },
             _marker: PhantomData,
         })
     }

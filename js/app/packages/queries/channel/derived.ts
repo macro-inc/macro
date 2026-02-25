@@ -1,9 +1,5 @@
-import type {
-  Attachment,
-  GetChannelResponse,
-  GetChannelResponseReactions,
-  Message,
-} from '@service-comms/generated/models';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import type { Attachment, GetChannelResponse, Message } from './types';
 
 export type MessageWithThreadId = Message & {
   thread_id: NonNullable<Message['thread_id']>;

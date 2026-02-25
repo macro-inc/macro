@@ -13,7 +13,6 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -27,7 +26,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
-import { useSettingsState } from '@core/constant/SettingsState';
+import { cn } from '@ui/utils/classname';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -51,7 +50,6 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      class="p-1"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -60,6 +58,10 @@ function SplitForwardButton() {
       }
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
+      class={cn(
+        'p-1',
+        isMobile() && !context.handle.canGoForward() && 'hidden'
+      )}
     >
       <CaretRight class="h-4" />
     </Button>
@@ -160,34 +162,12 @@ function _SplitPreviewToggle() {
 function _SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <div class="touch:mobile-width:hidden">
+      <div class="mobile:hidden">
         <SplitCloseButton />
       </div>
       <SplitBackButton />
       <SplitForwardButton />
     </div>
-  );
-}
-
-function SplitSettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-
-  return (
-    <Button
-      class="p-1"
-      classList={{
-        'bg-accent/20 text-accent': settingsOpen(),
-      }}
-      tooltip={
-        <LabelAndHotKey
-          label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-          hotkeyToken={TOKENS.global.toggleSettings}
-        />
-      }
-      onClick={toggleSettings}
-    >
-      <IconGear class="h-4" />
-    </Button>
   );
 }
 
@@ -203,40 +183,33 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       ref={props.ref}
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel">
-        <div class="z-2 relative flex items-center bg-panel pl-2 h-full">
-          <div class="touch:mobile-width:hidden">
+        <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
+          <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
           <SplitBackButton />
           <SplitForwardButton />
         </div>
         <div
-          class="relative w-fit min-w-0 h-full shrink pl-2"
+          class="relative min-w-0 h-full grow shrink pl-2"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}
         />
 
-        {/* space filler */}
-        <div class="h-full grow-1" />
-
-        <Show when={!isMobile()}>
-          <div
-            class="min-w-4 h-full shrink-0"
-            ref={(ref) => {
-              ctx.layoutRefs.headerRight = ref;
-            }}
-          />
-          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
-            <EntityNavigationIndicator />
-            <SplitSpotlightButton />
-          </div>
-        </Show>
-        <Show when={isTouchDevice()}>
-          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
-            <SplitSettingsButton />
-          </div>
-        </Show>
+        <div
+          class="min-w-4 h-full shrink-0 flex items-center gap-0.5 px-2"
+          ref={(ref) => {
+            ctx.layoutRefs.headerRight = ref;
+          }}
+        >
+          <Show when={!isTouchDevice()}>
+            <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
+              <EntityNavigationIndicator />
+              <SplitSpotlightButton />
+            </div>
+          </Show>
+        </div>
       </div>
     </div>
   );

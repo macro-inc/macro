@@ -202,11 +202,15 @@ export const authServiceClient = {
       },
     });
   },
-  async postProfilePictures(args: GetProfilePicturesRequestBody) {
+  async postProfilePictures(
+    args: GetProfilePicturesRequestBody,
+    init?: SafeFetchInit
+  ) {
     return mapOk(
       await fetchWithAuth<ProfilePictures>(
         `${authHost}/user/profile_pictures`,
         {
+          ...init,
           method: 'POST',
           body: JSON.stringify(args),
         }

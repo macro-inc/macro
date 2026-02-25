@@ -31,6 +31,7 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
+cowlike = { path = "../cowlike" }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -44,9 +45,11 @@ bzip2 = { workspace = true, default-features = false, features = [
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
+channels = { path = "../channels", features = ["inbound", "outbound"] }
 comms = { path = "../comms", features = ["outbound"] }
 connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }
+documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
 entity_access = { path = "../entity_access", features = ["schema"] }
 email = { path = "../email", features = ["outbound", "ports"] }
@@ -57,7 +60,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 lazy_static = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features=["s3"] }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
@@ -69,6 +72,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
+last_online_tracker = { path = "../last_online_tracker" }
 notification = { path = "../notification" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }

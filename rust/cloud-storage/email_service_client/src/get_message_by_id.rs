@@ -87,31 +87,6 @@ impl EmailServiceClient {
         }
     }
 
-    pub async fn get_search_message_by_id_internal(
-        &self,
-        id: &str,
-    ) -> anyhow::Result<message::ParsedSearchMessage> {
-        let res = self
-            .client
-            .get(format!("{}/internal/messages/{}/search", self.url, id))
-            .send()
-            .await?;
-
-        match res.status() {
-            reqwest::StatusCode::OK => {
-                let result = res.json::<message::ParsedSearchMessage>().await?;
-                Ok(result)
-            }
-            status_code => {
-                let body: String = res.text().await?;
-                anyhow::bail!(format!(
-                    "unexpected response from email service status code {}: {}",
-                    status_code, body
-                ))
-            }
-        }
-    }
-
     pub async fn get_message_by_id_batch_internal(
         &self,
         ids: &[String],

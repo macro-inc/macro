@@ -1,18 +1,24 @@
 name: Migrate Macro Database
-
 on:
   workflow_dispatch:
-
+    inputs:
+      environment:
+        description: 'Environment to run migrations for'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
 jobs:
   migrate-db:
-    name: Run Database Migrations (dev)
-    runs-on: ubuntu-latest
+    name: Run Database Migrations (${{ inputs.environment }})
+    runs-on: db-migrator
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run migrations for dev
+        with:
+          sparse-checkout: |
+            .github/
+      - name: Run migrations
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
-          environment: dev
-          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          environment: ${{ inputs.environment }}

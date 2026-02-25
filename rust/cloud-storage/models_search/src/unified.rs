@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -142,19 +143,11 @@ impl UnifiedSearchResponseItem {
         }
     }
     /// Get the updated_at timestamp for each item
-    pub fn updated_at(&self) -> i64 {
+    pub fn updated_at(&self) -> Option<DateTime<Utc>> {
         match self {
-            Self::Document(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
-            Self::Chat(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
-            Self::Email(item) => item.updated_at,
+            Self::Document(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::Chat(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::Email(item) => Some(item.updated_at),
             Self::Channel(item) => {
                 // Get the max updated_at from channel_message_search_results
                 let max_result_updated_at = item
@@ -165,18 +158,9 @@ impl UnifiedSearchResponseItem {
                     .max();
 
                 // Use max from results, or fall back to metadata.updated_at
-                max_result_updated_at.unwrap_or_else(|| {
-                    item.metadata
-                        .as_ref()
-                        .map(|m| m.updated_at)
-                        .unwrap_or_default()
-                })
+                max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
             }
-            Self::Project(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
+            Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
         }
     }
 }
@@ -200,11 +184,12 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
 }
 
 pub type SimpleUnifiedSearchResponseItem =
-    SimpleUnifiedSearchResponseBaseItem<crate::TimestampSeconds>;
+    SimpleUnifiedSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct SimpleUnifiedSearchBaseResponse<T> {
     pub results: Vec<SimpleUnifiedSearchResponseBaseItem<T>>,
 }
 
-pub type SimpleUnifiedSearchResponse = SimpleUnifiedSearchBaseResponse<crate::TimestampSeconds>;
+pub type SimpleUnifiedSearchResponse =
+    SimpleUnifiedSearchBaseResponse<crate::HumanReadableTimestamp>;

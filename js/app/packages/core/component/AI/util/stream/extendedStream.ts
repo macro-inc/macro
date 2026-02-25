@@ -1,13 +1,16 @@
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatStream } from '@service-cognition/generated/schemas';
+import type { Accessor } from 'solid-js';
 import { createEffect, createSignal } from 'solid-js';
+
+type StreamLike = { data: Accessor<ChatStream[]> };
 
 type Extended<T, U> = T & U;
 
-export interface TimedStream extends MessageStream {
+export interface TimedStream {
   timeToFirstMessageMs: () => undefined | number;
 }
 
-export function timeStream<T extends MessageStream>(
+export function timeStream<T extends StreamLike>(
   stream: T
 ): Extended<T, TimedStream> {
   const start = Date.now();
@@ -25,11 +28,11 @@ export function timeStream<T extends MessageStream>(
   };
 }
 
-export interface IddStream extends MessageStream {
+export interface IddStream {
   messageId: () => undefined | string;
 }
 
-export function idStream<T extends MessageStream>(
+export function idStream<T extends StreamLike>(
   stream: T
 ): Extended<T, IddStream> {
   const [id, setMessageId] = createSignal<string>();

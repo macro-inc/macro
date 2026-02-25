@@ -90,6 +90,34 @@ async function getLoroDocFromId(documentId: string) {
   return doc;
 }
 
+export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  return (
+    <DeprecatedIconButton
+      tooltip={{ label: 'History' }}
+      icon={ClockIcon}
+      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+      size={props.buttonSize ?? 'sm'}
+      onClick={drawerControl.toggle}
+    />
+  );
+}
+
+export function HistoryDrawer(props: { documentId: string }) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={768} title="History">
+      <Suspense fallback={'loading...'}>
+        <History
+          documentId={props.documentId}
+          close={drawerControl.close}
+          isOpen={drawerControl.isOpen()}
+        />
+      </Suspense>
+    </SplitDrawer>
+  );
+}
+
 export function HistoryModal(props: { documentId: string }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
 

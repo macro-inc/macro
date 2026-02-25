@@ -1,13 +1,9 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
-import {
-  canTryMindMapAgainSignal,
-  redoGenerateMindMap,
-} from '@block-canvas/signal/generateMindMap';
 import { useRenderMermaid } from '@block-canvas/util/mermaid';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragEvent } from '@entity';
 import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
@@ -166,17 +162,11 @@ export function handleDelete() {
 }
 
 export const renderMermaid = createCallback(async (args: { code: string }) => {
-  const redoGenerateMindMapCallback = createCallback(redoGenerateMindMap);
-  const [canTryMindMapAgain, _setCanTryMindMapAgain] = canTryMindMapAgainSignal;
   try {
     await renderMermaid(args);
   } catch (err) {
     console.error(err);
-    if (canTryMindMapAgain()) {
-      redoGenerateMindMapCallback();
-    } else {
-      toast.failure('Failed to generate Mind Map.');
-    }
+    toast.failure('Failed to render Mermaid diagram.');
   }
 });
 

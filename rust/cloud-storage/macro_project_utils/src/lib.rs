@@ -36,7 +36,7 @@ pub async fn update_project_modified<T>(
                 && !old_project_id.is_empty()
             {
                 tracing::trace!(project_id=?old_project_id, "updating project modified date");
-                let _ = macro_db_client::projects::update_project_modified_date(&db, &old_project_id).await.inspect_err(|e| {
+                let _ = update_project_modified_date(&db, &old_project_id).await.inspect_err(|e| {
                         tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date");
                     });
             }
@@ -46,10 +46,24 @@ pub async fn update_project_modified<T>(
             {
                 tracing::trace!(project_id=?project_id, "updating project modified date");
 
-                let _ = macro_db_client::projects::update_project_modified_date(&db, &project_id).await.inspect_err(|e| {
+                let _ = update_project_modified_date(&db, &project_id).await.inspect_err(|e| {
                         tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date");
                     });
             }
         }
     });
+}
+
+async fn update_project_modified_date(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    project_id: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"UPDATE "Project" SET "updatedAt" = NOW() WHERE id = $1"#,
+        project_id,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
 }

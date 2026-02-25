@@ -1,5 +1,5 @@
 use ::notification::domain::models::UserNotificationRow;
-use chrono::{DateTime, Utc, serde::ts_seconds_option};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
@@ -11,7 +11,6 @@ use utoipa::ToSchema;
 mod test;
 
 #[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ApiUserNotification {
     /// The user who owns this notification.
     #[schema(value_type = String)]
@@ -30,20 +29,12 @@ pub struct ApiUserNotification {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
     pub created_at: Option<DateTime<Utc>>,
     /// When the notification was viewed/seen.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub updated_at: Option<DateTime<Utc>>,
     /// When the notification was deleted.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
     pub notification_metadata: NotifEvent,
@@ -109,7 +100,7 @@ pub fn to_typed_row(
 /// Instantiates the notification crate's generic router, then overwrites the
 /// GET `/` route with a wrapper that deserializes each row into [`NotifEvent`].
 pub fn router<
-    S: ::notification::domain::service::NotificationIngress,
+    S: ::notification::domain::service::NotificationReader,
     O: Clone + Send + Sync + 'static,
 >(
     state: ::notification::inbound::http::NotificationRouterState<S>,
@@ -155,7 +146,7 @@ pub fn router<
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn list_typed_notifications<S: ::notification::domain::service::NotificationIngress>(
+async fn list_typed_notifications<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     query: axum::extract::Query<::notification::inbound::http::Params>,
@@ -211,7 +202,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
     )
 )]
 async fn bulk_get_typed_notifications_by_event_item_ids<
-    S: ::notification::domain::service::NotificationIngress,
+    S: ::notification::domain::service::NotificationReader,
 >(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
@@ -265,7 +256,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_typed_by_event_item_id<S: ::notification::domain::service::NotificationIngress>(
+async fn get_typed_by_event_item_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     path: axum::extract::Path<::notification::inbound::http::EventItemIdPath>,
@@ -317,7 +308,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_typed_notification_by_id<S: ::notification::domain::service::NotificationIngress>(
+async fn get_typed_notification_by_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     path: axum::extract::Path<::notification::inbound::http::NotificationIdPath>,

@@ -33,6 +33,13 @@ export type DraftFormAttachment =
       contentType: string;
       attachmentID: string;
       fileSize: number;
+    }
+  | {
+      type: 'forwarded';
+      attachmentID: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
     };
 
 export interface EmailFormStateOptions {
@@ -165,16 +172,23 @@ export function createEmailFormState(
 
   // TODO: Replace this signal with a memo deriving the attachments from the draft data
   // and a temporary queue to track attachments to be uploaded on draft save
-  const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>(
-    draft?.attachments_draft.map((a) => ({
-      type: 'remote',
+  const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>([
+    ...(draft?.attachments_draft.map((a) => ({
+      type: 'remote' as const,
       attachmentID: a.id,
       contentType: a.content_type,
       fileName: a.file_name,
       url: a.s3_key,
       fileSize: a.size,
-    })) ?? []
-  );
+    })) ?? []),
+    ...(draft?.attachments_forwarded.map((a) => ({
+      type: 'forwarded' as const,
+      attachmentID: a.attachment_id,
+      fileName: a.filename ?? 'attachment',
+      mimeType: a.mime_type ?? 'application/octet-stream',
+      fileSize: a.size_bytes ?? 0,
+    })) ?? []),
+  ]);
 
   const setRecipients = (
     field: keyof EmailFormRecipients,
@@ -197,6 +211,10 @@ export function createEmailFormState(
     setState('replyType', next);
     const rt = state.replyType;
     const msg = replyingTo;
+
+    // Clear forwarded attachments when switching away from forward
+    setAttachments((prev) => prev.filter((a) => a.type !== 'forwarded'));
+
     if (msg) {
       let calculated: EmailFormRecipients = { to: [], cc: [], bcc: [] };
 
@@ -223,6 +241,18 @@ export function createEmailFormState(
           replyType: rt,
           visible: true,
         });
+
+        // Populate forwarded attachments from original message (skip inline images)
+        const fwdAttachments: DraftFormAttachment[] = (msg.attachments ?? [])
+          .filter((a) => !a.content_id)
+          .map((a) => ({
+            type: 'forwarded' as const,
+            attachmentID: a.db_id,
+            fileName: a.filename ?? 'attachment',
+            mimeType: a.mime_type ?? 'application/octet-stream',
+            fileSize: a.size_bytes ?? 0,
+          }));
+        setAttachments((prev) => [...prev, ...fwdAttachments]);
       }
     }
 
@@ -321,6 +351,13 @@ export function createEmailFormState(
         setAttachments((p) =>
           p.filter(
             (a) => a.type !== 'remote' || a.attachmentID !== attachmentID
+          )
+        );
+      },
+      removeForwarded: (attachmentID: string) => {
+        setAttachments((p) =>
+          p.filter(
+            (a) => a.type !== 'forwarded' || a.attachmentID !== attachmentID
           )
         );
       },

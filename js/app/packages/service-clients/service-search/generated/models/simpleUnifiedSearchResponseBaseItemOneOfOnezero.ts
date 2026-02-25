@@ -4,9 +4,9 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleChannelSearchReponseBaseItemTimestampSeconds } from './simpleChannelSearchReponseBaseItemTimestampSeconds';
+import type { SimpleChannelSearchReponseBaseItemHumanReadableTimestamp } from './simpleChannelSearchReponseBaseItemHumanReadableTimestamp';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfOnezeroAllOf } from './simpleUnifiedSearchResponseBaseItemOneOfOnezeroAllOf';
 
 export type SimpleUnifiedSearchResponseBaseItemOneOfOnezero =
-  SimpleChannelSearchReponseBaseItemTimestampSeconds &
+  SimpleChannelSearchReponseBaseItemHumanReadableTimestamp &
     SimpleUnifiedSearchResponseBaseItemOneOfOnezeroAllOf;

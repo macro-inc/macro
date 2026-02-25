@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import { partialMatchKey } from '@tanstack/query-core';
 import { createPersistenceKey, setupQueryPersistence } from './persistence';
+import { initSoupNormalizer } from './soup/cache';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,7 +16,6 @@ export const queryClient = new QueryClient({
 });
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
-const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
 
 // Clean up orphaned v0 databases from the old whole-cache persistence format
 try {
@@ -30,7 +30,7 @@ setupQueryPersistence({
       store: createPerQueryIDBStore({
         dbName: createPersistenceKey('channels', 1),
       }),
-      maxAgeMs: SEVEN_DAYS_MS,
+      maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: (key) => partialMatchKey(key, ['channel']),
     },
@@ -38,12 +38,15 @@ setupQueryPersistence({
       store: createPerQueryIDBStore({
         dbName: createPersistenceKey('email-threads', 1),
       }),
-      maxAgeMs: SEVEN_DAYS_MS,
+      maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: (key) => partialMatchKey(key, ['email', 'threadMessages']),
     },
   ],
 });
+
+// Subscribe to query cache events for automatic normalization of soup entities
+initSoupNormalizer(queryClient);
 
 export function useQueryClient() {
   return queryClient;

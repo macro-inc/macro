@@ -2,7 +2,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { idToDisplayName } from '@core/user';
-import { formatDate } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
 import NotePencil from '@phosphor-icons/core/regular/note-pencil.svg?component-solid';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
@@ -36,7 +36,7 @@ export enum Color {
 export function MessageRow(
   props: ParentProps<{
     authorId: string | null;
-    date: Date;
+    date?: DateValue | null;
     hideBottomMargin?: boolean;
     nameSlot?: any;
     isActive: boolean;
@@ -57,7 +57,7 @@ export function MessageRow(
 export function MessageRowUI(
   props: ParentProps<{
     authorId: string;
-    date: Date;
+    date?: DateValue | null;
     hideBottomMargin?: boolean;
     nameSlot?: any;
     hideBubble?: boolean;
@@ -92,9 +92,9 @@ export function MessageRowUI(
           </div>
         )}
         <div class="text-xs text-ink truncate grow-1">{displayName()}</div>
-        <div class="text-xs text-ink-muted">
-          {formatDate(props.date.valueOf())}
-        </div>
+        <Show when={props.date}>
+          <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
+        </Show>
       </div>
       <Show when={props.children}>
         <div
@@ -109,7 +109,7 @@ export function MessageRowUI(
 
 export function MessageTopRow(props: {
   authorId: string | null;
-  date: Date;
+  date?: DateValue | null;
   deleteMessage?: () => void;
   enableEditing?: () => void;
   hideBottomMargin?: boolean;

@@ -5,7 +5,6 @@ pub mod create_user_chat;
 pub mod delete_chat;
 pub mod get_chat;
 pub mod get_chat_permissions;
-pub mod get_chats;
 pub mod patch_chat;
 pub mod revert_delete_chat;
 
@@ -50,12 +49,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     ))
                     .layer(ensure_chat_exists.clone()),
             ),
-        )
-        .route(
-            "/",
-            get(get_chats::get_chats_handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
         )
         .route(
             "/:chat_id",

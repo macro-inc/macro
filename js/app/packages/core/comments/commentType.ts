@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
@@ -17,7 +18,7 @@ type CommentBase = {
   owner: string;
   author: string;
   text: string;
-  createdAt: number;
+  createdAt: DateValue | null | undefined;
   // TODO: deprecated, adding for type compatibility
   resolved?: boolean;
 };

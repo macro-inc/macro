@@ -167,11 +167,18 @@ async function fetchProjectPreviews(
     return [];
   }
 
-  return result[1].previews.map((preview) => ({
-    type: 'project',
-    loading: false,
-    ...preview,
-  }));
+  return result[1].previews.map((preview) => {
+    const { updatedAt, ...rest } = preview as Extract<
+      typeof preview,
+      { updatedAt?: unknown }
+    >;
+    return {
+      type: 'project' as const,
+      loading: false as const,
+      ...rest,
+      updatedAt,
+    };
+  });
 }
 
 async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
@@ -208,7 +215,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         loading: false as const,
         name: subject,
         owner: sender as string | undefined,
-        updatedAt: new Date(data.thread.updated_at).getTime(),
+        updatedAt: data.thread.updated_at,
       };
     })
   );

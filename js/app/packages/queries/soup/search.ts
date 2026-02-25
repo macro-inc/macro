@@ -1,6 +1,6 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/maybeResult';
-import type { WithSearch, EntityData } from '@macro-entity';
+import type { WithSearch, EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import { searchClient } from '@service-search/client';
@@ -20,13 +20,25 @@ interface SearchQueryOptions {
   enabled: boolean;
 }
 
+/** Search service won't accept text less than 3 characters */
+export const validateSearchServiceText = (text: string) => {
+  return text.length >= 3;
+};
+
 export const useSearchSoupQuery = (
   args: Accessor<SearchSoupQueryArgs>,
   options?: Accessor<SearchQueryOptions>
 ) => {
   const pageSize = createMemo(() => args().params.page_size);
 
-  const request = createMemo(() => args().body);
+  const request = createMemo(() => {
+    const body = args().body;
+    return {
+      ...body,
+      query: body.query?.trim(),
+      terms: body.terms?.map((t) => t.trim()),
+    };
+  });
 
   const terms = createMemo(() => {
     const query = request().query;
@@ -47,13 +59,11 @@ export const useSearchSoupQuery = (
   });
 
   const validSearchTerms = createMemo(() => {
-    return terms().length > 0 && terms().every((term) => term.length >= 3);
+    return terms().length > 0 && terms().every(validateSearchServiceText);
   });
 
   const enabled = createMemo(() => {
     if (options?.().enabled === false) return false;
-
-    if (!terms().length) return true;
 
     return ENABLE_SEARCH_SERVICE && validSearchTerms();
   });
@@ -61,7 +71,8 @@ export const useSearchSoupQuery = (
   const mapSearchResponseItem = useSearchResponseItemMapper();
 
   return useInfiniteQuery(() => ({
-    queryKey: soupKeys.search(args()).queryKey,
+    queryKey: soupKeys.search({ params: args().params, body: request() })
+      .queryKey,
     queryFn: async (ctx) => {
       return throwOnErr(
         async () =>

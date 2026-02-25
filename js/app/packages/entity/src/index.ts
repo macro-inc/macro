@@ -13,7 +13,7 @@ export { ListEntity } from './composed/ListEntity';
 
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
-export { DraftBadge, SharedBadge } from './components/Badges';
+export { DraftBadge, InviteBadge, SharedBadge } from './components/Badges';
 export { DisplayName } from './components/DisplayName';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 
@@ -24,5 +24,12 @@ export {
 } from './utils/notification';
 
 export { unreadFilterFn } from './utils/filter';
+export {
+  TASK_STATUS_OPTIONS,
+  getTaskAssigneeIds,
+  getTaskStatusOptionId,
+  isTaskClosed,
+  isCurrentUserAssigned,
+} from './utils/task-properties';
 
 export { default as DebugEntityView } from './debug/DebugEntityView';

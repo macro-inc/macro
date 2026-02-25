@@ -1,5 +1,8 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  setVirtualKeyboardHeight,
+  setVirtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
@@ -9,7 +12,7 @@ import { onCleanup, onMount } from 'solid-js';
  */
 export function useAppSquishHandlers() {
   if (isIOS) {
-    // We are tracking viewport height, and using that to set a CSS variable and the viewport offset,
+    // We are tracking viewport height, and using that to set a CSS variable,
     // so that we can properly constrain the viewport-height for mobile in response to changes such as
     // the virtual keyboard appearing.
     let previousViewportHeight = window.visualViewport?.height || 0;
@@ -70,6 +73,7 @@ export function useAppSquishHandlers() {
 
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       setVirtualKeyboardVisible(true);
+      setVirtualKeyboardHeight(event.detail?.height ?? 0);
       const newViewportHeight =
         (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
       const vh = newViewportHeight * 0.01;
@@ -78,6 +82,7 @@ export function useAppSquishHandlers() {
 
     const handleKeyboardWillHide = () => {
       setVirtualKeyboardVisible(false);
+      setVirtualKeyboardHeight(0);
       document.documentElement.style.setProperty('--dvh', '1dvh');
     };
 

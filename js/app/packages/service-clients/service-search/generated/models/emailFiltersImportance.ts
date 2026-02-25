@@ -6,6 +6,8 @@
  */
 
 /**
- * Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+ * Filter by email importance. None to not filter. True to show only important emails
+(drafts, personal, sent, or uncategorized). False to show only unimportant emails
+(those categorized as promotions, social, updates, or forums).
  */
 export type EmailFiltersImportance = boolean | null;

@@ -1,13 +1,22 @@
+import type { DateValue } from '@core/util/date';
+import { visibleLength, windowSearchMatch } from '@core/util/searchHighlight';
 import { Entity } from '../entity';
+import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
   isChannelEntity,
   isEmailEntity,
   isProjectContainedEntity,
+  type ChannelEntity,
+  type EmailEntity,
   type ProjectEntity,
   type EntityData,
   isTaskEntity,
 } from '../types/entity';
 import { Match, Show, Switch, type Ref } from 'solid-js';
+import {
+  getStreamState,
+  subscribeToStreamState,
+} from '@service-connection/stream-events';
 import {
   isWithNotification,
   type WithNotification,
@@ -21,7 +30,7 @@ import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
-import { DraftBadge, SharedBadge } from '../components/Badges';
+import { DraftBadge, InviteBadge, SharedBadge } from '../components/Badges';
 import { DisplayName } from '../components/DisplayName';
 import { useIsShared } from '../utils/shared';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
@@ -32,14 +41,36 @@ import {
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
 
+const hasSearchContentHits = (entity: EntityData) =>
+  isSearchEntity(entity) && !!entity.search.contentHitData?.length;
+
+const getBestContentHitContent = (entity: EntityData) => {
+  if (!isSearchEntity(entity)) return undefined;
+  const hits = entity.search.contentHitData;
+  if (!hits?.length) return undefined;
+  if (hits.length === 1) return hits[0].content;
+
+  let bestIdx = 0;
+  let bestLen = visibleLength(hits[0].content);
+  for (let i = 1; i < hits.length; i++) {
+    const len = visibleLength(hits[i].content);
+    if (len > bestLen) {
+      bestLen = len;
+      bestIdx = i;
+    }
+  }
+  return hits[bestIdx].content;
+};
+
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
-  timestamp?: number;
+  timestamp?: DateValue | null;
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
   hovered?: boolean;
+  hideContentHits?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
   showUnrollNotifications?: boolean;
@@ -60,10 +91,77 @@ interface LayoutProps {
   unread: boolean;
   isShared: boolean;
   hasNotifications: boolean;
+  showContentHits: boolean;
+  streamState?: StreamEvent;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+}
+
+function EmailIdentity(props: { entity: EmailEntity }) {
+  return (
+    <>
+      <Show
+        when={props.entity.isDraft}
+        fallback={
+          <Show when={props.entity.hasIcsAttachment}>
+            <InviteBadge />
+          </Show>
+        }
+      >
+        <DraftBadge />
+      </Show>
+      <span class="truncate">
+        <Entity.EmailParticipants entity={props.entity} />
+      </span>
+    </>
+  );
+}
+
+function EmailSnippet(props: {
+  entity: EmailEntity;
+  showContentHits: boolean;
+}) {
+  return (
+    <Show
+      when={props.showContentHits && getBestContentHitContent(props.entity)}
+      fallback={props.entity.snippet}
+    >
+      {(content) => (
+        <StaticMarkdown
+          markdown={windowSearchMatch(content())}
+          theme={unifiedListMarkdownTheme}
+          singleLine
+        />
+      )}
+    </Show>
+  );
+}
+
+function ChannelMessage(props: {
+  message: NonNullable<ChannelEntity['latestMessage']>;
+}) {
+  const hasContent = () => Boolean(props.message.content?.trim());
+  return (
+    <>
+      <span class="font-semibold truncate min-w-min max-w-1/3">
+        <DisplayName id={props.message.senderId} format="firstName" />
+      </span>
+      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
+        <Show
+          when={hasContent()}
+          fallback={<span class="italic">Attached Items</span>}
+        >
+          <StaticMarkdown
+            theme={unifiedListMarkdownTheme}
+            markdown={props.message.content}
+            singleLine
+          />
+        </Show>
+      </span>
+    </>
+  );
 }
 
 function NarrowLayout(props: LayoutProps) {
@@ -98,20 +196,11 @@ function NarrowLayout(props: LayoutProps) {
           <UnreadIndicator active />
         </Show>
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} />
+          <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <>
-                <Show when={entity().isDraft}>
-                  <DraftBadge />
-                </Show>
-                <span class="truncate">
-                  <Entity.EmailParticipants entity={entity()} />
-                </span>
-              </>
-            )}
+            {(entity) => <EmailIdentity entity={entity()} />}
           </Match>
           <Match when={props.entity}>
             {(entity) => <Entity.Title entity={entity()} />}
@@ -134,8 +223,7 @@ function NarrowLayout(props: LayoutProps) {
       <Show
         when={
           (isEmailEntity(props.entity) || isChannelEntity(props.entity)) &&
-          !props.hasNotifications &&
-          !isSearchEntity(props.entity)
+          !props.hasNotifications
         }
       >
         <Entity.Slot placement="body" class="flex flex-col gap-1 pb-3 -mt-1">
@@ -148,8 +236,11 @@ function NarrowLayout(props: LayoutProps) {
                       <Entity.Title entity={entity()} />
                     </span>
                   </div>
-                  <div class="text-ink/50 font-medium w-full truncate">
-                    <span class="truncate">{entity().snippet}</span>
+                  <div class="text-ink/50 font-medium w-full truncate inline-flex items-center">
+                    <EmailSnippet
+                      entity={entity()}
+                      showContentHits={props.showContentHits}
+                    />
                   </div>
                 </>
               )}
@@ -159,16 +250,7 @@ function NarrowLayout(props: LayoutProps) {
                 <Show when={entity().latestMessage}>
                   {(msg) => (
                     <div class="flex items-center gap-2 w-full truncate">
-                      <span class="font-semibold truncate min-w-min max-w-1/3">
-                        <DisplayName id={msg().senderId} format="firstName" />
-                      </span>
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
-                        <StaticMarkdown
-                          theme={unifiedListMarkdownTheme}
-                          markdown={msg().content}
-                          singleLine
-                        />
-                      </span>
+                      <ChannelMessage message={msg()} />
                     </div>
                   )}
                 </Show>
@@ -218,40 +300,24 @@ function WideLayout(props: LayoutProps) {
         class="font-semibold truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} />
+          <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <Show
-                  when={!isSearchEntity(entity())}
-                  fallback={
-                    <>
-                      <span class="truncate">
-                        <Entity.Title entity={entity()} />
-                      </span>
-                      <span class="text-ink/50 font-medium truncate flex-1">
-                        {entity().snippet}
-                      </span>
-                    </>
-                  }
-                >
-                  <span class="w-(--title-width) truncate shrink-0 flex gap-2">
-                    <Show when={entity().isDraft}>
-                      <DraftBadge />
-                    </Show>
-                    <span class="truncate">
-                      <Entity.EmailParticipants entity={entity()} />
-                    </span>
-                  </span>
-                  <span class="truncate">
-                    <Entity.Title entity={entity()} />
-                  </span>
-                  <span class="text-ink/50 font-medium truncate flex-1">
-                    {entity().snippet}
-                  </span>
-                </Show>
+                <span class="w-(--title-width) truncate shrink-0 flex gap-2">
+                  <EmailIdentity entity={entity()} />
+                </span>
+                <span class="truncate">
+                  <Entity.Title entity={entity()} />
+                </span>
+                <span class="text-ink/50 font-medium truncate flex-1 inline-flex items-center">
+                  <EmailSnippet
+                    entity={entity()}
+                    showContentHits={props.showContentHits}
+                  />
+                </span>
               </>
             )}
           </Match>
@@ -262,18 +328,7 @@ function WideLayout(props: LayoutProps) {
                   <Entity.Title entity={entity()} />
                 </span>
                 <Show when={!props.hasNotifications && entity().latestMessage}>
-                  {(msg) => (
-                    <>
-                      <DisplayName id={msg().senderId} format="firstName" />
-                      <span class="text-ink/50 font-medium truncate inline-flex shrink items-center">
-                        <StaticMarkdown
-                          theme={unifiedListMarkdownTheme}
-                          markdown={msg().content}
-                          singleLine
-                        />
-                      </span>
-                    </>
-                  )}
+                  {(msg) => <ChannelMessage message={msg()} />}
                 </Show>
               </>
             )}
@@ -319,6 +374,9 @@ export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
 
+  subscribeToStreamState(props.entity.id, props.entity.type);
+  const streamState = getStreamState(props.entity.id);
+
   const hasNotifications = () => {
     if (!props.showUnrollNotifications) return false;
     if (!isWithNotification(props.entity)) return false;
@@ -329,6 +387,9 @@ export function ListEntity(props: ListEntityProps) {
     );
   };
 
+  const showContentHits = () =>
+    !props.hideContentHits && hasSearchContentHits(props.entity);
+
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     checked: props.checked,
@@ -336,6 +397,8 @@ export function ListEntity(props: ListEntityProps) {
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),
+    showContentHits: showContentHits(),
+    streamState: streamState(),
     onProjectClick: props.onProjectClick,
   });
 
@@ -377,12 +440,7 @@ export function ListEntity(props: ListEntityProps) {
       <Show when={hasNotifications()}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-2 @lg/entity:ml-6')}>
-            <Show
-              when={
-                isWithNotification(props.entity) &&
-                !isSearchEntity(props.entity)
-              }
-            >
+            <Show when={isWithNotification(props.entity) && !showContentHits()}>
               <Entity.Notification.Stacks
                 entity={props.entity}
                 visibleCount={3}
@@ -392,13 +450,15 @@ export function ListEntity(props: ListEntityProps) {
         </div>
       </Show>
 
-      <Show when={isSearchEntity(props.entity)}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
-          <div class={cn('min-w-0 flex-1 truncate ml-4 @lg/entity:ml-6')}>
+      <Show when={showContentHits()}>
+        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
+          <div
+            class={cn('min-w-0 flex-1 overflow-hidden ml-4 @lg/entity:ml-6')}
+          >
             <Entity.Search.ContentHits
               entity={props.entity}
               onClick={props.onContentHitClick}
-              visibleCount={1}
+              visibleCount={0}
             />
           </div>
         </div>

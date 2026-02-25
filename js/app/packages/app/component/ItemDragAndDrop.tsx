@@ -7,7 +7,7 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { EntityIcon, getEntityIconType } from 'core/component/EntityIcon';
-import type { EntityDragData } from '@macro-entity';
+import type { EntityDragData } from '@entity';
 import {
   createContext,
   createMemo,

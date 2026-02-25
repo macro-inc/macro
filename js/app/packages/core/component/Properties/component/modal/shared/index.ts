@@ -3,11 +3,16 @@ export { Dropdown } from './Dropdown';
 export {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityMapper,
+  entityTypeToBuckets,
+  useQuickAccessEntities,
   getEntityName,
   getEntitySearchText,
   getEntityType,
   threadMapper,
+  quickAccessItemToEntity,
+  entityDataToEntity,
+  userToEntity,
+  sortEntitiesWithSelfFirst,
 } from './entityUtils';
 export { PropertyEntitySelector } from './PropertyEntitySelector';
 export { PropertyOptionSelector } from './PropertyOptionSelector';

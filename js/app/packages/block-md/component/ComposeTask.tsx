@@ -37,8 +37,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import LinkIcon from '@icon/regular/link-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@core/context/user';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -108,11 +107,8 @@ async function createTaskWithProperties(
     }
   );
 
-  // Invalidate queries to refresh soup items and add to history
-  const queryClient = useQueryClient();
-  queryClient.invalidateQueries({
-    queryKey: soupKeys.items._def,
-  });
+  // refetchSoupEntity is already called inside createTask — just upsert to history
+  refetchSoupEntity(documentId, 'document');
 
   // Upsert the new task to history
   upsertToHistory({
@@ -343,7 +339,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     );
   };
 
-  const properties = () => {
+  const properties = (): Property[] => {
     return filterMap(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -354,8 +350,8 @@ export function ComposeTask(props: ComposeTaskProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: '',
-        createdAt: '',
+        updatedAt: new Date(0),
+        createdAt: new Date(0),
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
         options: options().get(definition.id),
@@ -370,7 +366,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     saveDate: async (property: Property, date: Date) => {
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };
@@ -387,7 +383,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    createTaskWithProperties(
+    const documentId = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -395,7 +391,12 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    // Clear draft and reset form
+    if (!documentId) {
+      // Task creation failed — keep the draft so the user can retry
+      return;
+    }
+
+    // Clear draft and reset form only on success
     clearTaskComposerDraft();
     setTitle('');
     setContent('');
@@ -470,7 +471,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative bracket-never"
+      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -500,9 +501,9 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </Show>
       </div>
-      <div class="w-full border-b border-edge-muted/50" />
-      <div class="p-2">
-        <div class="flex-shrink-0 flex p-2 gap-2 items-center">
+      <div class="border-b border-edge-muted/50" />
+      <div class="p-2 flex-1 min-h-0 flex flex-col">
+        <div class="shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
           <input
             type="text"
@@ -536,22 +537,21 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <div class="min-h-0 text-base m-2">
-          <MarkdownTextarea
-            editable={() => true}
-            onChange={(value) => setContent(value)}
-            initialValue={content()}
-            placeholder={props.placeholder ?? 'Add description...'}
-            captureEditor={setBodyEditor}
-            onEscape={() => {
-              containerRef()?.focus();
-              return true;
-            }}
-            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
-            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
-            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          />
-        </div>
+        <MarkdownTextarea
+          editable={() => true}
+          onChange={(value) => setContent(value)}
+          initialValue={content()}
+          placeholder={props.placeholder ?? 'Add description...'}
+          captureEditor={setBodyEditor}
+          onEscape={() => {
+            containerRef()?.focus();
+            return true;
+          }}
+          onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
+          onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
+          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto"
+        />
 
         <Suspense>
           <PropertiesProvider

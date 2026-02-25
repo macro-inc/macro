@@ -5,13 +5,16 @@ import {
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
-import { Show } from 'solid-js';
+import type { StreamEvent } from '@service-connection/generated/schemas';
+import { Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
+import { PulsingStar } from '../components/PulsingStar';
 import type { ChannelEntity, EntityData } from '../types/entity';
 import { isChannelEntity, isTaskEntity } from '../types/entity';
-import { match } from 'ts-pattern';
 
 interface EntityIconProps {
   entity: EntityData;
+  streamState?: StreamEvent;
 }
 
 function DirectMessageIcon(props: { entity: ChannelEntity }) {
@@ -55,12 +58,21 @@ export function EntityIcon(props: EntityIconProps) {
 
   const isDirectMessage = () => iconType() === 'direct_message';
 
+  const isChatEntity = () => props.entity.type === 'chat';
+
   return (
-    <Show
-      when={isDirectMessage()}
+    <Switch
       fallback={<CoreEntityIcon targetType={validIconType()} size="fill" />}
     >
-      <DirectMessageIcon entity={props.entity as ChannelEntity} />
-    </Show>
+      <Match when={isDirectMessage()}>
+        <DirectMessageIcon entity={props.entity as ChannelEntity} />
+      </Match>
+      <Match when={isChatEntity()}>
+        <PulsingStar
+          kind="listIcon"
+          animate={props.streamState?.type === 'created'}
+        />
+      </Match>
+    </Switch>
   );
 }

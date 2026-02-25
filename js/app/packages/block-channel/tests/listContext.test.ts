@@ -78,17 +78,16 @@ describe('createMessageListContextLookup', () => {
     expect(context.msg4.threadIndex).toBe(-1);
   });
 
-  it('should identify new messages for non-threaded messages only', () => {
+  it('should identify new messages for all messages including threaded', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: alwaysNewMessage,
     });
 
-    // All non threaded messages are new (if new function is always true)
+    expect(context.msg0.isNewMessage).toBe(true);
     expect(context.msg1.isNewMessage).toBe(true);
-    expect(context.msg1.isNewMessage).toBe(true);
-    expect(context.msg2.isNewMessage).toBe(false);
-    expect(context.msg3.isNewMessage).toBe(false);
+    expect(context.msg2.isNewMessage).toBe(true);
+    expect(context.msg3.isNewMessage).toBe(true);
     expect(context.msg4.isNewMessage).toBe(true);
   });
 
@@ -119,6 +118,32 @@ describe('createMessageListContextLookup', () => {
     expect(context.msg2.isParentNewMessage).toBe(true);
     expect(context.msg3.isParentNewMessage).toBe(true);
     expect(context.msg4.isParentNewMessage).toBe(false);
+  });
+
+  it('should mark only the first new top-level message as isFirstNewMessage', () => {
+    const context = createMessageListContextLookup({
+      messages: mockMessages,
+      isNewMessageFn: alwaysNewMessage,
+    });
+
+    // msg0 is the first top-level message marked as new
+    // threaded messages (msg2, msg3) are new but not isFirstNewMessage
+    expect(context.msg0.isFirstNewMessage).toBe(true);
+    expect(context.msg1.isFirstNewMessage).toBe(false);
+    expect(context.msg2.isFirstNewMessage).toBe(false);
+    expect(context.msg3.isFirstNewMessage).toBe(false);
+    expect(context.msg4.isFirstNewMessage).toBe(false);
+  });
+
+  it('should not mark any message as isFirstNewMessage when none are new', () => {
+    const context = createMessageListContextLookup({
+      messages: mockMessages,
+      isNewMessageFn: neverNewMessage,
+    });
+
+    expect(context.msg0.isFirstNewMessage).toBe(false);
+    expect(context.msg1.isFirstNewMessage).toBe(false);
+    expect(context.msg4.isFirstNewMessage).toBe(false);
   });
 
   it('should identify messages in the last thread when messages are threaded to last top-level', () => {

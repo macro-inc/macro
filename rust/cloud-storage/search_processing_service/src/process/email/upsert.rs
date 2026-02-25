@@ -1,21 +1,36 @@
 use anyhow::Context;
 use chrono::Utc;
-use email_service_client::EmailServiceClient;
 use models_email::service::label::system_labels;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
 };
+use sqlx::PgPool;
 use sqs_client::search::email::{EmailMessage, EmailThreadMessage};
+use uuid::Uuid;
 
 pub async fn process_upsert_message(
     opensearch_client: &OpensearchClient,
-    email_client: &EmailServiceClient,
+    db: &PgPool,
     upsert_email_message: &EmailMessage,
 ) -> anyhow::Result<()> {
-    let message_info = email_client
-        .get_search_message_by_id_internal(&upsert_email_message.message_id)
+    let message_id: Uuid = upsert_email_message
+        .message_id
+        .parse()
+        .context("failed to parse message_id as UUID")?;
+
+    let message_info =
+        email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(
+            db,
+            &message_id,
+        )
         .await
         .context("failed to get message info")?;
+
+    let message_info = if let Some(message_info) = message_info {
+        message_info
+    } else {
+        return Ok(());
+    };
 
     // don't insert spam or trash messages
     if message_info.labels.iter().any(|label| {
@@ -87,19 +102,25 @@ pub async fn process_upsert_message(
 
 pub async fn process_upsert_thread_message(
     opensearch_client: &OpensearchClient,
-    email_client: &EmailServiceClient,
+    db: &PgPool,
     upsert_email_thread_message: &EmailThreadMessage,
 ) -> anyhow::Result<()> {
     let mut message_offset = 0;
     // Max is 100
-    let message_limit = 100;
+    let message_limit = 10;
+
+    let thread_id: Uuid = upsert_email_thread_message
+        .thread_id
+        .parse()
+        .context("failed to parse thread_id as UUID")?;
 
     let now = EpochSeconds::new(Utc::now().timestamp())?;
 
     loop {
-        let messages = email_client
-            .get_search_messages_by_thread_id_internal(
-                &upsert_email_thread_message.thread_id,
+        let messages =
+            email_db_client::messages::get_parsed_search::get_paginated_parsed_search_messages_by_thread_id(
+                db,
+                thread_id,
                 message_offset,
                 message_limit,
             )

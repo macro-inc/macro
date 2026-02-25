@@ -1,4 +1,4 @@
-import type { Message } from '@service-comms/generated/models/message';
+import type { Message } from '@queries/channel/types';
 
 export type MessageWithThreadId = Message & {
   thread_id: NonNullable<Message['thread_id']>;

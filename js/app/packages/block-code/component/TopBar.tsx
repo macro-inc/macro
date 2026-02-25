@@ -13,11 +13,10 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
-import { ReferencesModal } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { blockTextSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -34,7 +33,6 @@ export const TopBar: Component = () => {
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(() => {
     const content = text();
@@ -73,27 +71,15 @@ export const TopBar: Component = () => {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <ReferencesModal
-            documentId={blockId}
-            documentName={name()}
-            buttonSize="sm"
-          />
-          <DocumentPropertiesModal
-            documentId={blockId}
-            blockType="code"
-            buttonSize="sm"
-          />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={name()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+        <ReferencesButton
+          documentId={blockId}
+          documentName={name()}
+          buttonSize="sm"
+        />
+        <DocumentPropertiesButton buttonSize="sm" />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareTrigger />
         </div>
       </SplitToolbarRight>
     </>

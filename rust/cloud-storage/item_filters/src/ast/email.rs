@@ -1,6 +1,7 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{EmailFilters, ast::ExpandErr};
 
@@ -24,8 +25,14 @@ pub enum EmailLiteral {
     Bcc(Email),
     /// The recipient field of the email
     Recipient(Email),
+    /// This value filters by email thread ID
+    ThreadId(Uuid),
     /// This node value filters by email importance. false short-circuits to match nothing.
     Importance(bool),
+    /// This node value filters by notification done state for emails.
+    NotificationDone(bool),
+    /// This node value filters by notification seen state for emails.
+    NotificationSeen(bool),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {
@@ -36,7 +43,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             cc,
             bcc,
             recipients,
+            email_thread_ids,
             importance,
+            notification_filters,
+            include_labels: _,
+            exclude_labels: _,
         } = input;
 
         fn map_email(s: String) -> Email {
@@ -63,14 +74,28 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(map_email)
             .expand(EmailLiteral::Recipient, Expr::or);
 
+        let thread_id_nodes = email_thread_ids
+            .iter()
+            .map(|s| Uuid::parse_str(s))
+            .try_expand(|r| r.map(EmailLiteral::ThreadId), Expr::or)?;
+
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(EmailLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(EmailLiteral::NotificationSeen(seen)));
 
         Ok([
             sender_nodes,
             cc_nodes,
             bcc_nodes,
             recipient_nodes,
+            thread_id_nodes,
             importance_node,
+            notification_done_node,
+            notification_seen_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

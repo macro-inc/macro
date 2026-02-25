@@ -1,5 +1,5 @@
 export {
   ChatInput,
-  type ChatInputProps,
   type ChatInputComponentProps,
-} from './useChatInput';
+  type ChatInputProps,
+} from './ChatInput';

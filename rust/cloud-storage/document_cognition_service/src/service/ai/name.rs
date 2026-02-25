@@ -7,7 +7,8 @@ use crate::{
 
 use ai::chat_completion::get_chat_completion_openai_request;
 use async_openai::types::{
-    ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs,
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    CreateChatCompletionRequestArgs,
 };
 use macro_db_client::dcs::patch_chat::patch_chat;
 
@@ -19,14 +20,14 @@ pub async fn get_recomended_chat_name(text: &str) -> anyhow::Result<String> {
         .context("failed to build system message")?
         .into();
 
-    let user_message = ChatCompletionRequestSystemMessageArgs::default()
+    let user_message = ChatCompletionRequestUserMessageArgs::default()
         .content(text)
         .build()
         .context("failed to build user message")?
         .into();
 
     let request = CreateChatCompletionRequestArgs::default()
-        .model(ai::types::Model::Gemini20Flash.to_string())
+        .model(ai::types::Model::Claude45Haiku.to_string())
         .max_tokens(DEFAULT_MAX_TOKENS)
         .messages(vec![system_message, user_message])
         .build()

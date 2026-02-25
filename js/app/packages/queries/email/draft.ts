@@ -9,11 +9,11 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
-import { soupKeys } from '@queries/soup/keys';
+import { invalidateSoupEntity, invalidateAllSoup } from '@queries/soup/cache';
 
 type CreateDraftParams = {
   draft: MessageToSend;
-  sendTime?: string | null;
+  sendTime?: Date | null;
 };
 
 /**
@@ -28,7 +28,7 @@ export function useSaveDraftMutation(
         async () =>
           await emailClient.createDraft({
             draft: vars.draft,
-            send_time: vars.sendTime,
+            send_time: vars.sendTime?.toISOString() ?? null,
           })
       );
     },
@@ -42,9 +42,7 @@ export function useSaveDraftMutation(
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
-          queryClient.invalidateQueries({
-            queryKey: soupKeys.items._def,
-          });
+          invalidateAllSoup();
         },
       },
       callbacks
@@ -74,13 +72,11 @@ export function useDeleteDraftMutation(
           console.error('Failed to delete draft', error);
           toast.failure('Failed to delete draft');
         },
-        onSuccess() {
+        onSuccess(_data, vars) {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
-          queryClient.invalidateQueries({
-            queryKey: soupKeys.items._def,
-          });
+          invalidateSoupEntity(vars.draftId);
         },
       },
       callbacks

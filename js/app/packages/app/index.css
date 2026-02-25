@@ -245,6 +245,14 @@
 @custom-variant ios (&:where(.tauri-ios *));
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant mobile-width (@media (max-width: 639px));
+/* `mobile:` is equivalent to `touch:mobile-width:` */
+@custom-variant mobile {
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
 
 :root {
   --color-focus: var(--color-accent);
@@ -487,10 +495,24 @@
 :root {
   --viewport-padding: 16px;
   --keyboard-height: 0px;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
+
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+@media (max-width: 639px) {
+  :root:where(html[data-touch-device="true"]) {
+    --text-xxs: 0.6875rem;
+    --text-xs: 0.8125rem;
+    --text-sm: 0.9375rem;
+    --text-base: 1.0625rem;
+  }
+}
 
 @theme default {
     /* Font families */
@@ -499,6 +521,9 @@
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
+    
+    /* Custom container size */
+    --container-small: 40rem;
 
     /* Colors */
     --color-macro-accent: #00c4ff;
@@ -720,19 +745,28 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
 
+/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
+   Keeps UI elements within device safe areas (notch, home indicator, etc.). */
+@utility safe-insets {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
 :root {
-  --thread-shift: 23px;
-  --user-icon-width: 30px;
-  --left-of-connector: 20px;
+  --thread-shift: 32px;
+  --user-icon-width: 36px;
+  --body-padding: .5rem;
+  --left-of-connector: 16px;
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
 }
 
 @media (min-width: 640px) {
   :root {
-    --thread-shift: 46px;
-    --user-icon-width: 40px;
+    --thread-shift: 40px;
+    --body-padding: .5rem;
     --left-of-connector: 28px;
-    --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
   }
 }
 
@@ -741,14 +775,26 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
         max-width: 800px;
         min-width: 250px;
     }
+}
 
-    @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4);
-    }
-    @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2);
-    }
+@utility macro-message-padding {
+  
+  @container (width < 816px) {
+      padding-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      padding-inline: calc(var(--spacing) * 2);
+  }
+}
 
+@utility macro-message-margin {
+  
+  @container (width < 816px) {
+      margin-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      margin-inline: calc(var(--spacing) * 2);
+  }
 }
 
 ::-webkit-scrollbar {

@@ -15,6 +15,7 @@ export const definition = defineBlock({
   description: '',
   defaultFilename: DEFAULT_CHAT_NAME,
   component: BlockChat,
+  liveTrackingEnabled: true,
   async load(source, intent) {
     if (source.type === 'dss') {
       // Fetch the chat from dcs

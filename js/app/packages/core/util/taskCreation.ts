@@ -5,7 +5,7 @@ import { createTask } from './create';
 export type TaskData = {
   title: string;
   assigneeUserIds: string[];
-  dueDate: string | null;
+  dueDate: Date | null;
 };
 
 export type TaskCreationOptions = {
@@ -42,7 +42,7 @@ function buildPropertyInputs(
   if (task.dueDate) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: { type: 'date', value: task.dueDate },
+      value: { type: 'date', value: task.dueDate.toISOString() },
     });
   }
 

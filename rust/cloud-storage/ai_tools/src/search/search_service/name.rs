@@ -1,9 +1,10 @@
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use item_filters::EmailFilters;
 use models_search::{
     MatchType,
-    unified::{UnifiedSearchIndex, UnifiedSearchRequest},
+    unified::{UnifiedSearchFilters, UnifiedSearchIndex, UnifiedSearchRequest},
 };
 use schemars::JsonSchema;
 use search_service_client::SearchServiceClient;
@@ -52,7 +53,13 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             query: Some(self.name.to_owned()),
             terms: None,
             match_type: MatchType::Partial,
-            filters: None,
+            filters: Some(UnifiedSearchFilters {
+                email: Some(EmailFilters {
+                    importance: Some(true),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
             search_on: models_search::SearchOn::Name,
             collapse: Some(true),
             include: self.entity_types.clone(),

@@ -13,7 +13,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { EntityData } from '../../../macro-entity/src/types/entity';
+import type { EntityData } from '@entity';
 import { MoveToProjectView } from './MoveToProjectView';
 import { RenameView } from './RenameView';
 

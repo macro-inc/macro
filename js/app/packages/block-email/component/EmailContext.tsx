@@ -169,7 +169,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     notificationSource,
     'email',
     (notification) => {
-      const meta = notification.notificationMetadata;
+      const meta = notification.notification_metadata;
       if (meta.tag !== 'new_email') return;
       if (meta.content.threadId === threadQuery.data?.db_id) {
         threadQuery.refetch();

@@ -4,15 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ThreadCreatedAt } from './threadCreatedAt';
 import type { ThreadDeletedAt } from './threadDeletedAt';
+import type { ThreadUpdatedAt } from './threadUpdatedAt';
 
 export interface Thread {
-  createdAt: number;
-  deletedAt: ThreadDeletedAt;
+  createdAt?: ThreadCreatedAt;
+  deletedAt?: ThreadDeletedAt;
   documentId: string;
   metadata?: unknown;
   owner: string;
   resolved: boolean;
   threadId: number;
-  updatedAt: number;
+  updatedAt?: ThreadUpdatedAt;
 }

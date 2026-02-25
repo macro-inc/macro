@@ -1,8 +1,7 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
-import { useQueryClient as useEntityQueryClient } from '@macro-entity';
 import { useSplitLayout } from '../component/split-layout/layout';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 
 export function useHandleFileUpload({
   projectId,
@@ -10,7 +9,6 @@ export function useHandleFileUpload({
   projectId?: string;
 } = {}) {
   const { replaceOrInsertSplit } = useSplitLayout();
-  const entityQueryClient = useEntityQueryClient();
 
   return async (files: UploadInput[]) => {
     const results = await uploadFiles(files, 'dss', {
@@ -28,16 +26,13 @@ export function useHandleFileUpload({
       .filter((result) => result.pending)
       .filter((result) => result.type === 'folder');
 
-    // update soup list folders once all pending uploads are done
+    // refetch soup for folders once all pending uploads are done
     Promise.allSettled(pendingUploads.map((upload) => upload.projectId)).then(
       (results) => {
-        const uploaded = results.filter(
-          (result) => result.status === 'fulfilled' && result.value
-        );
-        if (uploaded.length > 0) {
-          entityQueryClient.invalidateQueries({
-            queryKey: soupKeys.items._def,
-          });
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            refetchSoupEntity(result.value, 'project');
+          }
         }
       }
     );
@@ -47,13 +42,10 @@ export function useHandleFileUpload({
       return;
     }
 
-    // this refreshes the uploaded data into the soup list
-    entityQueryClient.invalidateQueries({
-      queryKey: soupKeys.items._def,
-    });
-
     const upload = successfulUploads[0];
+    // refetch the uploaded document into soup
     if (upload.type === 'document') {
+      refetchSoupEntity(upload.documentId, 'document');
       replaceOrInsertSplit(
         {
           type: fileTypeToBlockName(upload.fileType),

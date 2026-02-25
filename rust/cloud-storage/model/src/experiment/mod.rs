@@ -1,4 +1,3 @@
-use chrono::serde::ts_seconds_option;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -9,12 +8,8 @@ pub struct Experiment {
     /// Whether the experiment is active
     pub active: bool,
     /// The date the experiment was started
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The date the experiment was ended
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

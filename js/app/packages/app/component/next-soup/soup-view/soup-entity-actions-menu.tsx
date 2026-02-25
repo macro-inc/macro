@@ -5,10 +5,12 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
 import {
   makeCopyAction,
+  makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
+  makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
 import { useUserId } from '@core/context/user';
@@ -39,6 +41,10 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const copyAction = makeCopyAction();
 
   const moveToProjectAction = makeMoveToProjectAction();
+
+  const copyLinkAction = makeCopyLinkAction();
+
+  const shareAction = makeShareAction();
 
   const canExecuteAny = (canExecute: (e: EntityData) => boolean) =>
     props.entities.some(canExecute);
@@ -117,9 +123,24 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       />
 
       <MenuItem
-        text="Copy"
+        text="Duplicate"
         disabled={!canExecuteAny(copyAction.canExecute)}
         onClick={() => handleAction(copyAction.executeWithSoup)}
+      />
+
+      <MenuItem
+        text="Copy Link"
+        disabled={props.entities.length !== 1}
+        onClick={() => handleAction(copyLinkAction.executeWithSoup)}
+      />
+
+      <MenuItem
+        text="Share"
+        disabled={
+          props.entities.length !== 1 ||
+          !shareAction.canExecute(props.entities[0])
+        }
+        onClick={() => handleAction(shareAction.executeWithSoup)}
       />
 
       <Divider />

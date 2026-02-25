@@ -283,6 +283,17 @@ generate_file_types!(
     (Gz, "gz", "application/gzip", Archive),
     // Video files
     (Mp4, "mp4", "video/mp4", Video),
+    (Mkv, "mkv", "video/x-matroska", Video),
+    (Webm, "webm", "video/webm", Video),
+    (Avi, "avi", "video/x-msvideo", Video),
+    (Mov, "mov", "video/quicktime", Video),
+    (Wmv, "wmv", "video/x-ms-wmv", Video),
+    (Mpg, "mpg", "video/mpeg", Video),
+    (Mpeg, "mpeg", "video/mpeg", Video),
+    (M4v, "m4v", "video/mp4", Video),
+    (Flv, "flv", "video/x-flv", Video),
+    (F4v, "f4v", "video/mp4", Video),
+    (ThreeGp, "3gp", "video/3gpp", Video),
     // Document formats
     (Xls, "xls", "application/vnd.ms-excel", Document),
     (Ppt, "ppt", "application/vnd.ms-powerpoint", Document),

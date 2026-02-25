@@ -136,7 +136,7 @@ export class EmailService extends pulumi.ComponentResource {
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 1024 : 256,
-              memory: stack === 'prod' ? 1742 : 717, // 2048 minimum - 256 for datadog - 50 for log_router
+              memory: stack === 'prod' ? 4096 : 717,
               environment: [...containerEnvVars],
               logConfiguration: {
                 logDriver: 'awsfirelens',
@@ -144,7 +144,7 @@ export class EmailService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `email-service-${stack}`,
+                  dd_service: 'email-service',
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',

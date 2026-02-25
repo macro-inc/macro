@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatFiltersImportance } from './chatFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * The chat filters used to filter down what chats you search over.
@@ -14,6 +15,8 @@ export interface ChatFilters {
   chat_ids?: string[];
   /** Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: ChatFiltersImportance;
+  /** Filter by chat notification state. */
+  notification_filters?: NotificationFilters;
   /** Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering. */

@@ -95,7 +95,7 @@ export function SplitTabs(props: {
   });
 
   return (
-    <div class="touch:mobile-width:hidden relative isolate h-full shrink grow-2 @container-normal">
+    <div class="mobile:hidden relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
       <div
         class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"

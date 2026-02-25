@@ -11,7 +11,7 @@ import {
 } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragEvent } from '@entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -25,7 +25,7 @@ import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiM
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
-import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import TableActionMenu, {
   anchorElemRefSignal,
   menuButtonRefSignal,
@@ -454,7 +454,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     const highlightNodeId_ = highlightNodeId();
-    if (highlightNodeId_ && editorReady()) {
+    if (highlightNodeId_ && locationReady()) {
       setHighlightNodeId(undefined);
       const found = editor.dispatchCommand(
         GO_TO_NODE_ID_COMMAND,
@@ -975,7 +975,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           editor={editor}
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
-          emails={() => []}
+          showOpenTabs
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

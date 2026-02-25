@@ -18,10 +18,26 @@ import { Shortcuts } from './Shortcuts';
 import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { SettingsButton } from './SettingsButton';
 
 const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
+
+/**
+ * Wrapper specifically for in-Split version of Settings Panel used on Mobile. Includes the correct Header button.
+ */
+export function SettingsPanelComponentWrapper() {
+  return (
+    <>
+      <SplitHeaderRight>
+        <SettingsButton />
+      </SplitHeaderRight>
+      <SettingsPanel />
+    </>
+  )
+}
 
 type SettingsPanelProps = {
   hide?: boolean;

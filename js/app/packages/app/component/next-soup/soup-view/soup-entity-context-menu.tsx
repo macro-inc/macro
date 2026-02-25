@@ -1,4 +1,5 @@
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import type { DateValue } from '@core/util/date';
 import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { InlineEntity, type EntityData } from '@entity';
@@ -8,7 +9,7 @@ import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;
-  entityTimestamp?: number;
+  entityTimestamp?: DateValue | null;
   onOpenChange?: (open: boolean) => void;
 }
 

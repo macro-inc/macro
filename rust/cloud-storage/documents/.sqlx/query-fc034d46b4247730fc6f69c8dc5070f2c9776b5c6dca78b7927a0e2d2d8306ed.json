@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"UserItemAccess\" (\n                \"id\", \"user_id\", \"item_id\", \"item_type\", \"access_level\",\n                \"granted_from_channel_id\", \"created_at\", \"updated_at\"\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc034d46b4247730fc6f69c8dc5070f2c9776b5c6dca78b7927a0e2d2d8306ed"
+}

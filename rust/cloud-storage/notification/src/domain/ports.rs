@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -23,20 +24,24 @@ use crate::domain::models::{
 /// Port for sending mobile push notifications (iOS/Android via SNS).
 pub trait NotificationSender: Send + Sync + 'static {
     /// Send an iOS push notification via APNS.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &APNSPushNotification<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 
     /// Send an Android push notification via FCM.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &FCMMessage<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
 /// Port for rate limiting operations.
@@ -73,11 +78,11 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// (idempotent operation).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
-    ) -> impl Future<Output = Result<Option<Uuid>, Report>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Update the sent status for users who received the notification.
     fn update_sent_status<'a>(
@@ -184,14 +189,15 @@ pub trait EmailSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+use crate::domain::models::push_notification_event::RawPushNotificationEventMessage;
 use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
     /// Publish notifications for async delivery (after DB persistence).
-    fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+    fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).
@@ -216,4 +222,36 @@ pub trait NotificationEgress: Send + Sync + 'static {
     /// Messages are automatically deleted from the queue after successful delivery.
     fn poll_and_deliver(&self)
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
+}
+
+/// Port for deleting a device registration from the database by its SNS endpoint ARN.
+pub trait DeviceRegistrationDeleter: Send + Sync + 'static {
+    /// Delete a device registration by its endpoint ARN.
+    fn delete_device_by_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for deleting an SNS platform endpoint.
+pub trait SnsEndpointDeleter: Send + Sync + 'static {
+    /// Delete an SNS platform endpoint by its ARN.
+    fn delete_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for receiving and acknowledging push notification event messages from a queue.
+pub trait PushNotificationEventQueue: Send + Sync + 'static {
+    /// Receive a batch of raw push notification event messages from the queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawPushNotificationEventMessage>, Report>> + Send;
+
+    /// Delete a message from the queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }

@@ -6,6 +6,7 @@ import {
 } from '@lexical-core/utils/parsers';
 import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
+import { isValid } from 'date-fns';
 
 // Patterns for extracting data from mentions (not for replacement)
 const USER_MENTION_PATTERN = /<m-user-mention>(.*?)<\/m-user-mention>/;
@@ -34,15 +35,19 @@ export function extractUserMentions(markdownText: string): string[] {
 
 /**
  * Extract the first date mention from markdown text.
- * Returns ISO date string or null.
+ * Returns parsed ISO date string Date object or null.
  */
-export function extractDateMention(markdownText: string): string | null {
+export function extractDateMention(markdownText: string): Date | null {
   const match = DATE_MENTION_PATTERN.exec(markdownText);
   if (!match) return null;
 
   try {
     const data = JSON.parse(match[1]);
-    return data.date ?? null;
+    const maybeIsoString = data.date;
+    if (!maybeIsoString) return null;
+    const date = new Date(maybeIsoString);
+    if (!isValid(date)) return null;
+    return date;
   } catch {
     return null;
   }

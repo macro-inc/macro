@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentMetadataDeletedAt = number | null;
+export type DocumentMetadataDeletedAt = string | null;

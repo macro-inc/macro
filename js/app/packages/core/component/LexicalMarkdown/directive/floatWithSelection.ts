@@ -1,5 +1,4 @@
 import { isInBlock } from '@core/block';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getScrollParent } from '@core/util/scrollParent';
 import {
@@ -15,6 +14,7 @@ import {
 } from '@floating-ui/dom';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
 
 const DEFAULT_SPACING = 8;
 
@@ -37,6 +37,7 @@ type FloatWithSelectionOptions = {
   spacing?: number;
   floatingOptions?: Partial<ComputePositionConfig>;
   moveWithSelection?: boolean;
+  onAvailableHeight?: (height: number) => void;
 };
 
 export function floatWithSelection(
@@ -78,19 +79,17 @@ export function floatWithSelection(
 
     if (anchor) {
       setCurrentAnchor(anchor);
+      const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
       const { placement } = await computePosition(anchor, floatingEl, {
-        placement: isTouchDevice() ? 'top-start' : 'bottom-start',
+        placement: 'bottom-start',
         middleware: [
-          isTouchDevice()
-            ? null
-            : flip({
-                fallbackStrategy: 'initialPlacement',
-                fallbackPlacements: ['top-start'],
-                boundary,
-                padding: accessor()?.spacing ?? DEFAULT_SPACING,
-              }),
-          offset(accessor()?.spacing ?? DEFAULT_SPACING),
-          shift({ padding: accessor()?.spacing ?? DEFAULT_SPACING, boundary }),
+          flip({
+            fallbackPlacements: ['top-start'],
+            boundary,
+            padding: iosSafePadding(spacing),
+          }),
+          offset(spacing),
+          shift({ padding: spacing, boundary }),
           hide(),
         ],
       });
@@ -104,14 +103,19 @@ export function floatWithSelection(
     let current = currentAnchor();
     if (!current || !decidedPlacement) return;
 
+    const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+    const onAvailableHeight = accessor()?.onAvailableHeight;
     const { x, y, middlewareData } = await computePosition(
       current,
       floatingEl,
       {
         placement: decidedPlacement,
         middleware: [
-          offset(accessor()?.spacing ?? DEFAULT_SPACING),
-          shift({ padding: accessor()?.spacing ?? DEFAULT_SPACING, boundary }),
+          offset(spacing),
+          shift({ padding: iosSafePadding(spacing), boundary }),
+          ...(onAvailableHeight
+            ? [iosSizeMiddleware(spacing, onAvailableHeight)]
+            : []),
           hide(),
         ],
       }

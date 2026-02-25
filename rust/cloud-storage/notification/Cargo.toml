@@ -6,6 +6,7 @@ version = "0.1.0"
 
 
 [features]
+ai_tool = ["dep:ai", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 axum = [
   "dep:axum",
   "dep:model-error-response",
@@ -14,26 +15,38 @@ axum = [
   "schema",
 ]
 docs = ["dep:aquamarine"]
+redis-tests = []
 schema = ["dep:utoipa"]
 
 [dependencies]
+ai = { path = "../ai", optional = true }
+anyhow = { workspace = true, optional = true }
 aquamarine = { version = "0.6", optional = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+cowlike = { path = "../cowlike" }
 either = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
-redis = { workspace = true, features = ["tokio-native-tls-comp"] }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-native-tls-comp",
+] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

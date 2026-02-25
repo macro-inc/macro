@@ -27,4 +27,4 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 
 export const SMART_MODE_MODEL: Model = 'claude-opus-4-6';
 
-export const DEFAULT_MODEL: Model = 'claude-haiku-4-5';
+export const DEFAULT_MODEL: Model = 'claude-opus-4-6';

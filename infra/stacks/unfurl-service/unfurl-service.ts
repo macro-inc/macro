@@ -165,7 +165,7 @@ export class UnfurlService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `unfurl-service-${stack}`,
+                  dd_service: 'unfurl-service',
                   dd_source: 'fargate',
                   dd_tags: `project:unfurl-service, env:${stack}`,
                   provider: 'ecs',

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use item_filters::DocumentFilters;
 use schemars::JsonSchema;
@@ -48,11 +49,11 @@ pub struct DocumentSearchResponseItem {
 /// Metadata for a document fetched from the database
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct DocumentMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
-    pub deleted_at: Option<i64>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these
@@ -107,7 +108,7 @@ pub struct SimpleDocumentSearchResponseBaseItem<T> {
 }
 
 pub type SimpleDocumentSearchResponseItem =
-    SimpleDocumentSearchResponseBaseItem<crate::TimestampSeconds>;
+    SimpleDocumentSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleDocumentSearchResponse {

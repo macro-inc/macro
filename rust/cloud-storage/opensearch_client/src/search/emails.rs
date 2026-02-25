@@ -11,7 +11,9 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson};
+use opensearch_query_builder::{
+    BoolQuery, BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson,
+};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
@@ -36,6 +38,14 @@ pub(crate) struct EmailQueryBuilder {
     bcc: Vec<String>,
     /// The recipients of the email message
     recipients: Vec<String>,
+    /// Labels to include (emails must have at least one)
+    include_labels: Vec<String>,
+    /// Labels to exclude (emails must not have any)
+    exclude_labels: Vec<String>,
+    /// Filter by importance. All filters (importance, include_labels, exclude_labels) are
+    /// ANDed together. Contradictory combinations (e.g. importance=true with
+    /// include_labels=["CATEGORY_PROMOTIONS"]) will return no results.
+    importance: Option<bool>,
 }
 
 impl EmailQueryBuilder {
@@ -47,6 +57,9 @@ impl EmailQueryBuilder {
             cc: Vec::new(),
             bcc: Vec::new(),
             recipients: Vec::new(),
+            include_labels: Vec::new(),
+            exclude_labels: Vec::new(),
+            importance: None,
         }
     }
 
@@ -88,13 +101,25 @@ impl EmailQueryBuilder {
         self
     }
 
+    pub fn include_labels(mut self, include_labels: Vec<String>) -> Self {
+        self.include_labels = include_labels;
+        self
+    }
+
+    pub fn exclude_labels(mut self, exclude_labels: Vec<String>) -> Self {
+        self.exclude_labels = exclude_labels;
+        self
+    }
+
+    pub fn importance(mut self, importance: Option<bool>) -> Self {
+        self.importance = importance;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-        // We don't want to include trash items in your email search
-        content_bool_query.must_not(QueryType::term("labels", "TRASH"));
-
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
@@ -118,10 +143,60 @@ impl EmailQueryBuilder {
         }
 
         if !self.recipients.is_empty() {
-            // Create new query for recipients
             let recipients_query =
                 should_wildcard_field_query_builder("recipients", &self.recipients);
             content_bool_query.filter(recipients_query);
+        }
+
+        if !self.include_labels.is_empty() {
+            content_bool_query.filter(QueryType::terms("labels", self.include_labels.clone()));
+        }
+
+        for label in &self.exclude_labels {
+            content_bool_query.must_not(QueryType::term("labels", label.clone()));
+        }
+
+        // Importance filter. Source of truth for the label logic is in
+        // email/src/outbound/email_pg_repo/dynamic.rs (EmailLiteral::Importance).
+        match self.importance {
+            Some(true) => {
+                // Exclude emails that have depriority labels UNLESS they also have a priority label.
+                let importance_exclude = BoolQuery::new()
+                    .filter(QueryType::terms(
+                        "labels",
+                        [
+                            "CATEGORY_UPDATES",
+                            "CATEGORY_PROMOTIONS",
+                            "CATEGORY_SOCIAL",
+                            "CATEGORY_FORUMS",
+                        ],
+                    ))
+                    .must_not(QueryType::terms(
+                        "labels",
+                        ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
+                    ));
+                content_bool_query.must_not(QueryType::Bool(importance_exclude));
+            }
+            Some(false) => {
+                // Only show deprioritized emails: must have a depriority label
+                // AND must not have a priority label.
+                let depriority_filter = BoolQuery::new()
+                    .filter(QueryType::terms(
+                        "labels",
+                        [
+                            "CATEGORY_UPDATES",
+                            "CATEGORY_PROMOTIONS",
+                            "CATEGORY_SOCIAL",
+                            "CATEGORY_FORUMS",
+                        ],
+                    ))
+                    .must_not(QueryType::terms(
+                        "labels",
+                        ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
+                    ));
+                content_bool_query.filter(QueryType::Bool(depriority_filter));
+            }
+            None => {}
         }
         // END CUSTOM ATTRIBUTES SECTION
 
@@ -184,6 +259,9 @@ pub struct EmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
+    pub importance: Option<bool>,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
@@ -207,6 +285,9 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .bcc(args.bcc)
             .search_on(args.search_on)
             .recipients(args.recipients)
+            .include_labels(args.include_labels)
+            .exclude_labels(args.exclude_labels)
+            .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .disable_recency(args.disable_recency)
@@ -291,7 +372,9 @@ pub(crate) async fn search_emails(
                         bcc: a.bcc,
                         cc: a.cc,
                         labels: a.labels,
-                        sent_at: a.sent_at_seconds,
+                        sent_at: a
+                            .sent_at_seconds
+                            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
                         sender: a.sender,
                         recipients: a.recipients,
                     })),

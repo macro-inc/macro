@@ -1,6 +1,14 @@
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
-import type { EmailEntity } from '../types/entity';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  mergeAdjacentMacroEmTags,
+  highlightTermsInText,
+} from '@core/util/searchHighlight';
+import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
+import { isSearchEntity } from '../types/search';
+import { Show } from 'solid-js';
 
 /** Checks if a value is likely an email address */
 export function isLikelyEmail(value?: string): boolean {
@@ -17,7 +25,7 @@ export function getEmailLocalPart(email: string): string {
  * Priority: macroDisplayName > participant.name > email local part
  */
 export function resolveParticipantName(
-  participant: { email: string; name: string },
+  participant: EmailThreadParticipants[number],
   macroDisplayName?: string
 ): string {
   if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
@@ -35,7 +43,7 @@ export function resolveParticipantName(
  * Returns an array of display names (possibly ["me"] if single participant is userEmail)
  */
 export function combineParticipantNames(
-  participants: Array<{ email: string; name: string }> | undefined,
+  participants: EmailThreadParticipants | undefined,
   userEmail: string | undefined,
   getMacroDisplayName: (email: string) => string | undefined
 ): string[] {
@@ -88,11 +96,7 @@ export function formatDisplayNames(names: string[]): string | undefined {
   return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
 }
 
-/**
- * Get a nicely formatted list of participants from an email entity.
- * @param props
- * @returns
- */
+/** Get a nicely formatted list of participants from an email entity. */
 export function EntityEmailParticipants(props: { entity: EmailEntity }) {
   const userEmail = useEmail();
   const fetchDisplayName = (email: string) =>
@@ -108,5 +112,25 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
     );
   };
 
-  return <>{displayNames()}</>;
+  const highlighted = () => {
+    if (!isSearchEntity(props.entity)) return undefined;
+    const terms = props.entity.search.senderHighlightTerms;
+    if (!terms?.length) return undefined;
+    const names = displayNames();
+    if (!names) return undefined;
+    const result = mergeAdjacentMacroEmTags(highlightTermsInText(names, terms));
+    return result !== names ? result : undefined;
+  };
+
+  return (
+    <Show when={highlighted()} fallback={displayNames()}>
+      {(md) => (
+        <StaticMarkdown
+          markdown={md()}
+          theme={unifiedListMarkdownTheme}
+          singleLine
+        />
+      )}
+    </Show>
+  );
 }

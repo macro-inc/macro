@@ -9,7 +9,7 @@ export type ParsedCheckbox = {
   title: string;
   rawMarkdown: string;
   assigneeUserIds: string[];
-  dueDate: string | null;
+  dueDate: Date | null;
 };
 
 /** Successful task creation */

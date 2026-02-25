@@ -76,21 +76,9 @@ pub struct ApiThreadPreviewCursorInner {
     sender_name: Option<String>,
     sender_photo_url: Option<String>,
 
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     sort_ts: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     created_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     updated_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    #[cfg_attr(feature = "ai_schema", schemars(with = "Option<i64>"))]
     viewed_at: Option<DateTime<Utc>>,
 }
 
@@ -109,9 +97,6 @@ pub struct ApiAttachment {
     size_bytes: Option<i64>,
     content_id: Option<String>,
 
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     created_at: DateTime<Utc>,
 }
 

@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 
@@ -20,8 +21,8 @@ fn test_construct_search_result_single_channel() {
             opensearch_client::search::model::SearchGotoContent::Channels(
                 opensearch_client::search::model::SearchGotoChannel {
                     channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
+                    created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                    updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                     thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                     sender_id: "user1".to_string(),
                 },
@@ -79,8 +80,8 @@ fn test_construct_search_result_multiple_messages_same_channel() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -101,8 +102,8 @@ fn test_construct_search_result_multiple_messages_same_channel() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
-                        created_at: 1234567892,
-                        updated_at: 1234567893,
+                        created_at: DateTime::from_timestamp(1234567892, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567893, 0).unwrap(),
                         thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
                         sender_id: "user2".to_string(),
                     },
@@ -161,8 +162,8 @@ fn test_construct_search_result_filters_messages_without_content() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -183,8 +184,8 @@ fn test_construct_search_result_filters_messages_without_content() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
-                        created_at: 1234567892,
-                        updated_at: 1234567893,
+                        created_at: DateTime::from_timestamp(1234567892, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567893, 0).unwrap(),
                         thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
                         sender_id: "user2".to_string(),
                     },
@@ -233,8 +234,8 @@ fn create_test_channel_response(
             opensearch_client::search::model::SearchGotoContent::Channels(
                 opensearch_client::search::model::SearchGotoChannel {
                     channel_message_id: message_id.parse().unwrap(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
+                    created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                    updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                     thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                     sender_id: sender_id.to_string(),
                 },
@@ -298,10 +299,10 @@ fn test_channel_history_timestamps() {
     assert_eq!(result.len(), 1);
     assert!(result[0].metadata.is_some());
     let metadata = result[0].metadata.as_ref().unwrap();
-    assert_eq!(metadata.created_at, now.timestamp());
-    assert_eq!(metadata.updated_at, now.timestamp());
-    assert_eq!(metadata.viewed_at, Some(now.timestamp()));
-    assert_eq!(metadata.interacted_at, Some(now.timestamp()));
+    assert_eq!(metadata.created_at, now);
+    assert_eq!(metadata.updated_at, now);
+    assert_eq!(metadata.viewed_at, Some(now));
+    assert_eq!(metadata.interacted_at, Some(now));
 }
 
 #[test]
@@ -373,8 +374,8 @@ fn test_channel_history_null_viewed_at() {
     assert_eq!(result.len(), 1);
     assert!(result[0].metadata.is_some());
     let metadata = result[0].metadata.as_ref().unwrap();
-    assert_eq!(metadata.created_at, now.timestamp());
-    assert_eq!(metadata.updated_at, now.timestamp());
+    assert_eq!(metadata.created_at, now);
+    assert_eq!(metadata.updated_at, now);
     assert!(metadata.viewed_at.is_none());
     assert!(metadata.interacted_at.is_none());
 }
@@ -400,8 +401,8 @@ fn test_sort_stability() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -422,8 +423,8 @@ fn test_sort_stability() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("11111111-1111-1111-1111-111111111111".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -444,8 +445,8 @@ fn test_sort_stability() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("55555555-5555-5555-5555-555555555555".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -466,8 +467,8 @@ fn test_sort_stability() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
@@ -488,8 +489,8 @@ fn test_sort_stability() {
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
                         channel_message_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
-                        created_at: 1234567890,
-                        updated_at: 1234567891,
+                        created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                         thread_id: Some("44444444-4444-4444-4444-444444444444".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },

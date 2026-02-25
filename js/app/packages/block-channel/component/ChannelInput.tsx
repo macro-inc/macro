@@ -10,7 +10,7 @@ import type {
 import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import type { ChannelParticipant } from '@queries/channel/types';
 import { type Accessor, createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { BaseInput } from './BaseInput';

@@ -8,6 +8,7 @@ members = [
   "ai_toolset",
   "anthropic",
   "authentication_service",
+  "channels",
   "authentication_service_client",
   "comms_db_client",
   "comms_service",
@@ -16,6 +17,7 @@ members = [
   "contacts_db_client",
   "contacts_service",
   "convert_service",
+  "cowlike",
   "dataloss_prevention_handler",
   "delete_chat_handler",
   "delete_document_worker",
@@ -25,6 +27,7 @@ members = [
   "document_storage_service",
   "document_storage_service_client",
   "document_sub_type",
+  "documents",
   "document_text_extractor",
   "docx_unzip_handler",
   "dynamodb_client",
@@ -100,6 +103,7 @@ members = [
   "search_service_client",
   "search_upload_handler",
   "secretsmanager_client",
+  "seed_cli",
   "ses_client",
   "sha_cleanup_worker",
   "sns_client",
@@ -142,6 +146,7 @@ base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
+csv = "1"
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 dashmap = "6.1.0"
@@ -153,7 +158,7 @@ hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
 itertools = "0.14"
-jsonwebtoken = { version = "9.3.1" }
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
@@ -166,7 +171,7 @@ pdfium-render = { version = "0.8.28" }
 quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
-redis = "0.29.0"
+redis = "1.0.3"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }

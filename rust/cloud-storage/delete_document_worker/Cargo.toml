@@ -11,7 +11,7 @@ local_queue = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }

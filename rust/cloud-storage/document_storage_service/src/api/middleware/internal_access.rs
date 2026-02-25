@@ -8,6 +8,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+pub(crate) use entity_access::inbound::axum_extractors::InternalUser;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::header::ToStrError;
@@ -16,12 +17,6 @@ use tracing::Level;
 
 #[cfg(test)]
 mod tests;
-
-/// marker struct which denotes that this is an internal user via the [MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY]
-#[derive(Debug, Clone)]
-pub(crate) struct InternalUser {
-    pub access_level: AccessLevel,
-}
 
 #[derive(Debug, Error)]
 pub(crate) enum InternalAccessErr {

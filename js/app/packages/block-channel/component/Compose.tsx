@@ -129,8 +129,8 @@ export function ChannelCompose() {
             </div>
           </FileDropOverlay>
         </Show>
-        <div class="pt-2 h-full grow w-full overflow-y-auto px-4">
-          <div class="macro-message-width mx-auto pb-1 h-full">
+        <div class="pt-2 h-full grow w-full overflow-y-auto @min-[40rem]:px-4">
+          <div class="macro-message-width macro-message-padding mx-auto pb-1 h-full">
             <input
               type="text"
               value={channelName()}
@@ -154,8 +154,8 @@ export function ChannelCompose() {
             />
           </div>
         </div>
-        <div class="shrink-0 w-full px-4 pb-2">
-          <div class="mx-auto w-full macro-message-width">
+        <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
+          <div class="mx-auto w-full macro-message-width macro-message-padding">
             <DraftChannelInput
               selectedRecipients={selectedRecipients}
               channelName={channelName}

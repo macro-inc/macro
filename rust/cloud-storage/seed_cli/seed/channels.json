@@ -1,0 +1,88 @@
+[
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000001",
+    "channel_name": "general",
+    "channel_type": "public",
+    "participants": [
+      "macro|bob@example.com",
+      "macro|charlie@example.com",
+      "macro|dana@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000002",
+    "channel_name": "announcements",
+    "channel_type": "public",
+    "participants": [
+      "macro|bob@example.com",
+      "macro|charlie@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000003",
+    "channel_name": "random",
+    "channel_type": "public",
+    "participants": [
+      "macro|bob@example.com",
+      "macro|dana@example.com",
+      "macro|eve@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000004",
+    "channel_name": "leadership",
+    "channel_type": "private",
+    "participants": [
+      "macro|bob@example.com",
+      "macro|charlie@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000005",
+    "channel_name": "project-alpha",
+    "channel_type": "private",
+    "participants": [
+      "macro|charlie@example.com",
+      "macro|dana@example.com",
+      "macro|eve@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000006",
+    "channel_type": "private",
+    "participants": [
+      "macro|bob@example.com",
+      "macro|charlie@example.com",
+      "macro|dana@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000007",
+    "channel_type": "private",
+    "participants": [
+      "macro|dana@example.com",
+      "macro|eve@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000008",
+    "channel_type": "direct_message",
+    "participants": [
+      "macro|bob@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-000000000009",
+    "channel_type": "direct_message",
+    "participants": [
+      "macro|charlie@example.com"
+    ]
+  },
+  {
+    "channel_id": "00000000-0000-0000-0000-00000000000a",
+    "channel_type": "direct_message",
+    "participants": [
+      "macro|dana@example.com"
+    ]
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT location\n            FROM \"UserDocumentViewLocation\"\n            WHERE user_id = $1 AND document_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "location",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "49b6375ff01eeccbeecacee87258d2b4c354daa345b9c838adc1fadbc6a1cbb5"
+}

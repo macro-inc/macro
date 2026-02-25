@@ -197,10 +197,7 @@ export function MentionsTextarea(props: MentionsTextareaProps) {
           menu={mentionsMenuOperations}
           anchor={props.anchor}
           onUserMention={props.onContactMention}
-          history={() => []}
-          channels={() => []}
           portalScope={props.portalScope}
-          emails={() => []}
         />
       </div>
     </LexicalWrapperContext.Provider>

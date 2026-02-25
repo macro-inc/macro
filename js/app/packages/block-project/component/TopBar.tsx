@@ -15,21 +15,17 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PROJECT_SHARING,
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
-import {
-  useCanEdit,
-  useGetPermissions,
-  useIsDocumentOwner,
-} from '@core/signal/permissions';
+import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, Show } from 'solid-js';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
-import { ProjectPropertiesModal } from './ProjectPropertiesModal';
+import { ProjectPropertiesButton } from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -39,14 +35,10 @@ export function TopBar() {
   const [preview] = splitPanelContext.previewState;
   const id = useBlockId();
   const isSpecialProject = getIsSpecialProject(id);
-  const permissions = useGetPermissions();
   const isOwner = useIsDocumentOwner();
   const canEdit = useCanEdit();
   const name = createMemo(
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
-  );
-  const owner = createMemo(
-    () => projectBlockDataSignal()?.projectMetadata.userId
   );
 
   function handleCopyLink() {
@@ -99,23 +91,14 @@ export function TopBar() {
       </SplitToolbarLeft>
       <Show when={showToolbarRight()}>
         <SplitToolbarRight>
-          <div class="flex items-center p-1">
-            <div class="flex items-center">
-              <Show when={!isSpecialProject}>
-                <ProjectPropertiesModal buttonSize="sm" name={name()} />
-              </Show>
-              <SplitPermissionsBadge />
-              <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-                <ShareButton
-                  id={id}
-                  name={name()}
-                  userPermissions={permissions()}
-                  copyLink={handleCopyLink}
-                  itemType="project"
-                  owner={owner()}
-                />
-              </Show>
-            </div>
+          <div class="flex items-center">
+            <Show when={!isSpecialProject}>
+              <ProjectPropertiesButton buttonSize="sm" />
+            </Show>
+            <SplitPermissionsBadge />
+            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
+              <ShareTrigger copyLink={handleCopyLink} />
+            </Show>
           </div>
         </SplitToolbarRight>
       </Show>

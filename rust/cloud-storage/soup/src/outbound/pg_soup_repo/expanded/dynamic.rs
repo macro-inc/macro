@@ -88,6 +88,11 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                     AND ep_assignees.entity_id = d.id
                     AND ep_assignees.entity_type = 'TASK'
                     AND ep_assignees.property_definition_id = $8
+                LEFT JOIN entity_properties ep_status
+                    ON dt.sub_type = 'task'
+                    AND ep_status.entity_id = d.id
+                    AND ep_status.entity_type = 'TASK'
+                    AND ep_status.property_definition_id = $7
                 INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
@@ -252,6 +257,59 @@ static DETAIL_SUFFIX: &str = r#"
     LIMIT $3
 "#;
 
+fn build_notification_exists_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    predicate_sql: &str,
+) -> String {
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM notification n
+            JOIN user_notification un ON un.notification_id = n.id
+            WHERE un.user_id = $1
+              AND un.deleted_at IS NULL
+              AND n.event_item_type = '{entity_type}'
+              AND n.event_item_id = ({entity_id_sql})::text
+              AND {predicate_sql}
+        )"#
+    )
+}
+
+fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+    build_notification_exists_clause(
+        entity_id_sql,
+        entity_type,
+        if done {
+            "un.done = true"
+        } else {
+            "un.done = false"
+        },
+    )
+}
+
+fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
+    build_notification_exists_clause(
+        entity_id_sql,
+        entity_type,
+        if seen {
+            "un.seen_at IS NOT NULL"
+        } else {
+            "un.seen_at IS NULL"
+        },
+    )
+}
+
+fn build_task_include_cbm_atm_nc_clause() -> String {
+    r#"(
+        dt.sub_type = 'task'
+        AND d.owner = $1
+        AND ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1))
+        AND NOT COALESCE(ep_status.values->'value' ? $6, false)
+    )"#
+    .to_string()
+}
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -288,6 +346,17 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             )"#
                 .to_string()
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("d.id", "document", done)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("d.id", "document", seen)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
+            build_task_include_cbm_atm_nc_clause()
+        }
+        // false is equivalent to disabled/no-op.
+        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
     });
     if formatting.is_empty() {
         String::new()
@@ -314,6 +383,12 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
         // all chats are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
+        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("c.id", "chat", done)
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("c.id", "chat", seen)
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -337,6 +412,12 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("p.id", "project", done)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("p.id", "project", seen)
+        }
     });
     if formatting.is_empty() {
         String::new()

@@ -19,7 +19,7 @@ import type { ThreadPreviewCursorViewedAt } from './threadPreviewCursorViewedAt'
  */
 export interface ThreadPreviewCursor {
   attachments: Attachment[];
-  createdAt: number;
+  createdAt: string;
   id: string;
   inboxVisible: boolean;
   isDraft: boolean;
@@ -33,7 +33,7 @@ export interface ThreadPreviewCursor {
   senderName?: ThreadPreviewCursorSenderName;
   senderPhotoUrl?: ThreadPreviewCursorSenderPhotoUrl;
   snippet?: ThreadPreviewCursorSnippet;
-  sortTs: number;
-  updatedAt: number;
-  viewedAt: ThreadPreviewCursorViewedAt;
+  sortTs: string;
+  updatedAt: string;
+  viewedAt?: ThreadPreviewCursorViewedAt;
 }

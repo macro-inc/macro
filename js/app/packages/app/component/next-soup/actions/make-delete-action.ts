@@ -4,7 +4,7 @@ import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntit
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
 import type { SoupState } from '../create-soup-state';
-import { restoreSoupFocus } from '../utils';
+import { restoreSoupFocus, trashEmails } from '../utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type MakeDeleteOptions = {
@@ -15,7 +15,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
   const { userId } = options;
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'channel' || entity.type === 'email') {
+    if (entity.type === 'email') {
+      return true;
+    }
+    if (entity.type === 'channel') {
       return false;
     }
     return entity.ownerId === userId();
@@ -49,37 +52,95 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
     const inPreview = previewPanel !== undefined;
 
-    openBulkEditModal({
-      view: 'delete',
-      entities,
-      onFinish: () => {
-        const splitManager = globalSplitManager();
-        if (splitManager) {
-          const entityIdSet = new Set(entities.map(({ id }) => id));
-          globalRemoveFromSplitHistory(splitManager, (entry) =>
-            entityIdSet.has(entry.id)
-          );
-        }
+    // Separate email entities from non-email entities
+    const emailEntities = entities.filter((e) => e.type === 'email');
+    const nonEmailEntities = entities.filter((e) => e.type !== 'email');
 
-        soup.selection.clear();
-        if (nextEntity) {
-          soup.focus.set(nextEntity.id);
-        }
+    const trashEmailEntities = () => {
+      const handle = trashEmails(emailEntities.map((e) => e.id));
 
-        toast.success(
-          entities.length > 1 ? `Deleted ${entities.length} items` : 'Deleted'
+      const splitManager = globalSplitManager();
+      if (splitManager) {
+        const entityIdSet = new Set(emailEntities.map(({ id }) => id));
+        globalRemoveFromSplitHistory(splitManager, (entry) =>
+          entityIdSet.has(entry.id)
         );
+      }
 
-        restoreSoupFocus(nextEntity?.id, inPreview);
-      },
-      onCancel: () => {
-        const firstEntity = entities[0];
-        if (firstEntity) {
-          soup.focus.set(firstEntity.id);
-        }
-        restoreSoupFocus(firstEntity?.id, inPreview);
-      },
-    });
+      soup.selection.clear();
+      if (nextEntity) {
+        soup.focus.set(nextEntity.id);
+      }
+
+      const toastId = toast.success(
+        emailEntities.length > 1
+          ? `Moved ${emailEntities.length} items to Trash`
+          : 'Moved to Trash',
+        undefined,
+        {
+          text: 'Undo',
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
+        },
+        10_000
+      );
+
+      // Surface background API failures
+      handle.done.catch(() => {
+        toast.failure('Failed to move to Trash');
+      });
+
+      restoreSoupFocus(nextEntity?.id, inPreview);
+    };
+
+    if (nonEmailEntities.length > 0) {
+      // Handle non-email entities first via the bulk edit modal,
+      // then trash emails in onFinish so nextEntity/focus are still valid.
+      openBulkEditModal({
+        view: 'delete',
+        entities: nonEmailEntities,
+        onFinish: () => {
+          const splitManager = globalSplitManager();
+          if (splitManager) {
+            const entityIdSet = new Set(nonEmailEntities.map(({ id }) => id));
+            globalRemoveFromSplitHistory(splitManager, (entry) =>
+              entityIdSet.has(entry.id)
+            );
+          }
+
+          toast.success(
+            nonEmailEntities.length > 1
+              ? `Deleted ${nonEmailEntities.length} items`
+              : 'Deleted'
+          );
+
+          if (emailEntities.length > 0) {
+            trashEmailEntities();
+          } else {
+            soup.selection.clear();
+            if (nextEntity) {
+              soup.focus.set(nextEntity.id);
+            }
+            restoreSoupFocus(nextEntity?.id, inPreview);
+          }
+        },
+        onCancel: () => {
+          const firstEntity = nonEmailEntities[0];
+          if (firstEntity) {
+            soup.focus.set(firstEntity.id);
+          }
+          restoreSoupFocus(firstEntity?.id, inPreview);
+        },
+      });
+    } else if (emailEntities.length > 0) {
+      // Email-only selection: trash immediately
+      trashEmailEntities();
+    }
   };
 
   return { canExecute, execute, executeWithSoup };

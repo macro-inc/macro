@@ -1,4 +1,5 @@
 use anyhow::Context;
+use gmail_client::GmailClient;
 use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
 use models_email::service::link::Link;
 use models_email::service::message;
@@ -102,6 +103,65 @@ pub async fn fetch_and_attach_draft_attachments(
         }
     }
     Ok(None)
+}
+
+/// Fetch forwarded attachments from Gmail and attach them to the message being sent.
+/// Forwarded attachments reference original Gmail attachments, so their data is fetched
+/// from Gmail at send time rather than from S3.
+#[tracing::instrument(
+    skip(db, gmail_client, access_token, message_to_send),
+    fields(message_db_id = ?message_to_send.db_id), err
+)]
+pub async fn fetch_and_attach_forwarded_attachments(
+    db: &PgPool,
+    gmail_client: &GmailClient,
+    access_token: &str,
+    link: &Link,
+    message_to_send: &mut message::MessageToSend,
+) -> anyhow::Result<()> {
+    let Some(db_id) = message_to_send.db_id else {
+        return Ok(());
+    };
+
+    let fwd_attachments =
+        email_db_client::attachments::forwarded::fetch_forwarded_attachments_by_draft_id(
+            db, link.id, db_id,
+        )
+        .await
+        .context("unable to fetch forwarded attachments from database")?;
+
+    if fwd_attachments.is_empty() {
+        return Ok(());
+    }
+
+    let fetch_futures = fwd_attachments.iter().map(|fwd_att| async move {
+        let provider_att_id = fwd_att.provider_attachment_id.as_deref().unwrap_or_default();
+
+        let data = gmail_client
+            .get_attachment_data(access_token, &fwd_att.message_provider_id, provider_att_id)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to fetch forwarded attachment from Gmail (message: {}, attachment: {:?})",
+                    fwd_att.message_provider_id, fwd_att.provider_attachment_id
+                )
+            })?;
+
+        Ok::<AttachmentToSend, anyhow::Error>(AttachmentToSend {
+            file_name: fwd_att.filename.clone().unwrap_or_default(),
+            content_type: fwd_att.mime_type.clone().unwrap_or_else(|| "application/octet-stream".to_string()),
+            data,
+        })
+    });
+
+    let forwarded_to_send = futures::future::try_join_all(fetch_futures).await?;
+
+    match &mut message_to_send.attachments {
+        Some(existing) => existing.extend(forwarded_to_send),
+        None => message_to_send.attachments = Some(forwarded_to_send),
+    }
+
+    Ok(())
 }
 
 #[tracing::instrument(skip(db, s3_client))]

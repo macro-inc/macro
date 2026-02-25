@@ -2,6 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { filterSafeAttachments } from '@block-channel/utils/attachments';
 import { type BlockAlias, type BlockName, useBlockId } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -12,7 +13,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { MessageMention } from '@service-comms/generated/models';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { Attachment } from '@queries/channel/types';
 import type { ItemType } from '@service-storage/client';
 import { useMentionsQuery } from '@queries/channel/mentions';
 import { createMemo, Show, Suspense } from 'solid-js';
@@ -187,9 +188,9 @@ function AttachmentItem(props: AttachmentItemProps) {
   );
 }
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const datePart = date
+const formatTimestamp = (date: DateValue) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const datePart = d
     .toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -197,7 +198,7 @@ const formatTimestamp = (timestamp: string) => {
     })
     .replaceAll('/', '-');
 
-  const timePart = date.toLocaleTimeString('en-US', {
+  const timePart = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: 'numeric',
   });

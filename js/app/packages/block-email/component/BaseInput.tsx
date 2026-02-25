@@ -39,8 +39,12 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@lexical-core';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { invalidateSoupEntity } from '@queries/soup/cache';
+import { emailClient } from '@service-email/client';
 import {
   useScheduleMessageMutation,
   useSendMessageMutation,
@@ -105,7 +109,9 @@ import {
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import {
+  useAddForwardedAttachmentsMutation,
   useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
@@ -298,6 +304,14 @@ function TruncatedRecipientList(props: {
   );
 }
 
+type UndoReplySnapshot = {
+  threadId: string;
+  draftId: string;
+  bodyHtml: string;
+  attachments: DraftFormAttachment[];
+};
+let undoReplySnapshot: UndoReplySnapshot | null = null;
+
 export function BaseInput(props: {
   replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
   // TODO: Remove `newMessage` props. It's not used...
@@ -366,15 +380,112 @@ export function BaseInput(props: {
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
-  >(props.draft?.db_id ?? undefined);
+  >(
+    props.draft?.db_id ??
+      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
+        ? undoReplySnapshot?.draftId
+        : undefined) ??
+      undefined
+  );
+
+  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
+  // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
+  if (restoredSnapshot) {
+    undoReplySnapshot = null;
+    onMount(() => {
+      for (const attachment of restoredSnapshot.attachments) {
+        form().attachments.add(attachment);
+      }
+    });
+  }
 
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
     createSignal(false);
 
+  const undoSend = async (draftId: string) => {
+    try {
+      await emailClient.unscheduleMessage({ draftID: draftId });
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.previews._def,
+      });
+
+      // Remove the sent message from the thread cache so it disappears from the list.
+      const threadId = ctx.thread()?.db_id;
+      if (threadId) {
+        queryClient.setQueryData(
+          emailKeys.threadMessages(threadId).queryKey,
+          (old: any) => {
+            if (!old?.pages) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page: any) => ({
+                ...page,
+                messages: page.messages.filter((m: any) => m.db_id !== draftId),
+              })),
+            };
+          }
+        );
+        // Mark stale so next navigation fetches fresh data
+        queryClient.invalidateQueries({
+          queryKey: emailKeys.threadMessages(threadId).queryKey,
+          refetchType: 'none',
+        });
+      }
+
+      if (props.setShowReply) {
+        // Inline reply: component was unmounted by clearDraftState.
+        // Re-show the reply box — the new BaseInput instance will
+        // pick up undoReplySnapshot on mount and restore from it.
+        props.setShowReply(true);
+      } else {
+        // Bottom reply: component is still mounted. Restore compose box
+        // after reactive updates from setQueryData have settled
+        // (form may have re-keyed).
+        const snapshot = undoReplySnapshot;
+        if (snapshot) {
+          setTimeout(() => {
+            setSavedDraftId(draftId);
+            const currentEditor = editor();
+            if (currentEditor && snapshot.bodyHtml) {
+              setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
+            }
+            for (const attachment of snapshot.attachments) {
+              form().attachments.add(attachment);
+            }
+            undoReplySnapshot = null;
+          }, 0);
+        }
+      }
+
+      toast.success('Send cancelled');
+      invalidateSoupEntity(draftId);
+    } catch {
+      toast.failure('Failed to undo send');
+    }
+  };
+
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }) => {
-      toast.success('Email sent');
+      const draftId = message.db_id;
+      const toastId = toast.success(
+        'Email sent',
+        undefined,
+        draftId
+          ? {
+              text: 'Undo',
+              onClick: () => {
+                if (toastId != null) toast.dismiss(toastId);
+                void undoSend(draftId);
+              },
+            }
+          : undefined,
+        10_000
+      );
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
@@ -392,6 +503,7 @@ export function BaseInput(props: {
   });
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const addForwardedAttachmentsMutation = useAddForwardedAttachmentsMutation();
   const saveDraftMutation = useSaveDraftMutation();
   const deleteDraftMutation = useDeleteDraftMutation();
 
@@ -528,9 +640,7 @@ export function BaseInput(props: {
 
     // If there's an existing draft, we should send the sendTime so that the send time
     // stays up to date and is not removed
-    const sendTime = existingDraft
-      ? form().sendTime()?.toISOString()
-      : undefined;
+    const sendTime = existingDraft ? form().sendTime() : undefined;
 
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
@@ -568,6 +678,23 @@ export function BaseInput(props: {
             attachment.attachmentID
           );
         }
+      }
+
+      // Sync forwarded attachments
+      const forwardedAttachments = form()
+        .attachments.list()
+        .filter((a) => a.type === 'forwarded') as Extract<
+        DraftFormAttachment,
+        { type: 'forwarded' }
+      >[];
+
+      if (forwardedAttachments.length) {
+        await addForwardedAttachmentsMutation.mutateAsync({
+          draftID: draftId,
+          attachments: forwardedAttachments.map((a) => ({
+            attachmentID: a.attachmentID,
+          })),
+        });
       }
 
       setSavedDraftId(draftId);
@@ -692,6 +819,23 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
+    // Snapshot editor state before watermark so undo-send can restore it
+    if (currentEditor) {
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      const snapshotDraftId = savedDraftId();
+      const snapshotThreadId = ctx.thread()?.db_id;
+      if (snapshotDraftId && snapshotThreadId) {
+        undoReplySnapshot = {
+          threadId: snapshotThreadId,
+          draftId: snapshotDraftId,
+          bodyHtml: snapshotHtml,
+          attachments: [...form().attachments.list()],
+        };
+      }
+    }
+
     // We handle cleaning up the signature after we've sent the request because
     // otherwise the `bodyMacro` signal would update after the clean up call and
     // not contain the signature in the request data
@@ -723,7 +867,7 @@ export function BaseInput(props: {
     const currentDraftID = savedDraftId();
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
-    const sendTime = form().sendTime()?.toISOString();
+    const sendTime = form().sendTime();
 
     if (sendTime) {
       // Just in case, always get a fresh save of the draft so we don't miss any information
@@ -791,6 +935,7 @@ export function BaseInput(props: {
       refetchThreadMessages();
     }
     resetState();
+    form().setReplyAppended(false);
     clearDraftState();
   };
 
@@ -943,10 +1088,14 @@ export function BaseInput(props: {
   };
 
   const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+  const removeForwardedAttachmentMutation =
+    useRemoveForwardedAttachmentMutation();
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form().attachments.removeByFile(attachment.file);
+    } else if (attachment.type === 'forwarded') {
+      form().attachments.removeForwarded(attachment.attachmentID);
     } else {
       form().attachments.removeByID(attachment.attachmentID);
     }
@@ -955,10 +1104,17 @@ export function BaseInput(props: {
 
     if (!currentDraftID || !attachment.attachmentID) return;
 
-    removeAttachmentMutation.mutate({
-      draftID: currentDraftID,
-      attachmentID: attachment.attachmentID,
-    });
+    if (attachment.type === 'forwarded') {
+      removeForwardedAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    } else {
+      removeAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    }
   };
 
   const unscheduleMessageMutation = useUnscheduleMessageMutation({
@@ -1228,7 +1384,7 @@ export function BaseInput(props: {
             class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
-            initialHtml={props.preloadedHtml}
+            initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
@@ -1285,6 +1441,18 @@ export function BaseInput(props: {
                         attachment={{
                           fileName: attachment().fileName,
                           mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
                         }}
                         removable
                         onRemove={() => handleRemoveAttachment(attachment())}

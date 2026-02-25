@@ -1,5 +1,10 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use channels::{
+    domain::service::ChannelMessagesServiceImpl,
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+};
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
@@ -7,6 +12,11 @@ use comms::{
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::ports::TaskPropertiesPort;
+use documents_hex::domain::service::DocumentServiceImpl;
+use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -14,8 +24,13 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use notification::domain::models::email_notification_digest::StateMachineDriverA;
 use notification::domain::service::NotificationIngressService;
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -30,7 +45,9 @@ use soup::{
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use system_properties::{
+    PgSystemPropertiesRepository, SystemPropertiesService as _, SystemPropertiesServiceImpl,
+};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -48,8 +65,20 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type NotificationIngressType =
-    NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>;
+type StateMachine = StateMachineDriverA<
+    DbUserExistenceChecker,
+    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
+    LastOnlineCheckerImpl<
+        last_online_tracker::outbound::time::DefaultTime,
+        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
+    >,
+    RedisDigestBatcher,
+>;
+pub(crate) type NotificationIngressType = NotificationIngressService<
+    DbNotificationRepository<PgPool>,
+    SqsNotificationQueue,
+    StateMachine,
+>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl,
@@ -59,12 +88,34 @@ type PropertiesService = PropertiesServiceImpl<
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
+pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+
+impl TaskPropertiesPort for TaskPropertiesAdapter {
+    async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
+        self.0
+            .attach_task_properties(entity_ids)
+            .await
+            .map_err(Into::into)
+    }
+}
+
+/// Type alias for the documents router state.
+pub(crate) type DocumentsState = DocumentRouterState<
+    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+    EntityAccessService,
+>;
+
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
     ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
 
 /// Type alias for the CommsRouterState
 pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
+
+/// Type alias for the channels router state.
+pub(crate) type DssChannelsState =
+    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -90,6 +141,8 @@ pub(crate) struct ApiContext {
     pub permissions_token_secret:
         LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
     pub entity_access_service: Arc<EntityAccessService>,
+    pub documents_state: DocumentsState,
+    pub channels_state: DssChannelsState,
 }
 
 env_var! {

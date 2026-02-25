@@ -34,6 +34,7 @@ function getNotificationIcon(
     .with('channel_invite', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)
+    .with('ai_response', () => ChatIcon)
     .exhaustive();
 }
 
@@ -43,7 +44,7 @@ function getNotificationIcon(
 export function NotificationIcon(props: NotificationIconProps) {
   const notificationType = (): NotificationType | undefined => {
     if (props.stack) return props.stack.type;
-    if (props.notification) return props.notification.notificationMetadata.tag;
+    if (props.notification) return props.notification.notification_metadata.tag;
     return undefined;
   };
 

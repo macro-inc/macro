@@ -1,6 +1,6 @@
 import { observedSize } from '@core/directive/observedSize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { formatDate } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
 import IconPlus from '@icon/regular/plus.svg';
 import {
   type Accessor,
@@ -15,13 +15,14 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
 import { UserIcon } from './UserIcon';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 
 false && observedSize;
 
@@ -35,7 +36,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
-  timestamp?: string;
+  timestamp?: DateValue;
   hoverActions?: () => JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -79,7 +80,7 @@ export function useMessageContext(): MessageContextValue {
 
 export type MessageTopBarSimpleProps = {
   name: string;
-  timestamp?: string;
+  timestamp?: DateValue | null;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };
@@ -115,12 +116,12 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     <Show when={!context.isConsecutive()}>
       <div class="font-mono flex flex-row items-center justify-between">
         {/*  Name */}
-        <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
+        <div class="shrink-1 min-w-0 text-sm truncate text-ink-muted">
           {local.name}
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
             <div class="flex-shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />
@@ -131,9 +132,8 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </Show>
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
-            {local.timestamp &&
-              formatDate(new Date(local.timestamp).getTime() / 1000)}
+          <div class="text-xs mobile:text-sm text-ink-muted min-w-0 shrink-2 truncate">
+            {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>
       </div>
@@ -153,14 +153,10 @@ const Body: Component<MessageBodyProps> = (props) => {
     <Show
       when={!props.isDeleted}
       fallback={
-        <div class="text-xs touch:mobile-width:text-sm text-ink-muted font-mono">
-          Message Deleted
-        </div>
+        <div class="text-xs text-ink-muted font-mono">Message Deleted</div>
       }
     >
-      <div class="text-sm touch:mobile-width:text-base text-ink pr-4">
-        {props.children}
-      </div>
+      <div class="text-sm text-ink pr-4">{props.children}</div>
     </Show>
   );
 };
@@ -259,38 +255,50 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-body-id={props.id}
           >
             <div
-              class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
-              classList={{
-                'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage ?? false,
-                'border-edge-muted': !props.isNewMessage,
-                'pt-1.5': !(
+              class={cn(
+                'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]',
+                !props.hideConnectors && 'border-l',
+                props.isNewMessage ? 'border-accent' : 'border-edge-muted',
+                !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
-                ),
-                'pb-2': !props.isLastMessage,
-                'pb-4': props.hasThreadChildren ?? false,
-              }}
-              style={{
-                'margin-left': `var(--left-of-connector)`,
-              }}
+                ) && 'pt-4',
+                props.isLastMessage && 'pb-4',
+                props.hasThreadChildren && 'pb-4'
+              )}
             >
               {/* User Icon */}
               <div class="absolute left-0 -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
+                      {/* Slanted Line Connector */}
                       <div
-                        class="absolute border-b border-l border-edge-muted"
+                        class={cn(
+                          'absolute text-edge-muted -z-1',
+                          props.isNewMessage && 'text-accent'
+                        )}
                         style={{
-                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px) * -1)`,
-                          top: '.5px',
-                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px)`,
-                          height: '50%',
-                          'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
+                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,
+                          bottom:
+                            'calc(var(--user-icon-width) / 2 - 0.0375 * var(--user-icon-width))',
+                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 3px)`,
                         }}
-                      />
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 18"
+                          width="100%"
+                        >
+                          <path
+                            stroke="currentColor"
+                            vector-effect="non-scaling-stroke"
+                            d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                          />
+                        </svg>
+                      </div>
                     </Show>
                     <Show
                       when={props.customIcon || props.customIconTargetType}
@@ -332,9 +340,15 @@ const Root: Component<MessageRootProps> = (props) => {
             </div>
           </div>
         </BozzyBracket>
-        <Show when={props.hoverActions && !isTouchDevice()}>
+        <Show
+          when={
+            props.hoverActions &&
+            !isTouchDevice() &&
+            (hover() || !!props.shouldHover)
+          }
+        >
           <div
-            class="absolute right-0 -top-2 flex flex-col items-end z-tool-tip"
+            class="absolute right-0 -top-4 flex flex-col items-end z-tool-tip"
             classList={{
               block: props.focused || !!props.shouldHover,
               hidden: !(props.focused || !!props.shouldHover),
@@ -344,17 +358,17 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-id={props.id}
           >
             <Show when={props.timestamp}>
-              <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
-                {formatDate(new Date(props.timestamp!).getTime() / 1000, {
-                  showTime: true,
-                })}
-              </div>
+              {(timestamp) => (
+                <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                  {formatDate(timestamp(), {
+                    showTime: true,
+                  })}
+                </div>
+              )}
             </Show>
-            <Show when={hover()}>
-              <div class="border border-edge bg-panel">
-                {props.hoverActions?.()}
-              </div>
-            </Show>
+            <div class="border border-edge bg-panel">
+              {props.hoverActions?.()}
+            </div>
           </div>
         </Show>
         <Show when={props.isLastInThread}>
@@ -369,22 +383,20 @@ const Root: Component<MessageRootProps> = (props) => {
               fallback={
                 <div
                   class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
-                  classList={{
-                    'pb-3': props.isLastInThread && props.isLastMessage,
-                  }}
                   style={{
                     'margin-left': `calc(var(--thread-shift) + var(--left-of-connector))`,
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <DeprecatedIconButton
-                    icon={IconPlus}
-                    theme="base"
-                    iconSize={16}
+                  <Button
                     onClick={props.onThreadAppend}
-                    border
                     tabIndex={0}
-                  />
+                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
+                  >
+                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
+                      <IconPlus class="size-1/2" />
+                    </div>
+                  </Button>
                 </div>
               }
             >
@@ -400,14 +412,35 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-b border-l border-edge-muted"
+                  class="absolute border-l border-edge-muted"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
-                    width: `calc(var(--user-icon-width) / 2)`,
-                    height: '50%',
-                    'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
+                    height:
+                      'calc(50% - (var(--user-icon-width) / 2 + 1px) / 24 * 18 + 1px)',
                   }}
                 />
+
+                <div
+                  class="absolute text-edge-muted -z-1"
+                  style={{
+                    left: `calc((var(--user-icon-width) / 2) * -1)`,
+                    bottom: '50%',
+                    width: `calc(var(--user-icon-width) / 2 + 1px)`,
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 18"
+                    width="100%"
+                  >
+                    <path
+                      stroke="currentColor"
+                      vector-effect="non-scaling-stroke"
+                      d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                    />
+                  </svg>
+                </div>
               </div>
             </Show>
           </div>

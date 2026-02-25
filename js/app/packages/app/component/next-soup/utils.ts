@@ -1,4 +1,5 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
+import type { DateValue } from '@core/util/date';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -11,18 +12,21 @@ import {
   type EntityData,
   isSearchEntity,
   type SearchLocation,
-  type TaskEntityWithProperties,
   type WithSearch,
 } from '@entity';
 import { queryKeys } from '@macro-entity';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
+import { emailKeys } from '@queries/email/keys';
+import { throwOnErr } from '@core/util/maybeResult';
 import {
-  PROPERTY_OPTION_IDS,
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
-import { soupKeys } from '@queries/soup/keys';
+  removeSoupEntities,
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+} from '@queries/soup/cache';
 import { match } from 'ts-pattern';
+import { isAfter } from 'date-fns';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -47,6 +51,7 @@ const mergeSearchEntities = <T extends EntityData>(
   }
 
   return {
+    ...localEntity,
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
@@ -122,8 +127,8 @@ export const deduplicateEntities = <T extends EntityData>(
 /**
  * Gets the timestamp of an entity (updatedAt or createdAt)
  */
-const getEntityTimestamp = (entity: EntityData): number => {
-  return entity.updatedAt ?? entity.createdAt ?? 0;
+const getEntityTimestamp = (entity: EntityData): DateValue => {
+  return entity.updatedAt ?? entity.createdAt ?? new Date(0);
 };
 
 /**
@@ -133,7 +138,7 @@ export const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
+  return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
 export const openEntityInNewTab = ({
@@ -369,24 +374,26 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
-  ]);
+  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
     queryKey: queryKeys.all.email,
   });
-  const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: soupKeys.items._def,
-  });
 
-  const applyOptimistic = (data?: {
-    pages: { items: (EntityData | { data: EntityData })[] }[];
+  const current = getSoupEntityById(id);
+  const soupTxn = options.optimisticallyExclude
+    ? removeSoupEntities(new Set([id]))
+    : optimisticUpdateSoupEntity({
+        tag: 'emailThread',
+        data: { id, inboxVisible: false },
+        frecency_score: current?.frecency_score ?? 0,
+      });
+
+  // Optimistic update for email queries
+  const applyEmailOptimistic = (data?: {
+    pages: { items: EntityData[] }[];
   }) => {
     if (!data) return data;
 
@@ -395,137 +402,148 @@ export async function archiveEmail(
       pages: data.pages.map((page) => ({
         ...page,
         items: options.optimisticallyExclude
-          ? page.items.filter((item) => {
-              if ('data' in item) {
-                return item.data.id !== id;
-              }
-              return item.id !== id;
-            })
-          : page.items.map((item) => {
-              if ('data' in item) {
-                return item.data.id === id
-                  ? {
-                      ...item,
-                      data: {
-                        ...item.data,
-                        inboxVisible: false,
-                      },
-                    }
-                  : item;
-              }
-              return item.id === id
-                ? {
-                    ...item,
-                    inboxVisible: false,
-                  }
-                : item;
-            }),
+          ? page.items.filter((item) => item.id !== id)
+          : page.items.map((item) =>
+              item.id === id ? { ...item, inboxVisible: false } : item
+            ),
       })),
     };
   };
 
-  for (const [key, data] of [
-    ...previousEmailThreadItemFromDss,
-    ...previousEmail,
-  ]) {
-    queryClient.setQueryData(key, applyOptimistic(data));
+  for (const [key, data] of previousEmail) {
+    queryClient.setQueryData(key, applyEmailOptimistic(data));
   }
 
   try {
-    // server mutation
     await emailClient.flagArchived({ value: !options.isDone, id });
   } catch (_err) {
-    // rollback on error
+    soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
-    for (const [key, data] of previousEmailThreadItemFromDss) {
-      queryClient.setQueryData(key, data);
-    }
   } finally {
-    // revalidate
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def }),
+      invalidateSoupEntity(id),
     ]);
   }
 }
 
-/**
- * extracts assignee user ids from task properties.
- */
-export const getTaskAssigneeIds = (
-  entity: TaskEntityWithProperties
-): string[] => {
-  const properties = entity.properties;
-  if (!properties) return [];
-  const assigneesProperty = properties.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.ASSIGNEES
-  );
-  if (!assigneesProperty?.value) return [];
-
-  const value = assigneesProperty.value;
-  if (value.type === 'EntityReference' && Array.isArray(value.value)) {
-    return value.value
-      .filter((ref) => ref.entity_type === 'USER')
-      .map((ref) => ref.entity_id);
-  }
-
-  return [];
+export type TrashEmailsHandle = {
+  /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
+  done: Promise<void>;
+  /** Optimistically restores all entities and calls the API to remove the TRASH label. */
+  undo: () => Promise<void>;
 };
 
 /**
- * gets the status option id from task properties.
+ * Optimistically removes one or more email threads from soup + email caches,
+ * then fires the TRASH label API calls in the background. Takes a single
+ * snapshot before all removals so undo restores the complete pre-trash state.
+ * Returns synchronously so the caller can show the undo toast immediately.
  */
-export const getTaskStatusOptionId = (
-  entity: TaskEntityWithProperties
-): string | undefined => {
-  const properties = entity.properties;
-  if (!properties) return undefined;
+export function trashEmails(ids: string[]): TrashEmailsHandle {
+  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
-  const statusProperty = properties.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.STATUS
-  );
-  if (!statusProperty?.value) return undefined;
+  const previousEmail = queryClient.getQueriesData<{
+    pages: { items: EntityData[] }[];
+  }>({
+    queryKey: queryKeys.all.email,
+  });
 
-  const value = statusProperty.value;
-  if (
-    value.type === 'SelectOption' &&
-    'value' in value &&
-    Array.isArray(value.value)
-  ) {
-    return value.value[0];
+  const idSet = new Set(ids);
+  const soupTxn = removeSoupEntities(idSet);
+
+  // Optimistically remove from email queries
+  for (const [key, data] of previousEmail) {
+    if (!data) continue;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !idSet.has(item.id)),
+      })),
+    });
   }
 
-  return undefined;
-};
+  const rollback = () => {
+    soupTxn.rollback();
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+  };
 
-/**
- * checks if a task is in a "closed" state (completed or canceled).
- */
-export const isTaskClosed = (entity: TaskEntityWithProperties): boolean => {
-  if (entity.subType?.is_completed === true) {
-    return true;
-  }
-  const statusOptionId = getTaskStatusOptionId(entity);
-  if (
-    statusOptionId === PROPERTY_OPTION_IDS.STATUS.COMPLETED ||
-    statusOptionId === PROPERTY_OPTION_IDS.STATUS.CANCELED
-  ) {
-    return true;
-  }
-  return false;
-};
+  // Resolved lazily by the API calls; used by undo
+  let trashLabelId: string | undefined;
 
-/**
- * checks if the current user is assigned to the task.
- */
-export const isCurrentUserAssigned = (
-  entity: TaskEntityWithProperties,
-  currentUserId: string | undefined
-): boolean => {
-  if (!currentUserId) return false;
-  const assigneeIds = getTaskAssigneeIds(entity);
-  if (assigneeIds.length === 0) return true;
-  return assigneeIds.includes(currentUserId);
-};
+  const done = (async () => {
+    try {
+      const labelsData = await queryClient.fetchQuery({
+        queryKey: emailKeys.labels.queryKey,
+        queryFn: async () =>
+          throwOnErr(async () => await emailClient.getUserLabels()),
+        staleTime: 5 * 60 * 1000,
+      });
+      const trashLabel = labelsData?.labels.find(
+        (l) => l.provider_label_id === 'TRASH'
+      );
+      const labelId = trashLabel?.id;
+      if (!labelId) {
+        throw new Error('TRASH label not found');
+      }
+      trashLabelId = labelId;
+
+      await Promise.all(
+        ids.map((id) =>
+          emailClient.updateThreadLabel({
+            thread_id: id,
+            label_id: labelId,
+            value: true,
+          })
+        )
+      );
+    } catch (err) {
+      rollback();
+      throw err;
+    } finally {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        ...ids.map((id) => invalidateSoupEntity(id)),
+      ]);
+    }
+  })();
+
+  return {
+    done,
+    undo: async () => {
+      // Wait for the trash calls to finish so we know the label ID.
+      // If the trash call itself failed, rollback already happened — nothing to undo.
+      try {
+        await done;
+      } catch {
+        return;
+      }
+
+      rollback();
+
+      try {
+        await Promise.all(
+          ids.map((id) =>
+            emailClient.updateThreadLabel({
+              thread_id: id,
+              label_id: trashLabelId!,
+              value: false,
+            })
+          )
+        );
+      } finally {
+        // Only invalidate email queries — skip soup invalidation since
+        // rollback() already restored the correct cache state.
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.all.email,
+          refetchType: 'none',
+        });
+      }
+    },
+  };
+}

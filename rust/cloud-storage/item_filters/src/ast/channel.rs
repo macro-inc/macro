@@ -1,9 +1,43 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
+use strum::Display;
 use uuid::Uuid;
 
-use crate::{ChannelFilters, ast::ExpandErr};
+use crate::{
+    ChannelFilters,
+    ast::{ExpandErr, ParseFromStr, UnknownValue},
+};
+
+/// the possible channel types
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Display)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelTypeFilter {
+    /// a public channel
+    Public,
+    /// an organization channel
+    Organization,
+    /// a private channel
+    Private,
+    /// a direct message channel
+    DirectMessage,
+}
+
+impl ParseFromStr for ChannelTypeFilter {
+    fn parse_from_str<T: AsRef<str>>(s: T) -> Result<Self, UnknownValue<Self>> {
+        match s.as_ref() {
+            "public" => Ok(Self::Public),
+            "organization" => Ok(Self::Organization),
+            "private" => Ok(Self::Private),
+            "direct_message" => Ok(Self::DirectMessage),
+            _ => Err(UnknownValue(
+                s.as_ref().to_string(),
+                std::marker::PhantomData,
+            )),
+        }
+    }
+}
 
 /// the possible literal values in a channel filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -18,8 +52,14 @@ pub enum ChannelLiteral {
     ChannelId(Uuid),
     /// the message comes from some sender x
     Sender(MacroUserIdStr<'static>),
+    /// the channel type to filter by
+    ChannelType(ChannelTypeFilter),
     /// this node value filters by channel importance. false short-circuits to match nothing.
     Importance(bool),
+    /// this node value filters by notification done state for channels.
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for channels.
+    NotificationSeen(bool),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -34,7 +74,9 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            channel_types,
             importance,
+            notification_filters,
         } = filter_request;
 
         let thread_ids = thread_ids
@@ -61,7 +103,18 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChannelLiteral::Sender), Expr::or)?;
 
+        let channel_type_nodes = channel_types
+            .iter()
+            .map(ChannelTypeFilter::parse_from_str)
+            .try_expand(|r| r.map(ChannelLiteral::ChannelType), Expr::or)?;
+
         let importance_node = importance.map(|imp| Expr::Literal(ChannelLiteral::Importance(imp)));
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(ChannelLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(ChannelLiteral::NotificationSeen(seen)));
 
         Ok([
             thread_ids,
@@ -69,7 +122,10 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             organizations,
             channel_ids,
             sender_ids,
+            channel_type_nodes,
             importance_node,
+            notification_done_node,
+            notification_seen_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

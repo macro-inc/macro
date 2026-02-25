@@ -9,15 +9,20 @@ pub async fn create_chat_message(
     chat_id: &str,
     message: NewChatMessage,
 ) -> Result<String, anyhow::Error> {
+    let id = message
+        .id
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
     let mut tsx = db.begin().await.context("error creating transaction")?;
     if message.role == Role::User {
         // insert message
         let message_id = sqlx::query!(
             r#"
-            INSERT INTO "ChatMessage" ("chatId", "content", "role", "model", "createdAt", "updatedAt")
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO "ChatMessage" ("id", "chatId", "content", "role", "model", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id;
         "#,
+            id,
             chat_id,
             serde_json::to_value(&message.content)?,
             message.role.as_ref(),
@@ -63,10 +68,11 @@ pub async fn create_chat_message(
     } else {
         let id = sqlx::query!(
             r#"
-            INSERT INTO "ChatMessage" ("chatId", "content", "role", "model", "createdAt", "updatedAt")
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO "ChatMessage" ("id", "chatId", "content", "role", "model", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id;
         "#,
+            id,
             chat_id,
             serde_json::to_value(&message.content)?,
             message.role.as_ref(),

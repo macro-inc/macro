@@ -1,5 +1,5 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
+import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
@@ -10,10 +10,8 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { useSettingsState } from '@core/constant/SettingsState';
-import { TOKENS } from '@core/hotkey/tokens';
+
 import {
   For,
   Show,
@@ -31,6 +29,12 @@ import {
   getEntityTypeFilterIcon,
   QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
+import {
+  applyInboxQueryFilters,
+  applyOtherQueryFilters,
+  removeInboxQueryFilters,
+  removeOtherQueryFilters,
+} from '@app/component/next-soup/filters/inbox-query-filters';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -42,6 +46,13 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import { SettingsButton } from '@app/component/settings/SettingsButton';
+import {
+  TaskStatusDropdown,
+  TaskAssigneeDropdown,
+} from '@app/component/next-soup/soup-view/task-sub-filters';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import { match } from 'ts-pattern';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -62,7 +73,7 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
@@ -71,6 +82,7 @@ export const SoupToolbar = () => {
   const handleClear = () => {
     batch(() => {
       soup.filters.clear();
+      setSearchText('');
       setQueryFilters(QUERY_FILTERS.default);
     });
   };
@@ -78,12 +90,12 @@ export const SoupToolbar = () => {
   return (
     <>
       <SplitHeaderLeft>
-        <div class="relative h-full">
+        <div class="relative h-full w-full">
           <ScrollIndicators scrollRef={scrollContainerRef()} />
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs mobile:text-sm"
           >
             <SoupFilters />
             <SearchBar />
@@ -92,25 +104,19 @@ export const SoupToolbar = () => {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        <div class="flex items-center h-full gap-0.5">
-          <Tooltip
-            tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}
+        <Tooltip
+          tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}
+        >
+          <button
+            type="button"
+            class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
+            onClick={handleClear}
           >
-            <button
-              type="button"
-              class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
-              onClick={handleClear}
-            >
-              <XIcon class="size-4.5" />
-              <span class="text-xs touch:mobile-width:text-sm leading-none">
-                Clear
-                <span class="ml-1 font-mono opacity-70">/</span>
-              </span>
-            </button>
-          </Tooltip>
-          <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
-          <SettingsButton />
-        </div>
+            <BackspaceIcon class="size-4.5" />
+          </button>
+        </Tooltip>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        <SettingsButton />
       </SplitHeaderRight>
     </>
   );
@@ -125,21 +131,66 @@ type EntityTypeFilterId =
   | 'file';
 
 const SoupFilters = () => {
-  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
-    useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = createSignal(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = createSignal(false);
 
+  const setQueryFiltersInboxAware = (filters: SoupItemsQueryFilters) => {
+    if (soup.filters.isActive('signal')) {
+      setQueryFilters(applyInboxQueryFilters(filters));
+      return;
+    }
+    if (soup.filters.isActive('noise')) {
+      setQueryFilters(applyOtherQueryFilters(removeInboxQueryFilters(filters)));
+      return;
+    }
+    setQueryFilters(removeInboxQueryFilters(filters));
+  };
+
+  // Batch filter + query updates so the prefetch effect in soup-view-context
+  // sees the final query filters and active filter state in a single tick,
+  // avoiding intermediate re-renders with mismatched query keys.
   const toggleFocus = (id: 'signal' | 'noise') => {
-    if (soup.filters.isActive(id)) {
-      soup.filters.toggle('explicit-noise');
-      soup.filters.deactivate('not-done');
-    } else {
+    const comb = { id, isActive: soup.filters.isActive(id) };
+
+    const activateFocus = () => {
       soup.filters.toggle(id);
       soup.filters.activate('not-done');
-    }
+    };
+
+    const deactivateFocus = () => {
+      soup.filters.toggle('explicit-noise');
+      soup.filters.deactivate('not-done');
+    };
+
+    batch(() => {
+      match(comb)
+        .with({ id: 'signal', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyInboxQueryFilters(removeOtherQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'noise', isActive: false }, () => {
+          setQueryFilters((prev) =>
+            applyOtherQueryFilters(removeInboxQueryFilters(prev))
+          );
+          activateFocus();
+        })
+        .with({ id: 'signal', isActive: true }, () => {
+          setQueryFilters(removeInboxQueryFilters);
+          deactivateFocus();
+        })
+        .with({ id: 'noise', isActive: true }, () => {
+          setQueryFilters(removeOtherQueryFilters);
+          deactivateFocus();
+        })
+        .exhaustive();
+    });
   };
 
   const toggleUnread = () => {
@@ -150,7 +201,9 @@ const SoupFilters = () => {
     const willBeActive = !soup.filters.isActive(id);
     batch(() => {
       soup.filters.toggle(id);
-      setQueryFilters(willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default);
+      setQueryFiltersInboxAware(
+        willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default
+      );
     });
   };
 
@@ -160,15 +213,15 @@ const SoupFilters = () => {
     batch(() => {
       soup.filters.toggle('email');
       if (willBeActive) {
-        const shouldIncludeEmails = emailActive() && isSearchDisabled();
-        setQueryFilters({
+        const shouldIncludeEmails = emailActive();
+        setQueryFiltersInboxAware({
           ...QUERY_FILTERS.email,
           email_filters: {
             recipients: shouldIncludeEmails ? [] : EXCLUDE,
           },
         });
       } else {
-        setQueryFilters(QUERY_FILTERS.default);
+        setQueryFiltersInboxAware(QUERY_FILTERS.default);
       }
     });
   };
@@ -297,6 +350,31 @@ const SoupFilters = () => {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
+  const taskSubFilterHotkeyDisposers = [
+    registerHotkey({
+      hotkey: ['shift+s'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open status filter',
+      keyDownHandler: () => {
+        setStatusDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+    registerHotkey({
+      hotkey: ['shift+a'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open assignee filter',
+      keyDownHandler: () => {
+        setAssigneeDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+  ];
+
+  onCleanup(() => taskSubFilterHotkeyDisposers.forEach((d) => d.dispose()));
+
   return (
     <>
       {/* Inbox toggle */}
@@ -323,7 +401,7 @@ const SoupFilters = () => {
         <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
           <button
             type="button"
-            class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
+            class="flex items-center gap-1 h-[22px] mobile:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel': soup.filters.isActive('unread'),
               'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -369,6 +447,19 @@ const SoupFilters = () => {
           }}
         </For>
       </div>
+      <Show when={soup.filters.isActive('task')}>
+        <FilterDivider />
+        <div class="flex items-center gap-1 shrink-0">
+          <TaskStatusDropdown
+            open={statusDropdownOpen}
+            onOpenChange={setStatusDropdownOpen}
+          />
+          <TaskAssigneeDropdown
+            open={assigneeDropdownOpen}
+            onOpenChange={setAssigneeDropdownOpen}
+          />
+        </div>
+      </Show>
       <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
       {/* Preview toggle */}
       <Tooltip
@@ -376,7 +467,7 @@ const SoupFilters = () => {
       >
         <button
           type="button"
-          class="flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
+          class="flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
           classList={{
             'bg-accent text-panel': !!soup.previewEntity(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -401,47 +492,13 @@ const SoupFilters = () => {
           soup.sort.setAll([value]);
         }}
       />
-      <div class="touch:mobile-width:-order-1">
+      <div class="mobile:-order-1">
         <FilterDivider />
       </div>
       {/* Filter search bar */}
     </>
   );
 };
-
-function SettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-  const { getSplitCount } = useSplitLayout();
-
-  // Hide settings button when there are multiple splits
-  const isSingleSplit = () => getSplitCount() <= 1;
-
-  return (
-    <Show when={isSingleSplit()}>
-      <Tooltip
-        tooltip={
-          <LabelAndHotKey
-            label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-            hotkeyToken={TOKENS.global.toggleSettings}
-          />
-        }
-      >
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-[22px] rounded-full active:bg-accent active:text-panel"
-          classList={{
-            'bg-hover text-ink': settingsOpen(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !settingsOpen(),
-          }}
-          onClick={() => toggleSettings()}
-        >
-          <IconGear class="size-4.5" />
-        </button>
-      </Tooltip>
-    </Show>
-  );
-}
 
 const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   const [leftOpacity, setLeftOpacity] = createSignal(0);
@@ -475,8 +532,22 @@ const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   onMount(() => {
     const ref = props.scrollRef;
     if (!ref) return;
+
+    // Convert vertical scroll to horizontal scroll
+    const wheelListener = (e: WheelEvent) => {
+      e.preventDefault();
+      const { deltaX, deltaY } = e;
+      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+      ref.scrollLeft += delta;
+      updateClipIndicators();
+    };
+
+    ref.addEventListener('wheel', wheelListener);
     ref.addEventListener('scroll', updateClipIndicators);
-    onCleanup(() => ref?.removeEventListener('scroll', updateClipIndicators));
+    onCleanup(() => {
+      ref?.removeEventListener('wheel', wheelListener);
+      ref?.removeEventListener('scroll', updateClipIndicators);
+    });
   });
   return (
     <>
@@ -499,8 +570,17 @@ const SearchBar = () => {
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
+  let measureSpan: HTMLSpanElement | undefined;
 
   const [searchFocused, setSearchFocused] = createSignal(false);
+  const [measuredWidth, setMeasuredWidth] = createSignal(0);
+
+  createEffect(() => {
+    if (measureSpan) {
+      measureSpan.textContent = searchText() || '';
+      setMeasuredWidth(measureSpan.scrollWidth);
+    }
+  });
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -508,26 +588,64 @@ const SearchBar = () => {
     description: 'Search',
     keyDownHandler: () => {
       ref()?.focus();
-      if (ref()?.value) ref()?.select();
       return true;
     },
   });
 
   onCleanup(searchHotkey.dispose);
 
+  const MIN_INPUT_WIDTH = 48;
+
+  const inputWidth = () => {
+    if (!searchText() && !searchFocused()) return 0;
+    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
+  };
+
   return (
-    <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
-      <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
+    <div class="flex items-center shrink-0 grow min-w-0 mobile:-order-2">
+      <Tooltip
+        class="w-fit"
+        placement="bottom-start"
+        tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
+      >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
+          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 rounded-full mobile:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !searchText() || searchFocused(),
+              !searchText() && !searchFocused(),
+            'bg-accent/15 text-ink': searchFocused(),
           }}
-          onClick={() => ref()?.focus()}
+          onMouseDown={(e) => {
+            if (e.target !== ref()) {
+              e.preventDefault();
+              ref()?.focus();
+            }
+          }}
         >
-          <SearchIcon class="size-4.5 shrink-0" />
+          <Show
+            when={searchText()}
+            fallback={<SearchIcon class="size-4.5 shrink-0" />}
+          >
+            <button
+              type="button"
+              class="size-4.5 shrink-0 hover:opacity-60"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchText('');
+              }}
+            >
+              <XIcon class="size-4.5" />
+            </button>
+          </Show>
+          <span
+            ref={(el) => {
+              measureSpan = el;
+            }}
+            class="invisible absolute whitespace-pre"
+            aria-hidden="true"
+          />
           <Show when={!searchText() && !searchFocused()}>
             <span class="leading-none pointer-events-none">
               <span class="underline underline-offset-2 decoration-current/60">
@@ -554,12 +672,7 @@ const SearchBar = () => {
               }
             }}
             class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
-            style={{
-              width:
-                !searchText() && !searchFocused()
-                  ? '0'
-                  : `${Math.max(5, searchText().length + 1)}ch`,
-            }}
+            style={{ width: `${inputWidth()}px` }}
           />
         </div>
       </Tooltip>
@@ -624,7 +737,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
       >
         <button
           type="button"
-          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          class={`flex items-center gap-1 h-[22px] mobile:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
           classList={{
             'bg-accent text-panel': isActive(),
             'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),

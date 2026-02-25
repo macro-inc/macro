@@ -15,7 +15,32 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { createEffect, createSignal, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 
-const DRAWER_ID = 'properties';
+export const DRAWER_ID = 'properties';
+
+export function MarkdownPropertiesButton(props: {
+  buttonSize?: 'sm' | 'base';
+}) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  return (
+    <DeprecatedIconButton
+      icon={TagIcon}
+      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+      size={props.buttonSize ?? 'base'}
+      tooltip={{ label: 'Properties' }}
+      onClick={drawerControl.toggle}
+    />
+  );
+}
+
+export function MarkdownPropertiesDrawer(props: { documentId: string }) {
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
+      <Suspense fallback={<LoadingFallback />}>
+        <MarkdownPropertiesContent documentId={props.documentId} />
+      </Suspense>
+    </SplitDrawer>
+  );
+}
 
 export function MarkdownPropertiesModal(props: {
   documentId: string;

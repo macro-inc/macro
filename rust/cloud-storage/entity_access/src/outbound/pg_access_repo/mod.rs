@@ -30,7 +30,7 @@ impl AccessRepository for PgAccessRepository {
     async fn get_document_access(
         &self,
         document_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(queries::document_access::get_document_access(&self.pool, document_id, user_id).await?)
     }
@@ -39,7 +39,7 @@ impl AccessRepository for PgAccessRepository {
     async fn get_chat_access(
         &self,
         chat_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(queries::chat_access::get_chat_access(&self.pool, chat_id, user_id).await?)
     }
@@ -48,7 +48,7 @@ impl AccessRepository for PgAccessRepository {
     async fn get_project_access(
         &self,
         project_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(queries::project_access::get_project_access(&self.pool, project_id, user_id).await?)
     }
@@ -57,7 +57,7 @@ impl AccessRepository for PgAccessRepository {
     async fn get_thread_access(
         &self,
         thread_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(queries::thread_access::get_thread_access(&self.pool, thread_id, user_id).await?)
     }
@@ -65,7 +65,7 @@ impl AccessRepository for PgAccessRepository {
     #[tracing::instrument(err, skip(self))]
     async fn check_user_channel_membership(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         channel_ids: &[Uuid],
     ) -> Result<Vec<Uuid>, AccessError> {
         Ok(queries::channel_membership::check_user_channel_membership(
@@ -80,13 +80,13 @@ impl AccessRepository for PgAccessRepository {
     async fn get_channel_role(
         &self,
         channel_id: &Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         user_org_id: Option<i64>,
     ) -> Result<ChannelRoleResult, AccessError> {
         Ok(queries::channel_role::get_channel_role(
             &self.pool,
             channel_id,
-            user_id.as_ref(),
+            user_id.map(AsRef::as_ref).unwrap_or(""),
             user_org_id,
         )
         .await?)

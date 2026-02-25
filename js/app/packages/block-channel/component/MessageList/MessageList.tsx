@@ -21,11 +21,14 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
-import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
-import type { Attachment } from '@service-comms/generated/models/attachment';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import type { Message } from '@service-comms/generated/models/message';
+import type { ApiActivity as ChannelActivity } from '@service-comms/generated/models';
+import type {
+  Attachment,
+  ChannelParticipant,
+  Message,
+} from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -79,6 +82,7 @@ const createDefaultMessageListContext = (index: Accessor<number>) =>
   createMemo<MessageListContext>(() => ({
     index: index(),
     isNewMessage: false,
+    isFirstNewMessage: false,
     isParentNewMessage: false,
     threadIndex: -1,
     previousNonThreadedMessage: undefined,
@@ -212,23 +216,32 @@ export function MessageList(props: MessageListProps) {
     const targetBounds = targetEl.getBoundingClientRect();
     const containerBounds = container.getBoundingClientRect();
     const currentOffset = handle.scrollOffset;
-    const targetTop = targetBounds.top - containerBounds.top + currentOffset;
-    const targetBottom = targetTop + targetBounds.height;
-    const visibleTop = currentOffset;
-    const visibleBottom = currentOffset + handle.viewportSize;
+
+    const visualTop = targetBounds.top - containerBounds.top;
+    const visualBottom = targetBounds.bottom - containerBounds.top;
+
+    const targetTop = currentOffset + handle.viewportSize - visualTop;
+    const targetBottom = currentOffset + handle.viewportSize - visualBottom;
+
+    const visibleBottomEdge = currentOffset;
+    const visibleTopEdge = currentOffset + handle.viewportSize;
 
     const nextOffset = match(align)
-      .with('start', () => targetTop)
-      .with('end', () => targetBottom - handle.viewportSize)
-      .with(
-        'center',
-        () => targetTop - (handle.viewportSize - targetBounds.height) / 2
-      )
+      .with('start', () => targetTop - handle.viewportSize)
+      .with('end', () => targetBottom)
+      .with('center', () => {
+        // Center the element in the viewport
+        const elementCenter = (targetTop + targetBottom) / 2;
+        return elementCenter - handle.viewportSize / 2;
+      })
       .otherwise(() => {
-        if (targetTop < visibleTop) {
-          return targetTop;
-        } else if (targetBottom > visibleBottom) {
-          return targetBottom - handle.viewportSize;
+        // 'nearest': only scroll if element is out of view
+        if (targetTop > visibleTopEdge) {
+          // Element is above the visible area, scroll up to show it
+          return targetTop - handle.viewportSize;
+        } else if (targetBottom < visibleBottomEdge) {
+          // Element is below the visible area, scroll down to show it
+          return targetBottom;
         }
         return undefined;
       });
@@ -361,7 +374,6 @@ function MessageListImpl(props: MessageListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
   const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
   const [messageListContext, setMessageListContext] =
     createStore<MessageListContextLookup>({});
@@ -435,11 +447,18 @@ function MessageListImpl(props: MessageListProps) {
     });
   });
 
-  const lastViewed = createMemo(() => {
+  // Snapshot the lastViewed time so it reflects the pre-session value.
+  // Without this, the activity mutation on channel open would update
+  // lastViewed reactively, causing the "New" indicator to disappear.
+  const lastViewed = createMemo<DateValue | null | undefined>((prev) => {
+    if (prev !== undefined) return prev;
     return props?.latestActivity?.viewed_at;
   });
 
+  const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
+
   const checkIfNewMessage = (message: Message) => {
+    if (newMessagesDismissed()) return false;
     const lastViewed_ = lastViewed();
     const openedChannel_ = props.openedChannel;
     return (
@@ -449,6 +468,11 @@ function MessageListImpl(props: MessageListProps) {
       userId() !== message.sender_id &&
       new Date(message.created_at) < openedChannel_
     );
+  };
+
+  const dismissNewMessages = () => {
+    setNewMessagesDismissed(true);
+    computeListContext(flattenedThreaded());
   };
 
   // Keep some additional timing information for goToLocationFromParams
@@ -906,8 +930,6 @@ function MessageListImpl(props: MessageListProps) {
       orderedMessages={props.orderedMessages}
       threadChildren={params.threadChildren}
       threadSiblings={params.threadSiblings}
-      newIndicatorShown={newIndicatorShown}
-      setNewIndicatorShown={setNewIndicatorShown}
       virtualHandle={virtualHandle()!}
       container={containerRef()}
       listContext={params.listContext}
@@ -915,6 +937,7 @@ function MessageListImpl(props: MessageListProps) {
       channelId={() => props.channelId}
       attachments={props.attachments}
       reactions={props.reactions}
+      onDismissNewMessages={dismissNewMessages}
     />
   );
 

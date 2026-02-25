@@ -1,4 +1,5 @@
-import type { Model, Send } from '@core/component/AI/types';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import type { Model } from '@core/component/AI/types';
 import { isDssImage, isImageAttachment } from '@core/component/AI/util';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
@@ -34,7 +35,7 @@ function insertSoftHyphens(text: string): string {
 export function UserMessage(props: {
   message: ChatMessageWithAttachments;
   edit?: {
-    makeEdit: (edit: Send) => void;
+    makeEdit?: (edit: ChatSendInput) => void;
     chatId: string;
   };
 }) {
@@ -137,7 +138,7 @@ export function UserMessage(props: {
                 attachments={props.message.attachments}
                 initialText={props.message.content.toString()}
                 model={(props.message.model as Model) ?? DEFAULT_MODEL}
-                onAccept={props.edit!.makeEdit}
+                onAccept={() => {}}
                 onCancel={() => setIsEditing(false)}
               />
             </Match>
