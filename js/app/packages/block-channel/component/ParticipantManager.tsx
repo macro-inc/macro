@@ -2,7 +2,6 @@ import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
 } from '@block-channel/hooks/participants';
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DialogWrapper } from '@core/component/DialogWrapper';
@@ -25,7 +24,6 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
 type ParticipantManagerProps = {
@@ -87,62 +85,57 @@ export function ParticipantManager(props: ParticipantManagerProps) {
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
         <DialogWrapper>
-          <Dialog.Content>
-            <ClippedPanel tl={!beveledCorners()} active>
-              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                <Dialog.CloseButton>
-                  <DeprecatedIconButton
-                    tooltip={{ label: 'Close' }}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
-                  />
-                </Dialog.CloseButton>
-                <Dialog.Title class="text-sm">{title()}</Dialog.Title>
-              </div>
-              <Show
-                when={
-                  channelType() &&
-                  ['private'].includes(channelType()!) &&
-                  canManageParticipants()
+          <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+            <Dialog.CloseButton>
+              <DeprecatedIconButton
+                tooltip={{ label: 'Close' }}
+                icon={CloseIcon}
+                iconSize={16}
+                theme="clear"
+                size="sm"
+              />
+            </Dialog.CloseButton>
+            <Dialog.Title class="text-sm">{title()}</Dialog.Title>
+          </div>
+          <Show
+            when={
+              channelType() &&
+              ['private'].includes(channelType()!) &&
+              canManageParticipants()
+            }
+          >
+            <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
+              <RecipientSelector<'user'>
+                setSelectedOptions={setUsersToInvite}
+                selectedOptions={usersToInvite()}
+                placeholder={'Search'}
+                options={options}
+                hideBorder
+                noPadding
+              />
+              <DeprecatedTextButton
+                disabled={usersToInvite().length === 0}
+                onClick={handleAddParticipants}
+                icon={InvitedIcon}
+                text={
+                  usersToInvite().length > 1
+                    ? 'Add Participants'
+                    : 'Add Participant'
                 }
-              >
-                <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
-                  <RecipientSelector<'user'>
-                    setSelectedOptions={setUsersToInvite}
-                    selectedOptions={usersToInvite()}
-                    placeholder={'Search'}
-                    options={options}
-                    hideBorder
-                    noPadding
-                  />
-                  <DeprecatedTextButton
-                    disabled={usersToInvite().length === 0}
-                    onClick={handleAddParticipants}
-                    icon={InvitedIcon}
-                    text={
-                      usersToInvite().length > 1
-                        ? 'Add Participants'
-                        : 'Add Participant'
-                    }
-                    theme="accent"
-                  />
-                </div>
-              </Show>
+                theme="accent"
+              />
+            </div>
+          </Show>
 
-              <div class="flex flex-col">
-                <ParticipantList
-                  channelId={props.channelId}
-                  editable={editable()}
-                  participants={props.participants}
-                  userId={userId()!}
-                />
-              </div>
-            </ClippedPanel>
-          </Dialog.Content>
+          <div class="flex flex-col">
+            <ParticipantList
+              channelId={props.channelId}
+              editable={editable()}
+              participants={props.participants}
+              userId={userId()!}
+            />
+          </div>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

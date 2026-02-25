@@ -1,4 +1,3 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
@@ -22,7 +21,6 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
 import { CommandState } from './state';
@@ -89,15 +87,8 @@ export function CommandMenu() {
   return (
     <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
-        <DialogWrapper>
-          <div ref={setCommandMenuRef}>
-            <Dialog.Content>
-              <ClippedPanel tl={!beveledCorners()} active>
-                <CommandMenuInner commandMenuRef={commandMenuRef} />
-              </ClippedPanel>
-            </Dialog.Content>
-          </div>
+        <DialogWrapper contentRef={setCommandMenuRef}>
+          <CommandMenuInner commandMenuRef={commandMenuRef} />
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

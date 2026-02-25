@@ -471,7 +471,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative bracket-never"
+      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -501,9 +501,9 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </Show>
       </div>
-      <div class="w-full border-b border-edge-muted/50" />
-      <div class="p-2">
-        <div class="flex-shrink-0 flex p-2 gap-2 items-center">
+      <div class="border-b border-edge-muted/50" />
+      <div class="p-2 flex-1 min-h-0 flex flex-col">
+        <div class="shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
           <input
             type="text"
@@ -537,22 +537,21 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <div class="min-h-0 text-base m-2">
-          <MarkdownTextarea
-            editable={() => true}
-            onChange={(value) => setContent(value)}
-            initialValue={content()}
-            placeholder={props.placeholder ?? 'Add description...'}
-            captureEditor={setBodyEditor}
-            onEscape={() => {
-              containerRef()?.focus();
-              return true;
-            }}
-            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
-            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
-            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          />
-        </div>
+        <MarkdownTextarea
+          editable={() => true}
+          onChange={(value) => setContent(value)}
+          initialValue={content()}
+          placeholder={props.placeholder ?? 'Add description...'}
+          captureEditor={setBodyEditor}
+          onEscape={() => {
+            containerRef()?.focus();
+            return true;
+          }}
+          onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
+          onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
+          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto"
+        />
 
         <Suspense>
           <PropertiesProvider
