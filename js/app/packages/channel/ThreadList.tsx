@@ -61,6 +61,13 @@ export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
 
+export function shouldStickToBottomOnDataChange(
+  isNearBottom: boolean,
+  shift?: Accessor<boolean>
+): boolean {
+  return isNearBottom && !(shift?.() ?? false);
+}
+
 function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
   if (target.align) return target.align;
   switch (target.tag) {
@@ -79,7 +86,6 @@ export function ThreadList<T extends { id: string }>(
 ) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [isNearBottom, setIsNearBottom] = createSignal(true);
-  const [isNearTop, setIsNearTop] = createSignal(false);
   const [didInitialScroll, setDidInitialScroll] = createSignal(false);
 
   let scrollRef: HTMLDivElement | undefined;
@@ -164,10 +170,14 @@ export function ThreadList<T extends { id: string }>(
   });
 
   function scrollOnMount(handle: VirtualizerHandle) {
+    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
     requestAnimationFrame(() => {
-      const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
       scrollToTarget(handle, target);
-      setDidInitialScroll(true);
+      requestAnimationFrame(() => {
+        // Run a second pass after layout settles to avoid partial initial anchoring.
+        scrollToTarget(handle, target);
+        setDidInitialScroll(true);
+      });
     });
   }
 
@@ -177,7 +187,7 @@ export function ThreadList<T extends { id: string }>(
       () => {
         const handle = virtualHandle();
         if (!handle || !didInitialScroll()) return;
-        if (isNearBottom() && !props.shift) {
+        if (shouldStickToBottomOnDataChange(isNearBottom(), props.shift)) {
           requestAnimationFrame(() => {
             scrollToTarget(handle, { tag: 'bottom', align: 'end' });
           });
@@ -198,7 +208,8 @@ export function ThreadList<T extends { id: string }>(
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
 
     setIsNearBottom(nearBottom);
-    setIsNearTop(nearTop);
+
+    if (!didInitialScroll()) return;
 
     if (nearTop && !nearTopFired) {
       nearTopFired = true;
@@ -209,7 +220,6 @@ export function ThreadList<T extends { id: string }>(
 
     if (nearBottom && !nearBottomFired) {
       nearBottomFired = true;
-      console.log('scroll near bottom');
       props.onScrollNearBottom?.();
     } else if (!nearBottom) {
       nearBottomFired = false;
