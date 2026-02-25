@@ -3371,6 +3371,12 @@ name = "email_formatting"
 version = "0.1.0"
 dependencies = [
  "askama",
+ "chrono",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

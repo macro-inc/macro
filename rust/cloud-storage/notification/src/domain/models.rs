@@ -72,7 +72,7 @@ pub struct UserNotificationRow<T> {
 }
 
 impl<T> UserNotificationRow<T> {
-    /// map the inner T to some U
+    /// Map the inner T to some U.
     pub fn map<F, U>(self, f: F) -> UserNotificationRow<U>
     where
         F: FnOnce(T) -> U,
@@ -106,6 +106,42 @@ impl<T> UserNotificationRow<T> {
             notification_metadata: f(notification_metadata),
             sender_id,
         }
+    }
+
+    /// Map the inner T to some U, with a fallible mapping function.
+    pub fn try_map<F, U, E>(self, f: F) -> Result<UserNotificationRow<U>, E>
+    where
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: f(notification_metadata)?,
+            sender_id,
+        })
     }
 }
 
@@ -147,51 +183,24 @@ impl UserNotificationRow<serde_json::Value> {
     }
 }
 
-impl<T: Serialize> UserNotificationRow<TaggedContent<T>> {
-    /// Serialize the [`TaggedContent`] wrapper back into a single JSON value,
-    /// producing `{ "tag": "...", "content": ... }`.
-    pub fn into_json(self) -> Result<UserNotificationRow<serde_json::Value>, serde_json::Error> {
-        let val = serde_json::to_value(&self.notification_metadata)?;
-        Ok(self.map(|_| val))
+impl TaggedContent<serde_json::Value> {
+    /// Deserialize the adjacently-tagged content directly into `T` without
+    /// an intermediate serialization roundtrip.
+    pub fn deserialize<T: DeserializeOwned>(self) -> Result<T, serde_json::Error> {
+        let val = serde_json::json!({
+            "tag": self.tag,
+            "content": self.content,
+        });
+        serde_json::from_value(val)
     }
 }
 
-impl UserNotificationRow<serde_json::Value> {
-    /// Deserialize the JSON metadata into a concrete type `T`.
-    pub fn deserialize_json<T: DeserializeOwned>(
+impl UserNotificationRow<TaggedContent<serde_json::Value>> {
+    /// Deserialize the adjacently-tagged metadata into a concrete type `T`.
+    pub fn deserialize_metadata<T: DeserializeOwned>(
         self,
     ) -> Result<UserNotificationRow<T>, serde_json::Error> {
-        let UserNotificationRow {
-            owner_id,
-            notification_id,
-            notification_event_type,
-            entity,
-            sent,
-            done,
-            created_at,
-            viewed_at,
-            updated_at,
-            deleted_at,
-            notification_metadata,
-            sender_id,
-        } = self;
-
-        let val = serde_json::from_value(notification_metadata)?;
-
-        Ok(UserNotificationRow {
-            owner_id,
-            notification_id,
-            notification_event_type,
-            entity,
-            sent,
-            done,
-            created_at,
-            viewed_at,
-            updated_at,
-            deleted_at,
-            notification_metadata: val,
-            sender_id,
-        })
+        self.try_map(|tagged| tagged.deserialize())
     }
 }
 

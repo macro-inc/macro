@@ -90,9 +90,7 @@ pub struct GetAllUserNotificationsResponse {
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {
-    row.into_tagged()
-        .into_json()?
-        .deserialize_json::<NotifEvent>()
+    row.into_tagged().deserialize_metadata()
 }
 
 /// Build the strongly typed router.
