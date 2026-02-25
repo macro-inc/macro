@@ -225,13 +225,11 @@ export const SoupViewContextProvider: FlowComponent<
     // To avoid fetching all pages again when coming back to the current query filters,
     // we set the query cache to only contain the first page of data which is the only
     // one to be refetched
-    queryClient.setQueriesData(
-      {
-        queryKey: soupKeys.items({
-          params: soupParams(),
-          body: soupBody(),
-        }).queryKey,
-      },
+    queryClient.setQueryData(
+      soupKeys.items({
+        params: soupParams(),
+        body: soupBody(),
+      }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage) => {
         if (!prev) return;
 
