@@ -15,20 +15,29 @@
     "message_id": "00000000-0000-0000-0001-000000000003",
     "channel_id": "00000000-0000-0000-0000-000000000001",
     "sender_id": "macro|dana@example.com",
-    "content": "Hey all - quick question about the onboarding doc?"
+    "content": "Hey all - quick question about <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-00000000000e\",\"blockName\":\"md\",\"documentName\":\"Onboarding Guide\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> - is it up to date?",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-00000000000e" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000004",
     "channel_id": "00000000-0000-0000-0000-000000000001",
     "sender_id": "macro|bob@example.com",
-    "content": "Sure thing - I can walk you through it.",
-    "thread_id": "00000000-0000-0000-0001-000000000003"
+    "content": "Sure thing <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> - I can walk you through it.",
+    "thread_id": "00000000-0000-0000-0001-000000000003",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000005",
     "channel_id": "00000000-0000-0000-0000-000000000002",
     "sender_id": "macro|bob@example.com",
-    "content": "Reminder: all-hands meeting tomorrow at 10am."
+    "content": "Reminder: all-hands meeting tomorrow at 10am. <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> can you send out the agenda?",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000006",
@@ -61,40 +70,60 @@
     "message_id": "00000000-0000-0000-0001-00000000000a",
     "channel_id": "00000000-0000-0000-0000-000000000004",
     "sender_id": "macro|bob@example.com",
-    "content": "Q3 roadmap draft is ready for review."
+    "content": "<m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000001\",\"blockName\":\"pdf\",\"documentName\":\"Project Roadmap\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> draft is ready for review. <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> take a look when you get a chance.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000001" },
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-00000000000b",
     "channel_id": "00000000-0000-0000-0000-000000000004",
     "sender_id": "macro|charlie@example.com",
-    "content": "Looks good - left a few comments on the doc.",
-    "thread_id": "00000000-0000-0000-0001-00000000000a"
+    "content": "Looks good - left a few comments on <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000010\",\"blockName\":\"pdf\",\"documentName\":\"Product Requirements\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "thread_id": "00000000-0000-0000-0001-00000000000a",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000010" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-00000000000c",
     "channel_id": "00000000-0000-0000-0000-000000000005",
     "sender_id": "macro|charlie@example.com",
-    "content": "Sprint retro notes have been uploaded."
+    "content": "<m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000005\",\"blockName\":\"md\",\"documentName\":\"Sprint Retro Notes\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> have been uploaded.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000005" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-00000000000d",
     "channel_id": "00000000-0000-0000-0000-000000000005",
     "sender_id": "macro|dana@example.com",
-    "content": "Can we discuss the velocity drop next standup?",
-    "thread_id": "00000000-0000-0000-0001-00000000000c"
+    "content": "<m-user-mention>{\"userId\":\"macro|eve@example.com\",\"email\":\"eve@example.com\"}</m-user-mention> can we discuss the velocity drop next standup?",
+    "thread_id": "00000000-0000-0000-0001-00000000000c",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|eve@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-00000000000e",
     "channel_id": "00000000-0000-0000-0000-000000000005",
     "sender_id": "macro|eve@example.com",
-    "content": "Agreed - I think the new estimation process might be a factor.",
-    "thread_id": "00000000-0000-0000-0001-00000000000c"
+    "content": "Agreed - I think the new estimation process might be a factor. I documented it in <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000014\",\"blockName\":\"md\",\"documentName\":\"Incident Postmortem\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "thread_id": "00000000-0000-0000-0001-00000000000c",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000014" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-00000000000f",
     "channel_id": "00000000-0000-0000-0000-000000000006",
     "sender_id": "macro|bob@example.com",
-    "content": "Should we move this conversation to a named channel?"
+    "content": "Should we move this conversation to a named channel? <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> thoughts?",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" },
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000010",
@@ -107,14 +136,21 @@
     "message_id": "00000000-0000-0000-0001-000000000011",
     "channel_id": "00000000-0000-0000-0000-000000000007",
     "sender_id": "macro|dana@example.com",
-    "content": "Can you review my PR when you get a chance?"
+    "content": "<m-user-mention>{\"userId\":\"macro|eve@example.com\",\"email\":\"eve@example.com\"}</m-user-mention> can you review my PR when you get a chance? It touches <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000008\",\"blockName\":\"md\",\"documentName\":\"API Documentation\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|eve@example.com" },
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000008" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000012",
     "channel_id": "00000000-0000-0000-0000-000000000007",
     "sender_id": "macro|eve@example.com",
-    "content": "On it - will have feedback by EOD.",
-    "thread_id": "00000000-0000-0000-0001-000000000011"
+    "content": "On it <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> - will have feedback by EOD.",
+    "thread_id": "00000000-0000-0000-0001-000000000011",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000013",
@@ -126,7 +162,10 @@
     "message_id": "00000000-0000-0000-0001-000000000014",
     "channel_id": "00000000-0000-0000-0000-000000000009",
     "sender_id": "macro|charlie@example.com",
-    "content": "Sent you the updated design files."
+    "content": "Sent you the updated <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000009\",\"blockName\":\"canvas\",\"documentName\":\"Wireframe Draft\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000009" }
+    ]
   },
   {
     "message_id": "00000000-0000-0000-0001-000000000015",
