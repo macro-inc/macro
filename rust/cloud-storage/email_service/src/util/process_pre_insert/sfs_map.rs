@@ -1,5 +1,5 @@
 use anyhow::{Context, bail};
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, stream};
 use lol_html::html_content::Element;
 use lol_html::{HtmlRewriter, Settings, element};
@@ -65,6 +65,7 @@ pub async fn store_threads_images(
 
 /// stores a message's URL-referenced images in SFS and updates the html of the message to
 /// use the new SFS links.
+#[tracing::instrument(skip(db, sfs_client, msg), err)]
 pub async fn store_message_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
@@ -97,6 +98,7 @@ pub async fn store_message_images(
 }
 
 // extracts the src/srcset attributes from all <img> tags in the passed HTML
+#[tracing::instrument(skip(html_content), err)]
 fn extract_all_image_urls(html_content: &str) -> anyhow::Result<HashSet<String>> {
     let document = Html::parse_document(html_content);
     let mut image_urls = HashSet::new();
@@ -126,6 +128,7 @@ fn extract_all_image_urls(html_content: &str) -> anyhow::Result<HashSet<String>>
 }
 
 // wrapper function for fetching and caching images in parallel
+#[tracing::instrument(skip(db, sfs_client, source_urls), err)]
 async fn cache_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
@@ -173,10 +176,24 @@ async fn cache_images(
 }
 
 // fetches the data from the url, stores it in sfs, and returns a tuple of the source and new urls
+#[tracing::instrument(skip(sfs_client, original_url_str), err)]
 pub async fn fetch_and_upload_to_sfs(
     sfs_client: StaticFileServiceClient,
     original_url_str: &str,
 ) -> anyhow::Result<Option<(String, String)>> {
+    let image_data = match fetch_image(original_url_str).await? {
+        Some(data) => data,
+        None => return Ok(None),
+    };
+
+    let sfs_url = upload_to_sfs(sfs_client, original_url_str, image_data).await?;
+
+    Ok(Some((original_url_str.to_string(), sfs_url)))
+}
+
+// fetches image data from the given URL, returning None for non-HTTP(S) or unparseable URLs
+#[tracing::instrument(skip(original_url_str), err)]
+async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     let url_to_fetch = match Url::parse(original_url_str) {
         Ok(mut url) => {
             if url.scheme() != "http" && url.scheme() != "https" {
@@ -260,12 +277,19 @@ pub async fn fetch_and_upload_to_sfs(
     let image_data = image_data_bytes.freeze();
 
     if image_data.is_empty() {
-        return Err(anyhow::anyhow!(
-            "Fetched empty image data from {}",
-            original_url_str
-        ));
+        bail!("Fetched empty image data from {}", original_url_str);
     }
 
+    Ok(Some(image_data))
+}
+
+// validates image data and uploads it to SFS, returning the new SFS URL
+#[tracing::instrument(skip(sfs_client, original_url_str, image_data), err)]
+async fn upload_to_sfs(
+    sfs_client: StaticFileServiceClient,
+    original_url_str: &str,
+    image_data: Bytes,
+) -> anyhow::Result<String> {
     let inferred_type = match infer::get(&image_data) {
         Some(t) => t,
         None => {
@@ -282,17 +306,12 @@ pub async fn fetch_and_upload_to_sfs(
         );
     }
 
-    let sfs_info = match sfs_client
+    let sfs_info = sfs_client
         .put_file_with_bytes("a", image_data, validated_content_type.to_string())
         .await
-    {
-        Ok(info) => info,
-        Err(e) => {
-            return Err(anyhow::anyhow!("Failed to store image in SFS: {}", e));
-        }
-    };
+        .context("Failed to store image in SFS")?;
 
-    Ok(Some((original_url_str.to_string(), sfs_info.file_location)))
+    Ok(sfs_info.file_location)
 }
 
 fn build_error_chain(err: &reqwest::Error) -> String {
@@ -307,6 +326,7 @@ fn build_error_chain(err: &reqwest::Error) -> String {
     error_chain
 }
 
+#[tracing::instrument(skip(original_html, url_map), err)]
 fn rewrite_html_image_links(
     original_html: &str,
     url_map: &HashMap<String, String>,

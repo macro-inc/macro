@@ -286,6 +286,74 @@ async fn thread_data_multiple_parents(pool: Pool<Postgres>) -> anyhow::Result<()
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn thread_replies_returns_all_active_replies_oldest_first(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let replies = repo.get_thread_replies(MSG1).await?;
+
+    let ids: Vec<Uuid> = replies.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 4);
+    assert_eq!(ids[0], REPLY1);
+    assert_eq!(
+        ids[3],
+        Uuid::from_u128(0x00000000_0000_0000_0000_00000000b004)
+    );
+    let content: Vec<&str> = replies.iter().map(|r| r.content.as_str()).collect();
+    assert_eq!(content, vec!["reply 1", "reply 2", "reply 3", "reply 4"]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_replies_returns_non_null_edited_at(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE comms_messages
+        SET edited_at = '2024-01-01 10:05:00'
+        WHERE id = '00000000-0000-0000-0000-00000000b003'
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let replies = repo.get_thread_replies(MSG1).await?;
+    let edited_reply = replies
+        .into_iter()
+        .find(|r| r.id == Uuid::from_u128(0x00000000_0000_0000_0000_00000000b003))
+        .expect("expected fixture reply");
+
+    assert!(edited_reply.edited_at.is_some());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_replies_excludes_deleted_rows(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let fully_deleted_parent = Uuid::from_u128(0x00000000_0000_0000_0000_000000000004);
+    let deleted_parent_replies = repo.get_thread_replies(fully_deleted_parent).await?;
+    assert!(
+        deleted_parent_replies.is_empty(),
+        "deleted replies should not be returned"
+    );
+
+    let active_replies = repo.get_thread_replies(MSG2).await?;
+    assert_eq!(active_replies.len(), 1);
+    assert_eq!(active_replies[0].id, REPLY5);
+    assert_eq!(active_replies[0].content, "reply to deleted");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn reactions_grouped_by_emoji(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let map = repo.get_reactions_batch(&[MSG1, MSG3]).await?;

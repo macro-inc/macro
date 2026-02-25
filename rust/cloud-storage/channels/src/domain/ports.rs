@@ -1,6 +1,6 @@
 use crate::domain::models::{
     ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ThreadData, TopLevelMessageRow,
+    MessagePageDirection, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
@@ -28,6 +28,12 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         parent_ids: &[Uuid],
         preview_count: u16,
     ) -> impl Future<Output = Result<HashMap<Uuid, ThreadData>, Self::Err>> + Send;
+
+    /// Fetch all non-deleted replies for a parent message, oldest-first.
+    fn get_thread_replies(
+        &self,
+        parent_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReplyRow>, Self::Err>> + Send;
 
     /// Batch-fetch reactions for a set of message ids.
     fn get_reactions_batch(
@@ -106,6 +112,15 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         message_id: Uuid,
         limit: u16,
     ) -> impl Future<Output = Result<ChannelMessagesPage, ChannelMessagesErr>> + Send;
+
+    /// Fetch all replies for the thread identified by `message_id`.
+    ///
+    /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
+    fn get_thread_replies(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send;
 }
 
 /// Access check for channel membership. Separated from the business logic service.

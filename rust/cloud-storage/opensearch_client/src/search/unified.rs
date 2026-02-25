@@ -87,6 +87,8 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            include_labels: args.email_search_args.include_labels,
+            exclude_labels: args.email_search_args.exclude_labels,
         }
     }
 }
@@ -150,6 +152,8 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -411,14 +415,13 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    // Build highlight
     let highlight = Highlight::new().require_field_match(true).field(
         "content",
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(500),
+            .number_of_fragments(0),
     );
 
     search_request_builder.highlight(highlight);

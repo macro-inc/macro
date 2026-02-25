@@ -31,11 +31,20 @@ fn macro_user_id(input: &str) -> IResult<&str, MacroUserId<ArcCowStr<'_>>> {
 }
 
 /// A structure that encapsulates a macro user id
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct MacroUserId<T> {
     email_part: Email<()>,
     email_part_offset: usize,
     user_id: T,
+}
+
+impl<T> std::fmt::Debug for MacroUserId<T>
+where
+    T: AsRef<str>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.user_id.as_ref())
+    }
 }
 
 impl<T> PartialEq for MacroUserId<T>
@@ -62,14 +71,26 @@ where
 
 /// The standard inner type for a [MacroUserId]
 /// This is a value which is guaranteed to be unmodified from its original input
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(try_from = "String", into = "String")]
 pub struct MacroUserIdStr<'a>(pub MacroUserId<Lowercase<'a>>);
 
+impl<'a> std::fmt::Debug for MacroUserIdStr<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.as_ref())
+    }
+}
+
 /// Deserialize a MacroUserId to a guaranteed borrowed lifetime from the 'de argument
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(try_from = "&str")]
 pub struct BorrowedUserIdStr<'a>(#[serde(borrow)] pub MacroUserId<ArcCowStr<'a>>);
+
+impl<'a> std::fmt::Debug for BorrowedUserIdStr<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.as_ref())
+    }
+}
 
 impl<'a> doppleganger::Primitive for MacroUserIdStr<'a> {}
 

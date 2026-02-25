@@ -1,5 +1,5 @@
 use crate::{
-    api::context::{ApiContext, DocumentStorageServiceAuthKey},
+    api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     },
@@ -22,6 +22,7 @@ use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -288,6 +289,14 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
+    let s3 = Arc::new(S3::new(
+        s3_client,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+        config.vars.upload_staging_bucket.as_ref(),
+    ));
+    let system_properties_service = Arc::new(system_properties_service);
+
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -308,10 +317,17 @@ async fn main() -> anyhow::Result<()> {
         browser_cache_expiry_seconds: config
             .document_storage_service_presigned_url_browser_cache_expiry_seconds,
     };
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        macro_aws_config::s3_client().await,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
+        s3_upload_adapter,
+        TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
     );
 
@@ -327,19 +343,14 @@ async fn main() -> anyhow::Result<()> {
         ),
         db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
-        s3_client: Arc::new(S3::new(
-            s3_client,
-            config.vars.document_storage_bucket.as_ref(),
-            config.vars.docx_document_upload_bucket.as_ref(),
-            config.vars.upload_staging_bucket.as_ref(),
-        )),
+        s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
-        system_properties_service: Arc::new(system_properties_service),
+        system_properties_service: system_properties_service.clone(),
         properties_service: Arc::new(properties_service),
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),

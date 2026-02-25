@@ -403,21 +403,18 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('createDocument', {
-    description: schemas.createDocumentHandlerResponse.description!,
-    args: schemas.createDocumentHandlerBody.shape,
+    description: schemas.createDocumentResponse.description!,
+    args: schemas.createDocumentBody.shape,
     result: {
       metadata:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
+        schemas.createDocumentResponse.shape.data._def.left.shape
           .documentMetadata,
       presignedUrl:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
-          .presignedUrl,
+        schemas.createDocumentResponse.shape.data._def.left.shape.presignedUrl,
       contentType:
-        schemas.createDocumentHandlerResponse.shape.data._def.right.shape
-          .contentType,
+        schemas.createDocumentResponse.shape.data._def.right.shape.contentType,
       fileType:
-        schemas.createDocumentHandlerResponse.shape.data._def.right.shape
-          .fileType,
+        schemas.createDocumentResponse.shape.data._def.right.shape.fileType,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),

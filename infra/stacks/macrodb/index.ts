@@ -1,4 +1,5 @@
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { config, stack } from '../../packages/shared';
 
 const tags = {
@@ -64,7 +65,7 @@ const database = new aws.rds.Instance(
     finalSnapshotIdentifier:
       stack === 'prod' ? `macro-db-${stack}-final` : undefined, // only final snapshot prod
     deletionProtection: stack === 'prod',
-    // parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
+    parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     multiAz: stack === 'prod',

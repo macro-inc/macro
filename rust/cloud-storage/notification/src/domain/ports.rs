@@ -189,6 +189,7 @@ pub trait EmailSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+use crate::domain::models::push_notification_event::RawPushNotificationEventMessage;
 use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
@@ -221,4 +222,36 @@ pub trait NotificationEgress: Send + Sync + 'static {
     /// Messages are automatically deleted from the queue after successful delivery.
     fn poll_and_deliver(&self)
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
+}
+
+/// Port for deleting a device registration from the database by its SNS endpoint ARN.
+pub trait DeviceRegistrationDeleter: Send + Sync + 'static {
+    /// Delete a device registration by its endpoint ARN.
+    fn delete_device_by_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for deleting an SNS platform endpoint.
+pub trait SnsEndpointDeleter: Send + Sync + 'static {
+    /// Delete an SNS platform endpoint by its ARN.
+    fn delete_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for receiving and acknowledging push notification event messages from a queue.
+pub trait PushNotificationEventQueue: Send + Sync + 'static {
+    /// Receive a batch of raw push notification event messages from the queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawPushNotificationEventMessage>, Report>> + Send;
+
+    /// Delete a message from the queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }

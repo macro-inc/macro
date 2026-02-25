@@ -1,4 +1,4 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -26,6 +26,9 @@ import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;
 false && floatWithSelection;
+
+// py-2 on the menu container = 8px top + 8px bottom
+const MENU_DECORATION_HEIGHT = 16;
 
 export type EmojiMenuProps = {
   menu: MenuOperations;
@@ -69,6 +72,14 @@ export function EmojiMenu(props: EmojiMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+  const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
+    number | undefined
+  >(undefined);
+  const contentMaxHeight = () => {
+    const h = menuAvailableHeight();
+    if (h === undefined) return undefined;
+    return Math.min(200, Math.max(0, h - MENU_DECORATION_HEIGHT));
+  };
 
   const { isKeypressActive } = useIsKeyPressActive();
   const setSelectedIndexFromMouse = (index: number) => {
@@ -208,14 +219,15 @@ export function EmojiMenu(props: EmojiMenuProps) {
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
+            onAvailableHeight: setMenuAvailableHeight,
           }}
           use:clickOutside={() => {
             closeMenu();
           }}
           ref={menuRef}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
-            <div class="flex flex-col gap-1 pl-1 w-full">
+          <ClippedPanel active tl class="py-2">
+            <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}
                 fallback={
@@ -225,8 +237,12 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 <VList
                   data={emojiOptions()}
                   ref={setVirtualHandle}
+                  class="scrollbar-hidden"
                   style={{
-                    height: '200px',
+                    height:
+                      contentMaxHeight() !== undefined
+                        ? `${contentMaxHeight()}px`
+                        : '200px',
                     'max-height': '100%',
                     width: '100%',
                   }}
@@ -248,8 +264,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 </VList>
               </Show>
             </div>
-          </div>
-          <BozzyBracketInnerSibling animOnOpen={true} />
+          </ClippedPanel>
         </div>
       </ScopedPortal>
     </Show>

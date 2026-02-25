@@ -403,8 +403,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
 
-    println!("{:?} {:?}", content_next_cursor, content_hits.len());
-
     // Track original counts before combining
     let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();

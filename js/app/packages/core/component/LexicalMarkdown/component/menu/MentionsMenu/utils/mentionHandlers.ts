@@ -114,8 +114,6 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleGroupMentionItem(item.data, dependencies);
       case 'entity':
         return await handleEntityMention(item, dependencies);
-      case 'command':
-        return;
     }
   };
 }

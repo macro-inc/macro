@@ -5,11 +5,14 @@
 #[cfg(test)]
 mod tests;
 
+mod create;
+
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
+use crate::domain::models::CreateDocumentRepoArgs;
 use crate::domain::ports::DocumentRepo;
 
 /// PostgreSQL-backed document repository.
@@ -369,5 +372,138 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         Ok(content.content)
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn create_document(
+        &self,
+        args: CreateDocumentRepoArgs,
+    ) -> Result<DocumentMetadata, Self::Err> {
+        let CreateDocumentRepoArgs {
+            id,
+            sha,
+            document_name,
+            user_id,
+            file_type,
+            project_id,
+            email_attachment_id,
+            created_at: provided_created_at,
+            is_task,
+            skip_history,
+        } = args;
+
+        let now = chrono::Utc::now();
+        let created_at = provided_created_at.as_ref().unwrap_or(&now);
+
+        let mut transaction = self.pool.begin().await?;
+
+        // Fetch project name if project_id provided
+        let project_name: Option<String> = if let Some(ref proj_id) = project_id {
+            sqlx::query_scalar!(
+                r#"SELECT name FROM "Project" WHERE id = $1"#,
+                &proj_id.to_string(),
+            )
+            .fetch_optional(&mut *transaction)
+            .await?
+        } else {
+            None
+        };
+
+        let document_id = create::insert_document_row(
+            &mut transaction,
+            id.as_ref(),
+            &user_id,
+            &document_name,
+            file_type,
+            project_id.as_ref(),
+            created_at,
+        )
+        .await?;
+
+        // Insert document sub-type
+        let sub_type: Option<DocumentSubType> =
+            create::set_document_sub_type(&mut transaction, &document_id, is_task).await?;
+
+        // Insert document version (DocumentBom for docx, DocumentInstance for others)
+        let document_version = create::set_document_version(
+            &mut transaction,
+            &document_id,
+            file_type,
+            sha,
+            created_at,
+        )
+        .await?;
+
+        // Create share permission
+        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
+
+        // Add to user history (if not skipped)
+        if !skip_history {
+            create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
+        }
+
+        // Insert user item access (Owner level)
+        create::insert_item_access(&mut transaction, &document_id, &user_id).await?;
+
+        // Link to email attachment if provided
+        if let Some(attachment_id) = email_attachment_id {
+            sqlx::query!(
+                r#"
+                INSERT INTO "document_email" (document_id, email_attachment_id)
+                VALUES ($1, $2)
+                "#,
+                &document_id.to_string(),
+                attachment_id,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+
+        Ok(DocumentMetadata::new_document(
+            &document_id.to_string(),
+            document_version.id,
+            user_id,
+            &document_name,
+            file_type,
+            &document_version.sha,
+            None,
+            None,
+            None,
+            project_id.map(|s| s.to_string()).as_deref(),
+            project_name.as_deref(),
+            document_version.created_at,
+            document_version.updated_at,
+            sub_type,
+        ))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_upload_job(&self, document_id: &str, job_id: &str) -> Result<(), Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE "UploadJob" SET "documentId" = $1 WHERE "jobId" = $2
+            "#,
+            document_id,
+            job_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

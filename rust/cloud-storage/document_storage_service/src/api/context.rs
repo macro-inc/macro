@@ -12,9 +12,11 @@ use comms::{
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::ports::TaskPropertiesPort;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -43,7 +45,9 @@ use soup::{
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use system_properties::{
+    PgSystemPropertiesRepository, SystemPropertiesService as _, SystemPropertiesServiceImpl,
+};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -84,9 +88,23 @@ type PropertiesService = PropertiesServiceImpl<
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
+pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+
+impl TaskPropertiesPort for TaskPropertiesAdapter {
+    async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
+        self.0
+            .attach_task_properties(entity_ids)
+            .await
+            .map_err(Into::into)
+    }
+}
+
 /// Type alias for the documents router state.
-pub(crate) type DocumentsState =
-    DocumentRouterState<DocumentServiceImpl<PgDocumentRepo>, EntityAccessService>;
+pub(crate) type DocumentsState = DocumentRouterState<
+    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+    EntityAccessService,
+>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =

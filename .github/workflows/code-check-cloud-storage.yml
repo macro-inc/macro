@@ -177,11 +177,28 @@ jobs:
             exit 1
           fi
 
+  check-no-bootstrap-deletions:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check for deleted bootstrap.zip files
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          DELETED=$(git diff --name-only --diff-filter=D origin/${{ github.base_ref }} HEAD | grep "bootstrap\.zip" || true)
+          if [ -n "$DELETED" ]; then
+            echo "❌ bootstrap.zip files should never be deleted. The following bootstrap.zip files were removed in this PR:"
+            echo "$DELETED"
+            exit 1
+          fi
+          echo "✅ No bootstrap.zip files were deleted"
+
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, diff-check, check-lambdas]
+    needs: [path-check, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -191,13 +208,15 @@ jobs:
           echo "test: ${{ needs.test.result }}"
           echo "diff-check: ${{ needs.diff-check.result }}"
           echo "check-lambdas: ${{ needs.check-lambdas.result }}"
+          echo "check-no-bootstrap-deletions: ${{ needs.check-no-bootstrap-deletions.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.check-lambdas.result }}" == "failure" ]]; then
+             [[ "${{ needs.check-lambdas.result }}" == "failure" ]] || \
+             [[ "${{ needs.check-no-bootstrap-deletions.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi

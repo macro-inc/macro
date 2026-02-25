@@ -56,6 +56,10 @@ pub enum ChannelLiteral {
     ChannelType(ChannelTypeFilter),
     /// this node value filters by channel importance. false short-circuits to match nothing.
     Importance(bool),
+    /// this node value filters by notification done state for channels.
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for channels.
+    NotificationSeen(bool),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -72,6 +76,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             sender_ids,
             channel_types,
             importance,
+            notification_filters,
         } = filter_request;
 
         let thread_ids = thread_ids
@@ -104,6 +109,12 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             .try_expand(|r| r.map(ChannelLiteral::ChannelType), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ChannelLiteral::Importance(imp)));
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(ChannelLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(ChannelLiteral::NotificationSeen(seen)));
 
         Ok([
             thread_ids,
@@ -113,6 +124,8 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             sender_ids,
             channel_type_nodes,
             importance_node,
+            notification_done_node,
+            notification_seen_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

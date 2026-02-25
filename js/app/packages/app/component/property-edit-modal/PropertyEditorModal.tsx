@@ -1,5 +1,4 @@
 import { DialogWrapper } from '@core/component/DialogWrapper';
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { Dialog } from '@kobalte/core/dialog';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -26,7 +25,6 @@ import {
   setPropertyEditorTarget,
   togglePropertyEditor,
 } from './state/propertyEditor';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';
@@ -151,57 +149,51 @@ export function PropertyEditorModal() {
   return (
     <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
       <Dialog.Portal>
-        <DialogWrapper>
-          <div ref={mergeRefs(attach, setDialogRef)}>
-            <Dialog.Content>
-              <ClippedPanel tl={!beveledCorners()} active>
-                <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
-                  <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
-                    <span class="pl-2 pointer-events-none">❯</span>
-                    <SearchInput
-                      placeHolder={placeholder() || defaultPlaceholder}
-                      value={searchValue}
-                      setValue={setSearchValue}
-                      focusedIndex={selectedIndex}
-                      setFocusedIndex={setSelectedIndex}
-                      inputType={inputType()}
-                    />
-                  </div>
-                  <div class="p-2 border-b border-edge-muted">
-                    <EditingEntityPreview
-                      entities={propertyEditorState.selectedEntities}
-                    />
-                  </div>
-                  <Switch>
-                    <Match when={propertyEditorState.mode === 'selector'}>
-                      <div class="overflow-scroll scrollbar-hidden">
-                        <PropertyList
-                          searchTerm={searchValue()}
-                          focusedIndex={selectedIndex}
-                          setFocusedIndex={setSelectedIndex}
-                          setFocusedIndexFromMouse={setSelectedIndexFromMouse}
-                          setKeybindings={keybindings}
-                        />
-                      </div>
-                    </Match>
-                    <Match when={propertyEditorState.mode === 'direct'}>
-                      <PropertyValueEditor
-                        property={propertyEditorState.targetProperty}
-                        searchValue={searchValue}
-                        setSearchValue={setSearchValue}
-                        selectedIndex={selectedIndex}
-                        setSelectedIndex={setSelectedIndex}
-                        setSelectedIndexFromMouse={setSelectedIndexFromMouse}
-                        setKeybindings={keybindings}
-                        setPlaceholder={setPlaceholder}
-                        setInputType={setInputType}
-                        onSave={handlePropertySave}
-                      />
-                    </Match>
-                  </Switch>
+        <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
+          <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
+            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+              <span class="pl-2 pointer-events-none">❯</span>
+              <SearchInput
+                placeHolder={placeholder() || defaultPlaceholder}
+                value={searchValue}
+                setValue={setSearchValue}
+                focusedIndex={selectedIndex}
+                setFocusedIndex={setSelectedIndex}
+                inputType={inputType()}
+              />
+            </div>
+            <div class="p-2 border-b border-edge-muted">
+              <EditingEntityPreview
+                entities={propertyEditorState.selectedEntities}
+              />
+            </div>
+            <Switch>
+              <Match when={propertyEditorState.mode === 'selector'}>
+                <div class="overflow-scroll scrollbar-hidden">
+                  <PropertyList
+                    searchTerm={searchValue()}
+                    focusedIndex={selectedIndex}
+                    setFocusedIndex={setSelectedIndex}
+                    setFocusedIndexFromMouse={setSelectedIndexFromMouse}
+                    setKeybindings={keybindings}
+                  />
                 </div>
-              </ClippedPanel>
-            </Dialog.Content>
+              </Match>
+              <Match when={propertyEditorState.mode === 'direct'}>
+                <PropertyValueEditor
+                  property={propertyEditorState.targetProperty}
+                  searchValue={searchValue}
+                  setSearchValue={setSearchValue}
+                  selectedIndex={selectedIndex}
+                  setSelectedIndex={setSelectedIndex}
+                  setSelectedIndexFromMouse={setSelectedIndexFromMouse}
+                  setKeybindings={keybindings}
+                  setPlaceholder={setPlaceholder}
+                  setInputType={setInputType}
+                  onSave={handlePropertySave}
+                />
+              </Match>
+            </Switch>
           </div>
         </DialogWrapper>
       </Dialog.Portal>

@@ -1030,6 +1030,66 @@ export const getChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
+ * @summary Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+ */
+export const getThreadRepliesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+  message_id: zod
+    .string()
+    .uuid()
+    .describe('Message ID (thread parent or reply id)'),
+});
+
+export const getThreadRepliesResponseItem = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the attachment was created.'),
+            entity_id: zod.string().describe('Entity id.'),
+            entity_type: zod.string().describe('Type of entity.'),
+            id: zod.string().uuid().describe('Attachment id.'),
+          })
+          .describe('An attachment on a message.')
+      )
+      .describe('Attachments on this reply.'),
+    content: zod.string().describe('Reply content.'),
+    created_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was created.'),
+    edited_at: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the reply was edited.'),
+    id: zod.string().uuid().describe('Reply id.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('The emoji string.'),
+            users: zod
+              .array(zod.string())
+              .describe('User ids who added this reaction.'),
+          })
+          .describe('A reaction with emoji and user list.')
+      )
+      .describe('Reactions on this reply.'),
+    sender_id: zod.string().describe('Sender user id.'),
+    updated_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was last updated.'),
+  })
+  .describe('A thread reply shown in preview.');
+export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
+
+/**
  * @summary Handler for `GET /channels/:channel_id/participants`.
  */
 export const getChannelParticipantsParams = zod.object({
@@ -1182,9 +1242,11 @@ export const getUserDocumentsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Handles creating a document
+ * Creates a new document, generates an S3 presigned upload URL, and returns
+the document metadata with the URL for the client to upload to.
+ * @summary Handler for `POST /documents`.
  */
-export const createDocumentHandlerBody = zod.object({
+export const createDocumentBody = zod.object({
   branchedFromId: zod
     .string()
     .nullish()
@@ -1218,7 +1280,11 @@ export const createDocumentHandlerBody = zod.object({
     .string()
     .nullish()
     .describe('Optional file type of the document.'),
-  id: zod.string().nullish().describe('The id of the document in the database'),
+  id: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe('The id of the document in the database'),
   isTask: zod
     .boolean()
     .optional()
@@ -1237,7 +1303,7 @@ export const createDocumentHandlerBody = zod.object({
     .describe(
       'The content type of the document (currently only used for logging matches against file type).'
     ),
-  projectId: zod.string().nullish(),
+  projectId: zod.string().uuid().nullish(),
   sha: zod.string().describe('The sha of the document.'),
   skipHistory: zod
     .boolean()
@@ -1247,7 +1313,7 @@ export const createDocumentHandlerBody = zod.object({
     ),
 });
 
-export const createDocumentHandlerResponse = zod.object({
+export const createDocumentResponse = zod.object({
   data: zod
     .object({
       documentMetadata: zod.object({
@@ -1360,6 +1426,7 @@ export const createTaskHandlerBody = zod
   .object({
     projectId: zod
       .string()
+      .uuid()
       .nullish()
       .describe('Optional project id to associate the task with'),
     propertyValues: zod
@@ -3952,6 +4019,23 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -3989,6 +4073,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4032,6 +4133,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4044,6 +4162,17 @@ export const postItemsSoupBody = zod
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           ),
+        task_filters: zod
+          .object({
+            include_cbm_atm_nc: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
+              ),
+          })
+          .optional()
+          .describe('Task-only filters nested under document filters.'),
       })
       .optional()
       .describe(
@@ -4069,12 +4198,41 @@ export const postItemsSoupBody = zod
           .describe(
             "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
           ),
+        exclude_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
+          ),
         importance: zod
           .boolean()
           .nullish()
           .describe(
             'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        include_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -4100,6 +4258,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()

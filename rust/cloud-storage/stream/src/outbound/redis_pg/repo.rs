@@ -25,7 +25,7 @@ enum StoredStreamItem {
 
 struct StreamNotifier {
     _listener: JoinHandle<()>,
-    tx: broadcast::Sender<StreamId>,
+    tx: broadcast::Sender<StreamEvent>,
 }
 
 impl StreamNotifier {
@@ -41,11 +41,11 @@ impl StreamNotifier {
         }
     }
 
-    pub fn subscribe(&self) -> Receiver<StreamId> {
+    pub fn subscribe(&self) -> Receiver<StreamEvent> {
         self.tx.subscribe()
     }
 
-    fn spawn_subscriber(client: Client, tx: broadcast::Sender<StreamId>) -> JoinHandle<()> {
+    fn spawn_subscriber(client: Client, tx: broadcast::Sender<StreamEvent>) -> JoinHandle<()> {
         tracing::info!("Start notification subscriber");
         tokio::spawn(async move {
             loop {
@@ -56,16 +56,16 @@ impl StreamNotifier {
                         }
                         let mut stream = pubsub.on_message();
                         while let Some(msg) = stream.next().await {
-                            if let Ok(stream_id) = msg
+                            if let Ok(event) = msg
                                         .get_payload::<String>()
                                         .map_err(StreamServiceError::from)
                                         .and_then(|payload| {
-                                            serde_json::from_str::<StreamId>(&payload).map_err(Into::into)
+                                            serde_json::from_str::<StreamEvent>(&payload).map_err(Into::into)
                                         })
                                         .inspect_err(|err| tracing::error!(error=?err, "failed to get notification payload"))
                                     {
-                                        tracing::debug!(stream_id=?stream_id, "notify new stream");
-                                        let _ = tx.send(stream_id).inspect_err(
+                                        tracing::debug!(event=?event, "stream event received");
+                                        let _ = tx.send(event).inspect_err(
                                             |err| tracing::error!(error=?err, "failed to forward notification"),
                                         );
                                     }
@@ -167,7 +167,8 @@ impl StreamRepo for RedisPostgresStreamRepo {
 
         if is_new {
             tracing::debug!(stream_id=?id, "New stream detected publishing notification");
-            let notification = serde_json::to_string(id).expect("json");
+            let event = StreamEvent::Created(id.clone());
+            let notification = serde_json::to_string(&event).expect("json");
             let _: RedisResult<()> = conn
                 .publish(NOTIFY_CHANNEL, notification)
                 .await
@@ -262,6 +263,13 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to remove stream from postgres"));
 
+        let event = StreamEvent::Closed(id.clone());
+        let notification = serde_json::to_string(&event).expect("json");
+        let _: RedisResult<()> = conn
+            .publish(NOTIFY_CHANNEL, notification)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to publish close event"));
+
         Ok(())
     }
 
@@ -275,7 +283,7 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .map_err(|e| StreamServiceError::StorageError(e.to_string()))
     }
 
-    async fn notify(&self) -> Receiver<StreamId> {
+    async fn notify(&self) -> Receiver<StreamEvent> {
         self.notifier
             .get_or_init(|| StreamNotifier::new(&self.redis_client))
             .await

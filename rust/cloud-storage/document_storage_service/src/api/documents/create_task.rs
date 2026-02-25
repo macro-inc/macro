@@ -1,4 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
+use documents_hex::domain::models::CreateDocumentRepoArgs;
+use documents_hex::domain::ports::DocumentService;
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use model::document::FileType;
 use model::response::ErrorResponse;
@@ -9,13 +11,7 @@ use models_properties::api::requests::SetPropertyValue;
 use properties::PropertiesService;
 use uuid::Uuid;
 
-use crate::api::{
-    context::ApiContext,
-    documents::{
-        create_document::create_document_v2,
-        utils::{self},
-    },
-};
+use crate::api::context::ApiContext;
 
 /// SHA256 hash of empty string - for an empty markdown document
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -37,7 +33,7 @@ pub struct CreateTaskRequest {
     /// The name of the task
     pub task_name: String,
     /// Optional project id to associate the task with
-    pub project_id: Option<String>,
+    pub project_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task
     pub property_values: Option<Vec<PropertyInput>>,
 }
@@ -81,41 +77,38 @@ pub(in crate::api) async fn create_task_handler(
     let req = project.into_inner();
     let user_id = user_context.user_context.user_id.clone();
 
-    // Create task document metadata (empty content - client sets via sync service)
-    let create_document_response_data = create_document_v2::create_document(
-        &state,
-        create_document_v2::CreateDocumentParams {
-            id: None,
-            sha: EMPTY_SHA256,
-            document_name: &req.task_name,
-            owner: user_context.macro_user_id,
-            file_type: Some(FileType::Md),
-            job_id: None,
-            project_id: req.project_id.as_deref(),
-            email_attachment_id: None,
-            created_at: None,
-            is_task: true,
-            skip_history: false,
-        },
-    )
-    .await;
+    let macro_user_id = user_context.macro_user_id;
 
-    let response_data = match create_document_response_data {
-        Ok(response_data) => response_data,
-        Err((status_code, message, document_id)) => {
-            tracing::error!(error=?message, "unable to create task document");
-            if let Some(document_id) = document_id {
-                tracing::info!(document_id=?document_id, "cleaning up document");
-                utils::handle_document_creation_error_cleanup(&state.db, document_id).await;
-            }
-            return Err((
-                status_code,
+    // Create task document metadata (empty content - client sets via sync service)
+    let response_data = state
+        .documents_state
+        .service
+        .create_document(
+            macro_user_id.clone(),
+            CreateDocumentRepoArgs {
+                id: None,
+                sha: EMPTY_SHA256.to_string(),
+                document_name: req.task_name,
+                user_id: macro_user_id,
+                file_type: Some(FileType::Md),
+                project_id: req.project_id,
+                email_attachment_id: None,
+                created_at: None,
+                is_task: true,
+                skip_history: false,
+            },
+            None,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to create task document");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "failed to create task document",
                 }),
-            ));
-        }
-    };
+            )
+        })?;
 
     let document_id = response_data
         .document_response

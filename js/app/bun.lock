@@ -38,7 +38,6 @@
         "@lexical/utils": "^0.32.1",
         "@lukemorales/query-key-factory": "^1.3.4",
         "@normy/query-core": "^0.21.0",
-        "@panzoom/panzoom": "^4.6.0",
         "@phosphor-icons/core": "^2.1.1",
         "@solid-primitives/audio": "^1.4.2",
         "@solid-primitives/broadcast-channel": "^0.1.1",
@@ -70,6 +69,7 @@
         "@tauri-apps/plugin-websocket": "~2",
         "@thisbeyond/solid-dnd": "^0.7.5",
         "@vitest/ui": "^4.0.17",
+        "@zoompinch/core": "^0.0.38",
         "async-lock": "^1.4.1",
         "async-mutex": "^0.5.0",
         "brace-expansion": "^4.0.1",
@@ -881,8 +881,6 @@
 
     "@orval/zod": ["@orval/zod@7.13.0", "", { "dependencies": { "@orval/core": "7.13.0", "lodash.uniq": "^4.5.0", "openapi3-ts": "4.5.0" } }, "sha512-jEEj0uRO5D5D1CHKQdth5Atl5Ap4/P21SMiOFmVpiArlXr4LQtMpbkiPVM2tsQXIhtC38c9oMt8+rOx1rYSjcw=="],
 
-    "@panzoom/panzoom": ["@panzoom/panzoom@4.6.0", "", {}, "sha512-3KxkY1lNKFn98fW5ZFR6vV0YzsXj3I4EQDyFWSXME6/cic86eSS7VjuqIjrA3PEpySo0r5fFtlX8eYCt4JPUFQ=="],
-
     "@paralleldrive/cuid2": ["@paralleldrive/cuid2@2.2.2", "", { "dependencies": { "@noble/hashes": "^1.1.5" } }, "sha512-ZOBkgDwEdoYVlSeRbYYXs0S9MejQofiVYoTbKzy/6GQa39/q5tQU2IX46+shYnUkpEl3wc+J6wRlar7r2EK2xA=="],
 
     "@phosphor-icons/core": ["@phosphor-icons/core@2.1.1", "", {}, "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ=="],
@@ -1450,6 +1448,8 @@
     "@wapython/unionfs": ["@wapython/unionfs@4.5.7", "", { "dependencies": { "fs-monkey": "^1.0.0" } }, "sha512-7809nAVelP9TqXCq5c1yCwymPreTXrK4n4q/zxOlQOIIz4PNmoQmIKiLnwkKk39GDnLmP1MvP9ZkBDyXCCmTfg=="],
 
     "@webgpu/types": ["@webgpu/types@0.1.63", "", {}, "sha512-s9Kuh0nE/2+nKrvmKNMB2fE5Zlr3DL2t3OFKM55v5jRcfCOxbkOHhQoshoFum5mmXIfEtRXtLCWmkeTJsVjE9w=="],
+
+    "@zoompinch/core": ["@zoompinch/core@0.0.38", "", {}, "sha512-lsFy8S1XG6NJTFmgCtpXzS1tfxheA7UeZuy6ahd6ENlxNh4Rn1BvJN5pD9wStZmN7a064D8FAT9WvmsZDFt9Mw=="],
 
     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
 

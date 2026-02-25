@@ -1,5 +1,5 @@
 use super::util::StreamGuard;
-use crate::domain::StreamRepoExt;
+use crate::domain::{StreamEvent, StreamRepoExt};
 use futures::StreamExt;
 use serial_test::serial;
 use std::time::Duration;
@@ -72,7 +72,7 @@ async fn test_from_async_stream() {
     let input_stream = futures::stream::iter(items.clone());
     service
         .clone()
-        .from_async_stream(stream_id.clone(), Box::pin(input_stream), None, None);
+        .from_async_stream(stream_id.clone(), Box::pin(input_stream), None);
 
     let mut output_stream = service
         .stream_from_beginning(&stream_id)
@@ -110,10 +110,13 @@ async fn test_notify_on_multiple_new_streams() {
         .await
         .expect("Failed to append to stream 1");
 
-    let notified = tokio::time::timeout(timeout, notify.recv())
+    let event = tokio::time::timeout(timeout, notify.recv())
         .await
         .expect("Timeout waiting for notification on first stream")
         .expect("Notify channel closed");
+    let StreamEvent::Created(notified) = event else {
+        panic!("Expected Created event");
+    };
     assert_eq!(notified.entity_id, stream_id1.entity_id);
 
     // Second stream creation - should notify
@@ -122,10 +125,13 @@ async fn test_notify_on_multiple_new_streams() {
         .await
         .expect("Failed to append to stream 2");
 
-    let notified = tokio::time::timeout(timeout, notify.recv())
+    let event = tokio::time::timeout(timeout, notify.recv())
         .await
         .expect("Timeout waiting for notification on second stream")
         .expect("Notify channel closed");
+    let StreamEvent::Created(notified) = event else {
+        panic!("Expected Created event");
+    };
     assert_eq!(notified.entity_id, stream_id2.entity_id);
 }
 
@@ -144,10 +150,13 @@ async fn test_notify_only_on_new_stream() {
         .expect("Failed to append first item");
 
     let timeout = Duration::from_millis(500);
-    let notified_id = tokio::time::timeout(timeout, notify.recv())
+    let event = tokio::time::timeout(timeout, notify.recv())
         .await
         .expect("Timeout waiting for notification on new stream")
         .expect("Notify channel closed");
+    let StreamEvent::Created(notified_id) = event else {
+        panic!("Expected Created event");
+    };
     assert_eq!(notified_id.entity_id, stream_id.entity_id);
     assert_eq!(notified_id.stream_id, stream_id.stream_id);
 

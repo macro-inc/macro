@@ -191,7 +191,7 @@ pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseDat
 #[serde(rename_all = "camelCase")]
 pub struct CreateDocumentRequest {
     /// The id of the document in the database
-    pub id: Option<String>,
+    pub id: Option<uuid::Uuid>,
     /// The sha of the document.
     pub sha: String,
     /// The name of the document without extension.
@@ -210,7 +210,7 @@ pub struct CreateDocumentRequest {
     /// Will need to have a corresponding job initiated for the file beforehand.
     pub job_id: Option<String>,
     //// Optional project id to be used to what project the document belongs to.
-    pub project_id: Option<String>,
+    pub project_id: Option<uuid::Uuid>,
     /// Internal only field that links the document created to the specified email attachment by
     /// creating a row in the document_email table.
     pub email_attachment_id: Option<Uuid>,

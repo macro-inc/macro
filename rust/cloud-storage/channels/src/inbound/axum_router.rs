@@ -24,7 +24,7 @@ use models_pagination::{
     CursorExtractor, CursorVal, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 /// State for the channels router.
@@ -103,9 +103,15 @@ where
             .await
             .map_err(|_| ChannelMemberRejection::Unauthenticated)?;
 
-        let Path(channel_id) = Path::<Uuid>::from_request_parts(parts, state)
+        let Path(path_params) = Path::<HashMap<String, String>>::from_request_parts(parts, state)
             .await
             .map_err(|_| ChannelMemberRejection::InvalidPath)?;
+        let channel_id = path_params
+            .get("channel_id")
+            .ok_or(ChannelMemberRejection::InvalidPath)
+            .and_then(|raw| {
+                Uuid::parse_str(raw.as_str()).map_err(|_| ChannelMemberRejection::InvalidPath)
+            })?;
 
         let is_member = state
             .access
@@ -131,6 +137,15 @@ pub struct Params {
     /// instead of cursor-paginated results.
     #[serde(default)]
     load_around_message_id: Option<Uuid>,
+}
+
+/// Path params for thread replies endpoint.
+#[derive(Debug, Deserialize)]
+pub struct ThreadRepliesPath {
+    /// Channel ID from path.
+    channel_id: Uuid,
+    /// Message ID from path.
+    message_id: Uuid,
 }
 
 fn parse_messages_query(
@@ -185,6 +200,10 @@ where
         .route(
             "/:channel_id/messages",
             get(get_channel_messages_handler::<S, A>),
+        )
+        .route(
+            "/:channel_id/messages/:message_id/replies",
+            get(get_thread_replies_handler::<S, A>),
         )
         .route(
             "/:channel_id/attachments",
@@ -246,7 +265,8 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
         }
     };
 
-    let previous_cursor = if params.load_around_message_id.is_some() || !has_cursor {
+    let can_emit_previous = has_cursor || params.load_around_message_id.is_some();
+    let previous_cursor = if !can_emit_previous {
         None
     } else {
         match cursor_from_first_message(&page, limit) {
@@ -268,6 +288,40 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
         next_cursor: page.next_cursor,
         previous_cursor,
     }))
+}
+
+/// Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+#[utoipa::path(
+    get,
+    operation_id = "get_thread_replies",
+    path = "/channels/{channel_id}/messages/{message_id}/replies",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID (thread parent or reply id)")
+    ),
+    responses(
+        (status = 200, body = Vec<ApiThreadReply>),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_thread_replies_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    _member: ChannelMember,
+    Path(path): Path<ThreadRepliesPath>,
+) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
+    let channel_id = path.channel_id;
+    let message_id = path.message_id;
+
+    let replies = state
+        .service
+        .get_thread_replies(channel_id, message_id)
+        .await?;
+
+    Ok(Json(
+        replies.into_iter().map(ApiThreadReply::from).collect(),
+    ))
 }
 
 /// Handler for `GET /channels/:channel_id/attachments`.

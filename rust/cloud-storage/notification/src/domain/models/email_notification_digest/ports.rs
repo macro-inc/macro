@@ -1,6 +1,7 @@
 use crate::domain::models::{TaggedContent, UserNotificationRow};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use serde::Deserialize;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -81,7 +82,8 @@ pub trait LastOnlineChecker: Send + Sync + 'static {
 }
 
 /// The id of a message that was send as a push notification to SNS
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(transparent)]
 pub struct MessageId(pub String);
 
 /// trait for storage a message_id associated with a user_notification PK

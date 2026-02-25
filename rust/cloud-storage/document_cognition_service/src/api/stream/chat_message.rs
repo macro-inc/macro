@@ -516,6 +516,5 @@ fn stream_and_save_message(
         durable_stream_id,
         Box::pin(payload_stream),
         None,
-        None,
     );
 }

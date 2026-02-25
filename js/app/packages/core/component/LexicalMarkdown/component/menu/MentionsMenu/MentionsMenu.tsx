@@ -44,9 +44,12 @@ import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { useUsersMention } from './hooks/useUsersMention';
 import { useEntityMention } from './hooks/useEntityMention';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
+import { isMobile } from '@core/mobile/isMobile';
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
+// Height consumed by ClippedPanel's p-px border (2px) + py-2 padding (16px)
+const PANEL_DECORATION_HEIGHT = 18;
 
 export type MentionsMenuProps = {
   editor: LexicalEditor;
@@ -164,7 +167,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
+  // On mobile, combine all sources into a single flat list
+  const mobileAllItems = createLazyMemo((): MentionItem[] => [
+    ...(usersAndGroups() ?? []),
+    ...(docs() ?? []),
+    ...(channels() ?? []),
+    ...(emails() ?? []),
+    ...(dates() ?? []),
+  ]);
+
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
+    if (isMobile()) {
+      return [
+        {
+          id: 'all',
+          label: 'All',
+          getData: mobileAllItems,
+          getFullCount: () => mobileAllItems().length,
+        },
+      ];
+    }
+
     const buckets: BucketConfig[] = [
       {
         id: 'users',
@@ -242,6 +265,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (menuOpen()) {
       setMountSelection(document.getSelection());
       controller.reset();
+      if (isMobile()) {
+        controller.viewAll('all');
+      }
     } else {
       setMountSelection(null);
     }
@@ -389,6 +415,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     setMenuOpen(false);
   };
 
+  const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
+    number | undefined
+  >(undefined);
+
+  // Height available for scrollable content after subtracting ClippedPanel decorations.
+  // Capped at 256px (16rem) to preserve desktop behavior, and floored at 0.
+  const contentMaxHeight = () => {
+    const h = menuAvailableHeight();
+    if (h === undefined) return undefined;
+    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+  };
+
   const floatWithElementProps = () =>
     props.anchor
       ? {
@@ -403,6 +441,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           selection: untrack(mountSelection),
           reactiveOnContainer: props.editor.getRootElement(),
           useBlockBoundary: props.useBlockBoundary,
+          onAvailableHeight: setMenuAvailableHeight,
         }
       : undefined;
 
@@ -410,7 +449,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
-          class="w-96 cursor-default select-none z-modal-content"
+          class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
           ref={(el) => {
             floatWithElement(el, floatWithElementProps);
             floatWithSelection(el, floatWithSelectionProps);
@@ -464,37 +503,40 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   </div>
                 }
               >
-                <div class="px-2 pb-2">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-ink-muted">
-                      {viewAllCategoryLabel()}
-                    </span>
-                    <button
-                      type="button"
-                      class="text-xs font-medium text-ink-muted hover:text-ink hover:underline flex items-center gap-1"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleBackToAll();
-                      }}
-                    >
-                      <div class="p-0.5 px-1 -my-2 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
-                        ←
-                      </div>
-                      Back to everything
-                    </button>
+                <Show when={!isMobile()}>
+                  <div class="px-2 pb-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-medium text-ink-muted">
+                        {viewAllCategoryLabel()}
+                      </span>
+                      <button
+                        type="button"
+                        class="text-xs font-medium text-ink-muted hover:text-ink hover:underline flex items-center gap-1"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleBackToAll();
+                        }}
+                      >
+                        <div class="p-0.5 px-1 -my-2 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+                          ←
+                        </div>
+                        Back to everything
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </Show>
                 <VirtualizedItemList
                   items={controller.combinedItems()}
                   selectedIndex={controller.selectedIndex()}
                   itemAction={itemAction}
                   setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
+                  maxHeight={contentMaxHeight()}
                 />
               </Show>
             </Show>
@@ -511,6 +553,7 @@ function VirtualizedItemList(props: {
   itemAction: (item: MentionItem) => void;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
+  maxHeight?: number;
 }) {
   let scrollContainerRef: HTMLDivElement | undefined;
 
@@ -534,7 +577,11 @@ function VirtualizedItemList(props: {
   return (
     <div
       ref={scrollContainerRef}
-      class="max-h-64 overflow-y-auto scrollbar-hidden"
+      class="overflow-y-auto scrollbar-hidden"
+      style={{
+        'max-height':
+          props.maxHeight !== undefined ? `${props.maxHeight}px` : '16rem',
+      }}
     >
       <div
         style={{

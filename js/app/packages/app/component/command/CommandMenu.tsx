@@ -1,10 +1,9 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
-  type QuickAccessItem,
-  isEntityItem,
   isCommandItem,
-} from '@core/context/quickAccess';
+  isEntityItem,
+  type CommandMenuItem,
+} from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
@@ -22,7 +21,6 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
 import { CommandState } from './state';
@@ -35,6 +33,8 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import { debouncedDependent } from '@core/util/debounce';
 import { Hotkey } from '@core/component/Hotkey';
 import { InlineEntity, type EntityData } from '@entity';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { createIsActiveSplitContentMemo } from '../split-layout/layoutUtils';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -53,7 +53,7 @@ const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
 function getBlockNameForEntity(
-  item: QuickAccessItem
+  item: CommandMenuItem
 ): BlockName | BlockAlias | undefined {
   if (isEntityItem(item)) {
     return itemToBlockName(item.data);
@@ -63,9 +63,20 @@ function getBlockNameForEntity(
 
 export function CommandMenu() {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
+  const splitManager = globalSplitManager();
+  const isListMode = splitManager
+    ? createIsActiveSplitContentMemo(
+        splitManager.activeSplit,
+        'component',
+        'unified-list'
+      )
+    : () => true; // assume list mode
 
   createEffect(() => {
     const open = CommandState.isOpen();
+    if (!isListMode()) {
+      CommandState.clearEntityActionEntities();
+    }
     if (open) {
       CommandState.onMenuOpen();
     } else {
@@ -76,15 +87,8 @@ export function CommandMenu() {
   return (
     <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
-        <DialogWrapper>
-          <div ref={setCommandMenuRef}>
-            <Dialog.Content>
-              <ClippedPanel tl={!beveledCorners()} active>
-                <CommandMenuInner commandMenuRef={commandMenuRef} />
-              </ClippedPanel>
-            </Dialog.Content>
-          </div>
+        <DialogWrapper contentRef={setCommandMenuRef}>
+          <CommandMenuInner commandMenuRef={commandMenuRef} />
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
@@ -122,7 +126,7 @@ function CommandMenuInner(props: {
     return items[index];
   };
 
-  function handleItemAction(item: QuickAccessItem, openInNewSplit = false) {
+  function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
 
     if (isCommandItem(item)) {
@@ -448,9 +452,9 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
 }
 
 function ResultsContainer(props: {
-  items: QuickAccessItem[];
+  items: CommandMenuItem[];
   selectedIndex: number;
-  onSelect: (item: QuickAccessItem, openInNewSplit: boolean) => void;
+  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onMouseEnter: (index: number) => void;
 }) {
   const containerHeight = () => {
@@ -486,9 +490,9 @@ function ResultsContainer(props: {
 
 /** Virtualized command list component */
 function VirtualizedCommandList(props: {
-  items: QuickAccessItem[];
+  items: CommandMenuItem[];
   selectedIndex: number;
-  onSelect: (item: QuickAccessItem, openInNewSplit: boolean) => void;
+  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onMouseEnter: (index: number) => void;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
@@ -539,7 +543,7 @@ function HotkeyHint(props: { shortcut: string; label: string }) {
 }
 
 function CommandMenuFooter(props: {
-  selectedItem: QuickAccessItem | undefined;
+  selectedItem: CommandMenuItem | undefined;
   isInCommandScope: boolean;
   isEntityActionMode?: boolean;
 }) {

@@ -21,7 +21,6 @@ mod config;
 mod env;
 mod model;
 mod notification;
-mod push_notification_event;
 #[allow(dead_code)]
 mod templates;
 
@@ -63,27 +62,32 @@ pub async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
-    let push_notification_event_handler_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        config.push_notification_event_handler_queue.clone(),
-        config.notification_queue_max_messages,
-        config.notification_queue_wait_time_seconds,
-    );
-
-    let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));
-
     #[cfg(feature = "push_notification_event_handler")]
     {
-        let db = db.clone();
-        let sns_client = sns_client.clone();
-        tokio::spawn(async move {
-            push_notification_event::run_push_notification_event_worker(
-                db,
-                sns_client,
-                push_notification_event_handler_worker,
-            )
-            .await
-        });
+        let device_deleter =
+            ::notification::outbound::device_registration::DbDeviceRegistrationDeleter::new(
+                db.clone(),
+            );
+        let sns_deleter = ::notification::outbound::sns_endpoint::SnsEndpointDeletionAdapter::new(
+            aws_sdk_sns::Client::new(&aws_config),
+        );
+        let event_service = ::notification::domain::service::PushNotificationEventService::new(
+            device_deleter,
+            sns_deleter,
+        );
+        let event_queue =
+            ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                config.push_notification_event_handler_queue.clone(),
+                config.notification_queue_max_messages,
+                config.notification_queue_wait_time_seconds,
+            );
+        let event_worker =
+            ::notification::inbound::push_notification_event_worker::PushNotificationEventWorker::new(
+                event_service,
+                event_queue,
+            );
+        tokio::spawn(async move { event_worker.run().await });
     }
 
     let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));

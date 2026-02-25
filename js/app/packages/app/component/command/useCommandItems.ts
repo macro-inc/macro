@@ -2,12 +2,11 @@ import {
   useQuickAccess,
   type QuickAccessItem,
   type Bucket,
-  type CommandItem,
-  isEntityItem,
-  isUserItem,
-  isCommandItem,
+  type EntityItem,
+  type UserItem,
   exclude,
 } from '@core/context/quickAccess';
+import type { HotkeyCommand } from '@core/hotkey/types';
 import { createFreshSearch } from '@core/util/freshSort';
 import { createMemo } from 'solid-js';
 import type { CategoryFilter } from './types';
@@ -19,7 +18,33 @@ import { activeScope } from '@core/hotkey/state';
 import { CommandState } from './state';
 import { HotkeyTags } from '@core/hotkey/constants';
 
-function isChannelItem(item: QuickAccessItem): boolean {
+/** Command item type - local to command menu, not part of quickAccess */
+type CommandItem = {
+  id: string;
+  kind: 'command';
+  bucket: 'command';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: Record<string, never>;
+  data: HotkeyCommand;
+};
+
+/** Combined item type for command menu (quickAccess items + commands) */
+type CommandMenuItem = QuickAccessItem | CommandItem;
+
+function isCommandItem(item: CommandMenuItem): item is CommandItem {
+  return item.kind === 'command';
+}
+
+function isEntityItem(item: CommandMenuItem): item is EntityItem {
+  return item.kind === 'entity';
+}
+
+function isUserItem(item: CommandMenuItem): item is UserItem {
+  return item.kind === 'user';
+}
+
+function isChannelItem(item: CommandMenuItem): boolean {
   // only dms get the "channel boost" in command menu
   return item.bucket === 'dm';
 }
@@ -117,13 +142,13 @@ function useCommandsList(): () => CommandItem[] {
  */
 function useQuickAccessBuckets(): Record<
   CategoryFilter,
-  () => QuickAccessItem[]
+  () => CommandMenuItem[]
 > {
   const quickAccess = useQuickAccess();
   const commandsList = useCommandsList();
   const entitiesList = quickAccess.useList(...exclude('person'));
 
-  const allWithCommands = createMemo(() => {
+  const allWithCommands = createMemo((): CommandMenuItem[] => {
     const entities = entitiesList();
     const commands = commandsList();
     return [...entities, ...commands];
@@ -163,7 +188,7 @@ export function useCommandItems(
   const search = createMemo(() => {
     const q = query();
     const hasQuery = q.trim().length > 0;
-    return createFreshSearch<QuickAccessItem>(
+    return createFreshSearch<CommandMenuItem>(
       createSearchConfig(hasQuery),
       (item) => item.searchText,
       isChannelItem,
@@ -186,4 +211,4 @@ export function useCommandItems(
 }
 
 export { isEntityItem, isUserItem, isCommandItem };
-export type { QuickAccessItem, Bucket };
+export type { QuickAccessItem, CommandMenuItem, CommandItem, Bucket };

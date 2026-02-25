@@ -5,10 +5,13 @@
 use std::future::Future;
 
 use entity_access::domain::models::EntityAccessReceipt;
-use model::document::response::{GetDocumentResponseData, LocationResponseV3};
-use model::document::{DocumentBasic, DocumentMetadata};
+use macro_user_id::user_id::MacroUserIdStr;
+use model::document::response::{
+    CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
+};
+use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
-use super::models::{DocumentError, LocationQueryParams};
+use super::models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
 
 /// Repository for accessing document data from the database.
 ///
@@ -17,7 +20,7 @@ use super::models::{DocumentError, LocationQueryParams};
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait DocumentRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send;
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
     /// Get full document metadata (including latest version, BOM, project info).
     fn get_document_metadata(
@@ -75,6 +78,57 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Create a new document with all associated records in a single transaction.
+    ///
+    /// Handles: Document row, version (DocumentInstance or DocumentBom),
+    /// document_sub_type, SharePermission, DocumentPermission, UserHistory,
+    /// ItemLastAccessed, UserItemAccess, and document_email.
+    fn create_document(
+        &self,
+        args: CreateDocumentRepoArgs,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Update an upload job to associate it with a document.
+    fn update_upload_job(
+        &self,
+        document_id: &str,
+        job_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete a document by ID (used for error cleanup).
+    fn delete_document_by_id(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Port for generating S3 presigned upload URLs.
+pub trait PresignedUploadUrlPort: Send + Sync + 'static {
+    /// Generate a presigned URL for uploading to the document storage bucket.
+    fn put_document_storage_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Generate a presigned URL for uploading to the docx upload bucket.
+    fn put_docx_upload_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+}
+
+/// Port for attaching task system properties.
+pub trait TaskPropertiesPort: Send + Sync + 'static {
+    /// Attach initial (null-valued) task properties to entities.
+    fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Service interface for document operations.
@@ -113,4 +167,13 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Create a new document, generate an S3 presigned upload URL, and
+    /// optionally attach task properties and update project modified.
+    fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        job_id: Option<String>,
+    ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 }

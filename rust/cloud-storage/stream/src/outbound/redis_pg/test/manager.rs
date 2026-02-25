@@ -493,7 +493,7 @@ async fn util_test_stream_exhausted(
     let items: Vec<serde_json::Value> = (1..=3).map(|i| serde_json::json!({"seq": i})).collect();
     let input_stream = futures::stream::iter(items.clone());
 
-    service.from_async_stream(stream_id.clone(), Box::pin(input_stream), None, None);
+    service.from_async_stream(stream_id.clone(), Box::pin(input_stream), None);
 
     let mut count = 0;
     while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(1000), stream.next()).await {

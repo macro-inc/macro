@@ -167,14 +167,7 @@ fn mock_ctx(db: Db, s3: S3) -> SeedCliContext {
     }
 }
 
-fn write_temp_file(content: &[u8], suffix: &str) -> NamedTempFile {
-    let mut file = tempfile::Builder::new().suffix(suffix).tempfile().unwrap();
-    file.write_all(content).unwrap();
-    file.flush().unwrap();
-    file
-}
-
-fn write_temp_csv(content: &str) -> NamedTempFile {
+fn write_temp_json(content: &str) -> NamedTempFile {
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(content.as_bytes()).unwrap();
     file.flush().unwrap();
@@ -219,6 +212,13 @@ fn test_document_metadata_with_type(file_type: FileType) -> DocumentMetadata {
         None,
         None,
     )
+}
+
+fn write_temp_file(content: &[u8], suffix: &str) -> NamedTempFile {
+    let mut file = tempfile::Builder::new().suffix(suffix).tempfile().unwrap();
+    file.write_all(content).unwrap();
+    file.flush().unwrap();
+    file
 }
 
 // ── Execution tests ───────────────────────────────────────
@@ -317,18 +317,18 @@ async fn create_document_s3_failure_propagates() {
     assert!(err.to_string().contains("s3 upload failed"));
 }
 
-// ── Seed CSV tests ────────────────────────────────────────
+// ── Seed JSON tests ────────────────────────────────────────
 
 #[tokio::test]
 async fn seed_creates_all_documents() {
     let doc1 = Uuid::new_v4();
     let doc2 = Uuid::new_v4();
-    let csv = format!(
-        "document_id,document_name,file_name,is_public\n\
-         {doc1},Test PDF,pdf.pdf,false\n\
-         {doc2},Test Markdown,md.md,true\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        { "document_id": doc1, "document_name": "Test PDF", "file_name": "pdf.pdf", "is_public": false },
+        { "document_id": doc2, "document_name": "Test Markdown", "file_name": "md.md", "is_public": true }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -344,6 +344,7 @@ async fn seed_creates_all_documents() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -351,15 +352,16 @@ async fn seed_creates_all_documents() {
 }
 
 #[tokio::test]
-async fn seed_empty_csv_fails() {
-    let csv = "document_id,document_name,file_name,is_public\n";
-    let file = write_temp_csv(csv);
+async fn seed_empty_json_fails() {
+    let json = "[]";
+    let file = write_temp_json(json);
 
     let mock_db = Db::default();
     let mock_s3 = S3::default();
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -372,13 +374,13 @@ async fn seed_continues_on_db_failure() {
     let doc1 = Uuid::new_v4();
     let doc2 = Uuid::new_v4();
     let doc3 = Uuid::new_v4();
-    let csv = format!(
-        "document_id,document_name,file_name,is_public\n\
-         {doc1},Good Doc 1,pdf.pdf,false\n\
-         {doc2},Bad Doc,md.md,false\n\
-         {doc3},Good Doc 2,canvas.canvas,false\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        { "document_id": doc1, "document_name": "Good Doc 1", "file_name": "pdf.pdf", "is_public": false },
+        { "document_id": doc2, "document_name": "Bad Doc", "file_name": "md.md", "is_public": false },
+        { "document_id": doc3, "document_name": "Good Doc 2", "file_name": "canvas.canvas", "is_public": false }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut call_count = 0;
     let mut mock_db = Db::default();
@@ -402,6 +404,7 @@ async fn seed_continues_on_db_failure() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -412,12 +415,12 @@ async fn seed_continues_on_db_failure() {
 async fn seed_continues_on_s3_failure() {
     let doc1 = Uuid::new_v4();
     let doc2 = Uuid::new_v4();
-    let csv = format!(
-        "document_id,document_name,file_name,is_public\n\
-         {doc1},Good Doc,pdf.pdf,false\n\
-         {doc2},S3 Fail Doc,md.md,false\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        { "document_id": doc1, "document_name": "Good Doc", "file_name": "pdf.pdf", "is_public": false },
+        { "document_id": doc2, "document_name": "S3 Fail Doc", "file_name": "md.md", "is_public": false }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db
@@ -441,6 +444,7 @@ async fn seed_continues_on_s3_failure() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;
@@ -452,13 +456,13 @@ async fn seed_handles_all_file_types() {
     let doc1 = Uuid::new_v4();
     let doc2 = Uuid::new_v4();
     let doc3 = Uuid::new_v4();
-    let csv = format!(
-        "document_id,document_name,file_name,is_public\n\
-         {doc1},PDF Doc,pdf.pdf,false\n\
-         {doc2},Markdown Doc,md.md,false\n\
-         {doc3},Canvas Doc,canvas.canvas,false\n"
-    );
-    let file = write_temp_csv(&csv);
+    let json = serde_json::json!([
+        { "document_id": doc1, "document_name": "PDF Doc", "file_name": "pdf.pdf", "is_public": false },
+        { "document_id": doc2, "document_name": "Markdown Doc", "file_name": "md.md", "is_public": false },
+        { "document_id": doc3, "document_name": "Canvas Doc", "file_name": "canvas.canvas", "is_public": false }
+    ])
+    .to_string();
+    let file = write_temp_json(&json);
 
     let mut mock_db = Db::default();
     mock_db.expect_create_document().times(3).returning(|args| {
@@ -474,6 +478,7 @@ async fn seed_handles_all_file_types() {
 
     let args = SeedArgs {
         user_id: "macro|alice@example.com".to_string(),
+        file_path: None,
     };
 
     let result = seed_from_file(args, mock_ctx(mock_db, mock_s3), file.path()).await;

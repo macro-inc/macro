@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentFiltersImportance } from './documentFiltersImportance';
+import type { NotificationFilters } from './notificationFilters';
+import type { TaskFilters } from './taskFilters';
 
 /**
  * The document filters used to filter down what documents you search over.
@@ -16,9 +18,13 @@ export interface DocumentFilters {
   file_types?: string[];
   /** Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: DocumentFiltersImportance;
+  /** Filter by document notification state. */
+  notification_filters?: NotificationFilters;
   /** Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1'].
 filtering. Empty to ignore project filtering. */
   project_ids?: string[];
+  /** Task-specific filters that only apply to task subtype documents. */
+  task_filters?: TaskFilters;
 }

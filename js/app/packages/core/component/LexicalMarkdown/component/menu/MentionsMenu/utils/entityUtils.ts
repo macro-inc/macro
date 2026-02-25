@@ -43,7 +43,5 @@ export function getMentionItemName(item: MentionItem): string {
       return item.data.displayText;
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
-    case 'command':
-      return item.searchText ?? '';
   }
 }

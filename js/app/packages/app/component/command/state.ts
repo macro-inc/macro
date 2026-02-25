@@ -51,7 +51,9 @@ export interface ICommandState {
 }
 
 function createCommandState(): ICommandState {
-  const [isOpen, setIsOpen] = createControlledOpenSignal();
+  const [isOpen, setIsOpen] = createControlledOpenSignal(false, {
+    id: 'command',
+  });
   const [query, setQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [categoryFilter, setCategoryFilter] =

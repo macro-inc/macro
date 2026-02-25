@@ -11,16 +11,16 @@ const { track, TrackingEvents } = withAnalytics();
 export default function BlockVideo() {
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+        <ModalsProvider>
           <div class="relative">
             <TopBar />
           </div>
           <div class="w-full grow-1 relative overflow-hidden">
             <Video />
           </div>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }

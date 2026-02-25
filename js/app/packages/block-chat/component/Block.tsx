@@ -17,11 +17,11 @@ export default function ChatBlock() {
 
   return (
     <DocumentBlockContainer title={title()}>
-      <ModalsProvider>
-        <div class="size-full bracket-never" tabIndex={-1}>
+      <div class="size-full bracket-never" tabIndex={-1}>
+        <ModalsProvider>
           <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }

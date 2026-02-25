@@ -62,6 +62,49 @@ static CHANNEL_SELECT: &str = r#"
     LIMIT $3
 "#;
 
+fn build_notification_exists_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    predicate_sql: &str,
+) -> String {
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM notification n
+            JOIN user_notification un ON un.notification_id = n.id
+            WHERE un.user_id = $1
+              AND un.deleted_at IS NULL
+              AND n.event_item_type = '{entity_type}'
+              AND n.event_item_id = ({entity_id_sql})::text
+              AND {predicate_sql}
+        )"#
+    )
+}
+
+fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+    build_notification_exists_clause(
+        entity_id_sql,
+        entity_type,
+        if done {
+            "un.done = true"
+        } else {
+            "un.done = false"
+        },
+    )
+}
+
+fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
+    build_notification_exists_clause(
+        entity_id_sql,
+        entity_type,
+        if seen {
+            "un.seen_at IS NOT NULL"
+        } else {
+            "un.seen_at IS NULL"
+        },
+    )
+}
+
 fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -103,6 +146,12 @@ fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(true)) => String::new(),
         // all channels are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => "1=0".to_string(),
+        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("c.id", "channel", done)
+        }
+        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("c.id", "channel", seen)
+        }
     });
     if formatting.is_empty() {
         String::new()

@@ -1,0 +1,176 @@
+[
+  {
+    "message_id": "00000000-0000-0000-0001-000000000001",
+    "channel_id": "00000000-0000-0000-0000-000000000001",
+    "sender_id": "macro|bob@example.com",
+    "content": "Welcome to the general channel everyone!"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000002",
+    "channel_id": "00000000-0000-0000-0000-000000000001",
+    "sender_id": "macro|charlie@example.com",
+    "content": "Thanks Bob! Glad to be here."
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000003",
+    "channel_id": "00000000-0000-0000-0000-000000000001",
+    "sender_id": "macro|dana@example.com",
+    "content": "Hey all - quick question about <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-00000000000e\",\"blockName\":\"md\",\"documentName\":\"Onboarding Guide\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> - is it up to date?",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-00000000000e" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000004",
+    "channel_id": "00000000-0000-0000-0000-000000000001",
+    "sender_id": "macro|bob@example.com",
+    "content": "Sure thing <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> - I can walk you through it.",
+    "thread_id": "00000000-0000-0000-0001-000000000003",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000005",
+    "channel_id": "00000000-0000-0000-0000-000000000002",
+    "sender_id": "macro|bob@example.com",
+    "content": "Reminder: all-hands meeting tomorrow at 10am. <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> can you send out the agenda?",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000006",
+    "channel_id": "00000000-0000-0000-0000-000000000002",
+    "sender_id": "macro|charlie@example.com",
+    "content": "Will there be a recording for those who can't attend?",
+    "thread_id": "00000000-0000-0000-0001-000000000005"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000007",
+    "channel_id": "00000000-0000-0000-0000-000000000003",
+    "sender_id": "macro|dana@example.com",
+    "content": "Anyone tried that new coffee place on 5th?"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000008",
+    "channel_id": "00000000-0000-0000-0000-000000000003",
+    "sender_id": "macro|eve@example.com",
+    "content": "Yes! The cold brew is amazing.",
+    "thread_id": "00000000-0000-0000-0001-000000000007"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000009",
+    "channel_id": "00000000-0000-0000-0000-000000000003",
+    "sender_id": "macro|bob@example.com",
+    "content": "Adding it to my list for this week.",
+    "thread_id": "00000000-0000-0000-0001-000000000007"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000a",
+    "channel_id": "00000000-0000-0000-0000-000000000004",
+    "sender_id": "macro|bob@example.com",
+    "content": "<m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000001\",\"blockName\":\"pdf\",\"documentName\":\"Project Roadmap\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> draft is ready for review. <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> take a look when you get a chance.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000001" },
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000b",
+    "channel_id": "00000000-0000-0000-0000-000000000004",
+    "sender_id": "macro|charlie@example.com",
+    "content": "Looks good - left a few comments on <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000010\",\"blockName\":\"pdf\",\"documentName\":\"Product Requirements\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "thread_id": "00000000-0000-0000-0001-00000000000a",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000010" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000c",
+    "channel_id": "00000000-0000-0000-0000-000000000005",
+    "sender_id": "macro|charlie@example.com",
+    "content": "<m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000005\",\"blockName\":\"md\",\"documentName\":\"Sprint Retro Notes\",\"blockParams\":{},\"collapsed\":false}</m-document-mention> have been uploaded.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000005" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000d",
+    "channel_id": "00000000-0000-0000-0000-000000000005",
+    "sender_id": "macro|dana@example.com",
+    "content": "<m-user-mention>{\"userId\":\"macro|eve@example.com\",\"email\":\"eve@example.com\"}</m-user-mention> can we discuss the velocity drop next standup?",
+    "thread_id": "00000000-0000-0000-0001-00000000000c",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|eve@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000e",
+    "channel_id": "00000000-0000-0000-0000-000000000005",
+    "sender_id": "macro|eve@example.com",
+    "content": "Agreed - I think the new estimation process might be a factor. I documented it in <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000014\",\"blockName\":\"md\",\"documentName\":\"Incident Postmortem\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "thread_id": "00000000-0000-0000-0001-00000000000c",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000014" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-00000000000f",
+    "channel_id": "00000000-0000-0000-0000-000000000006",
+    "sender_id": "macro|bob@example.com",
+    "content": "Should we move this conversation to a named channel? <m-user-mention>{\"userId\":\"macro|charlie@example.com\",\"email\":\"charlie@example.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> thoughts?",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|charlie@example.com" },
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000010",
+    "channel_id": "00000000-0000-0000-0000-000000000006",
+    "sender_id": "macro|charlie@example.com",
+    "content": "Good idea - let me set one up.",
+    "thread_id": "00000000-0000-0000-0001-00000000000f"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000011",
+    "channel_id": "00000000-0000-0000-0000-000000000007",
+    "sender_id": "macro|dana@example.com",
+    "content": "<m-user-mention>{\"userId\":\"macro|eve@example.com\",\"email\":\"eve@example.com\"}</m-user-mention> can you review my PR when you get a chance? It touches <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000008\",\"blockName\":\"md\",\"documentName\":\"API Documentation\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|eve@example.com" },
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000008" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000012",
+    "channel_id": "00000000-0000-0000-0000-000000000007",
+    "sender_id": "macro|eve@example.com",
+    "content": "On it <m-user-mention>{\"userId\":\"macro|dana@example.com\",\"email\":\"dana@example.com\"}</m-user-mention> - will have feedback by EOD.",
+    "thread_id": "00000000-0000-0000-0001-000000000011",
+    "entity_mentions": [
+      { "entity_type": "user", "entity_id": "macro|dana@example.com" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000013",
+    "channel_id": "00000000-0000-0000-0000-000000000008",
+    "sender_id": "macro|bob@example.com",
+    "content": "Hey - are you free for a quick sync?"
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000014",
+    "channel_id": "00000000-0000-0000-0000-000000000009",
+    "sender_id": "macro|charlie@example.com",
+    "content": "Sent you the updated <m-document-mention>{\"documentId\":\"00000000-0000-0000-0002-000000000009\",\"blockName\":\"canvas\",\"documentName\":\"Wireframe Draft\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>.",
+    "entity_mentions": [
+      { "entity_type": "document", "entity_id": "00000000-0000-0000-0002-000000000009" }
+    ]
+  },
+  {
+    "message_id": "00000000-0000-0000-0001-000000000015",
+    "channel_id": "00000000-0000-0000-0000-00000000000a",
+    "sender_id": "macro|dana@example.com",
+    "content": "Thanks for the help earlier!"
+  }
+]

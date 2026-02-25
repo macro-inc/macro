@@ -2,24 +2,24 @@ import { Hotkey } from '@core/component/Hotkey';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Match, Show, Switch } from 'solid-js';
 import {
-  type QuickAccessItem,
-  isEntityItem,
   isCommandItem,
-} from '@core/context/quickAccess';
+  isEntityItem,
+  type CommandMenuItem,
+} from './useCommandItems';
 import { Entity, type EntityData } from '@entity';
 import { cn } from '@ui/utils/classname';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import { Dynamic } from 'solid-js/web';
 
 export interface CommandItemProps {
-  item: QuickAccessItem;
+  item: CommandMenuItem;
   index: number;
   selected: boolean;
-  onSelect: (item: QuickAccessItem, openInNewSplit: boolean) => void;
+  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onHover: (index: number) => void;
 }
 
-function CommandItemHotkey(props: { item: QuickAccessItem }) {
+function CommandItemHotkey(props: { item: CommandMenuItem }) {
   const command = () => (isCommandItem(props.item) ? props.item.data : null);
   const token = () => command()?.hotkeyToken;
 
@@ -47,7 +47,7 @@ function CommandItemHotkey(props: { item: QuickAccessItem }) {
   );
 }
 
-function CommandDisplay(props: { item: QuickAccessItem }) {
+function CommandDisplay(props: { item: CommandMenuItem }) {
   const command = () => (isCommandItem(props.item) ? props.item.data : null);
 
   const description = () => {
@@ -81,7 +81,7 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
-function ItemDisplay(props: { item: QuickAccessItem }) {
+function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
       <Match when={isCommandItem(props.item) && props.item}>

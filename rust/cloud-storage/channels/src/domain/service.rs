@@ -255,4 +255,53 @@ where
 
         Ok(page)
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_replies(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
+        let parent = self
+            .repo
+            .resolve_top_level_parent(channel_id, message_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
+
+        let reply_rows = self
+            .repo
+            .get_thread_replies(parent.id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if reply_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let reply_ids: Vec<Uuid> = reply_rows.iter().map(|row| row.id).collect();
+        let (reactions, attachments) = tokio::join!(
+            self.repo.get_reactions_batch(&reply_ids),
+            self.repo.get_attachments_batch(&reply_ids),
+        );
+
+        let reactions = reactions.map_err(anyhow::Error::from)?;
+        let attachments = attachments.map_err(anyhow::Error::from)?;
+
+        let replies = reply_rows
+            .into_iter()
+            .map(|row| ThreadReply {
+                id: row.id,
+                sender_id: row.sender_id,
+                content: row.content,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                edited_at: row.edited_at,
+                reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
+                attachments: attachments.get(&row.id).cloned().unwrap_or_default(),
+            })
+            .collect();
+
+        Ok(replies)
+    }
 }

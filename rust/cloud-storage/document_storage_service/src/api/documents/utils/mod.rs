@@ -1,19 +1,5 @@
-use sqlx::{PgPool, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 use tracing::instrument;
-
-/// Deletes the document
-/// This is to only be used if document creation fails
-/// Normal document deletion is a "soft delete"
-#[instrument(skip(db))]
-pub(in crate::api::documents) async fn handle_document_creation_error_cleanup(
-    db: &PgPool,
-    document_id: String,
-) {
-    // Delete from db
-    let _ = macro_db_client::document::delete_document(db, &document_id)
-        .await
-        .map_err(|e| tracing::error!(error=?e, "failed to delete document"));
-}
 
 /// Deletes a given document version if there was an error saving it
 #[instrument(skip(db))]

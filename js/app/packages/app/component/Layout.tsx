@@ -15,6 +15,7 @@ import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
+import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -83,20 +84,11 @@ export function Layout(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]',
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)]',
         {
-          'pb-[max(env(safe-area-inset-bottom,0px),var(--tauri-inset-bottom,0px))]':
-            !virtualKeyboardVisible(),
+          'pb-[var(--safe-bottom)]': !virtualKeyboardVisible(),
         }
       )}
-      style={{
-        'padding-top':
-          'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-        'padding-left':
-          'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
-        'padding-right':
-          'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
-      }}
     >
       <Suspense>
         <Show when={isAuthenticated()}>
@@ -108,6 +100,7 @@ export function Layout(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
+          <GlobalShareModal />
           <ShortcutsHelper />
         </Show>
         <Show

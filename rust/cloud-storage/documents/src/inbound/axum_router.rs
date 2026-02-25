@@ -1,6 +1,7 @@
 //! Axum router for document endpoints.
 //!
-//! Provides three routes:
+//! Provides four routes:
+//! - `POST /` — create a new document
 //! - `GET /:document_id` — get document metadata
 //! - `GET /:document_id/location_v3` — get document content location (presigned URL)
 //! - `DELETE /:document_id` — soft-delete a document
@@ -8,6 +9,7 @@
 #[cfg(test)]
 mod tests;
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
@@ -19,17 +21,24 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
-use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::document::response::GetDocumentResponse;
-use model::document::{DocumentBasic, response::LocationResponseV3};
+use entity_access::inbound::axum_extractors::{
+    DocumentAccessExtractor, InternalUser, ProjectBodyAccessLevelExtractor,
+};
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, GetDocumentResponse,
+};
+use model::document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseV3};
 use model::response::GenericSuccessResponse;
 use model::user::UserContext;
 use model_error_response::ErrorResponse;
-use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
+use model_user::axum_extractor::MacroUserExtractor;
+use models_permissions::share_permission::access_level::{
+    EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
+};
 use serde::Deserialize;
 use sqlx::PgPool;
 
-use crate::domain::models::{DocumentError, LocationQueryParams};
+use crate::domain::models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
 
 impl IntoResponse for DocumentError {
@@ -38,6 +47,8 @@ impl IntoResponse for DocumentError {
             DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
+            DocumentError::Conflict(_) => StatusCode::CONFLICT,
+            DocumentError::BadRequest(_) => StatusCode::BAD_REQUEST,
             DocumentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -83,14 +94,15 @@ pub struct Params {
     document_id: String,
 }
 
-/// Build the documents router with all three endpoints.
+/// Build the documents router with all four endpoints.
 pub fn documents_router<T, Svc, S>(state: DocumentRouterState<T, Svc>) -> Router<S>
 where
     T: DocumentService,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
-    Router::new()
+    // Routes that need ensure_document_exists middleware
+    let document_id_routes = Router::new()
         .route(
             "/:document_id",
             axum::routing::get(get_document_handler::<T, Svc>)
@@ -103,7 +115,11 @@ where
         .layer(middleware::from_fn_with_state(
             state.clone(),
             ensure_document_exists,
-        ))
+        ));
+
+    Router::new()
+        .merge(document_id_routes)
+        .route("/", axum::routing::post(create_document_handler::<T, Svc>))
         .with_state(state)
 }
 
@@ -275,4 +291,91 @@ pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessServic
         .await?;
 
     Ok(Json(GenericSuccessResponse { success: true }))
+}
+
+/// Handler for `POST /documents`.
+///
+/// Creates a new document, generates an S3 presigned upload URL, and returns
+/// the document metadata with the URL for the client to upload to.
+#[utoipa::path(
+    tag = "document",
+    post,
+    path = "/documents",
+    operation_id = "create_document",
+    request_body = CreateDocumentRequest,
+    responses(
+        (status = 200, body = inline(CreateDocumentResponse)),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
+pub async fn create_document_handler<T: DocumentService, Svc: EntityAccessService>(
+    State(state): State<DocumentRouterState<T, Svc>>,
+    internal_user: Option<Extension<InternalUser>>,
+    user_context: MacroUserExtractor,
+    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateDocumentRequest, Svc>,
+) -> Result<Json<CreateDocumentResponse>, DocumentError> {
+    let req = project.into_inner();
+
+    // Email linking is internal only
+    if req.email_attachment_id.is_some() && internal_user.is_none() {
+        return Err(DocumentError::Unauthorized);
+    }
+
+    // Parse file type from the request
+    let user_provided_file_type: Option<FileType> = req
+        .file_type
+        .as_deref()
+        .and_then(|f| FileType::from_str(f).ok());
+
+    let (document_name, file_type) = match user_provided_file_type {
+        Some(file_type) => {
+            let document_name = FileType::clean_document_name(&req.document_name);
+            (document_name.unwrap_or(req.document_name), Some(file_type))
+        }
+        None => match FileType::split_suffix_match(req.document_name.as_str()) {
+            Some((file_name, extension)) => {
+                let file_type: Option<FileType> = FileType::from_str(extension).ok();
+                (file_name.to_string(), file_type)
+            }
+            None => (req.document_name, None),
+        },
+    };
+
+    // Log if the user-provided mime type does not match the file type
+    if let (Some(ft), Some(user_mime_type)) = (file_type, &req.mime_type)
+        && *user_mime_type != ft.mime_type()
+    {
+        tracing::warn!(
+            file_type=?ft,
+            mime_type=?user_mime_type,
+            "provided mime type does not match file type"
+        );
+    }
+
+    let args = CreateDocumentRepoArgs {
+        id: req.id,
+        sha: req.sha,
+        document_name,
+        user_id: user_context.macro_user_id.clone(),
+        file_type,
+        project_id: req.project_id,
+        email_attachment_id: req.email_attachment_id,
+        created_at: req.created_at,
+        is_task: req.is_task,
+        skip_history: req.skip_history,
+    };
+
+    let response_data = state
+        .service
+        .create_document(user_context.macro_user_id, args, req.job_id)
+        .await?;
+
+    Ok(Json(CreateDocumentResponse {
+        error: false,
+        data: response_data,
+    }))
 }

@@ -314,7 +314,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   const debouncedFetchMore = debounce(() => {
-    if (source.isFetchingNextPage() || !source.hasNextPage()) return;
+    if (
+      source.isFetching() ||
+      source.isFetchingNextPage() ||
+      !source.hasNextPage()
+    )
+      return;
 
     source.fetchNextPage();
   }, 15);
@@ -573,6 +578,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   class="overflow-hidden flex min-w-0"
                   virtualizerRef={registerVirtualizerHandler}
                   onScrollBottom={debouncedFetchMore}
+                  scrollBottomOffset={300}
                   rows={rows()}
                 >
                   {(row, i) => {
@@ -589,12 +595,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           return row.original.updatedAt;
                       }
                     };
-
-                    createEffect(() => {
-                      if (i() === Math.floor(rows().length * 0.8)) {
-                        debouncedFetchMore();
-                      }
-                    });
 
                     return (
                       <>

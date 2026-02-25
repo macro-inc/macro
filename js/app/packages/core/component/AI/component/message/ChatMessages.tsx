@@ -1,11 +1,9 @@
-import {
-  useChatContext,
-  useChatInputContext,
-} from '@core/component/AI/context';
+import { useChatContext } from '@core/component/AI/context';
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import { PulsingStar } from '@entity/components/PulsingStar';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement, Setter } from 'solid-js';
@@ -20,12 +18,10 @@ import {
   onMount,
   Show,
   Switch,
-  untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
 import { AssistantMessage } from './AssistantMessage';
-import { LoadingMessage } from './LoadingMessage';
 import { UserMessage } from './UserMessage';
 
 export type MessageActions = {};
@@ -57,7 +53,6 @@ function messageContentIsEmpty(message: ChatMessageWithAttachments) {
 
 export function ChatMessages(props: ChatMessagesProps) {
   const chat = useChatContext();
-  const input = useChatInputContext();
   const [messages, setMessages] = [chat.messages, chat.setMessages];
   const streamTuple: [
     Accessor<ChatMessageStream | undefined>,
@@ -407,16 +402,14 @@ export function ChatMessages(props: ChatMessagesProps) {
                   scrollToBottom(isNearBottom() ? 'instant' : 'smooth')
                 }
               >
-                <LoadingMessage
-                  attachments={untrack(input.attachments.attached)}
-                />
+                <PulsingStar kind="streamIndicator" animate />
               </OnMount>
             </Show>
             {/*
               This shows a spinner after a tool call
             */}
             <Show when={generatingAfterToolCall()}>
-              <LoadingMessage attachments={[]} />
+              <PulsingStar kind="streamIndicator" animate />
             </Show>
           </div>
         </Show>

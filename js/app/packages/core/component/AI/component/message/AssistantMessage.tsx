@@ -5,6 +5,7 @@ import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
+import { PulsingStar } from '@entity/components/PulsingStar';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -22,7 +23,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { LoadingMessage } from './LoadingMessage';
 
 function messageContentIsEmpty(content: ChatMessageContent) {
   if (typeof content === 'string' || Array.isArray(content)) {
@@ -203,16 +203,6 @@ export function AssistantMessage(props: {
     setIsLoading(false);
   });
 
-  // ONLY one model for now so don't show icon
-  // const modelIcon = () => {
-  //   const icon: Component | undefined =
-  //     MODEL_PROVIDER_ICON[props.message?.model as Model];
-  //   if (!icon) return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
-  //   return icon;
-  // };
-
-  // const citations = () => webCitations()[props.message.id] ?? [];
-  // const isCitations = () => citations().length > 0;
   return (
     <div
       class="max-w-full flex flex-col justify-start items-start min-w-0 w-full"
@@ -256,7 +246,7 @@ export function AssistantMessage(props: {
               </Match>
             </Switch>
             <Show when={toolUsageMessageIncomplete()}>
-              <LoadingMessage attachments={[]} />
+              <PulsingStar animate kind="streamIndicator" />
             </Show>
           </div>
           <Show when={!props.isStreaming}>

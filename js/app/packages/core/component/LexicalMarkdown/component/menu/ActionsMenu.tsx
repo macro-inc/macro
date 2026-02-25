@@ -1,4 +1,4 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -30,6 +30,9 @@ import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 false && clickOutside;
 false && floatWithSelection;
 false && floatWithElement;
+
+// py-2 on the menu container = 8px top + 8px bottom
+const MENU_DECORATION_HEIGHT = 16;
 
 export function ActionsMenuItem(props: {
   action: Action;
@@ -91,6 +94,14 @@ export function ActionMenu(props: {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let menuRef!: HTMLDivElement;
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
+  const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
+    number | undefined
+  >(undefined);
+  const contentMaxHeight = () => {
+    const h = menuAvailableHeight();
+    if (h === undefined) return undefined;
+    return Math.max(0, h - MENU_DECORATION_HEIGHT);
+  };
 
   const { isKeypressActive } = useIsKeyPressActive();
   const setSelectedIndexFromMouse = (index: number) => {
@@ -253,6 +264,7 @@ export function ActionMenu(props: {
           selection: untrack(mountSelection),
           reactiveOnContainer: props.editor.getRootElement(),
           useBlockBoundary: props.useBlockBoundary,
+          onAvailableHeight: setMenuAvailableHeight,
         }
       : undefined;
 
@@ -266,10 +278,19 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
-            {inner()}
-          </div>
-          <BozzyBracketInnerSibling animOnOpen={true} />
+          <ClippedPanel active tl class="py-2">
+            <div
+              class="overflow-y-auto scrollbar-hidden"
+              style={{
+                'max-height':
+                  contentMaxHeight() !== undefined
+                    ? `${contentMaxHeight()}px`
+                    : undefined,
+              }}
+            >
+              {inner()}
+            </div>
+          </ClippedPanel>
         </div>
       </ScopedPortal>
     </Show>

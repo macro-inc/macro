@@ -222,3 +222,8 @@ export const unifiedListMarkdownTheme = createTheme({
   // padding right to prevent italics being clipped by overflow properties such as truncation
   root: `${theme.root} inline pr-[2px] cursor-default truncate`,
 });
+
+export const searchContentHitMarkdownTheme = createTheme({
+  ...unifiedListMarkdownTheme,
+  root: `${theme.root} pr-[2px] cursor-default overflow-x-auto`,
+});

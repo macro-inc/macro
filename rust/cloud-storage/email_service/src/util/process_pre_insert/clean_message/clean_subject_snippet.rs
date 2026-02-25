@@ -10,6 +10,7 @@ pub fn clean_threads_subject_snippet(threads: &mut Vec<service::thread::Thread>)
 }
 
 // decode any html and remove trailing spaces from subject and snippet
+#[tracing::instrument(skip(message))]
 pub fn clean_message_subject_snippet(message: &mut Message) {
     if let Some(snippet) = &message.snippet {
         let snippet_str = snippet.clone();

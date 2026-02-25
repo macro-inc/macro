@@ -8,7 +8,6 @@ import type {
   EmailEntity,
   ProjectEntity,
 } from '@entity';
-import type { HotkeyCommand } from '@core/hotkey/types';
 import type { IUser } from '@core/user/types';
 import type { DateValue } from '@core/util/date';
 
@@ -25,10 +24,9 @@ export type Bucket =
   | 'note'
   | 'chat'
   | 'project'
-  | 'email'
-  | 'command';
+  | 'email';
 
-export type EntityBucket = Exclude<Bucket, 'person' | 'command'>;
+export type EntityBucket = Exclude<Bucket, 'person'>;
 
 export const ALL_BUCKETS: Bucket[] = [
   'channel',
@@ -40,7 +38,6 @@ export const ALL_BUCKETS: Bucket[] = [
   'chat',
   'project',
   'email',
-  'command',
 ];
 
 export type BucketCombination = 'all' | 'channels' | 'documents';
@@ -78,13 +75,7 @@ export type UserItem = QuickAccessBase & {
   data: IUser;
 };
 
-export type CommandItem = QuickAccessBase & {
-  kind: 'command';
-  bucket: 'command';
-  data: HotkeyCommand;
-};
-
-export type QuickAccessItem = EntityItem | UserItem | CommandItem;
+export type QuickAccessItem = EntityItem | UserItem;
 
 export function isEntityItem(item: QuickAccessItem): item is EntityItem {
   return item.kind === 'entity';
@@ -92,10 +83,6 @@ export function isEntityItem(item: QuickAccessItem): item is EntityItem {
 
 export function isUserItem(item: QuickAccessItem): item is UserItem {
   return item.kind === 'user';
-}
-
-export function isCommandItem(item: QuickAccessItem): item is CommandItem {
-  return item.kind === 'command';
 }
 
 export function isEntityOfType<T extends EntityData['type']>(
@@ -138,7 +125,6 @@ export type BucketItemMap = {
   project: EntityItem<ProjectEntity>;
   email: EntityItem<EmailEntity>;
   person: UserItem;
-  command: CommandItem;
 };
 
 export type ItemForBucket<B extends Bucket> = BucketItemMap[B];
