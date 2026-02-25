@@ -422,7 +422,7 @@ export const commsServiceClient = {
   async getThreadReplies(args: WithChannelId & WithMessageId) {
     const { channel_id, message_id } = args;
     return mapOk(
-      await commsFetch<ApiThreadReply>(
+      await commsFetch<Array<ApiThreadReply>>(
         `/channels/${channel_id}/messages/${message_id}/replies`,
         { method: 'GET' }
       ),

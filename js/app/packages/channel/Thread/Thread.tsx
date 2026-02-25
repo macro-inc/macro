@@ -1,31 +1,60 @@
 import IconPlus from '@icon/regular/plus.svg';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { ThreadRailDecorations } from './ThreadRailDecorations';
 import { ThreadRepliesContainer } from './ThreadRepliesContainer';
 import { replyCenterOffsetX } from './thread-rail-geometry';
 import type { ThreadProps } from './types';
+import type { ApiThreadReply } from '@service-comms/client';
 
 const DEFAULT_REPLY_COUNT = 3;
+
+function sliceIf<T>(
+  val: Array<T>,
+  start: number,
+  end: number,
+  should: boolean
+): Array<T> {
+  return should ? val.slice(start, end) : val;
+}
+
+function ThreadReplyList(props: { replies: Array<ApiThreadReply> }) {
+  return (
+    <For each={props.replies}>
+      {(reply) => <ChannelMessage message={reply} />}
+    </For>
+  );
+}
 
 export function Thread(props: ThreadProps) {
   const [isReplying, setIsReplying] = createSignal(false);
 
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
+  const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
     () => props.data().id,
-    () => props.data().thread.reply_count > 0
+    fetchRepliesEnabled
   );
 
-  const previewReplies = () => thread().preview.slice(0, DEFAULT_REPLY_COUNT);
-  // Keep existing runtime behavior while isolating rail refactors.
-  const fetchedReplies = () =>
-    (repliesQuery.data as unknown as ReturnType<typeof previewReplies> | undefined) ??
-    [];
+  const sliceIfNotExpanded =
+    <T,>(val: Array<T>) =>
+    () =>
+      sliceIf(val, 0, DEFAULT_REPLY_COUNT, !props.isExpanded());
+
+  const previewReplies = sliceIfNotExpanded(thread().preview ?? []);
+  const fetchedReplies = sliceIfNotExpanded(repliesQuery.data ?? []);
   const moreRepliesCount = () => thread().reply_count - DEFAULT_REPLY_COUNT;
 
   const expand = () => {
@@ -39,9 +68,14 @@ export function Thread(props: ThreadProps) {
         <div class="relative w-full">
           <ThreadRailDecorations isReplying={isReplying} />
           <ThreadRepliesContainer>
-            <For each={previewReplies()}>
-              {(reply) => <ChannelMessage message={reply} />}
-            </For>
+            <Show
+              when={fetchRepliesEnabled() && !repliesQuery.isLoading}
+              fallback={<ThreadReplyList replies={previewReplies()} />}
+            >
+              <Suspense>
+                <ThreadReplyList replies={fetchedReplies()} />
+              </Suspense>
+            </Show>
 
             <Show when={!props.isExpanded() && moreRepliesCount() > 0}>
               <button
@@ -56,15 +90,6 @@ export function Thread(props: ThreadProps) {
                 {moreRepliesCount() === 1 ? 'reply' : 'replies'}
               </button>
             </Show>
-
-            <Show when={props.isExpanded()}>
-              <Suspense>
-                <For each={fetchedReplies()}>
-                  {(reply) => <ChannelMessage message={reply} />}
-                </For>
-              </Suspense>
-            </Show>
-
             <Switch>
               <Match when={!isReplying()}>
                 <button
