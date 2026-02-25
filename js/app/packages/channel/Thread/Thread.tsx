@@ -1,22 +1,19 @@
-import IconPlus from '@icon/regular/plus.svg';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import {
-  createEffect,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { ThreadRailDecorations } from './ThreadRailDecorations';
 import { ThreadRepliesContainer } from './ThreadRepliesContainer';
+import { ThreadReplyButton } from './ThreadReplyButton';
 import { replyCenterOffsetX } from './thread-rail-geometry';
 import type { ThreadProps } from './types';
 import type { ApiThreadReply } from '@service-comms/client';
-
-const DEFAULT_REPLY_COUNT = 3;
+import { ThreadCollapsedIndicator } from './ThreadCollapsedIndicator';
+import {
+  DEFAULT_VISIBLE_REPLY_COUNT,
+  getCollapsedRepliesCount,
+  getThreadLatestReplyAt,
+  getUniqueReplyUserIds,
+} from './thread-reply-indicator-helpers';
 
 function sliceIf<T>(
   val: Array<T>,
@@ -49,67 +46,82 @@ export function Thread(props: ThreadProps) {
   );
 
   const sliceIfNotExpanded =
-    <T,>(val: Array<T>) =>
+    <T,>(val: Accessor<Array<T>>) =>
     () =>
-      sliceIf(val, 0, DEFAULT_REPLY_COUNT, !props.isExpanded());
+      sliceIf(val(), 0, DEFAULT_VISIBLE_REPLY_COUNT, !props.isExpanded());
 
-  const previewReplies = sliceIfNotExpanded(thread().preview ?? []);
-  const fetchedReplies = sliceIfNotExpanded(repliesQuery.data ?? []);
-  const moreRepliesCount = () => thread().reply_count - DEFAULT_REPLY_COUNT;
+  const previewReplies = sliceIfNotExpanded(() => thread().preview ?? []);
+  const fetchedReplies = sliceIfNotExpanded(() => repliesQuery.data ?? []);
+  const hasFetchedReplies = () => repliesQuery.data !== undefined;
+  const activeReplies = () => {
+    const replies = repliesQuery.data;
+    if (replies && !repliesQuery.isLoading) return replies;
+    return thread().preview ?? [];
+  };
+  const collapsedRepliesCount = () =>
+    getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+  const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
+  const collapsedLatestReplyAt = () =>
+    getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
+  const shouldShowCollapsedIndicator = () =>
+    !isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
+  const shouldShowReplyButton = () =>
+    hasReplies() && !isReplying() && !shouldShowCollapsedIndicator();
 
   const expand = () => {
     props.setIsExpanded(true);
   };
 
   return (
-    <div class="flex flex-col w-full">
-      <ChannelMessage message={props.data()} />
-      <Show when={hasReplies()}>
-        <div class="relative w-full">
-          <ThreadRailDecorations isReplying={isReplying} />
-          <ThreadRepliesContainer>
-            <Show
-              when={fetchRepliesEnabled() && !repliesQuery.isLoading}
-              fallback={<ThreadReplyList replies={previewReplies()} />}
-            >
-              <Suspense>
-                <ThreadReplyList replies={fetchedReplies()} />
-              </Suspense>
-            </Show>
-
-            <Show when={!props.isExpanded() && moreRepliesCount() > 0}>
-              <button
-                type="button"
-                class="text-xs text-ink-muted hover:text-ink w-fit"
-                style={{
-                  'margin-left': replyCenterOffsetX,
-                }}
-                onClick={expand}
+    <Suspense>
+      <div class="flex flex-col w-full">
+        <ChannelMessage message={props.data()} />
+        <Show when={hasReplies()}>
+          <div class="relative w-full">
+            <ThreadRailDecorations isReplying={isReplying} />
+            <ThreadRepliesContainer>
+              <Show
+                when={
+                  fetchRepliesEnabled() &&
+                  !repliesQuery.isLoading &&
+                  hasFetchedReplies()
+                }
+                fallback={<ThreadReplyList replies={previewReplies()} />}
               >
-                Show {moreRepliesCount()} more{' '}
-                {moreRepliesCount() === 1 ? 'reply' : 'replies'}
-              </button>
-            </Show>
-            <Switch>
-              <Match when={!isReplying()}>
-                <button
-                  type="button"
-                  onClick={() => setIsReplying(true)}
-                  class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
+                <Suspense>
+                  <ThreadReplyList replies={fetchedReplies()} />
+                </Suspense>
+              </Show>
+
+              <Show
+                when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
+              >
+                <div
+                  class="relative z-10 w-fit"
                   style={{
-                    'margin-left': replyCenterOffsetX,
+                    'margin-left': `calc(${replyCenterOffsetX} - var(--user-icon-width) / 2)`,
                   }}
-                  aria-label="Reply"
                 >
-                  <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)] text-ink-muted">
-                    <IconPlus class="size-1/2" />
-                  </div>
-                </button>
-              </Match>
-            </Switch>
-          </ThreadRepliesContainer>
-        </div>
-      </Show>
-    </div>
+                  <Show when={shouldShowCollapsedIndicator()}>
+                    <ThreadCollapsedIndicator
+                      collapsedRepliesCount={collapsedRepliesCount()}
+                      participants={collapsedReplyUsers()}
+                      latestReplyAt={collapsedLatestReplyAt()}
+                      onClick={expand}
+                    />
+                  </Show>
+                  <Show when={shouldShowReplyButton()}>
+                    <ThreadReplyButton
+                      onClick={() => setIsReplying(true)}
+                      aria-label="Reply"
+                    />
+                  </Show>
+                </div>
+              </Show>
+            </ThreadRepliesContainer>
+          </div>
+        </Show>
+      </div>
+    </Suspense>
   );
 }

@@ -31,7 +31,7 @@ export function ThreadRailDecorations(props: ThreadRailDecorationsProps) {
         </div>
       </div>
       <div
-        class="pointer-events-none absolute bottom-0 border-l border-edge-muted/80"
+        class="pointer-events-none absolute bottom-0 -z-1 border-l border-edge-muted/80"
         style={{
           left: innerRailX,
           top: innerRailTop,
