@@ -1,14 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   applyInboxQueryFilters,
   applyOtherQueryFilters,
   removeInboxQueryFilters,
   removeOtherQueryFilters,
 } from './inbox-query-filters';
-
-vi.mock('./filters', () => ({
-  EXCLUDE: ['00000000-0000-0000-0000-000000000000'],
-}));
 
 describe('inbox-query-filters', () => {
   describe('applyInboxQueryFilters', () => {
@@ -69,24 +65,24 @@ describe('inbox-query-filters', () => {
   });
 
   describe('applyOtherQueryFilters', () => {
-    it('applies other filters and email importance=false', () => {
+    it('applies importance=false to all filter types', () => {
       const result = applyOtherQueryFilters({
         email_filters: {
           recipients: [],
         },
       });
 
-      expect(result.channel_filters?.channel_ids).toBeDefined();
-      expect(result.chat_filters?.chat_ids).toBeDefined();
-      expect(result.project_filters?.project_ids).toBeDefined();
-      expect(result.document_filters?.document_ids).toBeDefined();
+      expect(result.channel_filters?.importance).toBe(false);
+      expect(result.chat_filters?.importance).toBe(false);
+      expect(result.project_filters?.importance).toBe(false);
+      expect(result.document_filters?.importance).toBe(false);
       expect(result.email_filters?.importance).toBe(false);
       expect(result.email_filters?.recipients).toEqual([]);
     });
   });
 
   describe('removeOtherQueryFilters', () => {
-    it('strips other-applied ids and importance=false while preserving unrelated fields', () => {
+    it('strips importance=false while preserving unrelated fields', () => {
       const applied = applyOtherQueryFilters({
         channel_filters: { channel_types: ['direct_message'] as any },
         email_filters: { recipients: [] },
