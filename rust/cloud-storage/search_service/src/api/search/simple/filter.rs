@@ -133,39 +133,6 @@ impl FilterVariantToSearchArgs for item_filters::ProjectFilters {
     }
 }
 
-const DEPRIORITY_LABELS: &[&str] = &[
-    "CATEGORY_UPDATES",
-    "CATEGORY_PROMOTIONS",
-    "CATEGORY_SOCIAL",
-    "CATEGORY_FORUMS",
-];
-
-fn apply_email_importance(
-    importance: Option<bool>,
-    include_labels: &mut Vec<String>,
-    exclude_labels: &mut Vec<String>,
-) {
-    match importance {
-        Some(true) => {
-            for label in DEPRIORITY_LABELS {
-                let label = label.to_string();
-                if !exclude_labels.contains(&label) {
-                    exclude_labels.push(label);
-                }
-            }
-        }
-        Some(false) => {
-            for label in DEPRIORITY_LABELS {
-                let label = label.to_string();
-                if !include_labels.contains(&label) {
-                    include_labels.push(label);
-                }
-            }
-        }
-        None => {}
-    }
-}
-
 impl FilterVariantToSearchArgs for item_filters::EmailFilters {
     type Output = UnifiedEmailSearchArgs;
 
@@ -179,10 +146,6 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
         if !should_include {
             Ok(UnifiedEmailSearchArgs::default())
         } else {
-            let mut include_labels = self.include_labels.clone();
-            let mut exclude_labels = self.exclude_labels.clone();
-            apply_email_importance(self.importance, &mut include_labels, &mut exclude_labels);
-
             Ok(UnifiedEmailSearchArgs {
                 thread_ids: vec![],
                 link_ids: vec![],
@@ -190,12 +153,10 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
                 cc: self.cc.clone(),
                 bcc: self.bcc.clone(),
                 recipients: self.recipients.clone(),
-                include_labels,
-                exclude_labels,
+                include_labels: self.include_labels.clone(),
+                exclude_labels: self.exclude_labels.clone(),
+                importance: self.importance,
             })
         }
     }
 }
-
-#[cfg(test)]
-mod test;
