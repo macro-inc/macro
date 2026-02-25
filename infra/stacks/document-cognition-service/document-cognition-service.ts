@@ -38,7 +38,7 @@ type CreateDocumentCognitionServiceArgs = {
   tags: { [key: string]: string };
   secretKeyArns: pulumi.Output<string>[] | string[];
   queueArns: pulumi.Output<string>[] | string[];
-  additionalPolicyArns?: (pulumi.Output<string> | string)[];
+  connectionTablePolicyArn: pulumi.Output<string> | string;
 };
 
 export class DocumentCognitionService extends pulumi.ComponentResource {
@@ -67,7 +67,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
-      additionalPolicyArns,
+      connectionTablePolicyArn,
       tags,
     }: CreateDocumentCognitionServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -180,7 +180,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
             },
           ],
         },
-        managedPolicyArns: [sqsPolicy.arn, secretsManagerPolicy.arn, ...(additionalPolicyArns ?? [])],
+        managedPolicyArns: [sqsPolicy.arn, secretsManagerPolicy.arn, connectionTablePolicyArn],
         tags: this.tags,
       },
       { parent: this }

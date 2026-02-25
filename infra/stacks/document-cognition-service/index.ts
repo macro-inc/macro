@@ -207,7 +207,7 @@ const documentCognitionService = new DocumentCognitionService(
       searchEventQueueArn,
       notificationQueueArn,
     ],
-    additionalPolicyArns: [connectionGatewayTablePolicyArn],
+    connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
       {
         name: 'DATABASE_URL',
