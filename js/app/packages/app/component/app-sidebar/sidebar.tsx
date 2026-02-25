@@ -1,7 +1,7 @@
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-import TrayIcon from '@phosphor-icons/core/regular/tray.svg?component-solid';
+import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
@@ -76,7 +76,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       href={props.href}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      activeClass="bg-accent"
+      activeClass="bg-accent text-panel hover:!bg-accent"
     >
       <Show when={props.icon}>
         <div class="size-4">
