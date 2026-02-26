@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::sync::Arc;
-
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::{
@@ -13,6 +9,9 @@ use notification::outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Notification repository that wraps the real DB repository but overrides
@@ -113,7 +112,7 @@ impl NotificationRepository for SandboxNotificationRepository {
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
@@ -124,7 +123,7 @@ impl NotificationRepository for SandboxNotificationRepository {
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
@@ -136,7 +135,7 @@ impl NotificationRepository for SandboxNotificationRepository {
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         self.inner
@@ -146,7 +145,7 @@ impl NotificationRepository for SandboxNotificationRepository {
 
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         self.inner
@@ -156,7 +155,7 @@ impl NotificationRepository for SandboxNotificationRepository {
 
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.inner

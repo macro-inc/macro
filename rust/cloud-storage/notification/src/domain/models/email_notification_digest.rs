@@ -637,7 +637,7 @@ where
         // retrieve the notification data and add it to the batch
         let Some(notif) = self
             .notif_repo
-            .get_user_notification_by_id::<serde_json::Value>(user_id.as_ref(), notif_id)
+            .get_user_notification_by_id::<serde_json::Value>(user_id.copied(), notif_id)
             .await?
         else {
             return Err(report!(

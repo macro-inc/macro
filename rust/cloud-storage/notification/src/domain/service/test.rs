@@ -264,7 +264,7 @@ impl NotificationRepository for MockRepository {
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _limit: u32,
         _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
@@ -273,7 +273,7 @@ impl NotificationRepository for MockRepository {
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _event_item_ids: &[Uuid],
         _limit: u32,
         _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
@@ -283,7 +283,7 @@ impl NotificationRepository for MockRepository {
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         Ok(None)
@@ -291,7 +291,7 @@ impl NotificationRepository for MockRepository {
 
     async fn delete_user_notification(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _notification_id: Uuid,
     ) -> Result<(), Report> {
         Ok(())
@@ -299,7 +299,7 @@ impl NotificationRepository for MockRepository {
 
     async fn bulk_delete_user_notifications(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         Ok(())
@@ -379,7 +379,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
@@ -390,7 +390,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
@@ -402,7 +402,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         (**self)
@@ -412,7 +412,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         (**self)
@@ -422,7 +422,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         (**self)
