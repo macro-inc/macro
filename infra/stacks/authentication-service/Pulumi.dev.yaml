@@ -18,3 +18,6 @@ config:
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-dev
   authentication-service:stripe_price_id: stripe-price-id-dev
   authentication-service:fusionauth_tenant_id: 5e13f524-8d32-0454-81f8-061936256aa4
+  authentication-service:github_client_id_key: github-client-id-dev
+  authentication-service:github_client_secret_key: github-client-secret-dev
+  authentication-service:github_idp_id_key: github-idp-id-dev
