@@ -308,6 +308,43 @@ const DocumentsTabs = () => {
 };
 
 const TasksTabs = () => {
+  const soup = useSoup();
+  const { setQueryFilters } = useSoupView();
+
+  const user = useUserContext();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('assigned-to-me', () => {
+        const userId = user.userId();
+
+        if (!userId) return;
+
+        setQueryFilters({
+          ...QUERY_FILTERS.document,
+          document_filters: { owners: [userId] },
+        });
+
+        soup.filters.set(['task', 'assigned-to']);
+      })
+      .with('created-by-me', () => {
+        const userId = user.userId();
+
+        if (!userId) return;
+        setQueryFilters({
+          ...QUERY_FILTERS.task,
+          document_filters: { owners: [userId] },
+        });
+        soup.filters.set(['task']);
+      })
+      .with('all', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.task,
+        });
+        soup.filters.set(['task']);
+      });
+  };
+
   return (
     <div>
       <SegmentedControl
@@ -326,7 +363,7 @@ const TasksTabs = () => {
             label: 'All',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
