@@ -63,7 +63,7 @@ export const createSoupState = <
 
   const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
     filters:
-      filterConfigs ?? createSoupFilters(notificationSource, user.userId()),
+      filterConfigs ?? createSoupFilters(notificationSource, user.userId),
     groups: filterGroups ?? FILTER_GROUPS,
     initialFilters,
   });

@@ -1,4 +1,10 @@
-import { isTaskEntity, type EntityData, type WithNotification } from '@entity';
+import {
+  getTaskAssigneeIds,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+  type EntityData,
+  type WithNotification,
+} from '@entity';
 import {
   signalFilter,
   noiseFilter,
@@ -206,11 +212,22 @@ export function noDraftsFilter(entity: EntityData): boolean {
   return !entity.isDraft;
 }
 
-export function sharedDocumentFilter(ownerId: string | undefined) {
+export function sharedDocumentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
-    if (entity.type !== 'document' || ownerId == null) return false;
+    const userID = getUserID();
+    if (entity.type !== 'document' || userID == null) return false;
 
-    return entity.ownerId !== ownerId;
+    return entity.ownerId !== userID;
+  };
+}
+
+export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
+  return function (entity: EntityData): boolean {
+    const userID = getUserID();
+    if (!isTaskEntity(entity) || userID == null) return false;
+
+    const taskEntity = entity as unknown as TaskEntityWithProperties;
+    return getTaskAssigneeIds(taskEntity).includes(userID);
   };
 }
 
@@ -262,7 +279,7 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
 
 export const createSoupFilters = (
   notificationSource: NotificationSource,
-  userID: string | undefined
+  getUserID: () => string | undefined
 ) => {
   const list = [
     // Focus filters (mutually exclusive)
@@ -326,7 +343,12 @@ export const createSoupFilters = (
     {
       id: 'shared-document',
       label: 'Shared documents',
-      predicate: sharedDocumentFilter(userID),
+      predicate: sharedDocumentFilter(getUserID),
+    },
+    {
+      id: 'assigned-to',
+      label: 'Task assigned to user',
+      predicate: taskAssignedToUserFilter(getUserID),
     },
   ] as const satisfies (FilterConfig<EntityData> & { label: string })[];
 
