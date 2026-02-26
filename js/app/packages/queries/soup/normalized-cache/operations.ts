@@ -33,13 +33,10 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
-  const dependentStart = performance.now();
   const dependentKeys = normKey
     ? normalizer.getDependentQueriesByIds([normKey])
     : [];
-  const dependentEnd = performance.now();
 
-  const mapStart = performance.now();
   const previous = dependentKeys.map(
     (key: QueryKey) =>
       [
@@ -48,20 +45,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
       ] as const
   );
 
-  const mapEnd = performance.now();
-
-  const setStart = performance.now();
   normalizer.setNormalizedData(partial as NormalizerData);
-  const setEnd = performance.now();
-
-  console.log(
-    'update: dependent',
-    dependentEnd - dependentStart,
-    'map',
-    mapEnd - mapStart,
-    'set',
-    setEnd - setStart
-  );
 
   return {
     rollback: () => {
