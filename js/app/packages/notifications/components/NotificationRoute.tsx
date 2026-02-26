@@ -6,7 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { openNotificationFromId } from '@notifications/notification-navigation';
 import { logger } from '@observability';
 import { useSearchParams } from '@solidjs/router';
-import { createEffect, onCleanup, onMount, untrack } from 'solid-js';
+import { createEffect, onCleanup, onMount } from 'solid-js';
 
 export default function NotificationRoute() {
   const split = useSplitPanelOrThrow();

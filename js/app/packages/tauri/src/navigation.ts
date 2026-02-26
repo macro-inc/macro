@@ -35,7 +35,9 @@ export function triggerNavigation(path: string) {
   if (registeredNavigate) {
     registeredNavigate(path);
   } else {
-    console.warn(`[navigation] triggerNavigation: router not ready, buffering path ${path}`);
+    console.warn(
+      `[navigation] triggerNavigation: router not ready, buffering path ${path}`
+    );
     pendingNavigation = path;
   }
 }
