@@ -27,12 +27,10 @@ async fn link_user(
     link_id: &uuid::Uuid,
 ) -> Result<(), (StatusCode, String)> {
     // Get existing macro user id from link id
-    let macro_user_id = macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(
-        &ctx.db,
-        &link_id.to_string(),
-    )
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let macro_user_id =
+        macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(&ctx.db, link_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let token_response = ctx
         .auth_client
@@ -121,14 +119,11 @@ async fn link_user(
     }
 
     // delete in_progress_user_link once complete
-    let _ = macro_db_client::in_progress_user_link::delete_in_progress_user_link(
-        &ctx.db,
-        &link_id.to_string(),
-    )
-    .await
-    .inspect_err(|e| {
-        tracing::error!(error=?e, "unable to delete in progress user link");
-    });
+    let _ = macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, link_id)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "unable to delete in progress user link");
+        });
 
     Ok(())
 }

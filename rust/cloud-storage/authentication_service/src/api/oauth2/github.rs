@@ -60,11 +60,9 @@ async fn link_user(
     link_id: &uuid::Uuid,
     code: &str,
 ) -> Result<(), GithubLinkError> {
-    let fusionauth_user_id = macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(
-        &ctx.db,
-        &link_id.to_string(),
-    )
-    .await?;
+    let fusionauth_user_id =
+        macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(&ctx.db, link_id)
+            .await?;
 
     // SAFETY: we don't support multi-profile at this time but we do need to support the method for
     // fetching
