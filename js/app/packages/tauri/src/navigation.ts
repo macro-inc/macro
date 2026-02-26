@@ -1,6 +1,5 @@
 import { useNavigate } from '@solidjs/router';
 import { listen } from '@tauri-apps/api/event';
-import { info, warn } from '@tauri-apps/plugin-log';
 import { createEffect, onCleanup } from 'solid-js';
 
 type NavigateEvent = {
