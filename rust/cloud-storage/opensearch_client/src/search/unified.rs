@@ -480,7 +480,10 @@ pub(crate) async fn search_unified(
             })?
     };
 
-    tracing::info!(response_body_bytes = bytes.len(), "opensearch response size");
+    tracing::info!(
+        response_body_bytes = bytes.len(),
+        "opensearch response size"
+    );
 
     let result: DefaultSearchResponse<UnifiedSearchIndex> = {
         let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
