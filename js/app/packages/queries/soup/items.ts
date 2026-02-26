@@ -76,6 +76,6 @@ export const useSoupItemsQuery = (
     enabled: options?.().enabled,
     staleTime: options?.().staleTime,
     placeholderData: (p) => p,
-    meta: { itemFilter },
+    meta: { itemFilter, normalize: true },
   }));
 };
