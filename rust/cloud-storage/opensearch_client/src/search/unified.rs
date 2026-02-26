@@ -459,26 +459,39 @@ pub(crate) async fn search_unified(
         return Ok((Vec::new(), SearchCursorOption::Done));
     }
 
-    let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        .body(search_request)
-        .send()
-        .await
-        .map_client_error()
-        .await?;
+    let response = {
+        let _span = tracing::info_span!("opensearch_http_request").entered();
+        client
+            .search(opensearch::SearchParts::Index(&search_indices))
+            .body(search_request)
+            .send()
+            .await
+            .map_client_error()
+            .await?
+    };
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
-        })?;
+    let bytes = {
+        let _span = tracing::info_span!("opensearch_read_response_body").entered();
+        response
+            .bytes()
+            .await
+            .map_err(|e| OpensearchClientError::HttpBytesError {
+                details: e.to_string(),
+            })?
+    };
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
-        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
-        })?;
+    tracing::info!(response_body_bytes = bytes.len(), "opensearch response size");
+
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = {
+        let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
+            .entered();
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
+        })?
+    };
 
     let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
 
