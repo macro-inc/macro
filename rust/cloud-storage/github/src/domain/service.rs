@@ -74,14 +74,6 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        tracing::trace!("retreived tokens");
-
-        let refresh_token = if let Some(refresh_token) = tokens.refresh_token {
-            refresh_token
-        } else {
-            return Err(GithubError::NoRefreshTokenProvided);
-        };
-
         let user_info = self
             .oauth
             .get_user_info(&tokens.access_token)
@@ -117,7 +109,7 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
                 &self.config.idp_id,
                 &user_info.id.to_string(),
                 &user_info.login,
-                &refresh_token,
+                &tokens.access_token,
             )
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;

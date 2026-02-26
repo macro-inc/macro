@@ -31,7 +31,7 @@ impl FusionAuth for GithubFusionAuthImpl {
         idp_id: &str,
         github_user_id: &str,
         username: &str,
-        refresh_token: &str,
+        access_token: &str,
     ) -> Result<(), Self::Err> {
         self.fusionauth_client
             .link_user(LinkUserRequest {
@@ -40,7 +40,7 @@ impl FusionAuth for GithubFusionAuthImpl {
                     identity_provider_id: idp_id.into(),
                     identity_provider_user_id: github_user_id.into(),
                     user_id: fusionauth_user_id.to_string().into(),
-                    token: refresh_token.into(),
+                    token: access_token.into(),
                 },
             })
             .await?;

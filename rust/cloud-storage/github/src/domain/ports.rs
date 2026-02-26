@@ -92,7 +92,7 @@ pub trait FusionAuth: Send + Sync + 'static {
         idp_id: &str,
         github_user_id: &str,
         username: &str,
-        refresh_token: &str,
+        access_token: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
