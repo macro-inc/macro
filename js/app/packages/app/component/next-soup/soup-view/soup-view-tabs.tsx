@@ -370,6 +370,33 @@ const TasksTabs = () => {
 };
 
 const ChannelsTabs = () => {
+  const soup = useSoup();
+  const { setQueryFilters } = useSoupView();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('recent', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.document,
+          channel_filters: { importance: true },
+        });
+
+        soup.filters.set(['channels']);
+      })
+      .with('people', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.people,
+        });
+        soup.filters.set(['people']);
+      })
+      .with('teams', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.teams,
+        });
+        soup.filters.set(['teams']);
+      });
+  };
+
   return (
     <div>
       <SegmentedControl
@@ -388,7 +415,7 @@ const ChannelsTabs = () => {
             label: 'Teams',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
