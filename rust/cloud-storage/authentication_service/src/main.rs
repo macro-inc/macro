@@ -201,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
                 ),
             ),
         ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
+        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
         block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
         invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
             .append::<model_notifications::ChannelInviteMetadata>(),
@@ -237,7 +237,7 @@ async fn main() -> anyhow::Result<()> {
     let github_service_impl = GithubServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
-        GithubAuthImpl::new(auth_client.clone()),
+        GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
         GithubConfig {
             client_id: config.github_client_id,
             client_secret: config.github_client_secret,

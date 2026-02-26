@@ -12,6 +12,8 @@ outbound = [
   "dep:reqwest",
   "dep:serde_json",
   "dep:urlencoding",
+  "dep:redis",
+  "dep:tokio",
   "dep:fusionauth",
   "ports"
 ]
@@ -31,6 +33,8 @@ urlencoding = { workspace = true, optional = true }
 fusionauth = { path = "../fusionauth", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 macro_user_id = { path = "../macro_user_id" }
+redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

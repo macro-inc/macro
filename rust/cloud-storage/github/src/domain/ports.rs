@@ -4,7 +4,9 @@
 
 use std::future::Future;
 
-use crate::domain::models::{GithubError, GithubExchangeTokenResponse, GithubUserInfo};
+use crate::domain::models::{
+    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubUserInfo,
+};
 
 use super::models::GithubLink;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -94,6 +96,13 @@ pub trait Auth: Send + Sync + 'static {
         username: &str,
         access_token: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Retreives the users github access token
+    fn retreive_access_token(
+        &self,
+        fusionauth_user_id: &uuid::Uuid,
+        github_idp_id: &str,
+    ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>>;
 }
 
 /// Service interface for github operations.
