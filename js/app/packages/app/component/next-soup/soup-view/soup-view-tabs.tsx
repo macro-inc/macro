@@ -230,13 +230,13 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm bg-ink/5 p-1 rounded-md"
+      class="size-full text-sm bg-ink/10 p-1 rounded-md"
       defaultValue={props.list[0]?.value}
       onChange={onChange}
       disabled={props.disabled}
     >
       <div class="relative" role="presentation">
-        <KSegmentedControl.Indicator class="absolute rounded bg-accent/10 transition-transform" />
+        <KSegmentedControl.Indicator class="absolute rounded bg-edge transition-all ease-out" />
         <div class="flex" role="presentation">
           <For each={props.list}>
             {(item) => {
@@ -247,7 +247,7 @@ export const SegmentedControl: ParentComponent<
               return (
                 <KSegmentedControl.Item
                   value={itemValue()}
-                  class="relative text-ink-muted hover:text-ink px-2 py-0.5 text-sm font-medium data-[checked]:text-accent transition-colors not-first-of-type:before:absolute not-first-of-type:before:inset-0 not-first-of-type:before:bg-ink/10 not-first-of-type:before:h-full not-first-of-type:before:w-0.5 data-[checked]:before:opacity-0 data-[checked]:[&+::before]:opacity-0 not-first-of-type:before:opacity-100 not-first-of-type:before:transition-opacity"
+                  class="relative text-ink-placeholder px-2 py-0.5 text-sm font-medium data-[checked]:text-ink transition-colors not-first-of-type:before:absolute not-first-of-type:before:inset-0 not-first-of-type:before:bg-ink/10 not-first-of-type:before:h-full not-first-of-type:before:w-0.5 data-[checked]:before:opacity-0 data-[checked]:[&+::before]:opacity-0 not-first-of-type:before:opacity-100 not-first-of-type:before:transition-opacity"
                   disabled={props.disabled}
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 size-full pointer-events-none" />
