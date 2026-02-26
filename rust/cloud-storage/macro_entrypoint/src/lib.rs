@@ -88,7 +88,6 @@ impl MacroEntrypoint {
                 }
             }
             (Environment::Production | Environment::Develop, _) => {
-                println!("I AM HITTING THIS ONE {}", self.env); 
                 let tracer_provider = init_opentelemetry();
 
                 // Get service name for the tracer
