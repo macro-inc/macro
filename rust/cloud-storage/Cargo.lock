@@ -527,6 +527,7 @@ dependencies = [
  "email_validator",
  "fusionauth",
  "futures",
+ "github",
  "http-body-util",
  "jsonwebtoken",
  "last_online_tracker",
@@ -4044,6 +4045,27 @@ checksum = "f954a9e9159ec994f73a30a12b96a702dde78f5547bcb561174597924f7d4162"
 dependencies = [
  "color_quant",
  "weezl",
+]
+
+[[package]]
+name = "github"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fusionauth",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tracing",
+ "urlencoding",
+ "uuid",
 ]
 
 [[package]]

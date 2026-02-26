@@ -62,12 +62,11 @@ export function useEmailSearchMention(
       );
   });
 
-  const emailSearch = createFreshSearch<EntityItem>(
-    { timeWeight: 0, brevityWeight: 0.3 },
-    (item) => item.searchText,
-    (_item) => false,
-    (item) => item.timestamps
-  );
+  const emailSearch = createFreshSearch<EntityItem>({
+    config: { timeWeight: 0, brevityWeight: 0.3 },
+    getName: (item) => item.searchText,
+    getTimestamp: (item) => item.timestamps,
+  });
 
   const emails = createLazyMemo((): EntityItem[] => {
     const term = searchTerm();

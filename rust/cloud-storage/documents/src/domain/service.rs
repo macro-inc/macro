@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use document_sub_type::DocumentSubType;
-use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
+use entity_access::domain::models::{
+    EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
@@ -273,7 +275,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetDocumentResponseData, DocumentError> {
         let document_id = entity_access_receipt.entity().entity_id.clone();
         // get access level
@@ -321,7 +323,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     async fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         params: LocationQueryParams,
     ) -> Result<LocationResponseV3, DocumentError> {
         let file_type = document_context
@@ -384,7 +386,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     #[tracing::instrument(err, skip(self))]
     async fn delete_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
         self.repo
@@ -431,7 +433,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
 
     async fn get_document_text(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         self.repo
             .get_document_text(&entity_access_receipt.entity().entity_id)

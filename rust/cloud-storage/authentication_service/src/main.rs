@@ -1,6 +1,13 @@
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
+use github::{
+    domain::service::{GithubConfig, GithubServiceImpl},
+    outbound::{
+        github_fusionauth_client::GithubFusionAuthImpl, github_oauth_client::GithubOauthImpl,
+        pg_github_repo::PgGithubRepo,
+    },
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -227,9 +234,21 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
+    let github_service_impl = GithubServiceImpl::new(
+        PgGithubRepo::new(db.clone()),
+        GithubOauthImpl::default(),
+        GithubFusionAuthImpl::new(auth_client.clone()),
+        GithubConfig {
+            client_id: config.github_client_id,
+            client_secret: config.github_client_secret,
+            idp_id: config.github_idp_id,
+        },
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
+            github_service: Arc::new(github_service_impl),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),

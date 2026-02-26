@@ -44,16 +44,10 @@ function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
-function isChannelItem(item: CommandMenuItem): boolean {
-  // only dms get the "channel boost" in command menu
-  return item.bucket === 'dm';
-}
-
-// tune-able freshSearch for query vs non-query sort
 function createSearchConfig(hasQuery: boolean) {
   return {
     useViewedAt: true,
-    channelBoost: hasQuery ? 1.8 : 1.0,
+    dmBoost: hasQuery ? 1.8 : 1.0,
     fuzzyWeight: hasQuery ? 0.7 : 0.0,
     timeWeight: hasQuery ? 0.3 : 0.9,
     minFuzzyThreshold: hasQuery ? 0.1 : 0,
@@ -188,12 +182,12 @@ export function useCommandItems(
   const search = createMemo(() => {
     const q = query();
     const hasQuery = q.trim().length > 0;
-    return createFreshSearch<CommandMenuItem>(
-      createSearchConfig(hasQuery),
-      (item) => item.searchText,
-      isChannelItem,
-      (item) => item.timestamps
-    );
+    return createFreshSearch<CommandMenuItem>({
+      config: createSearchConfig(hasQuery),
+      getName: (item) => item.searchText,
+      isDmItem: (item) => item.bucket === 'dm',
+      getTimestamp: (item) => item.timestamps,
+    });
   });
 
   const filteredItems = createMemo(() => {

@@ -13,14 +13,6 @@ struct TestNotification {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
-
-    fn rate_limit_config() -> Option<crate::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<crate::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 fn test_user(email: &str) -> MacroUserIdStr<'static> {

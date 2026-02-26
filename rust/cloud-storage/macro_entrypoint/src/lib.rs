@@ -21,6 +21,8 @@ pub struct MacroEntrypoint {
 
 impl Default for MacroEntrypoint {
     fn default() -> Self {
+        // Load .env file if it exists, but don't fail if it doesn't
+        let _ = dotenvy::dotenv();
         MacroEntrypoint {
             env: Environment::new_or_prod(),
             local: Default::default(),
@@ -57,7 +59,6 @@ impl MacroEntrypoint {
 
     /// consume self, initialize this binary, and return a proof that it was initialized [InitializedEntrypoint]
     pub fn init(self) -> InitializedEntrypoint {
-        // Load .env file if it exists, but don't fail if it doesn't
         let _ = dotenvy::dotenv();
         std::panic::set_hook(Box::new(tracing_panic::panic_hook));
 

@@ -111,6 +111,7 @@ user_quota = { path = "../user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+github = { path = "../github" }
 
 
 [dev-dependencies]

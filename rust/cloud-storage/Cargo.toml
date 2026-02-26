@@ -44,6 +44,7 @@ members = [
   "entity_access",
   "frecency",
   "fusionauth",
+  "github",
   "gmail_client",
   "integration_tests/*",
   "lambda_client",

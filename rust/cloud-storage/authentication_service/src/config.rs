@@ -64,6 +64,10 @@ pub struct Config {
 
     /// The stripe price id for the professional subscription
     pub stripe_price_id: String,
+
+    pub github_client_id: String,
+    pub github_client_secret: String,
+    pub github_idp_id: String,
 }
 
 impl Config {
@@ -119,6 +123,13 @@ impl Config {
         let stripe_price_id =
             std::env::var("STRIPE_PRICE_ID").context("STRIPE_PRICE_ID must be provided")?;
 
+        let github_client_id =
+            std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
+        let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
+            .context("GITHUB_CLIENT_SECRET must be provided")?;
+        let github_idp_id =
+            std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
+
         Ok(Config {
             base_url,
             database_url,
@@ -140,6 +151,9 @@ impl Config {
             search_event_queue,
             stripe_price_id,
             environment,
+            github_client_id,
+            github_client_secret,
+            github_idp_id,
         })
     }
 }

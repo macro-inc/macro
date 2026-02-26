@@ -1,62 +1,78 @@
 import type { IUser } from '@core/user';
-import type { EntityData, EmailEntity } from '@entity';
+import type {
+  EntityData,
+  ChannelEntity,
+  ChatEntity,
+  DocumentEntity,
+  TaskEntity,
+  EmailEntity,
+  ProjectEntity,
+} from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import {
   useQuickAccess,
   type QuickAccessItem,
+  type EntityItem,
+  type UserItem,
   type Bucket,
 } from '@core/context/quickAccess';
+import { match } from 'ts-pattern';
+
+export type EntityTypeItemMap = {
+  USER: UserItem;
+  CHANNEL: EntityItem<ChannelEntity>;
+  DOCUMENT: EntityItem<DocumentEntity>;
+  PROJECT: EntityItem<ProjectEntity>;
+  CHAT: EntityItem<ChatEntity>;
+  TASK: EntityItem<TaskEntity>;
+  THREAD: EntityItem<EmailEntity>;
+  COMPANY: never;
+};
 
 /**
  * Maps EntityType to quickAccess buckets
  */
-export function entityTypeToBuckets(
-  entityType: EntityType | null | undefined
-): Bucket[] | null {
-  if (!entityType) return null; // null means "all"
-  switch (entityType) {
-    case 'USER':
-      return ['person'];
-    case 'CHANNEL':
-      return ['channel', 'dm'];
-    case 'DOCUMENT':
-      return ['document', 'note'];
-    case 'PROJECT':
-      return ['project'];
-    case 'CHAT':
-      return ['chat'];
-    case 'TASK':
-      return ['task'];
-    case 'THREAD':
-      return ['email']; // Note: emails aren't in quickAccess yet, handled separately
-    case 'COMPANY':
-      return []; // Companies aren't in quickAccess
-    default:
-      return null;
-  }
+export function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
+  const buckets = match(entityType)
+    .with('USER', () => ['person'] as const)
+    .with('CHANNEL', () => ['channel', 'dm'] as const)
+    .with('DOCUMENT', () => ['document', 'note'] as const)
+    .with('PROJECT', () => ['project'] as const)
+    .with('CHAT', () => ['chat'] as const)
+    .with('TASK', () => ['task'] as const)
+    .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
+    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .exhaustive();
+  return buckets;
 }
 
 /**
  * Hook to get QuickAccessItems for a given EntityType.
  * Returns items from the appropriate buckets based on entity type.
  */
-export function useQuickAccessEntities(
-  entityType: Accessor<EntityType | null | undefined>
-): { items: Accessor<QuickAccessItem[]>; isLoading: Accessor<boolean> } {
+export function useQuickAccessEntities<T extends EntityType>(
+  entityType: Accessor<T | T[] | null | undefined>
+): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
   const quickAccess = useQuickAccess();
 
-  const buckets = () => entityTypeToBuckets(entityType());
-  const items = (): QuickAccessItem[] => {
+  const buckets = () => {
+    const entityType_ = entityType();
+    if (!entityType_) return null;
+    if (Array.isArray(entityType_))
+      return entityType_.flatMap(entityTypeToBuckets);
+    return entityTypeToBuckets(entityType_);
+  };
+  const items = (): EntityTypeItemMap[T][] => {
     const b = buckets();
     if (b === null) {
-      return quickAccess.useList()();
+      return quickAccess.useList()() as EntityTypeItemMap[T][];
     }
     if (b.length === 0) {
       return [];
     }
-    return quickAccess.useList(...b)();
+    return quickAccess.useList(...b)() as EntityTypeItemMap[T][];
   };
   return { items, isLoading: quickAccess.isLoading };
 }

@@ -31,12 +31,12 @@ export function useEntityMention(
     ...(buckets as [EntityBucket, ...EntityBucket[]])
   );
 
-  const entitySearch = createFreshSearch<EntityItem>(
-    { useViewedAt: true },
-    (item) => item.searchText,
-    (item) => item.bucket === 'channel',
-    (item) => item.timestamps
-  );
+  const entitySearch = createFreshSearch<EntityItem>({
+    config: { useViewedAt: true },
+    getName: (item) => item.searchText,
+    isChannelItem: (item) => item.bucket === 'channel',
+    getTimestamp: (item) => item.timestamps,
+  });
 
   const entities = createLazyMemo(() => {
     const term = searchTerm();

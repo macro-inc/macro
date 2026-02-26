@@ -28,21 +28,21 @@ export function DialogWrapper(props: DialogWrapperProps) {
         ref={props.overlayRef}
       />
       <div class="z-modal fixed inset-0">
-        <div
+        <Dialog.Content
           class={cn(
-            'max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-hidden'
+            'max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-hidden portal-scope'
           )}
           style={{ width: width }}
         >
           <ClippedPanel tl active>
-            <Dialog.Content
+            <div
               class={cn('[&>*]:max-h-[75vh]', props.class)}
               ref={props.contentRef}
             >
               {props.children}
-            </Dialog.Content>
+            </div>
           </ClippedPanel>
-        </div>
+        </Dialog.Content>
       </div>
     </>
     // Overlay with Diagonal pattern

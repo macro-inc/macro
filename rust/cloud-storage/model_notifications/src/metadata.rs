@@ -4,8 +4,6 @@ use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
 use notification::domain::models::Notification;
-use notification::domain::models::RateLimitConfig;
-use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
@@ -207,96 +205,34 @@ pub struct NewEmailMetadata {
 
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelInviteMetadata {
     const TYPE_NAME: &'static str = "channel_invite";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for AiResponseMetadata {
     const TYPE_NAME: &'static str = "ai_response";
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelMentionMetadata {
     const TYPE_NAME: &'static str = "channel_mention";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelReplyMetadata {
     const TYPE_NAME: &'static str = "channel_message_reply";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for InviteToTeamMetadata {
     const TYPE_NAME: &'static str = "invite_to_team";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 /// Metadata for when a user is assigned to a task
@@ -553,14 +489,6 @@ impl NotificationExtIos for DocumentMentionMetadata {
 
 impl notification::domain::models::Notification for TaskAssignedMetadata {
     const TYPE_NAME: &'static str = "task_assigned";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl NotificationExtIos for TaskAssignedMetadata {
@@ -614,14 +542,6 @@ pub struct MentionedInDocumentCommentMetadata {
 
 impl Notification for MentionedInDocumentCommentMetadata {
     const TYPE_NAME: &'static str = "mentioned_in_document_comment";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl NotificationExtIos for MentionedInDocumentCommentMetadata {

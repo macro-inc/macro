@@ -140,12 +140,12 @@ export function useEntitiesForProperty(
   });
 
   // search function for fuzzy matching
-  const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain, currentUserId),
-    getEntitySearchText,
-    isChannelEntity,
-    getEntityTimestampedItem
-  );
+  const entitySearch = createFreshSearch<CombinedEntity>({
+    config: createEntitySearchConfig(currentUserDomain, currentUserId),
+    getName: getEntitySearchText,
+    isChannelItem: isChannelEntity,
+    getTimestamp: getEntityTimestampedItem,
+  });
 
   // get filtered entities based on search query
   const filteredEntities = createMemo(() => {

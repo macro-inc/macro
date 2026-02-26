@@ -164,20 +164,24 @@ pub async fn main() -> anyhow::Result<()> {
                     db.clone(),
                 ),
             digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
-                redis_multiplexed_conn,
+                redis_multiplexed_conn.clone(),
             ),
             digest_window: std::time::Duration::from_secs(30 * 60),
         };
 
-    let egress_service = NotificationEgressService::new(
-        notification_queue,
-        egress_repository,
-        websocket_adapter,
-        mobile_adapter,
-        email_adapter,
-        rate_limit_adapter,
-        egress_state_machine,
-    );
+    let egress_digest_batcher =
+        ::notification::outbound::digest_batcher::RedisDigestBatcher::new(redis_multiplexed_conn);
+
+    let egress_service = NotificationEgressService {
+        queue: notification_queue,
+        repository: egress_repository,
+        websocket: websocket_adapter,
+        mobile: mobile_adapter,
+        email: email_adapter,
+        rate_limiter: rate_limit_adapter,
+        state_machine: egress_state_machine,
+        digest_batcher: egress_digest_batcher,
+    };
 
     let worker = NotificationWorker::new(egress_service);
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub(crate) mod android;
+pub mod android;
 pub mod apple;
 
 pub mod email_notification_digest;
@@ -218,17 +218,17 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
-
-    /// The configuration for how often the notification can be triggered on a certain key.
-    fn rate_limit_config() -> Option<RateLimitConfig>;
-    /// The actual key for the rate limit bucket.
-    fn rate_limit_key(&self) -> Option<RateLimitKey>;
 }
 
 /// Extension trait for notifications that can be delivered via email.
 pub trait NotificationExtEmail: Notification {
     /// Convert this notification into email content.
-    fn into_email(self) -> EmailContent;
+    fn format_email(&self) -> EmailContent;
+
+    /// The configuration for how often the notification can be triggered on a certain key.
+    fn rate_limit_config() -> RateLimitConfig;
+    /// The actual key for the rate limit bucket.
+    fn rate_limit_key(&self) -> RateLimitKey;
 }
 
 /// Extension trait for notifications that can be delivered via iOS push (APNS).

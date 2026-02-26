@@ -12,14 +12,6 @@ struct TestNotification {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 async fn get_redis_connection() -> MultiplexedConnection {
@@ -74,6 +66,32 @@ fn create_test_notification(
         deleted_at: None,
         notification_metadata: serde_json::to_value(TaggedContent::new(notification))
             .expect("serialize cannot fail"),
+        sender_id: None,
+    }
+}
+
+/// Creates a notification with raw metadata (no TaggedContent wrapper),
+/// matching how production code stores via `inner_store_batch` and `mark_message_as_failed`.
+fn create_raw_test_notification(
+    user_id: MacroUserIdStr<'static>,
+    message: &str,
+) -> UserNotificationRow<serde_json::Value> {
+    let notification = TestNotification {
+        message: message.to_string(),
+    };
+
+    UserNotificationRow {
+        owner_id: user_id,
+        notification_id: Uuid::new_v4(),
+        notification_event_type: TestNotification::TYPE_NAME.to_string(),
+        entity: EntityType::Document.with_entity_string(Uuid::new_v4().to_string()),
+        sent: false,
+        done: false,
+        created_at: Some(Utc::now()),
+        viewed_at: None,
+        updated_at: Some(Utc::now()),
+        deleted_at: None,
+        notification_metadata: serde_json::to_value(notification).expect("serialize cannot fail"),
         sender_id: None,
     }
 }
@@ -254,6 +272,48 @@ async fn test_new_notifications_during_processing_not_lost() {
             assert_eq!(batch.notifications.len(), 1);
         }
         other => panic!("Expected second batch to be ready, got {:?}", other),
+    }
+
+    cleanup_prefix(&mut conn, &prefix).await;
+}
+
+#[tokio::test]
+async fn test_claim_digest_tags_raw_metadata() {
+    let mut conn = get_redis_connection().await;
+    let prefix = test_prefix("tags_raw_metadata");
+    let batcher = RedisDigestBatcher::with_key_prefix(conn.clone(), &prefix);
+    let user = test_user("tags_raw");
+
+    // Store with raw metadata (no TaggedContent wrapper), matching production code paths
+    let notification = create_raw_test_notification(user.clone(), "raw message");
+    let expected_id = notification.notification_id;
+
+    batcher
+        .add_to_digest(&notification, Duration::from_secs(0))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let result = batcher.claim_ready_digest().await.unwrap();
+
+    match result {
+        ClaimResult::Ready(batch) => {
+            assert_eq!(batch.user_id.as_ref(), user.as_ref());
+            assert_eq!(
+                batch.notifications.len(),
+                1,
+                "notification must not be silently dropped"
+            );
+            let tagged = &batch.notifications[0];
+            assert_eq!(tagged.notification_id, expected_id);
+            // Verify the metadata was wrapped in TaggedContent by round-tripping
+            // back to JSON and checking for the { "tag": ..., "content": ... } shape
+            let meta_json = serde_json::to_value(&tagged.notification_metadata).unwrap();
+            assert_eq!(meta_json["tag"], TestNotification::TYPE_NAME);
+            assert_eq!(meta_json["content"]["message"], "raw message");
+        }
+        other => panic!("Expected ClaimResult::Ready, got {:?}", other),
     }
 
     cleanup_prefix(&mut conn, &prefix).await;

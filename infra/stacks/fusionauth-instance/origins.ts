@@ -12,6 +12,7 @@ export const ALLOWED_ORIGINS = () => {
         ...allowedOrigins,
         'http://localhost:3000',
         'http://localhost:5173',
+        'https://github.com',
       ];
     case 'dev':
       return [
@@ -21,6 +22,7 @@ export const ALLOWED_ORIGINS = () => {
         'http://localhost:8084',
         'http://localhost:5173',
         'https://dashboarddev.macro.com',
+        'https://github.com',
       ];
     case 'prod':
       return [
@@ -30,6 +32,7 @@ export const ALLOWED_ORIGINS = () => {
         'https://staging.macro.com',
         'https://www.macro.com',
         'https://pdf.macro.com',
+        'https://github.com',
       ];
   }
 
