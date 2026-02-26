@@ -62,7 +62,7 @@ export const AppSidebar = () => {
   return (
     <div class="max-w-56 w-full h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
       <div class="py-2 px-4">
-        <LogoIcon class="size-8" />
+        <LogoIcon class="size-8 text-accent" />
       </div>
       <ul class="w-full h-full px-2 flex flex-col">
         <For each={SIDEBAR_LINKS}>
