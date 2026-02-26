@@ -1,5 +1,11 @@
-use axum::response::{Html, IntoResponse, Response};
-// use github_integration::{GithubIntegrationError, GithubOAuthClient, link_github_account};
+use anyhow::Context;
+use axum::{
+    Json,
+    response::{Html, IntoResponse, Response},
+};
+use github::domain::{models::GithubError, ports::GithubService};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
+use model::response::ErrorResponse;
 use tower_cookies::Cookies;
 
 use crate::api::{
@@ -9,6 +15,26 @@ use crate::api::{
         login::{self},
     },
 };
+
+/// Error type for Github Link operations
+#[derive(thiserror::Error, Debug)]
+pub enum GithubLinkError {
+    /// Internal error
+    #[error("internal error occurred")]
+    InternalError(#[from] anyhow::Error),
+    /// Internal github error
+    #[error("internal error occurred")]
+    GithubServiceError(#[from] GithubError),
+}
+
+impl IntoResponse for GithubLinkError {
+    fn into_response(self) -> Response {
+        Json(ErrorResponse {
+            message: &self.to_string(),
+        })
+        .into_response()
+    }
+}
 
 /// Success response for Github OAuth handler
 pub enum GithubOAuthSuccess {
@@ -27,42 +53,42 @@ impl IntoResponse for GithubOAuthSuccess {
     }
 }
 
+/// Links the users github to an existing fusionauth account
+#[tracing::instrument(skip(ctx), err)]
 async fn link_user(
     ctx: &ApiContext,
+    link_id: &uuid::Uuid,
     code: &str,
-    link_id: &str,
-) -> Result<(), GithubIntegrationError> {
-    // Get existing macro user id from link id
-    let macro_user_id =
-        macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(&ctx.db, link_id)
-            .await?;
-
-    // Use github_integration to link the account
-    let oauth_client = GithubOAuthClient::new();
-    let user_info = link_github_account(
+) -> Result<(), GithubLinkError> {
+    let fusionauth_user_id = macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(
         &ctx.db,
-        &*ctx.auth_client,
-        &oauth_client,
-        &ctx.github_config,
-        &format_redirect_uri("github"),
-        code,
-        macro_user_id,
+        &link_id.to_string(),
     )
     .await?;
 
-    tracing::info!(
-        fusionauth_user_id=%macro_user_id,
-        github_user_id=%user_info.id,
-        github_username=%user_info.login,
-        "successfully linked Github account"
-    );
+    // SAFETY: we don't support multi-profile at this time but we do need to support the method for
+    // fetching
+    let macro_user_id = macro_db_client::user::get::get_user_profiles_by_fusionauth_user_id(
+        &ctx.db,
+        &fusionauth_user_id.to_string(),
+    )
+    .await?;
 
-    // Delete in_progress_user_link
-    let _ = macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, link_id)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "failed to delete in_progress_user_link");
-        });
+    let macro_user_id = macro_user_id.first().context("expected user profile")?;
+
+    let macro_user_id = MacroUserId::parse_from_str(&macro_user_id)
+        .map(|id| id.into_owned().lowercase())
+        .context("valid macro user id")?;
+
+    ctx.github_service
+        .link_user(
+            &macro_user_id,
+            &fusionauth_user_id,
+            link_id,
+            &format_redirect_uri("github"),
+            code,
+        )
+        .await?;
 
     Ok(())
 }
@@ -72,14 +98,15 @@ pub(in crate::api::oauth2) async fn handler(
     cookies: Cookies,
     code: &str,
     state: &OAuthState,
-) -> Result<GithubOAuthSuccess, GithubIntegrationError> {
+) -> Result<GithubOAuthSuccess, GithubLinkError> {
     // if the link id is provided, this user is already logged in to an account. therefore, we
     // don't need to handle completing the login through fusionauth
     if let Some(link_id) = state.link_id.as_ref() {
-        link_user(ctx, code, link_id).await?;
+        link_user(ctx, link_id, code).await?;
 
         // Return HTML that notifies the opener window and closes the popup
-        let html = Html(r#"
+        let html = Html(
+            r#"
             <!DOCTYPE html>
             <html>
             <head><title>Github Connected</title></head>
@@ -101,16 +128,18 @@ pub(in crate::api::oauth2) async fn handler(
                 <p>Github account connected successfully. This window will close automatically...</p>
             </body>
             </html>
-        "#);
+        "#,
+        );
         return Ok(GithubOAuthSuccess::Html(html));
     }
 
     // The user does not need a link, complete the standard idp login
+    tracing::trace!("no link provided handling login normally");
+
     let response = login::handler(ctx, cookies, code, "github", state)
         .await
         .map_err(|_response| {
-            // Convert Response error to GithubIntegrationError
-            GithubIntegrationError::Generic(anyhow::anyhow!("login handler failed"))
+            GithubLinkError::InternalError(anyhow::anyhow!("login handler failed"))
         })?;
 
     Ok(GithubOAuthSuccess::Login(response))

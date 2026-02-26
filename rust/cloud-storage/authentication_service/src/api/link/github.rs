@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use github::domain::{models::GithubError, ports::GithubService};
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
@@ -25,16 +26,16 @@ pub enum InitGithubLinkError {
     /// Invalid user ID format
     #[error("invalid user ID format")]
     InvalidUserId(#[from] uuid::Error),
-    /// Github account already linked
-    #[error("Github account already linked")]
-    AlreadyLinked,
     /// Too many in-progress links
     #[error("too many in progress links")]
     TooManyInProgressLinks,
     /// Internal error
     #[error("internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    /// Identity Provider Not Found
+    /// Internal github error
+    #[error("internal error occurred")]
+    GithubServiceError(#[from] GithubError),
+    /// The identity provider was not found
     #[error("identity provider not found")]
     IdentityProviderNotFound,
 }
@@ -43,11 +44,10 @@ impl IntoResponse for InitGithubLinkError {
     fn into_response(self) -> Response {
         let message: &str = &self.to_string();
         let status_code: StatusCode = match &self {
-            InitGithubLinkError::InvalidUserId(_) | InitGithubLinkError::AlreadyLinked => {
-                StatusCode::BAD_REQUEST
-            }
+            InitGithubLinkError::InvalidUserId(_) => StatusCode::BAD_REQUEST,
             InitGithubLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
             InitGithubLinkError::InternalError(_)
+            | InitGithubLinkError::GithubServiceError(_)
             | InitGithubLinkError::IdentityProviderNotFound => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -74,9 +74,6 @@ pub async fn init_github_link_handler(
     ip_context: Extension<IPContext>,
     user_context: Extension<UserContext>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
-    // Parse fusion_user_id to UUID
-    let fusion_user_id = uuid::Uuid::parse_str(&user_context.fusion_user_id)?;
-
     // TODO: this should probably be a middleware or extractor
     // Check count of in-progress links
     let count =
@@ -107,7 +104,7 @@ pub async fn init_github_link_handler(
     // Build OAuth state
     let state = OAuthState {
         identity_provider_id: github_idp_id.clone(),
-        link_id: Some(link_id.to_string()),
+        link_id: Some(link_id),
         // TODO: support
         original_url: None,
         // TODO: support
@@ -117,9 +114,13 @@ pub async fn init_github_link_handler(
     // Build Github OAuth URL
     let redirect_uri = crate::api::oauth2::format_redirect_uri("github");
 
-    // TODO: Construct authorization url
+    let authorization_url = ctx
+        .github_service
+        .construct_oauth_url(&redirect_uri, state)
+        .map_err(InitGithubLinkError::GithubServiceError)?;
+
     Ok(Json(InitGithubLinkResponse {
-        authorization_url: "".to_string(),
+        authorization_url,
         link_id,
     }))
 }

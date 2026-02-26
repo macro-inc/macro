@@ -234,13 +234,12 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
-    let github_oauth_impl = GithubOauthImpl::default();
     let github_service_impl = GithubServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
         GithubFusionAuthImpl::new(auth_client.clone()),
         GithubConfig {
-            client_id: config.github_client_secret,
+            client_id: config.github_client_id,
             client_secret: config.github_client_secret,
             idp_id: config.github_idp_id,
         },
