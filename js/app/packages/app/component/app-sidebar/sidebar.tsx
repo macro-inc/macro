@@ -17,6 +17,7 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
+import { cn } from '@ui/utils/classname';
 
 interface SidebarItem {
   label: string;
@@ -64,8 +65,13 @@ export const SIDEBAR_LINKS = [
   },
 ] as const satisfies SidebarItem[];
 
-export const AppSidebar = () => {
+type AppSidebarProps = {
+  expanded?: boolean;
+};
+
+export const AppSidebar = (props: AppSidebarProps) => {
   const handleSearchClick = () => {};
+
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
   };
@@ -74,7 +80,14 @@ export const AppSidebar = () => {
   };
 
   return (
-    <div class="max-w-56 w-full h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
+    <div
+      class={cn(
+        'h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4 mobile:fixed mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
+        props.expanded !== false
+          ? 'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+          : '-translate-x-full overflow-hidden opacity-0'
+      )}
+    >
       <div class="flex items-center justify-between py-2 pl-3 pr-2">
         <LogoIcon class="size-6 text-accent" />
         <div class="flex items-center gap-1">

@@ -12,7 +12,7 @@ import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
@@ -26,6 +26,7 @@ import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 import { AppSidebar } from '@app/component/app-sidebar/sidebar';
+import { isMobile } from '@core/mobile/isMobile';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -35,6 +36,8 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
+
+export const [sidebarOpen, setSidebarOpen] = createSignal(!isMobile());
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -121,7 +124,7 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="grow-1 flex">
-        <AppSidebar />
+        <AppSidebar expanded={sidebarOpen()} />
 
         <Resize.Zone
           gutter={4}
