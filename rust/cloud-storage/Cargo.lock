@@ -4047,13 +4047,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "fusionauth",
+ "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "reqwest",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.17",
  "tracing",
+ "urlencoding",
  "uuid",
 ]
 

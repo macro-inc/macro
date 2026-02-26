@@ -35,6 +35,18 @@ pub trait GithubRepo: Send + Sync + 'static {
         &self,
         id: &uuid::Uuid,
     ) -> impl Future<Output = Result<GithubLink, Self::Err>> + Send;
+
+    /// Inserts a github link
+    fn insert_github_link(
+        &self,
+        link: &GithubLink,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// deletes the in progress user link
+    fn delete_in_progress_user_link(
+        &self,
+        in_progress_link_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Repository for handling github oauth related actions.
@@ -46,6 +58,7 @@ pub trait GithubOauth: Send + Sync + 'static {
     /// Constructs the oauth url to authenticate with github
     fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
         &self,
+        client_id: &str,
         redirect_uri: &str,
         state: T,
     ) -> Result<String, Self::Err>;
@@ -53,13 +66,10 @@ pub trait GithubOauth: Send + Sync + 'static {
     /// Exchanges the oauth code for tokens
     fn exchange_oauth_code_for_tokens(
         &self,
+        client_id: &str,
+        client_secret: &str,
         redirect_uri: &str,
         code: &str,
-    ) -> impl Future<Output = Result<GithubExchangeTokenResponse, Self::Err>> + Send;
-
-    /// Refreshes the access token
-    fn refresh_access_token(
-        &self,
     ) -> impl Future<Output = Result<GithubExchangeTokenResponse, Self::Err>> + Send;
 
     /// Gets the user info using the access token
@@ -82,7 +92,7 @@ pub trait FusionAuth: Send + Sync + 'static {
         idp_id: &str,
         github_user_id: &str,
         username: &str,
-        access_token: &str,
+        refresh_token: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -98,11 +108,12 @@ pub trait GithubService: Send + Sync + 'static {
     ) -> Result<String, GithubError>;
 
     /// Uses token exchange to link the user to the github account
-    fn link_user<'a>(
+    fn link_user(
         &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        fusionauth_user_id: &uuid::Uuid,
+        in_progress_user_link: &uuid::Uuid,
         redirect_uri: &str,
         code: &str,
-        fusionauth_user_id: &uuid::Uuid,
-        macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
 }

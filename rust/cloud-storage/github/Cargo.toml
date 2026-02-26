@@ -9,6 +9,10 @@ default = ["ports", "outbound"]
 ports = []
 outbound = [
   "dep:sqlx", 
+  "dep:reqwest",
+  "dep:serde_json",
+  "dep:urlencoding",
+  "dep:fusionauth",
   "ports"
 ]
 
@@ -18,9 +22,16 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 sqlx = { workspace = true, optional = true }
-mockall = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true}
+reqwest = {workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
 
+fusionauth = { path = "../fusionauth", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 macro_user_id = { path = "../macro_user_id" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+mockall = { workspace = true }

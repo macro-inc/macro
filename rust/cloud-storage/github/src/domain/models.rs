@@ -9,9 +9,15 @@ pub enum GithubError {
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+    /// No Github link was found
+    #[error("no link found")]
+    NoLinkFound,
     /// Github account is already linked
     #[error("github account is already linked with another")]
     AccountAlreadyLinked,
+    /// No refresh token was provided in the token exchange
+    #[error("no refresh token provided in token exchange")]
+    NoRefreshTokenProvided,
 }
 
 /// A GitHub link record (as stored in the database)

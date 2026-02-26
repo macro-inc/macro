@@ -1,60 +1,94 @@
 //! Github service implementation.
 
 use chrono::Utc;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::{
     models::{GithubError, GithubLink},
     ports::{FusionAuth, GithubOauth, GithubRepo, GithubService},
 };
 
+/// Github config
+#[derive(Debug)]
+pub struct GithubConfig {
+    /// The github application client id
+    pub client_id: String,
+    /// The github application client secret
+    pub client_secret: String,
+    /// The id of the github identity provider in fusionauth
+    pub idp_id: String,
+}
+
 /// The concrete github service implementation.
 pub struct GithubServiceImpl<R: GithubRepo, U: GithubOauth, F: FusionAuth> {
     repo: R,
     oauth: U,
     fusion: F,
+    config: GithubConfig,
 }
 
 impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubServiceImpl<R, U, F> {
     /// Create a new github service.
-    pub fn new(repo: R, oauth: U, fusion: F) -> Self {
+    pub fn new(repo: R, oauth: U, fusion: F, config: GithubConfig) -> Self {
         Self {
             repo,
             oauth,
             fusion,
+            config,
         }
     }
 }
 
 impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServiceImpl<R, U, F> {
+    #[tracing::instrument(skip(self), err)]
     fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
         &self,
         redirect_uri: &str,
         state: T,
     ) -> Result<String, GithubError> {
         self.oauth
-            .construct_oauth_url(redirect_uri, state)
+            .construct_oauth_url(&self.config.client_id, redirect_uri, state)
             .map_err(|e| GithubError::Internal(e.into()))
     }
 
-    async fn link_user<'a>(
+    #[tracing::instrument(skip(self), err)]
+    async fn link_user(
         &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        fusionauth_user_id: &uuid::Uuid,
+        in_progess_link_id: &uuid::Uuid,
         redirect_uri: &str,
         code: &str,
-        fusionauth_user_id: &uuid::Uuid,
-        macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<GithubLink, GithubError> {
         let tokens = self
             .oauth
-            .exchange_oauth_code_for_tokens(redirect_uri, code)
+            .exchange_oauth_code_for_tokens(
+                &self.config.client_id,
+                &self.config.client_secret,
+                redirect_uri,
+                code,
+            )
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
+
+        tracing::trace!("retreived tokens");
+
+        let refresh_token = if let Some(refresh_token) = tokens.refresh_token {
+            refresh_token
+        } else {
+            return Err(GithubError::NoRefreshTokenProvided);
+        };
 
         let user_info = self
             .oauth
             .get_user_info(&tokens.access_token)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
+
+        tracing::trace!(user_info=?user_info, "got user info");
 
         // Check if Github account is already linked to a different user
         match self
@@ -63,7 +97,7 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
             .await
         {
             Ok(link) => {
-                if !link.macro_id.0.eq(macro_user_id) {
+                if !link.macro_id.0.eq(user_id) {
                     return Err(GithubError::AccountAlreadyLinked);
                 }
             }
@@ -71,7 +105,7 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
                 let err: anyhow::Error = e.into();
                 // We should only error if the error is something other
                 // than the link not existing
-                if !err.to_string().contains("no link found") {
+                if !err.to_string().contains("no rows returned") {
                     return Err(GithubError::Internal(err));
                 }
             }
@@ -79,55 +113,48 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
 
         self.fusion
             .link_user(
-                &fusion_user_id,
-                "",
+                fusionauth_user_id,
+                &self.config.idp_id,
                 &user_info.id.to_string(),
                 &user_info.login,
-                &tokens.access_token,
+                &refresh_token,
             )
             .await
-            .map_err(|e| GithubError::Internal(e))?;
+            .map_err(|e| GithubError::Internal(e.into()))?;
 
-        // Link in FusionAuth
-        fusionauth_client
-            .link_user(
-                &fusionauth_user_id.to_string(),
-                &config.idp_id,
-                &user_info.id.to_string(),
-                &user_info.login,
-                &token_response.access_token,
-            )
-            .await
-            .map_err(|e| GithubIntegrationError::FusionAuthLinkingFailed(e.to_string()))?;
+        tracing::trace!("linked fusionauth user");
 
         // create github link
-
-        // Create github_links record
         let link = GithubLink {
             id: macro_uuid::generate_uuid_v7(),
-            macro_id: fusionauth_user_id.to_string(),
-            fusionauth_user_id,
+            macro_id: MacroUserIdStr(user_id.clone()),
+            fusionauth_user_id: *fusionauth_user_id,
             github_username: user_info.login.clone(),
             github_user_id: user_info.id.to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
 
-        tracing::info!(
+        tracing::debug!(
             fusionauth_user_id=%fusionauth_user_id,
             github_user_id=%user_info.id,
             github_username=%user_info.login,
             "creating github_links record"
         );
 
-        db::create_github_link(pool, link).await.inspect_err(|e| {
-            tracing::error!(error=?e, "failed to create github_links record");
+        self.repo
+            .insert_github_link(&link)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
 
-            // Note: Cleanup of FusionAuth link should be handled by caller
-            // if they want to implement async cleanup on failure
-        })?;
+        tracing::trace!("successfully linked github account");
 
-        tracing::trace!("successfully linked Github account");
+        // SAFETY: this is ok to fail as we have an auto cleanup job for this table
+        let _ = self
+            .repo
+            .delete_in_progress_user_link(in_progess_link_id)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
 
         Ok(link)
     }
