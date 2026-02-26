@@ -1,5 +1,4 @@
 import type { EntityData } from '@entity';
-import type { EntityItem } from '@core/context/quickAccess';
 import {
   type Accessor,
   createContext,
@@ -32,9 +31,9 @@ export const SearchProvider: FlowComponent = (props) => {
     EntityType.PROJECT,
   ]);
 
-  const entityPool = createMemo<EntityData[]>(() => {
-    return items().map((item: EntityItem) => item.data);
-  });
+  const entityPool = createMemo<EntityData[]>(() =>
+    items().map((item) => item.data)
+  );
 
   return (
     <SearchContext.Provider value={{ entityPool }}>
