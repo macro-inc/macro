@@ -1,7 +1,8 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { JSX } from 'solid-js';
-import { buildMarkdownEditor, MarkdownShell } from './createMarkdownEditor';
+import { buildConfig } from './MarkdownConfigBuilder';
+import { MarkdownShell } from './MarkdownShell';
 
 function Container(props: {
   label: string;
@@ -30,10 +31,11 @@ function Container(props: {
 }
 
 function Editor() {
-  const editor = buildMarkdownEditor('chat')
+  const editor = buildConfig('markdown')
     .namespace('test-page')
     .withHistory()
     .withEmojis()
+    .withMedia()
     .withMentions()
     .withActions()
     .onEscape(() => {

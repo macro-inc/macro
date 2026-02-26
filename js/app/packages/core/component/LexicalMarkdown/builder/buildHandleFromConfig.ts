@@ -36,7 +36,7 @@ import type {
   EditorConfig,
   EditorControls,
   EditorHandle,
-  FileDropOptions,
+  MediaDropOptions,
   MediaOptions,
 } from './types';
 
@@ -149,7 +149,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   const mediaEnabled = !!config.media;
   const mediaConfig: MediaOptions | undefined =
     typeof config.media === 'object' ? config.media : undefined;
-  const fileDropConfig: FileDropOptions | undefined =
+  const fileDropConfig: MediaDropOptions | undefined =
     mediaConfig?.fileDrop === true ? {} : mediaConfig?.fileDrop || undefined;
 
   // Drag-insert store (shared between plugin and indicator)

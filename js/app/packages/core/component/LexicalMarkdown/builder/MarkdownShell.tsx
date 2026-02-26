@@ -42,7 +42,7 @@ import type { EditorBuilder, EditorComponentProps } from './types';
 export const MarkdownShell: Component<
   { editor: EditorBuilder } & EditorComponentProps
 > = (props) => {
-  const handle = props.editor._materialize();
+  const handle = props.editor.buildHandle();
   const state = handle._internal;
   const {
     editor,

@@ -1,7 +1,7 @@
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
-import { buildHandleFromConfig } from './materialize';
+import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,
   EditorBuilder,
@@ -19,7 +19,7 @@ import type {
 } from './types';
 import type { EditorType } from '@lexical-core';
 
-export class MarkdownEditorBuilder implements EditorBuilder {
+export class EditorConfigBuilder implements EditorBuilder {
   private state: EditorConfig;
   private _handle?: EditorHandle;
   private _queuedPlugins: Array<(editor: LexicalEditor) => () => void> = [];
@@ -75,7 +75,7 @@ export class MarkdownEditorBuilder implements EditorBuilder {
   }
 
   withMedia(config?: MediaOptions): this {
-    this.state.media = config ?? true;
+    this.state.media = config ?? {};
     return this;
   }
 
@@ -146,7 +146,7 @@ export class MarkdownEditorBuilder implements EditorBuilder {
 
   /**
    * Register a custom Lexical plugin as part of the builder chain.
-   * Plugins are queued here and applied during `_materialize()` after all
+   * Plugins are queued here and applied during `buildHandle()` after all
    * built-in plugins have been registered.
    */
   use(pluginFn: (editor: LexicalEditor) => () => void): this {
@@ -155,10 +155,13 @@ export class MarkdownEditorBuilder implements EditorBuilder {
   }
 
   /**
-   * @internal — called once by `<MarkdownShell>` to instantiate reactive
-   * state. Subsequent calls return the cached handle.
+   * Instantiates the reactive editor state and returns the handle.
+   * Called once by `<MarkdownShell>` on mount; subsequent calls return the
+   * cached handle. Can also be called directly when a component needs
+   * low-level access to the Lexical editor before or outside of
+   * `<MarkdownShell>`.
    */
-  _materialize(): EditorHandle {
+  buildHandle(): EditorHandle {
     if (this._handle) return this._handle;
     this._handle = buildHandleFromConfig(this.state);
     for (const plugin of this._queuedPlugins) {
@@ -229,8 +232,8 @@ export class MarkdownEditorBuilder implements EditorBuilder {
  * editor.controls.clear();
  * ```
  */
-export function buildMarkdownEditor(
+export function buildConfig(
   type: EditorType = 'markdown'
-): MarkdownEditorBuilder {
-  return new MarkdownEditorBuilder(type);
+): EditorConfigBuilder {
+  return new EditorConfigBuilder(type);
 }

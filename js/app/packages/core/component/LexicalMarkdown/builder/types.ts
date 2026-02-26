@@ -21,6 +21,7 @@ export interface MentionsOptions {
   onRemove?: (mention: ItemMention) => void;
 }
 
+/** Intentional extension point — no options yet. */
 export type EmojisOptions = Record<string, never>;
 
 export interface LinksOptions {
@@ -38,12 +39,12 @@ export interface FilePasteOptions {
   ) => void;
 }
 
-export interface FileDropOptions {
+export interface MediaDropOptions {
   constrainedMediaDimensions?: { width: number; height: number };
 }
 
 export interface MediaOptions {
-  fileDrop?: boolean | FileDropOptions;
+  fileDrop?: boolean | MediaDropOptions;
 }
 
 export interface FocusLeaveCallbacks {
@@ -102,7 +103,7 @@ export interface EditorConfig {
   history?: HistoryOptions;
   singleLine: boolean;
   handlers: EditorCallbacks;
-  media: MediaOptions | boolean;
+  media: MediaOptions | false;
   code: boolean;
   checkboxToTask: boolean;
   filePaste?: FilePasteOptions;
@@ -127,7 +128,7 @@ export interface EditorInternals {
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
-  fileDropConfig: FileDropOptions | undefined;
+  fileDropConfig: MediaDropOptions | undefined;
 }
 
 export interface EditorHandle {
@@ -140,11 +141,11 @@ export interface EditorHandle {
 }
 
 /**
- * Minimal interface satisfied by {@link MarkdownEditorBuilder}.
+ * Minimal interface satisfied by {@link MarkdownConfigBuilder}.
  * `MarkdownShell` accepts this instead of the concrete class to avoid a
  * circular module dependency.
  */
 export interface EditorBuilder {
-  /** @internal — called once by `<MarkdownShell>` to instantiate reactive state */
-  _materialize(): EditorHandle;
+  /** Called once by `<MarkdownShell>` to instantiate reactive state. Can also be called directly for low-level Lexical access. */
+  buildHandle(): EditorHandle;
 }
