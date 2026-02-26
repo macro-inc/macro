@@ -212,10 +212,10 @@ export function noDraftsFilter(entity: EntityData): boolean {
   return !entity.isDraft;
 }
 
-export function sharedDocumentFilter(getUserID: () => string | undefined) {
+export function sharedEntity(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     const userID = getUserID();
-    if (entity.type !== 'document' || userID == null) return false;
+    if (userID == null) return false;
 
     return entity.ownerId !== userID;
   };
@@ -341,9 +341,9 @@ export const createSoupFilters = (
       predicate: noDraftsFilter,
     },
     {
-      id: 'shared-document',
-      label: 'Shared documents',
-      predicate: sharedDocumentFilter(getUserID),
+      id: 'shared-entity',
+      label: 'Shared entities',
+      predicate: sharedEntity(getUserID),
     },
     {
       id: 'assigned-to',

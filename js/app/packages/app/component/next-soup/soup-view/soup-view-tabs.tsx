@@ -273,7 +273,7 @@ const DocumentsTabs = () => {
         setQueryFilters({
           ...QUERY_FILTERS.document,
         });
-        soup.filters.set(['document', 'shared-document']);
+        soup.filters.set(['document', 'shared-entity']);
       })
       .with('all', () => {
         setQueryFilters({
@@ -422,6 +422,45 @@ const ChannelsTabs = () => {
 };
 
 const FilesTabs = () => {
+  const soup = useSoup();
+  const { setQueryFilters } = useSoupView();
+
+  const user = useUserContext();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('owned', () => {
+        const userId = user.userId();
+
+        if (!userId) return;
+
+        setQueryFilters({
+          ...QUERY_FILTERS.file,
+          document_filters: {
+            ...QUERY_FILTERS.file.document_filters,
+            owners: [userId],
+          },
+          project_filters: {
+            owners: [userId],
+          },
+        });
+
+        soup.filters.set(['file-folder']);
+      })
+      .with('shared', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.file,
+        });
+        soup.filters.set(['file-folder', 'shared-entity']);
+      })
+      .with('all', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.file,
+          project_filters: {},
+        });
+        soup.filters.set(['file-folder']);
+      });
+  };
   return (
     <div>
       <SegmentedControl
@@ -440,7 +479,7 @@ const FilesTabs = () => {
             label: 'All',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
