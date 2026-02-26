@@ -34,7 +34,7 @@ export const useSearchContext = () => {
 };
 
 export const SearchProvider: FlowComponent = (props) => {
-  const { items } = useQuickAccessEntities(() => SEARCH_ENTITY_TYPES);
+  const { items } = useQuickAccessEntities(() => [...SEARCH_ENTITY_TYPES]);
 
   return (
     <SearchContext.Provider value={{ entityPool: items }}>
