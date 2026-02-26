@@ -1,4 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   DropdownMenuContent,
   MenuItem,
@@ -12,6 +11,7 @@ import ThreeDotsIcon from '@icon/regular/dots-three.svg';
 import Trash from '@icon/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button } from '@ui/components/Button';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 false && clickOutside;
@@ -49,39 +49,44 @@ export function MediaButtons(props: MediaButtonsProps) {
   const ButtonContent = () => (
     <>
       <Show when={props.enlarge}>
-        <Dialog.Trigger>
-          <DeprecatedIconButton
-            class="m-0"
-            icon={() => <ArrowsOut class="size-5" />}
-            tooltip={{ label: 'View full screen' }}
-            onClick={(e: MouseEvent | KeyboardEvent) => {
-              e.preventDefault();
-              props.enlarge && props.enlarge();
-            }}
-          />
+        <Dialog.Trigger
+          as={Button}
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          tooltip="View full screen"
+          on:mousedown={(e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            props.enlarge?.();
+          }}
+        >
+          <ArrowsOut class="size-5" />
         </Dialog.Trigger>
       </Show>
       <Show when={props.newTab && !isMobile()}>
-        <DeprecatedIconButton
-          class="m-0"
-          icon={() => <NewTab class="size-5" />}
-          tooltip={{ label: 'Open in new tab' }}
-          onClick={(e: MouseEvent | KeyboardEvent) => {
+        <Button
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          tooltip="Open in new tab"
+          on:mousedown={(e: MouseEvent) => {
             e.preventDefault();
-            props.newTab && props.newTab();
+            e.stopPropagation();
+            props.newTab?.();
           }}
-        />
+        >
+          <NewTab class="size-5" />
+        </Button>
       </Show>
       <Show when={props.delete}>
-        <DeprecatedIconButton
-          class="m-0"
-          icon={() => <Trash class="size-5" />}
-          tooltip={{ label: 'Remove' }}
-          onClick={(e: MouseEvent | KeyboardEvent) => {
+        <Button
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          tooltip="Remove"
+          on:mousedown={(e: MouseEvent) => {
             e.preventDefault();
-            props.delete && props.delete();
+            e.stopPropagation();
+            props.delete?.();
           }}
-        />
+        >
+          <Trash class="size-5" />
+        </Button>
       </Show>
     </>
   );
@@ -97,12 +102,12 @@ export function MediaButtons(props: MediaButtonsProps) {
           onOpenChange={setMenuOpen}
           placement="bottom-end"
         >
-          <DropdownMenu.Trigger>
-            <DeprecatedIconButton
-              class="m-0"
-              icon={() => <ThreeDotsIcon class="size-4" />}
-              tooltip={{ label: 'More options' }}
-            />
+          <DropdownMenu.Trigger
+            as={Button}
+            class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+            tooltip="More options"
+          >
+            <ThreeDotsIcon class="size-4" />
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
@@ -121,7 +126,7 @@ export function MediaButtons(props: MediaButtonsProps) {
                     text="View full screen"
                     icon={ArrowsOut}
                     onClick={() => {
-                      props.enlarge && props.enlarge();
+                      props.enlarge?.();
                       setMenuOpen(false);
                     }}
                   />
@@ -131,7 +136,7 @@ export function MediaButtons(props: MediaButtonsProps) {
                     text="Open in new tab"
                     icon={NewTab}
                     onClick={() => {
-                      props.newTab && props.newTab();
+                      props.newTab?.();
                       setMenuOpen(false);
                     }}
                   />
@@ -143,7 +148,7 @@ export function MediaButtons(props: MediaButtonsProps) {
                     icon={Trash}
                     iconClass="text-failure"
                     onClick={() => {
-                      props.delete && props.delete();
+                      props.delete?.();
                       setMenuOpen(false);
                     }}
                   />

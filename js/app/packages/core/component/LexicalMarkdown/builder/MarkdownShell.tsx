@@ -40,9 +40,9 @@ import { ActionMenu } from '../component/menu/ActionsMenu';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
 export const MarkdownShell: Component<
-  { editor: EditorBuilder } & EditorComponentProps
+  { config: EditorBuilder } & EditorComponentProps
 > = (props) => {
-  const handle = props.editor.buildHandle();
+  const handle = props.config.buildHandle();
   const state = handle._internal;
   const {
     editor,
@@ -174,10 +174,7 @@ export const MarkdownShell: Component<
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
-        class={cn(
-          'relative w-full h-full overflow-y-auto min-h-8',
-          props.class
-        )}
+        class={cn('relative h-full overflow-y-auto min-h-8', props.class)}
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
           e.stopPropagation();

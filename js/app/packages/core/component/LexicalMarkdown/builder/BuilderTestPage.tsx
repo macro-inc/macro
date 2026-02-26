@@ -50,7 +50,7 @@ function Editor() {
 
   return (
     <Container label="Builder Pattern">
-      <MarkdownShell editor={editor} placeholder="Cool test placeholder" />
+      <MarkdownShell config={editor} placeholder="Cool test placeholder" />
     </Container>
   );
 }
