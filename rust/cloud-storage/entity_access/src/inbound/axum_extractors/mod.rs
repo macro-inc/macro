@@ -22,6 +22,8 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model_error_response::ErrorResponse;
 
+pub use crate::domain::models::RequiredAccessLevel;
+
 /// Marker struct for internal service-to-service requests.
 ///
 /// Middleware inserts this into request extensions for authenticated internal callers.
@@ -29,41 +31,6 @@ use model_error_response::ErrorResponse;
 pub struct InternalUser {
     /// The access level granted to the internal user.
     pub access_level: AccessLevel,
-}
-
-/// Trait to convert a unit struct marker into an [`AccessLevel`].
-///
-/// This allows extractors to be parameterized by required access level.
-/// Implement this for marker types like `ViewAccessLevel`, `EditAccessLevel`, etc.
-pub trait RequiredAccessLevel: std::fmt::Debug + Send + Sync + 'static {
-    /// Returns the access level this marker represents.
-    fn required_level() -> AccessLevel;
-}
-
-impl RequiredAccessLevel for models_permissions::share_permission::access_level::ViewAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::View
-    }
-}
-
-impl RequiredAccessLevel
-    for models_permissions::share_permission::access_level::CommentAccessLevel
-{
-    fn required_level() -> AccessLevel {
-        AccessLevel::Comment
-    }
-}
-
-impl RequiredAccessLevel for models_permissions::share_permission::access_level::EditAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::Edit
-    }
-}
-
-impl RequiredAccessLevel for models_permissions::share_permission::access_level::OwnerAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::Owner
-    }
 }
 
 /// Error type for access extractors that can be returned as HTTP responses.

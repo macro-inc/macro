@@ -4,7 +4,7 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::EntityAccessReceipt;
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
     CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
@@ -158,7 +158,7 @@ pub trait DocumentService: Send + Sync + 'static {
     /// Soft-delete a document and update project modified timestamp.
     fn delete_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 

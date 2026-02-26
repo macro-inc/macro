@@ -87,6 +87,7 @@ where
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
+                    _marker: PhantomData,
                 },
                 _marker: PhantomData,
             });
@@ -123,6 +124,7 @@ where
                     .map(|m| EntityAccessAuth::Authenticated(m.0))
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
+                _marker: PhantomData,
             },
             _marker: PhantomData,
         })
