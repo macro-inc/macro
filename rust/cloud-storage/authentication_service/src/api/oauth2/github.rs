@@ -76,7 +76,7 @@ async fn link_user(
 
     let macro_user_id = macro_user_id.first().context("expected user profile")?;
 
-    let macro_user_id = MacroUserId::parse_from_str(&macro_user_id)
+    let macro_user_id = MacroUserId::parse_from_str(macro_user_id)
         .map(|id| id.into_owned().lowercase())
         .context("valid macro user id")?;
 

@@ -5,8 +5,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use github::domain::{models::GithubError, ports::GithubService};
-use serde_utils::urlencode::UrlEncoded;
-use url::Url;
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
