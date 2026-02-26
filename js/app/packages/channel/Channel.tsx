@@ -21,9 +21,18 @@ import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
 import { createTargetMessageControlledSignal } from './target-message';
 import { useUserId } from '@core/context/user';
+import {
+  useDeleteMessageMutation,
+  usePatchMessageMutation,
+} from '@queries/channel/message';
+import {
+  useAddReactionMutation,
+  useRemoveReactionMutation,
+} from '@queries/channel/reaction';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { Thread, ThreadRow } from './Thread';
+import { createChannelMessageActions } from './create-channel-message-actions';
 
 type ChannelProps = {
   channelId: string;
@@ -47,6 +56,10 @@ export function flattenMessages(
 
 export function Channel(props: ChannelProps) {
   const userId = useUserId();
+  const patchMessageMutation = usePatchMessageMutation();
+  const deleteMessageMutation = useDeleteMessageMutation();
+  const addReactionMutation = useAddReactionMutation();
+  const removeReactionMutation = useRemoveReactionMutation();
   const [targetMessageId, _setTargetMessageId] =
     createTargetMessageControlledSignal(
       () => props.channelId,
@@ -101,6 +114,14 @@ export function Channel(props: ChannelProps) {
   const dismissNewMessages = () => {
     setNewMessagesDismissed(true);
   };
+  const getMessageActions = createChannelMessageActions({
+    channelId: () => props.channelId,
+    userId,
+    patchMessage: patchMessageMutation.mutate,
+    deleteMessage: deleteMessageMutation.mutate,
+    addReaction: addReactionMutation.mutate,
+    removeReaction: removeReactionMutation.mutate,
+  });
 
   return (
     <Suspense>
@@ -125,6 +146,7 @@ export function Channel(props: ChannelProps) {
                   <Thread
                     data={() => item}
                     channelId={() => props.channelId}
+                    getMessageActions={getMessageActions}
                     isExpanded={state.isExpanded}
                     setIsExpanded={state.setIsExpanded}
                   />

@@ -1,6 +1,10 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { createSignal, For, Show, Suspense, type Accessor } from 'solid-js';
-import { ChannelMessage } from '../Message';
+import {
+  ChannelMessage,
+  type MessageActions,
+  type MessageData,
+} from '../Message';
 import { ThreadRailDecorations } from './ThreadRailDecorations';
 import { ThreadRepliesContainer } from './ThreadRepliesContainer';
 import { ThreadReplyButton } from './ThreadReplyButton';
@@ -24,10 +28,18 @@ function sliceIf<T>(
   return should ? val.slice(start, end) : val;
 }
 
-function ThreadReplyList(props: { replies: Array<ApiThreadReply> }) {
+function ThreadReplyList(props: {
+  replies: Array<ApiThreadReply>;
+  getMessageActions?: (message: MessageData) => MessageActions | undefined;
+}) {
   return (
     <For each={props.replies}>
-      {(reply) => <ChannelMessage message={reply} />}
+      {(reply) => (
+        <ChannelMessage
+          message={reply}
+          actions={props.getMessageActions?.(reply)}
+        />
+      )}
     </For>
   );
 }
@@ -75,7 +87,10 @@ export function Thread(props: ThreadProps) {
   return (
     <Suspense>
       <div class="flex flex-col w-full">
-        <ChannelMessage message={props.data()} />
+        <ChannelMessage
+          message={props.data()}
+          actions={props.getMessageActions?.(props.data())}
+        />
         <Show when={hasReplies()}>
           <div class="relative w-full">
             <ThreadRailDecorations isReplying={isReplying} />
@@ -86,10 +101,18 @@ export function Thread(props: ThreadProps) {
                   !repliesQuery.isLoading &&
                   hasFetchedReplies()
                 }
-                fallback={<ThreadReplyList replies={previewReplies()} />}
+                fallback={
+                  <ThreadReplyList
+                    replies={previewReplies()}
+                    getMessageActions={props.getMessageActions}
+                  />
+                }
               >
                 <Suspense>
-                  <ThreadReplyList replies={fetchedReplies()} />
+                  <ThreadReplyList
+                    replies={fetchedReplies()}
+                    getMessageActions={props.getMessageActions}
+                  />
                 </Suspense>
               </Show>
 

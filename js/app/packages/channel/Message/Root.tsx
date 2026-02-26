@@ -1,10 +1,11 @@
-import { splitProps, type JSX } from 'solid-js';
+import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import { MessageProvider } from './context';
-import type { MessageData } from './types';
+import { MessageActionsProvider, MessageProvider } from './context';
+import type { MessageActions, MessageData } from './types';
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   message: MessageData;
+  actions?: MessageActions;
   highlighted?: boolean;
 };
 
@@ -13,6 +14,7 @@ export function Root(props: RootProps) {
     'children',
     'class',
     'message',
+    'actions',
     'highlighted',
   ]);
 
@@ -36,7 +38,13 @@ export function Root(props: RootProps) {
           { 'opacity-100': local.highlighted }
         )}
       />
-      <MessageProvider value={local.message}>{local.children}</MessageProvider>
+      <MessageProvider value={local.message}>
+        <Show when={local.actions !== undefined} fallback={local.children}>
+          <MessageActionsProvider value={local.actions}>
+            {local.children}
+          </MessageActionsProvider>
+        </Show>
+      </MessageProvider>
     </div>
   );
 }
