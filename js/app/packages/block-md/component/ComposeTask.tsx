@@ -1,7 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
