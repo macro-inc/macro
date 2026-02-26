@@ -1,3 +1,5 @@
+import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
+import FiltersIcon from '@phosphor-icons/core/assets/regular/faders.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -47,7 +49,6 @@ import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
-  batch,
   createEffect,
   createMemo,
   createRenderEffect,
@@ -64,7 +65,7 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
-import { SoupSearchbar, SoupToolbar } from './soup-toolbar';
+import { SoupSearchbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
@@ -79,9 +80,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -163,14 +163,55 @@ export const SoupView = (props: SoupViewProps) => {
     >
       <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
         <div class="size-full flex flex-col">
-          <SplitHeaderLeft>
-            <div class="size-full flex items-center justify-between p-2">
-              <SoupViewTabs />
-              <div class="max-w-56 w-full">
-                <SoupSearchbar />
+          <div class="flex flex-col w-full pl-2 pr-1">
+            {/* <div class="flex items-center py-2 justify-between"></div> */}
+            <div class="flex gap-2 items-center">
+              <button
+                type="button"
+                class="size-full max-w-4 relative group/button flex items-center justify-center bracket-never"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class={cn(
+                    'size-4 p-0.5 flex items-center justify-center rounded-xs border border-edge-muted group-hover/button:border-accent pointer-events-none'
+                    // {
+                    //   'bg-accent border border-accent': props.checked,
+                    // }
+                  )}
+                ></div>
+              </button>
+
+              <div class="py-2 flex items-center w-full">
+                <SoupViewTabs />
+              </div>
+              <div class="ml-auto w-full flex items-center justify-end gap-2">
+                <div class="max-w-56 w-full">
+                  <SoupSearchbar />
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    class="flex gap-1 items-center justify-center px-4 py-1 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded-xl transition-colors text-sm tracking-wide"
+                  >
+                    <FiltersIcon class="size-4" />
+                    Filters
+                  </button>
+                  <button
+                    type="button"
+                    class="flex gap-1 items-center justify-center p-1.5 hover:bg-ink/20 text-ink-muted hover:text-ink rounded-lg transition-colors aspect-square"
+                  >
+                    <GearIcon class="size-4 shrink-0" />
+                  </button>
+                </div>
               </div>
             </div>
-          </SplitHeaderLeft>
+          </div>
           <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <SoupViewFileDropzone>
               <SoupViewList />
