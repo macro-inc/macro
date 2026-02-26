@@ -26,6 +26,7 @@ export * from './getProfilePicturesRequestBody';
 export * from './getUserInfo';
 export * from './getUserInfoOrganizationId';
 export * from './getUserLinkExistsParams';
+export * from './initGithubLinkResponse';
 export * from './inviteToTeamRequest';
 export * from './macroApiTokenParams';
 export * from './macroApiTokenResponse';
