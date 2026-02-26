@@ -15,7 +15,7 @@ let pendingNavigation: string | null = null;
 /**
  * Register a navigate function to be called from outside the router context.
  * Called by useTauriNavigationEffect when the router is ready.
- * Drains any navigation that was buffered before the router was ready (e.g. cold-start tap).
+ * Drains any navigation that was buffered before the router was ready.
  */
 export function registerNavigate(fn: (path: string) => void) {
   registeredNavigate = fn;
