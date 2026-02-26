@@ -599,14 +599,13 @@ pub(in crate::api::search) async fn perform_unified_search(
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    tracing::info!("simple_unified_search");
+    tracing::info!(user_id = user_context.user_id, "simple_unified_search");
 
     let (results, _next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;

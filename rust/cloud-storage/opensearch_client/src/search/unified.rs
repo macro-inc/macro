@@ -23,6 +23,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use tracing::Instrument;
 
 use crate::SearchOn;
 use models_opensearch::SearchEntityType;
@@ -459,26 +460,28 @@ pub(crate) async fn search_unified(
         return Ok((Vec::new(), SearchCursorOption::Done));
     }
 
-    let response = {
-        let _span = tracing::info_span!("opensearch_http_request").entered();
+    let response = async {
         client
             .search(opensearch::SearchParts::Index(&search_indices))
             .body(search_request)
             .send()
             .await
             .map_client_error()
-            .await?
-    };
+            .await
+    }
+    .instrument(tracing::info_span!("opensearch_http_request"))
+    .await?;
 
-    let bytes = {
-        let _span = tracing::info_span!("opensearch_read_response_body").entered();
+    let bytes = async {
         response
             .bytes()
             .await
             .map_err(|e| OpensearchClientError::HttpBytesError {
                 details: e.to_string(),
-            })?
-    };
+            })
+    }
+    .instrument(tracing::info_span!("opensearch_read_response_body"))
+    .await?;
 
     tracing::info!(
         response_body_bytes = bytes.len(),

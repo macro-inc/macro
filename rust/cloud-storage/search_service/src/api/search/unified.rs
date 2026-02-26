@@ -36,14 +36,13 @@ use std::cmp::Ordering;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
-    tracing::info!("unified_search");
+    tracing::info!(user_id = user_context.user_id, "unified_search");
 
     let (results, next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;
