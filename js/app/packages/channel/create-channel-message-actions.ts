@@ -94,35 +94,33 @@ export function createChannelMessageActions(
 
     return {
       onReply: canReply ? (options.onReply ?? emptyReplyHandler) : undefined,
-      onReact:
-        currentUserId && !isDeleted
-          ? (ctx) => {
-              const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
-              const channelId = options.channelId();
-              const hasReaction = hasReactionFromUser(
-                message,
-                emoji,
-                currentUserId
-              );
+      onReact: !isDeleted
+        ? (ctx) => {
+            const userId = options.userId();
+            if (!userId) return;
 
-              if (hasReaction) {
-                options.removeReaction({
-                  channelId,
-                  messageId: message.id,
-                  emoji,
-                  userId: currentUserId,
-                });
-                return;
-              }
+            const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
+            const channelId = options.channelId();
+            const hasReaction = hasReactionFromUser(message, emoji, userId);
 
-              options.addReaction({
+            if (hasReaction) {
+              options.removeReaction({
                 channelId,
                 messageId: message.id,
                 emoji,
-                userId: currentUserId,
+                userId,
               });
+              return;
             }
-          : undefined,
+
+            options.addReaction({
+              channelId,
+              messageId: message.id,
+              emoji,
+              userId,
+            });
+          }
+        : undefined,
       onCopyLink: async () => {
         try {
           const url = buildMessageLink(effects.getLocationHref(), message.id);

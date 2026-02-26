@@ -121,6 +121,18 @@ describe('createChannelMessageActions', () => {
     });
   });
 
+  it('keeps react action available without a user id and no-ops on click', () => {
+    const harness = buildHarness({ userId: undefined });
+    const message = buildMessage();
+    const actions = harness.getMessageActions(message);
+
+    expect(actions.onReact).toBeTypeOf('function');
+    actions.onReact?.({ message, emoji: '👍' });
+
+    expect(harness.addReaction).not.toHaveBeenCalled();
+    expect(harness.removeReaction).not.toHaveBeenCalled();
+  });
+
   it('copies links through injected effects', async () => {
     const copyToClipboard = vi
       .fn<(text: string) => Promise<void>>()

@@ -151,7 +151,7 @@ export function ActionMenu(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions class={props.class}>
+      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
         <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets">
           <Show when={hasReactAction()}>
             <For each={QUICK_REACTION_EMOJIS}>

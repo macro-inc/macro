@@ -168,4 +168,33 @@ describe('ActionMenu', () => {
     expect(onReact.mock.calls[0]?.[0]?.emoji).toBe('👍');
     cleanup();
   });
+
+  it('keeps hover actions visible while emoji menu is open', () => {
+    const { container, cleanup } = renderComponent(() => (
+      <Root
+        message={message}
+        actions={{
+          onReact: () => undefined,
+        }}
+      >
+        <ActionMenu />
+      </Root>
+    ));
+
+    const hoverActions = container.querySelector(
+      '[data-message-hover-actions]'
+    ) as HTMLDivElement | null;
+    const emojiMenuTrigger = container.querySelector(
+      '[data-message-action="react-open-menu"]'
+    ) as HTMLButtonElement | null;
+
+    expect(hoverActions).not.toBeNull();
+    expect(emojiMenuTrigger).not.toBeNull();
+    expect(hoverActions?.className).toContain('opacity-0');
+
+    emojiMenuTrigger?.click();
+    expect(hoverActions?.className).toContain('opacity-100');
+
+    cleanup();
+  });
 });
