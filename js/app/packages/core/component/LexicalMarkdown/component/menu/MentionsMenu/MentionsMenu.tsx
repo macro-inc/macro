@@ -97,7 +97,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const { searchedEntities: docs } = useEntityMention({
-    buckets: ['note', 'task', 'document', 'project'],
+    buckets: ['note', 'task', 'document', 'project', 'chat'],
     searchTerm,
   });
 
@@ -197,7 +197,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'documents',
-        label: 'Documents & Tasks',
+        label: 'Documents, Agents, & Tasks',
         getData: () => docs() ?? [],
         getFullCount: () => docs()?.length ?? 0,
       },

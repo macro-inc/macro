@@ -1,6 +1,5 @@
 use super::*;
 
-#[ignore]
 #[test]
 fn test_clean_document_name() {
     assert_eq!(
@@ -53,7 +52,6 @@ fn test_clean_document_name() {
     );
 }
 
-#[ignore]
 #[test]
 fn test_is_suffix_match() {
     assert!(FileType::is_suffix_match("testing.docx"));
@@ -87,7 +85,6 @@ fn test_is_suffix_match_false() {
     assert!(!FileType::is_suffix_match(".testing"));
 }
 
-#[ignore]
 #[test]
 fn test_split_suffix_match() {
     assert_eq!(FileType::split_suffix_match("testing"), None);
