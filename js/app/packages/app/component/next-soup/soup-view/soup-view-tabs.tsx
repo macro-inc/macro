@@ -220,6 +220,7 @@ const MailTabs = () => {
         soup.filters.set(['email', 'no-drafts']);
       });
   };
+
   return (
     <div>
       <SegmentedControl
@@ -249,6 +250,39 @@ const MailTabs = () => {
 };
 
 const DocumentsTabs = () => {
+  const soup = useSoup();
+  const { setQueryFilters } = useSoupView();
+
+  const user = useUserContext();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('owned', () => {
+        const userId = user.userId();
+
+        if (!userId) return;
+
+        setQueryFilters({
+          ...QUERY_FILTERS.document,
+          document_filters: { owners: [userId] },
+        });
+
+        soup.filters.set(['document']);
+      })
+      .with('shared', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.document,
+        });
+        soup.filters.set(['document', 'shared-document']);
+      })
+      .with('all', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.document,
+        });
+        soup.filters.set(['document']);
+      });
+  };
+
   return (
     <div>
       <SegmentedControl
@@ -267,7 +301,7 @@ const DocumentsTabs = () => {
             label: 'All',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
