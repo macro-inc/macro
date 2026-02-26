@@ -171,7 +171,7 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </div>
           </SplitHeaderLeft>
-          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full p-4">
+          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <SoupViewFileDropzone>
               <SoupViewList />
             </SoupViewFileDropzone>
