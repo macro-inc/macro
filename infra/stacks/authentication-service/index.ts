@@ -253,13 +253,15 @@ const service = new AuthenticationService('authentication-service', {
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://cloud-storage${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'NOTIFICATION_SERVICE_URL',
-      value: `https://notifications${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://notifications${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'NOTIFICATION_QUEUE',
