@@ -75,8 +75,8 @@ export const AppSidebar = () => {
 
   return (
     <div class="max-w-56 w-full h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
-      <div class="flex items-center justify-between py-2 pl-4 pr-2">
-        <LogoIcon class="size-8 text-accent" />
+      <div class="flex items-center justify-between py-2 pl-3 pr-2">
+        <LogoIcon class="size-6 text-accent" />
         <div class="flex items-center gap-1">
           <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
             <button
