@@ -115,9 +115,9 @@ pub enum EntityAccessAuth {
 /// Represents that a given user has a given permission for the provided id.
 ///
 /// The type parameter `T` encodes the minimum access level that was verified
-/// when this receipt was created. The default is `ViewAccessLevel`.
+/// when this receipt was created.
 #[derive(Debug)]
-pub struct EntityAccessReceipt<T: RequiredAccessLevel = ViewAccessLevel> {
+pub struct EntityAccessReceipt<T: RequiredAccessLevel> {
     /// The entity access authentication method
     pub(crate) auth: EntityAccessAuth,
     /// The entity that was requested access

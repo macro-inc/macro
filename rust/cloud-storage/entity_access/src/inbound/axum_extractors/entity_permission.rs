@@ -13,6 +13,7 @@ use super::{ExtractorError, InternalUser};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -32,7 +33,7 @@ struct EntityPermissionParams {
 #[derive(Debug)]
 pub struct EntityPermissionExtractor<Svc> {
     /// The entity access receipt
-    pub entity_access_receipt: EntityAccessReceipt,
+    pub entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     _marker: PhantomData<Svc>,
 }
 
