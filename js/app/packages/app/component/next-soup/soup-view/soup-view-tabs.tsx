@@ -122,9 +122,9 @@ const AgentsTabs = () => {
     <div>
       <SegmentedControl
         list={[
-          { value: 'owned', label: 'My agents' },
-          { value: 'running', label: 'Running agents' },
-          { value: 'shared', label: 'Shared with me' },
+          { value: 'owned', label: 'Owned' },
+          { value: 'running', label: 'Running' },
+          { value: 'shared', label: 'Shared' },
         ]}
         onChange={(value) => applyTabPreset('agents', value)}
       />
@@ -157,8 +157,8 @@ const DocumentsTabs = () => {
     <div>
       <SegmentedControl
         list={[
-          { value: 'owned', label: 'My documents' },
-          { value: 'shared', label: 'Shared with me' },
+          { value: 'owned', label: 'Owned' },
+          { value: 'shared', label: 'Shared' },
           { value: 'all', label: 'All' },
         ]}
         onChange={(value) => applyTabPreset('documents', value)}
@@ -174,8 +174,8 @@ const TasksTabs = () => {
     <div>
       <SegmentedControl
         list={[
-          { value: 'assigned-to-me', label: 'Assigned to me' },
-          { value: 'created-by-me', label: 'Created by me' },
+          { value: 'assigned-to-me', label: 'Assigned' },
+          { value: 'created-by-me', label: 'Created' },
           { value: 'all', label: 'All' },
         ]}
         onChange={(value) => applyTabPreset('tasks', value)}
@@ -208,8 +208,8 @@ const FilesTabs = () => {
     <div>
       <SegmentedControl
         list={[
-          { value: 'owned', label: 'My files' },
-          { value: 'shared', label: 'Shared with me' },
+          { value: 'owned', label: 'Owned' },
+          { value: 'shared', label: 'Shared' },
           { value: 'all', label: 'All' },
         ]}
         onChange={(value) => applyTabPreset('files', value)}
