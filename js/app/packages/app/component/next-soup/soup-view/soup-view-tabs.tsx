@@ -57,7 +57,7 @@ export const SoupViewTabs = () => {
 const InboxTabs = () => {
   const soup = useSoup();
 
-  const { setQueryFilters, queryFilters } = useSoupView();
+  const { setQueryFilters } = useSoupView();
 
   // Batch filter + query updates so the prefetch effect in soup-view-context
   // sees the final query filters and active filter state in a single tick,
@@ -122,25 +122,155 @@ const InboxTabs = () => {
 };
 
 const AgentsTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'owned',
+            label: 'My agents',
+          },
+
+          {
+            value: 'running',
+            label: 'Running agents',
+          },
+          {
+            value: 'shared',
+            label: 'Shared with me',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
 
 const MailTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'important',
+            label: 'Important',
+          },
+
+          {
+            value: 'noise',
+            label: 'Noise',
+          },
+          {
+            value: 'drafts',
+            label: 'Drafts',
+          },
+          {
+            value: 'sent',
+            label: 'Sent',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
 
 const DocumentsTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'owned',
+            label: 'My documents',
+          },
+
+          {
+            value: 'shared',
+            label: 'Shared with me',
+          },
+          {
+            value: 'all',
+            label: 'All',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
 
 const TasksTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'assigned-to-me',
+            label: 'Assigned to me',
+          },
+
+          {
+            value: 'created-by-me',
+            label: 'Created by me',
+          },
+          {
+            value: 'all',
+            label: 'All',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
 
 const ChannelsTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'recent',
+            label: 'Recent',
+          },
+
+          {
+            value: 'people',
+            label: 'People',
+          },
+          {
+            value: 'teams',
+            label: 'Teams',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
 
 const FilesTabs = () => {
-  return <div></div>;
+  return (
+    <div>
+      <SegmentedControl
+        list={[
+          {
+            value: 'owned',
+            label: 'My files',
+          },
+
+          {
+            value: 'shared',
+            label: 'Shared with me',
+          },
+          {
+            value: 'all',
+            label: 'All',
+          },
+        ]}
+        onChange={(value) => {}}
+      />
+    </div>
+  );
 };
