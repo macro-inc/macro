@@ -41,7 +41,7 @@ export type FilterState<T, TFilter extends FilterConfig<T>> = {
   /** Clear all active filters */
   readonly clear: () => void;
   /** Set filters directly */
-  readonly set: (filters: TFilter[]) => void;
+  readonly set: (filters: (TFilter | string)[]) => void;
   /** Bulk activate filters */
   readonly bulkActivate: (filterIDs: string[]) => void;
   /** Get a filter config by ID */
@@ -169,11 +169,25 @@ export function createFilterState<T, TFilter extends FilterConfig<T>>(
   };
 
   // Set filters directly
-  const set = (filters: TFilter[]) => {
-    updateFilters(filters);
+  const set = (filters: (TFilter | string)[]) => {
+    const configs: TFilter[] = [];
+
+    for (const filter of filters) {
+      if (typeof filter !== 'string') {
+        configs.push(filter);
+        continue;
+      }
+
+      const config = getFilter(filter);
+
+      if (!config) continue;
+
+      configs.push(config);
+    }
+    updateFilters(configs);
   };
 
-  // Set filters directly
+  // Bulk activate filters by id directly
   const bulkActivate = (filtersIDs: string[]) => {
     batch(() => {
       for (const id of filtersIDs) {
