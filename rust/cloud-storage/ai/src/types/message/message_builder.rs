@@ -88,6 +88,14 @@ impl<R> MessageBuilder<R, NoContent> {
             role: self.role,
         }
     }
+
+    pub fn text<T: Into<String>>(self, content: T) -> MessageBuilder<R, ChatMessageContent> {
+        MessageBuilder {
+            content: ChatMessageContent::Text(content.into()),
+            image_urls: self.image_urls,
+            role: self.role,
+        }
+    }
 }
 
 impl<R, C> MessageBuilder<R, C> {

@@ -112,62 +112,54 @@ pub async fn search_email_contacts<'a>(
 
     let rows = sqlx::query!(
         r#"
-        WITH paginated_threads AS (
+        WITH link AS (
+            SELECT id AS link_id FROM email_links WHERE macro_id = $1
+        ),
+        matching_contacts AS (
+            SELECT c.id
+            FROM email_contacts c
+            JOIN link l ON c.link_id = l.link_id
+            WHERE c.name ILIKE $2 OR c.email_address ILIKE $2
+        ),
+        matching_thread_ids AS (
+            SELECT DISTINCT thread_id FROM (
+                SELECT m.thread_id
+                FROM email_messages m
+                JOIN link l ON m.link_id = l.link_id
+                WHERE m.from_contact_id IN (SELECT id FROM matching_contacts)
+
+                UNION ALL
+
+                SELECT m.thread_id
+                FROM email_messages m
+                JOIN link l ON m.link_id = l.link_id
+                WHERE m.from_name ILIKE $2
+
+                UNION ALL
+
+                SELECT m.thread_id
+                FROM email_message_recipients mr
+                JOIN email_messages m ON m.id = mr.message_id
+                JOIN link l ON m.link_id = l.link_id
+                WHERE mr.contact_id IN (SELECT id FROM matching_contacts)
+
+                UNION ALL
+
+                SELECT m.thread_id
+                FROM email_message_recipients mr
+                JOIN email_messages m ON m.id = mr.message_id
+                JOIN link l ON m.link_id = l.link_id
+                WHERE mr.name ILIKE $2
+            ) all_matches
+        ),
+        paginated_threads AS (
             SELECT t.id, t.latest_non_spam_message_ts
             FROM email_threads t
-            WHERE t.link_id = (SELECT id FROM email_links WHERE macro_id = $1)
-              AND t.latest_non_spam_message_ts IS NOT NULL
+            JOIN matching_thread_ids mt ON mt.thread_id = t.id
+            WHERE t.latest_non_spam_message_ts IS NOT NULL
               AND (
                   $4::timestamptz IS NULL
                   OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)
-              )
-              AND EXISTS (
-                  -- Check sender contact name
-                  SELECT 1
-                  FROM email_messages m
-                  JOIN email_contacts c ON c.id = m.from_contact_id
-                  WHERE m.thread_id = t.id AND c.name ILIKE $2
-
-                  UNION ALL
-
-                  -- Check sender email address
-                  SELECT 1
-                  FROM email_messages m
-                  JOIN email_contacts c ON c.id = m.from_contact_id
-                  WHERE m.thread_id = t.id AND c.email_address ILIKE $2
-
-                  UNION ALL
-
-                  -- Check message from_name
-                  SELECT 1
-                  FROM email_messages m
-                  WHERE m.thread_id = t.id AND m.from_name ILIKE $2
-
-                  UNION ALL
-
-                  -- Check recipient contact name
-                  SELECT 1
-                  FROM email_messages m
-                  JOIN email_message_recipients mr ON mr.message_id = m.id
-                  JOIN email_contacts c ON c.id = mr.contact_id
-                  WHERE m.thread_id = t.id AND c.name ILIKE $2
-
-                  UNION ALL
-
-                  -- Check recipient email address
-                  SELECT 1
-                  FROM email_messages m
-                  JOIN email_message_recipients mr ON mr.message_id = m.id
-                  JOIN email_contacts c ON c.id = mr.contact_id
-                  WHERE m.thread_id = t.id AND c.email_address ILIKE $2
-
-                  UNION ALL
-
-                  -- Check recipient name
-                  SELECT 1
-                  FROM email_messages m
-                  JOIN email_message_recipients mr ON mr.message_id = m.id
-                  WHERE m.thread_id = t.id AND mr.name ILIKE $2
               )
             ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC
             LIMIT $3
@@ -181,7 +173,6 @@ pub async fn search_email_contacts<'a>(
             matches.contact_type as "contact_type!"
         FROM paginated_threads pt
         CROSS JOIN LATERAL (
-            -- Sender matches: check contact.name, contact.email_address, and message.from_name
             SELECT DISTINCT
                 m.id as message_id,
                 COALESCE(m.from_name, c.name) as contact_name,
@@ -194,7 +185,6 @@ pub async fn search_email_contacts<'a>(
 
             UNION
 
-            -- Recipient matches: check contact.name, contact.email_address, and recipient.name
             SELECT DISTINCT
                 m.id as message_id,
                 COALESCE(mr.name, c.name) as contact_name,

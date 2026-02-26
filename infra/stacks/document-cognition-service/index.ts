@@ -111,6 +111,15 @@ const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
   .getOutput('connectionGatewayRedisUrl')
   .apply((url) => url as string);
 
+const connectionGatewayTableName: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayTableName')
+  .apply((name) => name as string);
+
+const connectionGatewayTablePolicyArn: pulumi.Output<string> =
+  connectionGatewayStack
+    .getOutput('connectionGatewayTablePolicyArn')
+    .apply((arn) => arn as string);
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -197,6 +206,7 @@ const documentCognitionService = new DocumentCognitionService(
       searchEventQueueArn,
       notificationQueueArn,
     ],
+    connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
       {
         name: 'DATABASE_URL',
@@ -326,6 +336,10 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'REDIS_HOST',
         value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
+      },
+      {
+        name: 'CONNECTION_GATEWAY_TABLE',
+        value: pulumi.interpolate`${connectionGatewayTableName}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

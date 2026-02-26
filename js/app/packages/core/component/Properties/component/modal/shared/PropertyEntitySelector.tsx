@@ -6,7 +6,7 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import { useEmail } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
@@ -30,6 +30,7 @@ import {
   threadMapper,
   quickAccessItemToEntity,
   userToEntity,
+  sortEntitiesWithSelfFirst,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useKeyPressed } from '@core/util/useKeyPressed';
@@ -77,7 +78,7 @@ function getEntityName(entity: CombinedEntity): string {
   if (entity.kind === 'user') {
     const { name, email } = entity.data;
     if (name === email) return email;
-    return name;
+    return `${name} | ${email}`;
   }
   const data = entity.data;
   if (data.type === 'email') {
@@ -111,8 +112,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  // Get current user domain for same-domain boost in search
+  // Get current user info for same-domain boost and self-boost in search
   const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
   const currentUserDomain = createMemo(() => {
     const email = currentUserEmail();
     return email ? email.split('@')[1] : undefined;
@@ -215,7 +217,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain),
+    createEntitySearchConfig(currentUserDomain, currentUserId),
     getEntitySearchText,
     isChannelEntity,
     getEntityTimestampedItem
@@ -224,6 +226,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const filteredEntities = createMemo(() => {
     const term = searchTerm();
     const allEntities = entities();
+    const userId = currentUserId();
 
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
@@ -237,14 +240,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       : () => true;
 
     // Get visible entities based on search
+    // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     const localResults = term
       ? entitySearch(allEntities, term)
           .slice(0, MAX_SEARCH_RESULTS)
           .map((result) => result.item)
           .filter(excludeFilter)
-      : allEntities
-          .filter(excludeFilter)
-          .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+      : sortEntitiesWithSelfFirst(
+          allEntities.filter(excludeFilter),
+          userId
+        ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
     // For THREAD or generic entity: merge local + server results
     if (needsEmailSearch() && term) {
@@ -269,7 +274,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         return filteredResults;
       }
 
-      // When browsing (no search), show selected entities first
+      // When browsing (no search), show selected entities first, then others
+      // (self is already sorted to top within filteredEntities)
       const selectedIds = props.selectedOptions();
       const entityIdsInResults = new Set(filteredResults.map((e) => e.id));
 

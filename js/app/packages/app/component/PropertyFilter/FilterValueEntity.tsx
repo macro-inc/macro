@@ -10,10 +10,11 @@ import {
   threadMapper,
   quickAccessItemToEntity,
   userToEntity,
+  sortEntitiesWithSelfFirst,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
 import { useAugmentUserWithDmActivity } from '@core/user';
-import { useEmail } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
@@ -87,8 +88,9 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
 
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  // Get current user domain for same-domain boost in search
+  // Get current user info for same-domain boost and self-boost in search
   const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
   const currentUserDomain = createMemo(() => {
     const email = currentUserEmail();
     return email ? email.split('@')[1] : undefined;
@@ -181,7 +183,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
 
   // Search function for fuzzy matching (same config as PropertyEntitySelector)
   const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain),
+    createEntitySearchConfig(currentUserDomain, currentUserId),
     getEntitySearchText,
     isChannelEntity,
     getEntityTimestampedItem
@@ -196,11 +198,19 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const availableEntities = createMemo(() => {
     const query = searchTerm();
     const ids = selectedIds();
-    const available = entities().filter((e) => !ids.has(e.id));
+    const userId = currentUserId();
+    // Sort self to top BEFORE filtering to ensure self appears even if not in top 50 by default
+    const available = sortEntitiesWithSelfFirst(
+      entities().filter((e) => !ids.has(e.id)),
+      userId
+    );
 
     const MAX_RESULTS = 50;
 
-    if (!query) return available.slice(0, MAX_RESULTS);
+    // When no search query, return sorted list
+    if (!query) {
+      return available.slice(0, MAX_RESULTS);
+    }
 
     // Local search results
     const localResults = entitySearch(available, query)

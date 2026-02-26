@@ -30,7 +30,7 @@ pub struct DocumentArgs {
 pub enum DocumentCommand {
     /// Create a single document
     Create(CreateArgs),
-    /// Seed documents from a fixed CSV file with pre-defined UUIDs
+    /// Seed documents from a fixed JSON file with pre-defined UUIDs
     Seed(SeedArgs),
 }
 
@@ -62,17 +62,20 @@ pub struct CreateArgs {
     pub skip_history: bool,
 }
 
-/// Arguments for seeding documents from a fixed CSV file.
+/// Arguments for seeding documents from a JSON file.
 #[derive(Debug, Args)]
 pub struct SeedArgs {
     /// The user ID to set as document owner
     #[arg(long)]
     pub user_id: String,
+    /// Path to the JSON file containing documents to seed (defaults to seed/documents/documents.json)
+    #[arg(long)]
+    pub file_path: Option<String>,
 }
 
-/// A row in the seed CSV file.
+/// A row in the seed JSON file.
 #[derive(Debug, Deserialize)]
-struct CsvSeedDocumentRow {
+struct SeedDocumentRow {
     /// Pre-defined document UUID.
     document_id: Uuid,
     /// Document name.
@@ -158,23 +161,26 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(ctx), err)]
 async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    seed_from_file(args, ctx, Path::new("seed/documents/documents.csv")).await
+    let default_path = Path::new("seed/documents/documents.json").to_path_buf();
+    let path = args
+        .file_path
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_path);
+    seed_from_file(args, ctx, &path).await
 }
 
 async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
     tracing::info!("seeding documents");
 
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read csv file: {}", path.display()))?;
+        .with_context(|| format!("failed to read json file: {}", path.display()))?;
 
-    let mut reader = csv::Reader::from_reader(content.as_bytes());
-    let rows: Vec<CsvSeedDocumentRow> = reader
-        .deserialize()
-        .collect::<Result<Vec<_>, _>>()
-        .context("failed to parse csv")?;
+    let rows: Vec<SeedDocumentRow> =
+        serde_json::from_str(&content).context("failed to parse json")?;
 
     if rows.is_empty() {
-        anyhow::bail!("no documents found in csv file");
+        anyhow::bail!("no documents found in json file");
     }
 
     println!("Found {} documents to seed", rows.len());

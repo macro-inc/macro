@@ -14,6 +14,13 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiResponseMetadata {
+    pub summary: String,
+    pub message_id: String,
+}
+
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
 #[dg(backward = models_comms::channel::ChannelType)]
 #[serde(rename_all = "camelCase")]
@@ -222,6 +229,16 @@ impl notification::domain::models::Notification for ChannelInviteMetadata {
     }
 }
 
+impl notification::domain::models::Notification for AiResponseMetadata {
+    const TYPE_NAME: &'static str = "ai_response";
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
 
@@ -393,6 +410,26 @@ impl NotificationExtIos for ChannelInviteMetadata {
         Some(alert_apns(
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
+            PushNotificationData { notification_id },
+        ))
+    }
+}
+
+impl NotificationExtIos for AiResponseMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(alert_apns(
+            "Ai Response".into(),
+            self.summary,
             PushNotificationData { notification_id },
         ))
     }

@@ -62,6 +62,10 @@ pub async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
+    let vars = config::Vars::new()?;
+    let redis_client =
+        redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
+
     #[cfg(feature = "push_notification_event_handler")]
     {
         let device_deleter =
@@ -71,9 +75,30 @@ pub async fn main() -> anyhow::Result<()> {
         let sns_deleter = ::notification::outbound::sns_endpoint::SnsEndpointDeletionAdapter::new(
             aws_sdk_sns::Client::new(&aws_config),
         );
+
+        let push_event_redis_conn = redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .context("failed to get redis connection for push event digest state machine")?;
+
+        let digest_failure_sm =
+            ::notification::domain::models::email_notification_digest::StateMachineDriverC {
+                message_receipt_repo:
+                    ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                        db.clone(),
+                    ),
+                digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+                    push_event_redis_conn,
+                ),
+                notif_repo:
+                    ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+                digest_window: std::time::Duration::from_secs(30 * 60),
+            };
+
         let event_service = ::notification::domain::service::PushNotificationEventService::new(
             device_deleter,
             sns_deleter,
+            digest_failure_sm,
         );
         let event_queue =
             ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
@@ -96,7 +121,6 @@ pub async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let vars = config::Vars::new()?;
     let notification_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
@@ -127,8 +151,6 @@ pub async fn main() -> anyhow::Result<()> {
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
     let email_adapter = EmailAdapter::new(ses_client, config.sender_base_address.clone());
 
-    let redis_client =
-        redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
     let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()
         .await

@@ -164,13 +164,23 @@ export function getEntityTimestampedItem<T extends CombinedEntity>(
 }
 
 /**
- * Creates search config for entity searches with same-domain boost.
+ * Creates search config for entity searches with same-domain boost and self-boost.
  * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
+ * When currentUserId is provided, the current user will be boosted to the top of the list.
  */
 export function createEntitySearchConfig<T extends CombinedEntity>(
-  currentUserDomain: Accessor<string | undefined>
+  currentUserDomain: Accessor<string | undefined>,
+  currentUserId?: Accessor<string | undefined>
 ): FreshSortConfig<T> {
   const boostFn = (item: T): number => {
+    // Boost self to top of list (high boost value ensures it appears first)
+    if (currentUserId && item.kind === 'user') {
+      const userId = currentUserId();
+      if (userId && item.data.id === userId) {
+        return 10; // High boost to ensure self appears at top
+      }
+    }
+
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
 
@@ -190,4 +200,29 @@ export function createEntitySearchConfig<T extends CombinedEntity>(
     brevityWeight: 0.1,
     boostFn,
   };
+}
+
+/**
+ * Sorts entities with the current user (self) at the top of the list.
+ * Use this when displaying entities without a search query to ensure
+ * the current user appears first in the assignees list.
+ */
+export function sortEntitiesWithSelfFirst<T extends CombinedEntity>(
+  entities: T[],
+  currentUserId: string | undefined
+): T[] {
+  if (!currentUserId) return entities;
+
+  const selfIndex = entities.findIndex(
+    (e) => e.kind === 'user' && e.data.id === currentUserId
+  );
+
+  // If self not found or already at top, return as-is
+  if (selfIndex <= 0) return entities;
+
+  // Move self to the front
+  const result = [...entities];
+  const [self] = result.splice(selfIndex, 1);
+  result.unshift(self);
+  return result;
 }

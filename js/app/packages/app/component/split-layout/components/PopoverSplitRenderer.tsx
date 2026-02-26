@@ -1,4 +1,3 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -128,26 +127,21 @@ function PopoverSplitModal(props: {
     >
       <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
       <div class={`fixed inset-0 z-modal flex pointer-events-none isolate`}>
-        <Dialog.Content
-          use:clickOutside={() => props.onClose()}
-          ref={(r) => {
+        <DialogWrapper
+          contentRef={(r) => {
+            setPanelRef(r);
+            clickOutside(r, () => () => props.onClose());
             bindHotKeyDom(r);
           }}
         >
-          <DialogWrapper>
-            <Dialog.Content class="portal-scope">
-              <ClippedPanel active tl ref={setPanelRef}>
-                <SplitPanelContext.Provider value={stubPanelContext}>
-                  <SoupContextProvider>
-                    <Show when={props.popover.mount}>
-                      <Dynamic component={props.popover.mount.element} />
-                    </Show>
-                  </SoupContextProvider>
-                </SplitPanelContext.Provider>
-              </ClippedPanel>
-            </Dialog.Content>
-          </DialogWrapper>
-        </Dialog.Content>
+          <SplitPanelContext.Provider value={stubPanelContext}>
+            <SoupContextProvider>
+              <Show when={props.popover.mount}>
+                <Dynamic component={props.popover.mount.element} />
+              </Show>
+            </SoupContextProvider>
+          </SplitPanelContext.Provider>
+        </DialogWrapper>
       </div>
     </Dialog>
   );

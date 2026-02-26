@@ -35,6 +35,10 @@ import {
   useContext,
 } from 'solid-js';
 import { matchesTaskSubFilters } from './task-sub-filter-matcher';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
+import type { InfiniteData } from '@tanstack/solid-query';
+import type { SoupPage } from '@service-storage/generated/schemas';
 
 type Row<T> = {
   original: T;
@@ -102,6 +106,9 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
+
+  const queryClient = useQueryClient();
+
   const soupParams = createMemo(
     (): SoupParams => ({
       limit: 100,
@@ -109,7 +116,7 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
-  const [internalQueryFilters, setQueryFilters] =
+  const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
 
   const [statusFilter, setStatusFilter] = createSignal<string | undefined>();
@@ -213,6 +220,32 @@ export const SoupViewContextProvider: FlowComponent<
       enabled: !search.isSearching(),
     })
   );
+
+  const setQueryFilters: Setter<SoupItemsQueryFilters> = (next) => {
+    // To avoid fetching all pages again when coming back to the current query filters,
+    // we set the query cache to only contain the first page of data which is the only
+    // one to be refetched
+    queryClient.setQueryData(
+      soupKeys.items({
+        params: soupParams(),
+        body: soupBody(),
+      }).queryKey,
+      (prev: InfiniteData<SoupPage> | SoupPage) => {
+        if (!prev) return;
+
+        if ('pages' in prev) {
+          // Just to avoid spreading and new array creation, works the same but slightly
+          // better performance
+          prev.pages.splice(1, prev.pages.length);
+          return prev;
+        }
+
+        return prev;
+      }
+    );
+
+    setInternalQueryFilters(next);
+  };
 
   const items = createMemo<SoupEntity[]>(
     (prev) => {

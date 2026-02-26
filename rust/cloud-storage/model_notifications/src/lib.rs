@@ -183,5 +183,8 @@ define_notif_event!(
 
         /// A user was assigned to a task.
         TaskAssigned(TaskAssignedMetadata),
+
+        /// An AI assistant responded to a chat.
+        AiResponse(AiResponseMetadata),
     }
 );

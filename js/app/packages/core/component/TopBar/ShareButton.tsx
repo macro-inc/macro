@@ -71,8 +71,6 @@ import {
   useContext,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
-import { ClippedPanel } from '../ClippedPanel';
 import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
@@ -80,6 +78,7 @@ import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
+import { VerticalScrollIndicators } from '../VerticalScrollIndicators';
 
 false && clickOutside;
 
@@ -206,6 +205,9 @@ export function ShareModal(props: ShareModalProps) {
     ? permissionsBlockResource[1].refetch
     : refetchFallback;
   const userId = useUserId();
+
+  const [recipientScrollRef, setRecipientScrollRef] =
+    createSignal<HTMLElement>();
 
   const copyPublicLink = createCallback(() => {
     const url = buildSimpleEntityUrl(
@@ -528,52 +530,59 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
         <DialogWrapper>
-          <Dialog.Content class="text-ink max-h-[100%] overflow-y-auto">
-            <ClippedPanel tl={!beveledCorners()} active>
-              <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                <div class="flex flex-row items-center gap-2">
-                  <Dialog.CloseButton>
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Close' }}
-                      icon={CloseIcon}
-                      iconSize={16}
-                      theme="clear"
-                      size="sm"
-                    />
-                  </Dialog.CloseButton>
-                  <Dialog.Title>{`Share: ${props.name}`}</Dialog.Title>
-                </div>
-
-                <div class="flex flex-row items-center gap-2"></div>
+          <div class="text-ink flex flex-col">
+            <div class="shrink-0 flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+              <div class="flex flex-row items-center gap-2">
+                <Dialog.CloseButton>
+                  <DeprecatedIconButton
+                    tooltip={{ label: 'Close' }}
+                    icon={CloseIcon}
+                    iconSize={16}
+                    theme="clear"
+                    size="sm"
+                  />
+                </Dialog.CloseButton>
+                <Dialog.Title>{`Share: ${props.name}`}</Dialog.Title>
               </div>
 
-              <ForwardToChannel
-                submitPermissionInfo={{
-                  setChannelPermissions: (id, accessLevel) =>
-                    setChannelPermissions(id, accessLevel, true),
-                  userPermissions: props.userPermissions,
-                  channelSharePermissions: recipients(),
-                }}
-                onSubmit={() => props.setIsSharePermOpen(false)}
-                refetch={refetch}
-                name={props.name}
-                hideAccessLevelSelector={props.itemType === 'email'}
-                initialAccessLevel={props.itemType === 'email' ? 'view' : null}
-                blockId={props.id}
-                blockName={props.blockAlias}
-              />
+              <div class="flex flex-row items-center gap-2"></div>
+            </div>
 
-              <Show when={(recipients()?.length ?? 0) > 0}>
-                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[160px] relative">
+            <ForwardToChannel
+              submitPermissionInfo={{
+                setChannelPermissions: (id, accessLevel) =>
+                  setChannelPermissions(id, accessLevel, true),
+                userPermissions: props.userPermissions,
+                channelSharePermissions: recipients(),
+              }}
+              onSubmit={() => props.setIsSharePermOpen(false)}
+              refetch={refetch}
+              name={props.name}
+              hideAccessLevelSelector={props.itemType === 'email'}
+              initialAccessLevel={props.itemType === 'email' ? 'view' : null}
+              blockId={props.id}
+              blockName={props.blockAlias}
+            />
+
+            <Show when={(recipients()?.length ?? 0) > 0}>
+              <div class="grow-2 shrink-1 min-h-[118px] flex flex-col border-t-1 border-edge-muted relative">
+                <VerticalScrollIndicators
+                  scrollRef={recipientScrollRef}
+                  noBorderBottom
+                  noBorderTop
+                />
+                <div
+                  class="overflow-y-auto scrollbar-hidden"
+                  ref={setRecipientScrollRef}
+                >
                   <div
-                    class="absolute top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center"
+                    class="sticky shrink-0 top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center z-1"
                     style="transform: translateX(12px); width: calc(100% - 24px);"
                   >
                     Share Recipients
                   </div>
-                  <div class="grid gap-3 text-ink text-sm select-none overflow-y-auto scrollbar-hidden pt-[52px] pb-3 px-3 max-h-[159px] h-min">
+                  <div class="grid gap-3 text-ink text-sm select-none py-3 px-3 relative">
                     <Show when={props.owner}>
                       <div class="flex justify-between bg-panel">
                         <div class="flex items-center gap-2 overflow-hidden">
@@ -644,40 +653,40 @@ export function ShareModal(props: ShareModalProps) {
                     </For>
                   </div>
                 </div>
-              </Show>
+              </div>
+            </Show>
 
-              <Show
-                when={
-                  props.userPermissions === Permissions.OWNER &&
-                  props.itemType !== 'email'
-                }
-              >
-                <div class="border-t-1 border-edge-muted flex flex-col">
-                  <div
-                    class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center"
-                    style="transform: translateX(12px); left: 12px; width: calc(100% - 24px);"
-                  >
-                    Public Link
-                  </div>
-                  <div class="flex items-center p-3 justify-between">
-                    <DeprecatedTextButton
-                      onClick={() => copyPublicLink()}
-                      text="Copy Link"
-                      height="h-[22px]"
-                      icon={IconLink}
-                      theme="accent"
-                      outline
-                    />
-                    <ShareOptions
-                      permissions={publicAccessLevel() ?? null}
-                      hideNoAccess={props.itemType === 'chat'}
-                      setPermissions={setPublicPermissions}
-                    />
-                  </div>
+            <Show
+              when={
+                props.userPermissions === Permissions.OWNER &&
+                props.itemType !== 'email'
+              }
+            >
+              <div class="border-t-1 border-edge-muted flex flex-col">
+                <div
+                  class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center"
+                  style="transform: translateX(12px); left: 12px; width: calc(100% - 24px);"
+                >
+                  Public Link
                 </div>
-              </Show>
-            </ClippedPanel>
-          </Dialog.Content>
+                <div class="flex items-center p-3 justify-between">
+                  <DeprecatedTextButton
+                    onClick={() => copyPublicLink()}
+                    text="Copy Link"
+                    height="h-[22px]"
+                    icon={IconLink}
+                    theme="accent"
+                    outline
+                  />
+                  <ShareOptions
+                    permissions={publicAccessLevel() ?? null}
+                    hideNoAccess={props.itemType === 'chat'}
+                    setPermissions={setPublicPermissions}
+                  />
+                </div>
+              </div>
+            </Show>
+          </div>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

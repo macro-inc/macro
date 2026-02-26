@@ -71,7 +71,13 @@ impl EmailServiceOps for aws_sdk_sesv2::Client {
             .destination(dest)
             .content(email_content)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                rootcause::report!(
+                    "SES send failed: {}",
+                    aws_sdk_sns::error::DisplayErrorContext(&e)
+                )
+            })?;
 
         Ok(())
     }

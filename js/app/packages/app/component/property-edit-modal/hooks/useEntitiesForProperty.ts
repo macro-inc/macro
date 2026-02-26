@@ -9,10 +9,11 @@ import {
   threadMapper,
   quickAccessItemToEntity,
   userToEntity,
+  sortEntitiesWithSelfFirst,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import { useEmail } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
@@ -44,8 +45,9 @@ export function useEntitiesForProperty(
 
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  // Get current user domain for same-domain boost in search
+  // Get current user info for same-domain boost and self-boost in search
   const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
   const currentUserDomain = createMemo(() => {
     const email = currentUserEmail();
     return email ? email.split('@')[1] : undefined;
@@ -139,7 +141,7 @@ export function useEntitiesForProperty(
 
   // search function for fuzzy matching
   const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain),
+    createEntitySearchConfig(currentUserDomain, currentUserId),
     getEntitySearchText,
     isChannelEntity,
     getEntityTimestampedItem
@@ -149,14 +151,20 @@ export function useEntitiesForProperty(
   const filteredEntities = createMemo(() => {
     const query = searchTerm();
     const available = entities();
+    const userId = currentUserId();
 
     const MAX_RESULTS = 50;
+
+    // When no search query, sort self to top BEFORE slicing
+    if (!query) {
+      return sortEntitiesWithSelfFirst(available, userId).slice(0, MAX_RESULTS);
+    }
 
     const localResults = entitySearch(available, query)
       .slice(0, MAX_RESULTS)
       .map((result) => result.item);
 
-    if (needsEmailSearch() && query) {
+    if (needsEmailSearch()) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails().filter((e) => !localIds.has(e.id));
       return [...localResults, ...serverResults].slice(0, MAX_RESULTS);

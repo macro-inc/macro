@@ -951,6 +951,18 @@
   },
   "components": {
     "schemas": {
+      "AiResponseMetadata": {
+        "type": "object",
+        "required": ["summary", "messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
       "ApiUserNotification": {
         "allOf": [
           {
@@ -1529,6 +1541,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["task_assigned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An AI assistant responded to a chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AiResponseMetadata",
+                "description": "An AI assistant responded to a chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["ai_response"]
               }
             }
           }

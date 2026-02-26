@@ -12,6 +12,7 @@ export {
   quickAccessItemToEntity,
   entityDataToEntity,
   userToEntity,
+  sortEntitiesWithSelfFirst,
 } from './entityUtils';
 export { PropertyEntitySelector } from './PropertyEntitySelector';
 export { PropertyOptionSelector } from './PropertyOptionSelector';
