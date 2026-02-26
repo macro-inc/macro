@@ -6,7 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { openNotificationFromId } from '@notifications/notification-navigation';
 import { logger } from '@observability';
 import { useSearchParams } from '@solidjs/router';
-import { createEffect, onCleanup, onMount } from 'solid-js';
+import { createEffect, onCleanup, onMount, untrack } from 'solid-js';
 
 export default function NotificationRoute() {
   const split = useSplitPanelOrThrow();
@@ -53,9 +53,14 @@ export default function NotificationRoute() {
       notificationSource
     ).match(
       () => {
-        // We only use this route as a "bridge" from external navigation
-        // (e.g. push tap / deep link) into the split layout.
-        split.handle.close();
+        // We only use this route as a "bridge" from external navigation into the split layout.
+        // At narrowWidths, openWithSplit replaces this split in-place, so content()
+        // will have changed by the time we get here — closing would navigate
+        // away from the notification. Only close if we're still the bridge.
+        const current = split.handle.content();
+        if (current.type === 'component' && current.id === 'notification') {
+          split.handle.close();
+        }
       },
       (err) => {
         replaceWithUnifiedList(new Error(err.tag));
