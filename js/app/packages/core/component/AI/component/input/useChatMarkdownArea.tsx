@@ -1,82 +1,42 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment } from '@core/component/AI/types';
-import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
-import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
-import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
-import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
-import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
-import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
-import {
-  createLexicalWrapper,
-  type LexicalWrapper,
-  LexicalWrapperContext,
-} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
-import {
-  autoRegister,
-  customSelectionDataPlugin,
-  DefaultShortcuts,
-  defaultSelectionData,
-  type ItemMention,
-  keyboardFocusPlugin,
-  keyboardShortcutsPlugin,
-  markdownPastePlugin,
-  mentionsPlugin,
-  NODE_TRANSFORM,
-  type NodeTransformType,
-  type SelectionData,
-  tabIndentationPlugin,
-  tableCellResizerPlugin,
-  tablePlugin,
-} from '@core/component/LexicalMarkdown/plugins';
-import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
-import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
-import { normalizeEnterPlugin } from '@core/component/LexicalMarkdown/plugins/normalize-enter/';
-import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
-import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
-import {
-  $traverseNodes,
-  editorIsEmpty,
-  initializeEditorEmpty,
-  insertText,
-  setEditorStateFromMarkdown,
-} from '@core/component/LexicalMarkdown/utils';
-import type { PortalScope } from '@core/component/ScopedPortal';
-import { shortcutBadgeStyles } from '@core/component/Themes';
-import { toast } from '@core/component/Toast/Toast';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
-import { TOKENS } from '@core/hotkey/tokens';
-import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
-import type { IOrganizationUser } from '@core/user';
+import type { PortalScope } from '@core/component/ScopedPortal';
+import { toast } from '@core/component/Toast/Toast';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $isDocumentMentionNode } from '@lexical-core';
-import type { HistoryItem } from '@queries/history/history';
-import { onElementConnect } from '@solid-primitives/lifecycle';
-import { activeElement } from 'app/signal/focus';
-import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
-import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/node-accessory/nodeAccessoryPlugin';
-import { textPastePlugin } from 'core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import {
-  $getRoot,
-  COMMAND_PRIORITY_CRITICAL,
-  COMMAND_PRIORITY_HIGH,
+  DefaultShortcuts,
+  type ItemMention,
+  keyboardShortcutsPlugin,
+  type NodeTransformType,
+  NODE_TRANSFORM,
+  type SelectionData,
+} from '@core/component/LexicalMarkdown/plugins';
+import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
+import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import {
+  $traverseNodes,
+  insertText,
+} from '@core/component/LexicalMarkdown/utils';
+import {
   FORMAT_TEXT_COMMAND,
-  KEY_ENTER_COMMAND,
-  KEY_ESCAPE_COMMAND,
+  $getRoot,
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
 import {
   type Accessor,
-  createEffect,
   createSignal,
   type JSXElement,
-  onCleanup,
-  type Setter,
-  Show,
+  onMount,
 } from 'solid-js';
-import { createStore, type SetStoreFunction } from 'solid-js/store';
+import type { IOrganizationUser } from '@core/user';
+import type { HistoryItem } from '@queries/history/history';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -99,123 +59,6 @@ export type useChatMarkdownAreaArgs = {
   addAttachment: (attachment: Attachment) => void;
 };
 
-export function useChatMarkdownArea(
-  args: useChatMarkdownAreaArgs
-): UseChatMarkdown {
-  const [mentions, setMentions] = createSignal<ItemMention[]>([]);
-  const [state, setState] = createSignal<string>('');
-  const [mountRef, setMountRef] = createSignal<HTMLDivElement>();
-  const [formatState, setFormatState] = createStore<SelectionData>(
-    structuredClone(defaultSelectionData)
-  );
-
-  const lexicalWrapper = createLexicalWrapper({
-    type: 'chat',
-    namespace: 'chat-markdown-area',
-    isInteractable: () => true,
-  });
-
-  function focus() {
-    setTimeout(() => {
-      lexicalWrapper.editor.focus();
-    }, 0);
-  }
-
-  function insert(text: string) {
-    insertText(lexicalWrapper.editor, text);
-  }
-
-  function inlineFormat(format: TextFormatType): void {
-    lexicalWrapper.editor.focus();
-    lexicalWrapper.editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-  }
-
-  function nodeFormat(transform: NodeTransformType): void {
-    lexicalWrapper.editor.focus();
-    lexicalWrapper.editor.dispatchCommand(NODE_TRANSFORM, transform);
-  }
-
-  function clear() {
-    initializeEditorEmpty(lexicalWrapper.editor);
-    setMentions([]);
-  }
-  function removeMention(mentionId: string) {
-    lexicalWrapper.editor.update(() => {
-      const root = $getRoot();
-      let nodeToRemove: any = null;
-
-      // Find the document mention node with the given ID
-      $traverseNodes(root, (node: any) => {
-        if (
-          $isDocumentMentionNode(node) &&
-          node.getDocumentId() === mentionId
-        ) {
-          nodeToRemove = node;
-          return true;
-        }
-        return false;
-      });
-
-      if (nodeToRemove) {
-        // Remove the node from the editor
-        nodeToRemove.remove();
-
-        // Update the mentions state to remove this mention
-        setMentions((prev) => prev.filter((m) => m.itemId !== mentionId));
-      }
-    });
-  }
-
-  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-  const addAttachmentFromMention = (mention: ItemMention) => {
-    track(TrackingEvents.CHAT.MENTION.SELECT);
-    const attachment = getAttachmentFromMention(mention);
-    if (attachment) args.addAttachment(attachment);
-  };
-
-  function ChatMarkdownArea(props: ConsumableChatMarkdownAreaProps) {
-    return (
-      <MarkdownArea
-        initialValue={args.initialValue}
-        mountRef={mountRef}
-        setMountRef={setMountRef}
-        markdownState={state}
-        setMarkdownState={setState}
-        lexicalWrapper={lexicalWrapper}
-        formatState={formatState}
-        setFormatState={setFormatState}
-        onCreateMention={addAttachmentFromMention}
-        {...props}
-      />
-    );
-  }
-
-  return {
-    insert,
-    MarkdownArea: ChatMarkdownArea,
-    focus,
-    mentions,
-    markdownText: state,
-    ref: mountRef,
-    clear,
-    formatState,
-    setInlineFormat: inlineFormat,
-    setNodeFormat: nodeFormat,
-    removeMention,
-  };
-}
-
-type MarkdownAreaProps = {
-  mountRef: Accessor<HTMLDivElement | undefined>;
-  setMountRef: Setter<HTMLDivElement | undefined>;
-  onCreateMention: (mention: ItemMention) => void;
-  markdownState: Accessor<string>;
-  setMarkdownState: Setter<string>;
-  lexicalWrapper: LexicalWrapper;
-  setFormatState: SetStoreFunction<SelectionData>;
-  formatState: SelectionData;
-};
-
 export type ConsumableChatMarkdownAreaProps = {
   onChange?: (value: string) => void;
   onEnter?: (e: KeyboardEvent) => boolean;
@@ -233,91 +76,72 @@ export type ConsumableChatMarkdownAreaProps = {
   captureEditor?: (editor: LexicalEditor) => void;
 };
 
-function MarkdownArea(
-  props: MarkdownAreaProps & ConsumableChatMarkdownAreaProps
-) {
-  const { editor, plugins, cleanup } = props.lexicalWrapper;
+export function useChatMarkdownArea(
+  args: useChatMarkdownAreaArgs
+): UseChatMarkdown {
+  const [mentions, setMentions] = createSignal<ItemMention[]>([]);
+  const [mountRef, setMountRef] = createSignal<HTMLDivElement>();
 
-  const isActiveElementInBlock = () => {
-    return false;
-  };
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 
-  const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
+  // Mutable slot that is filled when ChatMarkdownArea first renders.
+  // Props in SolidJS carry reactive getters so accessing e.g. chatProps.onEnter
+  // inside a callback always returns the latest value from the parent.
+  let chatProps: ConsumableChatMarkdownAreaProps = {};
 
-  const onConnect = () => {
-    editor.setEditable(true);
-    if (props.initialValue) {
-      setEditorStateFromMarkdown(editor, props.initialValue);
-    } else {
-      initializeEditorEmpty(editor);
-    }
-    if (!isMobile() && !props.dontFocusOnMount) {
-      editor.focus();
-    }
-  };
-
-  if (props.captureEditor) {
-    props.captureEditor(editor);
-  }
-
-  createEffect(() => {
-    props.onChange?.(props.markdownState());
-  });
-
-  const [showPlaceholder, setShowPlaceholder] = createSignal(true);
-
-  const mentionsMenuOperations = createMenuOperations();
-  const emojisMenuOperations = createMenuOperations();
-
-  const [accessories, setAccessories] = createAccessoryStore();
-
-  onCleanup(() => {
-    cleanup();
-  });
-
-  createEffect(() => {
-    props.markdownState();
-    setShowPlaceholder(editorIsEmpty(editor));
-  });
-
-  plugins
-    .richText()
-    .list()
-    .markdownShortcuts()
-    .delete()
-    .state<string>(props.setMarkdownState, 'markdown')
-    .history(400)
-    .use(
-      customSelectionDataPlugin(
-        props.lexicalWrapper,
-        props.formatState,
-        props.setFormatState
-      )
-    )
-    .use(emojisPlugin({ menu: emojisMenuOperations }))
-    .use(codePlugin({ accessories, setAccessories }))
-    .use(tabIndentationPlugin())
-    .use(
-      filePastePlugin({
-        onPasteFilesAndDirs: (files, directories) => {
-          const onPasteFile = props.onPasteFile;
-          if (onPasteFile) {
-            if (directories.length > 0) {
-              toast.failure('Folder upload not supported here');
-              return;
-            }
-            handleFileFolderDrop(files, [], (entries) => {
-              const files = entries.map((entry) => entry.file);
-              onPasteFile(files);
-            });
-          }
-        },
-      })
-    )
-    .use(textPastePlugin())
-    .use(markdownPastePlugin())
-    .use(restoreFocusPlugin())
-    .use(normalizeEnterPlugin())
+  const editor = buildConfig('chat')
+    .namespace('chat-markdown-area')
+    .withMentions({
+      onCreate: (mention: ItemMention) => {
+        track(TrackingEvents.CHAT.MENTION.SELECT);
+        const attachment = getAttachmentFromMention(mention);
+        if (attachment) args.addAttachment(attachment);
+        setMentions((prev) => [...prev, mention]);
+      },
+      onRemove: (mention) => {
+        setMentions((prev) => prev.filter((m) => m.itemId !== mention.itemId));
+      },
+      block: 'chat',
+      showOpenTabs: true,
+      useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
+    })
+    .withEmojis()
+    .withLinks({ floatingMenu: true })
+    .withHistory({ timeGap: 400 })
+    .withCode()
+    .withRestoreFocus()
+    .withSelectionData()
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        const onPasteFile = chatProps.onPasteFile;
+        if (!onPasteFile) return;
+        if (directories.length > 0) {
+          toast.failure('Folder upload not supported here');
+          return;
+        }
+        handleFileFolderDrop(files, directories, (entries) => {
+          onPasteFile(entries.map((e) => e.file));
+        });
+      },
+    })
+    .onEnter((e) => {
+      const handler = chatProps.onEnter;
+      if (!handler) return false;
+      // Shift+Enter becomes a regular newline — pass through to Lexical.
+      if (e.shiftKey) {
+        Object.defineProperty(e, 'shiftKey', { value: false });
+        return false;
+      }
+      const captured = handler(e);
+      setTimeout(() => editor.controls.focus(), 0);
+      return captured;
+    })
+    .onEscape((e) => chatProps.onEscape?.(e) ?? false)
+    .onChange((md) => chatProps.onChange?.(md))
+    .onFocusLeave({
+      onStart: (e) => chatProps.onFocusLeaveStart?.(e),
+      onEnd: (e) => chatProps.onFocusLeaveEnd?.(e),
+    })
     .use(
       tablePlugin({
         hasCellMerge: true,
@@ -326,133 +150,84 @@ function MarkdownArea(
         hasHorizontalScroll: true,
       })
     )
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
-      })
-    )
     .use(tableCellResizerPlugin())
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        onCreateMention: props.onCreateMention,
-      })
-    );
+    .use(keyboardShortcutsPlugin({ shortcuts: DefaultShortcuts }));
 
-  if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
-    plugins.use(
-      keyboardFocusPlugin({
-        onFocusLeaveStart: props.onFocusLeaveStart,
-        onFocusLeaveEnd: props.onFocusLeaveEnd,
-        ignoreKeys: () =>
-          mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
-      })
-    );
-  }
+  // Build the handle eagerly so that editor.controls / editor.lexical /
+  // editor.selection are available immediately (before <MarkdownShell> mounts).
+  // buildHandle() only creates reactive signals and registers plugins — it does
+  // not require a DOM element. MarkdownShell will receive the cached handle.
+  editor.buildHandle();
 
-  if (props.onEnter !== undefined) {
-    autoRegister(
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (e) => {
-          if (!e) return false;
-          // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
-          // the new "", so we delete the shiftKey and pass along to lexical.
-          if (e.shiftKey) {
-            Object.defineProperty(e, 'shiftKey', { value: false });
-            return false;
-          }
+  function ChatMarkdownArea(props: ConsumableChatMarkdownAreaProps) {
+    // Capture props so that all builder callbacks above can delegate to the
+    // latest reactive getters from the parent component.
+    chatProps = props;
 
-          const captured = props.onEnter!(e);
-          setTimeout(() => {
-            editor.focus();
-          }, 0);
-          if (captured) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          return captured;
-        },
-        // Run at HIGH here to that the mentions menu can run at CRITICAL
-        COMMAND_PRIORITY_HIGH
-      )
+    if (props.captureEditor) {
+      props.captureEditor(editor.lexical);
+    }
+
+    onMount(() => {
+      setMountRef(
+        editor.lexical.getRootElement() as HTMLDivElement | undefined
+      );
+    });
+
+    return (
+      <MarkdownShell
+        config={editor}
+        placeholder={props.placeholder ?? 'Ask AI, @mention anything'}
+        initialValue={args.initialValue ?? props.initialValue}
+        autofocus={!isMobile() && !props.dontFocusOnMount}
+        portalScope={props.portalScope}
+      />
     );
   }
 
-  if (props.onEscape !== undefined) {
-    autoRegister(
-      editor.registerCommand(
-        KEY_ESCAPE_COMMAND,
-        (e) => (props.onEscape ? props.onEscape(e) : false),
-        COMMAND_PRIORITY_CRITICAL
-      )
-    );
+  function removeMention(mentionId: string) {
+    editor.lexical.update(() => {
+      const root = $getRoot();
+      let nodeToRemove: any = null;
+
+      $traverseNodes(root, (node: any) => {
+        if (
+          $isDocumentMentionNode(node) &&
+          node.getDocumentId() === mentionId
+        ) {
+          nodeToRemove = node;
+          return true;
+        }
+        return false;
+      });
+
+      if (nodeToRemove) {
+        nodeToRemove.remove();
+        setMentions((prev) => prev.filter((m) => m.itemId !== mentionId));
+      }
+    });
   }
 
-  onCleanup(() => {
-    cleanup();
-  });
-
-  return (
-    <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
-      <div class="relative w-full">
-        <div
-          ref={(el) => {
-            onElementConnect(el, () => {
-              editor.setRootElement(el);
-              onConnect();
-              props.setMountRef(el);
-            });
-          }}
-          contentEditable={true}
-          class="overflow-y-auto max-h-40 p-0 m-0"
-        ></div>
-        <DecoratorRenderer editor={editor} />
-        <NodeAccessoryRenderer editor={editor} store={accessories} />
-        <Show when={showPlaceholder()}>
-          <div class="pointer-events-none absolute top-0">
-            <Show
-              when={
-                activeElement() !== props.mountRef() && isActiveElementInBlock()
-              }
-              fallback={
-                <p class="py-1.5 p-0 text-ink-extra-muted">
-                  {props.placeholder ?? 'Ask AI, @mention anything'}
-                </p>
-              }
-            >
-              <p class="p-0 m-0 text-ink-extra-muted">
-                Press{' '}
-                <span
-                  class={`rounded-md px-1.5 py-0.5 space-x-1 ${shortcutBadgeStyles['muted']}`}
-                >
-                  {focusShortcut}
-                </span>{' '}
-                to chat with AI
-              </p>
-            </Show>
-          </div>
-        </Show>
-        <EmojiMenu
-          editor={editor}
-          menu={emojisMenuOperations}
-          useBlockBoundary={true}
-          portalScope={props.portalScope}
-        />
-        <MentionsMenu
-          editor={editor}
-          menu={mentionsMenuOperations}
-          users={() => []}
-          block={'chat'}
-          useBlockBoundary={true}
-          portalScope={props.portalScope}
-          useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
-          showOpenTabs
-        />
-        <FloatingMenuGroup>
-          <FloatingLinkMenu />
-        </FloatingMenuGroup>
-      </div>
-    </LexicalWrapperContext.Provider>
-  );
+  return {
+    insert: (text) => insertText(editor.lexical, text),
+    MarkdownArea: ChatMarkdownArea,
+    focus: () => setTimeout(() => editor.controls.focus(), 0),
+    mentions,
+    markdownText: () => editor.controls.getMarkdown(),
+    ref: mountRef,
+    clear: () => {
+      editor.controls.clear();
+      setMentions([]);
+    },
+    formatState: editor.selection as SelectionData,
+    setInlineFormat: (format) => {
+      editor.lexical.focus();
+      editor.lexical.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+    },
+    setNodeFormat: (transform) => {
+      editor.lexical.focus();
+      editor.lexical.dispatchCommand(NODE_TRANSFORM, transform);
+    },
+    removeMention,
+  };
 }

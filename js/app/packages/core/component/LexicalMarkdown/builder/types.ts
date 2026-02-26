@@ -19,6 +19,10 @@ export interface ActionsOptions {
 export interface MentionsOptions {
   sources?: Array<'users' | 'documents'>;
   onRemove?: (mention: ItemMention) => void;
+  onCreate?: (mention: ItemMention) => void;
+  block?: string;
+  showOpenTabs?: boolean;
+  useSnapshotForDocuments?: boolean;
 }
 
 /** Intentional extension point — no options yet. */

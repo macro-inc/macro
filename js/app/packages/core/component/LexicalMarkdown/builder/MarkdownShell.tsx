@@ -230,6 +230,11 @@ export const MarkdownShell: Component<
               menu={menu()}
               useBlockBoundary={false}
               portalScope={props.portalScope}
+              block={builderConfig.mentions?.block as any}
+              showOpenTabs={builderConfig.mentions?.showOpenTabs}
+              useSnapshotForDocuments={
+                builderConfig.mentions?.useSnapshotForDocuments
+              }
             />
           )}
         </Show>

@@ -135,6 +135,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       plugins.use(
         mentionsPlugin({
           menu: mentionsMenuOps,
+          onCreateMention: config.mentions.onCreate,
           onRemoveMention: config.mentions.onRemove,
         })
       );
