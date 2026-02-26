@@ -24,6 +24,7 @@ pub use request::{NotificationResult, SendNotificationRequest, SendNotificationR
 use chrono::{DateTime, Utc};
 use model_entity::Entity;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+use uuid::Uuid;
 
 use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
 

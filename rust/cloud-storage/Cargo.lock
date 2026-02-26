@@ -6427,6 +6427,7 @@ dependencies = [
  "chrono",
  "email_validator",
  "http-body-util",
+ "itertools 0.14.0",
  "macro_auth",
  "macro_aws_config",
  "macro_cors",

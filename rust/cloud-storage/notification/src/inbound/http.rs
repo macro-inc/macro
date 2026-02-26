@@ -40,7 +40,7 @@ pub struct NotificationIdPath {
 
 /// the router state for a notification router
 pub struct NotificationRouterState<S> {
-    inner: Arc<S>,
+    pub inner: Arc<S>,
 }
 
 impl<S> Clone for NotificationRouterState<S> {
@@ -90,7 +90,7 @@ pub async fn list_user_notifications<
     S: NotificationReader,
     T: Serialize + DeserializeOwned + Send,
 >(
-    State(service): State<NotificationRouterState<S>>,
+    service: &NotificationRouterState<S>,
     macro_user: MacroUserExtractor,
     Query(Params { limit }): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
