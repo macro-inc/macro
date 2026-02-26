@@ -25,13 +25,26 @@ pub struct DigestBatch {
 
 /// Result of attempting to claim a digest batch.
 #[derive(Debug)]
-pub enum ClaimResult {
+pub enum ClaimResult<T> {
     /// A digest batch is ready and was claimed.
-    Ready(DigestBatch),
+    Ready(T),
     /// No digests are pending.
     Empty,
     /// Digests are pending but none are ready yet. Contains duration until the next one is ready.
     Wait(Duration),
+}
+
+impl<T> ClaimResult<T> {
+    pub(crate) fn map<F, U>(self, f: F) -> ClaimResult<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            ClaimResult::Ready(v) => ClaimResult::Ready(f(v)),
+            ClaimResult::Empty => ClaimResult::Empty,
+            ClaimResult::Wait(duration) => ClaimResult::Wait(duration),
+        }
+    }
 }
 
 /// Trait for batching notifications into digests for delayed email delivery.
@@ -60,7 +73,9 @@ pub trait DigestBatcher: Send + Sync + 'static {
     ///
     /// The claim is atomic - only one caller will receive a given user's digest
     /// even with concurrent workers.
-    fn claim_ready_digest(&self) -> impl Future<Output = Result<ClaimResult, Report>> + Send;
+    fn claim_ready_digest(
+        &self,
+    ) -> impl Future<Output = Result<ClaimResult<DigestBatch>, Report>> + Send;
 }
 
 /// trait for checking whether or not a user has push notifications enabled

@@ -4591,3 +4591,66 @@ async fn test_dyn_all_types_filtered_to_empty(db: PgPool) -> anyhow::Result<()> 
 
     Ok(())
 }
+
+/// Reproduces a 500 error when all filter types are provided simultaneously.
+/// The `chat_filters.owners` filter generates `c.owner` but the Chat table
+/// uses `"userId"` as its owner column, not `owner`.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_all_filter_types_combined(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{
+        ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
+    };
+
+    let nil = "00000000-0000-0000-0000-000000000000".to_string();
+
+    let entity_filters = EntityFilters {
+        channel_filters: ChannelFilters {
+            channel_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        document_filters: DocumentFilters {
+            document_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        email_filters: EmailFilters {
+            recipients: vec![nil.clone()],
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            project_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            owners: vec!["macro|user-1@test.com".to_string()],
+            ..Default::default()
+        },
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        100,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    // The query should execute without a SQL error.
+    // With the nil UUID filters we expect no document/project matches,
+    // but the chat owner filter should return chats owned by the user.
+    assert!(
+        items.iter().all(|i| matches!(i, SoupItem::Chat(_))),
+        "Only chats should match (documents/projects filtered to nil UUID)"
+    );
+
+    Ok(())
+}

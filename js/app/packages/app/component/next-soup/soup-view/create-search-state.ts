@@ -168,7 +168,7 @@ export const createSearchState = ({
       // NOTE: this is a temporary hack because the fresh search fuzzy library
       // does not give us the highlighted matches
       const results = nameFuzzySearchFilter(
-        freshSearchResults.map((r) => r.item),
+        freshSearchResults.map((r) => r.item.data),
         query
       );
       return results;

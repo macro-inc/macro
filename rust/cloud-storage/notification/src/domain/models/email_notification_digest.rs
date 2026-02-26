@@ -40,6 +40,11 @@ impl<T> BatchSend<T> {
     pub(crate) fn inner(&self) -> &T {
         &self.0
     }
+
+    /// Consume self and return the inner value.
+    pub fn into_inner(self) -> T {
+        self.0
+    }
 }
 
 #[cfg(test)]

@@ -182,12 +182,12 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   });
 
   // Search function for fuzzy matching (same config as PropertyEntitySelector)
-  const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain, currentUserId),
-    getEntitySearchText,
-    isChannelEntity,
-    getEntityTimestampedItem
-  );
+  const entitySearch = createFreshSearch<CombinedEntity>({
+    config: createEntitySearchConfig(currentUserDomain, currentUserId),
+    getName: getEntitySearchText,
+    isChannelItem: isChannelEntity,
+    getTimestamp: getEntityTimestampedItem,
+  });
 
   // Get selected entity IDs for filtering
   const selectedIds = createMemo(

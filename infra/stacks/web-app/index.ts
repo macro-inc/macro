@@ -88,7 +88,7 @@ execSync(`cp ${buildOutputPath}/index.html ./appRouteLambda/index.html`, {
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
   {
-    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "*.js.map"`,
+    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete${stack === 'prod' ? ' --exclude "*.js.map"' : ''}`,
     triggers: [Date.now()],
   },
   {

@@ -1,18 +1,16 @@
 //! Request and response models for the notification service.
 
-use crate::domain::{
-    models::{
-        ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-        RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification, mobile,
-        mobile::MessageAttributes, queue_message::EmailContent,
-    },
-    service::SendNotificationError,
+use crate::domain::models::{
+    ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
+    RecipientExclusion,
+    apple::APNSPushNotification,
+    mobile::{self, MessageAttributes},
+    queue_message::EmailCreateBundle,
 };
 use cowlike::CowLike;
 use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -49,6 +47,8 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 type BuildApns<T, U> =
     Box<dyn FnMut(T, uuid::Uuid) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
 
+type BuildEmail<T> = Box<dyn FnMut(&T) -> EmailCreateBundle + Send>;
+
 /// Full notification request with optional delivery channel builders.
 ///
 /// Created from [`SendNotificationRequestBuilder::into_request`] and can be
@@ -58,7 +58,7 @@ pub struct SendNotificationRequest<'a, T, U> {
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
     pub(crate) build_apns: Option<BuildApns<T, U>>,
     /// define how to turn T into an email content to be sent as an email
-    pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent + Send>>,
+    pub(crate) build_email: Option<BuildEmail<T>>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
 }
@@ -97,7 +97,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
     /// Add a custom email content builder.
     pub fn with_email(mut self) -> Self {
-        self.build_email = Some(Box::new(|notif: T| notif.into_email()));
+        self.build_email = Some(Box::new(|notif: &T| EmailCreateBundle::new(notif)));
         self
     }
 }
@@ -175,23 +175,6 @@ impl<'a, T: Notification> SendNotificationRequestBuilder<'a, T> {
     /// Get the event type name from the notification.
     pub fn event_type(&self) -> &'static str {
         T::TYPE_NAME
-    }
-
-    /// return the valid rate limit for this notification if it exists,
-    /// return none if there is no rate limit or error if there is a misconfig
-    pub fn get_rate_limit(
-        &self,
-    ) -> Result<Option<(RateLimitKey, RateLimitConfig)>, Report<SendNotificationError>> {
-        let config = T::rate_limit_config();
-        let key = self.notification.rate_limit_key();
-
-        match (config, key) {
-            (Some(config), Some(key)) => Ok(Some((key, config))),
-            (None, None) => Ok(None),
-            (Some(_), None) | (None, Some(_)) => {
-                Err(report!(SendNotificationError::RateLimitConfigErr))
-            }
-        }
     }
 }
 

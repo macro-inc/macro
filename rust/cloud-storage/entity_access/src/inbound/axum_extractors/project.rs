@@ -29,9 +29,9 @@ use model_user::axum_extractor::OptionalMacroUserExtractor;
 ///
 /// - Project context must be loaded (BasicProject in extensions)
 #[derive(Debug)]
-pub struct ProjectAccessLevelExtractor<T, Svc> {
+pub struct ProjectAccessLevelExtractor<T: RequiredAccessLevel, Svc> {
     /// The entity access receipt
-    pub entity_access_receipt: EntityAccessReceipt,
+    pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
 }
 
@@ -79,6 +79,7 @@ where
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
+                    _marker: PhantomData,
                 },
                 _marker: PhantomData,
             });
@@ -98,6 +99,7 @@ where
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
+                    _marker: PhantomData,
                 },
                 _marker: PhantomData,
             });
@@ -138,6 +140,7 @@ where
                     .map(|m| EntityAccessAuth::Authenticated(m.0))
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: EntityPermission::AccessLevel { access_level },
+                _marker: PhantomData,
             },
             _marker: PhantomData,
         })
@@ -194,7 +197,7 @@ impl ProjectOrParentId {
 ///
 /// Downstream consumers also use the body (which is an antipattern) so we need to keep the value around.
 #[derive(Debug)]
-pub enum ProjectBodyAccessLevelExtractor<T, V, Svc> {
+pub enum ProjectBodyAccessLevelExtractor<T: RequiredAccessLevel, V, Svc> {
     /// A project was found in the body and access was validated.
     FoundProject {
         /// The project ID that was found.
@@ -202,7 +205,7 @@ pub enum ProjectBodyAccessLevelExtractor<T, V, Svc> {
         /// Marker for the desired access level.
         desired: PhantomData<(T, Svc)>,
         /// The entity access receipt
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<T>,
         /// The parsed body.
         body: V,
     },
@@ -215,7 +218,7 @@ pub enum ProjectBodyAccessLevelExtractor<T, V, Svc> {
     },
 }
 
-impl<T, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
+impl<T: RequiredAccessLevel, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     /// Extract the body from this extractor.
     pub fn into_inner(self) -> V {
         match self {
@@ -281,6 +284,7 @@ where
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
+                    _marker: PhantomData,
                 },
                 project,
                 desired: PhantomData,
@@ -316,6 +320,7 @@ where
                     .map(|m| EntityAccessAuth::Authenticated(m.0))
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: EntityPermission::AccessLevel { access_level },
+                _marker: PhantomData,
             },
             project,
             desired: PhantomData,
