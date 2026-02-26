@@ -113,7 +113,7 @@ export interface EditorConfig {
   actions: ActionsOptions | false;
 }
 
-/** @internal consumed by MarkdownEditor; do not access directly */
+/** @internal consumed by MarkdownShell; do not access directly */
 export interface EditorInternals {
   builderConfig: EditorConfig;
   lexicalWrapper: ReturnType<typeof createLexicalWrapper>;
@@ -135,16 +135,16 @@ export interface EditorHandle {
   lexical: LexicalEditor;
   plugins: PluginManager;
   selection?: Store<SelectionData>;
-  /** @internal consumed by MarkdownEditor component; do not access directly */
+  /** @internal consumed by MarkdownShell component; do not access directly */
   _internal: EditorInternals;
 }
 
 /**
  * Minimal interface satisfied by {@link MarkdownEditorBuilder}.
- * `MarkdownEditor` accepts this instead of the concrete class to avoid a
+ * `MarkdownShell` accepts this instead of the concrete class to avoid a
  * circular module dependency.
  */
 export interface EditorBuilder {
-  /** @internal — called once by `<MarkdownEditor>` to instantiate reactive state */
+  /** @internal — called once by `<MarkdownShell>` to instantiate reactive state */
   _materialize(): EditorHandle;
 }

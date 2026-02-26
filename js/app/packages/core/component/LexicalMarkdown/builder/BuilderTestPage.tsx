@@ -1,7 +1,7 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { JSX } from 'solid-js';
-import { buildMarkdownEditor, MarkdownEditor } from './createMarkdownEditor';
+import { buildMarkdownEditor, MarkdownShell } from './createMarkdownEditor';
 
 function Container(props: {
   label: string;
@@ -48,7 +48,7 @@ function Editor() {
 
   return (
     <Container label="Builder Pattern">
-      <MarkdownEditor editor={editor} placeholder="Cool test placeholder" />
+      <MarkdownShell editor={editor} placeholder="Cool test placeholder" />
     </Container>
   );
 }

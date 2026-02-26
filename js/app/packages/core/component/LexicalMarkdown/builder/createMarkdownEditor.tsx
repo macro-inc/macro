@@ -17,7 +17,7 @@ export type {
   MentionsOptions,
 } from './types';
 
-export { MarkdownEditor } from './MarkdownEditor';
+export { MarkdownShell } from './MarkdownShell';
 export {
   MarkdownEditorBuilder,
   buildMarkdownEditor,

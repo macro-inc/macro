@@ -39,7 +39,7 @@ import { MentionsMenu } from '../component/menu/MentionsMenu';
 import { ActionMenu } from '../component/menu/ActionsMenu';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
-export const MarkdownEditor: Component<
+export const MarkdownShell: Component<
   { editor: EditorBuilder } & EditorComponentProps
 > = (props) => {
   const handle = props.editor._materialize();
@@ -212,7 +212,6 @@ export const MarkdownEditor: Component<
           {(store) => <NodeAccessoryRenderer editor={editor} store={store()} />}
         </Show>
 
-        {/* Placeholder */}
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
             <p class="my-1.5 pointer-events-none">
@@ -221,14 +220,12 @@ export const MarkdownEditor: Component<
           </div>
         </Show>
 
-        {/* Drag Insert Indicator */}
         <Show when={state.dragInsertStore}>
           {(store) => (
             <DragInsertIndicator state={store()} active={!props.disabled} />
           )}
         </Show>
 
-        {/* Mentions Menu */}
         <Show when={state.mentionsMenuOps}>
           {(menu) => (
             <MentionsMenu
@@ -240,7 +237,6 @@ export const MarkdownEditor: Component<
           )}
         </Show>
 
-        {/* Actions (slash command) Menu */}
         <Show when={state.actionsMenuOps}>
           {(menu) => (
             <ActionMenu

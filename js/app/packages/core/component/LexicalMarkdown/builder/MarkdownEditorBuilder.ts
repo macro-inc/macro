@@ -155,7 +155,7 @@ export class MarkdownEditorBuilder implements EditorBuilder {
   }
 
   /**
-   * @internal — called once by `<MarkdownEditor>` to instantiate reactive
+   * @internal — called once by `<MarkdownShell>` to instantiate reactive
    * state. Subsequent calls return the cached handle.
    */
   _materialize(): EditorHandle {
@@ -167,34 +167,30 @@ export class MarkdownEditorBuilder implements EditorBuilder {
     return this._handle;
   }
 
-  /** Imperative controls (focus, blur, clear, get/set content). Available after `<MarkdownEditor>` mounts. */
+  /** Imperative controls (focus, blur, clear, get/set content). Available after `<MarkdownShell>` mounts. */
   get controls(): EditorControls {
     if (!this._handle)
       throw new Error(
-        'editor.controls accessed before <MarkdownEditor> mounted'
+        'editor.controls accessed before <MarkdownShell> mounted'
       );
     return this._handle.controls;
   }
 
-  /** The underlying Lexical editor instance. Available after `<MarkdownEditor>` mounts. */
+  /** The underlying Lexical editor instance. Available after `<MarkdownShell>` mounts. */
   get lexical(): LexicalEditor {
     if (!this._handle)
-      throw new Error(
-        'editor.lexical accessed before <MarkdownEditor> mounted'
-      );
+      throw new Error('editor.lexical accessed before <MarkdownShell> mounted');
     return this._handle.lexical;
   }
 
-  /** The plugin manager. Available after `<MarkdownEditor>` mounts. */
+  /** The plugin manager. Available after `<MarkdownShell>` mounts. */
   get plugins(): PluginManager {
     if (!this._handle)
-      throw new Error(
-        'editor.plugins accessed before <MarkdownEditor> mounted'
-      );
+      throw new Error('editor.plugins accessed before <MarkdownShell> mounted');
     return this._handle.plugins;
   }
 
-  /** Reactive selection state, if `.withSelectionData()` was enabled. Available after `<MarkdownEditor>` mounts. */
+  /** Reactive selection state, if `.withSelectionData()` was enabled. Available after `<MarkdownShell>` mounts. */
   get selection(): Store<SelectionData> | undefined {
     return this._handle?.selection;
   }
@@ -204,7 +200,7 @@ export class MarkdownEditorBuilder implements EditorBuilder {
  * Creates a fluent builder for configuring a markdown editor.
  *
  * Chain feature methods to opt into capabilities, then pass the builder to
- * directly to `<MarkdownEditor editor={...} />`.
+ * directly to `<MarkdownShell editor={...} />`.
  *
  * Use the builder variable to access `controls`, `lexical`, `plugins`, and
  * `selection` after the component has mounted.
@@ -226,7 +222,7 @@ export class MarkdownEditorBuilder implements EditorBuilder {
  *   .onEscape(() => { containerRef()?.focus(); return true; });
  *
  * // In JSX — no .build() needed:
- * <MarkdownEditor editor={editor} placeholder="Write something..." />
+ * <MarkdownShell editor={editor} placeholder="Write something..." />
  *
  * // Access controls after mount (e.g. in event handlers):
  * editor.controls.focus();
