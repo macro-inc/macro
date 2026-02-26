@@ -63,7 +63,14 @@ const InboxTabs = () => {
   // sees the final query filters and active filter state in a single tick,
   // avoiding intermediate re-renders with mismatched query keys.
   const toggleFocus = (id: 'signal' | 'noise' | 'all') => {
-    if (id === 'all') return;
+    if (id === 'all') {
+      batch(() => {
+        setQueryFilters({});
+        soup.filters.activate('explicit-noise');
+        soup.filters.deactivate('not-done');
+      });
+      return;
+    }
 
     const comb = { id, isActive: soup.filters.isActive(id) };
 

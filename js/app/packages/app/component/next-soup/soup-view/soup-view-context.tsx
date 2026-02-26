@@ -137,27 +137,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     return {
       ...base,
-      ...props.queryFilters,
-      channel_filters: {
-        ...base.channel_filters,
-        ...props.queryFilters?.channel_filters,
-      },
-      chat_filters: {
-        ...base.chat_filters,
-        ...props.queryFilters?.chat_filters,
-      },
-      document_filters: {
-        ...base.document_filters,
-        ...props.queryFilters?.document_filters,
-      },
-      email_filters: {
-        ...base.email_filters,
-        ...props.queryFilters?.email_filters,
-      },
-      project_filters: {
-        ...base.project_filters,
-        ...props.queryFilters?.project_filters,
-      },
     };
   });
 
