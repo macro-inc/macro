@@ -53,6 +53,7 @@ import {
 } from '@app/component/next-soup/soup-view/task-sub-filters';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { match } from 'ts-pattern';
+import { Hotkey } from '@core/component/Hotkey';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -588,19 +589,19 @@ export const SoupSearchbar = () => {
   };
 
   return (
-    <div class="flex items-center shrink-0 grow min-w-0 mobile:-order-2">
+    <div class="size-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
       <Tooltip
-        class="w-full"
+        class="size-full"
         placement="bottom-start"
-        tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
+        tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
       >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 mobile:min-w-35"
+          class="relative flex items-center gap-1.5 h-full rounded-md py-0.5 mobile:h-9 px-2.5 mobile:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20':
+            'text-ink-muted bg-ink/10 hover:text-ink':
               !searchText() && !searchFocused(),
-            'bg-accent/15 text-ink': searchFocused(),
+            'bg-ink/15 text-ink': searchFocused(),
           }}
           onMouseDown={(e) => {
             if (e.target !== ref()) {
@@ -609,22 +610,7 @@ export const SoupSearchbar = () => {
             }
           }}
         >
-          <Show
-            when={searchText()}
-            fallback={<SearchIcon class="size-4.5 shrink-0" />}
-          >
-            <button
-              type="button"
-              class="size-4.5 shrink-0 hover:opacity-60"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setSearchText('');
-              }}
-            >
-              <XIcon class="size-4.5" />
-            </button>
-          </Show>
+          <SearchIcon class="size-4.5 shrink-0" />
           <span
             ref={(el) => {
               measureSpan = el;
@@ -633,12 +619,7 @@ export const SoupSearchbar = () => {
             aria-hidden="true"
           />
           <Show when={!searchText() && !searchFocused()}>
-            <span class="leading-none pointer-events-none">
-              <span class="underline underline-offset-2 decoration-current/60">
-                {IS_MAC ? '⌘' : '^'}F
-              </span>
-              <span>ilter</span>
-            </span>
+            <span class="leading-none pointer-events-none text-sm">Search</span>
           </Show>
           <input
             ref={setRef}
@@ -657,9 +638,27 @@ export const SoupSearchbar = () => {
                 e.currentTarget.blur();
               }
             }}
-            class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
+            class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
             style={{ width: `${inputWidth()}px` }}
           />
+          <Show when={!searchFocused() && !searchText()}>
+            <div class="ml-auto flex border border-edge text-xs rounded-md items-center px-1 py-px">
+              <Hotkey shortcut="cmd+f" />
+            </div>
+          </Show>
+          <Show when={searchText()}>
+            <button
+              type="button"
+              class="ml-auto size-4.5 shrink-0 hover:opacity-60"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchText('');
+              }}
+            >
+              <XIcon class="size-4.5" />
+            </button>
+          </Show>
         </div>
       </Tooltip>
     </div>
