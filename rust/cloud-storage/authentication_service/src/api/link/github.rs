@@ -4,6 +4,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use serde_utils::urlencode::UrlEncoded;
+use url::Url;
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
@@ -57,7 +59,7 @@ impl IntoResponse for InitGithubLinkError {
 #[utoipa::path(
         post,
         operation_id = "init_github_link",
-        path = "/link",
+        path = "/link/github",
         responses(
             (status = 200, body=InitGithubLinkResponse),
             (status = 400, body=ErrorResponse),
@@ -75,9 +77,7 @@ pub async fn init_github_link_handler(
     // Parse fusion_user_id to UUID
     let fusion_user_id = uuid::Uuid::parse_str(&user_context.fusion_user_id)?;
 
-    // TODO: check if user already has github link
-
-    // TODO: this should probably be a middleware
+    // TODO: this should probably be a middleware or extractor
     // Check count of in-progress links
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(

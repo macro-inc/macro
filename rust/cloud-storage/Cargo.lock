@@ -526,6 +526,7 @@ dependencies = [
  "email_validator",
  "fusionauth",
  "futures",
+ "github",
  "http-body-util",
  "jsonwebtoken",
  "last_online_tracker",
