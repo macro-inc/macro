@@ -1,13 +1,14 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import {
+  buildMarkdownEditor,
+  MarkdownEditor,
+} from '@core/component/LexicalMarkdown/builder/createMarkdownEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import {
   propertyApiValuesToNormalized,
   propertyValueToApi,
@@ -45,7 +46,6 @@ import type { PropertyDefinition } from '@service-properties/generated/schemas/p
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import { Button } from '@ui/components/Button';
-import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
@@ -239,6 +239,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         return {
           title: draft.title,
           content: draft.content,
+          editorState: draft.editorState,
           propertyValues: draft.propertyValues,
           isDraftLoaded: true,
         };
@@ -247,6 +248,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     return {
       title: props.initialTitle ?? '',
       content: props.initialContent ?? '',
+      editorState: undefined,
       propertyValues: getDefaultPropertyValues(),
       isDraftLoaded: false,
     };
@@ -255,15 +257,53 @@ export function ComposeTask(props: ComposeTaskProps) {
   const initialState = initializeFromDraft();
   const [title, setTitle] = createSignal(initialState.title);
   const [content, setContent] = createSignal(initialState.content);
-  const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+
+  // Cycles through tabbable elements when focus leaves the editor.
+  // References bodyEditor.controls above — safe because callbacks only run at user interaction time.
+  const editorFocusChange = (e: KeyboardEvent, dir: 1 | -1) => {
+    const root = editor.lexical.getRootElement();
+    const container = containerRef();
+    if (!(root && container)) return;
+    const tabbables = tabbable(container);
+    const ndx = tabbables.indexOf(root);
+    const next = (ndx + dir + tabbables.length) % tabbables.length;
+    const elem = tabbables.at(next);
+    if (elem) {
+      elem.focus();
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const editor = buildMarkdownEditor()
+    .namespace('compose-task-body')
+    .withMentions()
+    .withEmojis()
+    .withActions()
+    .withLinks()
+    .withHistory()
+    .withMedia({ fileDrop: true })
+    .withRestoreFocus()
+    .onChange((value) => setContent(value))
+    .onEscape(() => {
+      containerRef()?.focus();
+      return true;
+    })
+    .onFocusLeave({
+      onStart: (e) => editorFocusChange(e, -1),
+      onEnd: (e) => editorFocusChange(e, +1),
+    });
+
   const [attachHotkeys, composeHotkeyScope] = useHotkeyDOMScope(
     'compose-task',
     true
   );
+
   const [isDraftLoaded, setIsDraftLoaded] = createSignal(
     initialState.isDraftLoaded
   );
+
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
 
@@ -271,10 +311,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     Record<string, PropertyApiValues>
   >(initialState.propertyValues);
 
-  // History upsert mutation
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
 
-  // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
   const debouncedSave = debounce(saveTaskComposerDraft, 300);
 
@@ -291,6 +329,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     debouncedSave({
       title: currentTitle,
       content: currentContent,
+      editorState: editor.controls.getState(),
       propertyValues: currentProperties,
     });
   });
@@ -403,8 +442,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     setPropertyValues(reconcile(getDefaultPropertyValues()));
     setIsDraftLoaded(false);
 
-    const ed = bodyEditor();
-    ed && initializeEditorEmpty(ed);
+    editor.controls.clear();
 
     if (!createMore()) {
       splitPanel.handle.close();
@@ -432,23 +470,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     setContent('');
     setPropertyValues(reconcile(getDefaultPropertyValues()));
     setIsDraftLoaded(false);
-    const ed = bodyEditor();
-    ed && initializeEditorEmpty(ed);
-  };
-
-  const editorFocusChange = (e: KeyboardEvent, dir: 1 | -1) => {
-    const root = bodyEditor()?.getRootElement();
-    const container = containerRef();
-    if (!(root && container)) return;
-    const tabbables = tabbable(container);
-    const ndx = tabbables.indexOf(root);
-    const next = (ndx + dir + tabbables.length) % tabbables.length;
-    const elem = tabbables.at(next);
-    if (elem) {
-      elem.focus();
-      e.preventDefault();
-      e.stopPropagation();
-    }
+    editor.controls.clear();
   };
 
   onMount(() => {
@@ -477,13 +499,9 @@ export function ComposeTask(props: ComposeTaskProps) {
     >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.handle.isPopover()}>
-          <DeprecatedIconButton
-            icon={XIcon}
-            onClick={handleClose}
-            size="sm"
-            tabIndex={-1}
-            theme="current"
-          />
+          <Button onClick={handleClose} tabIndex={-1} class="aspect-square p-1">
+            <XIcon class="size-4" />
+          </Button>
         </Show>
         <div class="flex items-center gap-2 flex-1">
           <span class="text-sm font-medium text-ink-disabled/50">
@@ -491,14 +509,14 @@ export function ComposeTask(props: ComposeTaskProps) {
           </span>
         </div>
         <Show when={title() || content()}>
-          <DeprecatedIconButton
-            icon={TrashIcon}
+          <Button
             onClick={handleClearDraft}
-            size="sm"
             tabIndex={-1}
-            theme="current"
+            class="aspect-square p-1"
             title="Clear draft"
-          />
+          >
+            <TrashIcon class="size-4" />
+          </Button>
         </Show>
       </div>
       <div class="w-full border-b border-edge-muted/50" />
@@ -526,30 +544,24 @@ export function ComposeTask(props: ComposeTaskProps) {
                 }
               }
               if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                const editor = bodyEditor();
-                if (editor) {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  editor.focus(undefined, { defaultSelection: 'rootEnd' });
-                }
+                e.stopPropagation();
+                e.preventDefault();
+                editor.lexical.focus(undefined, {
+                  defaultSelection: 'rootEnd',
+                });
               }
             }}
           />
         </div>
 
-        <div class="min-h-0 text-base m-2">
-          <MarkdownTextarea
-            editable={() => true}
-            onChange={(value) => setContent(value)}
-            initialValue={content()}
+        <div class="min-h-0 text-base m-2 max-h-80 overflow-y-auto scrollbar-hidden">
+          <MarkdownEditor
+            editor={editor}
+            initialState={initialState.editorState}
+            initialValue={
+              !initialState.editorState ? initialState.content : undefined
+            }
             placeholder={props.placeholder ?? 'Add description...'}
-            captureEditor={setBodyEditor}
-            onEscape={() => {
-              containerRef()?.focus();
-              return true;
-            }}
-            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
-            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
             portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
           />
         </div>
