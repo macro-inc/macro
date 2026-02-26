@@ -77,8 +77,8 @@ export const nameFuzzySearchFilter = (
 };
 
 export const createSoupFreshSearch = () =>
-  createFreshSearch<EntityData>(
-    {
+  createFreshSearch<EntityData>({
+    config: {
       useViewedAt: true,
       channelBoost: 3,
       fuzzyWeight: 0.7,
@@ -86,7 +86,7 @@ export const createSoupFreshSearch = () =>
       minFuzzyThreshold: 0.1,
       commaSeparatedChannelMatch: true,
     },
-    (item) => item.name,
-    (item) => item.type === 'channel',
-    (item) => item
-  );
+    getName: (item) => item.name,
+    isChannelItem: (item) => item.type === 'channel',
+    getTimestamp: (item) => item,
+  });

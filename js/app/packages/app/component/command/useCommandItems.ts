@@ -188,12 +188,12 @@ export function useCommandItems(
   const search = createMemo(() => {
     const q = query();
     const hasQuery = q.trim().length > 0;
-    return createFreshSearch<CommandMenuItem>(
-      createSearchConfig(hasQuery),
-      (item) => item.searchText,
+    return createFreshSearch<CommandMenuItem>({
+      config: createSearchConfig(hasQuery),
+      getName: (item) => item.searchText,
       isChannelItem,
-      (item) => item.timestamps
-    );
+      getTimestamp: (item) => item.timestamps,
+    });
   });
 
   const filteredItems = createMemo(() => {

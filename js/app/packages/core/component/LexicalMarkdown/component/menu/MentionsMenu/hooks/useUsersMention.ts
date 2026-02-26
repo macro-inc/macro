@@ -68,15 +68,16 @@ export function useUsersMention(
   });
 
   const userSearch = () =>
-    createFreshSearch<UserItem>(
-      FreshSearchPresets.baseUserSearch<UserItem>(
+    createFreshSearch<UserItem>({
+      config: FreshSearchPresets.baseUserSearch<UserItem>(
         currentUserDomain,
         (item) => item.data.email
       ),
-      (item) => item.searchText,
-      (_) => false,
-      (item) => ({ lastInteraction: item.timestamps.lastInteraction })
-    );
+      getName: (item) => item.searchText,
+      getTimestamp: (item) => ({
+        lastInteraction: item.timestamps.lastInteraction,
+      }),
+    });
 
   const users = createLazyMemo(() => {
     const term = searchTerm();

@@ -200,12 +200,19 @@ function freshSort<T>(
   return scoredResults;
 }
 
-export function createFreshSearch<T>(
-  config: FreshSortConfig<T> = {},
-  getName: NameFn<T>,
-  isChannelItem: IsChannelFn<T>,
-  getTimestamp: TimestampFn<T>
-) {
+export interface CreateFreshSearchArgs<T> {
+  config?: FreshSortConfig<T>;
+  getName: NameFn<T>;
+  isChannelItem?: IsChannelFn<T>;
+  getTimestamp: TimestampFn<T>;
+}
+
+export function createFreshSearch<T>({
+  config = {},
+  getName,
+  isChannelItem = () => false,
+  getTimestamp,
+}: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
 

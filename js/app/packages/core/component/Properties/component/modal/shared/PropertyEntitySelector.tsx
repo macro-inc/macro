@@ -216,12 +216,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return converted;
   });
 
-  const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain, currentUserId),
-    getEntitySearchText,
-    isChannelEntity,
-    getEntityTimestampedItem
-  );
+  const entitySearch = createFreshSearch<CombinedEntity>({
+    config: createEntitySearchConfig(currentUserDomain, currentUserId),
+    getName: getEntitySearchText,
+    isChannelItem: isChannelEntity,
+    getTimestamp: getEntityTimestampedItem,
+  });
 
   const filteredEntities = createMemo(() => {
     const term = searchTerm();

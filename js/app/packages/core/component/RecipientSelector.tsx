@@ -333,18 +333,18 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   });
 
   // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
-    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
+    config: FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
       currentUserDomain,
       getRecipientOptionEmail
     ),
-    getRecipientOptionTextValue,
-    (item) => item.kind === 'channel',
-    (item) => ({
+    getName: getRecipientOptionTextValue,
+    isChannelItem: (item) => item.kind === 'channel',
+    getTimestamp: (item) => ({
       lastInteraction:
         item.kind === 'user' ? item.data.lastInteraction : undefined,
-    })
-  );
+    }),
+  });
 
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const recipients = createMemo(() => {
