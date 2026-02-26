@@ -164,7 +164,7 @@ export const SoupView = (props: SoupViewProps) => {
       <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
         <div class="size-full flex flex-col">
           <SplitHeaderLeft>
-            <div class="w-full flex items-center justify-between p-2">
+            <div class="size-full flex items-center justify-between p-2">
               <SoupViewTabs />
               <div class="max-w-56 w-full">
                 <SoupSearchbar />

@@ -8,9 +8,19 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { useUserContext } from '@core/context/user';
-import { batch, createMemo, Match, Switch } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  For,
+  Match,
+  type ParentComponent,
+  Switch,
+} from 'solid-js';
+import {
+  SegmentedControl as KSegmentedControl,
+  type SegmentedControlRootProps,
+} from '@kobalte/core/segmented-control';
 
 const useApplyPreset = () => {
   const soup = useSoup();
@@ -94,7 +104,11 @@ const InboxTabs = () => {
   return (
     <div>
       <SegmentedControl
-        list={Object.keys(VIEW_TAB_PRESETS.inbox.tabs)}
+        list={[
+          { value: 'signal', label: 'Signal' },
+          { value: 'noise', label: 'Noise' },
+          { value: 'all', label: 'All' },
+        ]}
         onChange={(value) => applyTabPreset('inbox', value)}
       />
     </div>
@@ -201,5 +215,51 @@ const FilesTabs = () => {
         onChange={(value) => applyTabPreset('files', value)}
       />
     </div>
+  );
+};
+
+export const SegmentedControl: ParentComponent<
+  {
+    list: { value: string; label: string }[];
+    value?: string;
+  } & SegmentedControlRootProps
+> = (props) => {
+  const onChange = (newValue: string) => {
+    props.onChange?.(newValue);
+  };
+
+  return (
+    <KSegmentedControl
+      class="size-full text-sm bg-ink/5 p-1 rounded-md"
+      defaultValue={props.list[0]?.value}
+      onChange={onChange}
+      disabled={props.disabled}
+    >
+      <div class="relative" role="presentation">
+        <KSegmentedControl.Indicator class="absolute rounded bg-accent/10 transition-transform" />
+        <div class="flex" role="presentation">
+          <For each={props.list}>
+            {(item) => {
+              const itemValue = () =>
+                typeof item === 'object' ? item.value : item;
+              const itemLabel = () =>
+                typeof item === 'object' ? item.label : item;
+              return (
+                <KSegmentedControl.Item
+                  value={itemValue()}
+                  class="relative text-ink-muted hover:text-ink px-2 py-0.5 text-sm font-medium data-[checked]:text-accent transition-colors not-first-of-type:before:absolute not-first-of-type:before:inset-0 not-first-of-type:before:bg-ink/10 not-first-of-type:before:h-full not-first-of-type:before:w-0.5 data-[checked]:before:opacity-0 data-[checked]:[&+::before]:opacity-0 not-first-of-type:before:opacity-100 not-first-of-type:before:transition-opacity"
+                  disabled={props.disabled}
+                >
+                  <KSegmentedControl.ItemInput class="absolute inset-0 size-full pointer-events-none" />
+                  <KSegmentedControl.ItemLabel class="flex">
+                    {itemLabel()}
+                  </KSegmentedControl.ItemLabel>
+                </KSegmentedControl.Item>
+              );
+            }}
+          </For>
+        </div>
+      </div>
+    </KSegmentedControl>
   );
 };
