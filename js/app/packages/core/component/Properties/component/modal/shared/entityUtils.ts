@@ -8,34 +8,23 @@ import {
   type QuickAccessItem,
   type Bucket,
 } from '@core/context/quickAccess';
+import { match } from 'ts-pattern';
 
 /**
  * Maps EntityType to quickAccess buckets
  */
-export function entityTypeToBuckets(
-  entityType: EntityType | null | undefined
-): Bucket[] | null {
-  if (!entityType) return null; // null means "all"
-  switch (entityType) {
-    case 'USER':
-      return ['person'];
-    case 'CHANNEL':
-      return ['channel', 'dm'];
-    case 'DOCUMENT':
-      return ['document', 'note'];
-    case 'PROJECT':
-      return ['project'];
-    case 'CHAT':
-      return ['chat'];
-    case 'TASK':
-      return ['task'];
-    case 'THREAD':
-      return ['email']; // Note: emails aren't in quickAccess yet, handled separately
-    case 'COMPANY':
-      return []; // Companies aren't in quickAccess
-    default:
-      return null;
-  }
+export function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
+  const buckets = match(entityType)
+    .with('USER', () => ['person'] as const)
+    .with('CHANNEL', () => ['channel', 'dm'] as const)
+    .with('DOCUMENT', () => ['document', 'note'] as const)
+    .with('PROJECT', () => ['project'] as const)
+    .with('CHAT', () => ['chat'] as const)
+    .with('TASK', () => ['task'] as const)
+    .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
+    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .exhaustive();
+  return buckets;
 }
 
 /**
@@ -43,11 +32,16 @@ export function entityTypeToBuckets(
  * Returns items from the appropriate buckets based on entity type.
  */
 export function useQuickAccessEntities(
-  entityType: Accessor<EntityType | null | undefined>
+  entityType: Accessor<EntityType | EntityType[] | null | undefined>
 ): { items: Accessor<QuickAccessItem[]>; isLoading: Accessor<boolean> } {
   const quickAccess = useQuickAccess();
 
-  const buckets = () => entityTypeToBuckets(entityType());
+  const buckets = () => {
+    const entityType_ = entityType();
+    if (!entityType_) return null;
+    if (!Array.isArray(entityType_)) return entityTypeToBuckets(entityType_);
+    return entityType_.flatMap(entityTypeToBuckets);
+  };
   const items = (): QuickAccessItem[] => {
     const b = buckets();
     if (b === null) {

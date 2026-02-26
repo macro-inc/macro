@@ -1,5 +1,5 @@
 import type { EntityData } from '@entity';
-import { useQuickAccess, isEntityItem } from '@core/context/quickAccess';
+import type { EntityItem } from '@core/context/quickAccess';
 import {
   type Accessor,
   createContext,
@@ -7,6 +7,8 @@ import {
   type FlowComponent,
   useContext,
 } from 'solid-js';
+import { useQuickAccessEntities } from '@core/component/Properties/component/modal';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 
 interface SearchContextValue {
   entityPool: Accessor<EntityData[]>;
@@ -23,14 +25,16 @@ export const useSearchContext = () => {
 };
 
 export const SearchProvider: FlowComponent = (props) => {
-  const quickAccess = useQuickAccess();
-  const allItems = quickAccess.useList();
+  const { items } = useQuickAccessEntities(() => [
+    EntityType.CHANNEL,
+    EntityType.CHAT,
+    EntityType.DOCUMENT,
+    EntityType.PROJECT,
+  ]);
 
-  const entityPool = createMemo<EntityData[]>(() =>
-    allItems()
-      .filter(isEntityItem)
-      .map((item) => item.data)
-  );
+  const entityPool = createMemo<EntityData[]>(() => {
+    return items().map((item: EntityItem) => item.data);
+  });
 
   return (
     <SearchContext.Provider value={{ entityPool }}>
