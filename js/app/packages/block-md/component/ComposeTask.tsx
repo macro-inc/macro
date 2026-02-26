@@ -1,4 +1,6 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { CircleSpinner } from '@core/component/CircleSpinner';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
@@ -215,6 +217,7 @@ export interface ComposeTaskProps {
 
 export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
+  const { popoverSplit } = useSplitLayout();
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
@@ -266,6 +269,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   );
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
+  const [isCreating, setIsCreating] = createSignal(false);
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -372,6 +376,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleCreateTask = async () => {
+    if (isCreating()) return;
+
     const taskTitle = title().trim();
     const taskContent = content().trim();
 
@@ -381,7 +387,43 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
     setErrorMessage('');
 
+    setIsCreating(true);
+
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
+
+    if (!createMore()) {
+      // Snapshot the draft locally, then clear localStorage so a new dialog
+      // opened while this creation is in flight starts blank.
+      const draftSnapshot = {
+        title: taskTitle,
+        content: taskContent,
+        propertyValues: structuredClone(unwrap(propertyValues)),
+      };
+      clearTaskComposerDraft();
+      // Close the dialog immediately
+      splitPanel.handle.close();
+      props.onClose?.();
+
+      const documentId = await createTaskWithProperties(
+        taskTitle,
+        taskContent,
+        properties,
+        definitions(),
+        (params) => upsertToHistoryMutation.mutate(params)
+      );
+
+      setIsCreating(false);
+
+      if (!documentId) {
+        // Restore the draft and re-open so the user can retry
+        saveTaskComposerDraft(draftSnapshot);
+        popoverSplit({ type: 'component', id: 'task-compose' });
+        return;
+      }
+
+      props.onCreateTask?.(taskTitle, taskContent);
+      return;
+    }
 
     const documentId = await createTaskWithProperties(
       taskTitle,
@@ -391,27 +433,24 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
+    setIsCreating(false);
+
     if (!documentId) {
-      // Task creation failed — keep the draft so the user can retry
       return;
     }
 
-    // Clear draft and reset form only on success
+    // Success: clear draft and notify
     clearTaskComposerDraft();
-    setTitle('');
-    setContent('');
-    setPropertyValues(reconcile(getDefaultPropertyValues()));
-    setIsDraftLoaded(false);
+    props.onCreateTask?.(taskTitle, taskContent);
 
-    const ed = bodyEditor();
-    ed && initializeEditorEmpty(ed);
-
-    if (!createMore()) {
-      splitPanel.handle.close();
-      props.onCreateTask?.(taskTitle, taskContent);
-      props.onClose?.();
-    } else {
-      props.onCreateTask?.(taskTitle, taskContent);
+    if (createMore()) {
+      // Reset form for next task
+      setTitle('');
+      setContent('');
+      setPropertyValues(reconcile(getDefaultPropertyValues()));
+      setIsDraftLoaded(false);
+      const ed = bodyEditor();
+      ed && initializeEditorEmpty(ed);
     }
   };
 
@@ -515,7 +554,8 @@ export function ComposeTask(props: ComposeTaskProps) {
                 setErrorMessage('');
               }
             }}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
+            disabled={isCreating()}
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50 disabled:opacity-50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();
@@ -538,7 +578,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
 
         <MarkdownTextarea
-          editable={() => true}
+          editable={() => !isCreating()}
           onChange={(value) => setContent(value)}
           initialValue={content()}
           placeholder={props.placeholder ?? 'Add description...'}
@@ -593,9 +633,14 @@ export function ComposeTask(props: ComposeTaskProps) {
         <Button
           onClick={handleCreateTask}
           class="border border-edge-muted pr-1"
-          disabled={title().trim().length === 0}
+          disabled={title().trim().length === 0 || isCreating()}
         >
-          <EntityIcon targetType="task" theme="monochrome" />
+          <Show
+            when={isCreating()}
+            fallback={<EntityIcon targetType="task" theme="monochrome" />}
+          >
+            <CircleSpinner width={16} height={16} />
+          </Show>
           Create Task
           <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
