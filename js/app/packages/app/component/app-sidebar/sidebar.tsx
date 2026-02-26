@@ -16,6 +16,7 @@ import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
+import { CommandState } from '@app/component/command';
 
 interface SidebarItem {
   label: string;
@@ -65,9 +66,11 @@ export const SIDEBAR_LINKS = [
 
 export const AppSidebar = () => {
   const handleSearchClick = () => {};
-  const handleCommandPaletteClick = () => {};
+  const handleCommandPaletteClick = () => {
+    CommandState.toggle();
+  };
   const handleCreateClick = () => {
-    setCreateMenuOpen(true);
+    setCreateMenuOpen((p) => !p);
   };
 
   return (
