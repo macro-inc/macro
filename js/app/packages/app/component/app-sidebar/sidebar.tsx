@@ -10,7 +10,12 @@ import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { A } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import PlusIcon from '@macro-icons/wide/plus.svg';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { setCreateMenuOpen } from '@app/component/Launcher';
 
 interface SidebarItem {
   label: string;
@@ -59,20 +64,59 @@ export const SIDEBAR_LINKS = [
 ] as const satisfies SidebarItem[];
 
 export const AppSidebar = () => {
+  const handleSearchClick = () => {};
+  const handleCommandPaletteClick = () => {};
+  const handleCreateClick = () => {
+    setCreateMenuOpen(true);
+  };
+
   return (
     <div class="max-w-56 w-full h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4">
-      <div class="py-2 px-4">
+      <div class="flex items-center justify-between py-2 px-4">
         <LogoIcon class="size-8 text-accent" />
+        <div class="flex items-center gap-1">
+          <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
+            <button
+              type="button"
+              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              onClick={handleSearchClick}
+            >
+              <SearchIcon class="size-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip
+            tooltip={<LabelAndHotKey label="Command palette" shortcut="⌘K" />}
+          >
+            <button
+              type="button"
+              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              onClick={handleCommandPaletteClick}
+            >
+              <CommandIcon class="size-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}>
+            <button
+              type="button"
+              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              onClick={handleCreateClick}
+            >
+              <PlusIcon class="size-3.5" />
+            </button>
+          </Tooltip>
+        </div>
       </div>
-      <ul class="w-full h-full px-2 flex flex-col">
-        <For each={SIDEBAR_LINKS}>
-          {(link) => (
-            <li>
-              <SidebarLink {...link} />
-            </li>
-          )}
-        </For>
-      </ul>
+      <nav>
+        <ul class="w-full h-full px-2 flex flex-col">
+          <For each={SIDEBAR_LINKS}>
+            {(link) => (
+              <li>
+                <SidebarLink {...link} />
+              </li>
+            )}
+          </For>
+        </ul>
+      </nav>
     </div>
   );
 };
