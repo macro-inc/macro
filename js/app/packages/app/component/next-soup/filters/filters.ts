@@ -181,6 +181,25 @@ export function filesAndFolderFilter(entity: EntityData): boolean {
   return true;
 }
 
+export function activeAgentFilter(entity: EntityData): boolean {
+  if (entity.type !== 'chat') return false;
+
+  // [TODO] Check status of agent
+  return true;
+}
+
+export function emailDraftsFilter(entity: EntityData): boolean {
+  if (entity.type !== 'email') return false;
+
+  return entity.isDraft;
+}
+
+export function noDraftsFilter(entity: EntityData): boolean {
+  if (entity.type !== 'email') return false;
+
+  return !entity.isDraft;
+}
+
 export const SOUP_FILTERS = [
   // Focus filters (mutually exclusive)
   {
@@ -267,6 +286,21 @@ export const SOUP_FILTERS = [
     id: 'file-folder',
     label: 'Files & Folders',
     predicate: filesAndFolderFilter,
+  },
+  {
+    id: 'active-agent',
+    label: 'Running agents',
+    predicate: activeAgentFilter,
+  },
+  {
+    id: 'email-drafts',
+    label: 'Email drafts',
+    predicate: emailDraftsFilter,
+  },
+  {
+    id: 'no-drafts',
+    label: 'No drafts',
+    predicate: noDraftsFilter,
   },
 ] as const;
 

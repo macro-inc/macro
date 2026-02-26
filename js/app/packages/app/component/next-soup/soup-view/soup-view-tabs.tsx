@@ -1,3 +1,4 @@
+import { QUERY_FILTERS } from '@app/component/next-soup/filters/filters';
 import {
   applyInboxQueryFilters,
   removeOtherQueryFilters,
@@ -9,6 +10,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { useUserContext } from '@core/context/user';
 import { batch, createMemo, Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -122,6 +124,36 @@ const InboxTabs = () => {
 };
 
 const AgentsTabs = () => {
+  const { setQueryFilters } = useSoupView();
+
+  const user = useUserContext();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('owned', () => {
+        const userId = user.userId();
+        if (!userId) return;
+        setQueryFilters({
+          ...QUERY_FILTERS.agent,
+          chat_filters: { owners: [userId] },
+        });
+      })
+      .with('running', () => {
+        // TODO
+        setQueryFilters({
+          ...QUERY_FILTERS.agent,
+        });
+        // soup.filters.activate('active-agent');
+      })
+      .with('shared', () => {
+        // TODO
+        setQueryFilters({
+          ...QUERY_FILTERS.agent,
+        });
+        // soup.filters.activate('active-agent');
+      });
+  };
+
   return (
     <div>
       <SegmentedControl
@@ -140,13 +172,54 @@ const AgentsTabs = () => {
             label: 'Shared with me',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
 };
 
 const MailTabs = () => {
+  const soup = useSoup();
+  const { setQueryFilters } = useSoupView();
+
+  const user = useUserContext();
+
+  const handleTabChange = (value: string) => {
+    match(value)
+      .with('important', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+          email_filters: { importance: true },
+        });
+        soup.filters.set(['email', 'no-drafts']);
+      })
+      .with('noise', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+          email_filters: {
+            importance: false,
+          },
+        });
+        soup.filters.set(['email', 'no-drafts']);
+      })
+      .with('drafts', () => {
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+        });
+        soup.filters.set(['email-drafts']);
+      })
+      .with('sent', () => {
+        const email = user.email();
+        if (!email) return;
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+          email_filters: {
+            senders: [email],
+          },
+        });
+        soup.filters.set(['email', 'no-drafts']);
+      });
+  };
   return (
     <div>
       <SegmentedControl
@@ -169,7 +242,7 @@ const MailTabs = () => {
             label: 'Sent',
           },
         ]}
-        onChange={(value) => {}}
+        onChange={handleTabChange}
       />
     </div>
   );
