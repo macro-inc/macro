@@ -19,7 +19,7 @@ type NameFn<T> = (item: T) => string;
 
 type TimestampFn<T> = (item: T) => TimestampedItem;
 
-type IsChannelFn<T> = (item: T) => boolean;
+type BooleanFn<T> = (item: T) => boolean;
 
 type EmailFn<T> = (item: T) => string | undefined;
 
@@ -135,8 +135,8 @@ function calculateBrevityScore(text: string): number {
 function freshSort<T>(
   filterResults: FilterResult<T>[],
   config: FreshSortConfig<T> = {},
-  isChannelItem: IsChannelFn<T>,
-  isDmItem: IsChannelFn<T>,
+  isChannelItem: BooleanFn<T>,
+  isDmItem: BooleanFn<T>,
   getTimestamp: TimestampFn<T>
 ): FreshSortResult<T>[] {
   const finalConfig = {
@@ -210,8 +210,8 @@ function freshSort<T>(
 export interface CreateFreshSearchArgs<T> {
   config?: FreshSortConfig<T>;
   getName: NameFn<T>;
-  isChannelItem?: IsChannelFn<T>;
-  isDmItem?: IsChannelFn<T>;
+  isChannelItem?: BooleanFn<T>;
+  isDmItem?: BooleanFn<T>;
   getTimestamp: TimestampFn<T>;
 }
 
