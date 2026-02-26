@@ -53,15 +53,16 @@ export function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
  * Returns items from the appropriate buckets based on entity type.
  */
 export function useQuickAccessEntities<T extends EntityType>(
-  entityType: Accessor<T | T[] | null | undefined>
+  entityType: Accessor<T | readonly T[] | null | undefined>
 ): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
   const quickAccess = useQuickAccess();
 
   const buckets = () => {
     const entityType_ = entityType();
     if (!entityType_) return null;
-    if (!Array.isArray(entityType_)) return entityTypeToBuckets(entityType_);
-    return entityType_.flatMap(entityTypeToBuckets);
+    if (Array.isArray(entityType_))
+      return entityType_.flatMap(entityTypeToBuckets);
+    return entityTypeToBuckets(entityType_);
   };
   const items = (): EntityTypeItemMap[T][] => {
     const b = buckets();
