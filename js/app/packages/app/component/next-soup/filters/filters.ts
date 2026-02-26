@@ -32,18 +32,6 @@ import { compositeEntity, type NotificationSource } from '@notifications';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-/**
- * Array containing NIL_UUID, used to exclude an entity type from query results.
- *
- * @example
- * ```ts
- * filters.set({
- *   query: {
- *     chat_filters: { chat_ids: EXCLUDE },  // Exclude all chats
- *   }
- * });
- * ```
- */
 export const EXCLUDE: string[] = [NIL_UUID];
 
 function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
@@ -109,14 +97,17 @@ export function unreadFilter(notificationSource: NotificationSource) {
  * - Emails: Uses `done` field (derived from !inboxVisible - email is "not done" when in inbox)
  * - Everything else: Has at least one notification with done === false
  */
-export function notDoneFilter(entity: WithNotification<EntityData>) {
-  if (entity.type === 'email') return !entity.done;
-  // Tasks are handled by signalFilter based on assignee/status, not notifications
-  if (isTaskEntity(entity)) return true;
+export function notDoneFilter(notificationSource: NotificationSource) {
+  return function (entity: WithNotification<EntityData>) {
+    if (entity.type === 'email') return !entity.done;
+    // Tasks are handled by signalFilter based on assignee/status, not notifications
+    if (isTaskEntity(entity)) return true;
 
-  return (
-    !!entity.notifications && entity.notifications().some(({ done }) => !done)
-  );
+    const notifications =
+      notificationSource.notificationsByEntity()[compositeEntity(entity)];
+
+    return notifications?.some(({ done }) => !done);
+  };
 }
 
 /** Filter group configuration */
@@ -311,7 +302,7 @@ export const createSoupFilters = (
     {
       id: 'not-done',
       label: 'Not done',
-      predicate: notDoneFilter,
+      predicate: notDoneFilter(notificationSource),
     },
     ...ENTITY_TYPE_FILTER_CONFIGS,
     {
