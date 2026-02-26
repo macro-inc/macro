@@ -62,7 +62,8 @@ export function useQuickAccessEntities<T extends EntityType>(
     if (!entityType_) return null;
     if (Array.isArray(entityType_))
       return entityType_.flatMap(entityTypeToBuckets);
-    return entityTypeToBuckets(entityType_);
+    // NOTE: incorrect type narrowing for readonly array: https://github.com/microsoft/TypeScript/issues/17002
+    return entityTypeToBuckets(entityType_ as T);
   };
   const items = (): EntityTypeItemMap[T][] => {
     const b = buckets();
