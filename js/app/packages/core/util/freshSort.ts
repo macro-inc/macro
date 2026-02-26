@@ -40,6 +40,8 @@ export interface FreshSortConfig<T> {
   useViewedAt?: boolean;
   /** Boost multiplier for channel items when query is present. Default: 1.0 (no boost) */
   channelBoost?: number;
+  /** Boost multiplier for DM items. Default: 1.0 (no boost) */
+  dmBoost?: number;
   /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
@@ -72,6 +74,7 @@ const DEFAULT_CONFIG = {
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
+  dmBoost: 1.0,
   commaSeparatedChannelMatch: false,
   boostFn: undefined,
 } as const;
@@ -133,6 +136,7 @@ function freshSort<T>(
   filterResults: FilterResult<T>[],
   config: FreshSortConfig<T> = {},
   isChannelItem: IsChannelFn<T>,
+  isDmItem: IsChannelFn<T>,
   getTimestamp: TimestampFn<T>
 ): FreshSortResult<T>[] {
   const finalConfig = {
@@ -173,6 +177,8 @@ function freshSort<T>(
       ? finalConfig.channelBoost
       : 1.0;
 
+    const dmMultiplier = isDmItem(result.original) ? finalConfig.dmBoost : 1.0;
+
     // Apply per-item boost if boostFn is provided
     const itemBoost = finalConfig.boostFn
       ? finalConfig.boostFn(result.original)
@@ -184,6 +190,7 @@ function freshSort<T>(
         normalizedBrevityWeight * brevityScore) *
       fuzzyPenalty *
       channelMultiplier *
+      dmMultiplier *
       (1 + itemBoost);
 
     return {
@@ -204,6 +211,7 @@ export interface CreateFreshSearchArgs<T> {
   config?: FreshSortConfig<T>;
   getName: NameFn<T>;
   isChannelItem?: IsChannelFn<T>;
+  isDmItem?: IsChannelFn<T>;
   getTimestamp: TimestampFn<T>;
 }
 
@@ -211,6 +219,7 @@ export function createFreshSearch<T>({
   config = {},
   getName,
   isChannelItem = () => false,
+  isDmItem = () => false,
   getTimestamp,
 }: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
@@ -250,13 +259,25 @@ export function createFreshSearch<T>({
 
       // Combine results
       const allResults = [...channelResults, ...nonChannelResults];
-      return freshSort(allResults, config, isChannelItem, getTimestamp);
+      return freshSort(
+        allResults,
+        config,
+        isChannelItem,
+        isDmItem,
+        getTimestamp
+      );
     }
 
     const fuzzyResults = fuzzy.filter(query, items, {
       extract: getName,
     });
-    return freshSort(fuzzyResults, config, isChannelItem, getTimestamp);
+    return freshSort(
+      fuzzyResults,
+      config,
+      isChannelItem,
+      isDmItem,
+      getTimestamp
+    );
   };
 }
 

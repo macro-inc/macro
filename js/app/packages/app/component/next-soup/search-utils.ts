@@ -82,6 +82,7 @@ export const createSoupFreshSearch = () =>
     config: {
       useViewedAt: true,
       channelBoost: 3,
+      dmBoost: 1.5,
       fuzzyWeight: 0.7,
       timeWeight: 0.3,
       minFuzzyThreshold: 0.1,
@@ -89,6 +90,7 @@ export const createSoupFreshSearch = () =>
     },
     getName: (item) => item.data.name,
     isChannelItem: (item) => item.data.type === 'channel',
+    isDmItem: (item) => item.bucket === 'dm',
     getTimestamp: (item) => ({
       viewedAt: item.data.viewedAt,
       updatedAt: item.data.updatedAt,
