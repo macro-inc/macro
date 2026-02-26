@@ -1,15 +1,17 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   createFilterState,
+  createSoupFilters,
   type FilterConfig,
 } from '@app/component/next-soup/filters';
 import {
   FILTER_GROUPS,
   type FilterGroup,
-  SOUP_FILTERS,
 } from '@app/component/next-soup/filters/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
+import { useUserContext } from '@core/context/user';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
@@ -56,8 +58,12 @@ export const createSoupState = <
     getItemId: (i) => i.id,
   });
 
+  const notificationSource = useGlobalNotificationSource();
+  const user = useUserContext();
+
   const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
-    filters: filterConfigs ?? SOUP_FILTERS,
+    filters:
+      filterConfigs ?? createSoupFilters(notificationSource, user.userId()),
     groups: filterGroups ?? FILTER_GROUPS,
     initialFilters,
   });

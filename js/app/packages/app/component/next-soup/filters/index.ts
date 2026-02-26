@@ -11,7 +11,7 @@ export {
   taskFilter,
   teamsFilter,
   unreadFilter,
-  SOUP_FILTERS,
+  createSoupFilters,
 } from './filters';
 
 export {
