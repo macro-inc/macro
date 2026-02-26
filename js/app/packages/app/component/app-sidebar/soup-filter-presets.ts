@@ -43,11 +43,11 @@ export const SOUP_FILTERS_PRESETS: Record<Links, SoupFiltersPreset> = {
   '/files': {
     queryFilters: {
       chat_filters: { chat_ids: EXCLUDE },
-      document_filters: { document_ids: EXCLUDE },
+      document_filters: {},
       email_filters: { recipients: EXCLUDE },
       project_filters: {},
-      channel_filters: {},
+      channel_filters: { channel_ids: EXCLUDE },
     },
-    clientFilters: [],
+    clientFilters: ['file-folder'],
   },
 };

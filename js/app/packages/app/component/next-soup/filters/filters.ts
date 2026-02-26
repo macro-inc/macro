@@ -170,6 +170,17 @@ export function channelsFilter(entity: EntityData): boolean {
   return entity.type === 'channel';
 }
 
+export function filesAndFolderFilter(entity: EntityData): boolean {
+  if (entity.type !== 'project' && entity.type !== 'document') return false;
+
+  if (entity.type === 'document') {
+    const fileType = entity.fileType ?? '';
+    return !['md', 'canvas'].includes(fileType);
+  }
+
+  return true;
+}
+
 export const SOUP_FILTERS = [
   // Focus filters (mutually exclusive)
   {
@@ -251,6 +262,11 @@ export const SOUP_FILTERS = [
     label: 'Channels',
     predicate: channelsFilter,
     group: 'type',
+  },
+  {
+    id: 'file-folder',
+    label: 'Files & Folders',
+    predicate: filesAndFolderFilter,
   },
 ] as const;
 
