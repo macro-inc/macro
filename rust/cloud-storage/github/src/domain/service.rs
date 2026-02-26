@@ -8,7 +8,7 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{GithubError, GithubLink},
-    ports::{FusionAuth, GithubOauth, GithubRepo, GithubService},
+    ports::{Auth, GithubOauth, GithubRepo, GithubService},
 };
 
 /// Github config
@@ -23,26 +23,26 @@ pub struct GithubConfig {
 }
 
 /// The concrete github service implementation.
-pub struct GithubServiceImpl<R: GithubRepo, U: GithubOauth, F: FusionAuth> {
+pub struct GithubServiceImpl<R: GithubRepo, U: GithubOauth, F: Auth> {
     repo: R,
     oauth: U,
-    fusion: F,
+    auth: F,
     config: GithubConfig,
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubServiceImpl<R, U, F> {
+impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubServiceImpl<R, U, F> {
     /// Create a new github service.
-    pub fn new(repo: R, oauth: U, fusion: F, config: GithubConfig) -> Self {
+    pub fn new(repo: R, oauth: U, auth: F, config: GithubConfig) -> Self {
         Self {
             repo,
             oauth,
-            fusion,
+            auth,
             config,
         }
     }
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServiceImpl<R, U, F> {
+impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl<R, U, F> {
     #[tracing::instrument(skip(self), err)]
     fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
         &self,
@@ -103,7 +103,7 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
             }
         }
 
-        self.fusion
+        self.auth
             .link_user(
                 fusionauth_user_id,
                 &self.config.idp_id,
@@ -114,7 +114,7 @@ impl<R: GithubRepo, U: GithubOauth, F: FusionAuth> GithubService for GithubServi
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        tracing::trace!("linked fusionauth user");
+        tracing::trace!("linked auth user");
 
         // create github link
         let link = GithubLink {

@@ -79,13 +79,13 @@ pub trait GithubOauth: Send + Sync + 'static {
     ) -> impl Future<Output = Result<GithubUserInfo, Self::Err>> + Send;
 }
 
-/// Repository for handling fusionauth related actions.
+/// Repository for handling auth related actions.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
-pub trait FusionAuth: Send + Sync + 'static {
+pub trait Auth: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
-    /// Links the github account to the fusionauth user
+    /// Links the github account to the auth user
     fn link_user(
         &self,
         fusionauth_user_id: &uuid::Uuid,

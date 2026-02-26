@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::FromRef;
 use github::domain::service::GithubServiceImpl;
-use github::outbound::github_fusionauth_client::GithubFusionAuthImpl;
+use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -45,7 +45,7 @@ pub(crate) type NotificationIngressType = NotificationIngressService<
 >;
 
 pub(crate) type GithubServiceType =
-    GithubServiceImpl<PgGithubRepo, GithubOauthImpl, GithubFusionAuthImpl>;
+    GithubServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

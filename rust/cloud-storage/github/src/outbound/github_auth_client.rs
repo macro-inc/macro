@@ -1,27 +1,27 @@
-//! Github FusionAuth implementation of the [`FusionAuth`] port.
+//! Github FusionAuth implementation of the [`Auth`] port.
 
 use fusionauth::{
     FusionAuthClient,
     identity_provider::{IdentityProviderLink, LinkUserRequest},
 };
 
-use crate::domain::ports::FusionAuth;
+use crate::domain::ports::Auth;
 
 /// Github FusionAuth implementation
 #[derive(Clone)]
-pub struct GithubFusionAuthImpl {
+pub struct GithubAuthImpl {
     /// The fusionauth client
     fusionauth_client: FusionAuthClient,
 }
 
-impl GithubFusionAuthImpl {
-    /// Create a new instance of GithubFusionAuthImpl
+impl GithubAuthImpl {
+    /// Create a new instance of GithubAuthImpl
     pub fn new(fusionauth_client: FusionAuthClient) -> Self {
         Self { fusionauth_client }
     }
 }
 
-impl FusionAuth for GithubFusionAuthImpl {
+impl Auth for GithubAuthImpl {
     type Err = anyhow::Error;
 
     #[tracing::instrument(skip(self), err)]
