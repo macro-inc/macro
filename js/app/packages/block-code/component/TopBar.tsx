@@ -7,7 +7,10 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -107,31 +110,48 @@ export const TopBar: Component = () => {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitToolbarLeft>
+              <div class="p-1">
+                <SplitFileMenu
+                  id={blockId}
+                  itemType="document"
+                  name={name()}
+                  ops={ops}
+                />
+              </div>
+            </SplitToolbarLeft>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
           <SplitFileMenu
             id={blockId}
             itemType="document"
             name={name()}
             ops={ops}
-            tools={isMobile() ? tools : undefined}
+            tools={tools}
           />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <For each={tools}>
-          {(tool) => (
-            <Show when={!tool.condition || tool.condition()}>
-              {tool.buttonComponent ? (
-                <tool.buttonComponent />
-              ) : (
-                <ToolButton tool={tool} />
-              )}
-            </Show>
-          )}
-        </For>
-        <SplitPermissionsBadge />
-      </SplitToolbarRight>
+        </SplitHeaderRight>
+      </Show>
     </>
   );
 };

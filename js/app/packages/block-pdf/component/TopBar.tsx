@@ -217,40 +217,60 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
       <SplitToolbarLeft>
         <Show when={pdfDocumentProxy()}>
           <div class="flex items-center p-1">
-            <SplitFileMenu
-              id={documentId}
-              itemType="document"
-              name={fileName()}
-              ops={ops}
-              tools={isMobile() ? tools : undefined}
-            />
-            <div class="w-5" />
+            <Show when={!isMobile()}>
+              <SplitFileMenu
+                id={documentId}
+                itemType="document"
+                name={fileName()}
+                ops={ops}
+              />
+              <div class="w-5" />
+            </Show>
             <PageNumberInput />
             <div class="w-5" />
             {ENABLE_PDF_MARKUP && <MarkupToolbar />}
           </div>
         </Show>
       </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <For each={tools}>
-          {(tool) => (
-            <Show when={!tool.condition || tool.condition()}>
-              {tool.buttonComponent ? (
-                <tool.buttonComponent />
-              ) : (
-                <ToolButton tool={tool} />
-              )}
-            </Show>
-          )}
-        </For>
-        <SplitPermissionsBadge />
-      </SplitToolbarRight>
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitHeaderRight>
+              <BlockLiveIndicators />
+            </SplitHeaderRight>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
+          <BlockLiveIndicators />
+          <SplitFileMenu
+            id={documentId}
+            itemType="document"
+            name={fileName()}
+            ops={ops}
+            tools={tools}
+          />
+        </SplitHeaderRight>
+      </Show>
     </>
   );
 }

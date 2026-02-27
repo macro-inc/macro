@@ -7,7 +7,10 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -30,6 +33,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
+import { isMobile } from '@core/mobile/isMobile';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { For, Show } from 'solid-js';
 
@@ -87,8 +91,39 @@ export function TopBar() {
           lockRename={false}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitToolbarLeft>
+              <div class="p-1">
+                <SplitFileMenu
+                  id={blockId}
+                  itemType="chat"
+                  name={chatName()}
+                  ops={ops}
+                />
+              </div>
+            </SplitToolbarLeft>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
           <SplitFileMenu
             id={blockId}
             itemType="chat"
@@ -96,22 +131,8 @@ export function TopBar() {
             ops={ops}
             tools={tools}
           />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <For each={tools}>
-          {(tool) => (
-            <Show when={!tool.condition || tool.condition()}>
-              {tool.buttonComponent ? (
-                <tool.buttonComponent />
-              ) : (
-                <ToolButton tool={tool} />
-              )}
-            </Show>
-          )}
-        </For>
-        <SplitPermissionsBadge />
-      </SplitToolbarRight>
+        </SplitHeaderRight>
+      </Show>
     </>
   );
 }

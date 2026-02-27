@@ -1,5 +1,4 @@
 import { useBlockName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -10,6 +9,8 @@ import Rename from '@icon/regular/pencil-line.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   type Component,
   createMemo,
@@ -169,13 +170,14 @@ export function SplitFileMenu(props: {
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen} boundary={ctx.panelRef}>
       <DropdownMenu.Trigger
-        as={DeprecatedIconButton}
-        theme={open() ? 'accent' : 'clear'}
-        size="sm"
-        icon={ThreeDots}
-        onclick={() => setOpen((p) => !p)}
-        onClick={() => setOpen((p) => !p)}
-      />
+        as={Button}
+        class={cn(
+          'px-1',
+          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+        )}
+      >
+        <ThreeDots class="size-4 shrink-0" />
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="bg-menu w-44 p-1 border border-edge mt-2">
           <For each={ops()}>

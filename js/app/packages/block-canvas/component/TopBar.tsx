@@ -153,34 +153,52 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-      <SplitToolbarLeft>
-        <div class="p-1">
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitHeaderRight>
+              <BlockLiveIndicators />
+            </SplitHeaderRight>
+            <SplitToolbarLeft>
+              <div class="p-1">
+                <SplitFileMenu
+                  id={documentId}
+                  itemType="document"
+                  name={fileName()}
+                  ops={ops}
+                />
+              </div>
+            </SplitToolbarLeft>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
+          <BlockLiveIndicators />
           <SplitFileMenu
             id={documentId}
             itemType="document"
             name={fileName()}
             ops={ops}
-            tools={isMobile() ? tools : undefined}
+            tools={tools}
           />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <For each={tools}>
-          {(tool) => (
-            <Show when={!tool.condition || tool.condition()}>
-              {tool.buttonComponent ? (
-                <tool.buttonComponent />
-              ) : (
-                <ToolButton tool={tool} />
-              )}
-            </Show>
-          )}
-        </For>
-        <SplitPermissionsBadge />
-      </SplitToolbarRight>
+        </SplitHeaderRight>
+      </Show>
     </div>
   );
 }
