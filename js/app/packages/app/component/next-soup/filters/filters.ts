@@ -425,9 +425,6 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
   },
 ] as const;
 
-/**
- * Contextual filters for email entities
- */
 export const EMAIL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'email-unread',
@@ -451,9 +448,6 @@ export const EMAIL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * Contextual filters for task entities - Status based
- */
 export const TASK_STATUS_FILTERS: EntityFilterConfig[] = [
   {
     id: 'task-not-started',
@@ -482,9 +476,6 @@ export const TASK_STATUS_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * Contextual filters for task entities - Priority based
- */
 export const TASK_PRIORITY_FILTERS: EntityFilterConfig[] = [
   {
     id: 'task-critical',
@@ -513,9 +504,6 @@ export const TASK_PRIORITY_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * Contextual filters for task entities - Assignee based
- */
 export const TASK_ASSIGNEE_FILTERS: EntityFilterConfig[] = [
   {
     id: 'task-has-assignee',
@@ -529,18 +517,12 @@ export const TASK_ASSIGNEE_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * All task contextual filters combined
- */
 export const TASK_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   ...TASK_STATUS_FILTERS,
   ...TASK_PRIORITY_FILTERS,
   ...TASK_ASSIGNEE_FILTERS,
 ];
 
-/**
- * Contextual filters for document entities
- */
 export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'doc-recent',
@@ -586,9 +568,6 @@ export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * Contextual filters for channel/message entities
- */
 export const CHANNEL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'channel-recent-activity',
@@ -617,9 +596,6 @@ export const CHANNEL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * Contextual filters for chat/agent entities
- */
 export const CHAT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'chat-recent',
@@ -636,9 +612,6 @@ export const CHAT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
-/**
- * General contextual filters that apply to multiple entity types
- */
 export const GENERAL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'recently-viewed',
@@ -680,6 +653,53 @@ export const GENERAL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
     predicate: (entity) => {
       const score = entity.frecencyScore ?? 0;
       return score > 100; // High frecency threshold
+    },
+  },
+];
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'] as const;
+
+export const FILE_TYPE_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'file-code',
+    label: 'Code',
+    predicate: (entity) => {
+      if (entity.type !== 'document') return false;
+      const fileType = entity.fileType ?? '';
+      return (codeFileExtensions as readonly string[]).includes(fileType);
+    },
+  },
+  {
+    id: 'file-image',
+    label: 'Images',
+    predicate: (entity) => {
+      if (entity.type !== 'document') return false;
+      const fileType = entity.fileType ?? '';
+      return (IMAGE_EXTENSIONS as readonly string[]).includes(fileType);
+    },
+  },
+  {
+    id: 'file-pdf',
+    label: 'PDFs',
+    predicate: (entity) => {
+      if (entity.type !== 'document') return false;
+      return entity.fileType === 'pdf';
+    },
+  },
+  {
+    id: 'file-other',
+    label: 'Other',
+    predicate: (entity) => {
+      if (entity.type !== 'document') return false;
+      const fileType = entity.fileType ?? '';
+      // Exclude markdown, canvas, code, images, and PDFs
+      if (['md', 'canvas'].includes(fileType)) return false;
+      if ((codeFileExtensions as readonly string[]).includes(fileType))
+        return false;
+      if ((IMAGE_EXTENSIONS as readonly string[]).includes(fileType))
+        return false;
+      if (fileType === 'pdf') return false;
+      return true;
     },
   },
 ];
@@ -757,6 +777,20 @@ export const createSoupFilters = (
       label: 'Task assigned to user',
       predicate: taskAssignedToUserFilter(getUserID),
     },
+    // Contextual filters - Email
+    ...EMAIL_CONTEXTUAL_FILTERS,
+    // Contextual filters - Tasks (status handled elsewhere, priority here)
+    ...TASK_PRIORITY_FILTERS,
+    // Contextual filters - Documents
+    ...DOCUMENT_CONTEXTUAL_FILTERS,
+    // Contextual filters - Channels
+    ...CHANNEL_CONTEXTUAL_FILTERS,
+    // Contextual filters - Chat/Agents
+    ...CHAT_CONTEXTUAL_FILTERS,
+    // Contextual filters - General (apply to multiple types)
+    ...GENERAL_CONTEXTUAL_FILTERS,
+    // Contextual filters - File types
+    ...FILE_TYPE_FILTERS,
   ] as const satisfies (EntityFilterConfig & { label: string })[];
 
   return list;
