@@ -58,18 +58,18 @@ pub async fn proxy_request_handler(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok());
 
-    tracing::info!(content_length=?content_length.unwrap_or(0), "image content length");
+    tracing::info!(content_length=?content_length.unwrap_or(0), content_type=%content_type, "image content length");
 
     if content_length.is_some_and(|len| len > MAX_IMAGE_SIZE) {
         return Err((
-            StatusCode::BAD_REQUEST,
+            StatusCode::UNPROCESSABLE_ENTITY,
             format!("image exceeds max size of {MAX_IMAGE_SIZE} bytes"),
         ));
     }
 
     if !content_type.starts_with("image/") {
         return Err((
-            StatusCode::BAD_REQUEST,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
             format!("upstream content-type is not an image: {content_type}"),
         ));
     }
