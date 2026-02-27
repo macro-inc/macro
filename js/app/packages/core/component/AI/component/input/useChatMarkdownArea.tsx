@@ -153,15 +153,9 @@ export function useChatMarkdownArea(
     .use(tableCellResizerPlugin())
     .use(keyboardShortcutsPlugin({ shortcuts: DefaultShortcuts }));
 
-  // Build the handle eagerly so that editor.controls / editor.lexical /
-  // editor.selection are available immediately (before <MarkdownShell> mounts).
-  // buildHandle() only creates reactive signals and registers plugins — it does
-  // not require a DOM element. MarkdownShell will receive the cached handle.
   editor.buildHandle();
 
   function ChatMarkdownArea(props: ConsumableChatMarkdownAreaProps) {
-    // Capture props so that all builder callbacks above can delegate to the
-    // latest reactive getters from the parent component.
     chatProps = props;
 
     if (props.captureEditor) {
