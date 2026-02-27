@@ -1,5 +1,5 @@
 import { isErr } from '@core/util/maybeResult';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import { dcsCompletion } from '@service-cognition/client';
 
 type StructuredOutputSchema = {
   type: string;
@@ -41,10 +41,17 @@ export async function structuredOutputCompletion<T>(
   schema: StructuredOutputSchema,
   schema_name: string
 ): Promise<T | undefined> {
-  let response = await cognitionApiServiceClient.structuredOuputCompletion({
-    prompt: prompt,
-    schema,
-    schema_name: schema_name,
+  const response = await dcsCompletion({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: prompt }],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: schema_name,
+        strict: true,
+        schema,
+      },
+    },
   });
 
   if (isErr(response)) {
@@ -52,11 +59,11 @@ export async function structuredOutputCompletion<T>(
     return;
   }
 
-  const completion = response.at(1)?.completion;
-  if (!completion) {
+  const content = response[1].choices[0]?.message?.content;
+  if (!content) {
     console.error('No completion in structured output completion');
     return undefined;
   }
 
-  return completion as T;
+  return JSON.parse(content) as T;
 }
