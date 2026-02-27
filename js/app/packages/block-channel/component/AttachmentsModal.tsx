@@ -23,8 +23,52 @@ import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
-export function AttachmentsModal() {
+export function AttachmentsButton() {
   const drawerControl = useDrawerControl(DRAWER_ID);
+  const currentBlockId = useBlockId();
+  const channelContext = useChannelContext();
+
+  const mentionsQuery = useMentionsQuery(() => currentBlockId);
+
+  const attachments = createMemo(() => {
+    const mentions: Attachment[] = !mentionsQuery.isSuccess
+      ? []
+      : (mentionsQuery.data?.mentions ?? []).map((m) =>
+          makeAttachmentFromMention(m, currentBlockId)
+        );
+
+    const channelAttachments = channelContext.attachments() ?? [];
+    const safeAttachments = filterSafeAttachments(channelAttachments);
+    const all = [...safeAttachments, ...mentions];
+    return all
+      .filter(
+        (a) => !a.entity_type.startsWith('static/') && a.entity_type !== 'user'
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+      );
+  });
+
+  return (
+    <Tooltip tooltip={'View all attachments'}>
+      <div
+        class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
+        tabIndex={0}
+        role="button"
+        onClick={drawerControl.toggle}
+      >
+        <BracketLeft class="h-4 w-2 text-edge" />
+        <PaperclipIcon class="size-4 text-ink" />
+        <span class="text-xs">{attachments().length}</span>
+        <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
+      </div>
+    </Tooltip>
+  );
+}
+
+export function AttachmentsDrawer() {
   const currentBlockId = useBlockId();
   const { openWithSplit } = useSplitLayout();
   const channelContext = useChannelContext();
@@ -63,57 +107,41 @@ export function AttachmentsModal() {
   };
 
   return (
-    <>
-      <Tooltip tooltip={'View all attachments'}>
-        <div
-          class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
-          tabIndex={0}
-          role="button"
-          onClick={drawerControl.toggle}
-        >
-          <BracketLeft class="h-4 w-2 text-edge" />
-          <PaperclipIcon class="size-4 text-ink" />
-          <span class="text-xs">{attachments().length}</span>
-          <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
-        </div>
-      </Tooltip>
-
-      <SplitDrawer
-        id={DRAWER_ID}
-        title="Channel Attachments"
-        side="right"
-        size={768}
-      >
-        <div class="flex justify-center items-center max-w-full h-full max-h-full">
-          <div class="flex-1 size-full overflow-x-hidden overflow-y-auto">
-            <Show
-              when={attachments().length > 0}
-              fallback={
-                <div class="py-8 text-ink-muted text-sm text-center">
-                  No attachments in this channel
-                </div>
-              }
-            >
-              <div class="flex flex-col h-full">
-                <VList data={attachments()}>
-                  {(attachment) => (
-                    <Suspense>
-                      <AttachmentItem
-                        attachment={attachment}
-                        onNavigate={onClickAttachment}
-                        senderId={channelContext
-                          .messageSenderMap()
-                          .get(attachment.message_id)}
-                      />
-                    </Suspense>
-                  )}
-                </VList>
+    <SplitDrawer
+      id={DRAWER_ID}
+      title="Channel Attachments"
+      side="right"
+      size={768}
+    >
+      <div class="flex justify-center items-center max-w-full h-full max-h-full">
+        <div class="flex-1 size-full overflow-x-hidden overflow-y-auto">
+          <Show
+            when={attachments().length > 0}
+            fallback={
+              <div class="py-8 text-ink-muted text-sm text-center">
+                No attachments in this channel
               </div>
-            </Show>
-          </div>
+            }
+          >
+            <div class="flex flex-col h-full">
+              <VList data={attachments()}>
+                {(attachment) => (
+                  <Suspense>
+                    <AttachmentItem
+                      attachment={attachment}
+                      onNavigate={onClickAttachment}
+                      senderId={channelContext
+                        .messageSenderMap()
+                        .get(attachment.message_id)}
+                    />
+                  </Suspense>
+                )}
+              </VList>
+            </div>
+          </Show>
         </div>
-      </SplitDrawer>
-    </>
+      </div>
+    </SplitDrawer>
   );
 }
 

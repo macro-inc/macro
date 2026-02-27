@@ -15,7 +15,7 @@ import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
-  NotificationsModal,
+  NotificationsButton,
   NOTIFICATIONS_DRAWER_ID,
 } from '@core/component/NotificationsModal';
 import { toast } from '@core/component/Toast/Toast';
@@ -32,10 +32,10 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { createMemo, For, Show } from 'solid-js';
-import { AttachmentsModal } from './AttachmentsModal';
-import { ParticipantManager } from './ParticipantManager';
+import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
+import { useChannelModals } from './ModalsProvider';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -70,13 +70,13 @@ type TopProps = {
 };
 
 export function Top(props: TopProps) {
-  const participantCount = () => props.participants.length;
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
   const channelContext = useChannelContext();
 
   const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const attachmentsControl = useDrawerControl('attachments');
+  const channelModals = useChannelModals();
 
   const isAdminOrOwner = createMemo(() => {
     const channelData = channelContext.channel();
@@ -112,7 +112,7 @@ export function Top(props: TopProps) {
       icon: Bell,
       action: notificationsControl.toggle,
       buttonComponent: () => (
-        <NotificationsModal
+        <NotificationsButton
           entity={{ id: blockId, type: 'channel' }}
           notificationSource={notificationSource}
           buttonSize="sm"
@@ -123,21 +123,13 @@ export function Top(props: TopProps) {
       label: 'Attachments',
       icon: PaperclipIcon,
       action: attachmentsControl.toggle,
-      buttonComponent: () => <AttachmentsModal />,
+      buttonComponent: () => <AttachmentsButton />,
     },
     {
       label: 'Participants',
       icon: UsersIcon,
-      action: () => {},
+      action: () => channelModals.openParticipants(),
       condition: () => props.channelType !== ChannelTypeEnum.DirectMessage,
-      buttonComponent: () => (
-        <ParticipantManager
-          channelId={props.channelId}
-          channelType={props.channelType}
-          participants={props.participants}
-          participantCount={participantCount()}
-        />
-      ),
     },
   ];
 

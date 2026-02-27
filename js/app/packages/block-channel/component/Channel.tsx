@@ -52,6 +52,7 @@ import {
   type TargetMessageInfo,
 } from './MessageList/MessageList';
 import { Top } from './Top';
+import { ModalsProvider } from './ModalsProvider';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
@@ -382,84 +383,86 @@ export function Channel(props: {
         debounceTime={500}
       />
       <StaticMarkdownContext>
-        <Suspense>
-          <Top
-            channelId={props.channelId}
-            channelType={channelContext.channelType()}
-            participants={channelContext.channel()?.participants ?? []}
-            channelName={channelContext.channelName()}
-          />
-        </Suspense>
-        <div
-          class="h-full flex flex-col min-h-0 flex-1 relative w-full"
-          use:fileFolderDrop={{
-            onDrop: (files, folders) => {
-              handleFileFolderDrop(files, folders, (uploadEntries) =>
-                handleFileUpload(uploadEntries, {
-                  store: channelInputAttachmentsStore,
-                  setStore: setChannelInputAttachmentsStore,
-                  key: props.channelId,
-                })
-              );
-            },
-            onDragStart: (valid) => {
-              setIsDraggingOverChannel(true);
-              setIsValidChannelDrag(valid);
-            },
-            onDragEnd: () => {
-              setIsDraggingOverChannel(false);
-            },
-          }}
-        >
+        <ModalsProvider>
+          <Suspense>
+            <Top
+              channelId={props.channelId}
+              channelType={channelContext.channelType()}
+              participants={channelContext.channel()?.participants ?? []}
+              channelName={channelContext.channelName()}
+            />
+          </Suspense>
           <div
-            class="absolute pointer-events-none top-1/2 left-1/2 w-[60%] h-full -translate-x-1/2 -translate-y-1/2"
-            use:droppable
-            ref={containerRef}
-          />
-          <FloatingInputLoader
-            minShowTime={200}
-            successDuration={100}
-            isLoading={() => channelQuery.isFetching}
-            loadingText="Refreshing messages"
-            class="top-0 bottom-auto mt-2 mb-0 z-10"
-          />
-          <MessageList
-            channelId={props.channelId}
-            messages={channelContext.messages()}
-            threads={channelContext.threads()}
-            reactions={channelContext.reactions()}
-            attachments={channelContext.attachments()}
-            participants={channelContext.channel()?.participants ?? []}
-            focusedMessageId={selectedMessageId}
-            setFocusedMessageId={setSelectedMessageId}
-            targetMessage={targetMessage}
-            latestActivity={latestActivity()}
-            openedChannel={openedChannel()}
-            orderedMessages={orderedMessages}
-            setOrderedMessages={setOrderedMessages}
-            onNavigationReady={setMessageListNav}
-          />
-          <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
-            {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
-            <div class="mx-auto w-full macro-message-width macro-message-padding">
-              <Suspense>
-                <ChannelInput
-                  channelId={props.channelId}
-                  channelName={channelContext.channelName()}
-                  participants={channelContext.channel()?.participants ?? []}
-                  inputAttachmentsStore={channelInputAttachmentsStore}
-                  setInputAttachmentsStore={setChannelInputAttachmentsStore}
-                  inputAttachmentsKey={props.channelId}
-                  onFocusLeaveStart={onChannelInputFocusLeaveStart}
-                  autoFocusOnMount={autoFocusOnMount()}
-                  domRef={setChannelInputRef}
-                  isDraggingOverChannel={isDraggingOverChannel}
-                  isValidChannelDrag={isValidChannelDrag}
-                />
-              </Suspense>
+            class="h-full flex flex-col min-h-0 flex-1 relative w-full"
+            use:fileFolderDrop={{
+              onDrop: (files, folders) => {
+                handleFileFolderDrop(files, folders, (uploadEntries) =>
+                  handleFileUpload(uploadEntries, {
+                    store: channelInputAttachmentsStore,
+                    setStore: setChannelInputAttachmentsStore,
+                    key: props.channelId,
+                  })
+                );
+              },
+              onDragStart: (valid) => {
+                setIsDraggingOverChannel(true);
+                setIsValidChannelDrag(valid);
+              },
+              onDragEnd: () => {
+                setIsDraggingOverChannel(false);
+              },
+            }}
+          >
+            <div
+              class="absolute pointer-events-none top-1/2 left-1/2 w-[60%] h-full -translate-x-1/2 -translate-y-1/2"
+              use:droppable
+              ref={containerRef}
+            />
+            <FloatingInputLoader
+              minShowTime={200}
+              successDuration={100}
+              isLoading={() => channelQuery.isFetching}
+              loadingText="Refreshing messages"
+              class="top-0 bottom-auto mt-2 mb-0 z-10"
+            />
+            <MessageList
+              channelId={props.channelId}
+              messages={channelContext.messages()}
+              threads={channelContext.threads()}
+              reactions={channelContext.reactions()}
+              attachments={channelContext.attachments()}
+              participants={channelContext.channel()?.participants ?? []}
+              focusedMessageId={selectedMessageId}
+              setFocusedMessageId={setSelectedMessageId}
+              targetMessage={targetMessage}
+              latestActivity={latestActivity()}
+              openedChannel={openedChannel()}
+              orderedMessages={orderedMessages}
+              setOrderedMessages={setOrderedMessages}
+              onNavigationReady={setMessageListNav}
+            />
+            <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
+              {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
+              <div class="mx-auto w-full macro-message-width macro-message-padding">
+                <Suspense>
+                  <ChannelInput
+                    channelId={props.channelId}
+                    channelName={channelContext.channelName()}
+                    participants={channelContext.channel()?.participants ?? []}
+                    inputAttachmentsStore={channelInputAttachmentsStore}
+                    setInputAttachmentsStore={setChannelInputAttachmentsStore}
+                    inputAttachmentsKey={props.channelId}
+                    onFocusLeaveStart={onChannelInputFocusLeaveStart}
+                    autoFocusOnMount={autoFocusOnMount()}
+                    domRef={setChannelInputRef}
+                    isDraggingOverChannel={isDraggingOverChannel}
+                    isValidChannelDrag={isValidChannelDrag}
+                  />
+                </Suspense>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalsProvider>
       </StaticMarkdownContext>
     </div>
   );

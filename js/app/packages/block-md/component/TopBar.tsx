@@ -56,7 +56,7 @@ import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { For, Show } from 'solid-js';
+import { For, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
@@ -142,7 +142,7 @@ export function TopBar() {
     {
       label: () =>
         showCommentsPreference() ? 'Hide Comments' : 'Show Comments',
-      icon: (props: any) => (
+      icon: (props: JSX.SvgSVGAttributes<SVGSVGElement>) => (
         <Show
           when={showCommentsPreference()}
           fallback={<ShowComments {...props} />}

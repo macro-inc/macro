@@ -31,6 +31,8 @@ type ParticipantManagerProps = {
   channelType?: string;
   participants: ChannelParticipant[];
   participantCount: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function ParticipantManager(props: ParticipantManagerProps) {
@@ -68,21 +70,23 @@ export function ParticipantManager(props: ParticipantManagerProps) {
       .map(recipientEntityMapper('user')) ?? [];
 
   return (
-    <Dialog>
-      <Dialog.Trigger>
-        <Tooltip tooltip={title()}>
-          <div
-            class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
-            tabIndex={0}
-            role="button"
-          >
-            <BracketLeft class="h-4 w-2 text-edge" />
-            <UsersIcon class="size-4 text-ink" />
-            <span class="text-xs">{props.participantCount.toString()}</span>
-            <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
-          </div>
-        </Tooltip>
-      </Dialog.Trigger>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <Show when={props.open === undefined}>
+        <Dialog.Trigger>
+          <Tooltip tooltip={title()}>
+            <div
+              class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
+              tabIndex={0}
+              role="button"
+            >
+              <BracketLeft class="h-4 w-2 text-edge" />
+              <UsersIcon class="size-4 text-ink" />
+              <span class="text-xs">{props.participantCount.toString()}</span>
+              <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
+            </div>
+          </Tooltip>
+        </Dialog.Trigger>
+      </Show>
 
       <Dialog.Portal>
         <DialogWrapper>

@@ -138,7 +138,7 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
 function makeCreateBlock({
   replaceSplit,
   insertSplit,
-}: ReturnType<typeof useSplitLayout>) {
+}: Pick<ReturnType<typeof useSplitLayout>, 'replaceSplit' | 'insertSplit'>) {
   return async (spec: {
     blockName: BlockName | BlockAlias;
     createFn: () => Promise<string>;

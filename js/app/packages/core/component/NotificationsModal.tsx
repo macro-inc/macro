@@ -34,7 +34,7 @@ export function NotificationsButton(props: {
         class={cn(
           'px-1',
           drawerControl.isOpen() &&
-            'bg-accent/20 hover:bg-accent/30 text-accent-ink '
+            'bg-accent/20 hover:bg-accent/30 text-accent-ink'
         )}
         tooltip="View notifications"
         onClick={() => drawerControl.toggle()}
