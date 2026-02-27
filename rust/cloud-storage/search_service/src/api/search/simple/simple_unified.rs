@@ -605,7 +605,12 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    tracing::info!(user_id = user_context.user_id, "simple_unified_search");
+    tracing::info!(
+        user_id = user_context.user_id,
+        terms = ?req.terms,
+        search_on = ?req.search_on,
+        "simple_unified_search"
+    );
 
     let (results, _next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;

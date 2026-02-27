@@ -483,11 +483,6 @@ pub(crate) async fn search_unified(
     .instrument(tracing::info_span!("opensearch_read_response_body"))
     .await?;
 
-    tracing::info!(
-        response_body_bytes = bytes.len(),
-        "opensearch response size"
-    );
-
     let result: DefaultSearchResponse<UnifiedSearchIndex> = {
         let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
             .entered();
@@ -498,6 +493,13 @@ pub(crate) async fn search_unified(
             }
         })?
     };
+
+    tracing::info!(
+        response_body_bytes = bytes.len(),
+        opensearch_took_ms = result.took,
+        hit_count = result.hits.hits.len(),
+        "opensearch response"
+    );
 
     let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
 
