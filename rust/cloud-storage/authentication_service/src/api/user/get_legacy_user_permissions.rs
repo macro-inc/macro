@@ -132,7 +132,7 @@ pub async fn handler(
             _ => None,
         },
         has_chrome_ext: legacy_user_info.has_chrome_ext,
-        has_trialed: true, // setting to true until we deprecate the usage on the frontend
+        has_trialed: legacy_user_info.has_trialed,
         ai_data_consent: legacy_user_info.ai_data_consent,
     })
 }
