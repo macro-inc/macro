@@ -7,6 +7,9 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
+/// 5 MB max image size
+const MAX_IMAGE_SIZE: u64 = 5 * 1024 * 1024;
+
 #[derive(Debug, ToSchema, Deserialize)]
 pub struct ProxyParams {
     pub url: String,
@@ -48,6 +51,19 @@ pub async fn proxy_request_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string();
+
+    let content_length = response
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+
+    if content_length.is_some_and(|len| len > MAX_IMAGE_SIZE) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("image exceeds max size of {MAX_IMAGE_SIZE} bytes"),
+        ));
+    }
 
     if !content_type.starts_with("image/") {
         return Err((
