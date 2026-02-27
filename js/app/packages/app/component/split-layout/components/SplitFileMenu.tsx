@@ -19,7 +19,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
-import { type BlockTool } from './BlockTool';
+import type { BlockTool } from './BlockTool';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { useSplitModal } from './SplitModalContext';

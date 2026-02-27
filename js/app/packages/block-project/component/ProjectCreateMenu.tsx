@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';

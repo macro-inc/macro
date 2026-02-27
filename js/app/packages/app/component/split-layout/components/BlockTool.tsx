@@ -1,6 +1,6 @@
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import { type Component, type JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export type BlockTool = {
