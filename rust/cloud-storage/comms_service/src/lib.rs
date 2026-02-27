@@ -18,6 +18,6 @@ pub use api::swagger::ApiDoc as CommsApiDoc;
 // Re-export comms types needed to construct the state
 pub use comms::domain::service::ChannelServiceImpl;
 pub use comms::inbound::CommsRouterState;
-pub use comms::outbound::http::user_repo::UserRepoImpl;
 pub use comms::outbound::postgres::comms_repo::PgCommsRepo;
+pub use comms::outbound::postgres::user_repo::PgUserRepo;
 pub use frecency::outbound::postgres::FrecencyPgStorage;

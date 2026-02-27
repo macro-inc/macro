@@ -1,8 +1,8 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::http::user_repo::UserRepoImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
+use comms::outbound::postgres::user_repo::PgUserRepo;
 use comms_service_client::CommsServiceClient;
 use config::{Config, EnvVars, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
@@ -147,31 +147,14 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized static file service client");
 
-    // Get auth service secret key for soup service
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config.authentication_service_secret_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.authentication_service_secret_key)
-            .await
-            .context("failed to get auth service secret key from secrets manager")?
-            .to_string(),
-    };
-
     // Build soup service
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
-    let user_repo = UserRepoImpl::new(
-        auth_service_secret_key,
-        config
-            .authentication_service_url
-            .parse()
-            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
-    );
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
-        user_repo,
+        PgUserRepo::new(db.clone()),
         frecency_storage,
     );
     let soup_service = Arc::new(SoupImpl::new(

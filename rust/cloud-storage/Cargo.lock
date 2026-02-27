@@ -1926,7 +1926,6 @@ dependencies = [
  "models_comms",
  "models_pagination",
  "recursion",
- "reqwest",
  "rootcause",
  "serde",
  "serde_json",

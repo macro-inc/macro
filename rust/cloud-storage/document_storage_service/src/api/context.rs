@@ -8,7 +8,7 @@ use channels::{
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -59,7 +59,7 @@ type DssSoupState = SoupRouterState<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
-        ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>,
+        ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
     EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
 >;
@@ -108,7 +108,7 @@ pub(crate) type DocumentsState = DocumentRouterState<
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
-    ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
+    ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
 
 /// Type alias for the CommsRouterState
 pub(crate) type CommsState = CommsRouterState<CommsChannelService>;

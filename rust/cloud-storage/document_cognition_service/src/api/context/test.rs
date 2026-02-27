@@ -109,8 +109,8 @@ impl StreamRepo for MockStreamRepo {
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
     use comms::domain::service::ChannelServiceImpl;
-    use comms::outbound::http::user_repo::UserRepoImpl;
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
+    use comms::outbound::postgres::user_repo::PgUserRepo;
     use comms_service_client::CommsServiceClient;
     use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
@@ -194,7 +194,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(pool.clone()), frecency_service.clone());
-    let user_repo = UserRepoImpl::new("dummy_auth_key".into(), "http://localhost".parse().unwrap());
+    let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: pool.clone() },
         user_repo,
