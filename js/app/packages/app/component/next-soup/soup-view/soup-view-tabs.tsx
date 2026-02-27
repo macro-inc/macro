@@ -230,13 +230,13 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm bg-ink/10 p-0.5 rounded-md outline outline-solid outline-edge-muted overflow-hidden"
+      class="size-full text-sm border border-edge-muted rounded-sm p-0.5"
       defaultValue={props.list[0]?.value}
       onChange={onChange}
       disabled={props.disabled}
     >
       <div class="relative" role="presentation">
-        <KSegmentedControl.Indicator class="absolute rounded bg-accent transition-all ease-out" />
+        <KSegmentedControl.Indicator class="absolute rounded bg-accent/15 border border-accent/30 transition-all ease-out" />
         <div class="flex" role="presentation">
           <For each={props.list}>
             {(item) => {
@@ -250,7 +250,7 @@ export const SegmentedControl: ParentComponent<
                   disabled={props.disabled}
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-3 py-1 text-xs font-medium data-[checked]:text-page transition-colors block">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-3 py-1 text-xs font-medium data-[checked]:text-accent transition-colors block">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>
