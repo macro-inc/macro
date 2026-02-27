@@ -1,8 +1,16 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -12,16 +20,26 @@ import {
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
+import { For, Show } from 'solid-js';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {
@@ -29,6 +47,9 @@ export function TopBar() {
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(async () => {
     try {
@@ -53,32 +74,75 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
-  return (
-    <>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel />
-      </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="document"
-            name={fileName()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}
           documentName={fileName()}
           buttonSize="sm"
         />
-        <div class="flex items-center">
-          <SplitPermissionsBadge />
-          <ShareTrigger />
-        </div>
-      </SplitToolbarRight>
+      ),
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
+    },
+  ];
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <BlockItemSplitLabel />
+      </SplitHeaderLeft>
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitToolbarLeft>
+              <div class="p-1">
+                <SplitFileMenu
+                  id={blockId}
+                  itemType="document"
+                  name={fileName()}
+                  ops={ops}
+                />
+              </div>
+            </SplitToolbarLeft>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
+          <SplitFileMenu
+            id={blockId}
+            itemType="document"
+            name={fileName()}
+            ops={ops}
+            tools={tools}
+          />
+        </SplitHeaderRight>
+      </Show>
     </>
   );
 }

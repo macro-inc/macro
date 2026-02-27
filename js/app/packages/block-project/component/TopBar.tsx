@@ -1,8 +1,16 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -15,7 +23,10 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PROJECT_SHARING,
   ENABLE_PROJECT_VIEW_PREVIEW,
@@ -23,8 +34,11 @@ import {
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
-import { createMemo, Show } from 'solid-js';
-import { ProjectCreateMenu } from './ProjectCreateMenu';
+import { isMobile } from '@core/mobile/isMobile';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
+import { createMemo, For, Show } from 'solid-js';
+import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 import { ProjectPropertiesButton } from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
@@ -40,6 +54,9 @@ export function TopBar() {
   const name = createMemo(
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
+
+  const propertiesControl = useDrawerControl('properties');
+  const shareCtx = useShareDialogContext();
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -69,39 +86,87 @@ export function TopBar() {
     return !preview();
   };
 
+  const { tools: createTools, CreateDialog } = useProjectCreateTools(
+    id,
+    name,
+    canEdit
+  );
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      condition: () => !isSpecialProject,
+      buttonComponent: () => <ProjectPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
+      buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <SplitToolbarLeft class="flex-0">
-        <div class="flex gap-2 p-1">
-          <Show when={ops().length > 0}>
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitToolbarLeft class="flex-0">
+              <div class="flex gap-2 p-1">
+                <Show when={ops().length > 0}>
+                  <SplitFileMenu
+                    id={id}
+                    itemType="project"
+                    name={name()}
+                    ops={ops()}
+                  />
+                  <Show when={canEdit()}>
+                    <ProjectCreateMenu id={id} />
+                  </Show>
+                </Show>
+              </div>
+            </SplitToolbarLeft>
+            <Show when={showToolbarRight()}>
+              <SplitToolbarRight>
+                <For each={tools}>
+                  {(tool) => (
+                    <Show when={!tool.condition || tool.condition()}>
+                      {tool.buttonComponent ? (
+                        <tool.buttonComponent />
+                      ) : (
+                        <ToolButton tool={tool} />
+                      )}
+                    </Show>
+                  )}
+                </For>
+                <SplitPermissionsBadge />
+              </SplitToolbarRight>
+            </Show>
+          </>
+        }
+      >
+        {/* Mobile layout */}
+        <SplitHeaderRight>
+          <Show when={ops().length > 0 || !isSpecialProject}>
             <SplitFileMenu
               id={id}
               itemType="project"
               name={name()}
               ops={ops()}
+              tools={[...tools, ...createTools]}
             />
-            <Show when={canEdit()}>
-              <ProjectCreateMenu id={id} />
-            </Show>
           </Show>
-        </div>
-      </SplitToolbarLeft>
-      <Show when={showToolbarRight()}>
-        <SplitToolbarRight>
-          <div class="flex items-center">
-            <Show when={!isSpecialProject}>
-              <ProjectPropertiesButton buttonSize="sm" />
-            </Show>
-            <SplitPermissionsBadge />
-            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-              <ShareTrigger copyLink={handleCopyLink} />
-            </Show>
-          </div>
-        </SplitToolbarRight>
+        </SplitHeaderRight>
       </Show>
+      <CreateDialog />
     </>
   );
 }
