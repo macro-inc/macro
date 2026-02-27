@@ -5,7 +5,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoContent, SearchGotoDocument, SearchHit,
-            inject_fragment_size, parse_highlight_hit,
+            exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
@@ -77,7 +77,6 @@ pub(crate) struct DocumentIndex {
     pub document_name: String,
     pub node_id: String,
     pub raw_content: Option<String>,
-    pub content: String,
     pub owner_id: String,
     pub file_type: String,
     pub updated_at_seconds: Option<i64>,
@@ -123,7 +122,8 @@ impl DocumentSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: DocumentQueryBuilder = self.into();
         let mut json = builder.build_search_request()?.to_json();
-        inject_fragment_size(&mut json, 5000);
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
         Ok(json)
     }
 }
