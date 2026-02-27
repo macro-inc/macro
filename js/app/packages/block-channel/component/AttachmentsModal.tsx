@@ -23,14 +23,12 @@ import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
-export function AttachmentsButton() {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+function useAttachments() {
   const currentBlockId = useBlockId();
   const channelContext = useChannelContext();
-
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
-  const attachments = createMemo(() => {
+  return createMemo(() => {
     const mentions: Attachment[] = !mentionsQuery.isSuccess
       ? []
       : (mentionsQuery.data?.mentions ?? []).map((m) =>
@@ -50,6 +48,11 @@ export function AttachmentsButton() {
           new Date(a.created_at || 0).getTime()
       );
   });
+}
+
+export function AttachmentsButton() {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  const attachments = useAttachments();
 
   return (
     <Tooltip tooltip={'View all attachments'}>
@@ -69,32 +72,8 @@ export function AttachmentsButton() {
 }
 
 export function AttachmentsDrawer() {
-  const currentBlockId = useBlockId();
   const { openWithSplit } = useSplitLayout();
-  const channelContext = useChannelContext();
-
-  const mentionsQuery = useMentionsQuery(() => currentBlockId);
-
-  const attachments = createMemo(() => {
-    const mentions: Attachment[] = !mentionsQuery.isSuccess
-      ? []
-      : (mentionsQuery.data?.mentions ?? []).map((m) =>
-          makeAttachmentFromMention(m, currentBlockId)
-        );
-
-    const channelAttachments = channelContext.attachments() ?? [];
-    const safeAttachments = filterSafeAttachments(channelAttachments);
-    const all = [...safeAttachments, ...mentions];
-    return all
-      .filter(
-        (a) => !a.entity_type.startsWith('static/') && a.entity_type !== 'user'
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.created_at || 0).getTime() -
-          new Date(a.created_at || 0).getTime()
-      );
-  });
+  const attachments = useAttachments();
 
   const onClickAttachment = (
     event: MouseEvent,

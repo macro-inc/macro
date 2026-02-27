@@ -36,6 +36,7 @@ import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { useChannelModals } from './ModalsProvider';
+import { ParticipantManagerButton } from './ParticipantManager';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -130,6 +131,9 @@ export function Top(props: TopProps) {
       icon: UsersIcon,
       action: () => channelModals.openParticipants(),
       condition: () => props.channelType !== ChannelTypeEnum.DirectMessage,
+      buttonComponent: () => (
+        <ParticipantManagerButton onClick={channelModals.openParticipants} />
+      ),
     },
   ];
 

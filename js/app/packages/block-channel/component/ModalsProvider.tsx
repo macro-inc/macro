@@ -5,7 +5,7 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import { createContext, createSignal, Show, useContext } from 'solid-js';
 import type { ParentProps } from 'solid-js';
 import { AttachmentsDrawer } from './AttachmentsModal';
-import { ParticipantManager } from './ParticipantManager';
+import { ParticipantManagerDialog } from './ParticipantManager';
 import { useChannelContext } from '@block-channel/hooks/channel';
 
 type ChannelModalsContextValue = {
@@ -15,7 +15,10 @@ type ChannelModalsContextValue = {
 export const ChannelModalsContext = createContext<ChannelModalsContextValue>();
 
 export function useChannelModals() {
-  return useContext(ChannelModalsContext)!;
+  const ctx = useContext(ChannelModalsContext);
+  if (!ctx)
+    throw new Error('useChannelModals must be used within ModalsProvider');
+  return ctx;
 }
 
 export function ModalsProvider(props: ParentProps) {
@@ -37,11 +40,7 @@ export function ModalsProvider(props: ParentProps) {
       <Show
         when={channelContext.channelType() !== ChannelTypeEnum.DirectMessage}
       >
-        <ParticipantManager
-          channelId={blockId}
-          channelType={channelContext.channelType()}
-          participants={channelContext.channel()?.participants ?? []}
-          participantCount={channelContext.channel()?.participants.length ?? 0}
+        <ParticipantManagerDialog
           open={participantsOpen()}
           onOpenChange={setParticipantsOpen}
         />
