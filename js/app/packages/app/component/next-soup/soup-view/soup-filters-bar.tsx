@@ -4,19 +4,11 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, type JSX, Match, Show, Switch } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   CHAT_CONTEXTUAL_FILTERS,
   GENERAL_CONTEXTUAL_FILTERS,
-  TASK_PRIORITY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -72,91 +64,67 @@ const toFilterOptions = (
   filters: readonly { id: string; label: string }[]
 ): Option[] => filters.map((f) => ({ value: f.id, label: f.label }));
 
-/** Hook to create filter state with active filters tracked */
-const useFilterState = () => {
-  const [activeFilters, setActiveFilters] = createSignal<
-    Record<string, Option[]>
-  >({});
-
-  const getActive = (key: string): Option[] => activeFilters()[key] ?? [];
-
-  const setActive = (key: string, options: Option[]) => {
-    setActiveFilters((prev) => ({ ...prev, [key]: options }));
-  };
-
-  return { getActive, setActive };
-};
-
-const InboxFilters = () => {
+/**
+ * Hook that derives active options from soup.filters and provides a change handler.
+ * Accesses soup context internally.
+ */
+const useFilterOptions = (options: Option[]) => {
   const { soup } = useSoupView();
-  const filterState = useFilterState();
 
-  const generalOptions = toFilterOptions(GENERAL_CONTEXTUAL_FILTERS);
+  const active = createMemo(() =>
+    options.filter((opt) => soup.filters.isActive(opt.value))
+  );
 
-  const handleGeneralChange = (options: Option[]) => {
-    filterState.setActive('general', options);
-
-    // Clear previous general filters
-    for (const filter of GENERAL_CONTEXTUAL_FILTERS) {
-      if (soup.filters.isActive(filter.id)) {
-        soup.filters.deactivate(filter.id);
+  const onChange = (selected: Option[]) => {
+    // Deactivate all options in this group first
+    for (const opt of options) {
+      if (soup.filters.isActive(opt.value)) {
+        soup.filters.deactivate(opt.value);
       }
     }
 
-    // Activate selected filters
-    for (const option of options) {
+    // Activate selected options
+    for (const option of selected) {
       soup.filters.activate(option.value);
     }
   };
+
+  return { active, onChange };
+};
+
+const InboxFilters = () => {
+  const generalOptions = toFilterOptions(GENERAL_CONTEXTUAL_FILTERS);
+  const general = useFilterOptions(generalOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Activity"
         options={generalOptions}
-        active={filterState.getActive('general')}
-        onChange={handleGeneralChange}
+        active={general.active()}
+        onChange={general.onChange}
       />
     </div>
   );
 };
 
 const AgentsFilters = () => {
-  const { soup } = useSoupView();
-  const filterState = useFilterState();
-
   const chatOptions = toFilterOptions(CHAT_CONTEXTUAL_FILTERS);
-
-  const handleChatChange = (options: Option[]) => {
-    filterState.setActive('chat', options);
-
-    for (const filter of CHAT_CONTEXTUAL_FILTERS) {
-      if (soup.filters.isActive(filter.id)) {
-        soup.filters.deactivate(filter.id);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
+  const chat = useFilterOptions(chatOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Activity"
         options={chatOptions}
-        active={filterState.getActive('chat')}
-        onChange={handleChatChange}
+        active={chat.active()}
+        onChange={chat.onChange}
       />
     </div>
   );
 };
 
 const MailFilters = () => {
-  const { soup } = useSoupView();
-  const filterState = useFilterState();
-
   // Split email filters into read/unread and done/not-done groups
   const readStatusOptions: Option[] = [
     { value: 'email-unread', label: 'Unread' },
@@ -168,57 +136,28 @@ const MailFilters = () => {
     { value: 'email-done', label: 'Done' },
   ];
 
-  const handleReadStatusChange = (options: Option[]) => {
-    filterState.setActive('readStatus', options);
-
-    // Clear previous read status filters
-    for (const opt of readStatusOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
-  const handleDoneStatusChange = (options: Option[]) => {
-    filterState.setActive('doneStatus', options);
-
-    for (const opt of doneStatusOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
+  const readStatus = useFilterOptions(readStatusOptions);
+  const doneStatus = useFilterOptions(doneStatusOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Read"
         options={readStatusOptions}
-        active={filterState.getActive('readStatus')}
-        onChange={handleReadStatusChange}
+        active={readStatus.active()}
+        onChange={readStatus.onChange}
       />
       <FilterSelect
         label="Status"
         options={doneStatusOptions}
-        active={filterState.getActive('doneStatus')}
-        onChange={handleDoneStatusChange}
+        active={doneStatus.active()}
+        onChange={doneStatus.onChange}
       />
     </div>
   );
 };
 
 const DocumentsFilters = () => {
-  const { soup } = useSoupView();
-  const filterState = useFilterState();
-
   // Recency filters
   const recencyOptions: Option[] = [
     { value: 'doc-recent', label: 'Recently Edited' },
@@ -236,81 +175,37 @@ const DocumentsFilters = () => {
     { value: 'doc-in-folder', label: 'In Folder' },
   ];
 
-  const handleRecencyChange = (options: Option[]) => {
-    filterState.setActive('recency', options);
-
-    for (const opt of recencyOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
-  const handleTypeChange = (options: Option[]) => {
-    filterState.setActive('type', options);
-
-    for (const opt of typeOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
-  const handleLocationChange = (options: Option[]) => {
-    filterState.setActive('location', options);
-
-    for (const opt of locationOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
+  const recency = useFilterOptions(recencyOptions);
+  const type = useFilterOptions(typeOptions);
+  const location = useFilterOptions(locationOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Recency"
         options={recencyOptions}
-        active={filterState.getActive('recency')}
-        onChange={handleRecencyChange}
+        active={recency.active()}
+        onChange={recency.onChange}
       />
       <FilterSelect
         label="Type"
         options={typeOptions}
-        active={filterState.getActive('type')}
-        onChange={handleTypeChange}
+        active={type.active()}
+        onChange={type.onChange}
       />
       <FilterSelect
         label="Location"
         options={locationOptions}
-        active={filterState.getActive('location')}
-        onChange={handleLocationChange}
+        active={location.active()}
+        onChange={location.onChange}
       />
     </div>
   );
 };
 
 const TasksFilters = () => {
-  const {
-    soup,
-    statusFilter,
-    setStatusFilter,
-    assigneeFilter,
-    setAssigneeFilter,
-  } = useSoupView();
-  const filterState = useFilterState();
+  const { statusFilter, setStatusFilter, assigneeFilter, setAssigneeFilter } =
+    useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
 
@@ -387,7 +282,10 @@ const TasksFilters = () => {
     },
   ];
 
-  // Derive active status from context signal
+  // Priority uses soup.filters via the hook
+  const priority = useFilterOptions(priorityOptions);
+
+  // Derive active status from context signal (special handling for single-select)
   const activeStatus = createMemo((): Option[] => {
     const current = statusFilter();
     if (!current) return [];
@@ -395,7 +293,7 @@ const TasksFilters = () => {
     return opt ? [opt] : [];
   });
 
-  // Derive active assignee from context signal
+  // Derive active assignee from context signal (special handling for single-select)
   const activeAssignee = createMemo((): Option[] => {
     const current = assigneeFilter();
     if (!current) return [];
@@ -416,20 +314,6 @@ const TasksFilters = () => {
     setAssigneeFilter(newValue);
   };
 
-  const handlePriorityChange = (options: Option[]) => {
-    filterState.setActive('priority', options);
-
-    for (const filter of TASK_PRIORITY_FILTERS) {
-      if (soup.filters.isActive(filter.id)) {
-        soup.filters.deactivate(filter.id);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
@@ -447,17 +331,14 @@ const TasksFilters = () => {
       <FilterSelect
         label="Priority"
         options={priorityOptions}
-        active={filterState.getActive('priority')}
-        onChange={handlePriorityChange}
+        active={priority.active()}
+        onChange={priority.onChange}
       />
     </div>
   );
 };
 
 const ChannelsFilters = () => {
-  const { soup } = useSoupView();
-  const filterState = useFilterState();
-
   // Activity filter
   const activityOptions: Option[] = [
     { value: 'channel-recent-activity', label: 'Recent Activity' },
@@ -469,56 +350,28 @@ const ChannelsFilters = () => {
     { value: 'channel-private', label: 'Private' },
   ];
 
-  const handleActivityChange = (options: Option[]) => {
-    filterState.setActive('activity', options);
-
-    for (const opt of activityOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
-  const handleVisibilityChange = (options: Option[]) => {
-    filterState.setActive('visibility', options);
-
-    for (const opt of visibilityOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
+  const activity = useFilterOptions(activityOptions);
+  const visibility = useFilterOptions(visibilityOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Activity"
         options={activityOptions}
-        active={filterState.getActive('activity')}
-        onChange={handleActivityChange}
+        active={activity.active()}
+        onChange={activity.onChange}
       />
       <FilterSelect
         label="Visibility"
         options={visibilityOptions}
-        active={filterState.getActive('visibility')}
-        onChange={handleVisibilityChange}
+        active={visibility.active()}
+        onChange={visibility.onChange}
       />
     </div>
   );
 };
 
 const FilesFilters = () => {
-  const { soup } = useSoupView();
-  const filterState = useFilterState();
-
   // File type filters based on FILE_ASSOCIATION_TYPES
   const fileTypeOptions: Option[] = [
     { value: 'file-code', label: 'Code' },
@@ -533,47 +386,22 @@ const FilesFilters = () => {
     { value: 'recently-created', label: 'Recently Created' },
   ];
 
-  const handleFileTypeChange = (options: Option[]) => {
-    filterState.setActive('fileType', options);
-
-    for (const opt of fileTypeOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
-
-  const handleRecencyChange = (options: Option[]) => {
-    filterState.setActive('recency', options);
-
-    for (const opt of recencyOptions) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
-
-    for (const option of options) {
-      soup.filters.activate(option.value);
-    }
-  };
+  const fileType = useFilterOptions(fileTypeOptions);
+  const recency = useFilterOptions(recencyOptions);
 
   return (
     <div class="flex items-center gap-1.5">
       <FilterSelect
         label="Type"
         options={fileTypeOptions}
-        active={filterState.getActive('fileType')}
-        onChange={handleFileTypeChange}
+        active={fileType.active()}
+        onChange={fileType.onChange}
       />
       <FilterSelect
         label="Recency"
         options={recencyOptions}
-        active={filterState.getActive('recency')}
-        onChange={handleRecencyChange}
+        active={recency.active()}
+        onChange={recency.onChange}
       />
     </div>
   );
