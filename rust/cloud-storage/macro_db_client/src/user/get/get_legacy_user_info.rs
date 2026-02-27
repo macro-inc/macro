@@ -12,6 +12,8 @@ pub struct LegacyUserInfo {
     pub ai_data_consent: bool,
 }
 
+/// Gets the legacy user info
+#[tracing::instrument(skip(db), err)]
 pub async fn get_legacy_user_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &MacroUserId<Lowercase<'_>>,

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use axum::{
     Extension, Json,
     extract::State,
@@ -56,8 +54,6 @@ impl IntoResponse for GetLegacyUserPermissionsResponse {
 pub enum GetLegacyUserPermissionsError {
     #[error("Internal error")]
     InternalError(#[from] anyhow::Error),
-    #[error("Stripe error")]
-    StripeError,
     #[error("Invalid macro user id")]
     InvalidMacroUserId,
 }
@@ -69,12 +65,6 @@ impl IntoResponse for GetLegacyUserPermissionsError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal error",
-                }),
-            ),
-            GetLegacyUserPermissionsError::StripeError => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "stripe error",
                 }),
             ),
             GetLegacyUserPermissionsError::InvalidMacroUserId => (
@@ -129,23 +119,6 @@ pub async fn handler(
             "inactive"
         };
 
-    let has_trialed = if let Some(stripe_customer_id) = legacy_user_info.stripe_customer_id.as_ref()
-    {
-        let customer_id = stripe::CustomerId::from_str(stripe_customer_id)
-            .map_err(|_| GetLegacyUserPermissionsError::StripeError)?;
-        // Get the user's stripe metadata and check if they have trialed
-        let customer = stripe::Customer::retrieve(&ctx.stripe_client, &customer_id, &[])
-            .await
-            .map_err(|_| GetLegacyUserPermissionsError::StripeError)?;
-
-        customer
-            .metadata
-            .map(|m| m.contains_key("has_trialed"))
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
     Ok(GetLegacyUserPermissionsResponse {
         user_id: user_id.as_ref().to_string(),
         email: email.as_ref().to_string(),
@@ -159,7 +132,7 @@ pub async fn handler(
             _ => None,
         },
         has_chrome_ext: legacy_user_info.has_chrome_ext,
-        has_trialed,
+        has_trialed: true, // setting to true until we deprecate the usage on the frontend
         ai_data_consent: legacy_user_info.ai_data_consent,
     })
 }
