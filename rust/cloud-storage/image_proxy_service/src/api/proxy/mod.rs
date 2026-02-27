@@ -22,6 +22,13 @@ pub async fn proxy_request_handler(
     Query(params): Query<ProxyParams>,
     State(http_client): State<reqwest::Client>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    if !params.url.starts_with("http://") && !params.url.starts_with("https://") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "only http/https URLs are allowed".to_string(),
+        ));
+    }
+
     let response = http_client
         .get(&params.url)
         .send()
@@ -42,8 +49,15 @@ pub async fn proxy_request_handler(
         .unwrap_or("application/octet-stream")
         .to_string();
 
+    if !content_type.starts_with("image/") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("upstream content-type is not an image: {content_type}"),
+        ));
+    }
+
     Response::builder()
-        .header("Content-Type", content_type)
+        .header("Content-Type", &content_type)
         .header("Cache-Control", "public, max-age=31536000, immutable")
         .header("Cross-Origin-Resource-Policy", "cross-origin")
         .body(Body::from_stream(response.bytes_stream()))
