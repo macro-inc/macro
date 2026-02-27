@@ -82,6 +82,7 @@ import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hoo
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { SoupFiltersBar } from '@app/component/next-soup/soup-view/soup-filters-bar';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -189,6 +190,7 @@ export const SoupView = (props: SoupViewProps) => {
 
               <div class="py-2 flex items-center w-full">
                 <SoupViewTabs />
+                <SoupFiltersBar />
               </div>
               <div class="ml-auto w-full flex items-center justify-end gap-2">
                 <div class="max-w-56 w-full">
