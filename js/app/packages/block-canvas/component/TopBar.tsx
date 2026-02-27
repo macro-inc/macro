@@ -1,3 +1,8 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -18,8 +23,14 @@ import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockFileSignal } from '@core/signal/load';
 import {
@@ -29,9 +40,13 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
-import { onMount, Show } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+import { For, onMount, Show } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
@@ -49,6 +64,10 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
   const canvasFile = blockFileSignal.get;
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const propertiesControl = useDrawerControl('properties');
+  const shareCtx = useShareDialogContext();
 
   let ref!: HTMLDivElement;
   onMount(() => {
@@ -99,6 +118,36 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      condition: () => ENABLE_REFERENCES_MODAL,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={documentId}
+          documentName={fileName()}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      condition: () => !!canvasFile(),
+      buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+    },
+  ];
+
   return (
     <div ref={ref}>
       <SplitHeaderLeft>
@@ -114,22 +163,23 @@ export function TopBar() {
             itemType="document"
             name={fileName()}
             ops={ops}
+            tools={isMobile() ? tools : undefined}
           />
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Show when={ENABLE_REFERENCES_MODAL}>
-          <ReferencesButton
-            documentId={documentId}
-            documentName={fileName()}
-            buttonSize="sm"
-          />
-        </Show>
-        <DocumentPropertiesButton buttonSize="sm" />
+        <For each={tools}>
+          {(tool) => (
+            <Show when={!tool.condition || tool.condition()}>
+              {tool.buttonComponent ? (
+                <tool.buttonComponent />
+              ) : (
+                <ToolButton tool={tool} />
+              )}
+            </Show>
+          )}
+        </For>
         <SplitPermissionsBadge />
-        <Show when={canvasFile()} keyed>
-          <ShareTrigger copyLink={copyLink} />
-        </Show>
       </SplitToolbarRight>
     </div>
   );

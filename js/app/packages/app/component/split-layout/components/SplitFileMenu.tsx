@@ -18,6 +18,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { type BlockTool } from './BlockTool';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { useSplitModal } from './SplitModalContext';
@@ -44,21 +45,13 @@ const isDefaultFileOperation = (
 
 export type FileOperation = DefaultFileOperation | CustomFileOperation;
 
-export type FileTools = {
-  label: string;
-  icon: Component;
-  action: () => void;
-  condition?: () => boolean;
-  divideAbove?: boolean;
-};
-
 export function SplitFileMenu(props: {
   id: string;
   itemType: ItemType;
   name: string;
   formattedName?: string;
   ops: Array<FileOperation>;
-  tools?: FileTools[];
+  tools?: BlockTool[];
 }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -205,7 +198,9 @@ export function SplitFileMenu(props: {
                   <div class="my-1 h-[1px] bg-edge" />
                 </Show>
                 <MenuItem
-                  text={tool.label}
+                  text={
+                    typeof tool.label === 'function' ? tool.label() : tool.label
+                  }
                   onClick={tool.action}
                   icon={tool.icon}
                 />

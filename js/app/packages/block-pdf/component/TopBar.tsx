@@ -1,3 +1,8 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -22,23 +27,33 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesButton } from '@core/component/ReferencesModal';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
+import { isMobile } from '@core/mobile/isMobile';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import Printer from '@icon/regular/printer.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
@@ -52,6 +67,10 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
 
   const fileType = blockMetadataSignal()?.fileType;
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const propertiesControl = useDrawerControl('properties');
+  const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
   const copyLink = () => {
@@ -164,6 +183,35 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      condition: () => ENABLE_REFERENCES_MODAL,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={documentId}
+          documentName={fileName()}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -180,6 +228,7 @@ export function TopBar() {
               itemType="document"
               name={fileName()}
               ops={ops}
+              tools={isMobile() ? tools : undefined}
             />
             <div class="w-5" />
             <PageNumberInput />
@@ -189,18 +238,18 @@ export function TopBar() {
         </Show>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Show when={ENABLE_REFERENCES_MODAL}>
-          <ReferencesButton
-            documentId={documentId}
-            documentName={fileName()}
-            buttonSize="sm"
-          />
-        </Show>
-        <DocumentPropertiesButton buttonSize="sm" />
-        <div class="flex items-center">
-          <SplitPermissionsBadge />
-          <ShareTrigger copyLink={copyLink} />
-        </div>
+        <For each={tools}>
+          {(tool) => (
+            <Show when={!tool.condition || tool.condition()}>
+              {tool.buttonComponent ? (
+                <tool.buttonComponent />
+              ) : (
+                <ToolButton tool={tool} />
+              )}
+            </Show>
+          )}
+        </For>
+        <SplitPermissionsBadge />
       </SplitToolbarRight>
     </>
   );

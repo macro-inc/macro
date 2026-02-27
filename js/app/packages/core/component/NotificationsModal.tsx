@@ -7,8 +7,9 @@ import {
   type NotificationSource,
   useNotificationsForEntity,
 } from '@notifications';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Notifications } from './Notifications';
 
 false && clickOutside;
@@ -29,13 +30,21 @@ export function NotificationsButton(props: {
   );
   return (
     <div class="relative" tabIndex={-1}>
-      <DeprecatedIconButton
-        icon={Bell}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'View notifications' }}
+      <Button
+        class={cn(
+          'px-1',
+          drawerControl.isOpen() &&
+            'bg-accent/20 hover:bg-accent/30 text-accent-ink '
+        )}
+        tooltip="View notifications"
         onClick={() => drawerControl.toggle()}
-      />
+      >
+        <Bell
+          class={
+            props.buttonSize === 'sm' ? 'size-4 shrink-0' : 'size-5 shrink-0'
+          }
+        />
+      </Button>
       <Suspense fallback={null}>
         <Show when={unreadCount() > 0}>
           <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-[4px] pointer-events-none">
@@ -120,15 +129,24 @@ export function NotificationsModal(props: NotificationsModalProps) {
   return (
     <>
       <div class="relative" tabIndex={-1}>
-        <DeprecatedIconButton
-          icon={Bell}
-          theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-          size={props.buttonSize ?? 'base'}
-          tooltip={{ label: 'View notifications' }}
-          onClick={() => {
-            drawerControl.toggle();
-          }}
-        />
+        <Button
+          suppressInteractionStyling
+          class={cn(
+            'aspect-square',
+            props.buttonSize === 'sm' ? 'size-6' : 'size-8',
+            drawerControl.isOpen()
+              ? 'bg-accent/10 text-accent-ink hover:bg-accent/20'
+              : 'text-ink hover:bg-hover'
+          )}
+          tooltip="View notifications"
+          onClick={() => drawerControl.toggle()}
+        >
+          <Bell
+            class={
+              props.buttonSize === 'sm' ? 'size-4 shrink-0' : 'size-5 shrink-0'
+            }
+          />
+        </Button>
         <Suspense fallback={null}>
           <Show when={unreadCount() > 0}>
             <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-[4px] pointer-events-none">

@@ -1,8 +1,11 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
+import {
   type FileOperation,
   SplitFileMenu,
-  type FileTools,
 } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -24,7 +27,6 @@ import {
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsButton } from '@core/component/NotificationsModal';
 import { NOTIFICATIONS_DRAWER_ID } from '@core/component/NotificationsModal';
@@ -54,10 +56,8 @@ import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { Show } from 'solid-js';
-import { HistoryButton } from './History';
+import { For, Show } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
-import { MarkdownPropertiesButton } from './MarkdownPropertiesModal';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
 export function TopBar() {
@@ -104,38 +104,73 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
-  const tools: FileTools[] = [
+  const tools: BlockTool[] = [
     {
       label: 'History',
       icon: ClockIcon,
       action: historyControl.toggle,
+      isActive: historyControl.isOpen,
       condition: () =>
         ENABLE_MARKDOWN_LIVE_COLLABORATION &&
         ENABLE_HISTORY_COMPONENT &&
         canEdit(),
     },
-    { label: 'Notifications', icon: Bell, action: notificationsControl.toggle },
-    { label: 'References', icon: Quotes, action: referencesControl.toggle },
     {
-      label: 'Show Comments',
-      icon: ShowComments,
-      action: () => setShowCommentsPreference(true),
-      condition: () => !showCommentsPreference(),
+      label: 'Notifications',
+      icon: Bell,
+      action: notificationsControl.toggle,
+      buttonComponent: () => (
+        <NotificationsButton
+          entity={{ id: blockId, type: itemType as EntityType }}
+          notificationSource={notificationSource}
+          buttonSize="sm"
+        />
+      ),
     },
     {
-      label: 'Hide Comments',
-      icon: HideComments,
-      action: () => setShowCommentsPreference(false),
-      condition: () => showCommentsPreference(),
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={blockId}
+          documentName={name()}
+          buttonSize="sm"
+        />
+      ),
     },
-    { label: 'Properties', icon: TagIcon, action: propertiesControl.toggle },
+    {
+      label: () =>
+        showCommentsPreference() ? 'Hide Comments' : 'Show Comments',
+      icon: (props: any) => (
+        <Show
+          when={showCommentsPreference()}
+          fallback={<ShowComments {...props} />}
+        >
+          <HideComments {...props} />
+        </Show>
+      ),
+      action: () => setShowCommentsPreference(!showCommentsPreference()),
+    },
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      isActive: propertiesControl.isOpen,
+    },
     {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
       divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
     },
-    { label: 'Copy Link', icon: IconLink, action: copyLink },
+    {
+      label: 'Copy Link',
+      icon: IconLink,
+      action: copyLink,
+      condition: isMobile,
+    },
   ];
 
   return (
@@ -163,41 +198,18 @@ export function TopBar() {
               />
             </SplitToolbarLeft>
             <SplitToolbarRight>
-              <Show
-                when={
-                  ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-                  ENABLE_HISTORY_COMPONENT &&
-                  canEdit()
-                }
-              >
-                <HistoryButton buttonSize="sm" />
-              </Show>
-              <NotificationsButton
-                entity={{ id: blockId, type: itemType as EntityType }}
-                notificationSource={notificationSource}
-                buttonSize="sm"
-              />
-              <ReferencesButton
-                documentId={blockId}
-                documentName={name()}
-                buttonSize="sm"
-              />
-              <DeprecatedIconButton
-                size="sm"
-                icon={showCommentsPreference() ? HideComments : ShowComments}
-                theme="clear"
-                onClick={() =>
-                  setShowCommentsPreference(!showCommentsPreference())
-                }
-                tooltip={{
-                  label: `${showCommentsPreference() ? 'Hide' : 'Show'} Comments`,
-                }}
-              />
-              <MarkdownPropertiesButton buttonSize="sm" />
-              <div class="flex items-center">
-                <SplitPermissionsBadge />
-                <ShareTrigger />
-              </div>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
             </SplitToolbarRight>
           </>
         }
@@ -220,21 +232,38 @@ export function TopBar() {
 
 export function InstructionsTopBar() {
   const canEdit = useCanEdit();
+  const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
+
+  const tools: BlockTool[] = [
+    {
+      label: 'History',
+      icon: ClockIcon,
+      action: historyControl.toggle,
+      isActive: historyControl.isOpen,
+      condition: () =>
+        ENABLE_MARKDOWN_LIVE_COLLABORATION &&
+        ENABLE_HISTORY_COMPONENT &&
+        canEdit(),
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel label="AI Instructions" iconType="md" />
       </SplitHeaderLeft>
       <SplitToolbarRight>
-        <Show
-          when={
-            ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-            ENABLE_HISTORY_COMPONENT &&
-            canEdit()
-          }
-        >
-          <HistoryButton />
-        </Show>
+        <For each={tools}>
+          {(tool) => (
+            <Show when={!tool.condition || tool.condition()}>
+              {tool.buttonComponent ? (
+                <tool.buttonComponent />
+              ) : (
+                <ToolButton tool={tool} />
+              )}
+            </Show>
+          )}
+        </For>
       </SplitToolbarRight>
     </>
   );

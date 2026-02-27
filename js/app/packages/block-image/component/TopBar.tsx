@@ -1,3 +1,8 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -12,8 +17,14 @@ import {
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { blockFileSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
@@ -21,13 +32,20 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { isMobile } from '@core/mobile/isMobile';
+import { For, Show } from 'solid-js';
 
 export function TopBar() {
   const blockId = useBlockId();
   const imageFile = blockFileSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
@@ -48,6 +66,28 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={blockId}
+          documentName={name()}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -60,19 +100,23 @@ export function TopBar() {
             itemType="document"
             name={name()}
             ops={ops}
+            tools={isMobile() ? tools : undefined}
           />
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <ReferencesButton
-          documentId={blockId}
-          documentName={name()}
-          buttonSize="sm"
-        />
-        <div class="flex items-center">
-          <SplitPermissionsBadge />
-          <ShareTrigger />
-        </div>
+        <For each={tools}>
+          {(tool) => (
+            <Show when={!tool.condition || tool.condition()}>
+              {tool.buttonComponent ? (
+                <tool.buttonComponent />
+              ) : (
+                <ToolButton tool={tool} />
+              )}
+            </Show>
+          )}
+        </For>
+        <SplitPermissionsBadge />
       </SplitToolbarRight>
     </>
   );
