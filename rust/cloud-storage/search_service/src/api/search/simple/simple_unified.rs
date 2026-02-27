@@ -84,7 +84,7 @@ fn compute_next_cursor(
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
-#[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
+#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
