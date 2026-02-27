@@ -220,9 +220,11 @@ export const SoupView = (props: SoupViewProps) => {
             </div>
           </div>
           <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
-            <SoupViewFileDropzone>
-              <SoupViewList />
-            </SoupViewFileDropzone>
+            <Suspense>
+              <SoupViewFileDropzone>
+                <SoupViewList />
+              </SoupViewFileDropzone>
+            </Suspense>
           </div>
         </div>
         <Suspense>
