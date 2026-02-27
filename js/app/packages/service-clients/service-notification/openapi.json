@@ -1059,6 +1059,9 @@
             "properties": {
               "invitedBy": {
                 "type": "string"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               }
             }
           }
@@ -1081,6 +1084,9 @@
               "messageId": {
                 "type": "string",
                 "description": "The message you were mentioned in"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               },
               "threadId": {
                 "type": ["string", "null"],
@@ -1110,6 +1116,9 @@
               "sender": {
                 "type": "string",
                 "description": "The user who sent the message"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               }
             }
           }
@@ -1131,6 +1140,9 @@
               "messageId": {
                 "type": "string",
                 "description": "The id of the new message"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               },
               "threadId": {
                 "type": "string",
@@ -1222,6 +1234,9 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -1374,6 +1389,9 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           },
           "text": {
             "type": "string",
@@ -1589,6 +1607,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
       },
@@ -1600,6 +1622,9 @@
           "assignedBy": {
             "type": "string",
             "description": "The user who assigned the task"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           },
           "taskId": {
             "type": "string",
