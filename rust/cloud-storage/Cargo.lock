@@ -4861,6 +4861,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "image_proxy_service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-secretsmanager",
+ "axum",
+ "http-body-util",
+ "macro_auth",
+ "macro_aws_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_middleware",
+ "model",
+ "reqwest",
+ "secretsmanager_client",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
 name = "imgref"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

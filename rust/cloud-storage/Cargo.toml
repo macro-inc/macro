@@ -46,6 +46,7 @@ members = [
   "fusionauth",
   "github",
   "gmail_client",
+  "image_proxy_service",
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
