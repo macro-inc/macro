@@ -238,7 +238,6 @@ export function ThreadList<T extends { id: string }>(
         'flex-direction': 'column',
       }}
     >
-      <div style={{ 'flex-grow': 1 }} />
       <Virtualizer
         ref={(ref) => {
           if (!ref) return;
