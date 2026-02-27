@@ -1,34 +1,79 @@
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import type { ListView } from '@app/constants/list-views';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 export const SoupFiltersBar = () => {
-  const [active, setActive] = createSignal<Option[]>([]);
+  const panel = useSplitPanelOrThrow();
+
+  const component = createMemo(() => {
+    const content = panel.handle.content();
+
+    if (content.type !== 'component') return;
+
+    return content.id;
+  });
+
+  const isComponentListView = (listView: ListView) => {
+    return component() === listView;
+  };
+
   return (
-    <div>
-      <FilterSelect
-        options={[
-          {
-            value: 'one',
-            label: 'One',
-          },
-          {
-            value: 'two',
-            label: 'Two',
-          },
-          {
-            value: 'three',
-            label: 'Three',
-          },
-        ]}
-        onChange={setActive}
-        active={active()}
-        label="Test filter"
-      />
-    </div>
+    <Switch>
+      <Match when={isComponentListView('inbox')}>
+        <InboxFilters />
+      </Match>
+      <Match when={isComponentListView('agents')}>
+        <AgentsFilters />
+      </Match>
+      <Match when={isComponentListView('mail')}>
+        <MailFilters />
+      </Match>
+      <Match when={isComponentListView('documents')}>
+        <DocumentsFilters />
+      </Match>
+      <Match when={isComponentListView('tasks')}>
+        <TasksFilters />
+      </Match>
+      <Match when={isComponentListView('channels')}>
+        <ChannelsFilters />
+      </Match>
+      <Match when={isComponentListView('files')}>
+        <FilesFilters />
+      </Match>
+    </Switch>
   );
+};
+
+const InboxFilters = () => {
+  return <div></div>;
+};
+
+const AgentsFilters = () => {
+  return <div></div>;
+};
+
+const MailFilters = () => {
+  return <div></div>;
+};
+
+const DocumentsFilters = () => {
+  return <div></div>;
+};
+
+const TasksFilters = () => {
+  return <div></div>;
+};
+
+const ChannelsFilters = () => {
+  return <div></div>;
+};
+
+const FilesFilters = () => {
+  return <div></div>;
 };
 
 type Option = { value: string; label: string };
