@@ -83,6 +83,7 @@ import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/soup-filters-bar';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -165,7 +166,11 @@ export const SoupView = (props: SoupViewProps) => {
       <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full pl-2 pr-1">
-            {/* <div class="flex items-center py-2 justify-between"></div> */}
+            <SplitHeaderLeft>
+              <div class="flex items-center py-2 justify-between">
+                <SoupViewTabs />
+              </div>
+            </SplitHeaderLeft>
             <div class="flex gap-2 items-center">
               <button
                 type="button"
