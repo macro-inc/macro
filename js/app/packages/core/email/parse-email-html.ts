@@ -1,3 +1,4 @@
+import { ENABLE_PROXY_EMAIL_IMAGES } from '../constant/featureFlags';
 import { proxyEmailImages } from './proxy-email-images';
 
 /**
@@ -170,8 +171,12 @@ export function parseEmailContent(
     ? `${styleTags}\n${mainContentDiv.innerHTML}`
     : mainContentDiv.innerHTML;
 
-  mainContent = proxyEmailImages(finalContent);
-  signature = signature ? proxyEmailImages(signature) : null;
+  if (ENABLE_PROXY_EMAIL_IMAGES) {
+    mainContent = proxyEmailImages(finalContent);
+    signature = signature ? proxyEmailImages(signature) : null;
+  } else {
+    mainContent = finalContent;
+  }
 
   return {
     mainContent,
