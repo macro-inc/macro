@@ -4,6 +4,10 @@ import {
   type TaskEntityWithProperties,
   type EntityData,
   type WithNotification,
+  isChannelEntity,
+  isChatEntity,
+  isDocumentEntity,
+  isEmailEntity,
 } from '@entity';
 import {
   signalFilter,
@@ -15,7 +19,10 @@ import {
   getIconConfig,
 } from '@core/component/EntityIcon';
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
-import type { SoupApiItem } from '@service-storage/generated/schemas';
+import type {
+  SoupApiItem,
+  SoupProperty,
+} from '@service-storage/generated/schemas';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { FilterConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
@@ -29,6 +36,10 @@ import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { match } from 'ts-pattern';
 import { compositeEntity, type NotificationSource } from '@notifications';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -70,6 +81,8 @@ export function filterSoupItemByRequestBody(
     )
     .exhaustive();
 }
+
+type EntityFilterConfig = FilterConfig<EntityData> & { label: string };
 
 /**
  * Unread filter - entity has unread content.
@@ -222,6 +235,150 @@ export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   };
 }
 
+export function hasProperties(
+  entity: EntityData
+): entity is EntityData & { properties: SoupProperty[] } {
+  return 'properties' in entity && Array.isArray(entity.properties);
+}
+
+export function getPropertyById(
+  entity: EntityData,
+  propertyId: string
+): SoupProperty | undefined {
+  if (!hasProperties(entity)) return undefined;
+
+  return entity.properties.find((p) => p.definition.id === propertyId);
+}
+
+export function hasAssignees(entity: EntityData): boolean {
+  if (!isTaskEntity(entity)) return false;
+  return getTaskAssigneeIds(entity).length > 0;
+}
+
+export function isAssignedTo(entity: EntityData, userId: string): boolean {
+  if (!isTaskEntity(entity)) return false;
+
+  const assigneeIds = getTaskAssigneeIds(entity);
+  // If no assignees, consider it assigned to everyone (or unassigned)
+  if (assigneeIds.length === 0) return false;
+  return assigneeIds.includes(userId);
+}
+
+export function isUnassigned(entity: EntityData): boolean {
+  if (!isTaskEntity(entity)) return false;
+  return getTaskAssigneeIds(entity).length === 0;
+}
+
+export function getStatusOptionId(entity: EntityData): string | undefined {
+  if (!isTaskEntity(entity)) return undefined;
+  const taskWithProps = entity as TaskEntityWithProperties;
+
+  const properties = taskWithProps.properties;
+
+  if (!properties) return undefined;
+
+  const statusProperty = properties.find(
+    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.STATUS
+  );
+
+  if (!statusProperty?.value) return undefined;
+
+  const value = statusProperty.value;
+
+  if (value.type === 'SelectOption') {
+    return value.value[0];
+  }
+
+  return undefined;
+}
+
+export function hasStatus(entity: EntityData, statusOptionId: string): boolean {
+  return getStatusOptionId(entity) === statusOptionId;
+}
+
+export function isNotStarted(entity: EntityData): boolean {
+  return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.NOT_STARTED);
+}
+
+export function isInProgress(entity: EntityData): boolean {
+  return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS);
+}
+
+export function isInReview(entity: EntityData): boolean {
+  return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.IN_REVIEW);
+}
+
+export function isCompleted(entity: EntityData): boolean {
+  if (!isTaskEntity(entity)) return false;
+  // Check both the subType flag and status property
+  if (entity.subType?.is_completed) return true;
+  return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.COMPLETED);
+}
+
+export function isCanceled(entity: EntityData): boolean {
+  return hasStatus(entity, PROPERTY_OPTION_IDS.STATUS.CANCELED);
+}
+
+export function isClosed(entity: EntityData): boolean {
+  return isCompleted(entity) || isCanceled(entity);
+}
+
+export function isOpen(entity: EntityData): boolean {
+  if (!isTaskEntity(entity)) return false;
+  return !isClosed(entity);
+}
+
+export function getPriorityOptionId(entity: EntityData): string | undefined {
+  if (!isTaskEntity(entity)) return undefined;
+  const taskWithProps = entity as TaskEntityWithProperties;
+
+  const properties = taskWithProps.properties;
+
+  if (!properties) return undefined;
+
+  const priorityProperty = properties.find(
+    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.PRIORITY
+  );
+
+  if (!priorityProperty?.value) return undefined;
+
+  const value = priorityProperty.value;
+
+  if (value.type === 'SelectOption') {
+    return value.value[0];
+  }
+
+  return undefined;
+}
+
+export function hasPriority(
+  entity: EntityData,
+  priorityOptionId: string
+): boolean {
+  return getPriorityOptionId(entity) === priorityOptionId;
+}
+
+export function isUrgentPriority(entity: EntityData): boolean {
+  return hasPriority(entity, PROPERTY_OPTION_IDS.PRIORITY.URGENT);
+}
+
+export function isHighPriority(entity: EntityData): boolean {
+  return hasPriority(entity, PROPERTY_OPTION_IDS.PRIORITY.HIGH);
+}
+
+export function isMediumPriority(entity: EntityData): boolean {
+  return hasPriority(entity, PROPERTY_OPTION_IDS.PRIORITY.MEDIUM);
+}
+
+export function isLowPriority(entity: EntityData): boolean {
+  return hasPriority(entity, PROPERTY_OPTION_IDS.PRIORITY.LOW);
+}
+
+export function hasNoPriority(entity: EntityData): boolean {
+  if (!isTaskEntity(entity)) return false;
+  return getPriorityOptionId(entity) === undefined;
+}
+
 export const ENTITY_TYPE_FILTER_CONFIGS = [
   // Entity type filters (mutually exclusive)
   {
@@ -267,6 +424,265 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
     group: 'type',
   },
 ] as const;
+
+/**
+ * Contextual filters for email entities
+ */
+export const EMAIL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'email-unread',
+    label: 'Unread',
+    predicate: (entity) => isEmailEntity(entity) && !entity.isRead,
+  },
+  {
+    id: 'email-read',
+    label: 'Read',
+    predicate: (entity) => isEmailEntity(entity) && entity.isRead,
+  },
+  {
+    id: 'email-done',
+    label: 'Done',
+    predicate: (entity) => isEmailEntity(entity) && entity.done,
+  },
+  {
+    id: 'email-not-done',
+    label: 'Not Done',
+    predicate: (entity) => isEmailEntity(entity) && !entity.done,
+  },
+];
+
+/**
+ * Contextual filters for task entities - Status based
+ */
+export const TASK_STATUS_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'task-not-started',
+    label: 'Not Started',
+    predicate: isNotStarted,
+  },
+  {
+    id: 'task-in-progress',
+    label: 'In Progress',
+    predicate: isInProgress,
+  },
+  {
+    id: 'task-in-review',
+    label: 'In Review',
+    predicate: isInReview,
+  },
+  {
+    id: 'task-completed',
+    label: 'Completed',
+    predicate: isCompleted,
+  },
+  {
+    id: 'task-canceled',
+    label: 'Canceled',
+    predicate: isCanceled,
+  },
+];
+
+/**
+ * Contextual filters for task entities - Priority based
+ */
+export const TASK_PRIORITY_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'task-critical',
+    label: 'Critical',
+    predicate: isUrgentPriority,
+  },
+  {
+    id: 'task-high-priority',
+    label: 'High Priority',
+    predicate: isHighPriority,
+  },
+  {
+    id: 'task-medium-priority',
+    label: 'Medium Priority',
+    predicate: isMediumPriority,
+  },
+  {
+    id: 'task-low-priority',
+    label: 'Low Priority',
+    predicate: isLowPriority,
+  },
+  {
+    id: 'task-no-priority',
+    label: 'No Priority',
+    predicate: hasNoPriority,
+  },
+];
+
+/**
+ * Contextual filters for task entities - Assignee based
+ */
+export const TASK_ASSIGNEE_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'task-has-assignee',
+    label: 'Has Assignee',
+    predicate: hasAssignees,
+  },
+  {
+    id: 'task-unassigned',
+    label: 'Unassigned',
+    predicate: isUnassigned,
+  },
+];
+
+/**
+ * All task contextual filters combined
+ */
+export const TASK_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  ...TASK_STATUS_FILTERS,
+  ...TASK_PRIORITY_FILTERS,
+  ...TASK_ASSIGNEE_FILTERS,
+];
+
+/**
+ * Contextual filters for document entities
+ */
+export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'doc-recent',
+    label: 'Recently Edited',
+    predicate: (entity) => {
+      if (!isDocumentEntity(entity)) return false;
+      const updatedAt = entity.updatedAt
+        ? new Date(entity.updatedAt)
+        : undefined;
+      if (!updatedAt) return false;
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return updatedAt > dayAgo;
+    },
+  },
+  {
+    id: 'doc-edited-this-week',
+    label: 'Edited This Week',
+    predicate: (entity) => {
+      if (!isDocumentEntity(entity)) return false;
+      const updatedAt = entity.updatedAt
+        ? new Date(entity.updatedAt)
+        : undefined;
+      if (!updatedAt) return false;
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return updatedAt > weekAgo;
+    },
+  },
+  {
+    id: 'doc-in-folder',
+    label: 'In Folder',
+    predicate: (entity) => isDocumentEntity(entity) && !!entity.projectId,
+  },
+  {
+    id: 'doc-markdown',
+    label: 'Markdown',
+    predicate: (entity) => isDocumentEntity(entity) && entity.fileType === 'md',
+  },
+  {
+    id: 'doc-canvas',
+    label: 'Canvas',
+    predicate: (entity) =>
+      isDocumentEntity(entity) && entity.fileType === 'canvas',
+  },
+];
+
+/**
+ * Contextual filters for channel/message entities
+ */
+export const CHANNEL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'channel-recent-activity',
+    label: 'Recent Activity',
+    predicate: (entity) => {
+      if (!isChannelEntity(entity)) return false;
+      const interactedAt = entity.interactedAt
+        ? new Date(entity.interactedAt)
+        : undefined;
+      if (!interactedAt) return false;
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return interactedAt > dayAgo;
+    },
+  },
+  {
+    id: 'channel-public',
+    label: 'Public',
+    predicate: (entity) =>
+      isChannelEntity(entity) && entity.channelType === 'public',
+  },
+  {
+    id: 'channel-private',
+    label: 'Private',
+    predicate: (entity) =>
+      isChannelEntity(entity) && entity.channelType === 'private',
+  },
+];
+
+/**
+ * Contextual filters for chat/agent entities
+ */
+export const CHAT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'chat-recent',
+    label: 'Recent',
+    predicate: (entity) => {
+      if (!isChatEntity(entity)) return false;
+      const updatedAt = entity.updatedAt
+        ? new Date(entity.updatedAt)
+        : undefined;
+      if (!updatedAt) return false;
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return updatedAt > dayAgo;
+    },
+  },
+];
+
+/**
+ * General contextual filters that apply to multiple entity types
+ */
+export const GENERAL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+  {
+    id: 'recently-viewed',
+    label: 'Recently Viewed',
+    predicate: (entity) => {
+      const viewedAt = entity.viewedAt ? new Date(entity.viewedAt) : undefined;
+      if (!viewedAt) return false;
+      const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      return viewedAt > hourAgo;
+    },
+  },
+  {
+    id: 'recently-created',
+    label: 'Recently Created',
+    predicate: (entity) => {
+      const createdAt = entity.createdAt
+        ? new Date(entity.createdAt)
+        : undefined;
+      if (!createdAt) return false;
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return createdAt > weekAgo;
+    },
+  },
+  {
+    id: 'recently-updated',
+    label: 'Recently Updated',
+    predicate: (entity) => {
+      const updatedAt = entity.updatedAt
+        ? new Date(entity.updatedAt)
+        : undefined;
+      if (!updatedAt) return false;
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return updatedAt > dayAgo;
+    },
+  },
+  {
+    id: 'high-frecency',
+    label: 'Frequently Used',
+    predicate: (entity) => {
+      const score = entity.frecencyScore ?? 0;
+      return score > 100; // High frecency threshold
+    },
+  },
+];
 
 export const createSoupFilters = (
   notificationSource: NotificationSource,
@@ -341,7 +757,7 @@ export const createSoupFilters = (
       label: 'Task assigned to user',
       predicate: taskAssignedToUserFilter(getUserID),
     },
-  ] as const satisfies (FilterConfig<EntityData> & { label: string })[];
+  ] as const satisfies (EntityFilterConfig & { label: string })[];
 
   return list;
 };
