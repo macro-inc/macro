@@ -70,6 +70,8 @@ targets:
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
       groups: [app]
     dependencies:
+      - target: NotificationServiceExtension
+        embed: true
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
@@ -86,3 +88,19 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+  NotificationServiceExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationServiceExtension
+    info:
+      path: NotificationServiceExtension/Info.plist
+      properties:
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macro.dev.NotificationServiceExtension
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
