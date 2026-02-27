@@ -20,6 +20,7 @@ import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UnreadWidget } from '@app/component/app-sidebar/unread-widget';
+import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 
 interface SidebarItem {
   label: string;
@@ -135,8 +136,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </For>
         </ul>
       </nav>
-      <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto">
-        <UnreadWidget />
+      <div class="block max-h-[clamp(10%,60%,20rem)]">
+        {/* <UnreadWidget /> */}
+        <ChannelsUnreadWidget />
       </div>
       {/* <div class="h-15"></div> */}
     </div>
