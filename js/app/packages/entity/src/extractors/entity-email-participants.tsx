@@ -2,12 +2,14 @@ import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserTooltip } from '@core/component/UserTooltip';
 import {
   mergeAdjacentMacroEmTags,
   highlightTermsInText,
 } from '@core/util/searchHighlight';
+import WideCopy from '@macro-icons/wide/copy.svg';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 import { For, Show } from 'solid-js';
@@ -121,12 +123,6 @@ function resolveParticipants(
   return result;
 }
 
-/**
- * Abbreviates resolved participants for display:
- * - 1 name: full name
- * - 2-3 names: first names only
- * - 4+ names: first, "..", second-to-last, last (first names)
- */
 function abbreviateParticipants(
   resolved: ResolvedParticipant[]
 ): ResolvedParticipant[] {
@@ -139,11 +135,39 @@ function abbreviateParticipants(
 
   if (abbreviated.length <= 3) return abbreviated;
 
-  return [
-    abbreviated[0],
-    abbreviated[abbreviated.length - 2],
-    abbreviated[abbreviated.length - 1],
-  ];
+  return [abbreviated[0], abbreviated[1]];
+}
+
+function copyEmail(email: string, e: MouseEvent) {
+  e.stopPropagation();
+  navigator.clipboard.writeText(email);
+  toast.success('Email copied');
+}
+
+function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
+  return (
+    <Tooltip
+      spanMode
+      unstyled
+      tooltip={
+        <div class="bg-panel text-ink border border-edge/20 py-1">
+          <For each={props.hidden}>
+            {(r) => (
+              <div
+                class="flex items-center gap-2 px-2 py-1 text-xs hover:bg-hover"
+                onClick={[copyEmail, r.participant.email]}
+              >
+                <span class="truncate">{r.participant.email}</span>
+                <WideCopy class="w-3 h-3 shrink-0 opacity-60" />
+              </div>
+            )}
+          </For>
+        </div>
+      }
+    >
+      <span class="opacity-60">+{props.hidden.length}</span>
+    </Tooltip>
+  );
 }
 
 /** Get a nicely formatted list of participants from an email entity. */
@@ -168,6 +192,11 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
       fetchDisplayName
     );
 
+  const hiddenParticipants = () => {
+    const all = allResolved();
+    return all.length > 3 ? all.slice(2) : [];
+  };
+
   const searchTerms = () => {
     if (!isSearchEntity(props.entity)) return undefined;
     return props.entity.search.senderHighlightTerms;
@@ -180,22 +209,24 @@ export function EntityEmailParticipants(props: { entity: EmailEntity }) {
     return result !== name ? result : undefined;
   };
 
-  const showEllipsis = () => allResolved().length >= 4;
-
   return (
-    <For each={participants()}>
-      {(resolved, index) => (
-        <>
-          <Show when={index() > 0}>
-            {showEllipsis() && index() === 1 ? ' .. ' : ', '}
-          </Show>
-          <ParticipantWithTooltip
-            participant={resolved.participant}
-            displayName={resolved.displayName}
-            highlighted={highlightName(resolved.displayName)}
-          />
-        </>
-      )}
-    </For>
+    <>
+      <For each={participants()}>
+        {(resolved, index) => (
+          <>
+            <Show when={index() > 0}>, </Show>
+            <ParticipantWithTooltip
+              participant={resolved.participant}
+              displayName={resolved.displayName}
+              highlighted={highlightName(resolved.displayName)}
+            />
+          </>
+        )}
+      </For>
+      <Show when={hiddenParticipants().length > 0}>
+        {''}
+        <HiddenParticipantsTooltip hidden={hiddenParticipants()} />
+      </Show>
+    </>
   );
 }
