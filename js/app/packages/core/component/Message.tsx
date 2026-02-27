@@ -391,7 +391,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   <Button
                     onClick={props.onThreadAppend}
                     tabIndex={0}
-                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 enabled:hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
+                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
                     <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
                       <IconPlus class="size-1/2" />
