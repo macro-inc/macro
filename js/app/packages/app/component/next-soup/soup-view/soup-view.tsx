@@ -525,13 +525,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const isProjectList = panel.handle.content().type === 'project';
 
+  let key = `soup-view-${panel.handle.id}-${panel.handle.content().id}`;
+
+  if (previewPanel) {
+    key += '-preview';
+  }
+
   const getCacheKey = () => {
-    let key = `soup-view-${panel.handle.id}`;
-
-    if (previewPanel) {
-      key += '-preview';
-    }
-
     return key;
   };
 
@@ -567,9 +567,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     soup.focus.set(cached.soup.focus);
-    for (const id of cached.soup.filters) {
-      soup.filters.activate(id);
-    }
+
+    soup.filters.set(cached.soup.filters);
 
     setQueryFilters(cached.soup.queryFilters);
     setSearchText(cached.soup.searchText);
