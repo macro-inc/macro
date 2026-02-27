@@ -116,7 +116,7 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// The metadata JSON column is deserialized into `T`.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl std::future::Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
@@ -124,7 +124,7 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// Get a user's active notifications filtered by event item IDs, with cursor-based pagination.
     fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
@@ -133,21 +133,21 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl std::future::Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
 
     /// Soft-delete a single user notification.
     fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Soft-delete multiple user notifications.
     fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
@@ -431,7 +431,7 @@ impl NotificationDbOps for PgPool {
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
@@ -464,7 +464,7 @@ impl NotificationDbOps for PgPool {
             ORDER BY un.created_at DESC, un.notification_id DESC
             LIMIT $2
             "#,
-            user_id,
+            user_id.as_ref(),
             query_limit,
             cursor_timestamp,
             cursor_id as _,
@@ -511,7 +511,7 @@ impl NotificationDbOps for PgPool {
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
@@ -547,7 +547,7 @@ impl NotificationDbOps for PgPool {
             ORDER BY un.created_at DESC, un.notification_id DESC
             LIMIT $3
             "#,
-            user_id,
+            user_id.as_ref(),
             &event_item_ids,
             query_limit,
             cursor_timestamp,
@@ -595,7 +595,7 @@ impl NotificationDbOps for PgPool {
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         let row = sqlx::query!(
@@ -621,7 +621,7 @@ impl NotificationDbOps for PgPool {
             AND un.deleted_at IS NULL
             LIMIT 1
             "#,
-            user_id,
+            user_id.as_ref(),
             notification_id,
         )
         .fetch_optional(self)
@@ -667,7 +667,7 @@ impl NotificationDbOps for PgPool {
 
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         sqlx::query!(
@@ -676,7 +676,7 @@ impl NotificationDbOps for PgPool {
             SET deleted_at = NOW()
             WHERE user_id = $1 AND notification_id = $2
             "#,
-            user_id,
+            user_id.as_ref(),
             notification_id,
         )
         .execute(self)
@@ -687,7 +687,7 @@ impl NotificationDbOps for PgPool {
 
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         sqlx::query!(
@@ -696,7 +696,7 @@ impl NotificationDbOps for PgPool {
             SET deleted_at = NOW()
             WHERE user_id = $1 AND notification_id = ANY($2)
             "#,
-            user_id,
+            user_id.as_ref(),
             notification_ids,
         )
         .execute(self)
@@ -779,7 +779,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
@@ -788,7 +788,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
@@ -800,7 +800,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         self.db
@@ -810,7 +810,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         self.db
@@ -820,7 +820,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.db

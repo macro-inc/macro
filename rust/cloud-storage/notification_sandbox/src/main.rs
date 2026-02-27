@@ -6,9 +6,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use email_formatting::EmailDigestNotification;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_notifications::ChannelMessageSendMetadata;
 use notification::domain::models::email_notification_digest::ports::MessageId;
 use notification::domain::models::email_notification_digest::{
     EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDecisionC,
@@ -280,7 +282,7 @@ fn prompt_push_result(req: PushPromptRequest) {
             .unwrap_or(false);
 
     if succeeded {
-        println!("  -> SUCCESS");
+        println!("  -> SUCCESS (message_id: {})", req.message_id);
     } else {
         println!("  -> FAILED");
     }
@@ -297,8 +299,14 @@ async fn run_notification_cycle<I: NotificationIngress>(
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Channel.with_entity_str("sandbox-entity-id"),
-        notification: SandboxNotification {
-            message: "Sandbox test notification".to_string(),
+        notification: ChannelMessageSendMetadata {
+            sender: MacroUserIdStr::try_from_email("fake-user@example.com").unwrap(),
+            message_content: "This is a message".to_string(),
+            message_id: "message_id".to_string(),
+            common: model_notifications::CommonChannelMetadata {
+                channel_type: model_notifications::ChannelType::Public,
+                channel_name: "test-channel-name".to_string(),
+            },
         },
         sender_id: None,
         recipient_ids: HashSet::from([user_id.copied()]),
@@ -369,11 +377,7 @@ async fn poll_email_digests(egress: &impl NotificationEgress) -> Result<(), Repo
         batch: notification::domain::models::email_notification_digest::ports::DigestBatch,
     ) -> Result<SandboxNotification, Report> {
         Ok(SandboxNotification {
-            message: format!(
-                "You have {} new notification(s) \n\n {:#?}",
-                batch.notifications.len(),
-                batch
-            ),
+            inner: EmailDigestNotification::new_from_digest_batch(batch)?,
         })
     }
 

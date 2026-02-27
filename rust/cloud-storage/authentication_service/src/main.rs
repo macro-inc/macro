@@ -4,7 +4,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use github::{
     domain::service::{GithubConfig, GithubServiceImpl},
     outbound::{
-        github_fusionauth_client::GithubFusionAuthImpl, github_oauth_client::GithubOauthImpl,
+        github_auth_client::GithubAuthImpl, github_oauth_client::GithubOauthImpl,
         pg_github_repo::PgGithubRepo,
     },
 };
@@ -201,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
                 ),
             ),
         ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
+        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
         block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
         invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
             .append::<model_notifications::ChannelInviteMetadata>(),
@@ -237,7 +237,7 @@ async fn main() -> anyhow::Result<()> {
     let github_service_impl = GithubServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
-        GithubFusionAuthImpl::new(auth_client.clone()),
+        GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
         GithubConfig {
             client_id: config.github_client_id,
             client_secret: config.github_client_secret,

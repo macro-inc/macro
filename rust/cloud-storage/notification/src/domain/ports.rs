@@ -125,7 +125,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// The metadata JSON column is deserialized into `T`.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
@@ -136,7 +136,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// matching one of the provided `event_item_ids`.
     fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
@@ -147,21 +147,21 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// Returns `None` if no active (non-deleted) notification exists for the given user and ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
 
     /// Soft-delete a single user notification.
     fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Soft-delete multiple user notifications.
     fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

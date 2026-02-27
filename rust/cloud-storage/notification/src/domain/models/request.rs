@@ -222,7 +222,7 @@ pub struct UpdateNotificationsRequest<'a> {
 #[derive(Debug)]
 pub struct GetNotificationsByEventItemIdsRequest<'a> {
     /// The user whose notifications to retrieve.
-    pub user_id: &'a str,
+    pub user_id: MacroUserIdStr<'a>,
     /// The event item IDs to filter by.
     pub event_item_ids: &'a [Uuid],
     /// Maximum number of results per page (default 20, max 500).

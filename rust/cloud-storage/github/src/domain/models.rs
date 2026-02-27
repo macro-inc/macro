@@ -3,6 +3,18 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
+/// Github access token
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct GithubAccessToken(String);
+
+impl GithubAccessToken {
+    /// Creates a new GithubAccessToken
+    pub fn new(token: String) -> Self {
+        Self(token)
+    }
+}
+
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {

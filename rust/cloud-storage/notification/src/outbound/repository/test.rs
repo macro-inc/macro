@@ -278,7 +278,11 @@ async fn test_get_basic_notifications_empty(pool: Pool<Postgres>) {
 )]
 async fn test_get_user_notifications(pool: Pool<Postgres>) {
     let result: Vec<UserNotificationRow<TestNotification>> = pool
-        .get_user_notifications("macro|user@test.com", 10, Query::Sort(CreatedAt, ()))
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
         .await
         .unwrap();
 
@@ -301,7 +305,11 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
     let result: Vec<UserNotificationRow<TestNotification>> = pool
-        .get_user_notifications("macro|nobody@test.com", 10, Query::Sort(CreatedAt, ()))
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|nobody@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
         .await
         .unwrap();
 

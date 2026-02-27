@@ -11,6 +11,8 @@ use tokio::sync::mpsc;
 pub struct PushPromptRequest {
     /// The endpoint ARN being pushed to.
     pub endpoint_arn: String,
+    /// The mock SNS message ID that will be used if the push "succeeds".
+    pub message_id: String,
     /// Channel to send back whether the push "succeeded".
     pub reply: tokio::sync::oneshot::Sender<bool>,
 }
@@ -28,10 +30,12 @@ impl NotificationSender for InteractiveMobileSender {
         _notification: &APNSPushNotification<T>,
         _attributes: &MessageAttributes,
     ) -> Result<String, Report> {
+        let msg_id = format!("mock-msg-{}", uuid::Uuid::new_v4());
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         self.prompt_tx
             .send(PushPromptRequest {
                 endpoint_arn: endpoint_arn.to_string(),
+                message_id: msg_id.clone(),
                 reply: reply_tx,
             })
             .map_err(|_| rootcause::report!("foreground prompt channel closed"))?;
@@ -41,7 +45,6 @@ impl NotificationSender for InteractiveMobileSender {
             .map_err(|_| rootcause::report!("foreground prompt reply dropped"))?;
 
         if succeeded {
-            let msg_id = format!("mock-msg-{}", uuid::Uuid::new_v4());
             Ok(msg_id)
         } else {
             rootcause::bail!("Simulated push failure for {endpoint_arn}");

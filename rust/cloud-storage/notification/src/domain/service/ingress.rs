@@ -20,6 +20,7 @@ use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
@@ -58,7 +59,7 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// not deleted and not done, ordered by creation time descending.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
@@ -72,21 +73,21 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
 
     /// Soft-delete a single user notification.
     fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Soft-delete multiple user notifications.
     fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
@@ -453,7 +454,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
@@ -502,7 +503,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         self.repository
@@ -513,7 +514,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         self.repository
@@ -524,7 +525,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.repository
