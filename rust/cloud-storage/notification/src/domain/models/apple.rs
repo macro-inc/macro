@@ -163,4 +163,9 @@ pub struct APNSPushNotification<T> {
 pub struct PushNotificationData {
     /// The id of the notification record (UserNotification.id)
     pub notification_id: Uuid,
+    /// The sender's profile picture URL, used by the Notification Service Extension
+    /// to download and attach as a rich notification image.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }

@@ -324,22 +324,30 @@ fn parse_message_plain_text(content: &str) -> Option<String> {
 fn alert_apns(
     title: String,
     body: String,
-    data: PushNotificationData,
-    launch_image: Option<String>,
+    notification_id: Uuid,
+    sender_profile_picture_url: Option<String>,
 ) -> APNSPushNotification<PushNotificationData> {
+    let mutable_content = if sender_profile_picture_url.is_some() {
+        Some(1)
+    } else {
+        None
+    };
     APNSPushNotification {
         aps: Aps {
             alert: Some(notification::domain::models::apple::Alert::Dictionary(
                 AlertDictionary {
                     title: Some(title),
                     body: Some(body),
-                    launch_image,
                     ..Default::default()
                 },
             )),
+            mutable_content,
             ..Default::default()
         },
-        push_notification_data: data,
+        push_notification_data: PushNotificationData {
+            notification_id,
+            sender_profile_picture_url,
+        },
     }
 }
 
@@ -360,7 +368,7 @@ impl NotificationExtIos for ChannelInviteMetadata {
         Some(alert_apns(
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -381,7 +389,7 @@ impl NotificationExtIos for AiResponseMetadata {
         Some(alert_apns(
             "Ai Response".into(),
             self.summary,
-            PushNotificationData { notification_id },
+            notification_id,
             None,
         ))
     }
@@ -412,7 +420,7 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -446,7 +454,7 @@ impl NotificationExtIos for ChannelMentionMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -471,7 +479,7 @@ impl NotificationExtIos for ChannelReplyMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -501,7 +509,7 @@ impl NotificationExtIos for DocumentMentionMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -534,7 +542,7 @@ impl NotificationExtIos for TaskAssignedMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
             self.sender_profile_picture_url,
         ))
     }
@@ -589,19 +597,11 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
             self.document_name, file_type_str
         );
 
-        Some(APNSPushNotification {
-            aps: Aps {
-                alert: Some(notification::domain::models::apple::Alert::Dictionary(
-                    AlertDictionary {
-                        title: Some(title),
-                        body: Some(body),
-                        launch_image: self.sender_profile_picture_url,
-                        ..Default::default()
-                    },
-                )),
-                ..Default::default()
-            },
-            push_notification_data: PushNotificationData { notification_id },
-        })
+        Some(alert_apns(
+            title,
+            body,
+            notification_id,
+            self.sender_profile_picture_url,
+        ))
     }
 }
