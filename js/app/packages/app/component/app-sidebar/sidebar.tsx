@@ -18,6 +18,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 
 interface SidebarItem {
   label: string;
@@ -141,6 +142,9 @@ interface SidebarLinkProps extends SidebarItem {}
 
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
+
+  const layout = useSplitLayout();
+
   return (
     <A
       class="w-full px-2 py-1.5 rounded-md flex items-center gap-2 text-sm hover:text-ink transition-colors"
@@ -149,6 +153,21 @@ const SidebarLink = (props: SidebarLinkProps) => {
       onMouseLeave={() => setIsHovering(false)}
       activeClass="bg-ink/10 text-white"
       inactiveClass="text-ink/70 hover:bg-ink/10 active:bg-ink/15"
+      onClick={(e) => {
+        // Middle mouse handling
+        if (e.button === 1) return;
+
+        e.preventDefault();
+        layout.openWithSplit(
+          {
+            id: props.href.slice(1),
+            type: 'component',
+          },
+          {
+            preferNewSplit: e.shiftKey,
+          }
+        );
+      }}
     >
       <Show when={props.icon}>
         <div class="size-4">
