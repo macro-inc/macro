@@ -123,7 +123,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="grow-1 flex">
+      <div class="max-h-full grow-1 flex">
         <AppSidebar expanded={sidebarOpen()} />
 
         <Resize.Zone

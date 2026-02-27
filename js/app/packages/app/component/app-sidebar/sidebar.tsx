@@ -19,6 +19,7 @@ import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { UnreadWidget } from '@app/component/app-sidebar/unread-widget';
 
 interface SidebarItem {
   label: string;
@@ -83,7 +84,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   return (
     <div
       class={cn(
-        'h-full border-r-edge-muted border-r-1 bg-panel py-2 flex flex-col gap-4 mobile:fixed mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
+        'h-full border-r-edge-muted border-r-1 bg-panel pt-2 flex flex-col gap-4 mobile:fixed mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
         props.expanded !== false
           ? 'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
           : '-translate-x-full overflow-hidden opacity-0'
@@ -134,6 +135,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </For>
         </ul>
       </nav>
+      <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto">
+        <UnreadWidget />
+      </div>
+      {/* <div class="h-15"></div> */}
     </div>
   );
 };
