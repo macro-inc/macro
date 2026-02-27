@@ -152,7 +152,7 @@ export const SoupView = (props: SoupViewProps) => {
     if (!props.initialClientFilters || !props.initialClientFilters.length)
       return;
 
-    soup.filters.bulkActivate(props.initialClientFilters);
+    soup.filters.set(props.initialClientFilters);
   });
 
   return (
