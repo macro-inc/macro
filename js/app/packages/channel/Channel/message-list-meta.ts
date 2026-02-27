@@ -1,5 +1,5 @@
 import type { ApiChannelMessage } from '@service-comms/client';
-import type { ChannelMessageListMeta } from './Message/list-meta';
+import type { ChannelMessageListMeta } from '../Message/list-meta';
 
 export function buildChannelMessageListMeta(
   messages: ApiChannelMessage[],

@@ -6,7 +6,7 @@ import {
   replyCenterOffsetX,
   threadConnectorStyle,
   threadOffsetX,
-} from './thread-rail-geometry';
+} from '../thread-rail-geometry';
 
 describe('thread-rail-geometry', () => {
   it('exports stable offsets for thread layout alignment', () => {
@@ -16,7 +16,9 @@ describe('thread-rail-geometry', () => {
     expect(threadOffsetX).toBe(
       'calc(var(--left-of-connector) + var(--thread-shift) - var(--user-icon-width) / 2 - var(--body-padding))'
     );
-    expect(innerRailX).toBe('calc(var(--left-of-connector) + var(--thread-shift))');
+    expect(innerRailX).toBe(
+      'calc(var(--left-of-connector) + var(--thread-shift))'
+    );
     expect(innerRailTop).toBe(
       'calc(var(--body-padding) + var(--user-icon-width) / 2)'
     );

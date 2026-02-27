@@ -33,7 +33,7 @@ import {
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
-import { Thread, ThreadRow } from './Thread';
+import { Thread, ThreadRow } from '../Thread';
 import { createChannelMessageActions } from './create-channel-message-actions';
 
 type ChannelProps = {

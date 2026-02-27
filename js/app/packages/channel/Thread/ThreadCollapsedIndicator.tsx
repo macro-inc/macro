@@ -13,11 +13,12 @@ import {
 } from 'solid-js';
 import { getThreadReplyCountLabel } from './thread-reply-indicator-helpers';
 
-type ThreadCollapsedIndicatorProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
-  collapsedRepliesCount: number;
-  participants: string[];
-  latestReplyAt?: string;
-};
+type ThreadCollapsedIndicatorProps =
+  JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+    collapsedRepliesCount: number;
+    participants: string[];
+    latestReplyAt?: string;
+  };
 
 const MAX_VISIBLE_PARTICIPANTS = 4;
 
@@ -72,7 +73,9 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
               )}
             </For>
             <Show when={hiddenParticipants() > 0}>
-              <p class="ml-1 text-[10px] text-ink-muted">+{hiddenParticipants()}</p>
+              <p class="ml-1 text-[10px] text-ink-muted">
+                +{hiddenParticipants()}
+              </p>
             </Show>
           </div>
         </Show>

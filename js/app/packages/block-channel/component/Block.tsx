@@ -3,7 +3,7 @@ import { useChannelName } from '@core/context/channels';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { type JSXElement, onMount, Suspense } from 'solid-js';
-import { Channel as NewChannel } from '@channel/Channel';
+import { Channel as NewChannel } from '@channel/Channel/Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 import { useChannelQuery } from '@queries/channel/channel';

@@ -4,14 +4,14 @@ import type {
   MessageActionHandler,
   MessageActions,
   MessageData,
-} from './Message';
+} from '../Message';
 import {
   buildMessageLink,
   canEditOrDeleteMessage,
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
-} from './Thread/message-actions';
+} from '../Thread/message-actions';
 
 type AddReactionInput = {
   channelId: string;

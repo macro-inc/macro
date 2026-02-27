@@ -4,7 +4,7 @@ import {
   hasExplicitScrollDownGesture,
   isExplicitScrollDown,
   shouldStickToBottomOnDataChange,
-} from './ThreadList';
+} from '../ThreadList';
 
 describe('shouldStickToBottomOnDataChange', () => {
   it('sticks when near bottom and not shifting', () => {
@@ -25,9 +25,9 @@ describe('shouldStickToBottomOnDataChange', () => {
 
 describe('isExplicitScrollDown', () => {
   it('returns true only for recent explicit down intent', () => {
-    expect(isExplicitScrollDown(24, { direction: 'down', at: 1000 }, 1100)).toBe(
-      true
-    );
+    expect(
+      isExplicitScrollDown(24, { direction: 'down', at: 1000 }, 1100)
+    ).toBe(true);
   });
 
   it('returns false when intent is missing, stale, or not downward', () => {
@@ -35,18 +35,18 @@ describe('isExplicitScrollDown', () => {
     expect(isExplicitScrollDown(24, { direction: 'up', at: 1000 }, 1100)).toBe(
       false
     );
-    expect(isExplicitScrollDown(24, { direction: 'down', at: 1000 }, 1300)).toBe(
-      false
-    );
+    expect(
+      isExplicitScrollDown(24, { direction: 'down', at: 1000 }, 1300)
+    ).toBe(false);
   });
 
   it('returns false when scroll delta is not positive', () => {
     expect(isExplicitScrollDown(0, { direction: 'down', at: 1000 }, 1100)).toBe(
       false
     );
-    expect(isExplicitScrollDown(-8, { direction: 'down', at: 1000 }, 1100)).toBe(
-      false
-    );
+    expect(
+      isExplicitScrollDown(-8, { direction: 'down', at: 1000 }, 1100)
+    ).toBe(false);
   });
 });
 

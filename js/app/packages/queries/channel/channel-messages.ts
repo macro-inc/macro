@@ -1,77 +1,76 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr } from "@core/util/maybeResult";
 import {
   commsServiceClient,
   type ApiChannelMessage,
   type ChannelMessagesPage,
-} from '@service-comms/client';
-import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
-import { queryClient } from '../client';
-import { channelKeys } from './keys';
+} from "@service-comms/client";
+import { type InfiniteData, useInfiniteQuery } from "@tanstack/solid-query";
+import { type Accessor, createMemo } from "solid-js";
+import { queryClient } from "../client";
+import { channelKeys } from "./keys";
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
-  string | null
+  ChannelMessagesPageParam | null
 >;
 
-type SimpleCursor =
-  | {
-      next_cursor: string;
-    }
-  | {
-      previous_cursor: string;
-    };
-
-function makeCursor(type: 'next' | 'previous', value: string): SimpleCursor {
-  if (type === 'next') return { next_cursor: value };
-  return { previous_cursor: value };
-}
-
-function maybeMakeCursor<T>(
-  type: 'next' | 'previous',
-  value: string | undefined | null,
-  fallback: T
-): SimpleCursor | T {
-  return value ? makeCursor(type, value) : fallback;
-}
+type ChannelMessagesPageParam = {
+  next_cursor: string | null;
+  previous_cursor: string | null;
+};
 
 export function channelMessagesQueryOptions(
   channelId: string,
-  loadAroundMessageId: string
+  loadAroundMessageId: string | null,
 ) {
   return {
     queryKey: channelKeys.messages(channelId).queryKey,
-    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+    queryFn: async ({
+      pageParam,
+    }: {
+      pageParam: ChannelMessagesPageParam | null;
+    }) => {
       return await throwOnErr(
         async () =>
           await commsServiceClient.getChannelMessages({
             channel_id: channelId,
             limit: 100,
-            ...(pageParam ?? {}),
+            next_cursor: pageParam?.next_cursor ?? null,
+            previous_cursor: pageParam?.previous_cursor ?? null,
             load_around_message_id: !pageParam ? loadAroundMessageId : null,
-          })
+          }),
       );
     },
-    initialPageParam: null,
+    initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
-      maybeMakeCursor('next', lastPage.next_cursor, null),
+      lastPage.next_cursor
+        ? {
+            next_cursor: lastPage.next_cursor,
+            previous_cursor: null,
+          }
+        : null,
     getPreviousPageParam: (firstPage: ChannelMessagesPage) =>
-      maybeMakeCursor('previous', firstPage.previous_cursor, null),
+      firstPage.previous_cursor
+        ? {
+            next_cursor: null,
+            previous_cursor: firstPage.previous_cursor,
+          }
+        : null,
     staleTime: Infinity,
   };
 }
 
 export function useChannelMessagesQuery(
   channelId: Accessor<string>,
-  loadAroundMessageId: Accessor<string | undefined>
+  loadAroundMessageId: Accessor<string | null | undefined>,
 ) {
   return useInfiniteQuery(() =>
-    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
+    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null),
   );
 }
 
 export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
-  const query = useChannelMessagesQuery(channelId, null);
+  const query = useChannelMessagesQuery(channelId, () => undefined);
   const byId = createMemo(() => {
     const flat = flattenMessages(query.data as ChannelMessagesData | undefined);
     return new Map(flat.map((m) => [m.id, m]));
@@ -85,7 +84,7 @@ export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
 export function softInvalidateChannelMessages(channelId: string) {
   queryClient.invalidateQueries({
     queryKey: channelKeys.messages(channelId).queryKey,
-    refetchType: 'inactive',
+    refetchType: "inactive",
   });
 }
 
@@ -95,7 +94,7 @@ export function softInvalidateChannelMessages(channelId: string) {
  * so we reverse both layers.
  */
 export function flattenMessages(
-  data: ChannelMessagesData | undefined
+  data: ChannelMessagesData | undefined,
 ): ApiChannelMessage[] {
   if (!data?.pages?.length) return [];
   const all: ApiChannelMessage[] = [];

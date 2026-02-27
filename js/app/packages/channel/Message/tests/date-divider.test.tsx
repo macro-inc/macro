@@ -5,8 +5,8 @@
 import { render } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DateDivider } from './DateDivider';
-import { NewDivider } from './NewDivider';
+import { DateDivider } from '../DateDivider';
+import { NewDivider } from '../NewDivider';
 
 function renderComponent(component: () => JSX.Element) {
   const container = document.createElement('div');

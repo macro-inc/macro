@@ -1,6 +1,6 @@
 import type { ApiChannelMessage } from '@service-comms/client';
 import { describe, expect, it } from 'vitest';
-import { buildChannelMessageListMeta } from './message-list-meta';
+import { buildChannelMessageListMeta } from '../message-list-meta';
 
 function createMessage(
   id: string,

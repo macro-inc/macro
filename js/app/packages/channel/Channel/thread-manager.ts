@@ -1,5 +1,5 @@
 import { createStore } from 'solid-js/store';
-import type { ThreadState } from './Thread';
+import type { ThreadState } from '../Thread';
 import { createSignal } from 'solid-js';
 
 type ThreadStore = Record<string, ThreadState>;

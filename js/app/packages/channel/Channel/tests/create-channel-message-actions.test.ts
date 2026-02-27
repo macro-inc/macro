@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MessageData } from './Message';
-import { createChannelMessageActions } from './create-channel-message-actions';
+import type { MessageData } from '../../Message';
+import { createChannelMessageActions } from '../create-channel-message-actions';
 
 type ActionMessage = MessageData & { thread_id?: string | null };
 

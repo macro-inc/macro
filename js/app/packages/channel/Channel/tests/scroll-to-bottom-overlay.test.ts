@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldShowScrollToBottomButton } from './ScrollToBottomOverlay';
+import { shouldShowScrollToBottomButton } from '../ScrollToBottomOverlay';
 
 describe('shouldShowScrollToBottomButton', () => {
   it('shows only when initial scroll is done, scrolled away, and user scrolls down', () => {

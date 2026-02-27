@@ -4,7 +4,8 @@ export const replyCenterOffsetX =
 export const threadOffsetX =
   'calc(var(--left-of-connector) + var(--thread-shift) - var(--user-icon-width) / 2 - var(--body-padding))';
 
-export const innerRailX = 'calc(var(--left-of-connector) + var(--thread-shift))';
+export const innerRailX =
+  'calc(var(--left-of-connector) + var(--thread-shift))';
 
 export const innerRailTop =
   'calc(var(--body-padding) + var(--user-icon-width) / 2)';

@@ -12,7 +12,9 @@ export function getCollapsedRepliesCount(
   return Math.max(totalReplies - visibleReplies, 0);
 }
 
-export function getThreadReplyCountLabel(collapsedRepliesCount: number): string {
+export function getThreadReplyCountLabel(
+  collapsedRepliesCount: number
+): string {
   return `${collapsedRepliesCount} more repl${
     collapsedRepliesCount === 1 ? 'y' : 'ies'
   }`;

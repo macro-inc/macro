@@ -5,10 +5,10 @@
 import { render } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ActionMenu } from './ActionMenu';
-import { MessageActionsProvider } from './context';
-import { Root } from './Root';
-import type { MessageData } from './types';
+import { ActionMenu } from '../ActionMenu';
+import { MessageActionsProvider } from '../context';
+import { Root } from '../Root';
+import type { MessageData } from '../types';
 
 function renderComponent(component: () => JSX.Element) {
   const container = document.createElement('div');
