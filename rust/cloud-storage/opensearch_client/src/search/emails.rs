@@ -3,7 +3,10 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, parse_highlight_hit},
+        model::{
+            NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, inject_fragment_size,
+            parse_highlight_hit,
+        },
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -297,7 +300,9 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
 impl EmailSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: EmailQueryBuilder = self.into();
-        Ok(builder.build_search_request()?.to_json())
+        let mut json = builder.build_search_request()?.to_json();
+        inject_fragment_size(&mut json, 5000);
+        Ok(json)
     }
 }
 

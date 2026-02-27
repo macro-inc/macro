@@ -16,7 +16,8 @@ use crate::{
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoChat,
-            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, inject_fragment_size,
+            parse_highlight_hit,
         },
         query::Keys,
     },
@@ -424,7 +425,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(0),
+            .number_of_fragments(1),
     );
 
     search_request_builder.highlight(highlight);
@@ -443,7 +444,8 @@ pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
 ) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
-    let search_request = build_unified_search_request(&args)?.to_json();
+    let mut search_request = build_unified_search_request(&args)?.to_json();
+    inject_fragment_size(&mut search_request, 5000);
 
     tracing::trace!("search request {:?}", search_request);
 

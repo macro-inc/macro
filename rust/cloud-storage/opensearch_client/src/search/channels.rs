@@ -5,7 +5,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
-            parse_highlight_hit,
+            inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
@@ -170,8 +170,9 @@ impl From<ChannelMessageSearchArgs> for ChannelMessageQueryBuilder {
 impl ChannelMessageSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: ChannelMessageQueryBuilder = self.into();
-
-        Ok(builder.build_search_request()?.to_json())
+        let mut json = builder.build_search_request()?.to_json();
+        inject_fragment_size(&mut json, 5000);
+        Ok(json)
     }
 }
 

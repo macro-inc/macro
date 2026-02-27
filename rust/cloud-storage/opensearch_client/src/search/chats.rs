@@ -5,7 +5,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit,
-            parse_highlight_hit,
+            inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
         utils::should_wildcard_field_query_builder,
@@ -135,7 +135,9 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
 impl ChatSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: ChatQueryBuilder = self.into();
-        Ok(builder.build_search_request()?.to_json())
+        let mut json = builder.build_search_request()?.to_json();
+        inject_fragment_size(&mut json, 5000);
+        Ok(json)
     }
 }
 
