@@ -1,5 +1,9 @@
 import type { DateValue } from '@core/util/date';
-import { visibleLength, windowSearchMatch } from '@core/util/searchHighlight';
+import {
+  visibleLength,
+  windowSearchMatch,
+  HighlightRender,
+} from '@core/util/searchHighlight';
 import { Entity } from '../entity';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
@@ -12,7 +16,15 @@ import {
   type EntityData,
   isTaskEntity,
 } from '../types/entity';
-import { Match, Show, Switch, type Ref } from 'solid-js';
+import {
+  createSignal,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  type Ref,
+} from 'solid-js';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -40,6 +52,8 @@ import {
 } from '../utils/notification';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
+
+const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 const hasSearchContentHits = (entity: EntityData) =>
   isSearchEntity(entity) && !!entity.search.contentHitData?.length;
@@ -128,13 +142,7 @@ function EmailSnippet(props: {
       when={props.showContentHits && getBestContentHitContent(props.entity)}
       fallback={props.entity.snippet}
     >
-      {(content) => (
-        <StaticMarkdown
-          markdown={windowSearchMatch(content())}
-          theme={unifiedListMarkdownTheme}
-          singleLine
-        />
-      )}
+      {(content) => <HighlightRender text={windowSearchMatch(content())} />}
     </Show>
   );
 }
@@ -167,7 +175,7 @@ function ChannelMessage(props: {
 function NarrowLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-2 items-center text-sm pl-0 px-2 grid @lg/entity:hidden"
+      class="w-full gap-x-2 items-center text-sm pl-0 px-2 grid"
       style={{
         'grid-template-columns': 'auto 1fr 8ch',
         'grid-template-rows': '2.5rem auto',
@@ -269,8 +277,7 @@ function WideLayout(props: LayoutProps) {
       class={cn(
         'w-full min-h-[inherit] items-center text-sm px-2',
         'gap-2 grid grid-cols-[1rem_1fr_auto_8ch] grid-rows-[1fr]',
-        '[--title-width:clamp(6rem,20%,16rem)]',
-        'hidden @lg/entity:grid'
+        '[--title-width:clamp(6rem,20%,16rem)]'
       )}
       style={{
         'grid-template-areas': '"indicator content meta timestamp"',
@@ -407,6 +414,17 @@ export function ListEntity(props: ListEntityProps) {
     splitId: useSplitPanel()?.handle?.id,
   });
 
+  let rootEl!: HTMLElement;
+  const [isWide, setIsWide] = createSignal(true);
+
+  onMount(() => {
+    const observer = new ResizeObserver((entries) => {
+      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+    });
+    observer.observe(rootEl);
+    onCleanup(() => observer.disconnect());
+  });
+
   return (
     <Entity.Root
       entity={props.entity}
@@ -417,7 +435,9 @@ export function ListEntity(props: ListEntityProps) {
         }
         props.onClick?.(e);
       }}
-      ref={mergeRefs(props.ref, draggable)}
+      ref={mergeRefs(props.ref, draggable, (el) => {
+        rootEl = el;
+      })}
       class={cn('@container/entity w-full min-h-10 relative group/narrow', {
         'bg-accent/5': props.checked,
         'hover:bg-hover/30':
@@ -434,8 +454,9 @@ export function ListEntity(props: ListEntityProps) {
         })}
       />
 
-      <NarrowLayout {...layoutProps()} />
-      <WideLayout {...layoutProps()} />
+      <Show when={isWide()} fallback={<NarrowLayout {...layoutProps()} />}>
+        <WideLayout {...layoutProps()} />
+      </Show>
 
       <Show when={hasNotifications()}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
