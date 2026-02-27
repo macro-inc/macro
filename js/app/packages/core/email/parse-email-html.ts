@@ -170,9 +170,12 @@ export function parseEmailContent(
     ? `${styleTags}\n${mainContentDiv.innerHTML}`
     : mainContentDiv.innerHTML;
 
+  mainContent = proxyEmailImages(finalContent);
+  signature = signature ? proxyEmailImages(signature) : null;
+
   return {
-    mainContent: proxyEmailImages(finalContent),
-    signature: signature ? proxyEmailImages(signature) : null,
+    mainContent,
+    signature,
     hasTable,
   };
 }
