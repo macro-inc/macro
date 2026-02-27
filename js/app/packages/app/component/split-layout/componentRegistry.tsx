@@ -57,13 +57,14 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <SoupView />);
+registerComponent('unified-list', () => <SoupView viewName="Unified list" />);
 
 /** BEGIN - APP ROUTES */
 registerComponent('inbox', () => {
   const preset = getDefaultListViewPreset('inbox');
   return (
     <SoupView
+      viewName="Inbox"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -77,6 +78,7 @@ registerComponent('agents', () => {
   });
   return (
     <SoupView
+      viewName="Agents"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -86,6 +88,7 @@ registerComponent('mail', () => {
   const preset = getDefaultListViewPreset('mail');
   return (
     <SoupView
+      viewName="Mail"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -99,6 +102,7 @@ registerComponent('documents', () => {
   });
   return (
     <SoupView
+      viewName="Documents"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -112,6 +116,7 @@ registerComponent('tasks', () => {
   });
   return (
     <SoupView
+      viewName="Tasks"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -121,6 +126,7 @@ registerComponent('channels', () => {
   const preset = getDefaultListViewPreset('channels');
   return (
     <SoupView
+      viewName="Channels"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />
@@ -134,6 +140,7 @@ registerComponent('files', () => {
   });
   return (
     <SoupView
+      viewName="Files"
       queryFilters={preset.queryFilters}
       initialClientFilters={preset.clientFilters}
     />

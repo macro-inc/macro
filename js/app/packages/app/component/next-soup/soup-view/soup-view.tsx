@@ -1,5 +1,5 @@
+import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
-import FiltersIcon from '@phosphor-icons/core/assets/regular/faders.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -138,6 +138,7 @@ const stateCache = new Map<
 >();
 
 interface SoupViewProps {
+  viewName: string;
   initialClientFilters?: FilterID[];
   queryFilters?: SoupItemsQueryFilters;
 }
@@ -167,7 +168,12 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full pl-2 pr-1">
             <SplitHeaderLeft>
-              <div class="flex items-center py-2 justify-between">
+              <div class="h-full flex gap-2 items-center">
+                <h1 class="font-medium text-ink-muted select-none text-sm">
+                  {props.viewName}
+                </h1>
+                <ChevronRightIcon class="size-4 text-ink-muted select-none" />
+
                 <SoupViewTabs />
               </div>
             </SplitHeaderLeft>
