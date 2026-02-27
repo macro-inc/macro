@@ -213,7 +213,7 @@ where
             user,
         } = self;
 
-        fn filter_erors(uuid: Uuid, err: serde_json::Error) -> Option<Uuid> {
+        fn filter_erors((uuid, err): (Uuid, serde_json::Error)) -> Option<Uuid> {
             let output = err
                 .to_string()
                 .contains("channel_message_document")
@@ -228,7 +228,7 @@ where
 
         let to_delete: Vec<_> = failed_notifs.into_iter().filter_map(filter_erors).collect();
 
-        service
+        let _ = service
             .inner
             .bulk_delete_user_notifications(user, to_delete.as_slice())
             .await;

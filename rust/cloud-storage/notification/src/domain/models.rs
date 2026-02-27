@@ -1,13 +1,7 @@
 //! Domain models for the notification service.
 
-use std::sync::Arc;
-
-use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
 pub mod android;
 pub mod apple;
-
 pub mod email_notification_digest;
 pub mod mobile;
 pub mod push_notification_event;
@@ -16,17 +10,17 @@ pub mod rate_limit;
 pub mod recipient;
 pub mod request;
 
+use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
+use model_entity::Entity;
+use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
-
-use chrono::{DateTime, Utc};
-use model_entity::Entity;
-use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
-use uuid::Uuid;
-
-use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use std::sync::Arc;
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
 #[derive(Debug, Clone)]

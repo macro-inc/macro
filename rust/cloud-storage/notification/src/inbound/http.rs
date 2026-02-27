@@ -40,6 +40,7 @@ pub struct NotificationIdPath {
 
 /// the router state for a notification router
 pub struct NotificationRouterState<S> {
+    /// the inner S wrapped in an [Arc]
     pub inner: Arc<S>,
 }
 
