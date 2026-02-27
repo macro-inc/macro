@@ -51,7 +51,7 @@ import {
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 
-const DRAWER_ID = 'history';
+export const HISTORY_DRAWER_ID = 'history';
 
 async function forkDocumentAtVersion(
   documentId: string,
@@ -91,7 +91,7 @@ async function getLoroDocFromId(documentId: string) {
 }
 
 export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
   return (
     <DeprecatedIconButton
       tooltip={{ label: 'History' }}
@@ -104,9 +104,9 @@ export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
 }
 
 export function HistoryDrawer(props: { documentId: string }) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
   return (
-    <SplitDrawer id={DRAWER_ID} side="right" size={768} title="History">
+    <SplitDrawer id={HISTORY_DRAWER_ID} side="right" size={768} title="History">
       <Suspense fallback={'loading...'}>
         <History
           documentId={props.documentId}
@@ -119,7 +119,7 @@ export function HistoryDrawer(props: { documentId: string }) {
 }
 
 export function HistoryModal(props: { documentId: string }) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
 
   return (
     <>
@@ -130,7 +130,12 @@ export function HistoryModal(props: { documentId: string }) {
         size="sm"
         onClick={drawerControl.toggle}
       />
-      <SplitDrawer id={DRAWER_ID} side="right" size={768} title="History">
+      <SplitDrawer
+        id={HISTORY_DRAWER_ID}
+        side="right"
+        size={768}
+        title="History"
+      >
         <Suspense fallback={'loading...'}>
           <History
             documentId={props.documentId}

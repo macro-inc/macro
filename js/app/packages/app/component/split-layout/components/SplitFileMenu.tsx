@@ -44,12 +44,21 @@ const isDefaultFileOperation = (
 
 export type FileOperation = DefaultFileOperation | CustomFileOperation;
 
+export type FileTools = {
+  label: string;
+  icon: Component;
+  action: () => void;
+  condition?: () => boolean;
+  divideAbove?: boolean;
+};
+
 export function SplitFileMenu(props: {
   id: string;
   itemType: ItemType;
   name: string;
   formattedName?: string;
   ops: Array<FileOperation>;
+  tools?: FileTools[];
 }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -160,6 +169,10 @@ export function SplitFileMenu(props: {
       .filter((op) => !!op);
   });
 
+  const filteredTools = createMemo(() =>
+    (props.tools ?? []).filter((t) => !t.condition || t.condition())
+  );
+
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen} boundary={ctx.panelRef}>
       <DropdownMenu.Trigger
@@ -179,6 +192,23 @@ export function SplitFileMenu(props: {
                   <div class="my-1 h-[1px] bg-edge" />
                 </Show>
                 <MenuItem text={op.label} onClick={op.action} icon={op.icon} />
+              </>
+            )}
+          </For>
+          <Show when={filteredTools().length > 0 && ops().length > 0}>
+            <div class="my-1 h-[1px] bg-edge" />
+          </Show>
+          <For each={filteredTools()}>
+            {(tool, i) => (
+              <>
+                <Show when={tool.divideAbove && i() > 0}>
+                  <div class="my-1 h-[1px] bg-edge" />
+                </Show>
+                <MenuItem
+                  text={tool.label}
+                  onClick={tool.action}
+                  icon={tool.icon}
+                />
               </>
             )}
           </For>

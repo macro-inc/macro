@@ -12,14 +12,14 @@ import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Notifications } from './Notifications';
 
 false && clickOutside;
-const DRAWER_ID = 'notifications';
+export const NOTIFICATIONS_DRAWER_ID = 'notifications';
 
 export function NotificationsButton(props: {
   entity: Entity;
   notificationSource: NotificationSource;
   buttonSize?: 'sm';
 }) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const notifications = useNotificationsForEntity(
     props.notificationSource,
     props.entity
@@ -67,7 +67,12 @@ export function NotificationsDrawer(props: {
     </>
   );
   return (
-    <SplitDrawer id={DRAWER_ID} side="right" size={768} title={title()}>
+    <SplitDrawer
+      id={NOTIFICATIONS_DRAWER_ID}
+      side="right"
+      size={768}
+      title={title()}
+    >
       <Suspense
         fallback={
           <div class="flex justify-center py-8">
@@ -91,7 +96,7 @@ export type NotificationsModalProps = {
 };
 
 export function NotificationsModal(props: NotificationsModalProps) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const notifications = useNotificationsForEntity(
     props.notificationSource,
     props.entity
@@ -132,7 +137,12 @@ export function NotificationsModal(props: NotificationsModalProps) {
           </Show>
         </Suspense>
       </div>
-      <SplitDrawer id={DRAWER_ID} side="right" size={768} title={title()}>
+      <SplitDrawer
+        id={NOTIFICATIONS_DRAWER_ID}
+        side="right"
+        size={768}
+        title={title()}
+      >
         <Suspense
           fallback={
             <div class="flex justify-center py-8">
