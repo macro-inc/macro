@@ -13,6 +13,7 @@ import {
   defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
+  type ThreadListScrollState,
   type ThreadListScrollTarget,
 } from './ThreadList';
 import type { ApiChannelMessage } from '@service-comms/client';
@@ -31,6 +32,7 @@ import {
 } from '@queries/channel/reaction';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
+import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { Thread, ThreadRow } from './Thread';
 import { createChannelMessageActions } from './create-channel-message-actions';
 
@@ -70,7 +72,10 @@ export function Channel(props: ChannelProps) {
     () => props.channelId,
     targetMessageId
   );
-  const [, setThreadListNavigation] = createSignal<ThreadListNavigation>();
+  const [threadListNavigation, setThreadListNavigation] =
+    createSignal<ThreadListNavigation>();
+  const [threadListScrollState, setThreadListScrollState] =
+    createSignal<ThreadListScrollState>();
   const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
 
   const threadManager = createThreadManager();
@@ -127,33 +132,40 @@ export function Channel(props: ChannelProps) {
     <Suspense>
       <Show when={messages().length > 0}>
         <StaticMarkdownContext>
-          <ThreadList
-            data={messages}
-            initialScrollTarget={threadListInitialScrollTarget()}
-            shift={shift}
-            onScrollNearTop={threadPaginator.shiftPaginate}
-            onScrollNearBottom={threadPaginator.prependPaginate}
-            onNavigationReady={setThreadListNavigation}
-          >
-            {(item) => {
-              const state = threadManager.getOrCreateThreadState(item.id);
-              return (
-                <ThreadRow
-                  message={item}
-                  listMeta={listMetaByMessageId()[item.id]}
-                  onDismissNewMessages={dismissNewMessages}
-                >
-                  <Thread
-                    data={() => item}
-                    channelId={() => props.channelId}
-                    getMessageActions={getMessageActions}
-                    isExpanded={state.isExpanded}
-                    setIsExpanded={state.setIsExpanded}
-                  />
-                </ThreadRow>
-              );
-            }}
-          </ThreadList>
+          <div class="relative h-full">
+            <ThreadList
+              data={messages}
+              initialScrollTarget={threadListInitialScrollTarget()}
+              shift={shift}
+              onScrollNearTop={threadPaginator.shiftPaginate}
+              onScrollNearBottom={threadPaginator.prependPaginate}
+              onNavigationReady={setThreadListNavigation}
+              onScrollStateChange={setThreadListScrollState}
+            >
+              {(item) => {
+                const state = threadManager.getOrCreateThreadState(item.id);
+                return (
+                  <ThreadRow
+                    message={item}
+                    listMeta={listMetaByMessageId()[item.id]}
+                    onDismissNewMessages={dismissNewMessages}
+                  >
+                    <Thread
+                      data={() => item}
+                      channelId={() => props.channelId}
+                      getMessageActions={getMessageActions}
+                      isExpanded={state.isExpanded}
+                      setIsExpanded={state.setIsExpanded}
+                    />
+                  </ThreadRow>
+                );
+              }}
+            </ThreadList>
+            <ScrollToBottomOverlay
+              navigation={threadListNavigation}
+              scrollState={threadListScrollState}
+            />
+          </div>
         </StaticMarkdownContext>
       </Show>
     </Suspense>

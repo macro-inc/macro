@@ -40,6 +40,15 @@ export type ThreadListNavigation = {
   isNearBottom: () => boolean;
 };
 
+export type ThreadListScrollState = {
+  didInitialScroll: boolean;
+  isNearBottom: boolean;
+  isScrollingDown: boolean;
+  distanceFromTop: number;
+  distanceFromBottom: number;
+  viewportSize: number;
+};
+
 type ThreadListProps<T extends { id: string }> = {
   data: Accessor<T[]>;
   children: (item: T) => JSX.Element;
@@ -47,11 +56,20 @@ type ThreadListProps<T extends { id: string }> = {
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
+  onScrollStateChange?: (state: ThreadListScrollState) => void;
   shift?: Accessor<boolean>;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
 const NEAR_BOTTOM_THRESHOLD = 50;
+const EXPLICIT_SCROLL_INTENT_WINDOW_MS = 250;
+const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
+
+type ScrollDirection = 'up' | 'down';
+type ExplicitScrollIntent = {
+  direction: ScrollDirection;
+  at: number;
+};
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
   tag: 'bottom',
@@ -66,6 +84,31 @@ export function shouldStickToBottomOnDataChange(
   shift?: Accessor<boolean>
 ): boolean {
   return isNearBottom && !(shift?.() ?? false);
+}
+
+export function isExplicitScrollDown(
+  delta: number,
+  intent: ExplicitScrollIntent | undefined,
+  now = Date.now()
+): boolean {
+  if (delta <= 0) return false;
+  if (!intent) return false;
+  if (intent.direction !== 'down') return false;
+  return now - intent.at <= EXPLICIT_SCROLL_INTENT_WINDOW_MS;
+}
+
+export function accumulateExplicitScrollDownDistance(
+  previousDistance: number,
+  delta: number,
+  intent: ExplicitScrollIntent | undefined,
+  now = Date.now()
+): number {
+  if (!isExplicitScrollDown(delta, intent, now)) return 0;
+  return previousDistance + delta;
+}
+
+export function hasExplicitScrollDownGesture(distance: number): boolean {
+  return distance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
 }
 
 function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
@@ -91,6 +134,17 @@ export function ThreadList<T extends { id: string }>(
   let scrollRef: HTMLDivElement | undefined;
   let nearTopFired = false;
   let nearBottomFired = false;
+  let previousScrollOffset: number | undefined;
+  let explicitScrollIntent: ExplicitScrollIntent | undefined;
+  let explicitScrollDownDistance = 0;
+  let previousTouchY: number | undefined;
+
+  const markExplicitScrollIntent = (direction: ScrollDirection) => {
+    explicitScrollIntent = {
+      direction,
+      at: Date.now(),
+    };
+  };
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
     const items = props.data();
@@ -125,6 +179,24 @@ export function ThreadList<T extends { id: string }>(
     const itemCount = props.data().length;
     if (!itemCount) return -1;
     return clamp(handle.findItemIndex(handle.scrollOffset), 0, itemCount - 1);
+  };
+
+  const emitScrollState = (
+    handle: VirtualizerHandle,
+    isScrollingDown: boolean
+  ) => {
+    if (!props.onScrollStateChange) return;
+    const distanceFromTop = handle.scrollOffset;
+    const distanceFromBottom =
+      handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+    props.onScrollStateChange({
+      didInitialScroll: didInitialScroll(),
+      isNearBottom: distanceFromBottom <= NEAR_BOTTOM_THRESHOLD,
+      isScrollingDown,
+      distanceFromTop,
+      distanceFromBottom,
+      viewportSize: handle.viewportSize,
+    });
   };
 
   const createNavigation = (
@@ -177,6 +249,7 @@ export function ThreadList<T extends { id: string }>(
         // Run a second pass after layout settles to avoid partial initial anchoring.
         scrollToTarget(handle, target);
         setDidInitialScroll(true);
+        emitScrollState(handle, false);
       });
     });
   }
@@ -208,6 +281,21 @@ export function ThreadList<T extends { id: string }>(
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
 
     setIsNearBottom(nearBottom);
+    let nextIsScrollingDown = false;
+
+    if (previousScrollOffset !== undefined) {
+      const delta = handle.scrollOffset - previousScrollOffset;
+      explicitScrollDownDistance = accumulateExplicitScrollDownDistance(
+        explicitScrollDownDistance,
+        delta,
+        explicitScrollIntent
+      );
+      nextIsScrollingDown = hasExplicitScrollDownGesture(
+        explicitScrollDownDistance
+      );
+    }
+    previousScrollOffset = handle.scrollOffset;
+    emitScrollState(handle, nextIsScrollingDown);
 
     if (!didInitialScroll()) return;
 
@@ -229,6 +317,29 @@ export function ThreadList<T extends { id: string }>(
   return (
     <div
       ref={scrollRef}
+      onWheel={(event) => {
+        if (event.deltaY === 0) return;
+        markExplicitScrollIntent(event.deltaY > 0 ? 'down' : 'up');
+      }}
+      onTouchStart={(event) => {
+        previousTouchY = event.touches.item(0)?.clientY;
+      }}
+      onTouchMove={(event) => {
+        const nextTouchY = event.touches.item(0)?.clientY;
+        if (nextTouchY === undefined || previousTouchY === undefined) return;
+
+        const deltaY = previousTouchY - nextTouchY;
+        if (deltaY !== 0) {
+          markExplicitScrollIntent(deltaY > 0 ? 'down' : 'up');
+        }
+        previousTouchY = nextTouchY;
+      }}
+      onTouchEnd={() => {
+        previousTouchY = undefined;
+      }}
+      onTouchCancel={() => {
+        previousTouchY = undefined;
+      }}
       style={{
         width: '100%',
         'overflow-y': 'auto',

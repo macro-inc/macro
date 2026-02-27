@@ -4,12 +4,17 @@ import { createSignal, splitProps, type JSX } from 'solid-js';
 
 type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
 
+type ButtonDataAttributes = {
+  [key in `data-${string}`]?: string | number | boolean | undefined;
+};
+
 type EmojiReactionPopoverProps = {
   open: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onEmojiSelect: (emoji: string) => void;
   trigger: JSX.Element;
-  triggerProps?: JSX.ButtonHTMLAttributes<HTMLButtonElement>;
+  triggerProps?: JSX.ButtonHTMLAttributes<HTMLButtonElement> &
+    ButtonDataAttributes;
   placement?: EmojiReactionPopoverPlacement;
 };
 
