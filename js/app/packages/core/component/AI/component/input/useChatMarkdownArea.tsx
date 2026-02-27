@@ -442,7 +442,6 @@ function MarkdownArea(
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}
-          users={() => []}
           block={'chat'}
           useBlockBoundary={true}
           portalScope={props.portalScope}
