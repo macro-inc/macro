@@ -1,4 +1,5 @@
 import {
+  flattenMessages,
   useChannelMessagesQuery,
   type ChannelMessagesData,
 } from '@queries/channel/channel-messages';
@@ -16,7 +17,6 @@ import {
   type ThreadListScrollState,
   type ThreadListScrollTarget,
 } from './ThreadList';
-import type { ApiChannelMessage } from '@service-comms/client';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
@@ -35,26 +35,14 @@ import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { Thread, ThreadRow } from '../Thread';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { createActivityTracker } from '@channel/activity-tracker';
+import { useChannelActivity } from '@core/context/channels';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   lastViewedAt?: DateValue | null;
 };
-
-export function flattenMessages(
-  data: ChannelMessagesData | undefined
-): ApiChannelMessage[] {
-  if (!data?.pages?.length) return [];
-  const all: ApiChannelMessage[] = [];
-  for (let i = data.pages.length - 1; i >= 0; i--) {
-    const items = data.pages[i].items;
-    for (let j = items.length - 1; j >= 0; j--) {
-      all.push(items[j]);
-    }
-  }
-  return all;
-}
 
 export function Channel(props: ChannelProps) {
   const userId = useUserId();
@@ -72,11 +60,13 @@ export function Channel(props: ChannelProps) {
     () => props.channelId,
     targetMessageId
   );
+
+  const activity = useChannelActivity(props.channelId);
+
   const [threadListNavigation, setThreadListNavigation] =
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
-  const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
 
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
@@ -91,34 +81,15 @@ export function Channel(props: ChannelProps) {
 
   const shift = () => threadPaginator.isShifting();
 
-  const lastViewedAt = createMemo<DateValue | null | undefined>((prev) => {
-    if (prev !== undefined) return prev;
-    return props.lastViewedAt;
+  const activityTracker = createActivityTracker({
+    lastViewedAt: () => activity().viewed_at,
+    userId,
   });
-  const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
-
-  const isNewMessage = (message: ApiChannelMessage) => {
-    if (newMessagesDismissed()) return false;
-
-    const lastViewed = lastViewedAt();
-    if (!lastViewed) return false;
-
-    const openedAt = openedChannelAt();
-    const createdAt = new Date(message.created_at);
-
-    return (
-      createdAt > new Date(lastViewed) &&
-      createdAt < openedAt &&
-      userId() !== message.sender_id
-    );
-  };
 
   const listMetaByMessageId = createMemo(() =>
-    buildChannelMessageListMeta(messages(), isNewMessage)
+    buildChannelMessageListMeta(messages(), activityTracker.isNewMessage)
   );
-  const dismissNewMessages = () => {
-    setNewMessagesDismissed(true);
-  };
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -148,7 +119,7 @@ export function Channel(props: ChannelProps) {
                   <ThreadRow
                     message={item}
                     listMeta={listMetaByMessageId()[item.id]}
-                    onDismissNewMessages={dismissNewMessages}
+                    onDismissNewMessages={activityTracker.dismissNewMessages}
                   >
                     <Thread
                       data={() => item}
