@@ -518,6 +518,7 @@ export function ShareModal(props: ShareModalProps) {
 
   const formattedOwner = createMemo(() => {
     const ownerValue = props.owner;
+    console.log('ownerValue', ownerValue);
     if (!ownerValue) {
       return '';
     }

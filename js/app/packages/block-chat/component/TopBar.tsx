@@ -1,8 +1,16 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import {
+  type BlockTool,
+  ToolButton,
+} from '@app/component/split-layout/components/BlockTool';
 import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -13,12 +21,21 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
+import { isMobile } from '@core/mobile/isMobile';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
+import { For, Show } from 'solid-js';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -28,11 +45,42 @@ export function TopBar() {
 
   const openInstructions = useOpenInstructionsMd();
 
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
+
   const ops: FileOperation[] = [
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
     { op: 'delete', divideAbove: true },
+  ];
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Edit AI Instructions',
+      icon: Notepad,
+      action: openInstructions,
+    },
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={blockId}
+          documentName={chatName()}
+          buttonSize="sm"
+          entityType="chat"
+        />
+      ),
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
+    },
   ];
 
   return (
@@ -43,35 +91,48 @@ export function TopBar() {
           lockRename={false}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
+      <Show
+        when={isMobile()}
+        fallback={
+          <>
+            <SplitToolbarLeft>
+              <div class="p-1">
+                <SplitFileMenu
+                  id={blockId}
+                  itemType="chat"
+                  name={chatName()}
+                  ops={ops}
+                />
+              </div>
+            </SplitToolbarLeft>
+            <SplitToolbarRight>
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+              <SplitPermissionsBadge />
+            </SplitToolbarRight>
+          </>
+        }
+      >
+        {/* Mobile */}
+        <SplitHeaderRight>
           <SplitFileMenu
             id={blockId}
             itemType="chat"
             name={chatName()}
             ops={ops}
+            tools={tools}
           />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <DeprecatedIconButton
-          icon={Notepad}
-          size="sm"
-          theme="clear"
-          tooltip={{ label: 'Edit AI Instructions' }}
-          onClick={openInstructions}
-        />
-        <ReferencesButton
-          documentId={blockId}
-          documentName={chatName()}
-          buttonSize="sm"
-          entityType="chat"
-        />
-        <div class="flex items-center">
-          <SplitPermissionsBadge />
-          <ShareTrigger />
-        </div>
-      </SplitToolbarRight>
+        </SplitHeaderRight>
+      </Show>
     </>
   );
 }
