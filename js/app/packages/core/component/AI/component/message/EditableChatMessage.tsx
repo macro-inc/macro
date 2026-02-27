@@ -1,12 +1,17 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
+import { withAnalytics } from '@coparse/analytics';
 import { onMount } from 'solid-js';
+
+const { track, TrackingEvents } = withAnalytics();
 
 function EditableChatMessageInner(props: {
   chatId: string;
@@ -17,13 +22,21 @@ function EditableChatMessageInner(props: {
   model: Model;
 }) {
   const input = useChatInputContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    initialValue: props.initialText,
-    addAttachment: (a) => input.attachments.addAttachment(a),
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      track(TrackingEvents.CHAT.MENTION.SELECT);
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    block: 'chat',
+    showOpenTabs: true,
+    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   onMount(() => {
-    chatMarkdownArea.focus();
+    editor.controls.focus();
   });
 
   const handleKey = (e: KeyboardEvent) => {
@@ -35,7 +48,8 @@ function EditableChatMessageInner(props: {
   return (
     <div onKeyDown={handleKey} class="w-full">
       <ChatInput
-        markdown={chatMarkdownArea}
+        editor={editor}
+        initialValue={props.initialText}
         chatId={props.chatId}
         onSend={(request) => props.onAccept(request)}
       />

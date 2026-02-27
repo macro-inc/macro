@@ -1,6 +1,8 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
@@ -12,11 +14,9 @@ import {
   useChatContext,
   useChatInputContext,
 } from '../../context';
-import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
 import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
-import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { ChatMessages } from '../message/ChatMessages';
 
 import {
@@ -56,20 +56,11 @@ export default function Debug() {
 }
 
 function ChatMarkdownArea() {
-  const attachments = useAttachments();
-  const { MarkdownArea, ref } = useChatMarkdownArea({
-    addAttachment: attachments.addAttachment,
-  });
-  createEffect(() => {
-    const el = ref();
-    if (el) {
-      el.classList.add('bg-accent/10');
-    }
-  });
+  const editor = buildChatEditor();
 
   return (
     <Item label="chat markown area">
-      <MarkdownArea />
+      <MarkdownShell config={editor} />
     </Item>
   );
 }
@@ -100,9 +91,7 @@ function ChatInputBox() {
 
 function ChatInputBoxInner() {
   const input = useChatInputContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
 
   return (
     <Item label="Chat input - not connected to backend">
@@ -120,7 +109,7 @@ function ChatInputBoxInner() {
           />
         </div>
         <ChatInput
-          markdown={chatMarkdownArea}
+          editor={editor}
           onSend={(request) => console.log('request', request)}
         />
       </div>
@@ -137,10 +126,7 @@ function ChatInputBoxConnected() {
 }
 
 function ChatInputBoxConnectedInner() {
-  const input = useChatInputContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
 
   const [_gen, setGen] = createSignal(false);
   const onSend = async (input: ChatSendInput) => {
@@ -172,7 +158,7 @@ function ChatInputBoxConnectedInner() {
   return (
     <Item label="Chat input - connected (console)">
       <div class="w-full h-full">
-        <ChatInput markdown={chatMarkdownArea} onSend={onSend} />
+        <ChatInput editor={editor} onSend={onSend} />
       </div>
     </Item>
   );
@@ -240,11 +226,8 @@ function FullChat() {
 }
 
 function FullChatInner() {
-  const input = useChatInputContext();
   const chat = useChatContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
   const [_isGen, setIsGen] = createSignal(false);
   const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
 
@@ -300,7 +283,7 @@ function FullChatInner() {
         <StreamStatus stream={debugStream} />
         <ChatMessages />
         <ChatInput
-          markdown={chatMarkdownArea}
+          editor={editor}
           chatId={chat.chatId()}
           onSend={onSend}
           onStop={() => {}}
