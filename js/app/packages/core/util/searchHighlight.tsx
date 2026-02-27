@@ -174,14 +174,16 @@ export function parseSearchHighlightSegments(
 
 export function HighlightRender(props: { text: string }) {
   return (
-    <Index each={parseSearchHighlightSegments(props.text)}>
-      {(segment) =>
-        segment().highlight ? (
-          <span class="md-mark search-match">{segment().text}</span>
-        ) : (
-          segment().text
-        )
-      }
-    </Index>
+    <span>
+      <Index each={parseSearchHighlightSegments(props.text)}>
+        {(segment) =>
+          segment().highlight ? (
+            <span class="md-mark search-match">{segment().text}</span>
+          ) : (
+            segment().text
+          )
+        }
+      </Index>
+    </span>
   );
 }
