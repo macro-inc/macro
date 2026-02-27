@@ -307,6 +307,7 @@ async fn run_notification_cycle<I: NotificationIngress>(
                 channel_type: model_notifications::ChannelType::Public,
                 channel_name: "test-channel-name".to_string(),
             },
+            sender_profile_picture_url: None,
         },
         sender_id: None,
         recipient_ids: HashSet::from([user_id.copied()]),

@@ -86,6 +86,7 @@ impl<'a> ChannelInviteEvent<'a> {
                 NotifEvent::ChannelInvite(ChannelInviteMetadata {
                     invited_by: self.invited_by_user_id.clone(),
                     common: self.common.clone(),
+                    sender_profile_picture_url: None,
                 }),
             ));
         }
@@ -111,6 +112,7 @@ impl ChannelMessageEvent<'_> {
                     message_id: self.message.id.to_string(),
                     thread_id: self.message.thread_id.map(|t| t.to_string()),
                     common: self.channel_metadata.clone(),
+                    sender_profile_picture_url: None,
                 }),
             ));
         }
@@ -130,6 +132,7 @@ impl ChannelMessageEvent<'_> {
                         document_name: mention.item_name.clone(),
                         owner: mention.item_owner.clone(),
                         file_type: mention.file_type.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }
@@ -164,6 +167,7 @@ impl ChannelMessageEvent<'_> {
                             message_content: self.message.content.clone(),
                             thread_parent_sender_id: self.thread_parent_sender_id.clone(),
                             common: self.channel_metadata.clone(),
+                            sender_profile_picture_url: None,
                         }),
                     ));
                 } else {
@@ -179,6 +183,7 @@ impl ChannelMessageEvent<'_> {
                     NotifEvent::ChannelInvite(ChannelInviteMetadata {
                         invited_by: self.message.sender_id.clone(),
                         common: self.channel_metadata.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }
@@ -193,6 +198,7 @@ impl ChannelMessageEvent<'_> {
                         sender: self.message.sender_id.clone(),
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }

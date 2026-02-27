@@ -200,6 +200,7 @@ where
                     task_id: task_id.to_string(),
                     task_name: task_name.clone(),
                     assigned_by: assigned_by.clone(),
+                    sender_profile_picture_url: None,
                 };
 
                 let request = SendNotificationRequestBuilder {

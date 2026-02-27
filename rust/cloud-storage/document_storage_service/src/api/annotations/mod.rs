@@ -143,6 +143,7 @@ fn build_mention_notif<'a>(
         comment_id: comment.comment_id,
         thread_id,
         text,
+        sender_profile_picture_url: None,
     };
 
     let recipient_ids: HashSet<MacroUserIdStr<'a>> = mentions
@@ -172,6 +173,7 @@ mod tests {
             thread_id: 42,
             comment_id: 99,
             text: "yy".to_string(),
+            sender_profile_picture_url: None,
         };
         let res = serde_json::to_string(&m).unwrap();
         assert!(res.contains(r#"mentionId":"xxx""#));

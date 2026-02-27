@@ -66,6 +66,8 @@ pub struct ChannelInviteMetadata {
     pub invited_by: MacroUserIdStr<'static>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -85,6 +87,8 @@ pub struct ChannelMessageSendMetadata {
     pub message_id: String,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 /// Metadata for when a item is shared with a user
@@ -143,6 +147,8 @@ pub struct ChannelMentionMetadata {
     pub thread_id: Option<String>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -168,6 +174,8 @@ pub struct ChannelReplyMetadata {
     pub thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 /// Someone mentioned a document in a channel
@@ -183,6 +191,8 @@ pub struct DocumentMentionMetadata {
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 impl From<DocumentMentionMetadata> for serde_json::Value {
@@ -249,6 +259,8 @@ pub struct TaskAssignedMetadata {
     #[serde(alias = "assigned_by")]
     #[schema(value_type = String)]
     pub assigned_by: MacroUserIdStr<'static>,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 // Plain text formatter for converting XML message content to plain text for APNS payloads.
@@ -313,6 +325,7 @@ fn alert_apns(
     title: String,
     body: String,
     data: PushNotificationData,
+    launch_image: Option<String>,
 ) -> APNSPushNotification<PushNotificationData> {
     APNSPushNotification {
         aps: Aps {
@@ -320,6 +333,7 @@ fn alert_apns(
                 AlertDictionary {
                     title: Some(title),
                     body: Some(body),
+                    launch_image,
                     ..Default::default()
                 },
             )),
@@ -347,6 +361,7 @@ impl NotificationExtIos for ChannelInviteMetadata {
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -367,6 +382,7 @@ impl NotificationExtIos for AiResponseMetadata {
             "Ai Response".into(),
             self.summary,
             PushNotificationData { notification_id },
+            None,
         ))
     }
 }
@@ -397,6 +413,7 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
             title,
             body,
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -430,6 +447,7 @@ impl NotificationExtIos for ChannelMentionMetadata {
             title,
             body,
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -454,6 +472,7 @@ impl NotificationExtIos for ChannelReplyMetadata {
             title,
             body,
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -483,6 +502,7 @@ impl NotificationExtIos for DocumentMentionMetadata {
             title,
             body,
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -515,6 +535,7 @@ impl NotificationExtIos for TaskAssignedMetadata {
             title,
             body,
             PushNotificationData { notification_id },
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -538,6 +559,8 @@ pub struct MentionedInDocumentCommentMetadata {
     pub thread_id: i64,
     /// the text of the comment
     pub text: String,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 impl Notification for MentionedInDocumentCommentMetadata {
@@ -572,6 +595,7 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
                     AlertDictionary {
                         title: Some(title),
                         body: Some(body),
+                        launch_image: self.sender_profile_picture_url,
                         ..Default::default()
                     },
                 )),
