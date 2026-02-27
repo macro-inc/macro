@@ -17,13 +17,17 @@ import {
   isTaskEntity,
 } from '../types/entity';
 import {
+  type Accessor,
+  createContext,
+  createEffect,
   createSignal,
   Match,
   onCleanup,
-  onMount,
   Show,
   Switch,
+  useContext,
   type Ref,
+  type JSX,
 } from 'solid-js';
 import {
   getStreamState,
@@ -54,6 +58,37 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
+
+interface ListLayoutContextValue {
+  isWide: Accessor<boolean>;
+}
+
+const ListLayoutContext = createContext<ListLayoutContextValue>();
+
+export function ListLayoutProvider(props: {
+  ref: Accessor<HTMLElement | undefined>;
+  children: JSX.Element;
+}) {
+  const [isWide, setIsWide] = createSignal(true);
+
+  createEffect(() => {
+    const el = props.ref();
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+    });
+    observer.observe(el);
+    onCleanup(() => observer.disconnect());
+  });
+
+  return (
+    <ListLayoutContext.Provider value={{ isWide }}>
+      {props.children}
+    </ListLayoutContext.Provider>
+  );
+}
+
+const useListLayout = () => useContext(ListLayoutContext);
 
 const hasSearchContentHits = (entity: EntityData) =>
   isSearchEntity(entity) && !!entity.search.contentHitData?.length;
@@ -414,16 +449,7 @@ export function ListEntity(props: ListEntityProps) {
     splitId: useSplitPanel()?.handle?.id,
   });
 
-  let rootEl!: HTMLElement;
-  const [isWide, setIsWide] = createSignal(true);
-
-  onMount(() => {
-    const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
-    });
-    observer.observe(rootEl);
-    onCleanup(() => observer.disconnect());
-  });
+  const isWide = useListLayout()?.isWide ?? (() => true);
 
   return (
     <Entity.Root
@@ -435,9 +461,7 @@ export function ListEntity(props: ListEntityProps) {
         }
         props.onClick?.(e);
       }}
-      ref={mergeRefs(props.ref, draggable, (el) => {
-        rootEl = el;
-      })}
+      ref={mergeRefs(props.ref, draggable)}
       class={cn('@container/entity w-full min-h-10 relative group/narrow', {
         'bg-accent/5': props.checked,
         'hover:bg-hover/30':
