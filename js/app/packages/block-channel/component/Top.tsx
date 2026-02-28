@@ -1,6 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
 import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
 import {
   SplitHeaderLeft,

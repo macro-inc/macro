@@ -1,5 +1,5 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
 import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
