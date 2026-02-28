@@ -1,5 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
-import { type ItemType } from '@service-storage/client';
+import type { ItemType } from '@service-storage/client';
 import { For, Show } from 'solid-js';
 import { type BlockTool, ToolButton } from './BlockTool';
 import { type FileOperation, SplitFileMenu } from './SplitFileMenu';
