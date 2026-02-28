@@ -1,16 +1,12 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import {
-  type BlockTool,
-  ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
-import { SplitFileMenu } from '@app/component/split-layout/components/SplitFileMenu';
+import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -30,8 +26,7 @@ import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
@@ -158,40 +153,18 @@ export function Top(props: TopProps) {
           </div>
         </div>
       </SplitHeaderLeft>
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitHeaderRight>
-              <BlockLiveIndicators />
-            </SplitHeaderRight>
-            <SplitToolbarRight>
-              <For each={tools}>
-                {(tool) => (
-                  <Show when={!tool.condition || tool.condition()}>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </Show>
-                )}
-              </For>
-            </SplitToolbarRight>
-          </>
-        }
-      >
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-          <SplitFileMenu
-            id={blockId}
-            itemType="channel"
-            name={channelName() ?? 'New Channel'}
-            ops={[]}
-            tools={tools}
-          />
-        </SplitHeaderRight>
-      </Show>
+
+      <SplitHeaderRight>
+        <BlockLiveIndicators />
+      </SplitHeaderRight>
+
+      <BlockToolbar
+        tools={tools}
+        ops={[]}
+        id={blockId}
+        itemType="channel"
+        name={channelName() ?? 'New Channel'}
+      />
     </>
   );
 }

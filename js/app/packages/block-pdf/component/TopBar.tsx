@@ -241,6 +241,7 @@ export function TopBar() {
           <>
             <SplitHeaderRight>
               <BlockLiveIndicators />
+              <SplitPermissionsBadge />
             </SplitHeaderRight>
             <SplitToolbarRight>
               <For each={tools}>
@@ -254,7 +255,6 @@ export function TopBar() {
                   </Show>
                 )}
               </For>
-              <SplitPermissionsBadge />
             </SplitToolbarRight>
           </>
         }

@@ -74,6 +74,7 @@ export function AttachmentsButton() {
 export function AttachmentsDrawer() {
   const { openWithSplit } = useSplitLayout();
   const attachments = useAttachments();
+  const channelContext = useChannelContext();
 
   const onClickAttachment = (
     event: MouseEvent,

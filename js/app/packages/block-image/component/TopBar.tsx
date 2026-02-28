@@ -1,12 +1,7 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import {
-  type BlockTool,
-  ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import { type FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -15,10 +10,7 @@ import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+
 import { useBlockId } from '@core/block';
 import {
   ReferencesButton,
@@ -39,7 +31,7 @@ import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { isMobile } from '@core/mobile/isMobile';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -95,49 +87,22 @@ export function TopBar() {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
+        <Show when={isMobile()}>
+          <SplitPermissionsBadge />
+        </Show>
       </SplitHeaderLeft>
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitToolbarLeft>
-              <div class="p-1">
-                <SplitFileMenu
-                  id={blockId}
-                  itemType="document"
-                  name={name()}
-                  ops={ops}
-                />
-              </div>
-            </SplitToolbarLeft>
-            <SplitToolbarRight>
-              <For each={tools}>
-                {(tool) => (
-                  <Show when={!tool.condition || tool.condition()}>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </Show>
-                )}
-              </For>
-              <SplitPermissionsBadge />
-            </SplitToolbarRight>
-          </>
-        }
-      >
-        {/* Mobile */}
-        <SplitHeaderRight>
-          <SplitFileMenu
-            id={blockId}
-            itemType="document"
-            name={name()}
-            ops={ops}
-            tools={tools}
-          />
-        </SplitHeaderRight>
-      </Show>
+
+      <SplitHeaderRight>
+        <SplitPermissionsBadge />
+      </SplitHeaderRight>
+
+      <BlockToolbar
+        tools={tools}
+        ops={ops}
+        id={blockId}
+        itemType="document"
+        name={name()}
+      />
     </>
   );
 }

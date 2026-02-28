@@ -1,12 +1,7 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import {
-  type BlockTool,
-  ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+import { type BlockTool } from '@app/component/split-layout/components/BlockTool';
+import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import { type FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -15,10 +10,7 @@ import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+
 import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
@@ -46,7 +38,7 @@ import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
-import { For, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
@@ -152,53 +144,23 @@ export function TopBar() {
     <div ref={ref}>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
+        <Show when={isMobile()}>
+          <SplitPermissionsBadge />
+        </Show>
       </SplitHeaderLeft>
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitHeaderRight>
-              <BlockLiveIndicators />
-            </SplitHeaderRight>
-            <SplitToolbarLeft>
-              <div class="p-1">
-                <SplitFileMenu
-                  id={documentId}
-                  itemType="document"
-                  name={fileName()}
-                  ops={ops}
-                />
-              </div>
-            </SplitToolbarLeft>
-            <SplitToolbarRight>
-              <For each={tools}>
-                {(tool) => (
-                  <Show when={!tool.condition || tool.condition()}>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </Show>
-                )}
-              </For>
-              <SplitPermissionsBadge />
-            </SplitToolbarRight>
-          </>
-        }
-      >
-        {/* Mobile */}
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-          <SplitFileMenu
-            id={documentId}
-            itemType="document"
-            name={fileName()}
-            ops={ops}
-            tools={tools}
-          />
-        </SplitHeaderRight>
-      </Show>
+
+      <SplitHeaderRight>
+        <BlockLiveIndicators />
+        <SplitPermissionsBadge />
+      </SplitHeaderRight>
+
+      <BlockToolbar
+        tools={tools}
+        ops={ops}
+        id={documentId}
+        itemType="document"
+        name={fileName()}
+      />
     </div>
   );
 }

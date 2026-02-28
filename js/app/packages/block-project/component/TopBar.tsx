@@ -115,6 +115,9 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
+      <SplitHeaderRight>
+        <SplitPermissionsBadge />
+      </SplitHeaderRight>
       <Show
         when={isMobile()}
         fallback={
@@ -147,7 +150,6 @@ export function TopBar() {
                     </Show>
                   )}
                 </For>
-                <SplitPermissionsBadge />
               </SplitToolbarRight>
             </Show>
           </>

@@ -3,10 +3,8 @@ import {
   type BlockTool,
   ToolButton,
 } from '@app/component/split-layout/components/BlockTool';
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import { type FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -16,10 +14,7 @@ import {
   SplitPermissionsBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   setShowCommentsPreference,
@@ -182,50 +177,18 @@ export function TopBar() {
         </Show>
       </SplitHeaderLeft>
 
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitHeaderRight>
-              <BlockLiveIndicators />
-            </SplitHeaderRight>
-            <SplitToolbarLeft>
-              <SplitFileMenu
-                id={blockId}
-                itemType={itemType}
-                name={name()}
-                ops={ops}
-              />
-            </SplitToolbarLeft>
-            <SplitToolbarRight>
-              <For each={tools}>
-                {(tool) => (
-                  <Show when={!tool.condition || tool.condition()}>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </Show>
-                )}
-              </For>
-              <SplitPermissionsBadge />
-            </SplitToolbarRight>
-          </>
-        }
-      >
-        {/* Mobile layout */}
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-          <SplitFileMenu
-            id={blockId}
-            itemType={itemType}
-            name={name()}
-            ops={ops}
-            tools={tools}
-          />
-        </SplitHeaderRight>
-      </Show>
+      <SplitHeaderRight>
+        <BlockLiveIndicators />
+        <SplitPermissionsBadge />
+      </SplitHeaderRight>
+
+      <BlockToolbar
+        tools={tools}
+        ops={ops}
+        id={blockId}
+        itemType={itemType}
+        name={name()}
+      />
     </>
   );
 }
