@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 
-import { render } from 'solid-js/web';
-import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { render, screen } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
 import { Root } from './Root';
 import { Reactions } from './Reactions';
 import type { MessageData } from './types';
@@ -12,20 +12,6 @@ import type { MessageData } from './types';
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user-1',
 }));
-
-function renderComponent(component: () => JSX.Element) {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const dispose = render(component, container);
-
-  return {
-    container,
-    cleanup: () => {
-      dispose();
-      container.remove();
-    },
-  };
-}
 
 const baseMessage: MessageData = {
   id: 'message-1',
@@ -37,13 +23,9 @@ const baseMessage: MessageData = {
   reactions: [],
 };
 
-afterEach(() => {
-  document.body.innerHTML = '';
-});
-
 describe('Reactions', () => {
   it('does not render row when there are no reactions', () => {
-    const { container, cleanup } = renderComponent(() => (
+    const { container } = render(() => (
       <Root
         message={{
           ...baseMessage,
@@ -58,12 +40,11 @@ describe('Reactions', () => {
     ));
 
     expect(container.querySelector('[data-message-reactions-row]')).toBeNull();
-    expect(container.querySelector('[data-message-reaction-add]')).toBeNull();
-    cleanup();
+    expect(screen.queryByRole('button', { name: 'Add reaction' })).toBeNull();
   });
 
   it('renders styled reaction chips and add-reaction button when reactions exist', () => {
-    const { container, cleanup } = renderComponent(() => (
+    const { container } = render(() => (
       <Root
         message={{
           ...baseMessage,
@@ -78,25 +59,21 @@ describe('Reactions', () => {
     ));
 
     const row = container.querySelector('[data-message-reactions-row]');
-    const chip = container.querySelector(
-      '[data-message-reaction-chip][data-emoji="👍"]'
-    ) as HTMLButtonElement | null;
-    const addButton = container.querySelector(
-      '[data-message-reaction-add]'
-    ) as HTMLButtonElement | null;
+    const chip = screen.getByRole('button', { name: /👍/u });
+    const addButton = screen.getByRole('button', { name: 'Add reaction' });
 
     expect(row).not.toBeNull();
     expect(chip).not.toBeNull();
-    expect(chip?.className).toContain('border-accent');
-    expect(chip?.textContent).toContain('2');
+    expect(chip.className).toContain('border-accent');
+    expect(chip.textContent).toContain('2');
     expect(addButton).not.toBeNull();
-    cleanup();
   });
 
-  it('calls onReact with chip emoji when a reaction chip is clicked', () => {
+  it('calls onReact with chip emoji when a reaction chip is clicked', async () => {
+    const user = userEvent.setup();
     const onReact = vi.fn();
 
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <Root
         message={{
           ...baseMessage,
@@ -110,15 +87,11 @@ describe('Reactions', () => {
       </Root>
     ));
 
-    const chip = container.querySelector(
-      '[data-message-reaction-chip][data-emoji="😂"]'
-    ) as HTMLButtonElement | null;
-    expect(chip).not.toBeNull();
+    const chip = screen.getByRole('button', { name: /😂/u });
+    await user.click(chip);
 
-    chip?.click();
     expect(onReact).toHaveBeenCalledTimes(1);
     expect(onReact.mock.calls[0]?.[0]?.message?.id).toBe('message-1');
     expect(onReact.mock.calls[0]?.[0]?.emoji).toBe('😂');
-    cleanup();
   });
 });

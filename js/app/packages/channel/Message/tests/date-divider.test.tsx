@@ -2,29 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { render } from 'solid-js/web';
-import type { JSX } from 'solid-js';
+import userEvent from '@testing-library/user-event';
+import { render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DateDivider } from '../DateDivider';
 import { NewDivider } from '../NewDivider';
 
-function renderComponent(component: () => JSX.Element) {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const dispose = render(component, container);
-
-  return {
-    container,
-    cleanup: () => {
-      dispose();
-      container.remove();
-    },
-  };
-}
-
 afterEach(() => {
   vi.useRealTimers();
-  document.body.innerHTML = '';
 });
 
 describe('DateDivider', () => {
@@ -32,7 +17,7 @@ describe('DateDivider', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-02-22T12:00:00.000Z'));
 
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <DateDivider
         createdAt="2026-02-22T10:00:00.000Z"
         listMeta={{
@@ -43,12 +28,11 @@ describe('DateDivider', () => {
       />
     ));
 
-    expect(container.textContent).toContain('Today');
-    cleanup();
+    expect(screen.getByText('Today')).toBeTruthy();
   });
 
   it('does not render for replies', () => {
-    const { container, cleanup } = renderComponent(() => (
+    const { container } = render(() => (
       <DateDivider
         createdAt="2026-02-22T10:00:00.000Z"
         isReply
@@ -61,11 +45,10 @@ describe('DateDivider', () => {
     ));
 
     expect(container.textContent).toBe('');
-    cleanup();
   });
 
   it('does not render when there is no day boundary', () => {
-    const { container, cleanup } = renderComponent(() => (
+    const { container } = render(() => (
       <DateDivider
         createdAt="2026-02-22T10:00:00.000Z"
         listMeta={{
@@ -78,14 +61,15 @@ describe('DateDivider', () => {
     ));
 
     expect(container.textContent).toBe('');
-    cleanup();
   });
 });
 
 describe('NewDivider', () => {
-  it('renders for the first new top-level message and calls dismiss', () => {
+  it('renders for the first new top-level message and calls dismiss', async () => {
+    const user = userEvent.setup();
     const onDismiss = vi.fn();
-    const { container, cleanup } = renderComponent(() => (
+
+    render(() => (
       <NewDivider
         listMeta={{
           index: 2,
@@ -97,16 +81,13 @@ describe('NewDivider', () => {
       />
     ));
 
-    expect(container.textContent).toContain('New');
-    const button = container.querySelector('button');
-    expect(button).not.toBeNull();
-    button?.click();
+    const button = screen.getByRole('button', { name: 'New' });
+    await user.click(button);
     expect(onDismiss).toHaveBeenCalledOnce();
-    cleanup();
   });
 
   it('does not render for replies', () => {
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <NewDivider
         isReply
         listMeta={{
@@ -118,7 +99,6 @@ describe('NewDivider', () => {
       />
     ));
 
-    expect(container.textContent).toBe('');
-    cleanup();
+    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
   });
 });

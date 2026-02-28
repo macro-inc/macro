@@ -2,27 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { render } from 'solid-js/web';
-import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { render, screen } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
 import { ActionMenu } from '../ActionMenu';
 import { MessageActionsProvider } from '../context';
 import { Root } from '../Root';
 import type { MessageData } from '../types';
-
-function renderComponent(component: () => JSX.Element) {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const dispose = render(component, container);
-
-  return {
-    container,
-    cleanup: () => {
-      dispose();
-      container.remove();
-    },
-  };
-}
 
 const message: MessageData = {
   id: 'message-1',
@@ -34,24 +20,19 @@ const message: MessageData = {
   reactions: [],
 };
 
-afterEach(() => {
-  document.body.innerHTML = '';
-});
-
 describe('ActionMenu', () => {
   it('does not render when no actions are provided', () => {
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <Root message={message}>
         <ActionMenu />
       </Root>
     ));
 
-    expect(container.querySelector('[data-message-action]')).toBeNull();
-    cleanup();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
   it('renders only actions that are provided', () => {
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <Root
         message={message}
         actions={{
@@ -63,22 +44,16 @@ describe('ActionMenu', () => {
       </Root>
     ));
 
-    const buttons = container.querySelectorAll('[data-message-action]');
-    expect(buttons).toHaveLength(2);
-    expect(
-      container.querySelector('[data-message-action="reply"]')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-message-action="delete"]')
-    ).not.toBeNull();
-    expect(container.querySelector('[data-message-action="edit"]')).toBeNull();
-    cleanup();
+    expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   });
 
-  it('uses actions from an outer provider when Root does not override', () => {
+  it('uses actions from an outer provider when Root does not override', async () => {
+    const user = userEvent.setup();
     const onEdit = vi.fn();
 
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <MessageActionsProvider
         value={{
           onEdit,
@@ -90,20 +65,17 @@ describe('ActionMenu', () => {
       </MessageActionsProvider>
     ));
 
-    const editButton = container.querySelector(
-      '[data-message-action="edit"]'
-    ) as HTMLButtonElement | null;
-    expect(editButton).not.toBeNull();
-    editButton?.click();
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    await user.click(editButton);
     expect(onEdit).toHaveBeenCalledTimes(1);
-    cleanup();
   });
 
-  it('calls provided handlers with the current message', () => {
+  it('calls provided handlers with the current message', async () => {
+    const user = userEvent.setup();
     const onReply = vi.fn();
     const onCopyLink = vi.fn();
 
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <Root
         message={message}
         actions={{
@@ -115,30 +87,23 @@ describe('ActionMenu', () => {
       </Root>
     ));
 
-    const replyButton = container.querySelector(
-      '[data-message-action="reply"]'
-    ) as HTMLButtonElement | null;
-    const copyLinkButton = container.querySelector(
-      '[data-message-action="copy-link"]'
-    ) as HTMLButtonElement | null;
+    const replyButton = screen.getByRole('button', { name: 'Reply' });
+    const copyLinkButton = screen.getByRole('button', { name: 'Copy Link' });
 
-    expect(replyButton).not.toBeNull();
-    expect(copyLinkButton).not.toBeNull();
-
-    replyButton?.click();
-    copyLinkButton?.click();
+    await user.click(replyButton);
+    await user.click(copyLinkButton);
 
     expect(onReply).toHaveBeenCalledTimes(1);
     expect(onCopyLink).toHaveBeenCalledTimes(1);
     expect(onReply.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
     expect(onCopyLink.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
-    cleanup();
   });
 
-  it('renders quick reactions and calls onReact with selected emoji', () => {
+  it('renders quick reactions and calls onReact with selected emoji', async () => {
+    const user = userEvent.setup();
     const onReact = vi.fn();
 
-    const { container, cleanup } = renderComponent(() => (
+    render(() => (
       <Root
         message={message}
         actions={{
@@ -149,28 +114,21 @@ describe('ActionMenu', () => {
       </Root>
     ));
 
-    const quickButtons = container.querySelectorAll(
-      '[data-message-action="react-quick"]'
-    );
+    const quickButtons = screen.getAllByRole('button', { name: /^React /u });
     expect(quickButtons).toHaveLength(3);
-    expect(
-      container.querySelector('[data-message-action="react-open-menu"]')
-    ).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'More reactions' })).toBeTruthy();
 
-    const thumbsUp = container.querySelector(
-      '[data-message-action="react-quick"][data-emoji="👍"]'
-    ) as HTMLButtonElement | null;
-    expect(thumbsUp).not.toBeNull();
-    thumbsUp?.click();
+    const thumbsUp = screen.getByRole('button', { name: 'React 👍' });
+    await user.click(thumbsUp);
 
     expect(onReact).toHaveBeenCalledTimes(1);
     expect(onReact.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
     expect(onReact.mock.calls[0]?.[0]?.emoji).toBe('👍');
-    cleanup();
   });
 
-  it('keeps hover actions visible while emoji menu is open', () => {
-    const { container, cleanup } = renderComponent(() => (
+  it('keeps hover actions visible while emoji menu is open', async () => {
+    const user = userEvent.setup();
+    const { container } = render(() => (
       <Root
         message={message}
         actions={{
@@ -184,17 +142,14 @@ describe('ActionMenu', () => {
     const hoverActions = container.querySelector(
       '[data-message-hover-actions]'
     ) as HTMLDivElement | null;
-    const emojiMenuTrigger = container.querySelector(
-      '[data-message-action="react-open-menu"]'
-    ) as HTMLButtonElement | null;
+    const emojiMenuTrigger = screen.getByRole('button', {
+      name: 'More reactions',
+    });
 
     expect(hoverActions).not.toBeNull();
-    expect(emojiMenuTrigger).not.toBeNull();
     expect(hoverActions?.className).toContain('opacity-0');
 
-    emojiMenuTrigger?.click();
+    await user.click(emojiMenuTrigger);
     expect(hoverActions?.className).toContain('opacity-100');
-
-    cleanup();
   });
 });

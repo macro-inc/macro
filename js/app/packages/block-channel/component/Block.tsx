@@ -31,7 +31,12 @@ export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
 
   if (ENABLE_NEW_CHANNELS) {
-    return <NewChannel channelId={channelId} />;
+    return (
+      <NewChannel
+        channelId={channelId}
+        // targetMessageId="019c2444-b1c4-7a91-a57d-14bd684388c9"
+      />
+    );
   }
 
   const targetMessage = () => {
