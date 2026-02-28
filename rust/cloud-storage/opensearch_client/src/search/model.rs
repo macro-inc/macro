@@ -204,11 +204,7 @@ pub(crate) fn parse_highlight_hit(
             .map(|v| v.to_string()),
         content: highlight
             .get(keys.content_key)
-            .map(|v| {
-                v.iter()
-                    .map(|f| normalize_highlight_fragment(f))
-                    .collect()
-            })
+            .map(|v| v.iter().map(|f| normalize_highlight_fragment(f)).collect())
             .unwrap_or_default(),
         sender: highlight
             .get("sender")
