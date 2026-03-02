@@ -16,7 +16,8 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        guard let urlString = request.content.userInfo["senderProfilePictureUrl"] as? String,
+        guard let payload = request.content.userInfo["payload"] as? [String: Any],
+              let urlString = payload["senderProfilePictureUrl"] as? String,
               let url = URL(string: urlString)
         else {
             contentHandler(content)
