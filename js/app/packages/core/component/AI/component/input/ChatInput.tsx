@@ -101,9 +101,6 @@ export function ChatInput(props: ChatInputComponentProps) {
     props.onSend(sendInput);
   });
 
-  // Configure builder handlers before MarkdownShell mounts.
-  // SolidJS processes parent bodies before child bodies, so these
-  // are set before buildHandle() reads them.
   props.editor
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
