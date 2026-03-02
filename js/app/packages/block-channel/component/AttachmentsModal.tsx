@@ -23,7 +23,7 @@ import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
-function useAttachments() {
+export function useAttachments() {
   const currentBlockId = useBlockId();
   const channelContext = useChannelContext();
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
@@ -50,9 +50,8 @@ function useAttachments() {
   });
 }
 
-export function AttachmentsButton() {
+export function AttachmentsButton(props: { attachments: () => Attachment[] }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
-  const attachments = useAttachments();
 
   return (
     <Tooltip tooltip={'View all attachments'}>
@@ -64,16 +63,15 @@ export function AttachmentsButton() {
       >
         <BracketLeft class="h-4 w-2 text-edge" />
         <PaperclipIcon class="size-4 text-ink" />
-        <span class="text-xs">{attachments().length}</span>
+        <span class="text-xs">{props.attachments().length}</span>
         <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
       </div>
     </Tooltip>
   );
 }
 
-export function AttachmentsDrawer() {
+export function AttachmentsDrawer(props: { attachments: () => Attachment[] }) {
   const { openWithSplit } = useSplitLayout();
-  const attachments = useAttachments();
   const channelContext = useChannelContext();
 
   const onClickAttachment = (
@@ -96,7 +94,7 @@ export function AttachmentsDrawer() {
       <div class="flex justify-center items-center max-w-full h-full max-h-full">
         <div class="flex-1 size-full overflow-x-hidden overflow-y-auto">
           <Show
-            when={attachments().length > 0}
+            when={props.attachments().length > 0}
             fallback={
               <div class="py-8 text-ink-muted text-sm text-center">
                 No attachments in this channel
@@ -104,7 +102,7 @@ export function AttachmentsDrawer() {
             }
           >
             <div class="flex flex-col h-full">
-              <VList data={attachments()}>
+              <VList data={props.attachments()}>
                 {(attachment) => (
                   <Suspense>
                     <AttachmentItem

@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -119,7 +119,9 @@ export function Top(props: TopProps) {
       label: 'Attachments',
       icon: PaperclipIcon,
       action: attachmentsControl.toggle,
-      buttonComponent: () => <AttachmentsButton />,
+      buttonComponent: () => (
+        <AttachmentsButton attachments={channelModals.attachments} />
+      ),
     },
     {
       label: 'Participants',
@@ -158,7 +160,7 @@ export function Top(props: TopProps) {
         <BlockLiveIndicators />
       </SplitHeaderRight>
 
-      <BlockToolbar
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={[]}
         id={blockId}

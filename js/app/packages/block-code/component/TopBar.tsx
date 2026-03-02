@@ -1,15 +1,9 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
@@ -33,8 +27,7 @@ import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { isMobile } from '@core/mobile/isMobile';
-import { type Component, Show } from 'solid-js';
+import { type Component } from 'solid-js';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -101,15 +94,11 @@ export const TopBar: Component = () => {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
-        <Show when={isMobile()}>
-          <SplitPermissionsBadge />
-        </Show>
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <SplitPermissionsBadge />
-      </SplitHeaderRight>
 
-      <BlockToolbar
+      <ResponsivePermissionsBadge />
+
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
         id={blockId}

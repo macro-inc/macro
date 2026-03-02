@@ -2,7 +2,7 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import {
   type BlockTool,
   ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
+} from '@app/component/ResponsiveBlockToolbar';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -11,10 +11,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -24,7 +21,7 @@ import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
-import { useBlockId } from '@core/block';
+import { useBlockId, useBlockName } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
@@ -49,22 +46,30 @@ import Printer from '@icon/regular/printer.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  blockNameToItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
+import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
+  const blockName = useBlockName();
   const hasModificationData = useHasModificationData();
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
+  const itemType = blockNameToItemType(blockName);
+  if (!itemType)
+    throw new Error('Using functionality in an unknown item type.');
 
   const fileType = blockMetadataSignal()?.fileType;
 
@@ -217,16 +222,14 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
+      <SplitHeaderRight>
+        <BlockLiveIndicators />
+      </SplitHeaderRight>
+      <ResponsivePermissionsBadge />
       <SplitToolbarLeft>
         <Show when={pdfDocumentProxy()}>
           <div class="flex items-center p-1">
             <Show when={!isMobile()}>
-              <SplitFileMenu
-                id={documentId}
-                itemType="document"
-                name={fileName()}
-                ops={ops}
-              />
               <div class="w-5" />
             </Show>
             <PageNumberInput />
@@ -235,42 +238,13 @@ export function TopBar() {
           </div>
         </Show>
       </SplitToolbarLeft>
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitHeaderRight>
-              <BlockLiveIndicators />
-              <SplitPermissionsBadge />
-            </SplitHeaderRight>
-            <SplitToolbarRight>
-              <For each={tools}>
-                {(tool) => (
-                  <Show when={!tool.condition || tool.condition()}>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </Show>
-                )}
-              </For>
-            </SplitToolbarRight>
-          </>
-        }
-      >
-        {/* Mobile */}
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-          <SplitFileMenu
-            id={documentId}
-            itemType="document"
-            name={fileName()}
-            ops={ops}
-            tools={tools}
-          />
-        </SplitHeaderRight>
-      </Show>
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={ops}
+        id={documentId}
+        itemType={itemType}
+        name={fileName()}
+      />
     </>
   );
 }

@@ -1,15 +1,9 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
@@ -25,9 +19,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
-import { isMobile } from '@core/mobile/isMobile';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
-import { Show } from 'solid-js';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -82,14 +74,9 @@ export function TopBar() {
           fallbackName={DEFAULT_CHAT_NAME}
           lockRename={false}
         />
-        <Show when={isMobile()}>
-          <SplitPermissionsBadge />
-        </Show>
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <SplitPermissionsBadge />
-      </SplitHeaderRight>
-      <BlockToolbar
+      <ResponsivePermissionsBadge />
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
         id={blockId}

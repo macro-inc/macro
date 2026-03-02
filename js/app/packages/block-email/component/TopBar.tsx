@@ -1,6 +1,6 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -59,7 +59,7 @@ export function TopBar(props: {
         />
       </SplitHeaderLeft>
 
-      <BlockToolbar
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={[]}
         id={props.id}

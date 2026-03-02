@@ -19,7 +19,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
-import type { BlockTool } from './BlockTool';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { useSplitModal } from './SplitModalContext';
@@ -53,6 +53,7 @@ export function SplitFileMenu(props: {
   formattedName?: string;
   ops: Array<FileOperation>;
   tools?: BlockTool[];
+  buttonClass?: string;
 }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -173,7 +174,8 @@ export function SplitFileMenu(props: {
         as={Button}
         class={cn(
           'px-1',
-          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink',
+          props.buttonClass
         )}
       >
         <ThreeDots class="size-4 shrink-0" />

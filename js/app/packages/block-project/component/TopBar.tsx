@@ -1,8 +1,9 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   type BlockTool,
+  ResponsivePermissionsBadge,
   ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
+} from '@app/component/ResponsiveBlockToolbar';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -11,10 +12,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -115,9 +113,7 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <SplitPermissionsBadge />
-      </SplitHeaderRight>
+      <ResponsivePermissionsBadge />
       <Show
         when={isMobile()}
         fallback={

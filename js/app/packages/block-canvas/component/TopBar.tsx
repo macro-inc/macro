@@ -1,6 +1,6 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { BlockTool } from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -8,7 +8,6 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
-  SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
 
 import { withAnalytics } from '@coparse/analytics';
@@ -37,7 +36,6 @@ import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
 import { onMount, Show } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
@@ -144,17 +142,12 @@ export function TopBar() {
     <div ref={ref}>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
-        <Show when={isMobile()}>
-          <SplitPermissionsBadge />
-        </Show>
       </SplitHeaderLeft>
-
       <SplitHeaderRight>
         <BlockLiveIndicators />
-        <SplitPermissionsBadge />
       </SplitHeaderRight>
-
-      <BlockToolbar
+      <ResponsivePermissionsBadge />
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
         id={documentId}

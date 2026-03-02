@@ -2,8 +2,8 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   type BlockTool,
   ToolButton,
-} from '@app/component/split-layout/components/BlockTool';
-import { BlockToolbar } from '@app/component/split-layout/components/BlockToolbar';
+} from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -11,7 +11,6 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
-  SplitPermissionsBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
@@ -172,17 +171,14 @@ export function TopBar() {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
-        <Show when={isMobile()}>
-          <SplitPermissionsBadge />
-        </Show>
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
         <BlockLiveIndicators />
-        <SplitPermissionsBadge />
       </SplitHeaderRight>
+      <ResponsivePermissionsBadge />
 
-      <BlockToolbar
+      <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
         id={blockId}
