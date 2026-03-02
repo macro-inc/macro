@@ -47,7 +47,6 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   withMentions(config: MentionsOptions = {}): this {
     this.state.mentions = {
-      sources: ['users', 'documents'],
       ...config,
     };
     return this;
