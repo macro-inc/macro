@@ -7,6 +7,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
+import {
   createCanvasFileFromJsonString,
   createChat,
   createMarkdownFile,
@@ -69,7 +73,20 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     ),
     loading: true,
     createFn: async (projectId) => {
-      const result = await createTask({ title: '', content: '', projectId });
+      const result = await createTask({
+        title: '',
+        content: '',
+        projectId,
+        propertyValues: [
+          {
+            propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+            value: {
+              type: 'select_option',
+              option_id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+            },
+          },
+        ],
+      });
       if (!result) throw new Error('Failed to create task');
       return result;
     },
