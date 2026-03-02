@@ -12,7 +12,7 @@ import {
 import type { ReplyType } from '../util/replyType';
 import { getSubjectText } from '../util/subjectText';
 import type { EmailRecipient } from './EmailContext';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 
 export type EmailFormRecipients = {
   to: EmailRecipient[];
@@ -43,8 +43,8 @@ export type DraftFormAttachment =
     };
 
 export interface EmailFormStateOptions {
-  getMessageByID: (id: string) => MessageWithBodyReplyless | undefined;
-  getDraftForMessageReply: (id: string) => MessageWithBodyReplyless | undefined;
+  getMessageByID: (id: string) => ApiMessage | undefined;
+  getDraftForMessageReply: (id: string) => ApiMessage | undefined;
   onRecipientsChange?: (next: EmailRecipient[]) => void;
 }
 
@@ -88,13 +88,13 @@ export function createEmailFormState(
 ) {
   const userEmail = useEmail();
 
-  let replyingTo: MessageWithBodyReplyless | undefined;
+  let replyingTo: ApiMessage | undefined;
 
   if (purpose?.type === 'replying_to') {
     replyingTo = options?.getMessageByID(purpose.messageID);
   }
 
-  let draft: MessageWithBodyReplyless | undefined;
+  let draft: ApiMessage | undefined;
 
   if (purpose?.type === 'draft') {
     draft = options?.getMessageByID(purpose.messageID);

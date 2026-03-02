@@ -38,10 +38,10 @@ import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
   ListEntity,
+  ListLayoutProvider,
   type SearchLocation,
   type ProjectEntity,
 } from '@entity';
-import { queryKeys } from '@macro-entity';
 import { useQueryClient } from '@queries/client';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
@@ -82,6 +82,10 @@ import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import {
+  invalidateSoupEntity,
+  refetchSoupEntity,
+} from '@queries/soup/normalized-cache';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -98,13 +102,14 @@ const useSoupNotificationInvalidators = () => {
     }
   );
 
-  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
-    entityQueryClient.invalidateQueries({
-      // HACK: this needs to be improved, since we use a single query, per entity invalidations
-      // become a little more complicated.
-      queryKey: queryKeys.all.entity,
-    });
-  });
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'email_thread',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'emailThread');
+      invalidateSoupEntity(notification.entity_id);
+    }
+  );
 
   createEffectOnEntityTypeNotification(
     notificationSource,
@@ -306,9 +311,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Property editor
-  usePropertyEditorHotkeys({
+  const propertyHotkeys = usePropertyEditorHotkeys({
     scopeId: scopeId(),
     soup,
+  });
+
+  onCleanup(() => {
+    propertyHotkeys.disposeHotkeys();
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
@@ -599,143 +608,147 @@ export const SoupViewList = (props: SoupViewListProps) => {
               <EmptyState search={!!searchText()} />
             </Match>
             <Match when={rows().length}>
-              <EntityRowProvider
-                container={localEntityListRef}
-                canSwipeLeft={(entityId) => {
-                  const entity = entityById().get(entityId);
-                  if (!entity) return false;
-                  return markDoneAction.canExecute(entity.original);
-                }}
-                onSwipeLeft={(entityId) => {
-                  const entity = entityById().get(entityId);
-                  if (!entity) return;
-                  markDoneAction.executeWithSoup([entity.original], soup);
-                }}
-                setCollapseEntity={soup.collapseEntity.set}
-              >
-                <SoupList
-                  cache={stateCache.get(getCacheKey())?.virtualCache}
-                  ref={setLocalEntityListRef}
-                  virtualizerClass="scrollbar-hidden"
-                  class="overflow-hidden flex min-w-0"
-                  virtualizerRef={registerVirtualizerHandler}
-                  onScrollBottom={debouncedFetchMore}
-                  scrollBottomOffset={300}
-                  rows={rows()}
-                >
-                  {(row, i) => {
-                    const timestamp = () => {
-                      const sort_ = soup.sort.active();
-                      if (!sort_.length) return;
-
-                      switch (sort_[0].id) {
-                        case 'viewed_at':
-                          return row.original.viewedAt;
-                        case 'created_at':
-                          return row.original.createdAt;
-                        case 'updated_at':
-                          return row.original.updatedAt;
-                        default:
-                          return row.original.createdAt;
-                      }
-                    };
-
-                    return (
-                      <>
-                        <Show when={i() === 0 && featuredCount() > 0}>
-                          <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                            Featured Results
-                          </div>
-                        </Show>
-                        <Show
-                          when={i() === featuredCount() && featuredCount() > 0}
-                        >
-                          <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                            More Results
-                          </div>
-                        </Show>
-                        <EntityRow
-                          entityId={row.original.id}
-                          swipeLeftColor="bg-success"
-                          swipeLeftRevealedComponent={
-                            <CheckIcon class="size-8 text-panel" />
-                          }
-                        >
-                          <SoupEntityContextMenu
-                            entity={row.original}
-                            entityTimestamp={timestamp()}
-                          >
-                            <ListEntity
-                              entity={row.original}
-                              timestamp={timestamp()}
-                              highlighted={
-                                panel.isPanelActive() && row.isFocused()
-                              }
-                              onMouseMove={() => {
-                                if (isKeypressActive()) return;
-                                if (soup.previewEntity()) return;
-                                soup.focus.set(row.original.id);
-                              }}
-                              showUnrollNotifications={
-                                soup.filters.isActive('signal') &&
-                                !soup.filters.isActive('noise')
-                              }
-                              checked={row.isSelected()}
-                              onChecked={(next: boolean, shiftKey: boolean) =>
-                                handleMultiSelectChecked({
-                                  entity: row.original,
-                                  entityIndex: i(),
-                                  next,
-                                  shiftKey: shiftKey ?? false,
-                                })
-                              }
-                              onClick={(event: MouseEvent) => {
-                                onEntityClick({
-                                  type: 'entity',
-                                  entity: row.original,
-                                  event,
-                                  location: undefined,
-                                });
-                              }}
-                              onProjectClick={(projectEntity, event) => {
-                                onEntityClick({
-                                  type: 'project',
-                                  projectEntity,
-                                  entity: row.original,
-                                  event,
-                                  location: undefined,
-                                });
-                              }}
-                              onContentHitClick={(
-                                e: PointerEvent | MouseEvent,
-                                location?: SearchLocation
-                              ) => {
-                                onEntityClick({
-                                  type: 'entity',
-                                  entity: row.original,
-                                  event: e,
-                                  location,
-                                });
-                              }}
-                            />
-                          </SoupEntityContextMenu>
-                        </EntityRow>
-                        <Show
-                          when={
-                            i() === rows().length - 1 &&
-                            isSearchServiceLoading()
-                          }
-                        >
-                          <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
-                            <Spinner class="size-3 animate-spin" />
-                            Searching...
-                          </div>
-                        </Show>
-                      </>
-                    );
+              <ListLayoutProvider ref={localEntityListRef}>
+                <EntityRowProvider
+                  container={localEntityListRef}
+                  canSwipeLeft={(entityId) => {
+                    const entity = entityById().get(entityId);
+                    if (!entity) return false;
+                    return markDoneAction.canExecute(entity.original);
                   }}
-                </SoupList>
-              </EntityRowProvider>
+                  onSwipeLeft={(entityId) => {
+                    const entity = entityById().get(entityId);
+                    if (!entity) return;
+                    markDoneAction.executeWithSoup([entity.original], soup);
+                  }}
+                  setCollapseEntity={soup.collapseEntity.set}
+                >
+                  <SoupList
+                    cache={stateCache.get(getCacheKey())?.virtualCache}
+                    ref={setLocalEntityListRef}
+                    virtualizerClass="scrollbar-hidden"
+                    class="overflow-hidden flex min-w-0"
+                    virtualizerRef={registerVirtualizerHandler}
+                    onScrollBottom={debouncedFetchMore}
+                    scrollBottomOffset={300}
+                    rows={rows()}
+                  >
+                    {(row, i) => {
+                      const timestamp = () => {
+                        const sort_ = soup.sort.active();
+                        if (!sort_.length) return;
+
+                        switch (sort_[0].id) {
+                          case 'viewed_at':
+                            return row.original.viewedAt;
+                          case 'created_at':
+                            return row.original.createdAt;
+                          case 'updated_at':
+                            return row.original.updatedAt;
+                          default:
+                            return row.original.createdAt;
+                        }
+                      };
+
+                      return (
+                        <>
+                          <Show when={i() === 0 && featuredCount() > 0}>
+                            <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
+                              Featured Results
+                            </div>
+                          </Show>
+                          <Show
+                            when={
+                              i() === featuredCount() && featuredCount() > 0
+                            }
+                          >
+                            <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
+                              More Results
+                            </div>
+                          </Show>
+                          <EntityRow
+                            entityId={row.original.id}
+                            swipeLeftColor="bg-success"
+                            swipeLeftRevealedComponent={
+                              <CheckIcon class="size-8 text-panel" />
+                            }
+                          >
+                            <SoupEntityContextMenu
+                              entity={row.original}
+                              entityTimestamp={timestamp()}
+                            >
+                              <ListEntity
+                                entity={row.original}
+                                timestamp={timestamp()}
+                                highlighted={
+                                  panel.isPanelActive() && row.isFocused()
+                                }
+                                onMouseMove={() => {
+                                  if (isKeypressActive()) return;
+                                  if (soup.previewEntity()) return;
+                                  soup.focus.set(row.original.id);
+                                }}
+                                showUnrollNotifications={
+                                  soup.filters.isActive('signal') &&
+                                  !soup.filters.isActive('noise')
+                                }
+                                checked={row.isSelected()}
+                                onChecked={(next: boolean, shiftKey: boolean) =>
+                                  handleMultiSelectChecked({
+                                    entity: row.original,
+                                    entityIndex: i(),
+                                    next,
+                                    shiftKey: shiftKey ?? false,
+                                  })
+                                }
+                                onClick={(event: MouseEvent) => {
+                                  onEntityClick({
+                                    type: 'entity',
+                                    entity: row.original,
+                                    event,
+                                    location: undefined,
+                                  });
+                                }}
+                                onProjectClick={(projectEntity, event) => {
+                                  onEntityClick({
+                                    type: 'project',
+                                    projectEntity,
+                                    entity: row.original,
+                                    event,
+                                    location: undefined,
+                                  });
+                                }}
+                                onContentHitClick={(
+                                  e: PointerEvent | MouseEvent,
+                                  location?: SearchLocation
+                                ) => {
+                                  onEntityClick({
+                                    type: 'entity',
+                                    entity: row.original,
+                                    event: e,
+                                    location,
+                                  });
+                                }}
+                              />
+                            </SoupEntityContextMenu>
+                          </EntityRow>
+                          <Show
+                            when={
+                              i() === rows().length - 1 &&
+                              isSearchServiceLoading()
+                            }
+                          >
+                            <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                              <Spinner class="size-3 animate-spin" />
+                              Searching...
+                            </div>
+                          </Show>
+                        </>
+                      );
+                    }}
+                  </SoupList>
+                </EntityRowProvider>
+              </ListLayoutProvider>
 
               <Show when={!props.customScrollbarHidden}>
                 <CustomScrollbar

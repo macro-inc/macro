@@ -1,4 +1,5 @@
 use super::*;
+use std::str::FromStr;
 
 #[test]
 fn test_preview_view_display() {

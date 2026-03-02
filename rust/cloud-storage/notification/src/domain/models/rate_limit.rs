@@ -13,11 +13,6 @@ use thiserror::Error;
 pub struct RateLimitKey(Vec<u8>);
 
 impl RateLimitKey {
-    /// Create a new rate limit key from raw bytes.
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
-    }
-
     /// Create a rate limit key by hashing the input string.
     pub fn from_str_hashed(input: &str) -> Self {
         use std::hash::{DefaultHasher, Hash, Hasher};

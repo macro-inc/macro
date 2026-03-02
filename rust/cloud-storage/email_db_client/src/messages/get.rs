@@ -409,59 +409,6 @@ pub async fn draft_exists_with_id(
     Ok(exists)
 }
 
-/// Fetches messages for a thread with pagination
-#[tracing::instrument(skip(pool), err)]
-pub async fn get_messages_by_thread_id(
-    pool: &PgPool,
-    thread_db_id: Uuid,
-    offset: i64,
-    limit: i64,
-) -> anyhow::Result<Vec<db::message::Message>> {
-    let db_messages = sqlx::query_as!(
-        db::message::Message,
-        r#"
-        SELECT
-            id,
-            provider_id,
-            global_id,
-            thread_id,
-            provider_thread_id,
-            replying_to_id,
-            link_id,
-            provider_history_id,
-            internal_date_ts,
-            snippet,
-            size_estimate,
-            subject,
-            from_name,
-            from_contact_id,
-            sent_at,
-            has_attachments,
-            is_read,
-            is_starred,
-            is_sent,
-            is_draft,
-            body_text,
-            body_html_sanitized,
-            body_macro,
-            headers_jsonb,
-            created_at,
-            updated_at
-        FROM email_messages
-        WHERE thread_id = $1
-        ORDER BY internal_date_ts DESC
-        LIMIT $2 OFFSET $3
-        "#,
-        thread_db_id,
-        limit,
-        offset
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(db_messages)
-}
-
 /// Converts a list of db messages to service messages by fetching ALL associated data
 /// in bulk (one query per data type for all messages), then mapping results back.
 pub async fn convert_db_messages_to_service_concurrent(

@@ -526,7 +526,8 @@ async fn send_notifications(
     })?;
 
     let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
+        notification_entity: EntityType::EmailThread
+            .with_entity_string(message.thread_db_id.to_string()),
         notification,
         sender_id,
         recipient_ids: HashSet::from([recipient]),

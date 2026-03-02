@@ -22,14 +22,15 @@ pub async fn create_user(
     // Create macro user
     let macro_user_id = sqlx::query!(
         r#"
-        INSERT INTO "macro_user" ("id", "username", "stripe_customer_id", "email")
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO "macro_user" ("id", "username", "stripe_customer_id", "email", "has_trialed")
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         "#,
         &id,
         username,
         stripe_customer_id,
-        email
+        email,
+        false // has_trialed
     )
     .map(|row| row.id)
     .fetch_one(&mut *transaction)

@@ -130,7 +130,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
   return (
     <div
       ref={handleRef}
-      class="w-4 absolute top-0 h-full cursor-col-resize z-1 pattern-diagonal-4 transition-colors duration-200 flex flex-col justify-center group"
+      class="w-4 absolute top-0 h-full cursor-col-resize z-1 transition-colors duration-200 flex flex-col justify-center group"
       classList={{
         'right-0': props.side === 'right',
         'left-0': props.side === 'left',

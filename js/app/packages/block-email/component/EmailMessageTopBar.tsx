@@ -2,7 +2,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
 import X from '@icon/regular/x.svg';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import {
   type Accessor,
@@ -23,7 +23,7 @@ import { type EmailMessageAction, MessageActions } from './MessageActions';
 import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   focused: boolean;
   setExpandedBodyId: (id: string, expanded: boolean) => void;
   isBodyExpanded: Accessor<boolean>;
@@ -112,7 +112,7 @@ function RecipientRow(props: {
 }
 
 function ExpandedHeader(props: {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   onClose: () => void;
 }): JSX.Element {
   return (
@@ -154,7 +154,7 @@ function CollapsedHeader(props: {
   recipientSummary: string;
   isHovering: boolean;
   onExpand: () => void;
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   focused: boolean;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;

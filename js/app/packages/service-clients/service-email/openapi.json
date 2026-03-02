@@ -1751,97 +1751,6 @@
         }
       }
     },
-    "/email/threads/{id}": {
-      "get": {
-        "tags": ["Threads"],
-        "summary": "Get a thread with a paginated number of messages.",
-        "operationId": "get_thread",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Thread ID.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Offset for message pagination. Default is 0.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Limit for message pagination. Default is 5.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetThreadResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/email/threads/{id}/archived": {
       "patch": {
         "tags": ["Threads"],
@@ -2146,6 +2055,96 @@
         }
       }
     },
+    "/email/threads/{thread_id}": {
+      "get": {
+        "tags": ["Threads"],
+        "summary": "Get a thread with paginated messages.",
+        "operationId": "get_thread",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Offset for message pagination. Default is 0.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit for message pagination. Default is 5, max 100.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetThreadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["Health"],
@@ -2168,68 +2167,6 @@
   },
   "components": {
     "schemas": {
-      "APIThread": {
-        "type": "object",
-        "description": "Thread object exposed to the FE in Get Threads Call",
-        "required": [
-          "db_id",
-          "link_id",
-          "inbox_visible",
-          "is_read",
-          "access_level",
-          "created_at",
-          "updated_at",
-          "messages"
-        ],
-        "properties": {
-          "access_level": {
-            "$ref": "#/components/schemas/AccessLevel"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "db_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "inbox_visible": {
-            "type": "boolean"
-          },
-          "is_read": {
-            "type": "boolean"
-          },
-          "latest_inbound_message_ts": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          },
-          "latest_non_spam_message_ts": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          },
-          "latest_outbound_message_ts": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          },
-          "link_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "messages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MessageWithBodyReplyless"
-            }
-          },
-          "provider_id": {
-            "type": ["string", "null"]
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -2343,6 +2280,76 @@
           }
         }
       },
+      "ApiAttachmentDraft": {
+        "type": "object",
+        "description": "API representation of a draft attachment on a message.",
+        "required": [
+          "id",
+          "draft_id",
+          "file_name",
+          "content_type",
+          "sha",
+          "size",
+          "s3_key"
+        ],
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "s3_key": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ApiAttachmentForwarded": {
+        "type": "object",
+        "description": "API representation of a forwarded attachment on a message.",
+        "required": ["attachment_id", "draft_id", "message_provider_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": ["string", "null"]
+          },
+          "message_provider_id": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": ["string", "null"]
+          },
+          "provider_attachment_id": {
+            "type": ["string", "null"]
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
+        }
+      },
       "ApiContact": {
         "type": "object",
         "required": ["id", "linkId"],
@@ -2362,6 +2369,22 @@
             "type": ["string", "null"]
           },
           "sfsPhotoUrl": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "ApiContactInfo": {
+        "type": "object",
+        "description": "API representation of a contact (sender or recipient).",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "photo_url": {
             "type": ["string", "null"]
           }
         }
@@ -2416,6 +2439,258 @@
         "type": "string",
         "enum": ["System", "User"]
       },
+      "ApiMessage": {
+        "type": "object",
+        "description": "API representation of a fully assembled email message.",
+        "required": [
+          "db_id",
+          "thread_db_id",
+          "link_id",
+          "is_read",
+          "is_starred",
+          "is_sent",
+          "is_draft",
+          "has_attachments",
+          "to",
+          "cc",
+          "bcc",
+          "labels",
+          "attachments",
+          "attachments_draft",
+          "attachments_forwarded",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            }
+          },
+          "attachments_draft": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentDraft"
+            }
+          },
+          "attachments_forwarded": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentForwarded"
+            }
+          },
+          "bcc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiContactInfo"
+            }
+          },
+          "body_html_sanitized": {
+            "type": ["string", "null"]
+          },
+          "body_macro": {
+            "type": ["string", "null"]
+          },
+          "body_replyless": {
+            "type": ["string", "null"]
+          },
+          "body_text": {
+            "type": ["string", "null"]
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiContactInfo"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiContactInfo"
+              }
+            ]
+          },
+          "global_id": {
+            "type": ["string", "null"]
+          },
+          "has_attachments": {
+            "type": "boolean"
+          },
+          "headers_json": {},
+          "internal_date_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "is_draft": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "is_sent": {
+            "type": "boolean"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageLabel"
+            }
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider_history_id": {
+            "type": ["string", "null"]
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "provider_thread_id": {
+            "type": ["string", "null"]
+          },
+          "replying_to_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "scheduled_send_time": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "size_estimate": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "snippet": {
+            "type": ["string", "null"]
+          },
+          "subject": {
+            "type": ["string", "null"]
+          },
+          "thread_db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiContactInfo"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiMessageAttachment": {
+        "type": "object",
+        "description": "API representation of a provider attachment on a message.",
+        "required": ["db_id"],
+        "properties": {
+          "content_id": {
+            "type": ["string", "null"]
+          },
+          "data_url": {
+            "type": ["string", "null"]
+          },
+          "db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": ["string", "null"]
+          },
+          "mime_type": {
+            "type": ["string", "null"]
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "sfs_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
+        }
+      },
+      "ApiMessageLabel": {
+        "type": "object",
+        "description": "API representation of a label on a message.",
+        "required": ["link_id", "provider_label_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "label_list_visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiLabelListVisibility"
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message_list_visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiMessageListVisibility"
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "provider_label_id": {
+            "type": "string"
+          },
+          "type_": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiLabelType"
+              }
+            ]
+          }
+        }
+      },
       "ApiMessageListVisibility": {
         "type": "string",
         "enum": ["Show", "Hide"]
@@ -2439,6 +2714,68 @@
         "type": "string",
         "description": "common types of sorts based on timestamps",
         "enum": ["viewed_at", "updated_at", "created_at", "viewed_updated"]
+      },
+      "ApiThread": {
+        "type": "object",
+        "description": "API representation of a fully assembled email thread.",
+        "required": [
+          "db_id",
+          "link_id",
+          "inbox_visible",
+          "is_read",
+          "access_level",
+          "created_at",
+          "updated_at",
+          "messages"
+        ],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inbox_visible": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "latest_inbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_non_spam_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_outbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessage"
+            }
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "ApiThreadPreviewCursor": {
         "allOf": [
@@ -2968,12 +3305,11 @@
       },
       "GetThreadResponse": {
         "type": "object",
-        "description": "The response returned from the get thread endpoint",
+        "description": "Response body for the get-thread endpoint.",
         "required": ["thread"],
         "properties": {
           "thread": {
-            "$ref": "#/components/schemas/APIThread",
-            "description": "the thread, with messages inside"
+            "$ref": "#/components/schemas/ApiThread"
           }
         }
       },
@@ -3412,21 +3748,6 @@
             }
           }
         }
-      },
-      "MessageWithBodyReplyless": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Message"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "body_replyless": {
-                "type": ["string", "null"]
-              }
-            }
-          }
-        ]
       },
       "ParsedMessage": {
         "type": "object",

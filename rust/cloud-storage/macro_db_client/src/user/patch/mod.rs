@@ -1,6 +1,28 @@
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
 
 pub mod add_user_role;
+
+/// Given a users email, it will udpate their has_trialed
+#[tracing::instrument(skip_all, err)]
+pub async fn update_macro_user_has_trialed<'a>(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    email: &Email<Lowercase<'a>>,
+    has_trialed: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE macro_user
+        SET has_trialed = $2
+        WHERE email = $1
+        "#,
+        email.as_ref(),
+        has_trialed,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
 
 pub async fn update_macro_user_id(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,

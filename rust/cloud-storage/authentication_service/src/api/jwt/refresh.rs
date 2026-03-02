@@ -81,7 +81,7 @@ pub async fn handler(
             // We only want to refresh the token if it's expired
             MacroAuthError::JwtExpired => {}
             _ => {
-                tracing::error!(error=?e, "unable to decode jwt");
+                tracing::error!(error=?e, token=?token_context.access_token, "unable to decode jwt");
                 return Err(RefreshError::Unauthorized);
             }
         },

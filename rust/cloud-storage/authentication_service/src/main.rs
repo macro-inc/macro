@@ -1,6 +1,13 @@
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
+use github::{
+    domain::service::{GithubConfig, GithubServiceImpl},
+    outbound::{
+        github_auth_client::GithubAuthImpl, github_oauth_client::GithubOauthImpl,
+        pg_github_repo::PgGithubRepo,
+    },
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -130,6 +137,15 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let github_webhook_secret = match config.environment {
+        Environment::Local => config.github_webhook_secret_key.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.github_webhook_secret_key)
+            .await
+            .context("unable to get secret")?
+            .to_string(),
+    };
+
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -194,7 +210,7 @@ async fn main() -> anyhow::Result<()> {
                 ),
             ),
         ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
+        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
         block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
         invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
             .append::<model_notifications::ChannelInviteMetadata>(),
@@ -227,9 +243,22 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
+    let github_service_impl = GithubServiceImpl::new(
+        PgGithubRepo::new(db.clone()),
+        GithubOauthImpl::default(),
+        GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
+        GithubConfig {
+            client_id: config.github_client_id,
+            client_secret: config.github_client_secret,
+            idp_id: config.github_idp_id,
+            webhook_secret: github_webhook_secret,
+        },
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
+            github_service: Arc::new(github_service_impl),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),

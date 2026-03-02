@@ -52,7 +52,7 @@ import {
 } from '@queries/email/thread';
 import type {
   MessageToSendDbId,
-  MessageWithBodyReplyless,
+  ApiMessage,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
@@ -305,6 +305,7 @@ function TruncatedRecipientList(props: {
 }
 
 type UndoReplySnapshot = {
+  threadId: string;
   draftId: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
@@ -312,11 +313,11 @@ type UndoReplySnapshot = {
 let undoReplySnapshot: UndoReplySnapshot | null = null;
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  replyingTo: Accessor<ApiMessage | undefined>;
   // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
   isEditingExisting?: boolean;
-  draft?: MessageWithBodyReplyless;
+  draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
@@ -379,11 +380,20 @@ export function BaseInput(props: {
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
-  >(props.draft?.db_id ?? undoReplySnapshot?.draftId ?? undefined);
+  >(
+    props.draft?.db_id ??
+      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
+        ? undoReplySnapshot?.draftId
+        : undefined) ??
+      undefined
+  );
 
-  // Consume undo-send snapshot if one exists (inline reply remount case).
+  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
   // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
-  const restoredSnapshot = undoReplySnapshot;
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
@@ -815,8 +825,10 @@ export function BaseInput(props: {
         $generateHtmlFromNodes(currentEditor)
       );
       const snapshotDraftId = savedDraftId();
-      if (snapshotDraftId) {
+      const snapshotThreadId = ctx.thread()?.db_id;
+      if (snapshotDraftId && snapshotThreadId) {
         undoReplySnapshot = {
+          threadId: snapshotThreadId,
           draftId: snapshotDraftId,
           bodyHtml: snapshotHtml,
           attachments: [...form().attachments.list()],

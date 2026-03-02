@@ -5,11 +5,7 @@ use crate::{
             chat_history, chat_history_batch_messages, copy_chat, create_user_chat, delete_chat,
             get_chat, get_chat_permissions, revert_delete_chat,
         },
-        citations,
-        completions::structured_output::{
-            self, StructedOutputCompletionRequest, StructedOutputCompletionResponse,
-        },
-        health,
+        citations, health,
         models::get_models,
         preview::get_batch_preview,
         stream::chat_message::{
@@ -72,7 +68,6 @@ use utoipa::OpenApi;
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
-            structured_output::handler,
             revert_delete_chat::handler,
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
@@ -139,10 +134,6 @@ use utoipa::OpenApi;
                 // Preview
                 GetBatchPreviewRequest,
                 GetBatchPreviewResponse,
-
-                // Completions
-                StructedOutputCompletionRequest,
-                StructedOutputCompletionResponse,
 
                 // Stream HTTP API
                 HttpSendChatMessageRequest,

@@ -3,6 +3,7 @@ import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
 import type { FilterConfig } from './filters/create-filter-state';
+import type { SearchPoolItem } from './search-context';
 
 export const getValidSearchFilters = <T>(
   filters: readonly FilterConfig<T>[]
@@ -77,16 +78,21 @@ export const nameFuzzySearchFilter = (
 };
 
 export const createSoupFreshSearch = () =>
-  createFreshSearch<EntityData>(
-    {
+  createFreshSearch<SearchPoolItem>({
+    config: {
       useViewedAt: true,
       channelBoost: 3,
+      dmBoost: 1.5,
       fuzzyWeight: 0.7,
       timeWeight: 0.3,
       minFuzzyThreshold: 0.1,
       commaSeparatedChannelMatch: true,
     },
-    (item) => item.name,
-    (item) => item.type === 'channel',
-    (item) => item
-  );
+    getName: (item) => item.data.name,
+    isChannelItem: (item) => item.data.type === 'channel',
+    isDmItem: (item) => item.bucket === 'dm',
+    getTimestamp: (item) => ({
+      viewedAt: item.data.viewedAt,
+      updatedAt: item.data.updatedAt,
+    }),
+  });

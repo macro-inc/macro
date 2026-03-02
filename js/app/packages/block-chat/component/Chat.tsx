@@ -7,7 +7,6 @@ import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
   ChatInputProvider,
@@ -17,14 +16,19 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_SNAPSHOT_NODE,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -35,11 +39,13 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { withAnalytics } from '@coparse/analytics';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
+
+const { track, TrackingEvents } = withAnalytics();
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -70,12 +76,23 @@ function ChatInner(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
-  const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
-  const chatMarkdownArea = useChatMarkdownArea({
-    initialValue: props.loadedInputText,
-    addAttachment: (a) => input.attachments.addAttachment(a),
+  const [markdownText, setMarkdownText] = createSignal(
+    props.loadedInputText ?? ''
+  );
+
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      track(TrackingEvents.CHAT.MENTION.SELECT);
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    block: 'chat',
+    showOpenTabs: true,
+    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   // Local stream signal for registerToolHandler
@@ -140,7 +157,7 @@ function ChatInner(props: {
   };
 
   createEffect(() => {
-    const inputText = chatMarkdownArea.markdownText();
+    const inputText = markdownText();
     const attached = input.attachments.attached();
     const model_ = input.model();
     saveChatState({ attachments: attached, input: inputText, model: model_ });
@@ -177,12 +194,8 @@ function ChatInner(props: {
     hotkey: 'enter',
     description: 'Focus Chat Input',
     keyDownHandler: () => {
-      const editor = chatEditor();
-      if (editor) {
-        editor.focus(undefined, { defaultSelection: 'rootStart' });
-        return true;
-      }
-      return false;
+      editor.controls.focus();
+      return true;
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,
@@ -244,10 +257,11 @@ function ChatInner(props: {
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
             <ChatInput
-              markdown={chatMarkdownArea}
+              editor={editor}
+              initialValue={props.loadedInputText}
+              onChange={setMarkdownText}
               chatId={chat.chatId()}
               onSend={onSend}
-              captureEditor={setChatEditor}
               autoFocusOnMount={true}
             />
           </div>

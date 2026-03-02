@@ -82,6 +82,7 @@ document_storage_service_client = { path = "../document_storage_service_client" 
 doppleganger = { workspace = true }
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "inbound", "outbound"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 email_db_client = { path = "../email_db_client" }
 email_utils = { path = "../email_utils" }
 frecency = { path = "../frecency", features = ["postgres"] }

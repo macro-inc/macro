@@ -14,9 +14,10 @@ import {
 } from './index';
 import { isShareableEntityType } from '@app/component/global-share-modal/GlobalShareModal';
 import { useUserId } from '@core/context/user';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { onCleanup } from 'solid-js';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -55,8 +56,13 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    const selected = soup.selection.selected();
-    if (selected.length > 0) return selected;
+    if (
+      splitHandle?.content().type === 'component' &&
+      splitHandle?.content().id === 'unified-list'
+    ) {
+      const selected = soup.selection.selected();
+      if (selected.length > 0) return selected;
+    }
 
     const focused = soup.focus.item();
     return focused ? [focused] : [];
@@ -69,7 +75,9 @@ export const useEntityActionHotkeys = (
     openEntityInSplitFromUnifiedList(entity, { splitHandle });
   };
 
-  // Mark Done - 'e'
+  const group = createHotkeyGroup();
+
+  // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
@@ -116,7 +124,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Rename - 'r'
   registerHotkey({
@@ -142,7 +150,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Copy - 'cmd+d'
   registerHotkey({
@@ -168,7 +176,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Move to folder - 'm'
   registerHotkey({
@@ -194,7 +202,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Copy link - 'shift+cmd+c'
   registerHotkey({
@@ -216,8 +224,9 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
+  // Share
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
@@ -236,5 +245,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 };

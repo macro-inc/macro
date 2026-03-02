@@ -44,10 +44,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             crate::api::middleware::link::attach_link_context,
         ));
 
-    // user can still view threads shared with them if they don't have email enabled
-    let optional_link_routes = Router::new().route("/:id", get(get::get_thread_handler));
+    let hex_thread_routes = email::inbound::thread_router(state.email_thread_state.clone());
 
     Router::new()
         .merge(required_link_routes)
-        .merge(optional_link_routes)
+        .merge(hex_thread_routes)
 }

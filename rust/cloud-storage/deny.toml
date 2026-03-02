@@ -187,6 +187,7 @@ deny = [
   { crate = "tracing-subscriber", wrappers = [
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "macro_entrypoint",
+    "notification_sandbox",      # This is not production code its just tooling
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",

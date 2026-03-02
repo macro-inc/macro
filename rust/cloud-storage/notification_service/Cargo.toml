@@ -28,6 +28,7 @@ axum = { workspace = true }
 chrono = { workspace = true }
 email_validator = { path = "../email_validator" }
 http-body-util = { workspace = true }
+itertools = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }

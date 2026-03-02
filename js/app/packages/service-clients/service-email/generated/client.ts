@@ -1835,86 +1835,6 @@ export const previewsInboxCursor = async (
 };
 
 /**
- * @summary Get a thread with a paginated number of messages.
- */
-export type getThreadResponse200 = {
-  data: GetThreadResponse;
-  status: 200;
-};
-
-export type getThreadResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getThreadResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getThreadResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getThreadResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getThreadResponseSuccess = getThreadResponse200 & {
-  headers: Headers;
-};
-export type getThreadResponseError = (
-  | getThreadResponse400
-  | getThreadResponse401
-  | getThreadResponse404
-  | getThreadResponse500
-) & {
-  headers: Headers;
-};
-
-export type getThreadResponse =
-  | getThreadResponseSuccess
-  | getThreadResponseError;
-
-export const getGetThreadUrl = (id: string, params: GetThreadParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/threads/${id}?${stringifiedParams}`
-    : `/email/threads/${id}`;
-};
-
-export const getThread = async (
-  id: string,
-  params: GetThreadParams,
-  options?: RequestInit
-): Promise<getThreadResponse> => {
-  const res = await fetch(getGetThreadUrl(id, params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getThreadResponse;
-};
-
-/**
  * @summary Change the archived status of a thread.
  */
 export type archiveThreadResponse200 = {
@@ -2193,6 +2113,86 @@ export const threadSeen = async (
     status: res.status,
     headers: res.headers,
   } as threadSeenResponse;
+};
+
+/**
+ * @summary Get a thread with paginated messages.
+ */
+export type getThreadResponse200 = {
+  data: GetThreadResponse;
+  status: 200;
+};
+
+export type getThreadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getThreadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getThreadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getThreadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getThreadResponseSuccess = getThreadResponse200 & {
+  headers: Headers;
+};
+export type getThreadResponseError = (
+  | getThreadResponse400
+  | getThreadResponse401
+  | getThreadResponse404
+  | getThreadResponse500
+) & {
+  headers: Headers;
+};
+
+export type getThreadResponse =
+  | getThreadResponseSuccess
+  | getThreadResponseError;
+
+export const getGetThreadUrl = (threadId: string, params?: GetThreadParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/threads/${threadId}?${stringifiedParams}`
+    : `/email/threads/${threadId}`;
+};
+
+export const getThread = async (
+  threadId: string,
+  params?: GetThreadParams,
+  options?: RequestInit
+): Promise<getThreadResponse> => {
+  const res = await fetch(getGetThreadUrl(threadId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadResponse;
 };
 
 /**

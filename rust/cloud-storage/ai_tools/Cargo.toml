@@ -15,6 +15,7 @@ comms = { path = "../comms", features = ["outbound"] }
 email = { path = "../email", features = ["ai_schema", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 macro_db_client = { path = "../macro_db_client" }
 model = { path = "../model" }

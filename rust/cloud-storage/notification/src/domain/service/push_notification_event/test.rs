@@ -1,5 +1,8 @@
 use super::*;
 use crate::domain::models::email_notification_digest::ports::MessageId;
+use crate::domain::models::email_notification_digest::{
+    BulkDigestFailureStateMachine, StateMachineDecisionC,
+};
 use crate::domain::models::push_notification_event::{EventType, SnsPushNotificationEvent};
 use crate::domain::ports::{DeviceRegistrationDeleter, SnsEndpointDeleter};
 use rootcause::Report;
@@ -83,11 +86,51 @@ impl SnsEndpointDeleter for MockSnsDeleter {
     }
 }
 
+/// Mock digest failure state machine that tracks calls.
+struct MockDigestFailureStateMachine {
+    calls: Mutex<Vec<String>>,
+    should_fail: bool,
+}
+
+impl MockDigestFailureStateMachine {
+    fn new() -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            should_fail: false,
+        }
+    }
+
+    fn failing() -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            should_fail: true,
+        }
+    }
+
+    fn get_calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl BulkDigestFailureStateMachine for MockDigestFailureStateMachine {
+    async fn mark_message_as_failed(
+        &self,
+        message_id: MessageId,
+    ) -> Result<StateMachineDecisionC, Report> {
+        self.calls.lock().unwrap().push(message_id.0.clone());
+        if self.should_fail {
+            rootcause::bail!("mock digest failure state machine error");
+        }
+        Ok(StateMachineDecisionC::NoAction)
+    }
+}
+
 #[tokio::test]
 async fn test_delivery_failure_deletes_device_and_sns_endpoint() {
     let device_deleter = MockDeviceDeleter::new();
     let sns_deleter = MockSnsDeleter::new();
-    let service = PushNotificationEventService::new(device_deleter, sns_deleter);
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
 
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
@@ -108,7 +151,8 @@ async fn test_delivery_failure_deletes_device_and_sns_endpoint() {
 async fn test_endpoint_deleted_only_deletes_device() {
     let device_deleter = MockDeviceDeleter::new();
     let sns_deleter = MockSnsDeleter::new();
-    let service = PushNotificationEventService::new(device_deleter, sns_deleter);
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
 
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
@@ -132,7 +176,8 @@ async fn test_endpoint_deleted_only_deletes_device() {
 async fn test_device_deletion_failure_propagates_error() {
     let device_deleter = MockDeviceDeleter::failing();
     let sns_deleter = MockSnsDeleter::new();
-    let service = PushNotificationEventService::new(device_deleter, sns_deleter);
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
 
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
@@ -154,7 +199,8 @@ async fn test_device_deletion_failure_propagates_error() {
 async fn test_sns_deletion_failure_propagates_error() {
     let device_deleter = MockDeviceDeleter::new();
     let sns_deleter = MockSnsDeleter::failing();
-    let service = PushNotificationEventService::new(device_deleter, sns_deleter);
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
 
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
@@ -170,4 +216,68 @@ async fn test_sns_deletion_failure_propagates_error() {
         service.device_deleter.get_deleted(),
         vec![event.endpoint_arn]
     );
+}
+
+#[tokio::test]
+async fn test_delivery_failure_calls_digest_state_machine() {
+    let device_deleter = MockDeviceDeleter::new();
+    let sns_deleter = MockSnsDeleter::new();
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
+
+    let event = SnsPushNotificationEvent {
+        endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
+        event_type: EventType::DeliveryFailure,
+        message_id: MessageId("msg-123".to_string()),
+    };
+
+    service.handle_event(&event).await.unwrap();
+
+    assert_eq!(service.digest_failure_sm.get_calls(), vec!["msg-123"]);
+}
+
+#[tokio::test]
+async fn test_endpoint_deleted_does_not_call_digest_state_machine() {
+    let device_deleter = MockDeviceDeleter::new();
+    let sns_deleter = MockSnsDeleter::new();
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
+
+    let event = SnsPushNotificationEvent {
+        endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
+        event_type: EventType::EndpointDeleted,
+        message_id: MessageId("msg-456".to_string()),
+    };
+
+    service.handle_event(&event).await.unwrap();
+
+    assert!(
+        service.digest_failure_sm.get_calls().is_empty(),
+        "digest state machine should not be called for EndpointDeleted events"
+    );
+}
+
+#[tokio::test]
+async fn test_digest_state_machine_failure_does_not_propagate() {
+    let device_deleter = MockDeviceDeleter::new();
+    let sns_deleter = MockSnsDeleter::new();
+    let digest_sm = MockDigestFailureStateMachine::failing();
+    let service = PushNotificationEventService::new(device_deleter, sns_deleter, digest_sm);
+
+    let event = SnsPushNotificationEvent {
+        endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
+        event_type: EventType::DeliveryFailure,
+        message_id: MessageId("msg-789".to_string()),
+    };
+
+    let result = service.handle_event(&event).await;
+    assert!(result.is_ok(), "digest SM failure should not propagate");
+
+    assert_eq!(service.digest_failure_sm.get_calls(), vec!["msg-789"]);
+
+    assert_eq!(
+        service.device_deleter.get_deleted(),
+        vec![event.endpoint_arn.clone()]
+    );
+    assert_eq!(service.sns_deleter.get_deleted(), vec![event.endpoint_arn]);
 }

@@ -16,17 +16,20 @@ interface User extends MockItem {
 }
 
 function createSearch(opts: { useViewedAt?: boolean; channelBoost?: number }) {
-  return createFreshSearch<MockItem>(
-    {
+  return createFreshSearch<MockItem>({
+    config: {
       useViewedAt: opts.useViewedAt,
       channelBoost: opts.channelBoost,
       timeWeight: 0.9,
       fuzzyWeight: 0.1,
     },
-    (item) => item.name,
-    (item) => item.type === 'channel',
-    (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-  );
+    getName: (item) => item.name,
+    isChannelItem: (item) => item.type === 'channel',
+    getTimestamp: (item) => ({
+      viewedAt: item.viewedAt,
+      updatedAt: item.updatedAt,
+    }),
+  });
 }
 
 describe('freshSort ordering', () => {
@@ -126,16 +129,19 @@ describe('freshSort ordering', () => {
 
 describe('createFreshSearch with comma-separated channel matching', () => {
   function createCommaSeparatedSearch() {
-    return createFreshSearch<MockItem>(
-      {
+    return createFreshSearch<MockItem>({
+      config: {
         commaSeparatedChannelMatch: true,
         fuzzyWeight: 0.9,
         timeWeight: 0.1,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
   }
 
   it('matches channel with comma-separated query', () => {
@@ -286,16 +292,19 @@ describe('freshSort with all exact matches', () => {
       { id: '4', name: 'Design', type: 'item', viewedAt: now },
     ];
 
-    const search = createFreshSearch<MockItem>(
-      {
+    const search = createFreshSearch<MockItem>({
+      config: {
         useViewedAt: true,
         fuzzyWeight: 0.5,
         timeWeight: 0.5,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, 'Design');
 
@@ -328,17 +337,20 @@ describe('freshSort with all exact matches', () => {
       },
     ];
 
-    const search = createFreshSearch<MockItem>(
-      {
+    const search = createFreshSearch<MockItem>({
+      config: {
         useViewedAt: true,
         fuzzyWeight: 0.8,
         timeWeight: 0.2,
         channelBoost: 2.0,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, 'Design');
 
@@ -379,8 +391,8 @@ describe('boostFn functionality', () => {
     ];
 
     const currentUserDomain = 'macro.com';
-    const search = createFreshSearch<MockItemWithEmail>(
-      {
+    const search = createFreshSearch<MockItemWithEmail>({
+      config: {
         fuzzyWeight: 0.8,
         timeWeight: 0.2,
         boostFn: (item) => {
@@ -388,10 +400,13 @@ describe('boostFn functionality', () => {
           return itemDomain === currentUserDomain ? 1.0 : 0; // 100% boost for same domain
         },
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, 'o'); // All three match with 'o' in their names
 
@@ -419,8 +434,8 @@ describe('boostFn functionality', () => {
     ];
 
     const currentUserDomain = 'macro.com';
-    const search = createFreshSearch<MockItemWithEmail>(
-      {
+    const search = createFreshSearch<MockItemWithEmail>({
+      config: {
         fuzzyWeight: 0.8,
         timeWeight: 0.2,
         boostFn: (item) => {
@@ -428,10 +443,13 @@ describe('boostFn functionality', () => {
           return itemDomain === currentUserDomain ? 0.5 : 0;
         },
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, 'Ali');
 
@@ -463,16 +481,19 @@ describe('boostFn functionality', () => {
       },
     ];
 
-    const search = createFreshSearch<MockItemWithEmail>(
-      {
+    const search = createFreshSearch<MockItemWithEmail>({
+      config: {
         fuzzyWeight: 0.5,
         timeWeight: 0.5,
         boostFn: () => 0, // No boost
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, '');
 
@@ -499,8 +520,8 @@ describe('boostFn functionality', () => {
       },
     ];
 
-    const search = createFreshSearch<MockItemWithEmail>(
-      {
+    const search = createFreshSearch<MockItemWithEmail>({
+      config: {
         fuzzyWeight: 0.5,
         timeWeight: 0.5,
         channelBoost: 1.5,
@@ -509,10 +530,13 @@ describe('boostFn functionality', () => {
           return itemDomain === 'macro.com' ? 0.3 : 0;
         },
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, 'Design');
 
@@ -543,16 +567,19 @@ describe('boostFn functionality', () => {
       },
     ];
 
-    const search = createFreshSearch<MockItemWithEmail>(
-      {
+    const search = createFreshSearch<MockItemWithEmail>({
+      config: {
         fuzzyWeight: 0.5,
         timeWeight: 0.5,
         // boostFn is undefined
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({
+        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt,
+      }),
+    });
 
     const results = search(items, '');
 
@@ -594,16 +621,16 @@ describe('DM activity timestamps for user ranking', () => {
       },
     ];
 
-    const search = createFreshSearch<User>(
-      {
+    const search = createFreshSearch<User>({
+      config: {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ lastInteraction: item.lastInteraction })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({ lastInteraction: item.lastInteraction }),
+    });
 
     const results = search(users, '');
 
@@ -650,16 +677,16 @@ describe('DM activity timestamps for user ranking', () => {
       },
     ];
 
-    const search = createFreshSearch<User>(
-      {
+    const search = createFreshSearch<User>({
+      config: {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ lastInteraction: item.lastInteraction })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({ lastInteraction: item.lastInteraction }),
+    });
 
     const results = search(users, 'Ali');
 
@@ -687,16 +714,16 @@ describe('DM activity timestamps for user ranking', () => {
       },
     ];
 
-    const search = createFreshSearch<User>(
-      {
+    const search = createFreshSearch<User>({
+      config: {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name,
-      (item) => item.type === 'channel',
-      (item) => ({ lastInteraction: item.lastInteraction })
-    );
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({ lastInteraction: item.lastInteraction }),
+    });
 
     const results = search(users, '');
 

@@ -24,7 +24,7 @@ async fn link_user(
     ctx: &ApiContext,
     identity_provider_id: &str,
     code: &str,
-    link_id: &str,
+    link_id: &uuid::Uuid,
 ) -> Result<(), (StatusCode, String)> {
     // Get existing macro user id from link id
     let macro_user_id =

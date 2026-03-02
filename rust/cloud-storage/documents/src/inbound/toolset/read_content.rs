@@ -6,7 +6,7 @@ use crate::domain::{models::LocationQueryParams, ports::DocumentService};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
-    models::{EntityAccessReceipt, EntityType},
+    models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
 use model::document::DocumentBasic;
@@ -169,7 +169,7 @@ where
 async fn get_document_content_from_location<DSvc: DocumentService, ESvc: EntityAccessService>(
     service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
     document_context: &DocumentBasic,
-    entity_access_receipt: EntityAccessReceipt,
+    entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> anyhow::Result<String> {
     let location = service_context
         .service

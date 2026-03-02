@@ -11,34 +11,66 @@ import { channelKeys } from './keys';
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
-  string | null
+  ChannelMessagesPageParam | null
 >;
 
-export function channelMessagesQueryOptions(channelId: string) {
+type ChannelMessagesPageParam = {
+  next_cursor: string | null;
+  previous_cursor: string | null;
+};
+
+export function channelMessagesQueryOptions(
+  channelId: string,
+  loadAroundMessageId: string | null
+) {
   return {
     queryKey: channelKeys.messages(channelId).queryKey,
-    queryFn: async ({ pageParam }: { pageParam: string | null }) => {
+    queryFn: async ({
+      pageParam,
+    }: {
+      pageParam: ChannelMessagesPageParam | null;
+    }) => {
       return await throwOnErr(
         async () =>
           await commsServiceClient.getChannelMessages({
             channel_id: channelId,
             limit: 100,
-            cursor: pageParam,
+            next_cursor: pageParam?.next_cursor ?? null,
+            previous_cursor: pageParam?.previous_cursor ?? null,
+            load_around_message_id: !pageParam ? loadAroundMessageId : null,
           })
       );
     },
-    initialPageParam: null as string | null,
+    initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
-      lastPage.next_cursor ?? null,
+      lastPage.next_cursor
+        ? {
+            next_cursor: lastPage.next_cursor,
+            previous_cursor: null,
+          }
+        : null,
+    getPreviousPageParam: (firstPage: ChannelMessagesPage) =>
+      firstPage.previous_cursor
+        ? {
+            next_cursor: null,
+            previous_cursor: firstPage.previous_cursor,
+          }
+        : null,
     staleTime: Infinity,
   };
 }
 
-export function useChannelMessagesQuery(channelId: Accessor<string>) {
-  return useInfiniteQuery(() => channelMessagesQueryOptions(channelId()));
+export function useChannelMessagesQuery(
+  channelId: Accessor<string>,
+  loadAroundMessageId: Accessor<string | null | undefined>
+) {
+  return useInfiniteQuery(() =>
+    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
+  );
 }
+
 export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
-  const query = useChannelMessagesQuery(channelId);
+  const query = useChannelMessagesQuery(channelId, () => undefined);
   const byId = createMemo(() => {
     const flat = flattenMessages(query.data as ChannelMessagesData | undefined);
     return new Map(flat.map((m) => [m.id, m]));

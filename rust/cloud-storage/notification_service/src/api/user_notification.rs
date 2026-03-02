@@ -1,11 +1,15 @@
 use ::notification::domain::models::UserNotificationRow;
+use axum::extract::State;
 use chrono::{DateTime, Utc};
+use itertools::{Either, Itertools};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::NotifEvent;
+use notification::{domain::service::NotificationReader, inbound::http::NotificationRouterState};
 use serde::Serialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -90,9 +94,7 @@ pub struct GetAllUserNotificationsResponse {
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {
-    row.into_tagged()
-        .into_json()?
-        .deserialize_json::<NotifEvent>()
+    row.into_tagged().deserialize_metadata()
 }
 
 /// Build the strongly typed router.
@@ -147,7 +149,7 @@ pub fn router<
     )
 )]
 async fn list_typed_notifications<S: ::notification::domain::service::NotificationReader>(
-    state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
+    State(state): State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     query: axum::extract::Query<::notification::inbound::http::Params>,
     cursor: models_pagination::CursorExtractor<uuid::Uuid, models_pagination::CreatedAt, ()>,
@@ -158,27 +160,79 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
+    let user = macro_user.macro_user_id.clone();
     let axum::Json(response) = ::notification::inbound::http::list_user_notifications::<
         S,
         serde_json::Value,
-    >(state, macro_user, query, cursor)
+    >(&state, macro_user, query, cursor)
     .await?;
 
-    let items = response
+    let (notifs, failed): (Vec<_>, Vec<_>) = response
         .items
         .into_iter()
-        .filter_map(|row| {
-            to_typed_row(row)
-                .inspect_err(|e| tracing::warn!(error=?e, "failed to deserialize notification row"))
-                .ok()
-        })
-        .map(ApiUserNotification::from_notification)
-        .collect();
+        .map(|r| (r.notification_id, to_typed_row(r)))
+        .partition_map(|r| match r {
+            (_id, Ok(notif)) => Either::Left(notif),
+            (id, Err(e)) => Either::Right((id, e)),
+        });
+
+    if !failed.is_empty() {
+        tokio::task::spawn(
+            CleanUpNotificationsTask {
+                service: state,
+                user,
+                failed_notifs: failed,
+            }
+            .delete_failures(),
+        );
+    }
 
     Ok(axum::Json(GetAllUserNotificationsResponse {
-        items,
+        items: notifs
+            .into_iter()
+            .map(ApiUserNotification::from_notification)
+            .collect(),
         next_cursor: response.next_cursor,
     }))
+}
+
+struct CleanUpNotificationsTask<S> {
+    service: NotificationRouterState<S>,
+    user: MacroUserIdStr<'static>,
+    failed_notifs: Vec<(Uuid, serde_json::Error)>,
+}
+
+impl<S> CleanUpNotificationsTask<S>
+where
+    S: NotificationReader,
+{
+    async fn delete_failures(self) {
+        let CleanUpNotificationsTask {
+            service,
+            failed_notifs,
+            user,
+        } = self;
+
+        fn filter_erors((uuid, err): (Uuid, serde_json::Error)) -> Option<Uuid> {
+            let output = err
+                .to_string()
+                .contains("channel_message_document")
+                .then_some(uuid);
+
+            if output.is_none() {
+                tracing::warn!("{err:?}");
+            }
+
+            output
+        }
+
+        let to_delete: Vec<_> = failed_notifs.into_iter().filter_map(filter_erors).collect();
+
+        let _ = service
+            .inner
+            .bulk_delete_user_notifications(user, to_delete.as_slice())
+            .await;
+    }
 }
 
 /// Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,

@@ -46,9 +46,8 @@ pub async fn create_in_progress_user_link(
 
 pub async fn delete_in_progress_user_link(
     db: &sqlx::Pool<sqlx::Postgres>,
-    link_id: &str,
+    link_id: &uuid::Uuid,
 ) -> anyhow::Result<()> {
-    let link_id = macro_uuid::string_to_uuid(link_id)?;
     sqlx::query!(
         r#"
             DELETE FROM
@@ -56,7 +55,7 @@ pub async fn delete_in_progress_user_link(
             WHERE
                 id = $1
         "#,
-        &link_id
+        link_id
     )
     .execute(db)
     .await?;
@@ -89,9 +88,8 @@ pub async fn delete_day_old_in_progress_user_links(
 
 pub async fn get_macro_user_id_by_link_id(
     db: &sqlx::Pool<sqlx::Postgres>,
-    link_id: &str,
+    link_id: &uuid::Uuid,
 ) -> anyhow::Result<Uuid> {
-    let link_id = macro_uuid::string_to_uuid(link_id)?;
     let link = sqlx::query!(
         r#"
             SELECT
@@ -102,7 +100,7 @@ pub async fn get_macro_user_id_by_link_id(
             WHERE
                 id = $1
         "#,
-        &link_id
+        link_id
     )
     .map(|row| row.macro_user_id)
     .fetch_one(db)

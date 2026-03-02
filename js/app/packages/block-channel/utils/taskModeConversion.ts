@@ -1,6 +1,9 @@
 import type { TaskWithProperties } from '../hooks/taskmode';
 import { propertyValueToApi } from '@core/component/Properties/api/converters';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import { createTask } from '@core/util/create';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { err, ok, type Result } from 'neverthrow';
@@ -66,6 +69,16 @@ function buildPropertyInputs(
         references: [
           { entity_id: options.currentUserId, entity_type: 'USER' as const },
         ],
+      },
+    });
+  }
+
+  if (!task.propertyValues[SYSTEM_PROPERTY_IDS.STATUS]) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+      value: {
+        type: 'select_option',
+        option_id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
       },
     });
   }

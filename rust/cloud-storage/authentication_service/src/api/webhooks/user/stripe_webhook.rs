@@ -213,6 +213,9 @@ async fn handle_customer_subscription_event(
     }
 
     if subscription_status == "trialing" {
+        // set has_trialed in macro_user table
+        macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, &email, true).await?;
+
         // Add has_trialed: true to stripe customer metadata
         let mut params = stripe::UpdateCustomer::new();
         let mut metadata = HashMap::new();

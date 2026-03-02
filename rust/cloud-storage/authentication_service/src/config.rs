@@ -64,6 +64,15 @@ pub struct Config {
 
     /// The stripe price id for the professional subscription
     pub stripe_price_id: String,
+
+    /// The github client id
+    pub github_client_id: String,
+    /// The github client secret
+    pub github_client_secret: String,
+    /// The github idp id
+    pub github_idp_id: String,
+    /// The github webhook secret key
+    pub github_webhook_secret_key: String,
 }
 
 impl Config {
@@ -119,6 +128,16 @@ impl Config {
         let stripe_price_id =
             std::env::var("STRIPE_PRICE_ID").context("STRIPE_PRICE_ID must be provided")?;
 
+        let github_client_id =
+            std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
+        let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
+            .context("GITHUB_CLIENT_SECRET must be provided")?;
+        let github_idp_id =
+            std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
+
+        let github_webhook_secret_key = std::env::var("GITHUB_WEBHOOK_SECRET_KEY")
+            .context("GITHUB_WEBHOOK_SECRET_KEY must be provided")?;
+
         Ok(Config {
             base_url,
             database_url,
@@ -140,6 +159,10 @@ impl Config {
             search_event_queue,
             stripe_price_id,
             environment,
+            github_client_id,
+            github_client_secret,
+            github_idp_id,
+            github_webhook_secret_key,
         })
     }
 }

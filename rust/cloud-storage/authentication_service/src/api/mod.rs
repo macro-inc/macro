@@ -1,10 +1,7 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
-use axum::extract::Request;
 use axum::http::HeaderName;
-use axum::http::Method;
-use axum::middleware::Next;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
 use native_app_service::inbound::RouterState;
 use tower::ServiceBuilder;
@@ -18,7 +15,6 @@ pub(crate) mod context;
 // Routes
 #[allow(unused_imports)]
 mod email;
-#[allow(unused_imports)]
 mod link;
 #[allow(unused_imports)]
 mod merge;
@@ -83,24 +79,30 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
         .nest(
+            "/link",
+            link::router(state.clone()).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::tracking::attach_ip_context_handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.jwt_args.clone(),
+                        macro_middleware::auth::decode_jwt::handler,
+                    )),
+            ),
+        )
+        .nest(
             "/team",
             team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn(macro_middleware::tracking::attach_ip_context_handler),
             )),
         )
-        .nest("/jwt", jwt::router(state.jwt_args))
+        .nest("/jwt", jwt::router(state.jwt_args.clone()))
         .nest("/session", session::router())
         .nest(
             "/webhooks",
-            webhooks::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
-                |req: Request, next: Next| async move {
-                    match req.method() {
-                        &Method::PUT | &Method::POST | &Method::PATCH | &Method::DELETE => {
-                            tokio::task::spawn(next.run(req)).await.unwrap()
-                        }
-                        _ => next.run(req).await,
-                    }
-                },
+            webhooks::router(state).layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                macro_middleware::connection_drop_prevention_handler,
             ))),
         )
 }

@@ -144,7 +144,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "fields": {
                 "content": {
                     "type": "plain",
-                    "number_of_fragments": 0,
+                    "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
                 },
@@ -212,7 +212,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "fields": {
                 "content": {
                     "type": "plain",
-                    "number_of_fragments": 0,
+                    "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
                 },

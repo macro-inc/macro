@@ -1,7 +1,7 @@
 import { CommandState } from '@app/component/command/state';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   getHotkeyCommand,
@@ -9,7 +9,7 @@ import {
   runCommand,
 } from '@core/hotkey/utils';
 import { isSearchEntity } from '@entity';
-import type { Accessor } from 'solid-js';
+import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
@@ -36,6 +36,31 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const splitIsUnifiedList = () => splitHandle.content().id === 'unified-list';
 
+  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  const clearMultiCondition = () =>
+    soup.selection.count() > 0 && splitIsUnifiedList();
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const goHomeCondition = () => !splitIsUnifiedList();
+  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
+
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    if (closeSplitCondition()) {
+      return 'Close split';
+    }
+    if (goHomeCondition()) {
+      return 'Go home';
+    }
+    return '';
+  };
+
+  const group = createHotkeyGroup();
+
   // home - Jump to top of list
   registerHotkey({
     hotkey: ['home'],
@@ -50,7 +75,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
 
   // g g - Jump to top of list (vim-style command scope)
   const { commandScopeId } = registerHotkey({
@@ -60,11 +85,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     keyDownHandler: () => true,
     activateCommandScope: true,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['g'],
-    scopeId: commandScopeId,
+    scopeId: commandScopeId!,
     description: 'Go to top of list',
     keyDownHandler: () => {
       const next = soup.navigate.toFirst();
@@ -73,7 +98,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return true;
     },
-  });
+  }).withGroup(group);
 
   // shift+g, end - Jump to bottom of list
   registerHotkey({
@@ -89,7 +114,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
 
   // enter - Open entity in split
   registerHotkey({
@@ -116,7 +141,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 4,
-  });
+  }).withGroup(group);
 
   // cmd+enter - Focus preview block
   registerHotkey({
@@ -169,7 +194,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 4,
-  });
+  }).withGroup(group);
 
   // x - Toggle select item
   registerHotkey({
@@ -183,7 +208,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 10,
-  });
+  }).withGroup(group);
 
   // cmd+k - Open command menu with selection context
   // When there's a selection, opens in entity action mode showing only
@@ -211,30 +236,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     displayPriority: 10,
     hide: CommandState.isOpen,
     runWithInputFocused: true,
-  });
+  }).withGroup(group);
 
   // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
-  const clearMultiCondition = () => soup.selection.count() > 0;
-  const closeSpotlightCondition = () => splitHandle.isSpotLight();
-  const goHomeCondition = () => !splitIsUnifiedList();
-  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
-
-  const escapeDescription = () => {
-    if (clearMultiCondition()) {
-      return 'Clear multi selection';
-    }
-    if (closeSpotlightCondition()) {
-      return 'Close spotlight';
-    }
-    if (closeSplitCondition()) {
-      return 'Close split';
-    }
-    if (goHomeCondition()) {
-      return 'Go home';
-    }
-    return '';
-  };
-
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
@@ -269,6 +273,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     },
   });
 
+  // shift+enter - Open in new split
   registerHotkey({
     hotkey: ['shift+enter'],
     scopeId,
@@ -284,5 +289,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 };

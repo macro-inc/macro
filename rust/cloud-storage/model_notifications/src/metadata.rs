@@ -4,8 +4,6 @@ use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
 use notification::domain::models::Notification;
-use notification::domain::models::RateLimitConfig;
-use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
@@ -13,6 +11,13 @@ use notification::domain::models::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiResponseMetadata {
+    pub summary: String,
+    pub message_id: String,
+}
 
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
 #[dg(backward = models_comms::channel::ChannelType)]
@@ -61,6 +66,8 @@ pub struct ChannelInviteMetadata {
     pub invited_by: MacroUserIdStr<'static>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -80,6 +87,8 @@ pub struct ChannelMessageSendMetadata {
     pub message_id: String,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 /// Metadata for when a item is shared with a user
@@ -138,6 +147,8 @@ pub struct ChannelMentionMetadata {
     pub thread_id: Option<String>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -163,6 +174,8 @@ pub struct ChannelReplyMetadata {
     pub thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 /// Someone mentioned a document in a channel
@@ -178,6 +191,8 @@ pub struct DocumentMentionMetadata {
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 impl From<DocumentMentionMetadata> for serde_json::Value {
@@ -200,86 +215,34 @@ pub struct NewEmailMetadata {
 
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelInviteMetadata {
     const TYPE_NAME: &'static str = "channel_invite";
+}
 
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
+impl notification::domain::models::Notification for AiResponseMetadata {
+    const TYPE_NAME: &'static str = "ai_response";
 }
 
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelMentionMetadata {
     const TYPE_NAME: &'static str = "channel_mention";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for ChannelReplyMetadata {
     const TYPE_NAME: &'static str = "channel_message_reply";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 impl notification::domain::models::Notification for InviteToTeamMetadata {
     const TYPE_NAME: &'static str = "invite_to_team";
-
-    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 /// Metadata for when a user is assigned to a task
@@ -296,6 +259,8 @@ pub struct TaskAssignedMetadata {
     #[serde(alias = "assigned_by")]
     #[schema(value_type = String)]
     pub assigned_by: MacroUserIdStr<'static>,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 // Plain text formatter for converting XML message content to plain text for APNS payloads.
@@ -359,8 +324,14 @@ fn parse_message_plain_text(content: &str) -> Option<String> {
 fn alert_apns(
     title: String,
     body: String,
-    data: PushNotificationData,
+    notification_id: Uuid,
+    sender_profile_picture_url: Option<String>,
 ) -> APNSPushNotification<PushNotificationData> {
+    let mutable_content = if sender_profile_picture_url.is_some() {
+        Some(1)
+    } else {
+        None
+    };
     APNSPushNotification {
         aps: Aps {
             alert: Some(notification::domain::models::apple::Alert::Dictionary(
@@ -370,9 +341,13 @@ fn alert_apns(
                     ..Default::default()
                 },
             )),
+            mutable_content,
             ..Default::default()
         },
-        push_notification_data: data,
+        push_notification_data: PushNotificationData {
+            notification_id,
+            sender_profile_picture_url,
+        },
     }
 }
 
@@ -393,7 +368,29 @@ impl NotificationExtIos for ChannelInviteMetadata {
         Some(alert_apns(
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
+        ))
+    }
+}
+
+impl NotificationExtIos for AiResponseMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(alert_apns(
+            "Ai Response".into(),
+            self.summary,
+            notification_id,
+            None,
         ))
     }
 }
@@ -423,7 +420,8 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -456,7 +454,8 @@ impl NotificationExtIos for ChannelMentionMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -480,7 +479,8 @@ impl NotificationExtIos for ChannelReplyMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -509,21 +509,14 @@ impl NotificationExtIos for DocumentMentionMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
         ))
     }
 }
 
 impl notification::domain::models::Notification for TaskAssignedMetadata {
     const TYPE_NAME: &'static str = "task_assigned";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl NotificationExtIos for TaskAssignedMetadata {
@@ -549,7 +542,8 @@ impl NotificationExtIos for TaskAssignedMetadata {
         Some(alert_apns(
             title,
             body,
-            PushNotificationData { notification_id },
+            notification_id,
+            self.sender_profile_picture_url,
         ))
     }
 }
@@ -573,18 +567,12 @@ pub struct MentionedInDocumentCommentMetadata {
     pub thread_id: i64,
     /// the text of the comment
     pub text: String,
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
 }
 
 impl Notification for MentionedInDocumentCommentMetadata {
     const TYPE_NAME: &'static str = "mentioned_in_document_comment";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 impl NotificationExtIos for MentionedInDocumentCommentMetadata {
@@ -609,18 +597,11 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
             self.document_name, file_type_str
         );
 
-        Some(APNSPushNotification {
-            aps: Aps {
-                alert: Some(notification::domain::models::apple::Alert::Dictionary(
-                    AlertDictionary {
-                        title: Some(title),
-                        body: Some(body),
-                        ..Default::default()
-                    },
-                )),
-                ..Default::default()
-            },
-            push_notification_data: PushNotificationData { notification_id },
-        })
+        Some(alert_apns(
+            title,
+            body,
+            notification_id,
+            self.sender_profile_picture_url,
+        ))
     }
 }

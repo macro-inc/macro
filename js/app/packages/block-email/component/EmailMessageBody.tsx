@@ -9,7 +9,7 @@ import {
   type ThemeColorParams,
 } from '@core/email';
 import DotsThree from '@icon/light/dots-three-light.svg';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import {
   type Accessor,
@@ -25,7 +25,7 @@ import { themeReactive } from '../../block-theme/signals/themeReactive';
 import { themeUpdate } from '../../block-theme/signals/themeSignals';
 
 interface EmailMessageBodyProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: (messageID: string | undefined) => void;

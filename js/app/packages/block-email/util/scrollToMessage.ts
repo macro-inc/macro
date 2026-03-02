@@ -1,4 +1,4 @@
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 
 /**
  * Scrolls to a message by its ID within a messages container
@@ -10,7 +10,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
  */
 export function scrollToMessage(
   messageId: string,
-  messages: MessageWithBodyReplyless[],
+  messages: ApiMessage[],
   messagesContainer: HTMLElement,
   {
     behavior = 'smooth',
@@ -66,9 +66,7 @@ export function scrollToLastMessage(
  * @param messages - Array of messages in the current thread
  * @returns The db_id of the last message, or undefined if no messages
  */
-export function getLastMessageId(
-  messages: MessageWithBodyReplyless[]
-): string | undefined {
+export function getLastMessageId(messages: ApiMessage[]): string | undefined {
   const lastMessage = messages[messages.length - 1];
   return lastMessage?.db_id?.toString();
 }

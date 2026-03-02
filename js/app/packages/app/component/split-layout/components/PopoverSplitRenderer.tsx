@@ -125,24 +125,20 @@ function PopoverSplitModal(props: {
       }}
       modal={true}
     >
-      <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
-      <div class={`fixed inset-0 z-modal flex pointer-events-none isolate`}>
-        <DialogWrapper
-          contentRef={(r) => {
-            setPanelRef(r);
-            clickOutside(r, () => () => props.onClose());
-            bindHotKeyDom(r);
-          }}
-        >
-          <SplitPanelContext.Provider value={stubPanelContext}>
-            <SoupContextProvider>
-              <Show when={props.popover.mount}>
-                <Dynamic component={props.popover.mount.element} />
-              </Show>
-            </SoupContextProvider>
-          </SplitPanelContext.Provider>
-        </DialogWrapper>
-      </div>
+      <DialogWrapper
+        contentRef={(r) => {
+          setPanelRef(r);
+          bindHotKeyDom(r);
+        }}
+      >
+        <SplitPanelContext.Provider value={stubPanelContext}>
+          <SoupContextProvider>
+            <Show when={props.popover.mount}>
+              <Dynamic component={props.popover.mount.element} />
+            </Show>
+          </SoupContextProvider>
+        </SplitPanelContext.Provider>
+      </DialogWrapper>
     </Dialog>
   );
 }

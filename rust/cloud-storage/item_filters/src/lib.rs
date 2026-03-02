@@ -185,7 +185,9 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
-    /// Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    /// Filter by email importance. None to not filter. True to show only important emails
+    /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
+    /// (those categorized as promotions, social, updates, or forums).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
 

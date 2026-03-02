@@ -34,24 +34,28 @@ export async function fetchToken(): Promise<
 > {
   if (tokenPromise == null) {
     tokenPromise = (async () => {
-      const result = await fetchWithCredentials(
-        `${SERVER_HOSTS['auth-service']}/jwt/refresh`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          cache: 'no-store',
+      try {
+        const result = await fetchWithCredentials(
+          `${SERVER_HOSTS['auth-service']}/jwt/refresh`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            cache: 'no-store',
+          }
+        );
+
+        if (isErr(result)) {
+          return [result[0]!];
+          // return [null, result[0]];
         }
-      );
 
-      if (isErr(result)) {
-        return [result[0]!];
-        // return [null, result[0]];
+        return [null];
+      } finally {
+        tokenPromise = null;
       }
-
-      return [null];
     })();
   }
   return tokenPromise;
@@ -103,9 +107,6 @@ export async function fetchWithToken<T extends ObjectLike>(
   let result = await fetchWithCredentials<T>(input, init);
 
   if (isErr(result, 'UNAUTHORIZED')) {
-    // Unset the token promise on UNAUTHORIZED error
-    tokenPromise = null;
-
     const tokenResult = await fetchToken();
     if (isErr(tokenResult, 'HTTP_ERROR')) {
       // converting this most likely a bad request to unauthorized error

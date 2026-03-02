@@ -1,15 +1,15 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import type {
   MessageToSendDbId,
-  MessageWithBodyReplyless,
+  ApiMessage,
 } from '@service-email/generated/schemas';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { BaseInput } from './BaseInput';
 
 interface EmailInputProps {
-  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
-  draft?: MessageWithBodyReplyless;
+  replyingTo: Accessor<ApiMessage | undefined>;
+  draft?: ApiMessage;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }

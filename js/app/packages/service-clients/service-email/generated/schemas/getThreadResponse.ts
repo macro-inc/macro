@@ -4,12 +4,11 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { APIThread } from './aPIThread';
+import type { ApiThread } from './apiThread';
 
 /**
- * The response returned from the get thread endpoint
+ * Response body for the get-thread endpoint.
  */
 export interface GetThreadResponse {
-  /** the thread, with messages inside */
-  thread: APIThread;
+  thread: ApiThread;
 }

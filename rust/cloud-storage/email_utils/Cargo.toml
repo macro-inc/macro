@@ -5,5 +5,7 @@ publish = false
 edition = "2024"
 
 [dependencies]
+ego-tree = { workspace = true }
 lazy_static = { workspace = true }
 regex = { workspace = true }
+scraper = { workspace = true }

@@ -215,6 +215,7 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "general".to_string(),
         },
+        sender_profile_picture_url: None,
     };
 
     // Create ApiUserNotification (used by HTTP API)
@@ -292,6 +293,7 @@ fn conn_gateway_inner_val_has_identical_serialization() {
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "my channel".to_string(),
         },
+        sender_profile_picture_url: None,
     };
 
     // TaggedContent<T> is what ConnGatewayInnerNotif uses for notification_metadata

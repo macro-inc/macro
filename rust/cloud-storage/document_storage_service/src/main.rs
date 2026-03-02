@@ -14,7 +14,7 @@ use channels::{
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -175,19 +175,6 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config
-            .vars
-            .authentication_service_secret_key
-            .as_ref()
-            .to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.authentication_service_secret_key)
-            .await
-            .context("unable to get auth service secret")?
-            .to_string(),
-    };
-
     // Initialize OpenSearch client
     let opensearch_password = match config.environment {
         Environment::Local => config.vars.opensearch_password.as_ref().to_string(),
@@ -263,20 +250,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
-    let auth_service_url: reqwest::Url = config
-        .vars
-        .authentication_service_url
-        .as_ref()
-        .parse()
-        .context("AUTHENTICATION_SERVICE_URL must be a valid url")?;
     let channel_service_for_soup = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
-        UserRepoImpl::new(auth_service_secret_key.clone(), auth_service_url.clone()),
+        PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
-        UserRepoImpl::new(auth_service_secret_key, auth_service_url),
+        PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
 

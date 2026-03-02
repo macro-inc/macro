@@ -9,24 +9,35 @@ type NavigateEvent = {
 };
 
 let registeredNavigate: ((path: string) => void) | null = null;
+let pendingNavigation: string | null = null;
 
 /**
  * Register a navigate function to be called from outside the router context.
  * Called by useTauriNavigationEffect when the router is ready.
+ * Drains any navigation that was buffered before the router was ready.
  */
 export function registerNavigate(fn: (path: string) => void) {
   registeredNavigate = fn;
+  if (pendingNavigation) {
+    const path = pendingNavigation;
+    pendingNavigation = null;
+    fn(path);
+  }
 }
 
 /**
  * Trigger navigation from outside the router context.
  * Used by PushNotification to navigate when a notification is tapped.
+ * If the router is not yet ready, buffers the path for replay on mount.
  */
 export function triggerNavigation(path: string) {
   if (registeredNavigate) {
     registeredNavigate(path);
   } else {
-    console.warn('Navigation triggered before navigate was registered');
+    console.warn(
+      `[navigation] triggerNavigation: router not ready, buffering path ${path}`
+    );
+    pendingNavigation = path;
   }
 }
 

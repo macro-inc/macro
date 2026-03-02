@@ -245,9 +245,9 @@ async fn thread_data_preview_count_limits_replies(pool: Pool<Postgres>) -> anyho
         2,
         "only 2 preview replies returned"
     );
-    // Preview should be the 2 most recent, in oldest-first order
-    assert_eq!(thread.preview_replies[0].content, "reply 3");
-    assert_eq!(thread.preview_replies[1].content, "reply 4");
+    // Preview should be the 2 oldest replies, in chronological order
+    assert_eq!(thread.preview_replies[0].content, "reply 1");
+    assert_eq!(thread.preview_replies[1].content, "reply 2");
     Ok(())
 }
 

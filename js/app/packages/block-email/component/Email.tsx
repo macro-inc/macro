@@ -9,7 +9,7 @@ import {
   blockElementSignal,
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { useUserContext } from '@core/context/user';
 import {
@@ -92,7 +92,7 @@ function EmailContent(props: EmailViewProps) {
 
       // Check if message exists in current batch
       const messageExists = messages.some(
-        (m: MessageWithBodyReplyless) => m.db_id === targetMessageId
+        (m: ApiMessage) => m.db_id === targetMessageId
       );
 
       if (messageExists) return true;

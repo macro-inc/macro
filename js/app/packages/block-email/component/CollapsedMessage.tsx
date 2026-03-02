@@ -1,6 +1,6 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { UserIcon } from '@core/component/UserIcon';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
 import {
@@ -10,7 +10,7 @@ import {
 import { formatShortDate } from './EmailMessageTopBar';
 
 interface CollapsedMessageProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFocused: boolean;
   isFirstMessage: boolean;
   onClick: () => void;

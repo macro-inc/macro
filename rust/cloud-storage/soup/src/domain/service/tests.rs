@@ -4,6 +4,7 @@ use chrono::Days;
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -43,6 +44,15 @@ impl EmailService for NoopEmailService {
         _auth_id: &str,
         _macro_id: MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 }

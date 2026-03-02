@@ -1,8 +1,8 @@
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import type { ReplyType } from './replyType';
 
 export const getSubjectText = (
-  replyingTo: MessageWithBodyReplyless | undefined,
+  replyingTo: ApiMessage | undefined,
   replyType: ReplyType | undefined
 ) => {
   if (!replyingTo) return '';

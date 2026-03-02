@@ -1,13 +1,17 @@
 import { withAnalytics } from '@coparse/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
-import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
 import type { Model, ToolSet } from '@core/component/AI/types';
+import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
+import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -15,12 +19,10 @@ import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
-import type { UseChatMarkdown } from './useChatMarkdownArea';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -30,13 +32,14 @@ export type ChatInputProps = {
   onEscape?: (e: KeyboardEvent) => boolean;
   isPersistent?: boolean;
   showActiveTabs?: boolean;
-  captureEditor?: (editor: LexicalEditor) => void;
   autoFocusOnMount?: boolean;
   chatId?: string;
 };
 
 export type ChatInputComponentProps = {
-  markdown: UseChatMarkdown;
+  editor: EditorConfigBuilder;
+  initialValue?: string;
+  onChange?: (markdown: string) => void;
 } & ChatInputProps;
 
 export function ChatInput(props: ChatInputComponentProps) {
@@ -53,6 +56,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
+  const [markdownText, setMarkdownText] = createSignal('');
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -64,7 +68,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       });
   });
 
-  const isEmptyInput = () => props.markdown.markdownText().trim().length === 0;
+  const isEmptyInput = () => markdownText().trim().length === 0;
   const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
@@ -73,7 +77,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   let mdRef: undefined | HTMLDivElement;
   const isMultiline = () => {
     // Access markdownText to create reactive dependency
-    const text = props.markdown.markdownText();
+    const text = markdownText();
     if (text.trim().length === 0) return false;
     if (!mdRef) return false;
     return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
@@ -87,30 +91,39 @@ export function ChatInput(props: ChatInputComponentProps) {
       return;
     }
 
-    const input: ChatSendInput = {
-      content: props.markdown.markdownText(),
+    const sendInput: ChatSendInput = {
+      content: markdownText(),
       model: modelOverride ?? model(),
       attachments: attachments.attached(),
       toolset: toolsetSignal[0](),
     };
-    props.markdown.clear();
-    props.onSend(input);
+    props.editor.controls.clear();
+    props.onSend(sendInput);
   });
 
-  function handleEnter(e: KeyboardEvent): boolean {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-
+  props.editor
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        if (directories.length > 0) {
+          toast.failure('Folder upload not supported here');
+          return;
+        }
+        handleFileFolderDrop(files, directories, (entries) => {
+          uploadQueue.upload(entries.map((e) => e.file));
+        });
+      },
+    })
+    .onEnter(() => {
       if (canSendMessage()) {
         sendMessage();
       }
       return true;
-    } else {
-      return false;
-    }
-  }
-
-  const availableAttachments = useChatAttachableHistory();
+    })
+    .onEscape((e) => props.onEscape?.(e) ?? false)
+    .onChange((md) => {
+      setMarkdownText(md);
+      props.onChange?.(md);
+    });
 
   const hasAttachments = () =>
     attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
@@ -211,16 +224,15 @@ export function ChatInput(props: ChatInputComponentProps) {
           }}
           ref={mdRef}
         >
-          <props.markdown.MarkdownArea
-            onEnter={handleEnter}
-            onEscape={props.onEscape}
+          <MarkdownShell
+            config={props.editor}
             placeholder="Ask AI, @mention anything"
-            history={availableAttachments}
-            dontFocusOnMount={
-              isTouchDevice() || props.autoFocusOnMount === false
+            initialValue={props.initialValue}
+            autofocus={
+              !isMobile() &&
+              !isTouchDevice() &&
+              props.autoFocusOnMount !== false
             }
-            onPasteFile={uploadQueue.upload}
-            captureEditor={props.captureEditor}
           />
         </div>
 

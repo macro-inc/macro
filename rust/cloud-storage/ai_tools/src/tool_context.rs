@@ -1,7 +1,7 @@
 use axum::extract::FromRef;
 use comms::{
     domain::service::ChannelServiceImpl,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -27,7 +27,7 @@ pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 pub type ToolEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService>;
 
 /// Type alias for the comms/channels service implementation
-pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
+pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
 
 /// Type alias for the soup service implementation
 pub type ToolSoupService =

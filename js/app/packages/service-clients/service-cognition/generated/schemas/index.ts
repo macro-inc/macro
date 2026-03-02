@@ -179,8 +179,6 @@ export * from './streamErrorOneOfStreamError';
 export * from './streamErrorOneOfThree';
 export * from './streamErrorOneOfThreeStreamError';
 export * from './stringIDResponse';
-export * from './structedOutputCompletionRequest';
-export * from './structedOutputCompletionResponse';
 export * from './successResponse';
 export * from './toolSchema';
 export * from './toolSchemas';

@@ -31,9 +31,9 @@ pub struct HistoryParams {
 ///
 /// Extracts both item_id and item_type from the path parameters.
 #[derive(Debug)]
-pub struct HistoryAccessExtractor<T, Svc> {
+pub struct HistoryAccessExtractor<T: RequiredAccessLevel, Svc> {
     /// The entity access receipt
-    pub entity_access_receipt: EntityAccessReceipt,
+    pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
 }
 
@@ -86,6 +86,7 @@ where
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
+                    _marker: PhantomData,
                 },
                 _marker: PhantomData,
             });
@@ -114,6 +115,7 @@ where
                     .map(|m| EntityAccessAuth::Authenticated(m.0))
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: EntityPermission::AccessLevel { access_level },
+                _marker: PhantomData,
             },
             _marker: PhantomData,
         })
