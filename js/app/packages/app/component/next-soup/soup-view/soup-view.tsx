@@ -635,6 +635,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           return row.original.createdAt;
                         case 'updated_at':
                           return row.original.updatedAt;
+                        default:
+                          return row.original.createdAt;
                       }
                     };
 

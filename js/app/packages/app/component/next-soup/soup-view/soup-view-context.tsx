@@ -104,6 +104,14 @@ interface SoupViewContextProviderProps {
   queryFilters?: SoupItemsQueryFilters;
 }
 
+const VALID_API_SORT_METHODS: NonNullable<SoupParams['sort_method']>[] = [
+  'viewed_at',
+  'created_at',
+  'updated_at',
+  'viewed_updated',
+  'frecency',
+];
+
 export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
@@ -111,12 +119,18 @@ export const SoupViewContextProvider: FlowComponent<
 
   const queryClient = useQueryClient();
 
-  const soupParams = createMemo(
-    (): SoupParams => ({
+  const soupParams = createMemo((): SoupParams => {
+    let sortMethod = soup.sort.active()[0]?.id ?? 'updated_at';
+
+    if (!VALID_API_SORT_METHODS.includes(sortMethod)) {
+      sortMethod = 'created_at';
+    }
+
+    return {
       limit: 100,
-      sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
-    })
-  );
+      sort_method: sortMethod,
+    };
+  });
 
   const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupItemsQueryFilters>({ ...(props.queryFilters ?? {}) });
