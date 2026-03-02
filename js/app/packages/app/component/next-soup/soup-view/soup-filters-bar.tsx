@@ -25,6 +25,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { TASK_STATUS_OPTIONS } from '@entity';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
+import type { CollectionNode } from '@kobalte/core';
 
 export const SoupFiltersBar = () => {
   const panel = useSplitPanelOrThrow();
@@ -69,16 +70,10 @@ export const SoupFiltersBar = () => {
 };
 
 type UseFilterOptionsConfig = {
-  /** Whether multiple options can be selected. Defaults to true. */
   multiple?: boolean;
-  /** Whether to apply changes to 'and' or 'or' filters. Defaults to 'or'. */
   target?: 'and' | 'or';
 };
 
-/**
- * Hook that derives active options from soup.filters and provides a change handler.
- * Accesses soup context internally.
- */
 const useFilterOptions = (
   options: Option[],
   config: UseFilterOptionsConfig = {}
@@ -427,7 +422,6 @@ const FilesFilters = () => {
 type Option = {
   value: string;
   label: string;
-  /** Optional icon to render for this option */
   icon?: () => JSX.Element;
 };
 
@@ -436,7 +430,6 @@ interface FilterSelectProps {
   options: Option[];
   active: Option[];
   onChange: (options: Option[]) => void;
-  /** Whether multiple options can be selected. Defaults to true. */
   multiple?: boolean;
 }
 
@@ -447,10 +440,9 @@ const FilterSelect = (props: FilterSelectProps) => {
   const activeCount = createMemo(() => activeFilters().length);
   const hasActiveFilters = createMemo(() => activeCount() > 0);
 
-  const renderItem = (itemProps: { item: { rawValue: Option } }) => (
+  const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
     <KSelect.Item
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      item={itemProps.item as any}
+      item={itemProps.item}
       class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
     >
       <span
@@ -573,17 +565,9 @@ interface FilterComboboxProps {
   options: Option[];
   active: Option[];
   onChange: (options: Option[]) => void;
-  /** Placeholder text for the search input */
   placeholder?: string;
 }
 
-/**
- * A searchable multi-select filter component using Combobox.
- * Features:
- * - Search bar in the dropdown body
- * - Selected options displayed in the trigger
- * - Clear button to reset selection
- */
 export const FilterCombobox = (props: FilterComboboxProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
@@ -762,14 +746,9 @@ interface FilterChipGroupProps {
   options: Option[];
   active: Option[];
   onChange: (options: Option[]) => void;
-  /** Whether to allow multiple selections. Defaults to true. */
   multiple?: boolean;
 }
 
-/**
- * A group of chip buttons for selecting filter options.
- * Each chip toggles its selection state when clicked.
- */
 export const FilterChipGroup = (props: FilterChipGroupProps) => {
   const multiple = () => props.multiple ?? true;
 
@@ -780,20 +759,15 @@ export const FilterChipGroup = (props: FilterChipGroupProps) => {
   const handleClick = (option: Option) => {
     const currentlyActive = isActive(option.value);
 
-    if (multiple()) {
-      // Toggle the option
-      if (currentlyActive) {
-        props.onChange(props.active.filter((o) => o.value !== option.value));
-      } else {
-        props.onChange([...props.active, option]);
-      }
+    if (!multiple()) {
+      props.onChange(currentlyActive ? [] : [option]);
+      return;
+    }
+
+    if (currentlyActive) {
+      props.onChange(props.active.filter((o) => o.value !== option.value));
     } else {
-      // Single select: toggle off if already selected, otherwise select only this one
-      if (currentlyActive) {
-        props.onChange([]);
-      } else {
-        props.onChange([option]);
-      }
+      props.onChange([...props.active, option]);
     }
   };
 
