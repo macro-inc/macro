@@ -56,14 +56,6 @@ export const SoupFiltersBar = () => {
   );
 };
 
-/** Converts filter configs to Option format for FilterSelect */
-const toFilterOptions = (
-  filters: readonly { id: string; label?: string }[]
-): Option[] =>
-  filters
-    .filter((f): f is { id: string; label: string } => !!f.label)
-    .map((f) => ({ value: f.id, label: f.label }));
-
 type UseFilterOptionsConfig = {
   /** Whether multiple options can be selected. Defaults to true. */
   multiple?: boolean;
@@ -116,18 +108,8 @@ const useFilterOptions = (
 };
 
 const InboxFilters = () => {
-  const generalOptions = toFilterOptions(GENERAL_CONTEXTUAL_FILTERS);
-  const general = useFilterOptions(generalOptions);
-
   return (
-    <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Activity"
-        options={generalOptions}
-        active={general.active()}
-        onChange={general.onChange}
-      />
-    </div>
+    <div class="flex items-center gap-1.5">{/* No inbox filters yet */}</div>
   );
 };
 
@@ -172,11 +154,6 @@ const MailFilters = () => {
 };
 
 const DocumentsFilters = () => {
-  const recencyOptions: Option[] = [
-    { value: 'doc-recent', label: 'Recently Edited' },
-    { value: 'doc-edited-this-week', label: 'Edited This Week' },
-  ];
-
   const typeOptions: Option[] = [
     { value: 'doc-markdown', label: 'Markdown' },
     { value: 'doc-canvas', label: 'Canvas' },
@@ -186,18 +163,11 @@ const DocumentsFilters = () => {
     { value: 'doc-in-folder', label: 'In Folder' },
   ];
 
-  const recency = useFilterOptions(recencyOptions);
   const type = useFilterOptions(typeOptions);
   const location = useFilterOptions(locationOptions);
 
   return (
     <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Recency"
-        options={recencyOptions}
-        active={recency.active()}
-        onChange={recency.onChange}
-      />
       <FilterSelect
         label="Type"
         options={typeOptions}
@@ -370,13 +340,7 @@ const FilesFilters = () => {
     { value: 'file-other', label: 'Other' },
   ];
 
-  const recencyOptions: Option[] = [
-    { value: 'recently-updated', label: 'Recently Updated' },
-    { value: 'recently-created', label: 'Recently Created' },
-  ];
-
   const fileType = useFilterOptions(fileTypeOptions);
-  const recency = useFilterOptions(recencyOptions);
 
   return (
     <div class="flex items-center gap-1.5">
@@ -385,12 +349,6 @@ const FilesFilters = () => {
         options={fileTypeOptions}
         active={fileType.active()}
         onChange={fileType.onChange}
-      />
-      <FilterSelect
-        label="Recency"
-        options={recencyOptions}
-        active={recency.active()}
-        onChange={recency.onChange}
       />
     </div>
   );
