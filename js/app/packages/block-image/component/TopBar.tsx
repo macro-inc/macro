@@ -1,6 +1,9 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';

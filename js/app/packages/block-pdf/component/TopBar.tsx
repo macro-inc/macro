@@ -58,7 +58,10 @@ import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
-import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();

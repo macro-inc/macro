@@ -3,7 +3,10 @@ import {
   type BlockTool,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -211,19 +214,17 @@ export function InstructionsTopBar() {
       <SplitHeaderLeft>
         <StaticSplitLabel label="AI Instructions" iconType="md" />
       </SplitHeaderLeft>
-      <SplitToolbarRight>
-        <For each={tools}>
-          {(tool) => (
-            <Show when={!tool.condition || tool.condition()}>
-              {tool.buttonComponent ? (
-                <tool.buttonComponent />
-              ) : (
-                <ToolButton tool={tool} />
-              )}
-            </Show>
-          )}
-        </For>
-      </SplitToolbarRight>
+      <For each={tools}>
+        {(tool) => (
+          <Show when={!tool.condition || tool.condition()}>
+            {tool.buttonComponent ? (
+              <tool.buttonComponent />
+            ) : (
+              <ToolButton tool={tool} />
+            )}
+          </Show>
+        )}
+      </For>
     </>
   );
 }

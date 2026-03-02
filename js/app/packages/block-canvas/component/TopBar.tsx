@@ -1,14 +1,15 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar, ResponsivePermissionsBadge } from '@app/component/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
