@@ -7,6 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -89,6 +90,15 @@ impl EmailService for MockEmail {
             updated_at: Default::default(),
         }))
     }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 fn mock_router() -> Router {
@@ -151,6 +161,15 @@ impl EmailService for MockEmailLinkResult {
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)()
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 }
 

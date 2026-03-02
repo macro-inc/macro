@@ -69,7 +69,6 @@ fn parse_html_to_text(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
 
     fn get_default_config() -> Config<PlainDecorator> {
         html2text::config::plain()
@@ -80,8 +79,6 @@ mod tests {
     #[test]
     fn test_parse_html_to_text_with_simple_html() {
         let html = Some("<html><body><p>Hello, world!</p></body></html>".to_string());
-        let provider_id = "gmail";
-        let link_id = macro_uuid::generate_uuid_v7();
 
         let result = parse_html_to_text(&html, get_default_config());
 
@@ -91,8 +88,6 @@ mod tests {
     #[test]
     fn test_parse_html_to_text_with_none() {
         let html: Option<String> = None;
-        let provider_id = "gmail";
-        let link_id = macro_uuid::generate_uuid_v7();
 
         let result = parse_html_to_text(&html, get_default_config());
         assert_eq!(result, None);
@@ -101,8 +96,6 @@ mod tests {
     #[test]
     fn test_parse_html_to_text_with_empty_html() {
         let html = Some("".to_string());
-        let provider_id = "gmail";
-        let link_id = macro_uuid::generate_uuid_v7();
 
         let result = parse_html_to_text(&html, get_default_config());
 
@@ -112,8 +105,6 @@ mod tests {
     #[test]
     fn test_parse_html_to_text_with_malformed_html() {
         let html = Some("<p>Unclosed paragraph<div>Nested content</p>".to_string());
-        let provider_id = "yahoo";
-        let link_id = macro_uuid::generate_uuid_v7();
 
         let result = parse_html_to_text(&html, get_default_config());
 
@@ -146,8 +137,6 @@ mod tests {
         "#
             .to_string(),
         );
-        let provider_id = "gmail";
-        let link_id = Uuid::new_v4();
 
         let result = parse_html_to_text(&html, get_default_config());
 

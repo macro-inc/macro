@@ -9026,6 +9026,7 @@ dependencies = [
  "doppleganger",
  "either",
  "email",
+ "entity_access",
  "filter_ast",
  "frecency",
  "futures",
