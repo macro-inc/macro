@@ -1,14 +1,5 @@
 import type { MessageActions, MessageData } from './types';
-import { Root } from './Root';
-import { Layout } from './Layout';
-import { SenderName } from './SenderName';
-import { SenderIcon } from './SenderIcon';
-import { Timestamp } from './Timestamp';
-import { Content } from './Content';
-import { Reactions } from './Reactions';
-import { EditedIndicator } from './EditedIndicator';
-import { Attachments } from './Attachments';
-import { ActionMenu } from './ActionMenu';
+import { Message } from './Message';
 
 type ChannelMessageProps = {
   message: MessageData;
@@ -17,23 +8,23 @@ type ChannelMessageProps = {
 
 export function ChannelMessage(props: ChannelMessageProps) {
   return (
-    <Root message={props.message} actions={props.actions}>
-      <Layout>
+    <Message.Root message={props.message} actions={props.actions}>
+      <Message.Layout>
         <div class="flex items-start gap-2">
-          <SenderIcon />
+          <Message.SenderIcon />
           <div class="flex flex-col flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <SenderName />
-              <EditedIndicator />
-              <Timestamp class="ml-auto" />
+              <Message.SenderName />
+              <Message.EditedIndicator />
+              <Message.Timestamp class="ml-auto" />
             </div>
-            <Content />
-            <Attachments />
-            <Reactions />
+            <Message.Content />
+            <Message.Attachments />
+            <Message.Reactions />
           </div>
         </div>
-        <ActionMenu />
-      </Layout>
-    </Root>
+        <Message.ActionMenu />
+      </Message.Layout>
+    </Message.Root>
   );
 }

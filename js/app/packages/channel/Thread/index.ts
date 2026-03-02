@@ -1,3 +1,3 @@
 export { Thread } from './Thread';
-export { ThreadRow } from './ThreadRow';
+export { ChannelThread } from './ChannelThread';
 export type { ThreadProps, ThreadState } from './types';

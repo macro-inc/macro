@@ -33,7 +33,7 @@ import {
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
-import { Thread, ThreadRow } from '../Thread';
+import { ChannelThread } from '../Thread';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
@@ -116,19 +116,15 @@ export function Channel(props: ChannelProps) {
               {(item) => {
                 const state = threadManager.getOrCreateThreadState(item.id);
                 return (
-                  <ThreadRow
-                    message={item}
+                  <ChannelThread
+                    data={() => item}
+                    channelId={() => props.channelId}
+                    getMessageActions={getMessageActions}
+                    isExpanded={state.isExpanded}
+                    setIsExpanded={state.setIsExpanded}
                     listMeta={listMetaByMessageId()[item.id]}
                     onDismissNewMessages={activityTracker.dismissNewMessages}
-                  >
-                    <Thread
-                      data={() => item}
-                      channelId={() => props.channelId}
-                      getMessageActions={getMessageActions}
-                      isExpanded={state.isExpanded}
-                      setIsExpanded={state.setIsExpanded}
-                    />
-                  </ThreadRow>
+                  />
                 );
               }}
             </ThreadList>
