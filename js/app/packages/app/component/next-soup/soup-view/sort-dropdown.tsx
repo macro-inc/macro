@@ -1,19 +1,34 @@
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import SortIcon from '@macro-icons/wide/sort.svg';
+import CheckIcon from '@icon/regular/check.svg';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import ClockIcon from '@icon/regular/clock.svg';
+import PencilIcon from '@icon/regular/pencil.svg';
+import EyeIcon from '@icon/regular/eye.svg';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
-import { ShortcutLabel } from '@app/component/next-soup/soup-view/soup-toolbar';
 
 export interface SortOption {
   value: SystemSortOption;
   label: string;
+  icon?: () => JSX.Element;
 }
 
 export const SORT_OPTIONS: SortOption[] = [
-  { value: 'viewed_at', label: 'Viewed' },
-  { value: 'updated_at', label: 'Updated' },
-  { value: 'created_at', label: 'Created' },
+  {
+    value: 'viewed_at',
+    label: 'Last viewed',
+    icon: () => <EyeIcon class="size-3.5" />,
+  },
+  {
+    value: 'updated_at',
+    label: 'Last modified',
+    icon: () => <PencilIcon class="size-3.5" />,
+  },
+  {
+    value: 'created_at',
+    label: 'Date created',
+    icon: () => <ClockIcon class="size-3.5" />,
+  },
 ];
 
 export interface SortDropdownProps {
@@ -46,6 +61,10 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
 
   const options = () => props.options ?? SORT_OPTIONS;
 
+  const currentOption = () => options().find((o) => o.value === props.value());
+
+  const currentLabel = () => currentOption()?.label ?? 'Sort';
+
   const handleKeyDown = (e: KeyboardEvent) => {
     const totalItems = options().length;
 
@@ -75,39 +94,36 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="s" />}>
-        <Popover.Trigger
-          as="button"
-          type="button"
-          class="flex items-center gap-1.5 h-[22px] px-2.5 shrink-0 rounded-full active:bg-accent active:text-panel"
-          classList={{
-            'bg-accent text-panel': open(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20': !open(),
-          }}
-        >
-          <SortIcon class="size-4.5" />
-          <span class="leading-none">
-            <ShortcutLabel label="Sort" shortcut="s" />
-          </span>
-        </Popover.Trigger>
-      </Tooltip>
+      <Popover.Trigger
+        as="button"
+        type="button"
+        class="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink transition-all"
+      >
+        <Show when={currentOption()?.icon}>
+          {(icon) => (
+            <span class="size-3.5 flex items-center justify-center shrink-0">
+              {icon()()}
+            </span>
+          )}
+        </Show>
+        <span class="font-medium">{currentLabel()}</span>
+        <ChevronDownIcon class="size-3" />
+      </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="z-50 bg-panel border border-edge-muted shadow-lg"
+          class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[120px]"
           tabIndex={0}
           ref={(el) => setTimeout(() => el?.focus(), 0)}
           onKeyDown={handleKeyDown}
         >
-          <div class="flex flex-col gap-1 p-2 min-w-[140px]">
+          <div class="flex flex-col py-1">
             <For each={options()}>
               {(option, index) => (
                 <button
                   type="button"
-                  class="flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
                   classList={{
-                    'bg-hover text-ink': props.value() === option.value,
-                    'text-ink': props.value() !== option.value,
-                    'bg-hover': focusedIndex() === index(),
+                    'bg-ink/5': focusedIndex() === index(),
                   }}
                   onClick={() => {
                     props.onChange(option.value);
@@ -115,10 +131,27 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
                   }}
                   onMouseEnter={() => setFocusedIndex(index())}
                 >
-                  <span>{option.label}</span>
-                  <Show when={props.value() === option.value}>
-                    <span class="text-ink">✓</span>
+                  <Show when={option.icon}>
+                    {(icon) => (
+                      <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+                        {icon()()}
+                      </span>
+                    )}
                   </Show>
+                  <span
+                    class="flex-1 truncate"
+                    classList={{
+                      'text-ink font-medium': props.value() === option.value,
+                      'text-ink-muted': props.value() !== option.value,
+                    }}
+                  >
+                    {option.label}
+                  </span>
+                  <span class="size-3.5 flex items-center justify-center shrink-0">
+                    <Show when={props.value() === option.value}>
+                      <CheckIcon class="size-3 text-accent" />
+                    </Show>
+                  </span>
                 </button>
               )}
             </For>

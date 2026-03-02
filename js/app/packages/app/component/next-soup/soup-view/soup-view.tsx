@@ -83,6 +83,7 @@ import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs'
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/soup-filters-bar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/soup-view-search-bar';
+import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -187,6 +188,10 @@ export const SoupView = (props: SoupViewProps) => {
                 <div class="max-w-56 w-full">
                   <SoupSearchbar />
                 </div>
+                <SortDropdown
+                  value={() => soup.sort.active()[0].id as SystemSortOption}
+                  onChange={(value) => soup.sort.setAll([value])}
+                />
               </div>
             </div>
           </div>
