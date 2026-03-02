@@ -210,13 +210,6 @@ export const SoupView = (props: SoupViewProps) => {
                 <div class="flex items-center gap-1">
                   <button
                     type="button"
-                    class="flex gap-1 items-center justify-center px-4 py-1 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded-xl transition-colors text-sm tracking-wide"
-                  >
-                    <FiltersIcon class="size-4" />
-                    Filters
-                  </button>
-                  <button
-                    type="button"
                     class="flex gap-1 items-center justify-center p-1.5 hover:bg-ink/20 text-ink-muted hover:text-ink rounded-lg transition-colors aspect-square"
                   >
                     <GearIcon class="size-4 shrink-0" />
