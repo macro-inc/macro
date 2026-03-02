@@ -16,7 +16,8 @@ use crate::{
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoChat,
-            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit,
+            exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
@@ -424,7 +425,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(0),
+            .number_of_fragments(1),
     );
 
     search_request_builder.highlight(highlight);
@@ -443,7 +444,9 @@ pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
 ) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
-    let search_request = build_unified_search_request(&args)?.to_json();
+    let mut search_request = build_unified_search_request(&args)?.to_json();
+    inject_fragment_size(&mut search_request, 1000);
+    exclude_source_content(&mut search_request);
 
     tracing::trace!("search request {:?}", search_request);
 
@@ -483,11 +486,6 @@ pub(crate) async fn search_unified(
     .instrument(tracing::info_span!("opensearch_read_response_body"))
     .await?;
 
-    tracing::info!(
-        response_body_bytes = bytes.len(),
-        "opensearch response size"
-    );
-
     let result: DefaultSearchResponse<UnifiedSearchIndex> = {
         let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
             .entered();
@@ -498,6 +496,13 @@ pub(crate) async fn search_unified(
             }
         })?
     };
+
+    tracing::info!(
+        response_body_bytes = bytes.len(),
+        opensearch_took_ms = result.took,
+        hit_count = result.hits.hits.len(),
+        "opensearch response"
+    );
 
     let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
 

@@ -1,152 +1,219 @@
-<div
-  style="
-    padding: 60px 20px;
-    width: 100%;
-  "
+<!doctype html>
+<html
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns="http://www.w3.org/1999/xhtml"
 >
-  <div
+  <head>
+    <title>You're Invited to Macro</title>
+    <meta
+      content="text/html; charset=UTF-8"
+      http-equiv="Content-Type"
+    >
+    <meta
+      content="width=device-width, initial-scale=1"
+      name="viewport"
+    >
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+            <o:AllowPNG/>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
+    <style type="text/css">
+      @font-face {
+        src: url('https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/berkley.woff2') format('woff2');
+        font-family: 'Berkeley Mono';
+        font-display: fallback;
+      }
+    </style>
+  </head>
+  <body
     style="
-      font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
-      background-color: #111;
-      border: 1px solid #444;
-      box-sizing: border-box;
-      border-radius: 4px;
-      max-width: 570px;
-      font-size: 15px;
-      margin: 0 auto;
-      color: #999;
-      width: 100%;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      word-spacing: normal;
+      padding: 0;
+      margin: 0;
     "
   >
     <div
       style="
-        background-color: #222;
-        box-sizing: border-box;
-        line-height: 60px;
-        font-size: 17px;
-        padding: 0 20px;
-        height: 60px;
+        padding: 60px 20px;
         width: 100%;
       "
     >
       <div
         style="
-          border: 1px solid #444;
-          vertical-align: middle;
+          font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
+          background-color: #0C0906;
+          border: 1px solid #474747;
           box-sizing: border-box;
-          display: inline-block;
-          border-radius: 20px;
-          margin-right: 10px;
-          height: 40px;
-          width: 40px;
+          border-radius: 4px;
+          max-width: 570px;
+          overflow: hidden;
+          color: #0C0906;
+          font-size: 15px;
+          margin: 0 auto;
+          width: 100%;
         "
-      >
-        <!--<SvgNotification/>-->
-      </div>
-      You have {{ notifs.len() }} unread messages
-    </div>
-    <hr
-      style="
-        border-top: 1px dashed #444;
-        border-bottom: none;
-        border-right: none;
-        border-left: none;
-        margin: 0;
-      "
-    />
-    <div
-      style="
-        box-sizing: border-box;
-        padding: 0 20px;
-      "
-    >
-      {% for notif in notifs %}
-      <a
-        style="
-          text-decoration: none;
-          padding: 10px 17px;
-          color: #999;
-          display: block;
-        "
-        href="https://macro.com"
-        target="_blank"
       >
         <div
           style="
-            background-color: #f038;
-            border: 1px solid #f03;
+            background-color: #201E1D;
             box-sizing: border-box;
-            display: inline-block;
-            border-radius: 100%;
-            margin-right: 10px;
-            height: 8px;
-            width: 8px;
+            line-height: 60px;
+            font-size: 17px;
+            padding: 0 20px;
+            height: 60px;
+            width: 100%;
           "
         >
-        </div>
-        {{ notif.created_at.format("%Y-%m-%d %H:%M:%S") }} {{ notif.message }}
-      </a>
-      {% if !loop.last %}
-      <hr
-        style="
-          border-top: 1px dashed #333;
-          border-bottom: none;
-          border-right: none;
-          border-left: none;
-          margin: 0;
-        "
-      />
-      {% endif %}
-      {% endfor %}
-
-      <hr
-        style="
-          border-top: 1px dashed #333;
-          border-bottom: none;
-          border-right: none;
-          border-left: none;
-          margin: 0;
-        "
-      />
-
-      <table style="width: 100%; cellpadding: 0; border: none;">
-        <tbody>
-        <tr>
-          <td
+          <div
             style="
+              border: 1px solid #474747;
               vertical-align: middle;
-              padding: 0;
-              width: 50%;
+              box-sizing: border-box;
+              display: inline-block;
+              border-radius: 20px;
+              margin-right: 10px;
+              height: 40px;
+              width: 40px;
             "
           >
-            <a
-              style="
-                background-color: #f04;
-                text-decoration: none;
-                display: inline-block;
-                white-space: nowrap;
-                width: min-content;
-                padding: 2px 10px;
-                color: #111;
-              "
-              href="https://macro.com"
-              target="_blank"
-            >
-              View in Macro
-            </a>
-          </td>
-          <td
+            <!--<SvgNotification/>-->
+          </div>
+          You have {{ notifs.len() }} unread messages
+        </div>
+        <hr
+          style="
+            border-top: 1px dashed #474747;
+            border-bottom: none;
+            border-right: none;
+            border-left: none;
+            margin: 0;
+          "
+        />
+        <div
+          style="
+            padding: 0 20px 20px 20px;
+            box-sizing: border-box;
+          "
+        >
+          {% for notif in notifs %}
+          <a
             style="
-              text-align: right;
-              padding: 0;
-              width: 50%;
+              text-decoration: none;
+              padding: 10px 17px;
+              display: block;
+              color: #aaaaaa;
             "
+            href="https://macro.com"
+            target="_blank"
           >
-            <!--<SvgLogo/>-->
-          </td>
-        </tr>
-        </tbody>
-      </table>
+            <div
+              style="
+                background-color: #ff8f0088;
+                border: 1px solid #ff8f00;
+                box-sizing: border-box;
+                display: inline-block;
+                border-radius: 100%;
+                margin-right: 10px;
+                height: 8px;
+                width: 8px;
+              "
+            >
+            </div>
+            {{ notif.created_at.format("%Y-%m-%d %H:%M:%S") }} {{ notif.message }}
+          </a>
+          {% if !loop.last %}
+          <hr
+            style="
+              border-top: 1px dashed #333;
+              border-bottom: none;
+              border-right: none;
+              border-left: none;
+              margin: 0;
+            "
+          />
+          {% endif %}
+          {% endfor %}
+
+          <hr
+            style="
+              border-top: 1px dashed #333;
+              border-bottom: none;
+              border-right: none;
+              border-left: none;
+              margin: 0;
+            "
+          />
+
+          <table
+            style="
+              mso-table-lspace: 0pt;
+              mso-table-rspace: 0pt;
+              margin-top: 20px;
+              border: none;
+              width: 100%;
+            "
+            cellpadding="0"
+            cellspacing="0"
+          >
+            <tbody>
+              <tr>
+                <td
+                  style="
+                    vertical-align: bottom;
+                    width: 50%;
+                  "
+                >
+                  <a
+                    style="
+                      font-family: 'Berkeley Mono', 'Courier New', Courier, monospace;
+                      background-color: #FF8F00;
+                      text-decoration: none;
+                      display: inline-block;
+                      white-space: nowrap;
+                      border-radius: 2px;
+                      width: min-content;
+                      padding: 2px 10px;
+                      color: #0C0906;
+                    "
+                    href="https://macro.com"
+                    target="_blank"
+                  >
+                    View in Macro
+                  </a>
+                </td>
+                <td
+                  style="
+                    vertical-align: top;
+                    text-align: right;
+                    padding: 0;
+                    width: 50%;
+                  "
+                >
+                  <img
+                    src="https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/email-logo.gif"
+                    style="
+                      -ms-interpolation-mode: bicubic;
+                      line-height: 100%;
+                      outline: none;
+                      width: 60px;
+                      border: 0;
+                    "
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
+  </body>
+</html>

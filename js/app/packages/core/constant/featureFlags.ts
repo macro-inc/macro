@@ -128,3 +128,5 @@ export const ENABLE_EMAIL_SCHEDULED_SEND = false;
 export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = true;
 
 export const ENABLE_FEATURED_SEARCH_RESULTS = true;
+
+export const ENABLE_PROXY_EMAIL_IMAGES = DEV_MODE_ENV;

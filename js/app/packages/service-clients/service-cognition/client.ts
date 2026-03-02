@@ -10,9 +10,13 @@ import {
   type MaybeError,
   type MaybeResult,
   mapOk,
+  ok,
+  err,
   type ObjectLike,
 } from '@core/util/maybeResult';
+import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type OpenAI from 'openai';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
@@ -25,8 +29,6 @@ import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendCha
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
-import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
-import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
@@ -233,19 +235,6 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
-  async structuredOuputCompletion(args: StructedOutputCompletionRequest) {
-    return mapOk(
-      await dcsFetch<StructedOutputCompletionResponse>(
-        `/completions/structured_output`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      ),
-      (result) => result as { completion: any }
-    );
-  },
-
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return mapOk(
@@ -257,3 +246,56 @@ export const cognitionApiServiceClient = {
     );
   },
 };
+
+export async function generateTitle(text: string): Promise<string | undefined> {
+  const result = await dcsCompletion({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'user',
+        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else.\n\n${text}`,
+      },
+    ],
+    max_tokens: 100,
+  });
+
+  if (isErr(result)) {
+    console.error('Error generating title');
+    return undefined;
+  }
+
+  return result[1].choices[0]?.message?.content?.trim() || undefined;
+}
+
+type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
+
+export async function dcsCompletion(
+  body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
+): Promise<
+  MaybeResult<
+    FetchWithTokenErrorCode | DcsCompletionErrorCode,
+    OpenAI.ChatCompletion
+  >
+> {
+  let response: Response;
+  try {
+    response = await platformFetch(`${dcsHost}/chat/completions`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: false }),
+    });
+  } catch {
+    return err('NETWORK_ERROR', 'Failed to reach completions proxy');
+  }
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ??
+      `Completion failed with status ${response.status}`;
+    return err('OPENAI_ERROR', message);
+  }
+  return ok(data as OpenAI.ChatCompletion);
+}

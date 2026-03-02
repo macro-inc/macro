@@ -61,14 +61,14 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
           'relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent',
           'font-mono font-medium uppercase leading-none',
           !local.suppressInteractionStyling &&
-            'enabled:hover:bg-surface-4 focus:[--focus-border-inset:-4px] active:border-accent active:bg-accent active:text-panel disabled:opacity-50 disabled:hover:',
+            'hover:bg-surface-4 focus:[--focus-border-inset:-4px] active:border-accent active:bg-accent active:text-panel disabled:opacity-50 disabled:hover:bg-inherit',
           'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
 
           {
-            'bg-ink border-ink text-panel enabled:hover:bg-accent enabled:hover:opacity-80 active:opacity-100':
+            'bg-ink border-ink text-panel hover:bg-accent hover:opacity-80 active:opacity-100':
               'primary' === local.variant,
             'border-ink': 'secondary' === local.variant,
-            'border-failure text-failure active:bg-failure enabled:hover:bg-failure-bg':
+            'border-failure text-failure active:bg-failure hover:bg-failure-bg':
               'destructive' === local.variant,
             'p-0 gap-0 items-stretch': local.showChevron,
           },

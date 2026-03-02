@@ -2,9 +2,12 @@
  * Utilities for extracting information from search highlight content
  * that contains <macro_em> tags marking matched terms.
  */
+import { Index } from 'solid-js';
 
 const INVISIBLE_CHARS_RE =
   /(?:[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF\u00AD\u2800-\u28FF]|\u034F)+/g;
+const MACRO_EM_SPLIT_RE = /(<macro_em>.*?<\/macro_em>)/gs;
+const MACRO_EM_UNWRAP_RE = /^<macro_em>(.*)<\/macro_em>$/s;
 
 /** Collapses newlines, extra whitespace, and invisible Unicode characters into a clean single line. */
 function stripInvisibleChars(text: string): string {
@@ -146,4 +149,41 @@ export function windowSearchMatch(text: string, chars: number = 200): string {
   }
 
   return line;
+}
+
+/**
+ * Parses text containing `<macro_em>` tags into an array of segments.
+ * Each segment is either plain text or a highlighted match.
+ */
+export function parseSearchHighlightSegments(
+  text: string
+): Array<{ text: string; highlight: boolean }> {
+  const parts = text.split(MACRO_EM_SPLIT_RE);
+  const segments: Array<{ text: string; highlight: boolean }> = [];
+  for (const part of parts) {
+    if (!part) continue;
+    const match = MACRO_EM_UNWRAP_RE.exec(part);
+    if (match) {
+      segments.push({ text: match[1], highlight: true });
+    } else {
+      segments.push({ text: part, highlight: false });
+    }
+  }
+  return segments;
+}
+
+export function HighlightRender(props: { text: string }) {
+  return (
+    <span>
+      <Index each={parseSearchHighlightSegments(props.text)}>
+        {(segment) =>
+          segment().highlight ? (
+            <span class="md-mark search-match">{segment().text}</span>
+          ) : (
+            segment().text
+          )
+        }
+      </Index>
+    </span>
+  );
 }

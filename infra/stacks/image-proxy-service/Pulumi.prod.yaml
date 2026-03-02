@@ -1,0 +1,6 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  image-proxy-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  image-proxy-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  image-proxy-service:fusionauth_issuer: auth.macro.com

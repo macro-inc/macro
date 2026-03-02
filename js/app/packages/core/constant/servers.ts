@@ -10,6 +10,7 @@ const serverHostLocal: Servers = {
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
+  'image-proxy-service': 'http://localhost:8097',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -26,6 +27,7 @@ const serverHostRemote = {
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
+  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;

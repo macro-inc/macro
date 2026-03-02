@@ -583,64 +583,6 @@
         }
       }
     },
-    "/completions/structured_output": {
-      "post": {
-        "tags": ["structured_output"],
-        "operationId": "handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StructedOutputCompletionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StructedOutputCompletionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -2760,26 +2702,6 @@
           "id": {
             "type": "string"
           }
-        }
-      },
-      "StructedOutputCompletionRequest": {
-        "type": "object",
-        "required": ["prompt", "schema", "schema_name"],
-        "properties": {
-          "prompt": {
-            "type": "string"
-          },
-          "schema": {},
-          "schema_name": {
-            "type": "string"
-          }
-        }
-      },
-      "StructedOutputCompletionResponse": {
-        "type": "object",
-        "required": ["completion"],
-        "properties": {
-          "completion": {}
         }
       },
       "SuccessResponse": {

@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
@@ -261,41 +261,6 @@ export function MarkdownPopup(props: {
       }
     };
 
-    async function generateTitleForMarkdown(markdownText: string) {
-      try {
-        const schema = {
-          type: 'object',
-          properties: {
-            title: {
-              type: 'string',
-              description:
-                'A concise and informative title that describes the following text excerpt',
-            },
-          },
-          required: ['title'],
-          additionalProperties: false,
-        };
-
-        const result = await structuredOutputCompletion(
-          `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-          schema,
-          'markdown_title_generator'
-        );
-
-        if (
-          typeof result === 'object' &&
-          result !== null &&
-          'title' in result &&
-          typeof result.title === 'string'
-        ) {
-          return result.title;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-      return undefined;
-    }
-
     const handleReplaceText = createCallback(async (newText: string) => {
       editor.dispatchCommand(POPUP_REPLACE_TEXT, newText);
       setPopupVisible(false);
@@ -309,7 +274,7 @@ export function MarkdownPopup(props: {
         return;
       }
 
-      const title: string | undefined = await generateTitleForMarkdown(content);
+      const title = await generateTitle(content);
       const documentId = await createMarkdownFile({
         content,
         title: title ?? `${name()} - AI Explanation`,

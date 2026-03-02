@@ -21,8 +21,6 @@ import type {
   HttpSendChatMessageRequest,
   SendChatMessageResponse,
   StringIDResponse,
-  StructedOutputCompletionRequest,
-  StructedOutputCompletionResponse,
   SuccessResponse,
 } from './schemas';
 
@@ -628,60 +626,6 @@ export const getCitationHandler = async (
     status: res.status,
     headers: res.headers,
   } as getCitationHandlerResponse;
-};
-
-export type handlerResponse200 = {
-  data: StructedOutputCompletionResponse;
-  status: 200;
-};
-
-export type handlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type handlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type handlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type handlerResponseSuccess = handlerResponse200 & {
-  headers: Headers;
-};
-export type handlerResponseError = (
-  | handlerResponse401
-  | handlerResponse404
-  | handlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type handlerResponse = handlerResponseSuccess | handlerResponseError;
-
-export const getHandlerUrl = () => {
-  return `/completions/structured_output`;
-};
-
-export const handler = async (
-  structedOutputCompletionRequest: StructedOutputCompletionRequest,
-  options?: RequestInit
-): Promise<handlerResponse> => {
-  const res = await fetch(getHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(structedOutputCompletionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as handlerResponse;
 };
 
 /**
