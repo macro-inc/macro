@@ -64,7 +64,6 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
-import { SoupSearchbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
@@ -83,6 +82,7 @@ import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/soup-filters-bar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import { SoupSearchbar } from '@app/component/next-soup/soup-view/soup-view-search-bar';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
