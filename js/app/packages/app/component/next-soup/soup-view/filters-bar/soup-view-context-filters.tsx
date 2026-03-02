@@ -434,7 +434,7 @@ interface FilterSelectProps {
 }
 
 const FilterSelect = (props: FilterSelectProps) => {
-  const isMultiple = () => props.multiple ?? true;
+  const multiple = () => props.multiple ?? true;
 
   const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
@@ -445,11 +445,7 @@ const FilterSelect = (props: FilterSelectProps) => {
       item={itemProps.item}
       class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
     >
-      <span
-        class={
-          'size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent'
-        }
-      >
+      <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
         <KSelect.ItemIndicator>
           <CheckIcon class="size-2.5 text-page" />
         </KSelect.ItemIndicator>
@@ -469,94 +465,61 @@ const FilterSelect = (props: FilterSelectProps) => {
     </KSelect.Item>
   );
 
-  const TriggerContent = () => (
-    <>
-      <span class="font-medium">{props.label}</span>
-      <Show when={isMultiple() && hasActiveFilters()}>
-        <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
-          {activeCount()}
-        </span>
-      </Show>
-      <ChevronDownIcon class="size-3" />
-    </>
-  );
-
-  const ContentFooter = () => (
-    <div class="w-full py-1 px-2 flex items-center border-t border-t-edge-muted">
-      <button
-        type="button"
-        class="ml-auto text-xs hover:bg-accent hover:text-page font-medium py-1 px-2 rounded-md"
-        onClick={() => props.onChange([])}
-      >
-        Clear
-      </button>
-    </div>
-  );
+  // For single select: convert to/from array format
+  const value = () =>
+    multiple() ? activeFilters() : (activeFilters()[0] ?? null);
+  const handleChange = (selected: Option | Option[] | null) => {
+    if (multiple()) {
+      props.onChange(selected as Option[]);
+    } else {
+      props.onChange(selected ? [selected as Option] : []);
+    }
+  };
 
   return (
-    <Show
-      when={isMultiple()}
-      fallback={
-        <KSelect<Option>
-          options={props.options}
-          value={activeFilters()[0] ?? null}
-          onChange={(selected) => props.onChange(selected ? [selected] : [])}
-          optionTextValue="label"
-          optionValue="value"
-          gutter={4}
-          placement="bottom-start"
-          itemComponent={renderItem}
-        >
-          <KSelect.Trigger
-            as="button"
-            type="button"
-            class={cn(
-              'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
-              hasActiveFilters() &&
-                'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
-            )}
-          >
-            <TriggerContent />
-          </KSelect.Trigger>
-          <KSelect.Portal>
-            <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
-              <KSelect.Listbox />
-              <ContentFooter />
-            </KSelect.Content>
-          </KSelect.Portal>
-        </KSelect>
-      }
+    <KSelect<Option>
+      options={props.options}
+      value={value() as Option & Option[]}
+      onChange={handleChange as (value: Option & Option[]) => void}
+      optionTextValue="label"
+      optionValue="value"
+      gutter={4}
+      multiple={multiple()}
+      placement="bottom-start"
+      itemComponent={renderItem}
     >
-      <KSelect<Option>
-        options={props.options}
-        value={activeFilters()}
-        onChange={props.onChange}
-        optionTextValue="label"
-        optionValue="value"
-        gutter={4}
-        multiple
-        placement="bottom-start"
-        itemComponent={renderItem}
+      <KSelect.Trigger
+        as="button"
+        type="button"
+        class={cn(
+          'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
+          hasActiveFilters() &&
+            'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
+        )}
       >
-        <KSelect.Trigger
-          as="button"
-          type="button"
-          class={cn(
-            'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
-            hasActiveFilters() &&
-              'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
-          )}
-        >
-          <TriggerContent />
-        </KSelect.Trigger>
-        <KSelect.Portal>
-          <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
-            <KSelect.Listbox />
-            <ContentFooter />
-          </KSelect.Content>
-        </KSelect.Portal>
-      </KSelect>
-    </Show>
+        <span class="font-medium">{props.label}</span>
+        <Show when={multiple() && hasActiveFilters()}>
+          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
+            {activeCount()}
+          </span>
+        </Show>
+        <ChevronDownIcon class="size-3" />
+      </KSelect.Trigger>
+      <KSelect.Portal>
+        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
+          <KSelect.Listbox />
+          <div class="w-full py-1 px-2 flex items-center border-t border-t-edge-muted">
+            <button
+              type="button"
+              class="ml-auto text-xs hover:bg-accent hover:text-page font-medium py-1 px-2 rounded-md"
+              onClick={() => props.onChange([])}
+            >
+              Clear
+            </button>
+          </div>
+        </KSelect.Content>
+      </KSelect.Portal>
+    </KSelect>
   );
 };
 
