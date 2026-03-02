@@ -1,11 +1,12 @@
 //! Thread (email thread) access extractor.
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
     Extension, RequestPartsExt, async_trait,
-    extract::{FromRef, FromRequestParts},
+    extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
@@ -16,7 +17,6 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model::thread::EmailThreadPermission;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Validates that the user has at least the required access level to an email thread.
@@ -24,9 +24,7 @@ use model_user::axum_extractor::OptionalMacroUserExtractor;
 /// Type parameter `T` specifies the required access level.
 /// Type parameter `Svc` is the entity access service implementation.
 ///
-/// # Prerequisites
-///
-/// - Thread context must be loaded (EmailThreadPermission in extensions)
+/// Extracts the thread ID from the `thread_id` path parameter.
 #[derive(Debug)]
 pub struct ThreadAccessLevelExtractor<T: RequiredAccessLevel, Svc> {
     /// The entity access receipt
@@ -53,10 +51,17 @@ where
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        let thread_context: Extension<EmailThreadPermission> = parts
+        let Path(path_params): Path<HashMap<String, String>> = parts
             .extract()
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(|_| ExtractorError::BadRequest("missing thread_id path parameter"))?;
+
+        let thread_id = path_params
+            .get("thread_id")
+            .ok_or(ExtractorError::BadRequest(
+                "missing thread_id path parameter",
+            ))?
+            .clone();
 
         let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
             parts
@@ -71,7 +76,7 @@ where
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
-                        entity_id: thread_context.thread_id.clone(),
+                        entity_id: thread_id,
                         entity_type: EntityType::EmailThread,
                     },
                     auth: EntityAccessAuth::Internal,
@@ -90,18 +95,14 @@ where
             Some(macro_user_id) => service
                 .check_access(
                     Some(macro_user_id),
-                    &thread_context.thread_id,
+                    &thread_id,
                     EntityType::EmailThread,
                     required_level,
                 )
                 .await
                 .map_err(ExtractorError::from)?,
             None => service
-                .check_public_access(
-                    &thread_context.thread_id,
-                    EntityType::EmailThread,
-                    required_level,
-                )
+                .check_public_access(&thread_id, EntityType::EmailThread, required_level)
                 .await
                 .map_err(ExtractorError::from)?,
         };
@@ -109,7 +110,7 @@ where
         Ok(Self {
             entity_access_receipt: EntityAccessReceipt {
                 entity: Entity {
-                    entity_id: thread_context.thread_id.clone(),
+                    entity_id: thread_id,
                     entity_type: EntityType::EmailThread,
                 },
                 auth: macro_user_id
