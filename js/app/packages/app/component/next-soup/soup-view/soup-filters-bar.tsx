@@ -325,26 +325,15 @@ const TasksFilters = () => {
 };
 
 const ChannelsFilters = () => {
-  const activityOptions: Option[] = [
-    { value: 'channel-recent-activity', label: 'Recent Activity' },
-  ];
-
   const visibilityOptions: Option[] = [
     { value: 'channel-public', label: 'Public' },
     { value: 'channel-private', label: 'Private' },
   ];
 
-  const activity = useFilterOptions(activityOptions);
   const visibility = useFilterOptions(visibilityOptions);
 
   return (
     <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Activity"
-        options={activityOptions}
-        active={activity.active()}
-        onChange={activity.onChange}
-      />
       <FilterSelect
         label="Visibility"
         options={visibilityOptions}
