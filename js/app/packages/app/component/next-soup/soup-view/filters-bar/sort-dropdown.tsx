@@ -47,11 +47,11 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         <ChevronDownIcon class="size-3" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[140px]">
+        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[140px] p-1">
           <For each={options()}>
             {(option) => (
               <DropdownMenu.Item
-                class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default"
+                class="w-full flex items-center gap-2 px-2 py-2 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                 onSelect={() => props.onChange(option.value)}
               >
                 <Show when={option.icon}>

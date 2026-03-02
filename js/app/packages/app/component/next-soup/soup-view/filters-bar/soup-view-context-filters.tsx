@@ -443,7 +443,7 @@ const FilterSelect = (props: FilterSelectProps) => {
   const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
     <KSelect.Item
       item={itemProps.item}
-      class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
+      class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 group"
     >
       <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
         <KSelect.ItemIndicator>
@@ -506,7 +506,7 @@ const FilterSelect = (props: FilterSelectProps) => {
         <ChevronDownIcon class="size-3" />
       </KSelect.Trigger>
       <KSelect.Portal>
-        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
+        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[var(--kb-popper-anchor-width)] p-1">
           <KSelect.Listbox />
           <div class="w-full py-1 px-2 flex items-center border-t border-t-edge-muted">
             <button
@@ -607,7 +607,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
       itemComponent={(itemProps) => (
         <Combobox.Item
           item={itemProps.item}
-          class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
+          class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
         >
           <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
             <Combobox.ItemIndicator>
@@ -683,7 +683,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
 
       <Combobox.Portal>
         <Combobox.Content
-          class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[200px]"
+          class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg p-1 shadow-xl min-w-[200px]"
           on:keydown={handleKeyDown}
         >
           <Show
