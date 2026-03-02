@@ -204,19 +204,22 @@ const DocumentsFilters = () => {
 };
 
 const TasksFilters = () => {
-  const { statusFilter, setStatusFilter, assigneeFilter, setAssigneeFilter } =
-    useSoupView();
+  const {
+    soup,
+    statusFilter,
+    setStatusFilter,
+    assigneeFilter,
+    setAssigneeFilter,
+  } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
 
-  // Status options from TASK_STATUS_OPTIONS with icons
   const statusOptions: Option[] = TASK_STATUS_OPTIONS.map((o) => ({
     value: o.value,
     label: o.label,
     icon: () => <PropertyValueIcon optionId={o.value} class="size-3.5" />,
   }));
 
-  // Assignee options from contacts with user icons
   const assigneeOptions = createMemo((): Option[] => {
     const currentUserId = userId();
     return contacts().map((contact) => ({
@@ -233,7 +236,6 @@ const TasksFilters = () => {
     }));
   });
 
-  // Priority options with icons - map filter IDs to actual property option IDs for icons
   const priorityOptions: Option[] = [
     {
       value: 'task-critical',
@@ -282,10 +284,8 @@ const TasksFilters = () => {
     },
   ];
 
-  // Priority uses soup.filters via the hook
   const priority = useFilterOptions(priorityOptions);
 
-  // Derive active status from context signal (special handling for single-select)
   const activeStatus = createMemo((): Option[] => {
     const current = statusFilter();
     if (!current) return [];
@@ -293,7 +293,6 @@ const TasksFilters = () => {
     return opt ? [opt] : [];
   });
 
-  // Derive active assignee from context signal (special handling for single-select)
   const activeAssignee = createMemo((): Option[] => {
     const current = assigneeFilter();
     if (!current) return [];
@@ -302,7 +301,6 @@ const TasksFilters = () => {
   });
 
   const handleStatusChange = (options: Option[]) => {
-    // Single-select behavior: use the last selected option or clear if empty
     const newValue =
       options.length > 0 ? options[options.length - 1].value : undefined;
     setStatusFilter(newValue);
@@ -322,12 +320,14 @@ const TasksFilters = () => {
         active={activeStatus()}
         onChange={handleStatusChange}
       />
-      <FilterSelect
-        label="Assignee"
-        options={assigneeOptions()}
-        active={activeAssignee()}
-        onChange={handleAssigneeChange}
-      />
+      <Show when={!soup.filters.isActive('assigned-to')}>
+        <FilterSelect
+          label="Assignee"
+          options={assigneeOptions()}
+          active={activeAssignee()}
+          onChange={handleAssigneeChange}
+        />
+      </Show>
       <FilterSelect
         label="Priority"
         options={priorityOptions}
