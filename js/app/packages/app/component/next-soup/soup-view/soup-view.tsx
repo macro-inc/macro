@@ -41,7 +41,6 @@ import {
   type SearchLocation,
   type ProjectEntity,
 } from '@entity';
-import { queryKeys } from '@macro-entity';
 import { useQueryClient } from '@queries/client';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
