@@ -76,14 +76,12 @@ const useFilterOptions = (options: Option[]) => {
   );
 
   const onChange = (selected: Option[]) => {
-    // Deactivate all options in this group first
     for (const opt of options) {
       if (soup.filters.isActive(opt.value)) {
         soup.filters.deactivate(opt.value);
       }
     }
 
-    // Activate selected options
     for (const option of selected) {
       soup.filters.activate(option.value);
     }
@@ -109,23 +107,14 @@ const InboxFilters = () => {
 };
 
 const AgentsFilters = () => {
-  const chatOptions = toFilterOptions(CHAT_CONTEXTUAL_FILTERS);
-  const chat = useFilterOptions(chatOptions);
-
   return (
     <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Activity"
-        options={chatOptions}
-        active={chat.active()}
-        onChange={chat.onChange}
-      />
+      {/* No filters for agents yet */}
     </div>
   );
 };
 
 const MailFilters = () => {
-  // Split email filters into read/unread and done/not-done groups
   const readStatusOptions: Option[] = [
     { value: 'email-unread', label: 'Unread' },
     { value: 'email-read', label: 'Read' },
@@ -158,19 +147,16 @@ const MailFilters = () => {
 };
 
 const DocumentsFilters = () => {
-  // Recency filters
   const recencyOptions: Option[] = [
     { value: 'doc-recent', label: 'Recently Edited' },
     { value: 'doc-edited-this-week', label: 'Edited This Week' },
   ];
 
-  // Type filters
   const typeOptions: Option[] = [
     { value: 'doc-markdown', label: 'Markdown' },
     { value: 'doc-canvas', label: 'Canvas' },
   ];
 
-  // Location filter
   const locationOptions: Option[] = [
     { value: 'doc-in-folder', label: 'In Folder' },
   ];
@@ -339,12 +325,10 @@ const TasksFilters = () => {
 };
 
 const ChannelsFilters = () => {
-  // Activity filter
   const activityOptions: Option[] = [
     { value: 'channel-recent-activity', label: 'Recent Activity' },
   ];
 
-  // Visibility filters
   const visibilityOptions: Option[] = [
     { value: 'channel-public', label: 'Public' },
     { value: 'channel-private', label: 'Private' },
@@ -372,7 +356,6 @@ const ChannelsFilters = () => {
 };
 
 const FilesFilters = () => {
-  // File type filters based on FILE_ASSOCIATION_TYPES
   const fileTypeOptions: Option[] = [
     { value: 'file-code', label: 'Code' },
     { value: 'file-image', label: 'Images' },
@@ -380,7 +363,6 @@ const FilesFilters = () => {
     { value: 'file-other', label: 'Other' },
   ];
 
-  // General recency filters
   const recencyOptions: Option[] = [
     { value: 'recently-updated', label: 'Recently Updated' },
     { value: 'recently-created', label: 'Recently Created' },
