@@ -65,7 +65,7 @@ export function ChannelThread(props: ThreadProps) {
       <Thread.Row
         message={props.data()}
         listMeta={props.listMeta}
-        onDismissNewMessages={props.onDismissNewMessages}
+        onDismissNewMessages={props.actions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
           <ChannelMessage

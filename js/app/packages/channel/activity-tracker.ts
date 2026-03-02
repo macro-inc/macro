@@ -1,6 +1,7 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiChannelMessage } from '@service-comms/client';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { isNewMessage as isNewMessagePure } from './Channel/util';
 
 type ActivityTracker = {
   openedAt: Accessor<Date>;
@@ -22,24 +23,16 @@ export function createActivityTracker(
 
   const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
 
-  const isNewMessage = (message: ApiChannelMessage) => {
-    if (newMessagesDismissed()) return false;
-
-    const lastViewed = props.lastViewedAt();
-    if (!lastViewed) return false;
-
-    const openedAt = openedChannelAt();
-    const createdAt = new Date(message.created_at);
-
-    return (
-      createdAt > new Date(lastViewed) &&
-      createdAt < openedAt &&
-      props.userId() !== message.sender_id
-    );
-  };
+  const isNewMessage = (message: ApiChannelMessage) =>
+    isNewMessagePure(message, {
+      dismissed: newMessagesDismissed(),
+      lastViewedAt: props.lastViewedAt(),
+      openedAt: openedChannelAt(),
+      userId: props.userId(),
+    });
 
   const dismissNewMessages = () => {
-    setNewMessagesDismissed(false);
+    setNewMessagesDismissed(true);
   };
 
   return {

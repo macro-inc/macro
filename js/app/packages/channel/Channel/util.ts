@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { ChannelMessagesData } from '@queries/channel/channel-messages';
 import type { ApiChannelMessage } from '@service-comms/client';
 
@@ -15,18 +16,25 @@ export function flattenMessages(
   return all;
 }
 
-export function isNewMessage(message: ApiChannelMessage) {
-  if (newMessagesDismissed()) return false;
+export function isNewMessage(
+  message: ApiChannelMessage,
+  ctx: {
+    dismissed: boolean;
+    lastViewedAt: DateValue | undefined | null;
+    openedAt: Date;
+    userId: string | undefined;
+  }
+): boolean {
+  if (ctx.dismissed) return false;
 
-  const lastViewed = lastViewedAt();
+  const lastViewed = ctx.lastViewedAt;
   if (!lastViewed) return false;
 
-  const openedAt = openedChannelAt();
   const createdAt = new Date(message.created_at);
 
   return (
     createdAt > new Date(lastViewed) &&
-    createdAt < openedAt &&
-    userId() !== message.sender_id
+    createdAt < ctx.openedAt &&
+    ctx.userId !== message.sender_id
   );
 }
