@@ -7,9 +7,14 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{GithubError, GithubLink},
+    models::{GithubError, GithubLink, ValidatedGithubWebhookEvent},
     ports::{Auth, GithubOauth, GithubRepo, GithubService},
 };
+
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use subtle::ConstantTimeEq;
+type HmacSha256 = Hmac<Sha256>;
 
 /// Github config
 #[derive(Debug)]
@@ -20,6 +25,8 @@ pub struct GithubConfig {
     pub client_secret: String,
     /// The id of the github identity provider in fusionauth
     pub idp_id: String,
+    /// The webhook secret used to validate github webhook events
+    pub webhook_secret: String,
 }
 
 /// The concrete github service implementation.
@@ -149,5 +156,39 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
             .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
 
         Ok(link)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn validate_webhook_event(
+        &self,
+        signature: &str,
+        body: &[u8],
+    ) -> Result<ValidatedGithubWebhookEvent, GithubError> {
+        let sig_bytes = hex::decode(signature).map_err(|_| GithubError::InvalidWebhookSignature)?;
+
+        let mut mac = HmacSha256::new_from_slice(self.config.webhook_secret.as_bytes())
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        mac.update(body);
+        let expected = mac.finalize().into_bytes();
+
+        // constant-time comparison
+        if expected.as_slice().ct_eq(&sig_bytes).into() {
+            Ok(ValidatedGithubWebhookEvent::new(
+                serde_json::to_value(body).map_err(|e| GithubError::Internal(e.into()))?,
+            ))
+        } else {
+            Err(GithubError::InvalidWebhookSignature)
+        }
+    }
+
+    #[tracing::instrument(skip(self, webhook_event), err)]
+    async fn process_webhook_event(
+        &self,
+        webhook_event: &ValidatedGithubWebhookEvent,
+    ) -> Result<(), GithubError> {
+        tracing::trace!(webhook_event=?webhook_event, "processing event");
+
+        Ok(())
     }
 }

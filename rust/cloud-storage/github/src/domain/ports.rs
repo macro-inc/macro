@@ -6,6 +6,7 @@ use std::future::Future;
 
 use crate::domain::models::{
     GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubUserInfo,
+    ValidatedGithubWebhookEvent,
 };
 
 use super::models::GithubLink;
@@ -125,4 +126,17 @@ pub trait GithubService: Send + Sync + 'static {
         redirect_uri: &str,
         code: &str,
     ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
+
+    /// Validates the incoming webhook event and returns back the `ValidatedGithubWebhookEvent`
+    fn validate_webhook_event(
+        &self,
+        signature: &str,
+        body: &[u8],
+    ) -> impl Future<Output = Result<ValidatedGithubWebhookEvent, GithubError>> + Send;
+
+    /// Processes and incoming github webhook event
+    fn process_webhook_event(
+        &self,
+        webhook_event: &ValidatedGithubWebhookEvent,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
 }

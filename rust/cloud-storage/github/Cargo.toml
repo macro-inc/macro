@@ -5,8 +5,9 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "outbound"]
+default = ["ports", "inbound", "outbound", "axum"]
 ports = []
+inbound = ["axum", "ports"]
 outbound = [
   "dep:sqlx", 
   "dep:reqwest",
@@ -16,6 +17,11 @@ outbound = [
   "dep:tokio",
   "dep:fusionauth",
   "ports"
+]
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:model-error-response",
 ]
 
 [dependencies]
@@ -29,12 +35,21 @@ serde = { workspace = true}
 reqwest = {workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
+entity_access = { path = "../entity_access" }
+hmac = "0.12.1"
+sha2 = { workspace = true }
+subtle = "2.6.1"
+hex = { workspace = true }
 
 fusionauth = { path = "../fusionauth", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 macro_user_id = { path = "../macro_user_id" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
+
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

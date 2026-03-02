@@ -30,6 +30,9 @@ pub enum GithubError {
     /// No refresh token was provided in the token exchange
     #[error("no refresh token provided in token exchange")]
     NoRefreshTokenProvided,
+    /// Invalid github webhook signature
+    #[error("invalid github webhook signature")]
+    InvalidWebhookSignature,
 }
 
 /// A GitHub link record (as stored in the database)
@@ -79,4 +82,15 @@ pub struct GithubUserInfo {
     pub email: Option<String>,
     /// Display name
     pub name: Option<String>,
+}
+
+/// A validated github webhook event
+#[derive(Debug)]
+pub struct ValidatedGithubWebhookEvent(serde_json::Value);
+
+impl ValidatedGithubWebhookEvent {
+    /// Create a new ValidatedGithubWebhookEvent
+    pub fn new(value: serde_json::Value) -> Self {
+        Self(value)
+    }
 }
