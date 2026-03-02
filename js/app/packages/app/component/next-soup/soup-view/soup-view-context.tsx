@@ -75,10 +75,10 @@ interface SoupViewContextValues {
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
-  statusFilter: Accessor<string | undefined>;
-  setStatusFilter: Setter<string | undefined>;
-  assigneeFilter: Accessor<string | undefined>;
-  setAssigneeFilter: Setter<string | undefined>;
+  statusFilter: Accessor<string[]>;
+  setStatusFilter: Setter<string[]>;
+  assigneeFilter: Accessor<string[]>;
+  setAssigneeFilter: Setter<string[]>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -119,16 +119,14 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupItemsQueryFilters>({ ...(props.queryFilters ?? {}) });
 
-  const [statusFilter, setStatusFilter] = createSignal<string | undefined>();
-  const [assigneeFilter, setAssigneeFilter] = createSignal<
-    string | undefined
-  >();
+  const [statusFilter, setStatusFilter] = createSignal<string[]>([]);
+  const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
     if (!soup.filters.isActive('task')) {
-      setStatusFilter(undefined);
-      setAssigneeFilter(undefined);
+      setStatusFilter([]);
+      setAssigneeFilter([]);
     }
   });
 
@@ -280,7 +278,7 @@ export const SoupViewContextProvider: FlowComponent<
 
       // Apply task sub-filters
       if (
-        (currentStatusFilter || currentAssigneeFilter) &&
+        (currentStatusFilter.length > 0 || currentAssigneeFilter.length > 0) &&
         isTaskEntity(entity)
       ) {
         const taskEntity = entity as unknown as TaskEntityWithProperties;

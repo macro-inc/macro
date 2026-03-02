@@ -299,28 +299,21 @@ const TasksFilters = () => {
 
   const activeStatus = createMemo((): Option[] => {
     const current = statusFilter();
-    if (!current) return [];
-    const opt = statusOptions.find((o) => o.value === current);
-    return opt ? [opt] : [];
+    return statusOptions.filter((o) => current.includes(o.value));
   });
 
   const activeAssignee = createMemo((): Option[] => {
     const current = assigneeFilter();
-    if (!current) return [];
-    const opt = assigneeOptions().find((o) => o.value === current);
-    return opt ? [opt] : [];
+    const options = assigneeOptions();
+    return options.filter((o) => current.includes(o.value));
   });
 
   const handleStatusChange = (options: Option[]) => {
-    const newValue =
-      options.length > 0 ? options[options.length - 1].value : undefined;
-    setStatusFilter(newValue);
+    setStatusFilter(options.map((o) => o.value));
   };
 
   const handleAssigneeChange = (options: Option[]) => {
-    const newValue =
-      options.length > 0 ? options[options.length - 1].value : undefined;
-    setAssigneeFilter(newValue);
+    setAssigneeFilter(options.map((o) => o.value));
   };
 
   return (

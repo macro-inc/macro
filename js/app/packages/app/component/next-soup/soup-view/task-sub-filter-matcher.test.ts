@@ -37,13 +37,13 @@ describe('matchesTaskSubFilters', () => {
 
     expect(
       matchesTaskSubFilters(task, {
-        statusFilter: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+        statusFilter: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
       })
     ).toBe(true);
 
     expect(
       matchesTaskSubFilters(task, {
-        assigneeFilter: 'user-1',
+        assigneeFilter: ['user-1'],
       })
     ).toBe(true);
   });
@@ -60,7 +60,7 @@ describe('matchesTaskSubFilters', () => {
 
     expect(
       matchesTaskSubFilters(task, {
-        statusFilter: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+        statusFilter: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
       })
     ).toBe(false);
   });
@@ -77,7 +77,7 @@ describe('matchesTaskSubFilters', () => {
 
     expect(
       matchesTaskSubFilters(task, {
-        assigneeFilter: 'user-1',
+        assigneeFilter: ['user-1'],
       })
     ).toBe(false);
   });
@@ -98,9 +98,109 @@ describe('matchesTaskSubFilters', () => {
 
     expect(
       matchesTaskSubFilters(task, {
-        statusFilter: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
-        assigneeFilter: 'user-1',
+        statusFilter: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
+        assigneeFilter: ['user-1'],
       })
+    ).toBe(true);
+  });
+
+  it('matches any status when multiple statuses are in filter', () => {
+    const taskInProgress = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.STATUS, {
+          type: 'SelectOption',
+          value: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
+        }),
+      ],
+    });
+
+    const taskInReview = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.STATUS, {
+          type: 'SelectOption',
+          value: [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW],
+        }),
+      ],
+    });
+
+    const taskDone = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.STATUS, {
+          type: 'SelectOption',
+          value: [PROPERTY_OPTION_IDS.STATUS.COMPLETED],
+        }),
+      ],
+    });
+
+    const multiStatusFilter = [
+      PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+      PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+    ];
+
+    expect(
+      matchesTaskSubFilters(taskInProgress, { statusFilter: multiStatusFilter })
+    ).toBe(true);
+    expect(
+      matchesTaskSubFilters(taskInReview, { statusFilter: multiStatusFilter })
+    ).toBe(true);
+    expect(
+      matchesTaskSubFilters(taskDone, { statusFilter: multiStatusFilter })
+    ).toBe(false);
+  });
+
+  it('matches any assignee when multiple assignees are in filter', () => {
+    const taskUser1 = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-1' }],
+        }),
+      ],
+    });
+
+    const taskUser2 = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-2' }],
+        }),
+      ],
+    });
+
+    const taskUser3 = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-3' }],
+        }),
+      ],
+    });
+
+    const multiAssigneeFilter = ['user-1', 'user-2'];
+
+    expect(
+      matchesTaskSubFilters(taskUser1, { assigneeFilter: multiAssigneeFilter })
+    ).toBe(true);
+    expect(
+      matchesTaskSubFilters(taskUser2, { assigneeFilter: multiAssigneeFilter })
+    ).toBe(true);
+    expect(
+      matchesTaskSubFilters(taskUser3, { assigneeFilter: multiAssigneeFilter })
+    ).toBe(false);
+  });
+
+  it('treats empty arrays the same as undefined filters', () => {
+    const task = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.STATUS, {
+          type: 'SelectOption',
+          value: [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS],
+        }),
+      ],
+    });
+
+    expect(
+      matchesTaskSubFilters(task, { statusFilter: [], assigneeFilter: [] })
     ).toBe(true);
   });
 });
