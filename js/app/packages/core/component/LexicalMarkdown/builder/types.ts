@@ -23,6 +23,7 @@ export interface MentionsOptions {
   block?: string;
   showOpenTabs?: boolean;
   useSnapshotForDocuments?: boolean;
+  sourceDocumentId?: string;
 }
 
 /** Intentional extension point — no options yet. */
