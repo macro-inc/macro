@@ -71,7 +71,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       shared: () => ({
         queryFilters: QUERY_FILTERS.agent,
-        clientFilters: { and: ['agent'] },
+        clientFilters: { and: ['agent', 'shared-agent'] },
       }),
     },
   },

@@ -17,7 +17,8 @@ import {
   Switch,
 } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { GENERAL_CONTEXTUAL_FILTERS } from '@app/component/next-soup/filters/filters';
+import { AGENT_OWNERSHIP_FILTERS } from '@app/component/next-soup/filters/filters';
+import { useProjectsQuery } from '@queries/storage/projects';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { UserIcon } from '@core/component/UserIcon';
@@ -128,9 +129,64 @@ const InboxFilters = () => {
 };
 
 const AgentsFilters = () => {
+  const { setQueryFilters, queryFilters } = useSoupView();
+  const projects = useProjectsQuery();
+
+  // Ownership filter options (client-side filtering)
+  const ownershipOptions: Option[] = AGENT_OWNERSHIP_FILTERS.map((f) => ({
+    value: f.id,
+    label: f.label,
+  }));
+  const ownership = useFilterOptions(ownershipOptions, { multiple: false });
+
+  // Project filter options (API-level filtering via chat_filters.project_ids)
+  const projectOptions = createMemo((): Option[] => {
+    const data = projects.data;
+    if (!data) return [];
+    return data.map((project) => ({
+      value: project.id,
+      label: project.name,
+    }));
+  });
+
+  // Track active project filter from queryFilters
+  const activeProjectFilter = createMemo((): Option[] => {
+    const projectIds = queryFilters().chat_filters?.project_ids;
+    if (!projectIds?.length) return [];
+    const options = projectOptions();
+    return options.filter((opt) => projectIds.includes(opt.value));
+  });
+
+  const handleProjectChange = (selected: Option[]) => {
+    const projectIds = selected.map((opt) => opt.value);
+    batch(() => {
+      setQueryFilters((prev) => ({
+        ...prev,
+        chat_filters: {
+          ...prev.chat_filters,
+          project_ids: projectIds.length > 0 ? projectIds : undefined,
+        },
+      }));
+    });
+  };
+
   return (
     <div class="flex items-center gap-1.5">
-      {/* No filters for agents yet */}
+      <FilterSelect
+        label="Owner"
+        options={ownershipOptions}
+        active={ownership.active()}
+        onChange={ownership.onChange}
+      />
+      <Show when={projectOptions().length > 0}>
+        <FilterCombobox
+          label="Project"
+          options={projectOptions()}
+          active={activeProjectFilter()}
+          onChange={handleProjectChange}
+          placeholder="Search projects..."
+        />
+      </Show>
     </div>
   );
 };

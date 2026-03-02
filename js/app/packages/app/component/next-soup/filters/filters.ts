@@ -213,6 +213,28 @@ export function sharedEntity(getUserID: () => string | undefined) {
   };
 }
 
+/** Filter for agents (chats) owned by the current user */
+export function ownedAgentFilter(getUserID: () => string | undefined) {
+  return function (entity: EntityData): boolean {
+    if (entity.type !== 'chat') return false;
+    const userID = getUserID();
+    if (userID == null) return false;
+
+    return entity.ownerId === userID;
+  };
+}
+
+/** Filter for agents (chats) shared with the current user (owned by someone else) */
+export function sharedAgentFilter(getUserID: () => string | undefined) {
+  return function (entity: EntityData): boolean {
+    if (entity.type !== 'chat') return false;
+    const userID = getUserID();
+    if (userID == null) return false;
+
+    return entity.ownerId !== userID;
+  };
+}
+
 export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     const userID = getUserID();
@@ -600,6 +622,17 @@ export const CHAT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   },
 ];
 
+/**
+ * Agent ownership filter options for the filter bar.
+ * Note: The actual predicates are registered in createSoupFilters with getUserID closure.
+ * These are just the IDs and labels for building filter UI options.
+ */
+export const AGENT_OWNERSHIP_FILTERS: readonly { id: string; label: string }[] =
+  [
+    { id: 'owned-agent', label: 'Owned by me' },
+    { id: 'shared-agent', label: 'Shared with me' },
+  ] as const;
+
 export const GENERAL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'recently-viewed',
@@ -758,6 +791,16 @@ export const createSoupFilters = (
       id: 'shared-entity',
       label: 'Shared entities',
       predicate: sharedEntity(getUserID),
+    },
+    {
+      id: 'owned-agent',
+      label: 'Owned by me',
+      predicate: ownedAgentFilter(getUserID),
+    },
+    {
+      id: 'shared-agent',
+      label: 'Shared with me',
+      predicate: sharedAgentFilter(getUserID),
     },
     {
       id: 'assigned-to',
