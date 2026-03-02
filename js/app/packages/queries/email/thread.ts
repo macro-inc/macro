@@ -5,7 +5,7 @@ import { emailClient } from '@service-email/client';
 import type {
   MessageToSend,
   SendMessageResponse,
-  APIThread as Thread,
+  ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
