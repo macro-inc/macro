@@ -130,6 +130,7 @@ const stateCache = new Map<
       queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
       searchText: string;
+      activeTab: string | undefined;
     };
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
@@ -225,6 +226,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
+    activeTab,
+    setActiveTab,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
@@ -520,6 +523,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
         searchText: searchText(),
+        activeTab: activeTab(),
       },
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
@@ -547,6 +551,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setSearchText(cached.soup.searchText);
 
     soup.sort.setAll(cached.soup.sort);
+
+    setActiveTab(cached.soup.activeTab);
 
     virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);

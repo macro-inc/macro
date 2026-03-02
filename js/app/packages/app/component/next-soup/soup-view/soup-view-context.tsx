@@ -79,6 +79,8 @@ interface SoupViewContextValues {
   setStatusFilter: Setter<string[]>;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
+  activeTab: Accessor<string | undefined>;
+  setActiveTab: Setter<string | undefined>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -121,6 +123,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [statusFilter, setStatusFilter] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
+  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
@@ -370,6 +373,8 @@ export const SoupViewContextProvider: FlowComponent<
     setStatusFilter,
     assigneeFilter,
     setAssigneeFilter,
+    activeTab,
+    setActiveTab,
   };
 
   return (

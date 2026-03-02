@@ -24,7 +24,7 @@ import {
 
 const useApplyPreset = () => {
   const soup = useSoup();
-  const { setQueryFilters } = useSoupView();
+  const { setQueryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -50,6 +50,7 @@ const useApplyPreset = () => {
     const resolved = resolver(getPresetContext());
     if (!resolved) return;
 
+    setActiveTab(tabId);
     applyPreset(resolved);
   };
 
@@ -100,6 +101,7 @@ export const SoupViewTabs = () => {
 
 const InboxTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -109,6 +111,8 @@ const InboxTabs = () => {
           { value: 'noise', label: 'Noise' },
           { value: 'all', label: 'All' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.inbox.default}
         onChange={(value) => applyTabPreset('inbox', value)}
       />
     </div>
@@ -117,6 +121,7 @@ const InboxTabs = () => {
 
 const AgentsTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -126,6 +131,8 @@ const AgentsTabs = () => {
           { value: 'running', label: 'Running' },
           { value: 'shared', label: 'Shared' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.agents.default}
         onChange={(value) => applyTabPreset('agents', value)}
       />
     </div>
@@ -134,6 +141,7 @@ const AgentsTabs = () => {
 
 const MailTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -144,6 +152,8 @@ const MailTabs = () => {
           { value: 'drafts', label: 'Drafts' },
           { value: 'sent', label: 'Sent' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.mail.default}
         onChange={(value) => applyTabPreset('mail', value)}
       />
     </div>
@@ -152,6 +162,7 @@ const MailTabs = () => {
 
 const DocumentsTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -161,6 +172,8 @@ const DocumentsTabs = () => {
           { value: 'shared', label: 'Shared' },
           { value: 'all', label: 'All' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.documents.default}
         onChange={(value) => applyTabPreset('documents', value)}
       />
     </div>
@@ -169,6 +182,7 @@ const DocumentsTabs = () => {
 
 const TasksTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -178,6 +192,8 @@ const TasksTabs = () => {
           { value: 'created-by-me', label: 'Created' },
           { value: 'all', label: 'All' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.tasks.default}
         onChange={(value) => applyTabPreset('tasks', value)}
       />
     </div>
@@ -186,6 +202,7 @@ const TasksTabs = () => {
 
 const ChannelsTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -195,6 +212,8 @@ const ChannelsTabs = () => {
           { value: 'people', label: 'People' },
           { value: 'teams', label: 'Teams' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.channels.default}
         onChange={(value) => applyTabPreset('channels', value)}
       />
     </div>
@@ -203,6 +222,7 @@ const ChannelsTabs = () => {
 
 const FilesTabs = () => {
   const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
 
   return (
     <div>
@@ -212,6 +232,8 @@ const FilesTabs = () => {
           { value: 'shared', label: 'Shared' },
           { value: 'all', label: 'All' },
         ]}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS.files.default}
         onChange={(value) => applyTabPreset('files', value)}
       />
     </div>
@@ -222,7 +244,8 @@ export const SegmentedControl: ParentComponent<
   {
     list: { value: string; label: string }[];
     value?: string;
-  } & SegmentedControlRootProps
+    defaultValue?: string;
+  } & Omit<SegmentedControlRootProps, 'defaultValue'>
 > = (props) => {
   const onChange = (newValue: string) => {
     props.onChange?.(newValue);
@@ -231,7 +254,8 @@ export const SegmentedControl: ParentComponent<
   return (
     <KSegmentedControl
       class="size-full text-sm border border-edge-muted rounded-sm p-0.5"
-      defaultValue={props.list[0]?.value}
+      value={props.value}
+      defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
       disabled={props.disabled}
     >
