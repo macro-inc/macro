@@ -34,11 +34,11 @@ const useApplyPreset = () => {
 
   const applyPreset = (preset: {
     queryFilters: SoupItemsQueryFilters;
-    clientFilters: FilterID[];
+    clientFilters: { and?: FilterID[]; or?: FilterID[] };
   }) => {
     batch(() => {
       setQueryFilters(preset.queryFilters);
-      soup.filters.set({ and: preset.clientFilters });
+      soup.filters.set(preset.clientFilters);
     });
   };
 

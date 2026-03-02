@@ -11,7 +11,10 @@ import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
 export type SoupFiltersPreset = {
   queryFilters: SoupItemsQueryFilters;
-  clientFilters: FilterID[];
+  clientFilters: {
+    and?: FilterID[];
+    or?: FilterID[];
+  };
 };
 
 // Tab preset configuration types
@@ -37,15 +40,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       signal: () => ({
         queryFilters: applyInboxQueryFilters({}),
-        clientFilters: ['signal', 'not-done'],
+        clientFilters: { and: ['signal', 'not-done'] },
       }),
       noise: () => ({
         queryFilters: applyOtherQueryFilters({}),
-        clientFilters: ['noise', 'not-done'],
+        clientFilters: { and: ['noise', 'not-done'] },
       }),
       all: () => ({
         queryFilters: {},
-        clientFilters: ['explicit-noise'],
+        clientFilters: { and: ['explicit-noise'] },
       }),
     },
   },
@@ -59,16 +62,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.agent,
             chat_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['agent'],
+          clientFilters: { and: ['agent'] },
         };
       },
       running: () => ({
         queryFilters: QUERY_FILTERS.agent,
-        clientFilters: ['agent'],
+        clientFilters: { and: ['agent'] },
       }),
       shared: () => ({
         queryFilters: QUERY_FILTERS.agent,
-        clientFilters: ['agent'],
+        clientFilters: { and: ['agent'] },
       }),
     },
   },
@@ -80,18 +83,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           ...QUERY_FILTERS.email,
           email_filters: { importance: true },
         },
-        clientFilters: ['email', 'no-drafts'],
+        clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
           email_filters: { importance: false },
         },
-        clientFilters: ['email', 'no-drafts'],
+        clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({
         queryFilters: QUERY_FILTERS.email,
-        clientFilters: ['email-drafts'],
+        clientFilters: { and: ['email-drafts'] },
       }),
       sent: (ctx) => {
         if (!ctx.email) return undefined;
@@ -100,7 +103,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.email,
             email_filters: { senders: [ctx.email] },
           },
-          clientFilters: ['email', 'no-drafts'],
+          clientFilters: { and: ['email', 'no-drafts'] },
         };
       },
     },
@@ -115,16 +118,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.document,
             document_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['document'],
+          clientFilters: { and: ['document'] },
         };
       },
       shared: () => ({
         queryFilters: QUERY_FILTERS.document,
-        clientFilters: ['document', 'shared-entity'],
+        clientFilters: { and: ['document', 'shared-entity'] },
       }),
       all: () => ({
         queryFilters: QUERY_FILTERS.document,
-        clientFilters: ['document'],
+        clientFilters: { and: ['document'] },
       }),
     },
   },
@@ -138,7 +141,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.task,
             document_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['task', 'assigned-to'],
+          clientFilters: { and: ['task', 'assigned-to'] },
         };
       },
       'created-by-me': (ctx) => {
@@ -148,12 +151,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.task,
             document_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['task'],
+          clientFilters: { and: ['task'] },
         };
       },
       all: () => ({
         queryFilters: QUERY_FILTERS.task,
-        clientFilters: ['task'],
+        clientFilters: { and: ['task'] },
       }),
     },
   },
@@ -165,15 +168,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           ...QUERY_FILTERS.channels,
           channel_filters: { importance: true },
         },
-        clientFilters: ['channels'],
+        clientFilters: { and: ['channels'] },
       }),
       people: () => ({
         queryFilters: QUERY_FILTERS.people,
-        clientFilters: ['people'],
+        clientFilters: { and: ['people'] },
       }),
       teams: () => ({
         queryFilters: QUERY_FILTERS.teams,
-        clientFilters: ['teams'],
+        clientFilters: { and: ['teams'] },
       }),
     },
   },
@@ -191,19 +194,19 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             },
             project_filters: { owners: [ctx.userId] },
           },
-          clientFilters: ['file-folder'],
+          clientFilters: { and: ['file-folder'] },
         };
       },
       shared: () => ({
         queryFilters: QUERY_FILTERS.file,
-        clientFilters: ['file-folder', 'shared-entity'],
+        clientFilters: { and: ['file-folder', 'shared-entity'] },
       }),
       all: () => ({
         queryFilters: {
           ...QUERY_FILTERS.file,
           project_filters: {},
         },
-        clientFilters: ['file-folder'],
+        clientFilters: { and: ['file-folder'] },
       }),
     },
   },
@@ -249,5 +252,5 @@ export function getDefaultListViewPreset(
   }
 
   // Last resort: empty filters
-  return { queryFilters: {}, clientFilters: [] };
+  return { queryFilters: {}, clientFilters: {} };
 }

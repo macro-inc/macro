@@ -138,7 +138,7 @@ const stateCache = new Map<
 
 interface SoupViewProps {
   viewName: string;
-  initialClientFilters?: FilterID[];
+  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
   queryFilters?: SoupItemsQueryFilters;
 }
 
@@ -149,10 +149,12 @@ export const SoupView = (props: SoupViewProps) => {
   useSoupNotificationInvalidators();
 
   onMount(() => {
-    if (!props.initialClientFilters || !props.initialClientFilters.length)
-      return;
+    if (!props.initialClientFilters) return;
 
-    soup.filters.set({ and: props.initialClientFilters });
+    const { and, or } = props.initialClientFilters;
+    if (!and?.length && !or?.length) return;
+
+    soup.filters.set(props.initialClientFilters);
   });
 
   return (
