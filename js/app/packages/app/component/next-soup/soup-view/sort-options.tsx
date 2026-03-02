@@ -78,6 +78,12 @@ const PRIORITY_ORDER: Record<string, number> = {
 };
 const NO_PRIORITY_ORDER = 4;
 
+const getPriorityOrder = (priority: string | undefined) => {
+  if (!priority) return NO_PRIORITY_ORDER;
+
+  return PRIORITY_ORDER[priority] ?? NO_PRIORITY_ORDER;
+};
+
 /**
  * Status sort order: Not Started -> In Progress -> In Review -> Completed -> Canceled
  */
@@ -91,6 +97,12 @@ const STATUS_ORDER: Record<string, number> = {
 
 const NO_STATUS_ORDER = 5;
 
+const getStatusOrder = (status: string | undefined) => {
+  if (!status) return NO_STATUS_ORDER;
+
+  return STATUS_ORDER[status] ?? NO_STATUS_ORDER;
+};
+
 /**
  * Sort tasks by priority (Urgent first, no priority last).
  * Non-task entities are sorted to the end.
@@ -100,12 +112,8 @@ export function sortByPriority<T extends EntityData>(a: T, b: T): number {
   const aPriority = getTaskPriorityOptionId(a as TaskEntityWithProperties);
   const bPriority = getTaskPriorityOptionId(b as TaskEntityWithProperties);
 
-  const aOrder = aPriority
-    ? (PRIORITY_ORDER[aPriority] ?? NO_PRIORITY_ORDER)
-    : NO_PRIORITY_ORDER;
-  const bOrder = bPriority
-    ? (PRIORITY_ORDER[bPriority] ?? NO_PRIORITY_ORDER)
-    : NO_PRIORITY_ORDER;
+  const aOrder = getPriorityOrder(aPriority);
+  const bOrder = getPriorityOrder(bPriority);
 
   if (aOrder !== bOrder) {
     return aOrder - bOrder;
@@ -124,12 +132,8 @@ export function sortByStatus<T extends EntityData>(a: T, b: T): number {
   const aStatus = getTaskStatusOptionId(a as TaskEntityWithProperties);
   const bStatus = getTaskStatusOptionId(b as TaskEntityWithProperties);
 
-  const aOrder = aStatus
-    ? (STATUS_ORDER[aStatus] ?? NO_STATUS_ORDER)
-    : NO_STATUS_ORDER;
-  const bOrder = bStatus
-    ? (STATUS_ORDER[bStatus] ?? NO_STATUS_ORDER)
-    : NO_STATUS_ORDER;
+  const aOrder = getStatusOrder(aStatus);
+  const bOrder = getStatusOrder(bStatus);
 
   if (aOrder !== bOrder) {
     return aOrder - bOrder;
