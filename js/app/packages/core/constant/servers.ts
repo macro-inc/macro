@@ -26,7 +26,7 @@ const serverHostRemote = {
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
-  'email-service': `http://localhost:8094`,
+  'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
 } as const;
 
