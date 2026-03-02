@@ -10,7 +10,10 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import {
+  DocumentPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from '@core/component/DocumentPropertiesModal';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -30,7 +33,7 @@ import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Component } from 'solid-js';
+import type { Component } from 'solid-js';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -41,7 +44,7 @@ export const TopBar: Component = () => {
   const downloadName = useBlockDocumentDownloadName();
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl('properties');
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(() => {

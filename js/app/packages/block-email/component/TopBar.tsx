@@ -13,14 +13,17 @@ import {
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
-import { EmailPropertiesButton } from './EmailPropertiesModal';
+import {
+  EmailPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from './EmailPropertiesModal';
 
 export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
 }) {
-  const propertiesControl = useDrawerControl('properties');
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const tools: BlockTool[] = [

@@ -37,7 +37,10 @@ import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
-import { ProjectPropertiesButton } from './ProjectPropertiesModal';
+import {
+  ProjectPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -53,7 +56,7 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const propertiesControl = useDrawerControl('properties');
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   function handleCopyLink() {

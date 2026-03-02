@@ -13,7 +13,10 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 
 import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
-import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import {
+  DocumentPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   ReferencesButton,
@@ -37,7 +40,7 @@ import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
-import { onMount, Show } from 'solid-js';
+import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
@@ -57,7 +60,7 @@ export function TopBar() {
   const canvasFile = blockFileSignal.get;
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl('properties');
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   let ref!: HTMLDivElement;

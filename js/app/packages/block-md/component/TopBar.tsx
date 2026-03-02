@@ -16,7 +16,6 @@ import {
   BlockItemSplitLabel,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   setShowCommentsPreference,

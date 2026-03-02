@@ -1,28 +1,22 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import {
-  type BlockTool,
-  ToolButton,
-} from '@app/component/ResponsiveBlockToolbar';
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
-import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import {
+  DocumentPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   ReferencesButton,
@@ -70,17 +64,18 @@ export function TopBar() {
   const hasModificationData = useHasModificationData();
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
-  const itemType = blockNameToItemType(blockName);
-  if (!itemType)
-    throw new Error('Using functionality in an unknown item type.');
-
-  const fileType = blockMetadataSignal()?.fileType;
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const propertiesControl = useDrawerControl('properties');
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
+
+  const itemType = blockNameToItemType(blockName);
+  if (!itemType) return null;
+
+  const fileType = blockMetadataSignal()?.fileType;
+
   const copyLink = () => {
     createShareUrl(LocationType.General);
     toast.success('Link copied to clipboard');
