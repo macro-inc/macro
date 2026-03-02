@@ -43,7 +43,7 @@ import { ChannelType } from './generated/models/channelType';
 import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
-import { ApiThreadReply } from '@service-storage/generated/schemas';
+import type { ApiThreadReply } from '@service-storage/generated/schemas';
 
 export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
