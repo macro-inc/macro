@@ -12,7 +12,9 @@ async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 chrono.workspace = true
 comms = { path = "../comms", features = ["outbound"] }
+documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "axum", "outbound"] }
+entity_access = { path = "../entity_access" }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 item_filters = { path = "../item_filters" }

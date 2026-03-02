@@ -180,7 +180,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             DocumentClient::builder()
                 .with_dss_client(document_storage_client.clone())
                 .with_lexical_client(lexical_client)
-                .with_sync_service_client(sync_service_client)
+                .with_sync_service_client(sync_service_client.clone())
                 .with_macro_db(pool.clone())
                 .build(),
         )
@@ -248,6 +248,43 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         NotificationIngressService::new(notification_repository, notification_queue, state_machine)
     });
 
+    // Build document tool context for AI tools
+    let s3_config = aws_sdk_s3::Config::builder()
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+        .build();
+    let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
+    let s3_upload_adapter = documents::outbound::s3_upload_url::S3UploadUrlAdapter::new(
+        s3_client,
+        "test-bucket",
+        "test-docx-bucket",
+    );
+    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(pool.clone());
+    let cloudfront_config = documents::domain::models::CloudFrontConfig {
+        distribution_url: "https://test.cloudfront.net".to_string(),
+        signer_public_key_id: "test-key-id".to_string(),
+        signer_private_key: "test-private-key".to_string(),
+        presigned_url_expiry_seconds: 3600,
+        browser_cache_expiry_seconds: 86400,
+    };
+    let document_service = documents::domain::service::DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.as_ref().clone(),
+        s3_upload_adapter,
+        ai_tools::NoOpTaskProperties,
+        pool.clone(),
+    );
+    let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    );
+    let test_lexical_client =
+        LexicalClient::new("test".into(), "http://nofileshere".into());
+    let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
+        document_service,
+        entity_access_service,
+        test_lexical_client,
+    );
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
@@ -263,6 +300,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         connection_repo: MockConnectionRepo::new(),
         soup_service,
         stream_repo: MockStreamRepo::new(),
+        document_tool_context,
     };
     Arc::new(api_context)
 }

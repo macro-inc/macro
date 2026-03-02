@@ -345,6 +345,7 @@ fn stream_and_save_message(
         search_service_client: ctx.search_service_client.clone(),
         scribe: ctx.scribe.clone(),
         soup_service: ctx.soup_service.clone(),
+        document_tool_context: ctx.document_tool_context.clone(),
     };
 
     #[expect(deprecated)]

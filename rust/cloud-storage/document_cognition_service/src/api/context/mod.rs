@@ -1,5 +1,5 @@
 use crate::config::Config;
-use ai_tools::ToolSoupService;
+use ai_tools::{ToolDocumentToolContext, ToolSoupService};
 use axum::extract::FromRef;
 use connection_gateway_client::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -61,6 +61,7 @@ pub struct ApiContext {
     pub connection_repo: Arc<dyn ConnectionRepo>,
     pub soup_service: Arc<ToolSoupService>,
     pub stream_repo: Arc<dyn StreamRepo>,
+    pub document_tool_context: ToolDocumentToolContext,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

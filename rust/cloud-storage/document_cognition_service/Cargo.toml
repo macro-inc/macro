@@ -37,8 +37,9 @@ ai_tools = { path = "../ai_tools" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 base64 = { workspace = true }
@@ -50,6 +51,8 @@ cookie = { workspace = true }
 dashmap = { workspace = true }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
+documents = { path = "../documents", features = ["ai_tools"] }
+entity_access = { path = "../entity_access" }
 doppleganger = { workspace = true }
 email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }

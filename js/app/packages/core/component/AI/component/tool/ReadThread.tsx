@@ -3,7 +3,7 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
-  name: 'Read',
+  name: 'ReadThread',
   renderCall: (ctx) => (
     <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
       Read{' '}
@@ -16,4 +16,4 @@ const handler = createToolRenderer({
   renderResponse: (_) => undefined,
 });
 
-export const readHandler = handler;
+export const readThreadHandler = handler;
