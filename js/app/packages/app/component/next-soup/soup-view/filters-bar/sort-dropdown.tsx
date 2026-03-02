@@ -1,35 +1,12 @@
-import { type Component, For, type JSX, Show } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@icon/regular/check.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import ClockIcon from '@icon/regular/clock.svg';
-import PencilIcon from '@icon/regular/pencil.svg';
-import EyeIcon from '@icon/regular/eye.svg';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
-
-export interface SortOption {
-  value: SystemSortOption;
-  label: string;
-  icon?: () => JSX.Element;
-}
-
-export const SORT_OPTIONS: SortOption[] = [
-  {
-    value: 'viewed_at',
-    label: 'Last viewed',
-    icon: () => <EyeIcon class="size-3.5" />,
-  },
-  {
-    value: 'updated_at',
-    label: 'Last modified',
-    icon: () => <PencilIcon class="size-3.5" />,
-  },
-  {
-    value: 'created_at',
-    label: 'Date created',
-    icon: () => <ClockIcon class="size-3.5" />,
-  },
-];
+import {
+  SORT_OPTIONS,
+  type SortOption,
+  type SystemSortOption,
+} from '@app/component/next-soup/soup-view/sort-options';
 
 export interface SortDropdownProps {
   /** Current sort value */

@@ -104,7 +104,8 @@ interface SoupViewContextProviderProps {
   queryFilters?: SoupItemsQueryFilters;
 }
 
-const VALID_API_SORT_METHODS: NonNullable<SoupParams['sort_method']>[] = [
+type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
+const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
   'created_at',
   'updated_at',
@@ -120,11 +121,12 @@ export const SoupViewContextProvider: FlowComponent<
   const queryClient = useQueryClient();
 
   const soupParams = createMemo((): SoupParams => {
-    let sortMethod = soup.sort.active()[0]?.id ?? 'updated_at';
+    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
 
-    if (!VALID_API_SORT_METHODS.includes(sortMethod)) {
-      sortMethod = 'created_at';
-    }
+    // Client-only sorts (priority, status) fall back to created_at for the API
+    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
+      ? (sortId as ApiSortMethod)
+      : 'created_at';
 
     return {
       limit: 100,

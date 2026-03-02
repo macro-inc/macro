@@ -1,11 +1,12 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
+import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
 import {
-  SortDropdown,
-  type SortOption,
   SORT_OPTIONS,
-} from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+  TASK_SORT_OPTIONS,
+  type SortOption,
+  type SystemSortOption,
+} from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { createMemo, Switch, Match } from 'solid-js';
 
@@ -114,7 +115,7 @@ const DocumentsSort = () => {
 };
 
 const TasksSort = () => {
-  const sort = useSortDropdown();
+  const sort = useSortDropdown(TASK_SORT_OPTIONS);
 
   return (
     <SortDropdown
