@@ -43,7 +43,7 @@ export type CodeExecutionErrorCode =
   | 'unavailable'
   | 'execution_time_exceeded'
   | 'container_expired'
-  | 'invalid_tool_input'
+  | 'invalid_input'
   | 'too_many_requests'
   | 'file_not_found'
   | 'string_not_found';
