@@ -187,7 +187,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         &self,
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> Result<(), GithubError> {
-        tracing::trace!(webhook_event=?webhook_event, "processing event");
+        tracing::trace!(webhook_event=?webhook_event.0, "processing event");
 
         Ok(())
     }

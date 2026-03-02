@@ -86,7 +86,7 @@ pub struct GithubUserInfo {
 
 /// A validated github webhook event
 #[derive(Debug)]
-pub struct ValidatedGithubWebhookEvent(serde_json::Value);
+pub struct ValidatedGithubWebhookEvent(pub serde_json::Value);
 
 impl ValidatedGithubWebhookEvent {
     /// Create a new ValidatedGithubWebhookEvent

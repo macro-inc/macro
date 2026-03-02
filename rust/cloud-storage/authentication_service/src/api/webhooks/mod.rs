@@ -1,4 +1,4 @@
-use crate::api::context::{ApiContext, GithubServiceType};
+use crate::api::context::ApiContext;
 use axum::Router;
 use github::inbound::webhook_router::{GithubWebhookRouterState, github_webhook_router};
 
