@@ -9,7 +9,7 @@ import {
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import { type RouteSectionProps, useLocation, useNavigate } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
@@ -25,6 +25,8 @@ import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+import { ENABLE_INTERACTIVE_ONBOARDING } from '@core/constant/featureFlags';
+import { useTutorialCompleted } from '@core/context/user';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -39,8 +41,22 @@ export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
+  const navigate = useNavigate();
+  const tutorialCompleted = useTutorialCompleted();
 
   useAppSquishHandlers();
+
+  // Auto-redirect new users to the interactive tutorial
+  createEffect(() => {
+    if (
+      ENABLE_INTERACTIVE_ONBOARDING &&
+      isAuthenticated() &&
+      tutorialCompleted() === false &&
+      !location.pathname.includes('/component/tutorial')
+    ) {
+      navigate(`${ROUTER_BASE_CONCAT}component/tutorial`);
+    }
+  });
 
   // save last_path to cookie
   createEffect(() => {
@@ -112,10 +128,6 @@ export function Layout(props: RouteSectionProps) {
           <Banner />
         </Show>
       </Suspense>
-      {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
-        <Onboarding />
-      </Show> */}
-
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
