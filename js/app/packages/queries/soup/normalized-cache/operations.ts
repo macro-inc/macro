@@ -223,7 +223,10 @@ export async function refetchSoupEntity(
   });
 
   if (isErr(result)) {
-    console.error('[normalized-cache] operations: failed to fetch individual soup item', result);
+    console.error(
+      '[normalized-cache] operations: failed to fetch individual soup item',
+      result
+    );
     return;
   }
 

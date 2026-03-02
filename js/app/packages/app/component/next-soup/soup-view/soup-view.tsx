@@ -78,7 +78,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/normalized-cache';
+import {
+  invalidateSoupEntity,
+  refetchSoupEntity,
+} from '@queries/soup/normalized-cache';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -100,7 +103,7 @@ const useSoupNotificationInvalidators = () => {
     'email_thread',
     (notification) => {
       refetchSoupEntity(notification.entity_id, 'emailThread');
-      invalidateSoupEntity(notification.entity_id)
+      invalidateSoupEntity(notification.entity_id);
     }
   );
 
