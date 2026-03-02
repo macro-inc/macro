@@ -1,5 +1,4 @@
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
-import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -199,21 +198,12 @@ export const SoupView = (props: SoupViewProps) => {
                 ></div>
               </button>
 
-              <div class="py-2 flex items-center w-full">
-                <SoupViewTabs />
+              <div class="py-2 flex gap-2 items-center w-full">
                 <SoupFiltersBar />
               </div>
               <div class="ml-auto w-full flex items-center justify-end gap-2">
                 <div class="max-w-56 w-full">
                   <SoupSearchbar />
-                </div>
-                <div class="flex items-center gap-1">
-                  <button
-                    type="button"
-                    class="flex gap-1 items-center justify-center p-1.5 hover:bg-ink/20 text-ink-muted hover:text-ink rounded-lg transition-colors aspect-square"
-                  >
-                    <GearIcon class="size-4 shrink-0" />
-                  </button>
                 </div>
               </div>
             </div>
