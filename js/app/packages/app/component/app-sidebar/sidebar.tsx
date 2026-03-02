@@ -133,7 +133,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </div>
       </div>
       <nav>
-        <ul class="w-full h-full px-2 flex flex-col">
+        <ul class="w-full h-full px-2 flex flex-col gap-1">
           <For each={SIDEBAR_LINKS}>
             {(link) => (
               <li>
@@ -232,7 +232,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
   return (
     <A
-      class="w-full px-2 py-1.5 rounded-md flex items-center gap-2 text-sm hover:text-ink transition-colors"
+      class="w-full px-2 py-1 rounded-md flex items-center gap-2 text-sm hover:text-ink transition-colors"
       href={`/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
