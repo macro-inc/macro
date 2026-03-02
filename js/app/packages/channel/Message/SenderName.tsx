@@ -9,7 +9,7 @@ type SenderNameProps = {
 
 export function SenderName(props: SenderNameProps) {
   const message = useMessage();
-  const macroId = () => tryMacroId(message.sender_id);
+  const macroId = () => tryMacroId(message().sender_id);
   const [displayName] = useDisplayName(macroId());
 
   return (

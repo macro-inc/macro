@@ -11,7 +11,7 @@ export function Timestamp(props: TimestampProps) {
 
   return (
     <span class={cn('text-xs text-secondary-fg', props.class)}>
-      {formatDate(message.created_at)}
+      {formatDate(message().created_at)}
     </span>
   );
 }

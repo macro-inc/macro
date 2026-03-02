@@ -38,7 +38,7 @@ export function Root(props: RootProps) {
           { 'opacity-100': local.highlighted }
         )}
       />
-      <MessageProvider value={local.message}>
+      <MessageProvider value={() => local.message}>
         <Show when={local.actions !== undefined} fallback={local.children}>
           <MessageActionsProvider value={local.actions}>
             {local.children}

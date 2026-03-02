@@ -56,7 +56,7 @@ export function partitionMessageAttachments(
 export function Attachments(props: AttachmentsProps) {
   const message = useMessage();
   const buckets = createMemo(() =>
-    partitionMessageAttachments(message.attachments ?? [])
+    partitionMessageAttachments(message().attachments ?? [])
   );
   const imagePreviewData = createMemo(() =>
     buckets().imageAttachments.map((attachment) => ({
@@ -73,7 +73,7 @@ export function Attachments(props: AttachmentsProps) {
       buckets().documentAttachments.length > 0
   );
   const shouldRender = createMemo(
-    () => hasAttachments() && !message.deleted_at
+    () => hasAttachments() && !message().deleted_at
   );
 
   return (

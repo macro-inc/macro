@@ -10,7 +10,7 @@ export function EditedIndicator(props: EditedIndicatorProps) {
   const message = useMessage();
 
   return (
-    <Show when={message.edited_at != null}>
+    <Show when={message().edited_at != null}>
       <span class={cn('text-xs text-secondary-fg', props.class)}>(edited)</span>
     </Show>
   );

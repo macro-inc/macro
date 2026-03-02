@@ -11,7 +11,7 @@ export function SenderIcon(props: SenderIconProps) {
 
   return (
     <div class={cn('flex-shrink-0 size-[var(--user-icon-width)]', props.class)}>
-      <UserIcon id={message.sender_id} size="fill" />
+      <UserIcon id={message().sender_id} size="fill" />
     </div>
   );
 }

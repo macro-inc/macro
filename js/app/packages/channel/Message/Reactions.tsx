@@ -20,7 +20,7 @@ export function Reactions(props: ReactionsProps) {
   const canReact = () => actions?.onReact !== undefined;
 
   return (
-    <Show when={message.reactions.length > 0}>
+    <Show when={message().reactions.length > 0}>
       <div
         class={cn(
           'flex flex-row flex-wrap items-center gap-2 mt-0.5 mb-1',
@@ -28,7 +28,7 @@ export function Reactions(props: ReactionsProps) {
         )}
         data-message-reactions-row
       >
-        <For each={message.reactions}>
+        <For each={message().reactions}>
           {(reaction) => {
             const didCurrentUserReact = () =>
               !!userId() && reaction.users.includes(userId()!);
@@ -41,7 +41,7 @@ export function Reactions(props: ReactionsProps) {
                 interactive={canReact()}
                 onClick={(event) => {
                   void actions?.onReact?.({
-                    message,
+                    message: message(),
                     event,
                     emoji: reaction.emoji,
                   });
@@ -58,7 +58,7 @@ export function Reactions(props: ReactionsProps) {
             onOpenChange={setEmojiMenuOpen}
             onEmojiSelect={(emoji) => {
               void actions?.onReact?.({
-                message,
+                message: message(),
                 emoji,
               });
             }}

@@ -57,7 +57,7 @@ export function ActionMenu(props: ActionMenuProps) {
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
     void actions?.onReact?.({
-      message,
+      message: message(),
       event,
       emoji,
     });
@@ -141,7 +141,7 @@ export function ActionMenu(props: ActionMenuProps) {
               <ActionButton
                 action={action}
                 onClick={(event) => {
-                  void action.onClick?.({ message, event });
+                  void action.onClick?.({ message: message(), event });
                 }}
               />
             )}
