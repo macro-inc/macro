@@ -7,11 +7,10 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use entity_access::domain::models::{AccessLevel, EntityPermission, ViewAccessLevel};
+use entity_access::domain::models::{EntityPermission, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use model_error_response::ErrorResponse;
-use sqlx::PgPool;
 use thiserror::Error;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
@@ -26,7 +25,6 @@ const MESSAGE_MAX: i64 = 100;
 pub struct EmailThreadRouterState<T, Svc> {
     pub service: Arc<T>,
     pub access_service: Arc<Svc>,
-    pub pool: PgPool,
 }
 
 impl<T, Svc> Clone for EmailThreadRouterState<T, Svc> {
@@ -34,7 +32,6 @@ impl<T, Svc> Clone for EmailThreadRouterState<T, Svc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
-            pool: self.pool.clone(),
         }
     }
 }
@@ -45,12 +42,6 @@ impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for Arc<Svc> {
     }
 }
 
-impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for PgPool {
-    fn from_ref(state: &EmailThreadRouterState<T, Svc>) -> Self {
-        state.pool.clone()
-    }
-}
-
 pub fn thread_router<S, T, Svc>(state: EmailThreadRouterState<T, Svc>) -> Router<S>
 where
     S: Send + Sync + 'static,
@@ -58,13 +49,7 @@ where
     Svc: EntityAccessService,
 {
     Router::new()
-        .route(
-            "/:thread_id",
-            get(get_thread_handler::<T, Svc>).layer(axum::middleware::from_fn_with_state(
-                state.pool.clone(),
-                macro_middleware::cloud_storage::thread::ensure_thread_exists::handler,
-            )),
-        )
+        .route("/:thread_id", get(get_thread_handler::<T, Svc>))
         .with_state(state)
 }
 
@@ -124,7 +109,7 @@ pub async fn get_thread_handler<T: EmailService, Svc: EntityAccessService>(
 
     let access_level = match access.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,
-        _ => AccessLevel::View,
+        _ => unreachable!("thread permissions should always be access level"),
     };
 
     let thread = state

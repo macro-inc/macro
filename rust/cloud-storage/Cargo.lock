@@ -3308,7 +3308,6 @@ dependencies = [
  "futures",
  "item_filters",
  "macro_db_migrator",
- "macro_middleware",
  "macro_user_id",
  "model-entity",
  "model-error-response",

@@ -9,10 +9,8 @@ ai_schema = ["dep:schemars"]
 axum = [
   "dep:axum",
   "dep:axum-extra",
-  "dep:macro_middleware",
   "dep:model-error-response",
   "dep:model_user",
-  "dep:sqlx",
   "dep:utoipa",
   "model_user/axum",
   "models_pagination/axum",
@@ -36,7 +34,6 @@ frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
-macro_middleware = { path = "../macro_middleware", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }

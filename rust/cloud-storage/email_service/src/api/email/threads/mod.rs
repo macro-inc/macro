@@ -5,11 +5,9 @@ pub(crate) mod seen;
 
 use axum::Router;
 use axum::routing::{get, patch, post};
-use email::inbound::EmailThreadRouterState;
 use tower::ServiceBuilder;
 
 use crate::api::ApiContext;
-use crate::api::context::EmailEntityAccessService;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let required_link_routes = Router::new()
@@ -46,13 +44,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             crate::api::middleware::link::attach_link_context,
         ));
 
-    let hex_thread_state: EmailThreadRouterState<_, EmailEntityAccessService> =
-        EmailThreadRouterState {
-            service: state.email_service.service(),
-            access_service: state.entity_access_service.clone(),
-            pool: state.db.clone(),
-        };
-    let hex_thread_routes = email::inbound::thread_router(hex_thread_state);
+    let hex_thread_routes = email::inbound::thread_router(state.email_thread_state.clone());
 
     Router::new()
         .merge(required_link_routes)
