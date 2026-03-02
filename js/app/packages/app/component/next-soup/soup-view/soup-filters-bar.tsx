@@ -2,9 +2,20 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
+import XIcon from '@icon/regular/x.svg';
+import { Combobox } from '@kobalte/core/combobox';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
-import { createMemo, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { GENERAL_CONTEXTUAL_FILTERS } from '@app/component/next-soup/filters/filters';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
@@ -295,11 +306,12 @@ const TasksFilters = () => {
         onChange={handleStatusChange}
       />
       <Show when={!soup.filters.isActive('assigned-to')}>
-        <FilterSelect
+        <FilterCombobox
           label="Assignee"
           options={assigneeOptions()}
           active={activeAssignee()}
           onChange={handleAssigneeChange}
+          placeholder="Search assignees..."
         />
       </Show>
       <FilterSelect
@@ -344,8 +356,7 @@ const FilesFilters = () => {
 
   return (
     <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Type"
+      <FilterChipGroup
         options={fileTypeOptions}
         active={fileType.active()}
         onChange={fileType.onChange}
@@ -366,39 +377,236 @@ interface FilterSelectProps {
   options: Option[];
   active: Option[];
   onChange: (options: Option[]) => void;
+  /** Whether multiple options can be selected. Defaults to true. */
+  multiple?: boolean;
 }
 
 const FilterSelect = (props: FilterSelectProps) => {
-  const activeFilters = createMemo(() => {
-    return props.active;
-  });
+  const isMultiple = () => props.multiple ?? true;
 
+  const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
   const hasActiveFilters = createMemo(() => activeCount() > 0);
 
+  const renderItem = (itemProps: { item: { rawValue: Option } }) => (
+    <KSelect.Item
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      item={itemProps.item as any}
+      class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
+    >
+      <span
+        class={
+          'size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent'
+        }
+      >
+        <KSelect.ItemIndicator>
+          <CheckIcon class="size-2.5 text-page" />
+        </KSelect.ItemIndicator>
+      </span>
+
+      <Show when={itemProps.item.rawValue.icon}>
+        {(icon) => (
+          <span class="size-4 flex items-center justify-center shrink-0">
+            {icon()()}
+          </span>
+        )}
+      </Show>
+
+      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
+        {itemProps.item.rawValue.label}
+      </KSelect.ItemLabel>
+    </KSelect.Item>
+  );
+
+  const TriggerContent = () => (
+    <>
+      <span class="font-medium">{props.label}</span>
+      <Show when={isMultiple() && hasActiveFilters()}>
+        <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
+          {activeCount()}
+        </span>
+      </Show>
+      <ChevronDownIcon class="size-3" />
+    </>
+  );
+
+  const ContentFooter = () => (
+    <div class="w-full py-1 px-2 flex items-center border-t border-t-edge-muted">
+      <button
+        type="button"
+        class="ml-auto text-xs hover:bg-accent hover:text-page font-medium py-1 px-2 rounded-md"
+        onClick={() => props.onChange([])}
+      >
+        Clear
+      </button>
+    </div>
+  );
+
   return (
-    <KSelect<Option, never>
-      options={props.options}
+    <Show
+      when={isMultiple()}
+      fallback={
+        <KSelect<Option>
+          options={props.options}
+          value={activeFilters()[0] ?? null}
+          onChange={(selected) => props.onChange(selected ? [selected] : [])}
+          optionTextValue="label"
+          optionValue="value"
+          gutter={4}
+          placement="bottom-start"
+          itemComponent={renderItem}
+        >
+          <KSelect.Trigger
+            as="button"
+            type="button"
+            class={cn(
+              'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
+              hasActiveFilters() &&
+                'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
+            )}
+          >
+            <TriggerContent />
+          </KSelect.Trigger>
+          <KSelect.Portal>
+            <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
+              <KSelect.Listbox />
+              <ContentFooter />
+            </KSelect.Content>
+          </KSelect.Portal>
+        </KSelect>
+      }
+    >
+      <KSelect<Option>
+        options={props.options}
+        value={activeFilters()}
+        onChange={props.onChange}
+        optionTextValue="label"
+        optionValue="value"
+        gutter={4}
+        multiple
+        placement="bottom-start"
+        itemComponent={renderItem}
+      >
+        <KSelect.Trigger
+          as="button"
+          type="button"
+          class={cn(
+            'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
+            hasActiveFilters() &&
+              'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
+          )}
+        >
+          <TriggerContent />
+        </KSelect.Trigger>
+        <KSelect.Portal>
+          <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
+            <KSelect.Listbox />
+            <ContentFooter />
+          </KSelect.Content>
+        </KSelect.Portal>
+      </KSelect>
+    </Show>
+  );
+};
+
+interface FilterComboboxProps {
+  label: string;
+  options: Option[];
+  active: Option[];
+  onChange: (options: Option[]) => void;
+  /** Placeholder text for the search input */
+  placeholder?: string;
+}
+
+/**
+ * A searchable multi-select filter component using Combobox.
+ * Features:
+ * - Search bar in the dropdown body
+ * - Selected options displayed in the trigger
+ * - Clear button to reset selection
+ */
+export const FilterCombobox = (props: FilterComboboxProps) => {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+
+  const activeFilters = createMemo(() => props.active);
+  const activeCount = createMemo(() => activeFilters().length);
+  const hasActiveFilters = createMemo(() => activeCount() > 0);
+
+  const filteredOptions = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    if (!query) return props.options;
+    return props.options.filter((opt) =>
+      opt.label.toLowerCase().includes(query)
+    );
+  });
+
+  const dispatchKeyToListbox = (key: string) => {
+    listboxRef()?.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key })
+    );
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    switch (e.key) {
+      case 'j': {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowDown');
+        break;
+      }
+      case 'k': {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowUp');
+        break;
+      }
+    }
+  };
+
+  const onInputChange = (value: string) => {
+    setSearchQuery(value);
+    queueMicrotask(() => {
+      dispatchKeyToListbox('ArrowDown');
+    });
+  };
+
+  const onOpenChange = (open: boolean) => {
+    if (!open) {
+      setSearchQuery('');
+    }
+  };
+
+  const removeOption = (e: MouseEvent, option: Option) => {
+    e.stopPropagation();
+    props.onChange(props.active.filter((o) => o.value !== option.value));
+  };
+
+  return (
+    <Combobox<Option>
+      multiple
+      options={filteredOptions()}
       value={activeFilters()}
       onChange={props.onChange}
-      optionTextValue="label"
+      onOpenChange={onOpenChange}
+      onInputChange={onInputChange}
       optionValue="value"
-      gutter={4}
-      multiple
+      optionTextValue="label"
+      optionLabel="label"
+      placeholder={props.placeholder ?? 'Search...'}
+      allowsEmptyCollection
       placement="bottom-start"
+      gutter={4}
+      defaultFilter={() => true}
       itemComponent={(itemProps) => (
-        <KSelect.Item
+        <Combobox.Item
           item={itemProps.item}
-          class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 group"
+          class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
         >
-          <span
-            class={
-              'size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent'
-            }
-          >
-            <KSelect.ItemIndicator>
+          <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+            <Combobox.ItemIndicator>
               <CheckIcon class="size-2.5 text-page" />
-            </KSelect.ItemIndicator>
+            </Combobox.ItemIndicator>
           </span>
 
           <Show when={itemProps.item.rawValue.icon}>
@@ -409,34 +617,152 @@ const FilterSelect = (props: FilterSelectProps) => {
             )}
           </Show>
 
-          <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
+          <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
             {itemProps.item.rawValue.label}
-          </KSelect.ItemLabel>
-        </KSelect.Item>
+          </Combobox.ItemLabel>
+        </Combobox.Item>
       )}
     >
-      <KSelect.Trigger
-        as="button"
-        type="button"
-        class={cn(
-          'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
-          hasActiveFilters() &&
-            'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
-        )}
-      >
-        <span class="font-medium">{props.label}</span>
+      <Combobox.Control class="flex items-start gap-1 px-1.5 py-1 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 transition-all max-h-[76px]">
+        <div class="flex flex-wrap items-center gap-1 flex-1 max-h-[60px] overflow-y-auto">
+          <For each={activeFilters()}>
+            {(option) => (
+              <span class="flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
+                <Show when={option.icon}>
+                  {(icon) => (
+                    <span class="size-3 flex items-center justify-center shrink-0">
+                      {icon()()}
+                    </span>
+                  )}
+                </Show>
+                <span class="font-medium max-w-[80px] truncate">
+                  {option.label}
+                </span>
+                <button
+                  type="button"
+                  class="size-3.5 flex items-center justify-center rounded-full hover:bg-ink/20 transition-colors"
+                  onClick={(e) => removeOption(e, option)}
+                  aria-label={`Remove ${option.label}`}
+                >
+                  <XIcon class="size-2" />
+                </button>
+              </span>
+            )}
+          </For>
+          <Combobox.Input
+            class="flex-1 min-w-[60px] text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+            placeholder={
+              hasActiveFilters()
+                ? 'Add more...'
+                : (props.placeholder ??
+                  `Filter by ${props.label.toLowerCase()}...`)
+            }
+          />
+        </div>
         <Show when={hasActiveFilters()}>
-          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
-            {activeCount()}
-          </span>
+          <button
+            type="button"
+            class="size-4 flex items-center justify-center shrink-0 rounded-full hover:bg-ink/20 transition-colors mt-0.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onChange([]);
+            }}
+            aria-label="Clear all"
+          >
+            <XIcon class="size-2.5" />
+          </button>
         </Show>
-        <ChevronDownIcon class="size-3" />
-      </KSelect.Trigger>
-      <KSelect.Portal>
-        <KSelect.Content class="z-action-menu bg-panel border border-edge-muted rounded shadow-xl min-w-[var(--kb-popper-anchor-width)]">
-          <KSelect.Listbox />
-        </KSelect.Content>
-      </KSelect.Portal>
-    </KSelect>
+        <ChevronDownIcon class="size-3 shrink-0 mt-1" />
+      </Combobox.Control>
+
+      <Combobox.Portal>
+        <Combobox.Content
+          class="z-action-menu bg-surface-0 border border-edge-muted rounded shadow-xl min-w-[200px]"
+          on:keydown={handleKeyDown}
+        >
+          <Show
+            when={filteredOptions().length > 0}
+            fallback={
+              <div class="py-3 px-2 text-center text-xs text-ink-muted">
+                No options match "{searchQuery()}"
+              </div>
+            }
+          >
+            <Combobox.Listbox
+              ref={setListboxRef}
+              class="max-h-[200px] overflow-y-auto"
+            />
+          </Show>
+        </Combobox.Content>
+      </Combobox.Portal>
+    </Combobox>
+  );
+};
+
+interface FilterChipGroupProps {
+  options: Option[];
+  active: Option[];
+  onChange: (options: Option[]) => void;
+  /** Whether to allow multiple selections. Defaults to true. */
+  multiple?: boolean;
+}
+
+/**
+ * A group of chip buttons for selecting filter options.
+ * Each chip toggles its selection state when clicked.
+ */
+export const FilterChipGroup = (props: FilterChipGroupProps) => {
+  const multiple = () => props.multiple ?? true;
+
+  const activeSet = createMemo(() => new Set(props.active.map((o) => o.value)));
+
+  const isActive = (value: string) => activeSet().has(value);
+
+  const handleClick = (option: Option) => {
+    const currentlyActive = isActive(option.value);
+
+    if (multiple()) {
+      // Toggle the option
+      if (currentlyActive) {
+        props.onChange(props.active.filter((o) => o.value !== option.value));
+      } else {
+        props.onChange([...props.active, option]);
+      }
+    } else {
+      // Single select: toggle off if already selected, otherwise select only this one
+      if (currentlyActive) {
+        props.onChange([]);
+      } else {
+        props.onChange([option]);
+      }
+    }
+  };
+
+  return (
+    <div class="flex items-center gap-1 flex-wrap">
+      <For each={props.options}>
+        {(option) => (
+          <button
+            type="button"
+            class={cn(
+              'flex items-center gap-1.5 px-2 py-1 text-xs rounded-full border transition-all',
+              isActive(option.value)
+                ? 'bg-accent/15 text-accent border-accent/30 hover:bg-accent/25'
+                : 'bg-ink/8 text-ink-muted border-transparent hover:bg-ink/12 hover:text-ink'
+            )}
+            onClick={() => handleClick(option)}
+          >
+            <Show when={option.icon}>
+              {(icon) => (
+                <span class="size-3.5 flex items-center justify-center shrink-0">
+                  {icon()()}
+                </span>
+              )}
+            </Show>
+            <span class="font-medium">{option.label}</span>
+          </button>
+        )}
+      </For>
+    </div>
   );
 };
