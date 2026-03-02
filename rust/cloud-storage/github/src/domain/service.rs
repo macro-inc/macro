@@ -158,7 +158,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         Ok(link)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(
         &self,
         signature: &str,
@@ -175,7 +175,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         // constant-time comparison
         if expected.as_slice().ct_eq(&sig_bytes).into() {
             Ok(ValidatedGithubWebhookEvent::new(
-                serde_json::to_value(body).map_err(|e| GithubError::Internal(e.into()))?,
+                serde_json::from_slice(body).map_err(|e| GithubError::Internal(e.into()))?,
             ))
         } else {
             Err(GithubError::InvalidWebhookSignature)
