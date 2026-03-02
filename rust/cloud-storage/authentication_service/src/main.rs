@@ -137,6 +137,15 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let github_webhook_secret = match config.environment {
+        Environment::Local => config.github_webhook_secret_key.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.github_webhook_secret_key)
+            .await
+            .context("unable to get secret")?
+            .to_string(),
+    };
+
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -242,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
             client_id: config.github_client_id,
             client_secret: config.github_client_secret,
             idp_id: config.github_idp_id,
+            webhook_secret: github_webhook_secret,
         },
     );
 
