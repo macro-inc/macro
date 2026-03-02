@@ -520,7 +520,7 @@ const SoupFilters = () => {
       <FilterDivider />
       {/* Sort dropdown */}
       <SortDropdown
-        open={sortDropdownOpen}
+        open={sortDropdownOpen()}
         onOpenChange={setSortDropdownOpen}
         value={() => soup.sort.active()[0].id as SystemSortOption}
         onChange={(value) => {
