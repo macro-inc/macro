@@ -3,12 +3,11 @@ import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   createFilterState,
   createSoupFilters,
+  SOUP_FILTER_GROUPS,
   type FilterConfig,
+  type FilterGroupConfig,
+  type FilterID,
 } from '@app/component/next-soup/filters';
-import {
-  FILTER_GROUPS,
-  type FilterGroup,
-} from '@app/component/next-soup/filters/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { useUserContext } from '@core/context/user';
@@ -31,29 +30,25 @@ export type SortConfig<T> = {
   fn: (a: T, b: T) => number;
 };
 
-interface SoupContextOptions<
-  TFilter extends Readonly<FilterConfig<SoupEntity>>,
-> {
+interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: TFilter['id'][];
-  filterConfigs?: TFilter[];
-  filterGroups?: FilterGroup[];
+  initialFilters?: TId[];
+  filterConfigs?: FilterConfig<SoupEntity>[];
+  filterGroups?: FilterGroupConfig[];
   wrapNavigation?: boolean;
 }
 
-export const createSoupState = <
-  TFilter extends Readonly<FilterConfig<SoupEntity>>,
->(
-  {
+export const createSoupState = <TId extends string = FilterID>(
+  options: SoupContextOptions<TId> = { wrapNavigation: false }
+) => {
+  const {
     wrapNavigation,
     initialData,
     initialFilters,
     filterConfigs,
     filterGroups,
-  }: SoupContextOptions<TFilter> = {
-    wrapNavigation: false,
-  }
-) => {
+  } = options;
+
   const selection = createSelectionState<SoupEntity>({
     getItemId: (i) => i.id,
   });
@@ -61,10 +56,10 @@ export const createSoupState = <
   const notificationSource = useGlobalNotificationSource();
   const user = useUserContext();
 
-  const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
+  const filters = createFilterState({
     filters:
       filterConfigs ?? createSoupFilters(notificationSource, user.userId),
-    groups: filterGroups ?? FILTER_GROUPS,
+    groups: filterGroups ?? SOUP_FILTER_GROUPS,
     initialFilters,
   });
 

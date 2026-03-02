@@ -155,53 +155,86 @@ const SoupFilters = () => {
   // Batch filter + query updates so the prefetch effect in soup-view-context
   // sees the final query filters and active filter state in a single tick,
   // avoiding intermediate re-renders with mismatched query keys.
+  //
+  // Focus toggle is special: it sets multiple filters (signal/noise + not-done)
+  // and handles query filter updates. Uses set() with callback to preserve
+  // entity type filters while updating focus filters.
   const toggleFocus = (id: 'signal' | 'noise') => {
-    const comb = { id, isActive: soup.filters.isActive(id) };
-
-    const activateFocus = () => {
-      soup.filters.toggle(id);
-      soup.filters.activate('not-done');
-    };
-
-    const deactivateFocus = () => {
-      soup.filters.toggle('explicit-noise');
-      soup.filters.deactivate('not-done');
-    };
+    const isActive = soup.filters.isActive(id);
 
     batch(() => {
-      match(comb)
+      match({ id, isActive })
         .with({ id: 'signal', isActive: false }, () => {
           setQueryFilters((prev) =>
             applyInboxQueryFilters(removeOtherQueryFilters(prev))
           );
-          activateFocus();
+          soup.filters.set((cur) => ({
+            and: [
+              'signal',
+              'not-done',
+              ...cur.andIds.filter(
+                (i) =>
+                  !['signal', 'noise', 'explicit-noise', 'not-done'].includes(i)
+              ),
+            ],
+            or: cur.orIds,
+          }));
         })
         .with({ id: 'noise', isActive: false }, () => {
           setQueryFilters((prev) =>
             applyOtherQueryFilters(removeInboxQueryFilters(prev))
           );
-          activateFocus();
+          soup.filters.set((cur) => ({
+            and: [
+              'noise',
+              'not-done',
+              ...cur.andIds.filter(
+                (i) =>
+                  !['signal', 'noise', 'explicit-noise', 'not-done'].includes(i)
+              ),
+            ],
+            or: cur.orIds,
+          }));
         })
         .with({ id: 'signal', isActive: true }, () => {
           setQueryFilters(removeInboxQueryFilters);
-          deactivateFocus();
+          soup.filters.set((cur) => ({
+            and: [
+              'explicit-noise',
+              ...cur.andIds.filter(
+                (i) =>
+                  !['signal', 'noise', 'explicit-noise', 'not-done'].includes(i)
+              ),
+            ],
+            or: cur.orIds,
+          }));
         })
         .with({ id: 'noise', isActive: true }, () => {
           setQueryFilters(removeOtherQueryFilters);
-          deactivateFocus();
+          soup.filters.set((cur) => ({
+            and: [
+              'explicit-noise',
+              ...cur.andIds.filter(
+                (i) =>
+                  !['signal', 'noise', 'explicit-noise', 'not-done'].includes(i)
+              ),
+            ],
+            or: cur.orIds,
+          }));
         })
         .exhaustive();
     });
   };
 
   const toggleUnread = () => {
-    soup.filters.toggle('unread');
+    soup.filters.toggle({ and: ['unread'] });
   };
 
   const toggleEntityType = (id: EntityTypeFilterId) => {
     const willBeActive = !soup.filters.isActive(id);
+
     batch(() => {
-      soup.filters.toggle(id);
+      soup.filters.toggle({ and: [id] });
       setQueryFiltersInboxAware(
         willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default
       );
@@ -211,8 +244,9 @@ const SoupFilters = () => {
   // Email has special handling for email integration status
   const toggleEmail = () => {
     const willBeActive = !soup.filters.isActive('email');
+
     batch(() => {
-      soup.filters.toggle('email');
+      soup.filters.toggle({ and: ['email'] });
       if (willBeActive) {
         const shouldIncludeEmails = emailActive();
         setQueryFiltersInboxAware({

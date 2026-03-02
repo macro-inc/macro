@@ -266,7 +266,6 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const baseEntities = () => {
-    const filters = soup.filters.active();
     let transformed = items();
 
     const next = [];
@@ -275,7 +274,7 @@ export const SoupViewContextProvider: FlowComponent<
     const currentAssigneeFilter = assigneeFilter();
 
     for (const entity of transformed) {
-      if (!filters.every((f) => f.predicate(entity))) {
+      if (!soup.filters.test(entity)) {
         continue;
       }
 

@@ -38,7 +38,7 @@ const useApplyPreset = () => {
   }) => {
     batch(() => {
       setQueryFilters(preset.queryFilters);
-      soup.filters.set(preset.clientFilters);
+      soup.filters.set({ and: preset.clientFilters });
     });
   };
 

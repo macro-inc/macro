@@ -6,10 +6,7 @@ import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
 import { createMemo, type JSX, Match, Show, Switch } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import {
-  CHAT_CONTEXTUAL_FILTERS,
-  GENERAL_CONTEXTUAL_FILTERS,
-} from '@app/component/next-soup/filters/filters';
+import { GENERAL_CONTEXTUAL_FILTERS } from '@app/component/next-soup/filters/filters';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { UserIcon } from '@core/component/UserIcon';
@@ -61,30 +58,58 @@ export const SoupFiltersBar = () => {
 
 /** Converts filter configs to Option format for FilterSelect */
 const toFilterOptions = (
-  filters: readonly { id: string; label: string }[]
-): Option[] => filters.map((f) => ({ value: f.id, label: f.label }));
+  filters: readonly { id: string; label?: string }[]
+): Option[] =>
+  filters
+    .filter((f): f is { id: string; label: string } => !!f.label)
+    .map((f) => ({ value: f.id, label: f.label }));
+
+type UseFilterOptionsConfig = {
+  /** Whether multiple options can be selected. Defaults to true. */
+  multiple?: boolean;
+  /** Whether to apply changes to 'and' or 'or' filters. Defaults to 'or'. */
+  target?: 'and' | 'or';
+};
 
 /**
  * Hook that derives active options from soup.filters and provides a change handler.
  * Accesses soup context internally.
  */
-const useFilterOptions = (options: Option[]) => {
+const useFilterOptions = (
+  options: Option[],
+  config: UseFilterOptionsConfig = {}
+) => {
+  const { multiple = true, target = 'or' } = config;
   const { soup } = useSoupView();
+
+  const optionIds = new Set(options.map((opt) => opt.value));
 
   const active = createMemo(() =>
     options.filter((opt) => soup.filters.isActive(opt.value))
   );
 
   const onChange = (selected: Option[]) => {
-    for (const opt of options) {
-      if (soup.filters.isActive(opt.value)) {
-        soup.filters.deactivate(opt.value);
-      }
-    }
+    const selectedIds = multiple
+      ? selected.map((opt) => opt.value)
+      : selected.length > 0
+        ? [selected[selected.length - 1].value]
+        : [];
 
-    for (const option of selected) {
-      soup.filters.activate(option.value);
-    }
+    soup.filters.set((cur) => {
+      if (target === 'and') {
+        return {
+          and: [
+            ...cur.andIds.filter((id) => !optionIds.has(id)),
+            ...selectedIds,
+          ],
+          or: cur.orIds,
+        };
+      }
+      return {
+        and: cur.andIds,
+        or: [...cur.orIds.filter((id) => !optionIds.has(id)), ...selectedIds],
+      };
+    });
   };
 
   return { active, onChange };

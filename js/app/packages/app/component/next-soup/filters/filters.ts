@@ -24,7 +24,7 @@ import type {
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import type { FilterConfig } from './create-filter-state';
+import type { FilterConfig, FilterGroupConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
@@ -82,7 +82,7 @@ export function filterSoupItemByRequestBody(
     .exhaustive();
 }
 
-type EntityFilterConfig = FilterConfig<EntityData> & { label: string };
+type EntityFilterConfig = FilterConfig<EntityData> & { label?: string };
 
 /**
  * Unread filter - entity has unread content.
@@ -122,18 +122,6 @@ export function notDoneFilter(notificationSource: NotificationSource) {
     return notifications?.some(({ done }) => !done);
   };
 }
-
-/** Filter group configuration */
-export type FilterGroup = {
-  readonly id: string;
-  readonly allowMultiple?: boolean;
-};
-
-/** Filter group configurations */
-export const FILTER_GROUPS: readonly FilterGroup[] = [
-  { id: 'focus', allowMultiple: false },
-  { id: 'type', allowMultiple: false },
-];
 
 type EnhancedEntity = WithNotification<EntityData>;
 
@@ -385,43 +373,43 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
     id: 'document',
     label: 'Docs',
     predicate: documentFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'agent',
     label: 'Agents',
     predicate: agentFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'people',
     label: 'People',
     predicate: peopleFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'teams',
     label: 'Teams',
     predicate: teamsFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'task',
     label: 'Tasks',
     predicate: taskFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'email',
     label: 'Mail',
     predicate: emailFilter,
-    group: 'type',
+    group: 'entity-type',
   },
   {
     id: 'file',
     label: 'Files',
     predicate: fileFilter,
-    group: 'type',
+    group: 'entity-type',
   },
 ] as const;
 
@@ -745,7 +733,6 @@ export const createSoupFilters = (
       id: 'channels',
       label: 'Channels',
       predicate: channelsFilter,
-      group: 'type',
     },
     {
       id: 'file-folder',
@@ -791,14 +778,24 @@ export const createSoupFilters = (
     ...GENERAL_CONTEXTUAL_FILTERS,
     // Contextual filters - File types
     ...FILE_TYPE_FILTERS,
-  ] as const satisfies (EntityFilterConfig & { label: string })[];
+  ] as const satisfies EntityFilterConfig[];
 
   return list;
 };
 
+/**
+ * Default filter group configurations for soup filters.
+ * - 'focus': Mutually exclusive (signal/noise/explicit-noise)
+ * - 'entity-type': Mutually exclusive by default
+ */
+export const SOUP_FILTER_GROUPS: FilterGroupConfig[] = [
+  { id: 'focus', allowMultiple: false },
+  { id: 'entity-type', allowMultiple: false },
+];
+
 type SoupFilter = ReturnType<typeof createSoupFilters>[number];
 
-export type FilterID = SoupFilter['id'];
+export type FilterID = Extract<SoupFilter, { id: string & {} }>['id'];
 
 const ENTITY_TYPE_FILTERS = [
   'document',

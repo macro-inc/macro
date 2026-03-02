@@ -126,7 +126,7 @@ const stateCache = new Map<
   {
     soup: {
       focus: string | undefined;
-      filters: string[];
+      filters: { and: string[]; or: string[] };
       queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
       searchText: string;
@@ -152,7 +152,7 @@ export const SoupView = (props: SoupViewProps) => {
     if (!props.initialClientFilters || !props.initialClientFilters.length)
       return;
 
-    soup.filters.set(props.initialClientFilters);
+    soup.filters.set({ and: props.initialClientFilters });
   });
 
   return (
@@ -532,7 +532,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     stateCache.set(getCacheKey(), {
       soup: {
         focus: soup.focus.id(),
-        filters: soup.filters.activeIds(),
+        filters: {
+          and: [...soup.filters.andFilters().map((f) => f.id)],
+          or: [...soup.filters.orFilters().map((f) => f.id)],
+        },
         queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
         searchText: searchText(),

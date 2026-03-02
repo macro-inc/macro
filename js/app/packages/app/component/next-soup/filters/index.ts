@@ -3,8 +3,6 @@ export {
   documentFilter,
   emailFilter,
   fileFilter,
-  FILTER_GROUPS,
-  type FilterGroup,
   notDoneFilter,
   peopleFilter,
   projectFilter,
@@ -12,6 +10,7 @@ export {
   teamsFilter,
   unreadFilter,
   createSoupFilters,
+  SOUP_FILTER_GROUPS,
   // Contextual filter configs
   EMAIL_CONTEXTUAL_FILTERS,
   TASK_STATUS_FILTERS,
@@ -23,6 +22,7 @@ export {
   CHAT_CONTEXTUAL_FILTERS,
   GENERAL_CONTEXTUAL_FILTERS,
   FILE_TYPE_FILTERS,
+  type FilterID,
 } from './filters';
 
 export {
@@ -33,6 +33,12 @@ export {
 
 export {
   createFilterState,
+  type FilterState,
+  type FilterStateOptions,
+  type SetFiltersInput,
+  type SetFiltersCallback,
+  type CurrentFilterState,
   type FilterConfig,
+  type FilterGroupConfig,
   type FilterPredicate,
 } from './create-filter-state';
