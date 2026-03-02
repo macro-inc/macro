@@ -123,7 +123,9 @@ export function Channel(props: ChannelProps) {
                     isExpanded={state.isExpanded}
                     setIsExpanded={state.setIsExpanded}
                     listMeta={listMetaByMessageId()[item.id]}
-                    actions={{ onDismissNewMessages: activityTracker.dismissNewMessages }}
+                    actions={{
+                      onDismissNewMessages: activityTracker.dismissNewMessages,
+                    }}
                   />
                 );
               }}

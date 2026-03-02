@@ -1,5 +1,9 @@
 import { For } from 'solid-js';
-import { ChannelMessage, type MessageActions, type MessageData } from '../Message';
+import {
+  ChannelMessage,
+  type MessageActions,
+  type MessageData,
+} from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 
 export function ThreadReplyList(props: {

@@ -1,5 +1,9 @@
 import type { ApiChannelMessage } from '@service-comms/client';
-import type { ChannelMessageListMeta, MessageActions, MessageData } from '../Message';
+import type {
+  ChannelMessageListMeta,
+  MessageActions,
+  MessageData,
+} from '../Message';
 import type { Accessor, Setter } from 'solid-js';
 
 export type ThreadActions = {

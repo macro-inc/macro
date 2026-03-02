@@ -98,7 +98,9 @@ export function ChannelThread(props: ThreadProps) {
                 </Show>
 
                 <Show
-                  when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
+                  when={
+                    shouldShowCollapsedIndicator() || shouldShowReplyButton()
+                  }
                 >
                   <div
                     class="relative z-10 w-fit"
