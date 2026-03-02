@@ -80,10 +80,10 @@ import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hoo
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { SoupFiltersBar } from '@app/component/next-soup/soup-view/soup-filters-bar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { SoupSearchbar } from '@app/component/next-soup/soup-view/soup-view-search-bar';
-import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
+import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
