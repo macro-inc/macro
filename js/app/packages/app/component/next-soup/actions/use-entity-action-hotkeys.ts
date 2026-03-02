@@ -56,11 +56,14 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    if (splitHandle?.content().type === 'component' && splitHandle?.content().id === 'unified-list') {
+    if (
+      splitHandle?.content().type === 'component' &&
+      splitHandle?.content().id === 'unified-list'
+    ) {
       const selected = soup.selection.selected();
       if (selected.length > 0) return selected;
     }
-    
+
     const focused = soup.focus.item();
     return focused ? [focused] : [];
   };
