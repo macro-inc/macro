@@ -85,7 +85,7 @@ const useFilterOptions = (
   const { multiple = true, target = 'or' } = config;
   const { soup } = useSoupView();
 
-  const optionIds = new Set(options.map((opt) => opt.value));
+  const optionIds = options.map((opt) => opt.value);
 
   const active = createMemo(() =>
     options.filter((opt) => soup.filters.isActive(opt.value))
@@ -102,7 +102,7 @@ const useFilterOptions = (
       if (target === 'and') {
         return {
           and: [
-            ...cur.andIds.filter((id) => !optionIds.has(id)),
+            ...cur.andIds.filter((id) => !optionIds.includes(id)),
             ...selectedIds,
           ],
           or: cur.orIds,
@@ -110,7 +110,10 @@ const useFilterOptions = (
       }
       return {
         and: cur.andIds,
-        or: [...cur.orIds.filter((id) => !optionIds.has(id)), ...selectedIds],
+        or: [
+          ...cur.orIds.filter((id) => !optionIds.includes(id)),
+          ...selectedIds,
+        ],
       };
     });
   };
