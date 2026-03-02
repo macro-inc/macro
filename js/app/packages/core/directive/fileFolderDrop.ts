@@ -55,7 +55,7 @@ export function fileFolderDrop(
       const options = accessor();
       const items = e.dataTransfer?.items;
 
-      // Check if we're dragging an image element (no files in dataTransfer)
+      // Mark drag start call back as valid if we're dragging a file.
       const hasFiles =
         items && Array.from(items).some((item) => item.kind === 'file');
 

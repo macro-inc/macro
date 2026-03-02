@@ -120,7 +120,6 @@ export function Channel(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockRef = blockElementSignal.get;
   const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
-  const [isValidChannelDrag, setIsValidChannelDrag] = createSignal(true);
   const notificationSource = useGlobalNotificationSource();
 
   const blockHandle = blockHandleSignal.get;
@@ -404,9 +403,8 @@ export function Channel(props: {
                   })
                 );
               },
-              onDragStart: (valid) => {
+              onDragStart: () => {
                 setIsDraggingOverChannel(true);
-                setIsValidChannelDrag(valid);
               },
               onDragEnd: () => {
                 setIsDraggingOverChannel(false);
@@ -456,7 +454,7 @@ export function Channel(props: {
                     autoFocusOnMount={autoFocusOnMount()}
                     domRef={setChannelInputRef}
                     isDraggingOverChannel={isDraggingOverChannel}
-                    isValidChannelDrag={isValidChannelDrag}
+                    isValidChannelDrag={() => true}
                   />
                 </Suspense>
               </div>
