@@ -198,7 +198,7 @@ export const SoupView = (props: SoupViewProps) => {
                 ></div>
               </button>
 
-              <div class="py-2 flex gap-2 items-center w-full">
+              <div class="flex gap-2 items-center w-full h-12">
                 <SoupFiltersBar />
               </div>
               <div class="ml-auto w-full flex items-center justify-end gap-2">
