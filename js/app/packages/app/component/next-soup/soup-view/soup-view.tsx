@@ -179,27 +179,6 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </SplitHeaderLeft>
             <div class="flex gap-2 items-center">
-              <button
-                type="button"
-                class="size-full max-w-4 relative group/button flex items-center justify-center bracket-never"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                data-blocks-navigation
-              >
-                <div
-                  class={cn(
-                    'size-4 p-0.5 flex items-center justify-center rounded-xs border border-edge-muted group-hover/button:border-accent pointer-events-none'
-                    // {
-                    //   'bg-accent border border-accent': props.checked,
-                    // }
-                  )}
-                ></div>
-              </button>
-
               <div class="flex gap-2 items-center w-full h-12">
                 <SoupFiltersBar />
               </div>
