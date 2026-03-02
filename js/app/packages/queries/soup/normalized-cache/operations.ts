@@ -222,7 +222,9 @@ export async function refetchSoupEntity(
     body: filter,
   });
 
-  if (isErr(result)) return;
+  if (isErr(result)) {
+    return;
+  }
 
   const [, page] = result;
   if (!page.items.length) return;

@@ -78,6 +78,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -94,13 +95,18 @@ const useSoupNotificationInvalidators = () => {
     }
   );
 
-  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
-    entityQueryClient.invalidateQueries({
-      // HACK: this needs to be improved, since we use a single query, per entity invalidations
-      // become a little more complicated.
-      queryKey: queryKeys.all.entity,
-    });
-  });
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'email',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'emailThread');
+      entityQueryClient.invalidateQueries({
+        // HACK: this needs to be improved, since we use a single query, per entity invalidations
+        // become a little more complicated.
+        queryKey: queryKeys.all.entity,
+      });
+    }
+  );
 
   createEffectOnEntityTypeNotification(
     notificationSource,
