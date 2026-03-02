@@ -38,6 +38,7 @@ anyhow = { workspace = true }
 async-openai = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
+aws-sdk-dynamodb = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 base64 = { workspace = true }
@@ -55,6 +56,7 @@ email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 lazy_static = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 log = { workspace = true }
@@ -65,6 +67,7 @@ macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+notification = { path = "../notification" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
@@ -75,6 +78,7 @@ macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+model_notifications = { path = "../model_notifications" }
 models_dcs = { path = "../models_dcs" }
 models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }

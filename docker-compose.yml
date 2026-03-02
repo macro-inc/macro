@@ -274,6 +274,27 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # image_proxy_service (Port 8097)
+  # Proxies external images to avoid CORS issues and IP leakage
+  # ============================================================================
+  image_proxy_service:
+    <<: *common-env
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile.dev
+      target: image_proxy_service
+    ports:
+      - "8097:8080"
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # websocket_service (Port 6969)
   # Simple WebSocket service - responds with "ping" to all messages
   # ============================================================================

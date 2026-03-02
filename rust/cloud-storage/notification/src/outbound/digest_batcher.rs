@@ -109,7 +109,7 @@ impl DigestBatcher for RedisDigestBatcher {
         Ok(())
     }
 
-    async fn claim_ready_digest(&self) -> Result<ClaimResult, Report> {
+    async fn claim_ready_digest(&self) -> Result<ClaimResult<DigestBatch>, Report> {
         let mut conn = self.conn.clone();
         let now = Utc::now().timestamp();
         let pending_users_key = self.pending_users_key();
@@ -159,7 +159,11 @@ impl DigestBatcher for RedisDigestBatcher {
 
         let notifications = items
             .into_iter()
-            .filter_map(|s| serde_json::from_str(&s).ok())
+            .filter_map(|s| {
+                serde_json::from_str::<UserNotificationRow<serde_json::Value>>(&s)
+                    .ok()
+                    .map(|n| n.into_tagged())
+            })
             .collect();
 
         Ok(ClaimResult::Ready(DigestBatch {

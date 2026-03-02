@@ -5,6 +5,120 @@ use models_opensearch::SearchEntityType;
 
 use crate::search::query::Keys;
 
+/// Injects `fragment_size` into every highlight field config in the query JSON.
+/// The `opensearch_query_builder` crate doesn't support `fragment_size` natively,
+/// so we patch the serialized JSON after building.
+pub(crate) fn inject_fragment_size(query: &mut serde_json::Value, fragment_size: u32) {
+    if let Some(fields) = query
+        .pointer_mut("/highlight/fields")
+        .and_then(|v| v.as_object_mut())
+    {
+        for (_name, config) in fields.iter_mut() {
+            if let Some(obj) = config.as_object_mut() {
+                obj.insert(
+                    "fragment_size".to_string(),
+                    serde_json::json!(fragment_size),
+                );
+            }
+        }
+    }
+}
+
+/// Excludes `content` from `_source` in the query JSON. The content field is
+/// only needed in highlights, not in the raw source — excluding it cuts ~40%
+/// of the OpenSearch response payload.
+pub(crate) fn exclude_source_content(query: &mut serde_json::Value) {
+    if let Some(obj) = query.as_object_mut() {
+        obj.insert(
+            "_source".to_string(),
+            serde_json::json!({"excludes": ["content"]}),
+        );
+    }
+}
+
+const MAX_VISIBLE_FRAGMENT_CHARS: usize = 500;
+const OPEN_TAG: &str = "<macro_em>";
+const CLOSE_TAG: &str = "</macro_em>";
+
+fn normalize_highlight_fragment(fragment: &str) -> String {
+    let stripped: String = fragment
+        .chars()
+        .filter(|&c| {
+            !matches!(c,
+                '\u{2800}'..='\u{28FF}' | '\u{200B}'..='\u{200F}' |
+                '\u{2028}'..='\u{202F}' | '\u{2060}'..='\u{206F}' |
+                '\u{FEFF}' | '\u{00AD}' | '\u{034F}'
+            )
+        })
+        .collect();
+
+    let mut prev_space = false;
+    let normalized: String = stripped
+        .chars()
+        .filter_map(|c| {
+            if c == '\n' || c == '\r' || c.is_whitespace() {
+                if prev_space {
+                    return None;
+                }
+                prev_space = true;
+                Some(' ')
+            } else {
+                prev_space = false;
+                Some(c)
+            }
+        })
+        .collect();
+
+    let trimmed = normalized.trim();
+    truncate_preserving_tags(trimmed, MAX_VISIBLE_FRAGMENT_CHARS)
+}
+
+/// Truncates a highlight fragment to `max_chars` visible characters (excluding
+/// `<macro_em>`/`</macro_em>` tags from the count). If truncation lands inside
+/// an open tag, the closing tag is appended. Adds "..." when truncated.
+fn truncate_preserving_tags(s: &str, max_chars: usize) -> String {
+    let mut result = String::new();
+    let mut visible_count = 0;
+    let mut inside_tag = false;
+    let mut chars = s.chars().peekable();
+
+    while let Some(&c) = chars.peek() {
+        if visible_count >= max_chars {
+            break;
+        }
+
+        if c == '<' {
+            let rest: String = chars.clone().collect();
+            if rest.starts_with(OPEN_TAG) {
+                for _ in 0..OPEN_TAG.len() {
+                    result.push(chars.next().unwrap());
+                }
+                inside_tag = true;
+                continue;
+            } else if rest.starts_with(CLOSE_TAG) {
+                for _ in 0..CLOSE_TAG.len() {
+                    result.push(chars.next().unwrap());
+                }
+                inside_tag = false;
+                continue;
+            }
+        }
+
+        result.push(c);
+        visible_count += 1;
+        chars.next();
+    }
+
+    if visible_count >= max_chars && chars.peek().is_some() {
+        if inside_tag {
+            result.push_str(CLOSE_TAG);
+        }
+        result.push_str("...");
+    }
+
+    result
+}
+
 /// macro open/close tags for highlight matches
 #[derive(Debug, PartialEq)]
 pub(crate) enum MacroEm {
@@ -90,7 +204,7 @@ pub(crate) fn parse_highlight_hit(
             .map(|v| v.to_string()),
         content: highlight
             .get(keys.content_key)
-            .map(|v| v.to_vec())
+            .map(|v| v.iter().map(|f| normalize_highlight_fragment(f)).collect())
             .unwrap_or_default(),
         sender: highlight
             .get("sender")

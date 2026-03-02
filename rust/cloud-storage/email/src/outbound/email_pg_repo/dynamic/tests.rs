@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
+use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
@@ -13,9 +15,12 @@ fn test_build_message_email_filter_sender_complete() {
     );
     let expr = Expr::Literal(EmailLiteral::Sender(email));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("m.from_contact_id"));
-    assert!(result.contains("LOWER(c.email_address) = LOWER('test@example.com')"));
+    assert!(debug.contains("m.from_contact_id"));
+    assert!(debug.contains("LOWER(c.email_address) = LOWER("));
+    assert!(result.has_bind_string("test@example.com"));
+    assert!(result.has_no_raw_containing("test@example.com"));
 }
 
 #[test]
@@ -23,17 +28,21 @@ fn test_build_message_email_filter_sender_partial() {
     let email = Email::Partial("example".to_string());
     let expr = Expr::Literal(EmailLiteral::Sender(email));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("m.from_contact_id"));
-    assert!(result.contains("c.email_address ILIKE '%example%'"));
+    assert!(debug.contains("m.from_contact_id"));
+    assert!(debug.contains("ILIKE"));
+    assert!(result.has_bind_string("%example%"));
+    assert!(result.has_no_raw_containing("example"));
 }
 
 #[test]
 fn test_build_message_email_filter_importance_true_includes_drafts() {
     let expr = Expr::Literal(EmailLiteral::Importance(true));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("m.is_draft = TRUE"));
+    assert!(debug.contains("m.is_draft = TRUE"));
 }
 
 #[test]
@@ -45,10 +54,12 @@ fn test_build_message_email_filter_recipient() {
     );
     let expr = Expr::Literal(EmailLiteral::Recipient(email));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("email_message_recipients"));
-    assert!(result.contains("recipient_type = 'TO'"));
-    assert!(result.contains("LOWER(c.email_address) = LOWER('recipient@example.com')"));
+    assert!(debug.contains("email_message_recipients"));
+    assert!(debug.contains("recipient_type = 'TO'"));
+    assert!(result.has_bind_string("recipient@example.com"));
+    assert!(result.has_no_raw_containing("recipient@example.com"));
 }
 
 #[test]
@@ -60,8 +71,11 @@ fn test_build_message_email_filter_cc() {
     );
     let expr = Expr::Literal(EmailLiteral::Cc(email));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("recipient_type = 'CC'"));
+    assert!(debug.contains("recipient_type = 'CC'"));
+    assert!(result.has_bind_string("cc@example.com"));
+    assert!(result.has_no_raw_containing("cc@example.com"));
 }
 
 #[test]
@@ -73,8 +87,11 @@ fn test_build_message_email_filter_bcc() {
     );
     let expr = Expr::Literal(EmailLiteral::Bcc(email));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("recipient_type = 'BCC'"));
+    assert!(debug.contains("recipient_type = 'BCC'"));
+    assert!(result.has_bind_string("bcc@example.com"));
+    assert!(result.has_no_raw_containing("bcc@example.com"));
 }
 
 #[test]
@@ -94,10 +111,13 @@ fn test_build_message_email_filter_and() {
         Expr::Literal(EmailLiteral::Recipient(email2)),
     );
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("AND"));
-    assert!(result.contains("sender@example.com"));
-    assert!(result.contains("recipient@example.com"));
+    assert!(debug.contains("AND"));
+    assert!(result.has_bind_string("sender@example.com"));
+    assert!(result.has_bind_string("recipient@example.com"));
+    assert!(result.has_no_raw_containing("sender@example.com"));
+    assert!(result.has_no_raw_containing("recipient@example.com"));
 }
 
 #[test]
@@ -117,10 +137,13 @@ fn test_build_message_email_filter_or() {
         Expr::Literal(EmailLiteral::Sender(email2)),
     );
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("OR"));
-    assert!(result.contains("sender1@example.com"));
-    assert!(result.contains("sender2@example.com"));
+    assert!(debug.contains("OR"));
+    assert!(result.has_bind_string("sender1@example.com"));
+    assert!(result.has_bind_string("sender2@example.com"));
+    assert!(result.has_no_raw_containing("sender1@example.com"));
+    assert!(result.has_no_raw_containing("sender2@example.com"));
 }
 
 #[test]
@@ -132,9 +155,11 @@ fn test_build_message_email_filter_not() {
     );
     let expr = Expr::is_not(Expr::Literal(EmailLiteral::Sender(email)));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("NOT"));
-    assert!(result.contains("blocked@example.com"));
+    assert!(debug.contains("NOT"));
+    assert!(result.has_bind_string("blocked@example.com"));
+    assert!(result.has_no_raw_containing("blocked@example.com"));
 }
 
 #[test]
@@ -150,47 +175,54 @@ fn test_escape_like_pattern() {
 fn test_build_view_thread_filter_inbox() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let result = build_view_thread_filter(&view);
-    assert!(result.contains("inbox_visible = TRUE"));
-    assert!(result.contains("latest_inbound_message_ts IS NOT NULL"));
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("inbox_visible = TRUE"));
+    assert!(debug.contains("latest_inbound_message_ts IS NOT NULL"));
 }
 
 #[test]
 fn test_build_view_thread_filter_sent() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let result = build_view_thread_filter(&view);
-    assert!(result.contains("latest_outbound_message_ts IS NOT NULL"));
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("latest_outbound_message_ts IS NOT NULL"));
 }
 
 #[test]
 fn test_build_view_message_filter_drafts() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts);
-    let result = build_view_message_filter(&view, "$1");
-    assert!(result.contains("is_draft = TRUE"));
+    let result = build_view_message_filter(&view);
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("is_draft = TRUE"));
 }
 
 #[test]
 fn test_build_view_message_filter_starred() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Starred);
-    let result = build_view_message_filter(&view, "$1");
-    assert!(result.contains("is_starred = TRUE"));
-    assert!(result.contains("is_draft = FALSE"));
+    let result = build_view_message_filter(&view);
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("is_starred = TRUE"));
+    assert!(debug.contains("is_draft = FALSE"));
 }
 
 #[test]
 fn test_build_view_message_filter_important() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Important);
-    let result = build_view_message_filter(&view, "$1");
-    assert!(result.contains("IMPORTANT"));
-    assert!(result.contains("m.is_draft = TRUE"));
-    assert!(result.contains("EXISTS"));
+    let result = build_view_message_filter(&view);
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("IMPORTANT"));
+    assert!(debug.contains("m.is_draft = TRUE"));
+    assert!(debug.contains("EXISTS"));
 }
 
 #[test]
 fn test_build_view_message_filter_user_label() {
     let view = PreviewView::UserLabel("MyLabel".to_string());
-    let result = build_view_message_filter(&view, "$1");
-    assert!(result.contains("MyLabel"));
-    assert!(result.contains("EXISTS"));
+    let result = build_view_message_filter(&view);
+    let debug = result.to_debug_sql();
+    assert!(debug.contains("EXISTS"));
+    assert!(result.has_bind_string("MyLabel"));
+    assert!(result.has_no_raw_containing("MyLabel"));
 }
 
 #[test]
@@ -222,8 +254,11 @@ fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
     let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains(&format!("t.id = '{id}'::uuid")));
+    assert!(debug.contains("t.id = "));
+    assert!(result.has_bind_uuid(&id));
+    assert!(result.has_no_raw_containing(&id.to_string()));
 }
 
 #[test]
@@ -235,10 +270,13 @@ fn test_build_thread_email_filter_multiple_thread_ids() {
         Expr::Literal(EmailLiteral::ThreadId(id2)),
     );
     let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains(&format!("t.id = '{id1}'::uuid")));
-    assert!(result.contains(&format!("t.id = '{id2}'::uuid")));
-    assert!(result.contains("OR"));
+    assert!(result.has_bind_uuid(&id1));
+    assert!(result.has_bind_uuid(&id2));
+    assert!(debug.contains("OR"));
+    assert!(result.has_no_raw_containing(&id1.to_string()));
+    assert!(result.has_no_raw_containing(&id2.to_string()));
 }
 
 #[test]
@@ -250,9 +288,10 @@ fn test_build_thread_email_filter_maps_sender_to_true() {
     );
     let expr = Expr::Literal(EmailLiteral::Sender(email));
     let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("TRUE"));
-    assert!(!result.contains("t.id"));
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("t.id"));
 }
 
 #[test]
@@ -260,9 +299,10 @@ fn test_build_message_email_filter_maps_thread_id_to_true() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
     let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
 
-    assert!(result.contains("TRUE"));
-    assert!(!result.contains("t.id"));
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("t.id"));
 }
 
 #[test]
@@ -279,12 +319,15 @@ fn test_combined_thread_id_and_sender_splits_correctly() {
     );
 
     let thread_result = build_thread_email_filter(&expr);
-    assert!(thread_result.contains(&format!("t.id = '{id}'::uuid")));
-    assert!(!thread_result.contains("from_contact_id"));
+    let thread_debug = thread_result.to_debug_sql();
+    assert!(thread_result.has_bind_uuid(&id));
+    assert!(!thread_debug.contains("from_contact_id"));
 
     let message_result = build_message_email_filter(&expr);
-    assert!(message_result.contains("from_contact_id"));
-    assert!(!message_result.contains(&format!("t.id = '{id}'")));
+    let message_debug = message_result.to_debug_sql();
+    assert!(message_debug.contains("from_contact_id"));
+    assert!(message_result.has_bind_string("sender@example.com"));
+    assert!(!message_result.has_bind_uuid(&id));
 }
 
 #[test]
@@ -337,4 +380,45 @@ fn test_has_both_literals_in_combined_ast() {
     );
     assert!(has_thread_literals(&expr));
     assert!(has_message_literals(&expr));
+}
+
+#[test]
+fn test_sql_injection_email_not_in_raw_sql() {
+    let malicious = Email::Complete(EmailStr::parse_from_str("evil@x.com").unwrap().into_owned());
+    let expr = Expr::Literal(EmailLiteral::Sender(malicious));
+    let result = build_message_email_filter(&expr);
+
+    assert!(result.has_bind_string("evil@x.com"));
+    assert!(result.has_no_raw_containing("evil@x.com"));
+}
+
+#[test]
+fn test_sql_injection_partial_email_not_in_raw_sql() {
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "'; DROP TABLE--".to_string(),
+    )));
+    let result = build_message_email_filter(&expr);
+
+    assert!(result.has_no_raw_containing("DROP"));
+    assert!(result.has_no_raw_containing("';"));
+}
+
+#[test]
+fn test_sql_injection_user_label_not_in_raw_sql() {
+    let view = PreviewView::UserLabel("'; DROP TABLE--".to_string());
+    let result = build_view_message_filter(&view);
+
+    assert!(result.has_no_raw_containing("DROP"));
+    assert!(result.has_no_raw_containing("';"));
+    assert!(result.has_bind_string("'; DROP TABLE--"));
+}
+
+#[test]
+fn test_sql_injection_thread_id_not_in_raw_sql() {
+    let id = Uuid::new_v4();
+    let expr = Expr::Literal(EmailLiteral::ThreadId(id));
+    let result = build_thread_email_filter(&expr);
+
+    assert!(result.has_bind_uuid(&id));
+    assert!(result.has_no_raw_containing(&id.to_string()));
 }

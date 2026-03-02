@@ -97,6 +97,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         id: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Get the profile picture URL for a user.
+    /// Returns `None` if the user doesn't exist or has no profile picture.
+    fn get_user_profile_picture(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.

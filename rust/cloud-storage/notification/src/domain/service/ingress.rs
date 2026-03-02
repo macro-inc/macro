@@ -7,8 +7,8 @@ use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification,
-    NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine, UserApnsEndpoints,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, NotificationChannel, QueueMessage,
+    QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
     GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
@@ -20,6 +20,7 @@ use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
@@ -58,7 +59,7 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// not deleted and not done, ordered by creation time descending.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
@@ -72,21 +73,21 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
 
     /// Soft-delete a single user notification.
     fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Soft-delete multiple user notifications.
     fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
@@ -241,20 +242,14 @@ where
         (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
         Report<SendNotificationError>,
     > {
-        let rate_limit = notification.req.get_rate_limit()?;
-        let message_type = T::TYPE_NAME.to_string();
         let mut messages = Vec::new();
         let mut apns_collapse_key = None;
 
         // Connection gateway: 1:M (single message for all recipients)
         if notification.send_conn_gateway {
-            messages.push(QueueMessage {
-                message_type: message_type.clone(),
-                rate_limit: rate_limit.clone(),
-                content: NotificationChannel::ConnGateway(
-                    ConnGatewayNotification::clone_from_request(notification_id, notification),
-                ),
-            });
+            messages.push(QueueMessage::new(NotificationChannel::ConnGateway(
+                ConnGatewayNotification::clone_from_request(notification_id, notification),
+            )));
         }
 
         // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
@@ -295,30 +290,23 @@ where
                     build_apns(notification.req.notification.clone(), notification_id)
             {
                 apns_collapse_key = Some(attributes.collapse_key.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: NotificationChannel::Ios(Box::new(APNSTargets {
+                messages.push(QueueMessage::new(NotificationChannel::Ios(Box::new(
+                    APNSTargets {
                         notif: apns_notif,
                         attributes,
                         ios_device_endpoints: ios_endpoints,
-                    })),
-                });
+                    },
+                ))));
             }
         }
 
         // Email: 1:1 (one message per recipient)
         if let Some(ref mut build_email) = notification.build_email {
             for recipient in &notification.req.recipient_ids {
-                let email_content = build_email(notification.req.notification.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: NotificationChannel::Email(EmailNotification {
-                        to: recipient.clone(),
-                        content: email_content,
-                    }),
-                });
+                let email_content = build_email(&notification.req.notification);
+                messages.push(QueueMessage::new(NotificationChannel::Email(
+                    email_content.with_recipient(recipient.clone()),
+                )));
             }
         }
 
@@ -425,27 +413,23 @@ where
                 .into_iter()
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
-                    QueueMessage {
-                        message_type: "clear_push_notification".to_string(),
-                        rate_limit: None,
-                        content: NotificationChannel::Ios(Box::new(APNSTargets {
-                            notif: APNSPushNotification {
-                                aps: Aps {
-                                    content_available: Some(1),
-                                    sound: None,
-                                    ..Default::default()
-                                },
-                                push_notification_data: ClearPushIdentifier {
-                                    identifier: collapse_key.clone(),
-                                },
+                    QueueMessage::new(NotificationChannel::Ios(Box::new(APNSTargets {
+                        notif: APNSPushNotification {
+                            aps: Aps {
+                                content_available: Some(1),
+                                sound: None,
+                                ..Default::default()
                             },
-                            attributes: MessageAttributes {
-                                push_type: PushType::Background,
-                                collapse_key,
+                            push_notification_data: ClearPushIdentifier {
+                                identifier: collapse_key.clone(),
                             },
-                            ios_device_endpoints: ios_endpoints.clone(),
-                        })),
-                    }
+                        },
+                        attributes: MessageAttributes {
+                            push_type: PushType::Background,
+                            collapse_key,
+                        },
+                        ios_device_endpoints: ios_endpoints.clone(),
+                    })))
                 })
                 .collect();
 
@@ -470,7 +454,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
@@ -519,7 +503,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         self.repository
@@ -530,7 +514,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         self.repository
@@ -541,7 +525,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.repository

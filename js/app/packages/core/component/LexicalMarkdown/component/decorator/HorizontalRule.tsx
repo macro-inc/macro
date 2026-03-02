@@ -1,4 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import Trash from '@icon/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
@@ -9,6 +8,7 @@ import {
   $setSelection,
 } from 'lexical';
 import { createSignal, useContext } from 'solid-js';
+import { Button } from '@ui/components/Button';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
@@ -82,20 +82,20 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
         }}
       />
 
-      {/* Add hover overlay similar to the image component */}
       {(isSelectedAsNode() || ruleHover()) && (
         <div class="absolute h-full top-0 right-2 flex flex-row gap-1 items-center">
           {editor()?.isEditable() && (
-            <DeprecatedIconButton
-              class="m-0"
-              theme="clear"
-              icon={() => <Trash class="size-4" />}
-              tooltip={{ label: 'Remove' }}
-              onClick={(e: MouseEvent | KeyboardEvent) => {
+            <Button
+              class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+              tooltip="Remove"
+              on:mousedown={(e: MouseEvent) => {
                 e.preventDefault();
+                e.stopPropagation();
                 deleteRule();
               }}
-            />
+            >
+              <Trash class="size-4" />
+            </Button>
           )}
         </div>
       )}

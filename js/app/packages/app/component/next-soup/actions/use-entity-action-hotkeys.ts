@@ -14,9 +14,10 @@ import {
 } from './index';
 import { isShareableEntityType } from '@app/component/global-share-modal/GlobalShareModal';
 import { useUserId } from '@core/context/user';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { onCleanup } from 'solid-js';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -69,6 +70,8 @@ export const useEntityActionHotkeys = (
     openEntityInSplitFromUnifiedList(entity, { splitHandle });
   };
 
+  const group = createHotkeyGroup();
+
   // Mark Done - 'e'
   registerHotkey({
     hotkey: ['e'],
@@ -90,7 +93,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Delete - 'delete', 'backspace'
   registerHotkey({
@@ -116,7 +119,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Rename - 'r'
   registerHotkey({
@@ -142,7 +145,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Copy - 'cmd+d'
   registerHotkey({
@@ -168,7 +171,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Move to folder - 'm'
   registerHotkey({
@@ -194,7 +197,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
   // Copy link - 'shift+cmd+c'
   registerHotkey({
@@ -216,8 +219,9 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
 
+  // Share
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
@@ -236,5 +240,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  });
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 };

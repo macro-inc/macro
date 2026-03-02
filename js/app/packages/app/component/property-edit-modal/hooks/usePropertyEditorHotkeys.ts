@@ -1,4 +1,4 @@
-import { registerHotkey } from 'core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from 'core/hotkey/hotkeys';
 import { openPropertyEditor } from '../state/propertyEditor';
 import type {
   Property,
@@ -56,6 +56,8 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     }
   };
 
+  const group = createHotkeyGroup();
+
   // Open property selector - shift+cmd+o
   registerHotkey({
     hotkey: ['shift+cmd+o'],
@@ -72,7 +74,7 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
       return entities.length > 0 && entities.every(isTaskEntity);
     },
     scopeId,
-  });
+  }).withGroup(group);
 
   // Set priority - shift+cmd+p
   registerHotkey({
@@ -94,7 +96,7 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
       );
     },
     scopeId,
-  });
+  }).withGroup(group);
 
   // Set assignee - shift+cmd+a
   registerHotkey({
@@ -116,7 +118,7 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
       );
     },
     scopeId,
-  });
+  }).withGroup(group);
 
   // Set status - shift+cmd+s
   registerHotkey({
@@ -136,9 +138,10 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
       );
     },
     scopeId,
-  });
+  }).withGroup(group);
 
   return {
     openPropertyEditor: openIfSelected,
+    disposeHotkeys: group.dispose,
   };
 }

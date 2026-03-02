@@ -18,7 +18,6 @@ pub(crate) mod context;
 // Routes
 #[allow(unused_imports)]
 mod email;
-#[allow(unused_imports)]
 mod link;
 #[allow(unused_imports)]
 mod merge;
@@ -82,6 +81,19 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
+        .nest(
+            "/link",
+            link::router(state.clone()).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::tracking::attach_ip_context_handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.jwt_args.clone(),
+                        macro_middleware::auth::decode_jwt::handler,
+                    )),
+            ),
+        )
         .nest(
             "/team",
             team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(

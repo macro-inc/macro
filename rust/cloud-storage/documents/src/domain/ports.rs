@@ -4,7 +4,7 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::EntityAccessReceipt;
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
     CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
@@ -144,28 +144,28 @@ pub trait DocumentService: Send + Sync + 'static {
     /// Get a document with metadata, access level, and view location.
     fn get_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<GetDocumentResponseData, DocumentError>> + Send;
 
     /// Get the location (presigned URL or sync service content) for a document.
     fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         params: LocationQueryParams,
     ) -> impl Future<Output = Result<LocationResponseV3, DocumentError>> + Send;
 
     /// Soft-delete a document and update project modified timestamp.
     fn delete_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Get the document text for a given document
     fn get_document_text(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
     /// Create a new document, generate an S3 presigned upload URL, and

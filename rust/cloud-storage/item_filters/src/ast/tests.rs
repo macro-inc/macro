@@ -100,7 +100,6 @@ fn it_expands_filters() {
 }
 
 #[test]
-#[ignore]
 fn it_expands_file_associations() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
@@ -108,7 +107,6 @@ fn it_expands_file_associations() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
-            importance: Some(true),
             ..Default::default()
         },
         ..Default::default()
@@ -171,7 +169,6 @@ fn it_expands_file_associations() {
 }
 
 #[test]
-#[ignore]
 fn it_expands_other_association() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
@@ -179,7 +176,6 @@ fn it_expands_other_association() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
-            importance: Some(true),
             ..Default::default()
         },
         ..Default::default()

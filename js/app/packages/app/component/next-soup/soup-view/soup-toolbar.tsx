@@ -532,8 +532,22 @@ const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   onMount(() => {
     const ref = props.scrollRef;
     if (!ref) return;
+
+    // Convert vertical scroll to horizontal scroll
+    const wheelListener = (e: WheelEvent) => {
+      e.preventDefault();
+      const { deltaX, deltaY } = e;
+      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+      ref.scrollLeft += delta;
+      updateClipIndicators();
+    };
+
+    ref.addEventListener('wheel', wheelListener);
     ref.addEventListener('scroll', updateClipIndicators);
-    onCleanup(() => ref?.removeEventListener('scroll', updateClipIndicators));
+    onCleanup(() => {
+      ref?.removeEventListener('wheel', wheelListener);
+      ref?.removeEventListener('scroll', updateClipIndicators);
+    });
   });
   return (
     <>

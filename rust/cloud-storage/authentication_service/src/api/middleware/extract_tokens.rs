@@ -7,7 +7,7 @@ use axum::{
 };
 use macro_auth::error::MacroAuthError;
 
-// Extracts the access token and refresh token and inserts into TokenContext
+/// Extracts the access token and refresh token and inserts into TokenContext
 pub(in crate::api) async fn handler(mut req: Request, next: Next) -> Result<Response, Response> {
     let headers = req.headers();
     let access_token = match macro_auth::headers::extract_access_token_from_request_headers(headers)

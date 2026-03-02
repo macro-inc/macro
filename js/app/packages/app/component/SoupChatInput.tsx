@@ -1,18 +1,23 @@
 import { useSoup } from '@app/component/next-soup/soup-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
+import { withAnalytics } from '@coparse/analytics';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+
+const { track, TrackingEvents } = withAnalytics();
 
 function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
@@ -20,8 +25,17 @@ function SoupChatInputInner() {
   const soup = useSoup();
   const input = useChatInputContext();
 
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      track(TrackingEvents.CHAT.MENTION.SELECT);
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    block: 'chat',
+    showOpenTabs: true,
+    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
@@ -37,7 +51,7 @@ function SoupChatInputInner() {
     hotkeyToken: TOKENS.chat.input.focus,
     description: 'Focus chat input',
     keyDownHandler: () => {
-      chatMarkdownArea.focus();
+      editor.controls.focus();
       return true;
     },
   });
@@ -78,7 +92,7 @@ function SoupChatInputInner() {
         <div class="w-full max-w-3xl">
           <div class="pointer-events-auto">
             <ChatInput
-              markdown={chatMarkdownArea}
+              editor={editor}
               onSend={handleSend}
               onEscape={() => {
                 splitPanelContext.panelRef()?.focus();

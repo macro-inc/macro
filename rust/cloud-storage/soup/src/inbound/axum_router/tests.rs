@@ -699,3 +699,82 @@ async fn it_parses_notification_and_task_filters() {
         }
     )
 }
+
+#[tokio::test]
+async fn it_can_filter_chat_owners() {
+    let json = r#"{
+"channel_filters": {
+"channel_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"document_filters": {
+"document_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"email_filters": {
+"recipients": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"project_filters": {
+"project_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"chat_filters": {
+"owners": [
+"macro|rahul@macro.com"
+]
+},
+"emailView": "all",
+"limit": 100,
+"sort_method": "updated_at"
+}"#;
+
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(json))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard.pop().unwrap()
+    };
+
+    assert_matches!(
+        arg,
+        SoupRequest {
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+                _,
+                EntityFilters {
+                    chat_filters,
+                    ..
+                },
+            ))),
+            ..
+        } => {
+            assert_eq!(chat_filters.owners, vec!["macro|rahul@macro.com".to_string()]);
+        }
+    )
+}

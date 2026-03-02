@@ -170,4 +170,10 @@ if (DEV_MODE_ENV) {
         )
     )
   );
+  registerComponent(
+    'md-builder',
+    lazy(
+      () => import('@core/component/LexicalMarkdown/builder/BuilderTestPage')
+    )
+  );
 }

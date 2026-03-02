@@ -40,6 +40,11 @@ impl<T> BatchSend<T> {
     pub(crate) fn inner(&self) -> &T {
         &self.0
     }
+
+    /// Consume self and return the inner value.
+    pub fn into_inner(self) -> T {
+        self.0
+    }
 }
 
 #[cfg(test)]
@@ -632,7 +637,7 @@ where
         // retrieve the notification data and add it to the batch
         let Some(notif) = self
             .notif_repo
-            .get_user_notification_by_id::<serde_json::Value>(user_id.as_ref(), notif_id)
+            .get_user_notification_by_id::<serde_json::Value>(user_id.copied(), notif_id)
             .await?
         else {
             return Err(report!(
@@ -647,5 +652,32 @@ where
             .add_to_digest(&notif, self.digest_window)
             .await?;
         Ok(StateMachineDecisionC::BatchWasQueued(BatchSend(())))
+    }
+}
+
+/// Port for reconciling async SNS delivery failures with the digest batching system.
+///
+/// This abstracts [`StateMachineDriverC`] so callers only depend on the capability,
+/// not the specific implementation or its generic adapter parameters.
+pub trait BulkDigestFailureStateMachine: Send + Sync + 'static {
+    /// Mark a push notification message as failed and, if all pushes for that
+    /// user+notification have now failed, queue the notification for batch email digest.
+    fn mark_message_as_failed(
+        &self,
+        message_id: MessageId,
+    ) -> impl Future<Output = Result<StateMachineDecisionC, Report>> + Send;
+}
+
+impl<B, R, N> BulkDigestFailureStateMachine for StateMachineDriverC<B, R, N>
+where
+    B: DigestBatcher,
+    R: MessageReceiptRepo,
+    N: NotificationRepository,
+{
+    fn mark_message_as_failed(
+        &self,
+        message_id: MessageId,
+    ) -> impl Future<Output = Result<StateMachineDecisionC, Report>> + Send {
+        self.mark_message_as_failed(message_id)
     }
 }

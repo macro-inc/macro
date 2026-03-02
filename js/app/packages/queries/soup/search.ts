@@ -103,5 +103,6 @@ export const useSearchSoupQuery = (
     },
     enabled: enabled(),
     placeholderData: (p) => p,
+    meta: { normalize: false },
   }));
 };

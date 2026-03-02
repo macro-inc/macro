@@ -10,6 +10,7 @@ use crate::core::model::FALLBACK_MODEL;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::ai::name::maybe_rename_chat;
 use crate::service::get_chat::get_chat;
+use crate::service::notification::notify;
 use ai::tool::ToolLoop;
 use ai::tool::types::StreamPart;
 use ai::types::{AssistantMessagePart, Model};
@@ -488,17 +489,36 @@ fn stream_and_save_message(
 
         // Save conversation messages
         let new_messages = chat.get_new_conversation_messages();
+
+        // Extract assistant response text before moving new_messages into store
+        let assistant_text = new_messages
+            .iter()
+            .find(|m| m.role == ai::types::Role::Assistant)
+            .and_then(|m| m.content.assistant_message_text());
+
         if let Err(err) = store_conversation_messages(
             ctx.clone(),
             user_id.0.as_ref(),
             &chat_id,
             new_messages,
             model,
-            Some(message_id),
+            Some(message_id.clone()),
         )
         .await
         {
             tracing::error!(error=?err, "failed to store conversation messages");
+        }
+
+        // Summarize and send notification in a background task
+        if let Some(text) = assistant_text {
+            notify(
+                ctx.connection_repo.clone(),
+                ctx.notification_ingress_service.clone(),
+                chat_id.clone(),
+                message_id.clone(),
+                text,
+                user_id.as_ref().clone(),
+            );
         }
 
         // Maybe rename chat if first message

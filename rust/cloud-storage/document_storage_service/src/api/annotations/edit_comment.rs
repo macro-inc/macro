@@ -56,6 +56,15 @@ pub async fn edit_comment_handler(
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = req.mentions {
+                let sender_profile_picture_url =
+                    macro_db_client::user::update_profile_picture::get_profile_pictures(
+                        &db,
+                        &vec![user_id.clone()],
+                    )
+                    .await
+                    .ok()
+                    .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url));
+
                 let request = build_mention_notif(
                     req.text.clone().unwrap_or_else(|| "".to_string()),
                     &res.comment,
@@ -67,6 +76,7 @@ pub async fn edit_comment_handler(
                     user_id.clone().try_into().ok(),
                     res.document_id.to_string(),
                     &mention_id,
+                    sender_profile_picture_url,
                 )
                 .into_request()
                 .with_apns()

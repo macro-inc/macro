@@ -60,6 +60,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
+    .with('ai_response', () => 'responded')
     .exhaustive();
 }
 
@@ -81,6 +82,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
+    .with({ tag: 'ai_response' }, (m) => m.content.summary || '')
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .exhaustive();

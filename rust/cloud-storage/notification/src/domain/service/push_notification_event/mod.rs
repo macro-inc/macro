@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::email_notification_digest::BulkDigestFailureStateMachine;
 use crate::domain::models::push_notification_event::SnsPushNotificationEvent;
 use crate::domain::ports::{DeviceRegistrationDeleter, SnsEndpointDeleter};
 use rootcause::Report;
@@ -17,7 +18,8 @@ pub trait PushNotificationEventHandler: Send + Sync + 'static {
     /// Handle a single push notification event.
     ///
     /// Deletes the device from the DB. If the event is a `DeliveryFailure`,
-    /// also deletes the SNS endpoint.
+    /// also deletes the SNS endpoint and records the failure in the digest
+    /// state machine.
     fn handle_event(
         &self,
         event: &SnsPushNotificationEvent,
@@ -26,31 +28,35 @@ pub trait PushNotificationEventHandler: Send + Sync + 'static {
 
 /// Service for handling SNS push notification platform events.
 ///
-/// Generic over the two outbound ports: device registration deletion (DB) and
-/// SNS endpoint deletion.
-pub struct PushNotificationEventService<D, S> {
+/// Generic over three outbound ports: device registration deletion (DB),
+/// SNS endpoint deletion, and digest failure state machine.
+pub struct PushNotificationEventService<D, S, F> {
     device_deleter: D,
     sns_deleter: S,
+    digest_failure_sm: F,
 }
 
-impl<D, S> PushNotificationEventService<D, S>
+impl<D, S, F> PushNotificationEventService<D, S, F>
 where
     D: DeviceRegistrationDeleter,
     S: SnsEndpointDeleter,
+    F: BulkDigestFailureStateMachine,
 {
     /// Create a new push notification event service.
-    pub fn new(device_deleter: D, sns_deleter: S) -> Self {
+    pub fn new(device_deleter: D, sns_deleter: S, digest_failure_sm: F) -> Self {
         Self {
             device_deleter,
             sns_deleter,
+            digest_failure_sm,
         }
     }
 }
 
-impl<D, S> PushNotificationEventHandler for PushNotificationEventService<D, S>
+impl<D, S, F> PushNotificationEventHandler for PushNotificationEventService<D, S, F>
 where
     D: DeviceRegistrationDeleter,
     S: SnsEndpointDeleter,
+    F: BulkDigestFailureStateMachine,
 {
     #[tracing::instrument(err, skip(self))]
     async fn handle_event(&self, event: &SnsPushNotificationEvent) -> Result<(), Report> {
@@ -71,6 +77,14 @@ where
                 self.sns_deleter
                     .delete_endpoint(&event.endpoint_arn)
                     .await?;
+
+                self.digest_failure_sm
+                    .mark_message_as_failed(event.message_id.clone())
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to record delivery failure in digest state machine");
+                    })
+                    .ok();
             }
             EventType::EndpointDeleted => {}
         }

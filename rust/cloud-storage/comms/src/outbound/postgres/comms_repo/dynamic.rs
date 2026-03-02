@@ -218,7 +218,7 @@ impl ChannelRow {
     }
 }
 
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip(db), err(Debug))]
 pub async fn get_user_channels_dynamic(
     db: &PgPool,
     params: &GetChannelsParams,
@@ -238,6 +238,7 @@ pub async fn get_user_channels_dynamic(
         .bind(cursor_timestamp)
         .bind(cursor_id_str)
         .try_map(|row: PgRow| {
+            tracing::info!("{row:?}");
             let channel_row = ChannelRow {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,

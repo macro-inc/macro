@@ -149,4 +149,14 @@ impl PropertiesRepo for PropertiesPgRepo {
             }
         }
     }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_user_profile_picture(&self, user_id: &str) -> Result<Option<String>, Self::Err> {
+        let pics = macro_db_client::user::update_profile_picture::get_profile_pictures(
+            &self.pool,
+            &vec![user_id.to_string()],
+        )
+        .await?;
+        Ok(pics.pictures.into_iter().next().map(|p| p.url))
+    }
 }

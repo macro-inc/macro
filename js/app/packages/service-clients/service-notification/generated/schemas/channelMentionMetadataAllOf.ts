@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMentionMetadataAllOfSenderProfilePictureUrl } from './channelMentionMetadataAllOfSenderProfilePictureUrl';
 import type { ChannelMentionMetadataAllOfThreadId } from './channelMentionMetadataAllOfThreadId';
 
 export type ChannelMentionMetadataAllOf = {
@@ -11,6 +12,7 @@ export type ChannelMentionMetadataAllOf = {
   messageContent: string;
   /** The message you were mentioned in */
   messageId: string;
+  senderProfilePictureUrl?: ChannelMentionMetadataAllOfSenderProfilePictureUrl;
   /** the id of the thread */
   threadId?: ChannelMentionMetadataAllOfThreadId;
 };

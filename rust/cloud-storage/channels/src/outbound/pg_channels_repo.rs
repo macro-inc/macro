@@ -254,12 +254,15 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     r.edited_at,
                     COUNT(*) OVER (PARTITION BY r.thread_id) AS reply_count,
                     MAX(r.created_at) OVER (PARTITION BY r.thread_id)::timestamptz AS latest_reply_at,
-                    ROW_NUMBER() OVER (PARTITION BY r.thread_id ORDER BY r.created_at DESC) AS rn
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.thread_id
+                        ORDER BY r.created_at ASC, r.id ASC
+                    ) AS rn
                 FROM comms_messages r
                 WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
             ) sub
             WHERE rn <= $2
-            ORDER BY thread_id, created_at ASC
+            ORDER BY thread_id, created_at ASC, id ASC
             "#,
             parent_ids,
             i64::from(preview_count) as i64,

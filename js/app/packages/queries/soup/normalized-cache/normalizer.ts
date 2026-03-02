@@ -41,6 +41,7 @@ export function getSoupNormalizer() {
 export function initSoupNormalizer(qc: QueryClient): () => void {
   _normalizer = createQueryNormalizer(qc, {
     getNormalizationObjectKey,
+    normalize: false,
   });
   _normalizer.subscribe();
   return () => _normalizer!.unsubscribe();

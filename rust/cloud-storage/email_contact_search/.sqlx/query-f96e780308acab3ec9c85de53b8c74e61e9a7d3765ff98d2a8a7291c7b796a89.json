@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH link AS (\n            SELECT id AS link_id FROM email_links WHERE macro_id = $1\n        ),\n        matching_contacts AS (\n            SELECT c.id\n            FROM email_contacts c\n            JOIN link l ON c.link_id = l.link_id\n            WHERE c.name ILIKE $2 OR c.email_address ILIKE $2\n        ),\n        matching_thread_ids AS (\n            SELECT DISTINCT thread_id FROM (\n                SELECT m.thread_id\n                FROM email_messages m\n                JOIN link l ON m.link_id = l.link_id\n                WHERE m.from_contact_id IN (SELECT id FROM matching_contacts)\n\n                UNION ALL\n\n                SELECT m.thread_id\n                FROM email_messages m\n                JOIN link l ON m.link_id = l.link_id\n                WHERE m.from_name ILIKE $2\n\n                UNION ALL\n\n                SELECT m.thread_id\n                FROM email_message_recipients mr\n                JOIN email_messages m ON m.id = mr.message_id\n                JOIN link l ON m.link_id = l.link_id\n                WHERE mr.contact_id IN (SELECT id FROM matching_contacts)\n\n                UNION ALL\n\n                SELECT m.thread_id\n                FROM email_message_recipients mr\n                JOIN email_messages m ON m.id = mr.message_id\n                JOIN link l ON m.link_id = l.link_id\n                WHERE mr.name ILIKE $2\n            ) all_matches\n        ),\n        paginated_threads AS (\n            SELECT t.id, t.latest_non_spam_message_ts\n            FROM email_threads t\n            JOIN matching_thread_ids mt ON mt.thread_id = t.id\n            WHERE t.latest_non_spam_message_ts IS NOT NULL\n              AND (\n                  $4::timestamptz IS NULL\n                  OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)\n              )\n            ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC\n            LIMIT $3\n        )\n        SELECT\n            pt.id as \"thread_id!\",\n            pt.latest_non_spam_message_ts as \"updated_at!\",\n            matches.message_id as \"message_id!\",\n            matches.contact_name as \"contact_name?\",\n            matches.contact_email as \"contact_email!\",\n            matches.contact_type as \"contact_type!\"\n        FROM paginated_threads pt\n        CROSS JOIN LATERAL (\n            SELECT DISTINCT\n                m.id as message_id,\n                COALESCE(m.from_name, c.name) as contact_name,\n                c.email_address as contact_email,\n                'FROM'::text as contact_type\n            FROM email_messages m\n            JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.thread_id = pt.id\n              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR m.from_name ILIKE $2)\n\n            UNION\n\n            SELECT DISTINCT\n                m.id as message_id,\n                COALESCE(mr.name, c.name) as contact_name,\n                c.email_address as contact_email,\n                mr.recipient_type::text as contact_type\n            FROM email_messages m\n            JOIN email_message_recipients mr ON mr.message_id = m.id\n            JOIN email_contacts c ON c.id = mr.contact_id\n            WHERE m.thread_id = pt.id\n              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR mr.name ILIKE $2)\n        ) matches(message_id, contact_name, contact_email, contact_type)\n        ORDER BY pt.latest_non_spam_message_ts DESC, pt.id DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "contact_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "contact_email!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "contact_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f96e780308acab3ec9c85de53b8c74e61e9a7d3765ff98d2a8a7291c7b796a89"
+}

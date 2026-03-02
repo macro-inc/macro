@@ -92,7 +92,7 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
-      if (senderId) {
+      if (senderId && type !== 'ai_response') {
         return `${primarySenderFirstName()} ${getActionVerb(type)}`;
       }
       return getActionVerb(type);

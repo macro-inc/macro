@@ -1,7 +1,7 @@
 //! Tests for the email notification digest state machine.
 
 use super::*;
-use crate::domain::models::{Notification, RateLimitConfig, RateLimitKey, UserNotificationRow};
+use crate::domain::models::{Notification, UserNotificationRow};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
@@ -22,14 +22,6 @@ struct TestNotification {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 /// A notification type that should be blocked from email delivery.
@@ -38,14 +30,6 @@ struct BlockedNotification;
 
 impl Notification for BlockedNotification {
     const TYPE_NAME: &'static str = "blocked_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 /// An invite notification that should be sent immediately (single send).
@@ -56,14 +40,6 @@ struct InviteNotification {
 
 impl Notification for InviteNotification {
     const TYPE_NAME: &'static str = "invite_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 /// A workspace invite notification for testing multiple invite types.
@@ -72,14 +48,6 @@ struct WorkspaceInviteNotification;
 
 impl Notification for WorkspaceInviteNotification {
     const TYPE_NAME: &'static str = "workspace_invite_notification";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
 }
 
 // ============================================================================

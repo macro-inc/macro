@@ -193,6 +193,13 @@ where
         let notification_entity =
             model_entity::EntityType::Document.with_entity_string(task_id.to_string());
 
+        let sender_profile_picture_url = self
+            .repository
+            .get_user_profile_picture(assigned_by_user_id)
+            .await
+            .ok()
+            .flatten();
+
         let notification_futures: Vec<_> = recipient_ids
             .iter()
             .map(|recipient_id| {
@@ -200,6 +207,7 @@ where
                     task_id: task_id.to_string(),
                     task_name: task_name.clone(),
                     assigned_by: assigned_by.clone(),
+                    sender_profile_picture_url: sender_profile_picture_url.clone(),
                 };
 
                 let request = SendNotificationRequestBuilder {

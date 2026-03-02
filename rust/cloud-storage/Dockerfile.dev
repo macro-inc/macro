@@ -20,6 +20,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
         --bin notification_service \
         --bin static_file_service \
         --bin unfurl_service \
+        --bin image_proxy_service \
     && mkdir -p /app/out \
     && cp /app/target/debug/authentication_service /app/out/ \
     && cp /app/target/debug/connection_gateway_service /app/out/ \
@@ -29,7 +30,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     && cp /app/target/debug/email_service /app/out/ \
     && cp /app/target/debug/notification_service /app/out/ \
     && cp /app/target/debug/static_file_service /app/out/ \
-    && cp /app/target/debug/unfurl_service /app/out/
+    && cp /app/target/debug/unfurl_service /app/out/ \
+    && cp /app/target/debug/image_proxy_service /app/out/
 
 # Base runtime image
 FROM debian:trixie-slim AS base
@@ -83,5 +85,10 @@ ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS unfurl_service
 COPY --from=builder /app/out/unfurl_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS image_proxy_service
+COPY --from=builder /app/out/image_proxy_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]

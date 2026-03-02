@@ -71,7 +71,7 @@ pub struct ThreadInfo {
     pub reply_count: i64,
     /// Timestamp of the most recent reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
-    /// Last N replies for the collapsed thread preview.
+    /// Oldest N replies for the collapsed thread preview.
     pub preview: Vec<ThreadReply>,
 }
 
@@ -223,7 +223,7 @@ pub struct ThreadData {
     pub reply_count: i64,
     /// Timestamp of the latest reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
-    /// Last N replies for the thread preview (oldest-first).
+    /// Oldest N replies for the thread preview (oldest-first).
     pub preview_replies: Vec<ThreadReplyRow>,
 }
 

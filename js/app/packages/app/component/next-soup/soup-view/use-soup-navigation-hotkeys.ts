@@ -1,9 +1,9 @@
 import { TOKENS } from '@core/hotkey/tokens';
 import type { VirtualizerHandle } from 'virtua/solid';
-import type { Accessor } from 'solid-js';
+import { onCleanup, type Accessor } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { EntityData } from '@entity';
@@ -107,43 +107,65 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
-  // Navigate down - 'j', 'arrowdown'
+  const group = createHotkeyGroup();
+
+  const navigateDown = () => {
+    const next = soup.navigate.down();
+
+    if (!next) return true;
+
+    scrollTo(next.index);
+    openEntity(next.item);
+
+    return true;
+  };
+
+  const navigateUp = () => {
+    const next = soup.navigate.up();
+
+    if (!next) return true;
+
+    scrollTo(next.index);
+    openEntity(next.item);
+
+    return true;
+  };
+
+  // Used outside soup view, does not need to be disposed
   registerHotkey({
-    hotkey: ['j', 'arrowdown'],
+    hotkey: ['j'],
     scopeId,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
-    keyDownHandler: () => {
-      const next = soup.navigate.down();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateDown,
     hide: true,
   });
 
-  // Navigate up - 'k', 'arrowup'
   registerHotkey({
-    hotkey: ['k', 'arrowup'],
+    hotkey: ['arrowdown'],
+    scopeId,
+    description: 'Down',
+    keyDownHandler: navigateDown,
+    hide: true,
+  }).withGroup(group);
+
+  // Used outside soup view, does not need to be disposed
+  registerHotkey({
+    hotkey: ['k'],
     scopeId,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
-    keyDownHandler: () => {
-      const next = soup.navigate.up();
-
-      if (!next) return true;
-
-      scrollTo(next.index);
-      openEntity(next.item);
-
-      return true;
-    },
+    keyDownHandler: navigateUp,
     hide: true,
   });
+
+  registerHotkey({
+    hotkey: ['arrowup'],
+    scopeId,
+    description: 'Up',
+    keyDownHandler: navigateUp,
+    hide: true,
+  }).withGroup(group);
 
   // Select up - 'shift+arrowup', 'shift+k'
   registerHotkey({
@@ -155,7 +177,7 @@ export const useSoupNavigationHotkeys = (
       return handleNavigationSelection(-1);
     },
     hide: true,
-  });
+  }).withGroup(group);
 
   // Select down - 'shift+arrowdown', 'shift+j'
   registerHotkey({
@@ -167,7 +189,7 @@ export const useSoupNavigationHotkeys = (
       return handleNavigationSelection(1);
     },
     hide: true,
-  });
+  }).withGroup(group);
 
   const previewPanel = useMaybePreviewPanel();
 
@@ -202,7 +224,7 @@ export const useSoupNavigationHotkeys = (
     registrationType: 'add',
     handlerPriority: 4,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['l', 'arrowright'],
@@ -238,5 +260,7 @@ export const useSoupNavigationHotkeys = (
     registrationType: 'add',
     handlerPriority: 4,
     hide: true,
-  });
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 };

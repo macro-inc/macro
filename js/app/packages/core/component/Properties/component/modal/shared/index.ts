@@ -2,6 +2,7 @@ export type { DropdownOption } from './Dropdown';
 export { Dropdown } from './Dropdown';
 export {
   type CombinedEntity,
+  type EntityTypeItemMap,
   createEntitySearchConfig,
   entityTypeToBuckets,
   useQuickAccessEntities,

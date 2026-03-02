@@ -1,3 +1,6 @@
+import { ENABLE_PROXY_EMAIL_IMAGES } from '../constant/featureFlags';
+import { proxyEmailImages } from './proxy-email-images';
+
 /**
  * Strips @media (prefers-color-scheme: ...) rules from CSS content.
  * This prevents email dark mode styles from conflicting with our forced backgrounds.
@@ -168,9 +171,16 @@ export function parseEmailContent(
     ? `${styleTags}\n${mainContentDiv.innerHTML}`
     : mainContentDiv.innerHTML;
 
+  if (ENABLE_PROXY_EMAIL_IMAGES) {
+    mainContent = proxyEmailImages(finalContent);
+    signature = signature ? proxyEmailImages(signature) : null;
+  } else {
+    mainContent = finalContent;
+  }
+
   return {
-    mainContent: finalContent,
-    signature: signature,
+    mainContent,
+    signature,
     hasTable,
   };
 }

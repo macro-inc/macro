@@ -1,14 +1,16 @@
 //! Entity access service implementation.
 
+use std::marker::PhantomData;
+use std::str::FromStr;
+
 use crate::domain::{
     models::{
         AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType,
+        EntityPermission, EntityType, RequiredAccessLevel,
     },
     ports::{AccessRepository, EntityAccessService},
 };
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
-use std::str::FromStr;
 use uuid::Uuid;
 
 /// Implementation of the [`EntityAccessService`].
@@ -77,16 +79,23 @@ where
     R: AccessRepository,
 {
     #[tracing::instrument(err, skip(self))]
-    async fn generate_entity_access_receipt(
+    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
         user_org_id: Option<i64>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<EntityAccessReceipt, AccessError> {
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
         let entity_permission = self
             .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
             .await?;
+
+        // Verify the user meets the minimum required access level
+        if let EntityPermission::AccessLevel { access_level } = &entity_permission
+            && *access_level < T::required_level()
+        {
+            return Err(AccessError::Unauthorized);
+        }
 
         Ok(EntityAccessReceipt {
             auth: EntityAccessAuth::Authenticated(user_id.clone().into_owned()),
@@ -95,6 +104,7 @@ where
                 entity_type,
             },
             entity_permission,
+            _marker: PhantomData,
         })
     }
 
