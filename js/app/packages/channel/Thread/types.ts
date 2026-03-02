@@ -20,5 +20,5 @@ export type ThreadProps = {
   channelId: Accessor<string>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   listMeta?: ChannelMessageListMeta;
-  actions?: ThreadActions;
+  threadActions?: ThreadActions;
 } & ThreadState;
