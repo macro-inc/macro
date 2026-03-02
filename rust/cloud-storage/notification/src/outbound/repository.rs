@@ -150,6 +150,12 @@ pub trait NotificationDbOps: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Hard-delete all notifications for a user.
+    fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
 
 impl NotificationDbOps for PgPool {
@@ -704,6 +710,23 @@ impl NotificationDbOps for PgPool {
 
         Ok(())
     }
+
+    async fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            DELETE FROM user_notification
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
+    }
 }
 
 impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificationRepository<D> {
@@ -826,5 +849,12 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db
             .bulk_delete_user_notifications(user_id, notification_ids)
             .await
+    }
+
+    async fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Report> {
+        self.db.delete_all_user_notifications(user_id).await
     }
 }
