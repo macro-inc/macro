@@ -81,9 +81,7 @@ import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
-import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -180,20 +178,7 @@ export const SoupView = (props: SoupViewProps) => {
                 <SoupViewTabs />
               </div>
             </SplitHeaderLeft>
-            <div class="flex gap-2 items-center">
-              <div class="flex gap-2 items-center w-full h-12">
-                <SoupFiltersBar />
-              </div>
-              <div class="ml-auto w-full flex items-center justify-end gap-2">
-                <div class="max-w-56 w-full">
-                  <SoupSearchbar />
-                </div>
-                <SortDropdown
-                  value={() => soup.sort.active()[0].id as SystemSortOption}
-                  onChange={(value) => soup.sort.setAll([value])}
-                />
-              </div>
-            </div>
+            <SoupFiltersBar />
           </div>
           <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <Suspense>
