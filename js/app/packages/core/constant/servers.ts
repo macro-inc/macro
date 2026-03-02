@@ -48,9 +48,14 @@ function selectLocalServers(): Servers {
     return serverHostLocal;
   }
 
+  function assertValidName(name: string): name is keyof Servers {
+    if (!(name in serverHostRemote))
+      throw new Error(`unknown server name ${name}`);
+    return true;
+  }
   const servers = selectedLocalServers
     .split(',')
-    .filter((name) => name in serverHostRemote)
+    .filter(assertValidName)
     .reduce((acc: Servers, key: keyof Servers) => {
       acc[key] = serverHostLocal[key];
       console.log(`Using local server ${key}: ${acc}`);

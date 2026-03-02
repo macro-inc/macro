@@ -20,6 +20,20 @@ pub struct Params {
     pub chat_id: String,
 }
 
+#[utoipa::path(
+    patch,
+    path = "/chats/{chat_id}",
+    request_body = PatchChatRequestV2,
+    params(
+        ("chat_id" = String, Path, description = "Chat ID")
+    ),
+    responses(
+        (status = 200, description = "Chat patched successfully"),
+        (status = 400, body = String, description = "Cannot modify deleted chat"),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
 #[tracing::instrument(skip(user_context, state), fields(user_id=?user_context.user_id))]
 pub async fn patch_chat_handler(
     ChatAccessLevelExtractor { access_level, .. }: ChatAccessLevelExtractor<OwnerAccessLevel>,

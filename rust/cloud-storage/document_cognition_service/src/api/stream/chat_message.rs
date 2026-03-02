@@ -8,7 +8,6 @@ use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::core::model::FALLBACK_MODEL;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
-use crate::service::ai::name::maybe_rename_chat;
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use ai::tool::ToolLoop;
@@ -196,7 +195,6 @@ pub async fn send_chat_message(
         }
     };
 
-    let is_first_message = chat.messages.is_empty();
     let model = if request.model == Model::Claude45Opus {
         Model::Claude45Opus
     } else {
@@ -268,7 +266,6 @@ pub async fn send_chat_message(
         user_message_id,
         request.attachments.clone().unwrap_or_default(),
         durable_stream_id,
-        is_first_message,
     );
 
     Ok(Json(SendChatMessageResponse {
@@ -340,7 +337,6 @@ fn stream_and_save_message(
     user_message_id: String,
     user_message_attachments: Vec<ChatAttachmentWithName>,
     durable_stream_id: StreamId,
-    is_first_message: bool,
 ) {
     tracing::trace!(request=?request, "streaming chat request");
 
@@ -521,15 +517,6 @@ fn stream_and_save_message(
             );
         }
 
-        // Maybe rename chat if first message
-        if is_first_message
-            && let Ok(new_name) =
-                maybe_rename_chat(&chat_id, &ctx, user_id.0.as_ref())
-                    .await
-                    .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
-        {
-            tracing::info!(chat_id, new_name, "chat renamed after first message");
-        }
     };
 
     ctx_outer.stream_repo.clone().from_async_stream(

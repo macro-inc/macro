@@ -3,7 +3,7 @@ use crate::{
         attachments::get_chats_for_attachment,
         chats::{
             chat_history, chat_history_batch_messages, copy_chat, create_user_chat, delete_chat,
-            get_chat, get_chat_permissions, revert_delete_chat,
+            get_chat, get_chat_permissions, patch_chat, revert_delete_chat,
         },
         citations, health,
         models::get_models,
@@ -72,6 +72,7 @@ use utoipa::OpenApi;
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
+            patch_chat::patch_chat_handler
         ),
         components(
             schemas(

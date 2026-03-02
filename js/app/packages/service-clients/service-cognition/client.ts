@@ -6,18 +6,18 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import {
+  err,
   isErr,
   type MaybeError,
   type MaybeResult,
   mapOk,
-  ok,
-  err,
   type ObjectLike,
+  ok,
 } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type OpenAI from 'openai';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
+import type OpenAI from 'openai';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -247,13 +247,26 @@ export const cognitionApiServiceClient = {
   },
 };
 
-export async function generateTitle(text: string): Promise<string | undefined> {
+const titleKind = {
+  chat: "you are generating a title for an AI chat based on the user's 1st message",
+} as const;
+
+export async function generateTitle(
+  text: string,
+  kind?: keyof typeof titleKind
+): Promise<string | undefined> {
+  return new Promise((resolve) => setTimeout(() => resolve('TEST TITLE'), 1));
+
   const result = await dcsCompletion({
     model: 'gpt-4o-mini',
     messages: [
       {
+        role: 'system',
+        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else. ${kind ? titleKind[kind] : ''}`,
+      },
+      {
         role: 'user',
-        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else.\n\n${text}`,
+        content: text,
       },
     ],
     max_tokens: 100,
