@@ -191,7 +191,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           <SplitForwardButton />
         </div>
         <div
-          class="relative min-w-0 h-full grow shrink pl-2"
+          class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}

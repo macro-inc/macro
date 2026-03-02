@@ -137,6 +137,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           menu: mentionsMenuOps,
           onCreateMention: config.mentions.onCreate,
           onRemoveMention: config.mentions.onRemove,
+          sourceDocumentId: config.mentions.sourceDocumentId,
         })
       );
     }

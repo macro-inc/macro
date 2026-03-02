@@ -6,7 +6,8 @@ import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
 
-const DRAWER_ID = 'properties';
+export const PROPERTIES_DRAWER_ID = 'properties';
+const DRAWER_ID = PROPERTIES_DRAWER_ID;
 
 export function EmailPropertiesButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(DRAWER_ID);

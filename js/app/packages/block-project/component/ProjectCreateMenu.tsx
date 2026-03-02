@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
@@ -11,9 +12,12 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
+import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 
 type MenuItemProps = {
   label: string;
@@ -24,29 +28,118 @@ type MenuItemProps = {
   action: () => void | Promise<void>;
 };
 
-function MenuItem(props: MenuItemProps) {
-  const selectedColor = getIconConfig(props.blockName).foreground;
+type CreateBlockSpec = {
+  label: string;
+  blockName: BlockName | BlockAlias;
+  hotkeyToken: HotkeyToken;
+  icon: Component;
+  loading?: boolean;
+  createFn: (projectId: string) => Promise<string>;
+};
 
-  return (
-    <DropdownMenu.Item
-      class={`flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:${selectedColor} data-highlighted:bracket-offset-4`}
-      onSelect={props.action}
-    >
-      <div class="flex items-center gap-1">
-        <div class="size-4">
-          <props.Icon />
-        </div>
-        <span>{props.label}</span>
+const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
+  {
+    label: 'Note',
+    blockName: 'md' as BlockName,
+    hotkeyToken: TOKENS.create.note,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="md" size="shrinkFill" theme="monochrome" />
       </div>
-    </DropdownMenu.Item>
-  );
-}
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const result = await createMarkdownFile({
+        title: '',
+        content: '',
+        projectId,
+      });
+      if (!result) throw new Error('Failed to create markdown file');
+      return result;
+    },
+  },
+  {
+    label: 'Task',
+    blockName: 'task' as BlockAlias,
+    hotkeyToken: TOKENS.create.task,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="task" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const result = await createTask({ title: '', content: '', projectId });
+      if (!result) throw new Error('Failed to create task');
+      return result;
+    },
+  },
+  {
+    label: 'AI',
+    blockName: 'chat' as BlockName,
+    hotkeyToken: TOKENS.create.chat,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="chat" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    createFn: async (projectId) => {
+      const result = await createChat({ projectId });
+      if ('error' in result) {
+        console.error(result.error);
+        throw new Error('Failed to create chat');
+      }
+      return result.chatId;
+    },
+  },
+  {
+    label: 'Canvas',
+    blockName: 'canvas' as BlockName,
+    hotkeyToken: TOKENS.create.canvas,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="canvas" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const result = await createCanvasFileFromJsonString({
+        json: JSON.stringify({ nodes: [], edges: [] }),
+        title: 'New Canvas',
+        projectId,
+      });
+      if ('error' in result) {
+        console.error(result.error);
+        throw new Error('Failed to create canvas');
+      }
+      return result.documentId;
+    },
+  },
+  {
+    label: 'Folder',
+    blockName: 'project' as BlockName,
+    hotkeyToken: TOKENS.create.project,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="project" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    createFn: async (projectId) => {
+      const result = await createProject({
+        name: 'New Project',
+        parentId: projectId,
+      });
+      if (!result) throw new Error('Failed to create folder');
+      return result;
+    },
+  },
+];
 
-function MenuContent(props: { projectId: string }) {
-  const { replaceSplit, insertSplit } = useSplitLayout();
-  let ref!: HTMLDivElement;
-
-  const createBlock = async (spec: {
+function makeCreateBlock({
+  replaceSplit,
+  insertSplit,
+}: Pick<ReturnType<typeof useSplitLayout>, 'replaceSplit' | 'insertSplit'>) {
+  return async (spec: {
     blockName: BlockName | BlockAlias;
     createFn: () => Promise<string>;
     loading?: boolean;
@@ -99,129 +192,124 @@ function MenuContent(props: { projectId: string }) {
         });
     }
   };
+}
 
-  const CREATABLE_BLOCKS: MenuItemProps[] = [
-    {
-      label: 'Note',
-      blockName: 'md' as BlockName,
-      hotkeyToken: TOKENS.create.note,
-      Icon: () => (
-        <EntityIcon targetType="md" size="shrinkFill" theme="monochrome" />
-      ),
-      action: () =>
-        createBlock({
-          blockName: 'md',
-          loading: true,
-          createFn: async () => {
-            const result = await createMarkdownFile({
-              title: '',
-              content: '',
-              projectId: props.projectId,
-            });
-            if (!result) throw new Error('Failed to create markdown file');
-            return result;
-          },
-        }),
-    },
-    {
-      label: 'Task',
-      blockName: 'task' as BlockAlias,
-      hotkeyToken: TOKENS.create.task,
-      Icon: () => (
-        <EntityIcon targetType="task" size="shrinkFill" theme="monochrome" />
-      ),
-      action: () =>
-        createBlock({
-          blockName: 'task' as BlockAlias,
-          loading: true,
-          createFn: async () => {
-            const result = await createTask({
-              title: '',
-              content: '',
-              projectId: props.projectId,
-            });
-            if (!result) throw new Error('Failed to create task');
-            return result;
-          },
-        }),
-    },
-    {
-      label: 'AI',
-      blockName: 'chat' as BlockName,
-      hotkeyToken: TOKENS.create.chat,
-      Icon: () => (
-        <EntityIcon targetType="chat" size="shrinkFill" theme="monochrome" />
-      ),
-      action: () =>
-        createBlock({
-          blockName: 'chat',
-          createFn: async () => {
-            const result = await createChat({ projectId: props.projectId });
-            if ('error' in result) {
-              console.error(result.error);
-              throw new Error('Failed to create chat');
-            }
-            return result.chatId;
-          },
-        }),
-    },
-    {
-      label: 'Canvas',
-      blockName: 'canvas' as BlockName,
-      hotkeyToken: TOKENS.create.canvas,
-      Icon: () => (
-        <EntityIcon targetType="canvas" size="shrinkFill" theme="monochrome" />
-      ),
-      action: () =>
-        createBlock({
-          blockName: 'canvas',
-          loading: true,
-          createFn: async () => {
-            const result = await createCanvasFileFromJsonString({
-              json: JSON.stringify({ nodes: [], edges: [] }),
-              title: 'New Canvas',
-              projectId: props.projectId,
-            });
-            if ('error' in result) {
-              console.error(result.error);
-              throw new Error('Failed to create canvas');
-            }
-            return result.documentId;
-          },
-        }),
-    },
-    {
-      label: 'Folder',
-      blockName: 'project' as BlockName,
-      hotkeyToken: TOKENS.create.project,
-      Icon: () => (
-        <EntityIcon targetType="project" size="shrinkFill" theme="monochrome" />
-      ),
-      action: () =>
-        createBlock({
-          blockName: 'project',
-          createFn: async () => {
-            const result = await createProject({
-              name: 'New Project',
-              parentId: props.projectId,
-            });
-            if (!result) throw new Error('Failed to create folder');
-            return result;
-          },
-        }),
-    },
-  ];
+function ProjectCreateDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  projectId: string;
+  name: string;
+}) {
+  const { replaceSplit, insertSplit } = useSplitLayout();
+  const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
 
   return (
-    <DropdownMenu.Content
-      class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max bracket-never"
-      ref={ref}
+    <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
+      <Dialog.Portal>
+        <DialogWrapper width="">
+          <div class="p-2">
+            <Dialog.Title class="text-md font-semibold text-ink pb-3">
+              Create in {props.name}
+            </Dialog.Title>
+            <For each={BLOCK_CREATE_SPECS}>
+              {(spec) => (
+                <button
+                  class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
+                  onClick={() => {
+                    props.onClose();
+                    createBlock({
+                      blockName: spec.blockName,
+                      loading: spec.loading,
+                      createFn: () => spec.createFn(props.projectId),
+                    });
+                  }}
+                >
+                  <div class="size-4 shrink-0">
+                    <spec.icon />
+                  </div>
+                  {spec.label}
+                </button>
+              )}
+            </For>
+          </div>
+        </DialogWrapper>
+      </Dialog.Portal>
+    </Dialog>
+  );
+}
+
+function MenuItem(props: MenuItemProps) {
+  const selectedColor = getIconConfig(props.blockName).foreground;
+
+  return (
+    <DropdownMenu.Item
+      class={`flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:${selectedColor} data-highlighted:bracket-offset-4`}
+      onSelect={props.action}
     >
-      <For each={CREATABLE_BLOCKS}>
+      <div class="flex items-center gap-1">
+        <div class="size-4">
+          <props.Icon />
+        </div>
+        <span>{props.label}</span>
+      </div>
+    </DropdownMenu.Item>
+  );
+}
+
+function MenuContent(props: { projectId: string }) {
+  const { replaceSplit, insertSplit } = useSplitLayout();
+  const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
+
+  const items: MenuItemProps[] = BLOCK_CREATE_SPECS.map((spec) => ({
+    label: spec.label,
+    blockName: spec.blockName,
+    hotkeyToken: spec.hotkeyToken,
+    Icon: spec.icon,
+    action: () =>
+      createBlock({
+        blockName: spec.blockName,
+        loading: spec.loading,
+        createFn: () => spec.createFn(props.projectId),
+      }),
+  }));
+
+  return (
+    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max bracket-never">
+      <For each={items}>
         {(item, index) => <MenuItem {...item} index={index() + 1} />}
       </For>
     </DropdownMenu.Content>
   );
+}
+
+export function useProjectCreateTools(
+  projectId: string,
+  name: () => string,
+  condition?: () => boolean
+): { tools: BlockTool[]; CreateDialog: Component } {
+  const [open, setOpen] = createSignal(false);
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Create',
+      icon: PlusIcon,
+      // Using a setTimeout here so that the synthetic click event after the touch doesn't instantly select an item
+      action: () => setTimeout(() => setOpen(true), 0),
+      divideAbove: true,
+      condition,
+    },
+  ];
+
+  const CreateDialog: Component = () => (
+    <ProjectCreateDialog
+      open={open()}
+      onClose={() => setOpen(false)}
+      projectId={projectId}
+      name={name()}
+    />
+  );
+
+  return { tools, CreateDialog };
 }
 
 export function ProjectCreateMenu(props: { id: string }) {
