@@ -7,23 +7,23 @@ use crate::domain::{models::EmailErr, ports::EmailService};
 
 use super::{
     EmailLinkExtractor, EmailRouterState,
-    api_types::{CreateDraftRequest, CreateDraftResponse},
+    api_types::{SendMessageRequest, SendMessageResponse},
 };
 
-/// Create the draft router with a `POST /` handler.
-pub fn draft_router<S, T>(state: EmailRouterState<T>) -> Router<S>
+/// Create the send router with a `POST /` handler.
+pub fn send_router<S, T>(state: EmailRouterState<T>) -> Router<S>
 where
     S: Send + Sync + 'static,
     T: EmailService,
 {
     Router::new()
-        .route("/", post(create_draft_handler::<T>))
+        .route("/", post(send_message_handler::<T>))
         .with_state(state)
 }
 
-/// Errors from the create draft handler.
+/// Errors from the send message handler.
 #[derive(Debug, Error)]
-pub enum CreateDraftError {
+pub enum SendMessageError {
     /// Validation error (bad request).
     #[error("{0}")]
     Validation(String),
@@ -35,16 +35,16 @@ pub enum CreateDraftError {
     Internal(EmailErr),
 }
 
-impl IntoResponse for CreateDraftError {
+impl IntoResponse for SendMessageError {
     fn into_response(self) -> axum::response::Response {
-        if matches!(self, CreateDraftError::Internal(_)) {
-            tracing::error!(error=?self, "create draft error");
+        if matches!(self, SendMessageError::Internal(_)) {
+            tracing::error!(error=?self, "send message error");
         }
 
         let status = match &self {
-            CreateDraftError::Validation(_) => StatusCode::BAD_REQUEST,
-            CreateDraftError::NotFound(_) => StatusCode::NOT_FOUND,
-            CreateDraftError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SendMessageError::Validation(_) => StatusCode::BAD_REQUEST,
+            SendMessageError::NotFound(_) => StatusCode::NOT_FOUND,
+            SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         let message = self.to_string();
@@ -52,46 +52,46 @@ impl IntoResponse for CreateDraftError {
     }
 }
 
-impl From<EmailErr> for CreateDraftError {
+impl From<EmailErr> for SendMessageError {
     fn from(err: EmailErr) -> Self {
         match &err {
-            EmailErr::MessageNotFound(_) => CreateDraftError::NotFound(err.to_string()),
+            EmailErr::MessageNotFound(_) => SendMessageError::NotFound(err.to_string()),
             EmailErr::MessageAlreadySent(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
-            | EmailErr::Utf8Error(_) => CreateDraftError::Validation(err.to_string()),
-            EmailErr::RepoErr(_) | EmailErr::Frecency(_) => CreateDraftError::Internal(err),
+            | EmailErr::Utf8Error(_) => SendMessageError::Validation(err.to_string()),
+            EmailErr::RepoErr(_) | EmailErr::Frecency(_) => SendMessageError::Internal(err),
         }
     }
 }
 
-/// Create a draft.
+/// Send a message.
 #[utoipa::path(
     post,
-    tag = "Drafts",
-    path = "/email/drafts",
-    operation_id = "create_draft",
-    request_body = CreateDraftRequest,
+    tag = "Messages",
+    path = "/email/messages",
+    operation_id = "send_message",
+    request_body = SendMessageRequest,
     responses(
-        (status = 201, body = CreateDraftResponse),
+        (status = 201, body = SendMessageResponse),
         (status = 400, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip(state, link, body))]
-pub async fn create_draft_handler<T: EmailService>(
+pub async fn send_message_handler<T: EmailService>(
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
-    Json(body): Json<CreateDraftRequest>,
-) -> Result<impl IntoResponse, CreateDraftError> {
+    Json(body): Json<SendMessageRequest>,
+) -> Result<impl IntoResponse, SendMessageError> {
     let input = body.into_domain();
-    let draft = state.inner.create_draft(&link, input).await?;
+    let created = state.inner.send_message(&link, input).await?;
 
     Ok((
         StatusCode::CREATED,
-        Json(CreateDraftResponse {
-            draft: draft.into(),
+        Json(SendMessageResponse {
+            message: created.into(),
         }),
     ))
 }

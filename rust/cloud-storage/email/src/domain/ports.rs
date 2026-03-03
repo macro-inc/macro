@@ -2,7 +2,8 @@ use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest,
     Label, Link, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
-    RecipientType, SimpleMessageInfo, Thread, ThreadRow, UpsertedContacts, UserProvider,
+    RecipientType, ResolvedDraftInput, SimpleMessageInfo, Thread, ThreadRow, UpsertedContacts,
+    UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -13,6 +14,20 @@ use uuid::Uuid;
 
 /// Keyed map of message recipients grouped by message ID.
 pub type RecipientsByMessageId = HashMap<Uuid, Vec<(ContactInfo, RecipientType)>>;
+
+/// Port for enqueuing email messages to be sent on a schedule.
+pub trait EmailMessageEnqueuer: Send + Sync + 'static {
+    /// Error type for enqueue operations.
+    type Err: Send;
+
+    /// Enqueue a message to be sent after an optional delay.
+    fn enqueue_scheduled_message(
+        &self,
+        link_id: Uuid,
+        message_id: Uuid,
+        delay_seconds: Option<i32>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
 
 pub trait EmailRepo: Send + Sync + 'static {
     type Err: Send;
@@ -123,19 +138,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         addresses: ParsedAddresses,
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
-    /// Insert a draft message within a transaction, including thread insert (if new),
+    /// Insert a message within a transaction, including thread insert (if new),
     /// recipients, scheduled message handling, thread metadata update, and user history.
     /// If `new_thread` is Some, the thread is created inside the same transaction.
-    /// Returns the thread DB ID.
-    fn insert_draft_message(
+    fn insert_message(
         &self,
-        input: &CreateDraftInput,
-        message_db_id: Uuid,
-        thread_db_id: Uuid,
+        input: &ResolvedDraftInput,
         contacts: &UpsertedContacts,
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
-    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+        is_draft: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -169,4 +182,28 @@ pub trait EmailService: Send + Sync + 'static {
         link: &Link,
         input: CreateDraftInput,
     ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
+    /// Send a message: persist it and enqueue for scheduled delivery.
+    fn send_message(
+        &self,
+        link: &Link,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+}
+
+/// No-op enqueuer for callers that don't need send capability.
+#[derive(Clone)]
+pub struct NoOpEnqueuer;
+
+impl EmailMessageEnqueuer for NoOpEnqueuer {
+    type Err = std::convert::Infallible;
+
+    async fn enqueue_scheduled_message(
+        &self,
+        _link_id: Uuid,
+        _message_id: Uuid,
+        _delay_seconds: Option<i32>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
 }

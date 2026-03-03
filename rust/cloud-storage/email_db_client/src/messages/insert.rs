@@ -1,14 +1,10 @@
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
-use crate::messages::scheduled::delete::delete_scheduled_message;
-use crate::messages::scheduled::upsert::upsert_scheduled_message;
-use crate::parse::service_to_db::{addresses_from_message, map_message_to_send_to_db};
+use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, labels, parse, threads};
 use anyhow::Context;
-use chrono::Utc;
 use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::message;
-use models_email::service::message::ScheduledMessage;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
@@ -198,119 +194,4 @@ pub async fn insert_message(
             Err(e).context("Failed to insert message")
         }
     }
-}
-
-/// insert message that user created via macro frontend
-#[tracing::instrument(skip(tx, service_message), err)]
-pub async fn insert_message_to_send_db(
-    tx: &mut sqlx::PgConnection,
-    service_message: &mut message::MessageToSend,
-    send_time: Option<chrono::DateTime<Utc>>,
-    thread_id: Uuid,
-    from_contact_id: Option<Uuid>,
-    is_draft: bool,
-    // recipients need to be inserted ahead of time outside the tx, as they are shared
-    // across messages and can cause deadlocks if inserted within.
-    recipients: UpsertedRecipients,
-) -> anyhow::Result<()> {
-    let message_db_id = service_message
-        .db_id
-        .unwrap_or_else(macro_uuid::generate_uuid_v7);
-
-    let db_message_to_send = map_message_to_send_to_db(service_message, message_db_id, thread_id);
-
-    // Insert the message into the database
-    sqlx::query!(
-        r#"
-        INSERT INTO email_messages (
-            id, provider_id, link_id, thread_id, provider_thread_id,
-            replying_to_id, subject, from_contact_id, sent_at,
-            has_attachments, is_read, is_starred, is_sent, is_draft,
-            body_text, body_html_sanitized, body_macro, headers_jsonb,
-            created_at, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-        ON CONFLICT (id) DO UPDATE SET
-            id = EXCLUDED.id,
-            provider_id = EXCLUDED.provider_id,
-            thread_id = EXCLUDED.thread_id,
-            provider_thread_id = EXCLUDED.provider_thread_id,
-            replying_to_id = EXCLUDED.replying_to_id,
-            provider_history_id = EXCLUDED.provider_history_id,
-            subject = EXCLUDED.subject,
-            from_contact_id = EXCLUDED.from_contact_id,
-            sent_at = EXCLUDED.sent_at,
-            has_attachments = EXCLUDED.has_attachments,
-            is_read = EXCLUDED.is_read,
-            is_starred = EXCLUDED.is_starred,
-            is_sent = EXCLUDED.is_sent,
-            is_draft = EXCLUDED.is_draft,
-            body_text = EXCLUDED.body_text,
-            body_html_sanitized = EXCLUDED.body_html_sanitized,
-            body_macro = EXCLUDED.body_macro,
-            headers_jsonb = EXCLUDED.headers_jsonb,
-            updated_at = NOW()
-        "#,
-        message_db_id,
-        db_message_to_send.provider_id,
-        db_message_to_send.link_id,
-        thread_id,
-        db_message_to_send.provider_thread_id,
-        db_message_to_send.replying_to_id,
-        db_message_to_send.subject,
-        from_contact_id,
-        Utc::now(),
-        false,
-        true,
-        false,
-        false,
-        is_draft,
-        db_message_to_send.body_text,
-        db_message_to_send.body_html,
-        db_message_to_send.body_macro,
-        db_message_to_send.headers_json,
-        Utc::now(),
-        Utc::now()
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    service_message.db_id = Some(message_db_id);
-
-    process_scheduled_message(tx, service_message, send_time, message_db_id).await?;
-
-    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
-
-    threads::update::update_thread_metadata(tx, thread_id, db_message_to_send.link_id).await?;
-
-    Ok(())
-}
-
-// Handle scheduled message logic
-async fn process_scheduled_message(
-    tx: &mut sqlx::PgConnection,
-    service_message: &message::MessageToSend,
-    send_time: Option<chrono::DateTime<Utc>>,
-    message_db_id: Uuid,
-) -> anyhow::Result<()> {
-    if let Some(send_time) = send_time {
-        upsert_scheduled_message(
-            tx,
-            ScheduledMessage {
-                link_id: service_message.link_id,
-                message_id: message_db_id,
-                send_time,
-                sent: false,
-                processing: false,
-            },
-        )
-        .await
-        .context("Failed to insert scheduled message")?;
-    } else {
-        delete_scheduled_message(tx, service_message.link_id, message_db_id)
-            .await
-            .context("Failed to delete scheduled message")?;
-    }
-
-    Ok(())
 }

@@ -5437,6 +5437,7 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "aws-sdk-sqs",
  "macro_env",
  "macro_env_var",
  "thiserror 2.0.17",
@@ -9301,6 +9302,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
+ "email",
  "futures",
  "model",
  "models_email",

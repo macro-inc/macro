@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    ContactInfo, CreateDraftInput, ParsedAddresses, RecipientType, ThreadRow, UpsertedContacts,
+    ContactInfo, ParsedAddresses, RecipientType, ResolvedDraftInput, ThreadRow, UpsertedContacts,
     UpsertedRecipient,
 };
 use chrono::Utc;
@@ -339,12 +339,12 @@ async fn test_insert_draft_message_into_existing_thread(
     let from_contact_id = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
     let to_contact_id = Uuid::parse_str("c0000002-0000-0000-0000-000000000002")?;
 
-    let input = CreateDraftInput {
-        db_id: None,
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
         provider_thread_id: Some("provider-thread-2".to_string()),
-        thread_db_id: Some(thread_db_id),
+        thread_db_id,
         subject: "Test draft".to_string(),
         to: vec![ContactInfo {
             email: "bob@example.com".to_string(),
@@ -369,18 +369,8 @@ async fn test_insert_draft_message_into_existing_thread(
         }],
     };
 
-    let returned_thread_id = repo
-        .insert_draft_message(
-            &input,
-            message_db_id,
-            thread_db_id,
-            &contacts,
-            link_id,
-            None,
-        )
+    repo.insert_message(&input, &contacts, link_id, None, true)
         .await?;
-
-    assert_eq!(returned_thread_id, thread_db_id);
 
     // Verify the message was inserted
     let msg = sqlx::query(
@@ -436,12 +426,12 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
     let message_db_id = Uuid::parse_str("dd000002-0000-0000-0000-000000000002")?;
     let from_contact_id = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
 
-    let input = CreateDraftInput {
-        db_id: None,
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
         provider_thread_id: None,
-        thread_db_id: None,
+        thread_db_id: new_thread_id,
         subject: "Brand new thread draft".to_string(),
         to: vec![],
         cc: vec![],
@@ -471,18 +461,8 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         updated_at: Utc::now(),
     };
 
-    let returned_thread_id = repo
-        .insert_draft_message(
-            &input,
-            message_db_id,
-            new_thread_id,
-            &contacts,
-            link_id,
-            Some(new_thread),
-        )
+    repo.insert_message(&input, &contacts, link_id, Some(new_thread), true)
         .await?;
-
-    assert_eq!(returned_thread_id, new_thread_id);
 
     // Verify the thread was created
     let thread_link: Uuid = sqlx::query_scalar("SELECT link_id FROM email_threads WHERE id = $1")
@@ -516,12 +496,12 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
     let send_time =
         chrono::DateTime::parse_from_rfc3339("2025-06-01T12:00:00Z")?.with_timezone(&Utc);
 
-    let input = CreateDraftInput {
-        db_id: None,
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
         provider_thread_id: None,
-        thread_db_id: Some(thread_db_id),
+        thread_db_id,
         subject: "Scheduled draft".to_string(),
         to: vec![],
         cc: vec![],
@@ -538,15 +518,8 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
         recipients: vec![],
     };
 
-    repo.insert_draft_message(
-        &input,
-        message_db_id,
-        thread_db_id,
-        &contacts,
-        link_id,
-        None,
-    )
-    .await?;
+    repo.insert_message(&input, &contacts, link_id, None, true)
+        .await?;
 
     // Verify the scheduled message was created
     let row =
@@ -573,12 +546,12 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     // Re-use the existing draft message ID (msg2)
     let message_db_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
 
-    let input = CreateDraftInput {
-        db_id: Some(message_db_id),
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
         provider_id: None,
         replying_to_id: Some(Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?),
         provider_thread_id: Some("provider-thread-1".to_string()),
-        thread_db_id: Some(thread_db_id),
+        thread_db_id,
         subject: "Updated draft subject".to_string(),
         to: vec![],
         cc: vec![],
@@ -595,15 +568,8 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         recipients: vec![],
     };
 
-    repo.insert_draft_message(
-        &input,
-        message_db_id,
-        thread_db_id,
-        &contacts,
-        link_id,
-        None,
-    )
-    .await?;
+    repo.insert_message(&input, &contacts, link_id, None, true)
+        .await?;
 
     // Verify the message was updated (not duplicated)
     let row = sqlx::query("SELECT subject, body_text FROM email_messages WHERE id = $1")
@@ -637,12 +603,12 @@ async fn test_insert_draft_message_updates_thread_metadata(
     let message_db_id = Uuid::parse_str("dd000004-0000-0000-0000-000000000004")?;
 
     // Insert a macro draft (no provider_id, is_draft=true) into the thread
-    let input = CreateDraftInput {
-        db_id: None,
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
         provider_thread_id: None,
-        thread_db_id: Some(thread_db_id),
+        thread_db_id,
         subject: "Metadata test draft".to_string(),
         to: vec![],
         cc: vec![],
@@ -659,15 +625,8 @@ async fn test_insert_draft_message_updates_thread_metadata(
         recipients: vec![],
     };
 
-    repo.insert_draft_message(
-        &input,
-        message_db_id,
-        thread_db_id,
-        &contacts,
-        link_id,
-        None,
-    )
-    .await?;
+    repo.insert_message(&input, &contacts, link_id, None, true)
+        .await?;
 
     // Thread should now be inbox_visible because it has a macro draft
     let row = sqlx::query("SELECT inbox_visible FROM email_threads WHERE id = $1")
@@ -678,6 +637,57 @@ async fn test_insert_draft_message_updates_thread_metadata(
     assert!(
         row.get::<bool, _>("inbox_visible"),
         "Thread with macro draft should be inbox_visible"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread_db_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let message_db_id = Uuid::parse_str("dd000005-0000-0000-0000-000000000005")?;
+    let from_contact_id = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
+
+    let input = ResolvedDraftInput {
+        db_id: message_db_id,
+        provider_id: None,
+        replying_to_id: None,
+        provider_thread_id: None,
+        thread_db_id,
+        subject: "Sent message".to_string(),
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("This is a sent message".to_string()),
+        body_html: None,
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+    };
+
+    let contacts = UpsertedContacts {
+        from_contact_id: Some(from_contact_id),
+        recipients: vec![],
+    };
+
+    repo.insert_message(&input, &contacts, link_id, None, false)
+        .await?;
+
+    // Verify the message was inserted with is_draft = false
+    let row = sqlx::query("SELECT is_draft, is_sent FROM email_messages WHERE id = $1")
+        .bind(message_db_id)
+        .fetch_one(&pool)
+        .await?;
+
+    assert!(
+        !row.get::<bool, _>("is_draft"),
+        "Message should have is_draft = false"
     );
 
     Ok(())

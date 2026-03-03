@@ -20,11 +20,11 @@ use crate::{
     },
 };
 
-pub struct EmailPreviewState<T> {
+pub struct EmailRouterState<T> {
     pub(crate) inner: Arc<T>,
 }
 
-impl<T> Clone for EmailPreviewState<T> {
+impl<T> Clone for EmailRouterState<T> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -32,7 +32,7 @@ impl<T> Clone for EmailPreviewState<T> {
     }
 }
 
-impl<T> EmailPreviewState<T>
+impl<T> EmailRouterState<T>
 where
     T: EmailService,
 {
@@ -48,7 +48,7 @@ where
     }
 }
 
-pub fn router<S, T>(state: EmailPreviewState<T>) -> Router<S>
+pub fn router<S, T>(state: EmailRouterState<T>) -> Router<S>
 where
     S: Send + Sync,
     T: EmailService,
@@ -78,7 +78,7 @@ where
 )]
 #[tracing::instrument(skip(link, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
 async fn cursor_handler<T: EmailService>(
-    State(service): State<EmailPreviewState<T>>,
+    State(service): State<EmailRouterState<T>>,
     Cached(macro_user): Cached<MacroUserExtractor>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,

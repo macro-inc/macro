@@ -1,7 +1,5 @@
 pub(crate) mod add_attachment;
 pub(crate) mod add_forwarded_attachment;
-#[allow(dead_code)]
-pub(crate) mod create;
 pub(crate) mod delete;
 pub(crate) mod remove_attachment;
 pub(crate) mod remove_forwarded_attachment;
@@ -14,7 +12,7 @@ use email::inbound::draft_router;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .merge(draft_router(state.email_draft_state))
+        .merge(draft_router(state.email_service.clone()))
         .nest("/scheduled", scheduled::router())
         .route("/:id", delete(delete::handler))
         .route("/:id/attachments", post(add_attachment::handler))

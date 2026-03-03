@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, Link, ParsedAddresses, SimpleMessageInfo,
-        ThreadRow,
+        CreateDraftInput, CreatedDraft, EmailErr, Link, ParsedAddresses, ResolvedDraftInput,
+        SimpleMessageInfo, ThreadRow,
     },
     ports::EmailRepo,
 };
@@ -12,17 +12,33 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U> EmailServiceImpl<T, U>
+impl<T, U, E> EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
+    E: crate::domain::ports::EmailMessageEnqueuer,
     anyhow::Error: From<T::Err>,
 {
     #[tracing::instrument(err, skip(self, link, input))]
     pub(crate) async fn create_draft_impl(
         &self,
         link: &Link,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.prepare_and_insert_db_message(link, input, true).await
+    }
+
+    /// Shared pipeline for creating a draft or a sent message.
+    ///
+    /// Validates existing message / reply-to, decodes HTML body, upserts contacts,
+    /// builds thread if needed, and inserts the message row via the repo layer.
+    /// `is_draft` controls the `is_draft` flag persisted on the message row.
+    #[tracing::instrument(err, skip(self, link, input))]
+    pub(crate) async fn prepare_and_insert_db_message(
+        &self,
+        link: &Link,
         mut input: CreateDraftInput,
+        is_draft: bool,
     ) -> Result<CreatedDraft, EmailErr> {
         let link_id = link.id;
 
@@ -52,30 +68,15 @@ where
         // Build new thread if one doesn't already exist
         let (thread_db_id, new_thread) = self.build_new_thread_if_needed(link_id, &input);
 
-        // Generate message ID once, before insert, so the response matches the DB
+        // Resolve all IDs and build the insert-ready struct
         let message_db_id = input.db_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
-        input.db_id = Some(message_db_id);
 
-        let thread_db_id = self
-            .email_repo
-            .insert_draft_message(
-                &input,
-                message_db_id,
-                thread_db_id,
-                &contacts,
-                link_id,
-                new_thread,
-            )
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        Ok(CreatedDraft {
+        let resolved = ResolvedDraftInput {
             db_id: message_db_id,
             provider_id: input.provider_id,
             replying_to_id: input.replying_to_id,
             provider_thread_id: input.provider_thread_id,
             thread_db_id,
-            link_id,
             subject: input.subject,
             to: input.to,
             cc: input.cc,
@@ -85,6 +86,29 @@ where
             body_macro: input.body_macro,
             headers_json: input.headers_json,
             send_time: input.send_time,
+        };
+
+        self.email_repo
+            .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(CreatedDraft {
+            db_id: resolved.db_id,
+            provider_id: resolved.provider_id,
+            replying_to_id: resolved.replying_to_id,
+            provider_thread_id: resolved.provider_thread_id,
+            thread_db_id: resolved.thread_db_id,
+            link_id,
+            subject: resolved.subject,
+            to: resolved.to,
+            cc: resolved.cc,
+            bcc: resolved.bcc,
+            body_text: resolved.body_text,
+            body_html: resolved.body_html,
+            body_macro: resolved.body_macro,
+            headers_json: resolved.headers_json,
+            send_time: resolved.send_time,
         })
     }
 

@@ -83,30 +83,6 @@ pub fn map_service_message_to_db(
     }
 }
 
-#[tracing::instrument]
-pub fn map_message_to_send_to_db(
-    service_msg: &mut message::MessageToSend,
-    message_id: Uuid,
-    thread_id: Uuid,
-) -> db::message::MessageToSend {
-    db::message::MessageToSend {
-        db_id: Some(message_id),
-        provider_id: service_msg.provider_id.clone(),
-        provider_thread_id: service_msg.provider_thread_id.clone(),
-        replying_to_id: service_msg.replying_to_id,
-        thread_db_id: Some(thread_id),
-        link_id: service_msg.link_id,
-        subject: service_msg.subject.clone(),
-        to: service_msg.to.clone(),
-        cc: service_msg.cc.clone(),
-        bcc: service_msg.bcc.clone(),
-        body_text: mem::take(&mut service_msg.body_text),
-        body_html: mem::take(&mut service_msg.body_html),
-        body_macro: mem::take(&mut service_msg.body_macro),
-        headers_json: service_msg.headers_json.clone(),
-    }
-}
-
 #[tracing::instrument(skip(service_labels))]
 pub fn map_service_labels_to_provider_ids(
     service_labels: &[service::label::LabelInfo],

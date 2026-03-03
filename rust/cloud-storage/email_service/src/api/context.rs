@@ -2,7 +2,7 @@ use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailDraftRouterState, EmailPreviewState, EmailThreadRouterState},
+    inbound::{EmailRouterState, EmailThreadRouterState},
     outbound::EmailPgRepo,
 };
 use email_service::config::Config;
@@ -17,7 +17,8 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
-type EmailSvc = EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>;
+type EmailSvc =
+    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, sqs_client::SQS>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -33,8 +34,7 @@ pub(crate) struct ApiContext {
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
-    pub email_service: EmailPreviewState<EmailSvc>,
+    pub email_service: EmailRouterState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
     pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
-    pub email_draft_state: EmailDraftRouterState<EmailSvc>,
 }

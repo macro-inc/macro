@@ -14,8 +14,8 @@ mod tests;
 pub use attachment::{Attachment, AttachmentDraft, AttachmentForwarded, MessageAttachment};
 pub use contact::{Contact, ContactInfo, RecipientType};
 pub use draft::{
-    CreateDraftInput, CreatedDraft, ParsedAddresses, SimpleMessageInfo, UpsertedContacts,
-    UpsertedRecipient,
+    CreateDraftInput, CreatedDraft, ParsedAddresses, ResolvedDraftInput, SimpleMessageInfo,
+    UpsertedContacts, UpsertedRecipient,
 };
 pub use error::EmailErr;
 pub use label::{Label, LabelListVisibility, LabelType, MessageLabel, MessageListVisibility};

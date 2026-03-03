@@ -15,7 +15,6 @@ use crate::api::email::labels::create::CreateLabelResponse;
 use crate::api::email::labels::list::ListLabelsResponse;
 use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
-use crate::api::email::messages::send::{SendMessageRequest, SendMessageResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::email::threads::labels::UpdateThreadLabelRequest;
@@ -25,6 +24,7 @@ use ::email::inbound::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiPaginatedThreadCursor, ApiSortMethod,
     ApiThread, CreateDraftRequest as HexCreateDraftRequest,
     CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
+    SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
@@ -34,7 +34,7 @@ use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
 use models_email::email::service::thread::{PreviewView, PreviewViewStandardLabel};
 use models_email::service::label::Label;
-use models_email::service::message::{MessageToSend, ParsedMessage};
+use models_email::service::message::ParsedMessage;
 use models_email::service::thread::ThreadPreviewCursor;
 use utoipa::OpenApi;
 
@@ -63,7 +63,7 @@ use utoipa::OpenApi;
         email::messages::get::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
-        email::messages::send::send_handler,
+        inbound::send_message_handler,
         email::threads::seen::seen_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
@@ -106,10 +106,9 @@ use utoipa::OpenApi;
             // Message types
             UpdateLabelBatchRequest,
             UpdateLabelBatchResponse,
-            SendMessageRequest,
-            SendMessageResponse,
+            HexSendMessageRequest,
+            HexSendMessageResponse,
             ParsedMessage,
-            MessageToSend,
             // Thread types
             ArchiveThreadRequest,
             UpdateThreadLabelRequest,

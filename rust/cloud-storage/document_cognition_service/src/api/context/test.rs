@@ -192,8 +192,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build soup service dependencies
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service =
-        EmailServiceImpl::new(EmailPgRepo::new(pool.clone()), frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(pool.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        0,
+    );
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: pool.clone() },

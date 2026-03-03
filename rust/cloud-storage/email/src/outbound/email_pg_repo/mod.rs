@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-        EmailThreadPreview, Label, Link, MessageAttachment, MessageLabel, MessageRow,
-        ParsedAddresses, PreviewCursorQuery, SimpleMessageInfo, ThreadRow, UpsertedContacts,
+        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailThreadPreview,
+        Label, Link, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+        PreviewCursorQuery, ResolvedDraftInput, SimpleMessageInfo, ThreadRow, UpsertedContacts,
         UserProvider,
     },
     ports::{EmailRepo, RecipientsByMessageId},
@@ -159,24 +159,14 @@ impl EmailRepo for EmailPgRepo {
         contact::upsert_contacts(&self.pool, link_id, addresses).await
     }
 
-    async fn insert_draft_message(
+    async fn insert_message(
         &self,
-        input: &CreateDraftInput,
-        message_db_id: Uuid,
-        thread_db_id: Uuid,
+        input: &ResolvedDraftInput,
         contacts: &UpsertedContacts,
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
-    ) -> Result<Uuid, Self::Err> {
-        draft::insert_draft_message(
-            &self.pool,
-            input,
-            message_db_id,
-            thread_db_id,
-            contacts,
-            link_id,
-            new_thread,
-        )
-        .await
+        is_draft: bool,
+    ) -> Result<(), Self::Err> {
+        draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 }

@@ -59,10 +59,18 @@ type DssSoupState = SoupRouterState<
     SoupImpl<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+        EmailServiceImpl<
+            EmailPgRepo,
+            FrecencyQueryServiceImpl<FrecencyPgStorage>,
+            email::domain::ports::NoOpEnqueuer,
+        >,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
-    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+    EmailServiceImpl<
+        EmailPgRepo,
+        FrecencyQueryServiceImpl<FrecencyPgStorage>,
+        email::domain::ports::NoOpEnqueuer,
+    >,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;

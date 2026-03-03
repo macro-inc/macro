@@ -881,7 +881,6 @@ export function BaseInput(props: {
         subject: form().subject(),
         thread_db_id: currentThread?.db_id,
         to,
-        link_id: linkId!,
       },
     });
 

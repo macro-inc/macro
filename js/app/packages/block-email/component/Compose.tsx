@@ -652,7 +652,6 @@ export function EmailCompose(props: EmailComposeProps) {
 
     sendMutation.mutate({
       message: {
-        link_id: currentLink.id,
         to: convertToContactInfoArray(recipients.to),
         cc:
           recipients.cc.length > 0
@@ -667,7 +666,6 @@ export function EmailCompose(props: EmailComposeProps) {
         body_html: data.html,
         body_macro: data.raw,
         db_id: currentDraftID(),
-        send_time: sendTime,
       },
     });
 

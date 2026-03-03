@@ -37,6 +37,40 @@ pub struct CreateDraftInput {
     pub send_time: Option<DateTime<Utc>>,
 }
 
+/// A draft input with all IDs resolved, ready for database insertion.
+/// Created from `CreateDraftInput` after validation and ID generation.
+#[derive(Debug, Clone)]
+pub struct ResolvedDraftInput {
+    /// The resolved message DB ID.
+    pub db_id: Uuid,
+    /// Provider message ID.
+    pub provider_id: Option<String>,
+    /// ID of the message this draft is replying to.
+    pub replying_to_id: Option<Uuid>,
+    /// Provider thread ID.
+    pub provider_thread_id: Option<String>,
+    /// The resolved thread DB ID.
+    pub thread_db_id: Uuid,
+    /// Subject line of the draft.
+    pub subject: String,
+    /// To recipients.
+    pub to: Vec<ContactInfo>,
+    /// Cc recipients.
+    pub cc: Vec<ContactInfo>,
+    /// Bcc recipients.
+    pub bcc: Vec<ContactInfo>,
+    /// Plain text body.
+    pub body_text: Option<String>,
+    /// HTML body (decoded).
+    pub body_html: Option<String>,
+    /// Macro-specific body format.
+    pub body_macro: Option<String>,
+    /// Headers JSON (e.g. Macro-In-Reply-To).
+    pub headers_json: Option<JsonValue>,
+    /// Scheduled send time.
+    pub send_time: Option<DateTime<Utc>>,
+}
+
 /// Simplified message info used for validation queries.
 #[derive(Debug, Clone)]
 pub struct SimpleMessageInfo {

@@ -1,8 +1,10 @@
 mod draft;
+mod send;
 
 pub use draft::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, CreateDraftRequest, CreateDraftResponse,
 };
+pub use send::{SendMessageRequest, SendMessageResponse};
 mod label;
 mod message;
 mod preview;

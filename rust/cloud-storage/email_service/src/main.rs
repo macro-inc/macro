@@ -3,7 +3,7 @@ use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailDraftRouterState, EmailPreviewState, EmailThreadRouterState},
+    inbound::{EmailRouterState, EmailThreadRouterState},
     outbound::EmailPgRepo,
 };
 use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
@@ -67,9 +67,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to db")?;
 
-    let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
-
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
+    let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
@@ -125,9 +123,12 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let email_service = EmailPreviewState::new(EmailServiceImpl::new(
+    let sqs_client = Arc::new(sqs_client);
+    let email_service = EmailRouterState::new(EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+        (*sqs_client).clone(),
+        config.sent_undo_delay_secs,
     ));
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
@@ -136,16 +137,12 @@ async fn main() -> anyhow::Result<()> {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
     };
-    let email_draft_state = EmailDraftRouterState {
-        service: email_service.service(),
-    };
-
     api::setup_and_serve(ApiContext {
         db,
         config: Arc::new(config),
         auth_service_client: Arc::new(auth_service_client),
         redis_client: Arc::new(redis_client),
-        sqs_client: Arc::new(sqs_client),
+        sqs_client,
         sfs_client: Arc::new(sfs_client),
         gmail_client: Arc::new(gmail_client),
         s3_client: Arc::new(s3_client),
@@ -156,7 +153,6 @@ async fn main() -> anyhow::Result<()> {
         email_service,
         entity_access_service,
         email_thread_state,
-        email_draft_state,
     })
     .await?;
     Ok(())

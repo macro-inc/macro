@@ -1284,7 +1284,7 @@
     "/email/messages": {
       "post": {
         "tags": ["Messages"],
-        "summary": "Send an email message.",
+        "summary": "Send a message.",
         "operationId": "send_message",
         "requestBody": {
           "content": {
@@ -1317,7 +1317,7 @@
               }
             }
           },
-          "401": {
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -3192,27 +3192,6 @@
           }
         }
       },
-      "AttachmentToSend": {
-        "type": "object",
-        "description": "The attachment data we need to include when sending a message to a provider.",
-        "required": ["file_name", "content_type", "data"],
-        "properties": {
-          "content_type": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          },
-          "file_name": {
-            "type": "string"
-          }
-        }
-      },
       "BackfillJob": {
         "type": "object",
         "required": [
@@ -3860,84 +3839,6 @@
         "type": "string",
         "enum": ["Show", "Hide"]
       },
-      "MessageToSend": {
-        "type": "object",
-        "required": ["link_id", "subject"],
-        "properties": {
-          "attachments": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/AttachmentToSend"
-            }
-          },
-          "bcc": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ContactInfo"
-            }
-          },
-          "body_html": {
-            "type": ["string", "null"]
-          },
-          "body_macro": {
-            "type": ["string", "null"]
-          },
-          "body_text": {
-            "type": ["string", "null"]
-          },
-          "cc": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ContactInfo"
-            }
-          },
-          "db_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "headers_json": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Value"
-              }
-            ]
-          },
-          "link_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "provider_id": {
-            "type": ["string", "null"]
-          },
-          "provider_thread_id": {
-            "type": ["string", "null"]
-          },
-          "replying_to_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "send_time": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "thread_db_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "to": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ContactInfo"
-            }
-          }
-        }
-      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -4061,20 +3962,23 @@
       },
       "SendMessageRequest": {
         "type": "object",
-        "description": "The request passed to send a message",
+        "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
         "required": ["message"],
         "properties": {
           "message": {
-            "$ref": "#/components/schemas/MessageToSend"
+            "$ref": "#/components/schemas/ApiDraftInput",
+            "description": "The message content."
           }
         }
       },
       "SendMessageResponse": {
         "type": "object",
+        "description": "Response body for sending a message.",
         "required": ["message"],
         "properties": {
           "message": {
-            "$ref": "#/components/schemas/MessageToSend"
+            "$ref": "#/components/schemas/ApiDraftOutput",
+            "description": "The created message."
           }
         }
       },

@@ -1,5 +1,6 @@
 mod draft;
 mod previews;
+mod send;
 mod thread;
 
 use crate::domain::{
@@ -7,7 +8,7 @@ use crate::domain::{
         CreateDraftInput, CreatedDraft, EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest,
         Link, Thread,
     },
-    ports::{EmailRepo, EmailService},
+    ports::{EmailMessageEnqueuer, EmailRepo, EmailService},
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use frecency::domain::ports::FrecencyQueryService;
@@ -15,29 +16,41 @@ use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct EmailServiceImpl<T, U> {
+pub struct EmailServiceImpl<T, U, E> {
     email_repo: T,
     frecency_service: U,
+    enqueuer: E,
+    sent_undo_delay_secs: u32,
 }
 
-impl<T, U> EmailServiceImpl<T, U>
+impl<T, U, E> EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
 {
-    pub fn new(email_repo: T, frecency_service: U) -> EmailServiceImpl<T, U> {
+    pub fn new(
+        email_repo: T,
+        frecency_service: U,
+        enqueuer: E,
+        sent_undo_delay_secs: u32,
+    ) -> EmailServiceImpl<T, U, E> {
         EmailServiceImpl {
             email_repo,
             frecency_service,
+            enqueuer,
+            sent_undo_delay_secs,
         }
     }
 }
 
-impl<T, U> EmailService for EmailServiceImpl<T, U>
+impl<T, U, E> EmailService for EmailServiceImpl<T, U, E>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
     anyhow::Error: From<T::Err>,
+    anyhow::Error: From<E::Err>,
 {
     async fn get_email_thread_previews(
         &self,
@@ -72,5 +85,13 @@ where
         input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
         self.create_draft_impl(link, input).await
+    }
+
+    async fn send_message(
+        &self,
+        link: &Link,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.send_message_impl(link, input).await
     }
 }

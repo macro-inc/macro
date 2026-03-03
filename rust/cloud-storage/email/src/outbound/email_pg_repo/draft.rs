@@ -1,5 +1,5 @@
 use super::{message, thread};
-use crate::domain::models::{CreateDraftInput, ThreadRow, UpsertedContacts};
+use crate::domain::models::{ResolvedDraftInput, ThreadRow, UpsertedContacts};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -9,22 +9,22 @@ use uuid::Uuid;
 /// thread metadata update, and user history.
 /// Returns the thread DB ID.
 #[tracing::instrument(skip(pool, input, contacts, new_thread), err)]
-pub(crate) async fn insert_draft_message(
+pub(crate) async fn insert_message(
     pool: &PgPool,
-    input: &CreateDraftInput,
-    message_db_id: Uuid,
-    thread_db_id: Uuid,
+    input: &ResolvedDraftInput,
     contacts: &UpsertedContacts,
     link_id: Uuid,
     new_thread: Option<ThreadRow>,
-) -> Result<Uuid, sqlx::Error> {
+    is_draft: bool,
+) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let thread_db_id = if let Some(thread) = new_thread {
-        thread::insert_thread(&mut tx, &thread, link_id).await?
-    } else {
-        thread_db_id
-    };
+    let message_db_id = input.db_id;
+    let thread_db_id = input.thread_db_id;
+
+    if let Some(thread) = new_thread {
+        thread::insert_thread(&mut tx, &thread, link_id).await?;
+    }
 
     upsert_draft(
         &mut tx,
@@ -33,6 +33,7 @@ pub(crate) async fn insert_draft_message(
         thread_db_id,
         contacts.from_contact_id,
         link_id,
+        is_draft,
     )
     .await?;
 
@@ -45,17 +46,18 @@ pub(crate) async fn insert_draft_message(
     thread::upsert_user_history(&mut tx, link_id, thread_db_id).await?;
 
     tx.commit().await?;
-    Ok(thread_db_id)
+    Ok(())
 }
 
 /// Upsert a draft message row.
 pub(crate) async fn upsert_draft(
     tx: &mut sqlx::PgConnection,
-    input: &CreateDraftInput,
+    input: &ResolvedDraftInput,
     message_db_id: Uuid,
     thread_db_id: Uuid,
     from_contact_id: Option<Uuid>,
     link_id: Uuid,
+    is_draft: bool,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
 
@@ -101,7 +103,7 @@ pub(crate) async fn upsert_draft(
         true,  // is_read
         false, // is_starred
         false, // is_sent
-        true,  // is_draft (always true for drafts)
+        is_draft,
         input.body_text,
         input.body_html,
         input.body_macro,

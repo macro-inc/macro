@@ -1370,7 +1370,7 @@ export const listLinks = async (
 };
 
 /**
- * @summary Send an email message.
+ * @summary Send a message.
  */
 export type sendMessageResponse201 = {
   data: SendMessageResponse;
@@ -1382,9 +1382,9 @@ export type sendMessageResponse400 = {
   status: 400;
 };
 
-export type sendMessageResponse401 = {
+export type sendMessageResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type sendMessageResponse500 = {
@@ -1397,7 +1397,7 @@ export type sendMessageResponseSuccess = sendMessageResponse201 & {
 };
 export type sendMessageResponseError = (
   | sendMessageResponse400
-  | sendMessageResponse401
+  | sendMessageResponse404
   | sendMessageResponse500
 ) & {
   headers: Headers;

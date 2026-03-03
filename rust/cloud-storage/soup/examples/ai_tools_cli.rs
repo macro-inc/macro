@@ -52,7 +52,12 @@ async fn main() {
 
     // Create the email service with real database connections
     let email_repo = EmailPgRepo::new(pool.clone());
-    let email_service = EmailServiceImpl::new(email_repo, frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        email_repo,
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        0,
+    );
 
     // Create the channels service with real database connections
     let comms_repo = PgCommsRepo { pool: pool.clone() };
