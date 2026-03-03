@@ -22,7 +22,6 @@ import {
   Switch,
 } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { AGENT_OWNERSHIP_FILTERS } from '@app/component/next-soup/filters/filters';
 import { useProjectsQuery } from '@queries/storage/projects';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -134,13 +133,6 @@ const AgentsFilters = () => {
   const { setQueryFilters, queryFilters } = useSoupView();
   const projects = useProjectsQuery();
 
-  // Ownership filter options (client-side filtering)
-  const ownershipOptions: Option[] = AGENT_OWNERSHIP_FILTERS.map((f) => ({
-    value: f.id,
-    label: f.label,
-  }));
-  const ownership = useFilterOptions(ownershipOptions, { multiple: false });
-
   // Project filter options (API-level filtering via chat_filters.project_ids)
   const projectOptions = createMemo((): Option[] => {
     const data = projects.data;
@@ -173,26 +165,18 @@ const AgentsFilters = () => {
   };
 
   return (
-    <>
-      <FilterSelect
-        label="Owner"
-        options={ownershipOptions}
-        active={ownership.active()}
-        onChange={ownership.onChange}
+    <Show when={projectOptions().length > 0}>
+      <FilterCombobox
+        label="Project"
+        options={projectOptions()}
+        active={activeProjectFilter()}
+        onChange={handleProjectChange}
+        placeholder="Search projects..."
+        displayLimit={2}
+        overflowLabel="projects"
+        showIcons={false}
       />
-      <Show when={projectOptions().length > 0}>
-        <FilterCombobox
-          label="Project"
-          options={projectOptions()}
-          active={activeProjectFilter()}
-          onChange={handleProjectChange}
-          placeholder="Search projects..."
-          displayLimit={2}
-          overflowLabel="projects"
-          showIcons={false}
-        />
-      </Show>
-    </>
+    </Show>
   );
 };
 
@@ -369,6 +353,12 @@ const TasksFilters = () => {
         active={activeStatus()}
         onChange={handleStatusChange}
       />
+      <FilterSelect
+        label="Priority"
+        options={priorityOptions}
+        active={priority.active()}
+        onChange={priority.onChange}
+      />
       <Show when={!soup.filters.isActive('assigned-to')}>
         <FilterCombobox
           label="Assignee"
@@ -380,12 +370,6 @@ const TasksFilters = () => {
           overflowLabel="assignees"
         />
       </Show>
-      <FilterSelect
-        label="Priority"
-        options={priorityOptions}
-        active={priority.active()}
-        onChange={priority.onChange}
-      />
     </>
   );
 };
