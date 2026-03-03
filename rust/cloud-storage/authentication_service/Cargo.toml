@@ -43,7 +43,11 @@ doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
 fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
-github = { path = "../github" }
+github = { path = "../github", default-features = false, features = [
+  "axum",
+  "link",
+  "outbound",
+] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }

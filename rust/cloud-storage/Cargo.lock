@@ -2889,6 +2889,7 @@ dependencies = [
  "entity_access",
  "frecency",
  "futures",
+ "github",
  "hex",
  "http-body-util",
  "jsonwebtoken",

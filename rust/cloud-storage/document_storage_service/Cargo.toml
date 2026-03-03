@@ -130,6 +130,7 @@ uuid = { workspace = true }
 zip = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
 comms_service = { path = "../comms_service" }
+github = { path = "../github", default-features= false, features = ["inbound", "axum", "sync"]}
 
 [dev-dependencies]
 cool_asserts = "2"

@@ -2,9 +2,7 @@ use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use github::{
-    domain::service::{
-        GithubLinkConfig, GithubLinkServiceImpl, GithubSyncConfig, GithubSyncServiceImpl,
-    },
+    domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
     outbound::{
         github_auth_client::GithubAuthImpl, github_oauth_client::GithubOauthImpl,
         pg_github_repo::PgGithubRepo,
@@ -138,24 +136,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let github_webhook_secret = match config.environment {
-        Environment::Local => config.github_webhook_secret_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.github_webhook_secret_key)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
-    let github_sync_app_pem = match config.environment {
-        Environment::Local => config.github_sync_app_pem.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.github_sync_app_pem)
-            .await
-            .context("unable to get github sync app pem secret")?
-            .to_string(),
-    };
-
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -248,13 +228,6 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
-    let github_sync_service_impl = GithubSyncServiceImpl::new(GithubSyncConfig {
-        webhook_secret: github_webhook_secret,
-        github_sync_app_url: config.github_sync_app_url,
-        sync_app_pem: github_sync_app_pem,
-        sync_app_client_id: config.github_sync_app_client_id,
-    });
-
     let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
@@ -269,7 +242,6 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(
         ApiContext {
             db,
-            github_sync_service: Arc::new(github_sync_service_impl),
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),

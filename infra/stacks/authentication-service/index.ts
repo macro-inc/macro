@@ -41,20 +41,6 @@ const GITHUB_IDP_ID = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const GITHUB_SYNC_APP_URL = config.require('github_sync_app_url');
-
-const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
-const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
-const GITHUB_SYNC_APP_PEM = config.require('github_sync_app_pem');
-const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM })
-  .apply((secret) => secret.arn);
-
-const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
-
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_cache_secret_key`),
@@ -168,8 +154,6 @@ const secretKeyArns = [
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
   pulumi.interpolate`${stripePriceIdArn}`,
-  pulumi.interpolate`${githubWebhookSecretKeyArn}`,
-  pulumi.interpolate`${githubSyncAppPemArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -328,22 +312,6 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'GITHUB_IDP_ID',
       value: pulumi.interpolate`${GITHUB_IDP_ID}`,
-    },
-    {
-      name: 'GITHUB_WEBHOOK_SECRET_KEY',
-      value: GITHUB_WEBHOOK_SECRET_KEY,
-    },
-    {
-      name: 'GITHUB_SYNC_APP_URL',
-      value: GITHUB_SYNC_APP_URL,
-    },
-    {
-      name: 'GITHUB_SYNC_APP_PEM',
-      value: GITHUB_SYNC_APP_PEM,
-    },
-    {
-      name: 'GITHUB_SYNC_APP_CLIENT_ID',
-      value: GITHUB_SYNC_APP_CLIENT_ID,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

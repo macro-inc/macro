@@ -7,6 +7,7 @@ use axum::http::Method;
 use axum::middleware::Next;
 use comms_service::CommsHandlerState;
 use context::InternalFlag;
+use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use properties_service::PropertiesHandlerState;
@@ -88,7 +89,17 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn api_router(state: ApiContext) -> Router {
+    let github_sync_service_router_state = GithubSyncRouterState {
+        service: state.github_sync_service.clone(),
+    };
+
     let internal_router = Router::new()
+        .nest(
+            "/github",
+            github::inbound::github_sync_router::github_sync_router(
+                github_sync_service_router_state,
+            ),
+        )
         .nest(
             "/documents",
             documents::router(state.clone())

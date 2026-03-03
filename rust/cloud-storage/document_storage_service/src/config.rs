@@ -53,6 +53,8 @@ env_var! {
         pub OpensearchUsername,
         pub OpensearchPassword,
         pub ContactsQueue,
+        pub GithubSyncAppUrl,
+        pub GithubSyncAppClientId,
     }
 }
 
@@ -64,6 +66,13 @@ env_var! { pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName
 env_var! {
     #[derive(Clone)]
     pub struct DocumentPermissionJwtSecretKey;
+}
+env_var! {
+    pub struct GithubWebhookSecretKey;
+}
+
+env_var! {
+    pub struct GithubSyncAppPemSecretKey;
 }
 
 impl Config {

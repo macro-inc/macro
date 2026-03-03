@@ -2,6 +2,7 @@ use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        GithubSyncAppPemSecretKey, GithubWebhookSecretKey,
     },
     service::s3::S3,
 };
@@ -26,6 +27,7 @@ use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -312,6 +314,21 @@ async fn main() -> anyhow::Result<()> {
         db.clone(),
     );
 
+    let github_webhook_secret = secretsmanager_client
+        .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
+        .await?;
+
+    let github_sync_app_pem = secretsmanager_client
+        .get_maybe_secret_value(env, GithubSyncAppPemSecretKey::new()?)
+        .await?;
+
+    let github_sync_service_impl = GithubSyncServiceImpl::new(GithubSyncConfig {
+        webhook_secret: github_webhook_secret.as_ref().to_string(),
+        github_sync_app_url: config.vars.github_sync_app_url.to_string(),
+        sync_app_pem: github_sync_app_pem.as_ref().to_string(),
+        sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
+    });
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -322,6 +339,7 @@ async fn main() -> anyhow::Result<()> {
             ),
             email_service,
         ),
+        github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: s3,

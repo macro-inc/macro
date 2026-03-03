@@ -2,7 +2,6 @@ use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
 use axum::http::HeaderName;
-use github::inbound::github_sync_router::{GithubSyncRouterState, github_sync_router};
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
 use native_app_service::inbound::RouterState;
 use tower::ServiceBuilder;
@@ -66,17 +65,12 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
-    let github_sync_router_state = GithubSyncRouterState {
-        service: state.github_sync_service.clone(),
-    };
-
     Router::new()
         .merge(native_app_service::inbound::native_app_router(
             RouterState {
                 inner: state.native_app_service.clone(),
             },
         ))
-        .nest("/github", github_sync_router(github_sync_router_state))
         .nest("/internal", internal::router())
         .nest("/permissions", permissions::router(state.jwt_args.clone()))
         .nest("/login", login::router(state.clone()))
@@ -107,7 +101,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/session", session::router())
         .nest(
             "/webhooks",
-            webhooks::router(state).layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+            webhooks::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
                 macro_middleware::connection_drop_prevention_handler,
             ))),
         )
