@@ -14,6 +14,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -128,6 +129,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
 
   const activeAssigneeLabel = () => {
     if (!assigneeFilter()) return 'Assignee';
+    if (assigneeFilter() === NO_ASSIGNEE) return 'No assignee';
     const contact = contacts().find((c) => c.id === assigneeFilter());
     if (contact && contact.id === userId())
       return contact.name ? `${contact.name} (me)` : 'Me';
@@ -145,7 +147,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
     >
       <FilterTrigger filter={assigneeFilter}>
         <Show
-          when={assigneeFilter()}
+          when={assigneeFilter() !== NO_ASSIGNEE ? assigneeFilter() : undefined}
           keyed
           fallback={<UserCircleIcon class="size-3.5" />}
         >
@@ -178,6 +180,13 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
               placeholder: 'Filter assignee...',
               specificEntityType: 'USER',
             }}
+            pinnedOptions={[
+              {
+                id: NO_ASSIGNEE,
+                label: 'No assignee',
+                icon: <UserCircleIcon class="size-4 text-ink-muted" />,
+              },
+            ]}
             selectedOptions={() =>
               assigneeFilter() ? new Set([assigneeFilter()!]) : new Set()
             }
