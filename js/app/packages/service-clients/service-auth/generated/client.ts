@@ -261,41 +261,6 @@ export const verifyEmailLink = async (
 };
 
 /**
- * @summary Redirects the user to the github sync app installation page.
- */
-export type installSyncResponse307 = {
-  data: void;
-  status: 307;
-};
-export type installSyncResponseError = installSyncResponse307 & {
-  headers: Headers;
-};
-
-export type installSyncResponse = installSyncResponseError;
-
-export const getInstallSyncUrl = () => {
-  return `/github/install-sync`;
-};
-
-export const installSync = async (
-  options?: RequestInit
-): Promise<installSyncResponse> => {
-  const res = await fetch(getInstallSyncUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: installSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as installSyncResponse;
-};
-
-/**
  * @summary Health check
  */
 export type healthHandlerResponse200 = {
