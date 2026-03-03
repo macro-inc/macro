@@ -1,13 +1,13 @@
-import { catchToResult, isOk, throwOnErr } from '@core/util/maybeResult';
+import { isOk, throwOnErr, catchToResult } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
 import {
-  type QueryClient,
-  queryOptions,
-  type Updater,
   useMutation,
   useQuery,
+  queryOptions,
+  type QueryClient,
+  type Updater,
 } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
@@ -50,14 +50,11 @@ function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
 }
 
 export function setHistoryItemName(itemId: string, name: string) {
-  return setHistoryItemData(itemId, (prev) => {
-    console.log('prev item', prev);
-    return {
-      ...prev,
-      name,
-      rawName: name,
-    };
-  });
+  return setHistoryItemData(itemId, (prev) => ({
+    ...prev,
+    name,
+    rawName: name,
+  }));
 }
 
 const historyQueryOptions = queryOptions({
@@ -94,7 +91,7 @@ export function refetchHistory() {
   });
 }
 
-// @ts-expect-error
+// @ts-ignore
 // biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
 function optimisticUpdateViewedAt(itemId: string) {
   const now = new Date();

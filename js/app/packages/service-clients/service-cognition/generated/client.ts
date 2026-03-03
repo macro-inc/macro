@@ -19,6 +19,7 @@ import type {
   GetChatsForAttachmentResponse,
   GetModelsResponse,
   HttpSendChatMessageRequest,
+  PatchChatRequestV2,
   SendChatMessageResponse,
   StringIDResponse,
   SuccessResponse,
@@ -387,6 +388,67 @@ export const deleteChatHandler = async (
     status: res.status,
     headers: res.headers,
   } as deleteChatHandlerResponse;
+};
+
+export type patchChatHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchChatHandlerResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type patchChatHandlerResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type patchChatHandlerResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type patchChatHandlerResponseSuccess = patchChatHandlerResponse200 & {
+  headers: Headers;
+};
+export type patchChatHandlerResponseError = (
+  | patchChatHandlerResponse400
+  | patchChatHandlerResponse401
+  | patchChatHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchChatHandlerResponse =
+  | patchChatHandlerResponseSuccess
+  | patchChatHandlerResponseError;
+
+export const getPatchChatHandlerUrl = (chatId: string) => {
+  return `/chats/${chatId}`;
+};
+
+export const patchChatHandler = async (
+  chatId: string,
+  patchChatRequestV2: PatchChatRequestV2,
+  options?: RequestInit
+): Promise<patchChatHandlerResponse> => {
+  const res = await fetch(getPatchChatHandlerUrl(chatId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchChatRequestV2),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchChatHandlerResponse;
 };
 
 export type copyChatHandlerResponse201 = {

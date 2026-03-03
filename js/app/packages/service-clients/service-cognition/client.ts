@@ -247,26 +247,13 @@ export const cognitionApiServiceClient = {
   },
 };
 
-const titleKind = {
-  chat: "you are generating a title for an AI chat based on the user's 1st message",
-} as const;
-
-export async function generateTitle(
-  text: string,
-  kind?: keyof typeof titleKind
-): Promise<string | undefined> {
-  return new Promise((resolve) => setTimeout(() => resolve('TEST TITLE'), 1));
-
+export async function generateTitle(text: string): Promise<string | undefined> {
   const result = await dcsCompletion({
     model: 'gpt-4o-mini',
     messages: [
       {
-        role: 'system',
-        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else. ${kind ? titleKind[kind] : ''}`,
-      },
-      {
         role: 'user',
-        content: text,
+        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else.\n\n${text}`,
       },
     ],
     max_tokens: 100,

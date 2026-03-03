@@ -11,11 +11,6 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
-import { setHistoryItemName } from '@queries/history/history';
-import {
-  getSoupEntityById,
-  optimisticUpdateSoupEntity,
-} from '@queries/soup/normalized-cache/operations';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -73,11 +68,9 @@ function SoupChatInputInner() {
   const handleSend = async (request: ChatSendInput) => {
     // Create a new persistent chat
     const name = deriveChatName(request.content);
-    console.log('chat name', name);
 
     const response = await cognitionApiServiceClient.createChat({ name });
     if (isErr(response)) {
-      console.error('Failed to create chat', response);
       return;
     }
     const [, { id: chatId }] = response;
