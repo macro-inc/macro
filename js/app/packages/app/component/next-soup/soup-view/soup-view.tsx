@@ -176,10 +176,12 @@ export const SoupView = (props: SoupViewProps) => {
           <div class="flex flex-col w-full pl-2 pr-1">
             <SplitHeaderLeft>
               <div class="h-full flex gap-2 items-center">
-                <h1 class="font-medium text-ink-muted select-none text-sm">
-                  {props.viewName}
-                </h1>
-                <ChevronRightIcon class="size-4 text-ink-muted select-none" />
+                <Show when={!isMobile()}>
+                  <h1 class="font-medium text-ink-muted select-none text-sm">
+                    {props.viewName}
+                  </h1>
+                  <ChevronRightIcon class="size-4 text-ink-muted select-none" />
+                </Show>
 
                 <SoupViewTabs />
               </div>
