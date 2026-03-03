@@ -4,8 +4,8 @@ import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/so
 
 export const SoupFiltersBar = () => {
   return (
-    <div class="flex gap-2 items-center">
-      <div class="flex gap-2 items-center w-full h-12">
+    <div class="flex gap-2 items-center h-12">
+      <div class="flex gap-2 items-center size-full">
         <SoupViewContextFilters />
       </div>
       <div class="ml-auto w-full flex items-center justify-end gap-2">

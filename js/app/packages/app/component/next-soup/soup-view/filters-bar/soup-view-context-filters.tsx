@@ -43,29 +43,31 @@ export const SoupViewContextFilters = () => {
   };
 
   return (
-    <Switch>
-      <Match when={isComponentListView('inbox')}>
-        <InboxFilters />
-      </Match>
-      <Match when={isComponentListView('agents')}>
-        <AgentsFilters />
-      </Match>
-      <Match when={isComponentListView('mail')}>
-        <MailFilters />
-      </Match>
-      <Match when={isComponentListView('documents')}>
-        <DocumentsFilters />
-      </Match>
-      <Match when={isComponentListView('tasks')}>
-        <TasksFilters />
-      </Match>
-      <Match when={isComponentListView('channels')}>
-        <ChannelsFilters />
-      </Match>
-      <Match when={isComponentListView('files')}>
-        <FilesFilters />
-      </Match>
-    </Switch>
+    <div class="h-full flex items-center gap-1.5">
+      <Switch>
+        <Match when={isComponentListView('inbox')}>
+          <InboxFilters />
+        </Match>
+        <Match when={isComponentListView('agents')}>
+          <AgentsFilters />
+        </Match>
+        <Match when={isComponentListView('mail')}>
+          <MailFilters />
+        </Match>
+        <Match when={isComponentListView('documents')}>
+          <DocumentsFilters />
+        </Match>
+        <Match when={isComponentListView('tasks')}>
+          <TasksFilters />
+        </Match>
+        <Match when={isComponentListView('channels')}>
+          <ChannelsFilters />
+        </Match>
+        <Match when={isComponentListView('files')}>
+          <FilesFilters />
+        </Match>
+      </Switch>
+    </div>
   );
 };
 
@@ -166,7 +168,7 @@ const AgentsFilters = () => {
   };
 
   return (
-    <div class="flex items-center gap-1.5">
+    <>
       <FilterSelect
         label="Owner"
         options={ownershipOptions}
@@ -182,7 +184,7 @@ const AgentsFilters = () => {
           placeholder="Search projects..."
         />
       </Show>
-    </div>
+    </>
   );
 };
 
@@ -201,7 +203,7 @@ const MailFilters = () => {
   const doneStatus = useFilterOptions(doneStatusOptions);
 
   return (
-    <div class="flex items-center gap-1.5">
+    <>
       <FilterSelect
         label="Read"
         options={readStatusOptions}
@@ -214,7 +216,7 @@ const MailFilters = () => {
         active={doneStatus.active()}
         onChange={doneStatus.onChange}
       />
-    </div>
+    </>
   );
 };
 
@@ -232,7 +234,7 @@ const DocumentsFilters = () => {
   const location = useFilterOptions(locationOptions);
 
   return (
-    <div class="flex items-center gap-1.5">
+    <>
       <FilterSelect
         label="Type"
         options={typeOptions}
@@ -245,7 +247,7 @@ const DocumentsFilters = () => {
         active={location.active()}
         onChange={location.onChange}
       />
-    </div>
+    </>
   );
 };
 
@@ -352,7 +354,7 @@ const TasksFilters = () => {
   };
 
   return (
-    <div class="flex items-center gap-1.5">
+    <>
       <FilterSelect
         label="Status"
         options={statusOptions}
@@ -374,7 +376,7 @@ const TasksFilters = () => {
         active={priority.active()}
         onChange={priority.onChange}
       />
-    </div>
+    </>
   );
 };
 
@@ -387,14 +389,12 @@ const ChannelsFilters = () => {
   const visibility = useFilterOptions(visibilityOptions);
 
   return (
-    <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label="Visibility"
-        options={visibilityOptions}
-        active={visibility.active()}
-        onChange={visibility.onChange}
-      />
-    </div>
+    <FilterSelect
+      label="Visibility"
+      options={visibilityOptions}
+      active={visibility.active()}
+      onChange={visibility.onChange}
+    />
   );
 };
 
@@ -409,13 +409,11 @@ const FilesFilters = () => {
   const fileType = useFilterOptions(fileTypeOptions);
 
   return (
-    <div class="flex items-center gap-1.5">
-      <FilterChipGroup
-        options={fileTypeOptions}
-        active={fileType.active()}
-        onChange={fileType.onChange}
-      />
-    </div>
+    <FilterChipGroup
+      options={fileTypeOptions}
+      active={fileType.active()}
+      onChange={fileType.onChange}
+    />
   );
 };
 
@@ -590,6 +588,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
 
   return (
     <Combobox<Option>
+      class="max-h-full"
       multiple
       options={filteredOptions()}
       value={activeFilters()}
@@ -603,7 +602,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
       allowsEmptyCollection
       placement="bottom-start"
       gutter={4}
-      defaultFilter={() => true}
+      triggerMode="focus"
       itemComponent={(itemProps) => (
         <Combobox.Item
           item={itemProps.item}
@@ -629,8 +628,8 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
         </Combobox.Item>
       )}
     >
-      <Combobox.Control class="flex items-start gap-1 px-1.5 py-1 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 transition-all max-h-[76px]">
-        <div class="flex flex-wrap items-center gap-1 flex-1 max-h-[60px] overflow-y-auto">
+      <Combobox.Control class="max-h-8 flex items-start gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 transition-all overflow-hidden">
+        <div class="flex flex-wrap items-center gap-1 flex-1 overflow-auto">
           <For each={activeFilters()}>
             {(option) => (
               <span class="flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
@@ -641,9 +640,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
                     </span>
                   )}
                 </Show>
-                <span class="font-medium max-w-[80px] truncate">
-                  {option.label}
-                </span>
+                <span class="font-medium  truncate">{option.label}</span>
                 <button
                   type="button"
                   class="size-3.5 flex items-center justify-center rounded-full hover:bg-ink/20 transition-colors"
@@ -678,7 +675,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
             <XIcon class="size-2.5" />
           </button>
         </Show>
-        <ChevronDownIcon class="size-3 shrink-0 mt-1" />
+        <ChevronDownIcon class="size-4" />
       </Combobox.Control>
 
       <Combobox.Portal>

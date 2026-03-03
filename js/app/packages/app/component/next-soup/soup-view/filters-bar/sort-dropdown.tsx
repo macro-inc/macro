@@ -35,7 +35,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <DropdownMenu.Trigger class="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink transition-all">
+      <DropdownMenu.Trigger class="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink transition-all whitespace-nowrap">
         <Show when={currentOption()?.icon}>
           {(icon) => (
             <span class="size-3.5 flex items-center justify-center shrink-0">
