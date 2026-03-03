@@ -191,6 +191,8 @@ async fn delete_user(
     );
 
     // Delete user notifications directly from the database
+    // TODO: technically we should be calling into the notification service here
+    // but since the service method would just be a straight passthrough to the repo, this is simpler than plumbing the entire service down
     tokio::spawn(
         {
             let user_infos = user_infos.clone();
