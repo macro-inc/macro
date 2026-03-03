@@ -18,6 +18,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
@@ -113,35 +114,35 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <LogoIcon class="size-6 text-accent" />
           <div class="flex items-center gap-1">
             <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
-              <button
-                type="button"
-                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              <Button
+                variant="tertiary"
+                size="icon-sm"
                 onClick={handleSearchClick}
               >
-                <SearchIcon class="size-3.5" />
-              </button>
+                <SearchIcon />
+              </Button>
             </Tooltip>
             <Tooltip
               tooltip={<LabelAndHotKey label="Command palette" shortcut="⌘K" />}
             >
-              <button
-                type="button"
-                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              <Button
+                variant="tertiary"
+                size="icon-sm"
                 onClick={handleCommandPaletteClick}
               >
-                <CommandIcon class="size-3.5" />
-              </button>
+                <CommandIcon />
+              </Button>
             </Tooltip>
             <Tooltip
               tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
             >
-              <button
-                type="button"
-                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+              <Button
+                variant="tertiary"
+                size="icon-sm"
                 onClick={handleCreateClick}
               >
-                <PlusIcon class="size-3.5" />
-              </button>
+                <PlusIcon />
+              </Button>
             </Tooltip>
           </div>
         </div>

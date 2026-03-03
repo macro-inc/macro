@@ -10,6 +10,7 @@ import FileIcon from '@icon/regular/file.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import {
   batch,
   createMemo,
@@ -512,10 +513,11 @@ const FilterSelect = (props: FilterSelectProps) => {
       itemComponent={renderItem}
     >
       <KSelect.Trigger
-        as="button"
-        type="button"
+        as={Button}
+        variant="secondary"
+        size="sm"
         class={cn(
-          'relative flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border border-transparent transition-all',
+          'relative transition-none',
           hasActiveFilters() &&
             'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
         )}
@@ -531,14 +533,15 @@ const FilterSelect = (props: FilterSelectProps) => {
       <KSelect.Portal>
         <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[var(--kb-popper-anchor-width)] p-1">
           <KSelect.Listbox />
-          <div class="w-full py-1 px-2 flex items-center border-t border-t-edge-muted">
-            <button
-              type="button"
-              class="ml-auto text-xs hover:bg-accent hover:text-page font-medium py-1 px-2 rounded-md"
+          <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
+            <Button
+              variant="primary"
+              size="sm"
+              class="ml-auto"
               onClick={() => props.onChange([])}
             >
               Clear
-            </button>
+            </Button>
           </div>
         </KSelect.Content>
       </KSelect.Portal>
@@ -672,7 +675,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
         </Combobox.Item>
       )}
     >
-      <Combobox.Control class="max-h-8 flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md bg-ink/8 text-ink-muted hover:bg-ink/12 transition-all overflow-hidden">
+      <Combobox.Control class="flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-transparent text-ink-muted border border-edge hover:bg-ink/8 hover:text-ink transition-all overflow-hidden">
         <Show when={showIcons() && hasActiveFilters()}>
           {/* Icons stacked on top of each other with offset */}
           <div
