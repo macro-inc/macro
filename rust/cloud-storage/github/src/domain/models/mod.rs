@@ -194,10 +194,8 @@ impl GithubWebhookEventType {
 /// Regex matching `MACRO-{short_uuid}` (case-insensitive).
 /// The capture group contains only the Flickr base58 short UUID portion.
 static MACRO_TASK_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)macro-([123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]+)",
-    )
-    .expect("valid regex")
+    Regex::new(r"(?i)macro-([123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]+)")
+        .expect("valid regex")
 });
 
 /// A Macro task ID in the form `MACRO-{short_uuid}`.
@@ -249,10 +247,10 @@ impl MacroTaskId {
 
         for caps in MACRO_TASK_ID_RE.captures_iter(text) {
             let short = &caps[1];
-            if seen.insert(short.to_string()) {
-                if let Some(task_id) = Self::from_short_uuid(short) {
-                    results.push(task_id);
-                }
+            if seen.insert(short.to_string())
+                && let Some(task_id) = Self::from_short_uuid(short)
+            {
+                results.push(task_id);
             }
         }
 

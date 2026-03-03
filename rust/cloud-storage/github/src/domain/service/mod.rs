@@ -1,5 +1,8 @@
 //! Github service implementation.
 
+#[cfg(test)]
+mod test;
+
 use chrono::Utc;
 use macro_user_id::{
     lowercased::Lowercase,
@@ -7,7 +10,9 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{GithubError, GithubLink, ValidatedGithubWebhookEvent},
+    models::{
+        GithubError, GithubLink, GithubWebhookEventType, MacroTaskId, ValidatedGithubWebhookEvent,
+    },
     ports::{Auth, GithubOauth, GithubRepo, GithubService},
 };
 
@@ -191,11 +196,42 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         &self,
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> Result<(), GithubError> {
-        tracing::trace!(
-            event_type=%webhook_event.event_type,
-            webhook_event=?webhook_event.payload,
-            "processing event"
-        );
+        let event_type = webhook_event.parsed_event_type();
+        tracing::info!(event_type=?event_type, "processing github webhook event");
+
+        if let GithubWebhookEventType::Unknown(ref name) = event_type {
+            tracing::debug!(event_type=%name, "skipping unknown event type");
+            return Ok(());
+        }
+
+        let searchable_texts = webhook_event.extract_searchable_text();
+        let combined = searchable_texts.join(" ");
+        let task_ids = MacroTaskId::extract_from_text(&combined);
+
+        if task_ids.is_empty() {
+            tracing::debug!(event_type=?event_type, "no task IDs found in event");
+            return Ok(());
+        }
+
+        for task_id in &task_ids {
+            match task_id.to_uuid() {
+                Ok(uuid) => {
+                    tracing::info!(
+                        task_id=%task_id,
+                        uuid=%uuid,
+                        event_type=?event_type,
+                        "detected macro task ID in github event"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        task_id=%task_id,
+                        error=?e,
+                        "failed to convert task ID to UUID"
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
