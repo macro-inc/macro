@@ -8,7 +8,7 @@ function createEmailNotification(
   return {
     id: 'notif-1',
     entity_id: 'thread-1',
-    entity_type: 'email',
+    entity_type: 'email_thread',
     created_at: new Date().toISOString(),
     updated_at: null,
     viewed_at: null,

@@ -3,6 +3,7 @@ import { createStore } from 'solid-js/store';
 import type { EntityType, StreamEvent } from './generated/schemas';
 import { isStreamEntity } from './stream';
 import { createConnectionWebsocketEffect, ws } from './websocket';
+import { EntityData } from '@entity';
 
 const [streamState, setStreamState] = createStore<Record<string, StreamEvent>>(
   {}
@@ -27,7 +28,7 @@ export function getStreamState(
 
 export function subscribeToStreamState(
   entity_id: string,
-  entity_type: EntityType
+  entity_type: EntityData["type"]
 ) {
   if (!isStreamEntity(entity_type) || subscribed.has(entity_id)) return;
   subscribed.add(entity_id);
