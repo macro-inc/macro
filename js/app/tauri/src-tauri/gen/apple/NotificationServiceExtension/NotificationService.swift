@@ -1,4 +1,5 @@
 import UserNotifications
+import Intents
 
 final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
@@ -16,35 +17,137 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        guard let payload = request.content.userInfo["payload"] as? [String: Any],
-              let urlString = payload["senderProfilePictureUrl"] as? String,
+        // Debug: Log the raw userInfo
+        NSLog("NotificationServiceExtension: Raw userInfo: \(request.content.userInfo)")
+
+        guard let urlString = request.content.userInfo["senderProfilePictureUrl"] as? String,
               let url = URL(string: urlString)
         else {
+            NSLog("NotificationServiceExtension: Failed to extract URL. senderProfilePictureUrl exists: \(request.content.userInfo["senderProfilePictureUrl"] != nil)")
             contentHandler(content)
             return
         }
 
-        URLSession.shared.downloadTask(with: url) { location, _, error in
-            defer { contentHandler(content) }
+        // Extract sender name from the notification title
+        let senderName = content.title
 
-            guard let location = location, error == nil else { return }
+        NSLog("NotificationServiceExtension: Downloading image from: \(urlString)")
+
+        URLSession.shared.downloadTask(with: url) { location, response, error in
+            if let error = error {
+                NSLog("NotificationServiceExtension: Download error: \(error.localizedDescription)")
+                contentHandler(content)
+                return
+            }
+
+            guard let location = location else {
+                NSLog("NotificationServiceExtension: No location returned")
+                contentHandler(content)
+                return
+            }
+
+            NSLog("NotificationServiceExtension: Downloaded to: \(location)")
 
             let tempDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try? FileManager.default.createDirectory(
-                at: tempDir,
-                withIntermediateDirectories: true
-            )
-            let fileURL = tempDir.appendingPathComponent("profile.jpg")
-            try? FileManager.default.moveItem(at: location, to: fileURL)
 
-            if let attachment = try? UNNotificationAttachment(
-                identifier: "sender-profile-picture",
-                url: fileURL
-            ) {
-                content.attachments = [attachment]
+            do {
+                try FileManager.default.createDirectory(
+                    at: tempDir,
+                    withIntermediateDirectories: true
+                )
+            } catch {
+                NSLog("NotificationServiceExtension: Failed to create temp dir: \(error)")
+                contentHandler(content)
+                return
+            }
+
+            let fileURL = tempDir.appendingPathComponent("profile.jpg")
+
+            do {
+                try FileManager.default.moveItem(at: location, to: fileURL)
+                NSLog("NotificationServiceExtension: Moved file to: \(fileURL)")
+            } catch {
+                NSLog("NotificationServiceExtension: Failed to move file: \(error)")
+                contentHandler(content)
+                return
+            }
+
+            // Create a communication notification with the sender's avatar on the left (iOS 15+)
+            // No-op for iOS 14 (feature not supported)
+            if #available(iOS 15.0, *) {
+                self.configureCommunicationNotification(
+                    content: content,
+                    senderName: senderName,
+                    avatarURL: fileURL,
+                    contentHandler: contentHandler
+                )
+            } else {
+                // iOS 14: just deliver the notification without profile picture
+                contentHandler(content)
             }
         }.resume()
+    }
+
+    @available(iOS 15.0, *)
+    private func configureCommunicationNotification(
+        content: UNMutableNotificationContent,
+        senderName: String,
+        avatarURL: URL,
+        contentHandler: @escaping (UNNotificationContent) -> Void
+    ) {
+        // Create a unique identifier for the sender
+        let handle = INPersonHandle(value: senderName, type: .unknown)
+
+        // Load the avatar image
+        var personImage: INImage? = nil
+        if let imageData = try? Data(contentsOf: avatarURL) {
+            personImage = INImage(imageData: imageData)
+        }
+
+        // Create the sender person
+        let sender = INPerson(
+            personHandle: handle,
+            nameComponents: nil,
+            displayName: senderName,
+            image: personImage,
+            contactIdentifier: nil,
+            customIdentifier: senderName
+        )
+
+        // Create a send message intent
+        let intent = INSendMessageIntent(
+            recipients: nil,
+            outgoingMessageType: .outgoingMessageText,
+            content: content.body,
+            speakableGroupName: nil,
+            conversationIdentifier: senderName,
+            serviceName: nil,
+            sender: sender,
+            attachments: nil
+        )
+
+        // Set the sender's image for the intent
+        intent.setImage(personImage, forParameterNamed: \.sender)
+
+        // Create an interaction and donate it
+        let interaction = INInteraction(intent: intent, response: nil)
+        interaction.direction = .incoming
+        interaction.donate { error in
+            if let error = error {
+                NSLog("NotificationServiceExtension: Failed to donate interaction: \(error)")
+            }
+        }
+
+        // Update the notification content with the intent
+        do {
+            let updatedContent = try content.updating(from: intent)
+            NSLog("NotificationServiceExtension: Successfully created communication notification")
+            contentHandler(updatedContent)
+        } catch {
+            NSLog("NotificationServiceExtension: Failed to update content with intent: \(error)")
+            contentHandler(content)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
