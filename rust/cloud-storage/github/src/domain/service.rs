@@ -163,6 +163,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
     #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(
         &self,
+        event_type: &str,
         signature: &str,
         body: &[u8],
     ) -> Result<ValidatedGithubWebhookEvent, GithubError> {
@@ -177,6 +178,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         // constant-time comparison
         if expected.as_slice().ct_eq(&sig_bytes).into() {
             Ok(ValidatedGithubWebhookEvent::new(
+                event_type.to_string(),
                 serde_json::from_slice(body).map_err(|e| GithubError::Internal(e.into()))?,
             ))
         } else {
@@ -189,7 +191,11 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
         &self,
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> Result<(), GithubError> {
-        tracing::trace!(webhook_event=?webhook_event.0, "processing event");
+        tracing::trace!(
+            event_type=%webhook_event.event_type,
+            webhook_event=?webhook_event.payload,
+            "processing event"
+        );
 
         Ok(())
     }

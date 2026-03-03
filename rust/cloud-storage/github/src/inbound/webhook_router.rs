@@ -53,6 +53,12 @@ where
     ) -> Result<Self, Self::Rejection> {
         let (parts, body) = req.into_parts();
 
+        let event_type = parts
+            .headers
+            .get("X-GitHub-Event")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown");
+
         let signature = parts
             .headers
             .get("X-Hub-Signature-256")
@@ -66,7 +72,7 @@ where
 
         let event = state
             .service
-            .validate_webhook_event(signature, &body)
+            .validate_webhook_event(event_type, signature, &body)
             .await?;
 
         Ok(GithubWebhookEventExtractor(event))

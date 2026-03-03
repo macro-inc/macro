@@ -86,11 +86,19 @@ pub struct GithubUserInfo {
 
 /// A validated github webhook event
 #[derive(Debug)]
-pub struct ValidatedGithubWebhookEvent(pub serde_json::Value);
+pub struct ValidatedGithubWebhookEvent {
+    /// The event type from the `X-GitHub-Event` header
+    pub event_type: String,
+    /// The parsed JSON payload
+    pub payload: serde_json::Value,
+}
 
 impl ValidatedGithubWebhookEvent {
     /// Create a new ValidatedGithubWebhookEvent
-    pub fn new(value: serde_json::Value) -> Self {
-        Self(value)
+    pub fn new(event_type: String, payload: serde_json::Value) -> Self {
+        Self {
+            event_type,
+            payload,
+        }
     }
 }

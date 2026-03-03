@@ -130,6 +130,7 @@ pub trait GithubService: Send + Sync + 'static {
     /// Validates the incoming webhook event and returns back the `ValidatedGithubWebhookEvent`
     fn validate_webhook_event(
         &self,
+        event_type: &str,
         signature: &str,
         body: &[u8],
     ) -> impl Future<Output = Result<ValidatedGithubWebhookEvent, GithubError>> + Send;
