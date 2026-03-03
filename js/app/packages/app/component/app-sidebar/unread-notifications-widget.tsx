@@ -270,7 +270,7 @@ export const UnreadNotificationsWidget = () => {
 
   return (
     <section class="w-full h-full border-b border-b-edge-muted flex flex-col">
-      <header class="flex items-center justify-between py-1 px-2 border-y border-y-edge-muted">
+      <header class="flex items-center justify-between py-1 px-2">
         <h1 class="text-sm font-medium text-ink-muted tracking-wide">
           Notifications
         </h1>
@@ -278,7 +278,7 @@ export const UnreadNotificationsWidget = () => {
           {filteredNotifications().length}
         </span>
       </header>
-      <div class="flex-1 overflow-y-auto py-1 px-2">
+      <div class="flex-1 overflow-y-auto pb-2 px-2">
         <For
           each={filteredNotifications()}
           fallback={
