@@ -51,7 +51,7 @@ import {
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import type {
-  MessageToSendDbId,
+  ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
@@ -320,7 +320,7 @@ export function BaseInput(props: {
   draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
-  sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -379,7 +379,7 @@ export function BaseInput(props: {
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
-    MessageToSendDbId | undefined
+    ApiDraftOutputDbId | undefined
   >(
     props.draft?.db_id ??
       (undoReplySnapshot?.threadId === ctx.thread()?.db_id

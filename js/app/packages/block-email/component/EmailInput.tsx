@@ -1,6 +1,6 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import type {
-  MessageToSendDbId,
+  ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
@@ -24,7 +24,7 @@ export function EmailInput(props: EmailInputProps) {
     return decodedHtml;
   });
 
-  function afterSend(newMessageId: MessageToSendDbId | null) {
+  function afterSend(newMessageId: ApiDraftOutputDbId | null) {
     // Refresh to get the new message
     ctx.query.refetch();
 
