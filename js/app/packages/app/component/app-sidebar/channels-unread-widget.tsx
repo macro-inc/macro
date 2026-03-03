@@ -167,8 +167,10 @@ export const ChannelsUnreadWidget = () => {
   });
 
   return (
-    <div class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-      <div class="text-xs font-medium text-ink-muted tracking-wide">Unread</div>
+    <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
+      <header class="text-xs font-medium text-ink-muted tracking-wide">
+        <h1>Unread</h1>
+      </header>
 
       <div class="flex-1 overflow-y-auto">
         <For
@@ -178,6 +180,6 @@ export const ChannelsUnreadWidget = () => {
           {(group) => <ChannelGroupItem group={group} animate={false} />}
         </For>
       </div>
-    </div>
+    </section>
   );
 };

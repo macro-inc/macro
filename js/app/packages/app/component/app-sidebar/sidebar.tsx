@@ -2,7 +2,6 @@ import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
-import SlidersIcon from '@phosphor-icons/core/regular/sliders.svg?component-solid';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
@@ -20,13 +19,8 @@ import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { UnreadWidget } from '@app/component/app-sidebar/unread-widget';
+import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
-
-type UnreadWidgetType = 'channels' | 'all' | 'none';
-
-const [activeUnreadWidget, setActiveUnreadWidget] =
-  createSignal<UnreadWidgetType>('channels');
 
 interface SidebarItem {
   label: string;
@@ -129,7 +123,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               <PlusIcon class="size-3.5" />
             </button>
           </Tooltip>
-          <UnreadWidgetSelector />
         </div>
       </div>
       <nav>
@@ -143,82 +136,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </For>
         </ul>
       </nav>
-      {/* Unread Widget Section */}
-      <Show when={activeUnreadWidget() === 'channels'}>
-        <div class="block max-h-[clamp(10%,60%,20rem)]">
-          <ChannelsUnreadWidget />
-        </div>
-      </Show>
+      <div class="block max-h-[clamp(10%,60%,20rem)]">
+        <ChannelsUnreadWidget />
+      </div>
 
-      {/* Spacer to push UnreadWidget to bottom */}
-      <Show when={activeUnreadWidget() === 'all'}>
-        <div class="flex-1" />
-      </Show>
-
-      <Show when={activeUnreadWidget() === 'all'}>
-        <div class="block max-h-[clamp(10%,60%,20rem)] border-t border-t-edge-muted">
-          <UnreadWidget />
-        </div>
-      </Show>
-    </div>
-  );
-};
-
-/** Debug dropdown to switch between unread widget types */
-const UnreadWidgetSelector = () => {
-  const [isOpen, setIsOpen] = createSignal(false);
-
-  const options: { value: UnreadWidgetType; label: string }[] = [
-    { value: 'channels', label: 'Channels' },
-    { value: 'all', label: 'All Notifications' },
-    { value: 'none', label: 'None' },
-  ];
-
-  return (
-    <div class="relative">
-      <Tooltip tooltip="Widget selector">
-        <button
-          type="button"
-          onClick={() => setIsOpen((p) => !p)}
-          class={cn(
-            'flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors',
-            isOpen() && 'bg-ink/20 text-ink'
-          )}
-        >
-          <SlidersIcon class="size-3.5" />
-        </button>
-      </Tooltip>
-
-      <Show when={isOpen()}>
-        {/* Backdrop */}
-        <div class="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-
-        {/* Dropdown */}
-        <div class="absolute top-full right-0 mt-1 w-40 bg-panel border border-edge-muted rounded shadow-lg z-20">
-          <div class="px-2 py-1.5 text-xs text-ink-muted border-b border-edge-muted">
-            Unread Widget
-          </div>
-          <For each={options}>
-            {(option) => (
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveUnreadWidget(option.value);
-                  setIsOpen(false);
-                }}
-                class={cn(
-                  'w-full px-2 py-1.5 text-xs text-left hover:bg-ink/10 transition-colors last:rounded-b',
-                  activeUnreadWidget() === option.value
-                    ? 'text-accent font-medium'
-                    : 'text-ink-muted'
-                )}
-              >
-                {option.label}
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
+      <div class="block max-h-[clamp(10%,60%,20rem)] border-t border-t-edge-muted mt-auto">
+        <UnreadNotificationsWidget />
+      </div>
     </div>
   );
 };

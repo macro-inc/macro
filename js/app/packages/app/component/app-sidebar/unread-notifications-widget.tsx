@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { EntityType, NotificationType } from '@core/types';
 import type { UnifiedNotification } from '@notifications/types';
-import { For, Show, createSignal, onMount } from 'solid-js';
+import { For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   EntityIcon,
@@ -260,21 +260,36 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
   );
 }
 
-export const UnreadWidget = () => {
+export const UnreadNotificationsWidget = () => {
   const notificationSource = useGlobalNotificationSource();
 
   const allNotifications = () => [...notificationSource.notifications()];
-  const filteredNotifications = () => filterUnreadNotDone(allNotifications());
+  const filteredNotifications = createMemo(() =>
+    filterUnreadNotDone(allNotifications())
+  );
 
   return (
-    <div class="w-full h-full border-y border-y-edge-muted flex flex-col">
-      <div class="flex-1 overflow-y-auto">
-        <For each={filteredNotifications()}>
+    <section class="w-full h-full border-b border-b-edge-muted flex flex-col">
+      <header class="flex items-center justify-between py-1 px-2 border-y border-y-edge-muted">
+        <h1 class="text-sm font-medium text-ink-muted tracking-wide">
+          Notifications
+        </h1>
+        <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded">
+          {filteredNotifications().length}
+        </span>
+      </header>
+      <div class="flex-1 overflow-y-auto py-1 px-2">
+        <For
+          each={filteredNotifications()}
+          fallback={
+            <span class="text-ink/80 text-xs">No new notifications</span>
+          }
+        >
           {(notification) => (
             <NotificationItem notification={notification} animate={false} />
           )}
         </For>
       </div>
-    </div>
+    </section>
   );
 };
