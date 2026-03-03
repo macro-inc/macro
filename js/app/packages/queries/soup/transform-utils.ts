@@ -20,7 +20,6 @@ import type {
   EmailEntity,
   ChannelEntity,
 } from '@entity';
-import { useHistoryQuery } from '@queries/history/history';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
   DocumentSearchResult,
@@ -165,8 +164,6 @@ export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
 
-  const historyQuery = useHistoryQuery();
-
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
@@ -241,19 +238,10 @@ export const useSearchResponseItemMapper = () => {
         const search = getSearchData({
           results: result.chat_search_results,
         });
-        let name = result.name;
-        if (!name || name === blockNameToDefaultFile('chat')) {
-          const chat = (historyQuery.data ?? []).find(
-            (item) => item.id === result.chat_id
-          );
-          if (chat) {
-            name = chat.name;
-          }
-        }
         return {
           type: 'chat',
           id: result.chat_id,
-          name,
+          name: result.name,
           ownerId: result.user_id,
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,

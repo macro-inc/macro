@@ -57,7 +57,7 @@ export function setHistoryItemName(itemId: string, name: string) {
   }));
 }
 
-const historyQueryOptions = queryOptions({
+export const historyQueryOptions = queryOptions({
   queryKey: historyKeys.list.queryKey,
   queryFn: async (): Promise<HistoryQueryFnResult> => {
     const result = await throwOnErr(
@@ -78,6 +78,7 @@ export function useHistoryQuery() {
 
   return baseQuery;
 }
+
 
 export async function prefetchHistory() {
   void (await catchToResult(
