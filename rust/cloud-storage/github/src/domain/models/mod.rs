@@ -109,6 +109,86 @@ impl ValidatedGithubWebhookEvent {
             payload,
         }
     }
+
+    /// Parse the raw event type string into a [`GithubWebhookEventType`].
+    pub fn parsed_event_type(&self) -> GithubWebhookEventType {
+        GithubWebhookEventType::from_event_header(&self.event_type)
+    }
+
+    /// Extract all text fields worth searching for task IDs, based on event type.
+    pub fn extract_searchable_text(&self) -> Vec<String> {
+        let mut texts = Vec::new();
+        match self.parsed_event_type() {
+            GithubWebhookEventType::PullRequest => {
+                if let Some(pr) = self.payload.get("pull_request") {
+                    if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
+                        texts.push(s.to_string());
+                    }
+                    if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
+                        texts.push(s.to_string());
+                    }
+                    if let Some(s) = pr
+                        .get("head")
+                        .and_then(|h| h.get("ref"))
+                        .and_then(|v| v.as_str())
+                    {
+                        texts.push(s.to_string());
+                    }
+                }
+            }
+            GithubWebhookEventType::IssueComment
+            | GithubWebhookEventType::PullRequestReviewComment => {
+                if let Some(s) = self
+                    .payload
+                    .get("comment")
+                    .and_then(|c| c.get("body"))
+                    .and_then(|v| v.as_str())
+                {
+                    texts.push(s.to_string());
+                }
+            }
+            GithubWebhookEventType::PullRequestReview => {
+                if let Some(s) = self
+                    .payload
+                    .get("review")
+                    .and_then(|r| r.get("body"))
+                    .and_then(|v| v.as_str())
+                {
+                    texts.push(s.to_string());
+                }
+            }
+            GithubWebhookEventType::Unknown(_) => {}
+        }
+        texts
+    }
+}
+
+/// Known GitHub webhook event types we handle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GithubWebhookEventType {
+    /// `pull_request` events
+    PullRequest,
+    /// `issue_comment` events (includes comments on PRs)
+    IssueComment,
+    /// `pull_request_review` events
+    PullRequestReview,
+    /// `pull_request_review_comment` events
+    PullRequestReviewComment,
+    /// Any event type we don't handle
+    Unknown(String),
+}
+
+impl GithubWebhookEventType {
+    /// Map the raw `X-GitHub-Event` header value to a variant.
+    pub fn from_event_header(s: &str) -> Self {
+        match s {
+            "pull_request" => Self::PullRequest,
+            "issue_comment" => Self::IssueComment,
+            "pull_request_review" => Self::PullRequestReview,
+            "pull_request_review_comment" => Self::PullRequestReviewComment,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
 }
 
 /// Regex matching `MACRO-{short_uuid}` (case-insensitive).

@@ -111,3 +111,133 @@ fn extract_multiple_in_sentence() {
     assert_eq!(ids[0].short_uuid, "aaa111");
     assert_eq!(ids[1].short_uuid, "bbb222");
 }
+
+// ---------------------------------------------------------------------------
+// GithubWebhookEventType::from_event_header
+// ---------------------------------------------------------------------------
+
+#[test]
+fn event_type_from_known_headers() {
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("pull_request"),
+        GithubWebhookEventType::PullRequest
+    );
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("issue_comment"),
+        GithubWebhookEventType::IssueComment
+    );
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("pull_request_review"),
+        GithubWebhookEventType::PullRequestReview
+    );
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("pull_request_review_comment"),
+        GithubWebhookEventType::PullRequestReviewComment
+    );
+}
+
+#[test]
+fn event_type_unknown() {
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("ping"),
+        GithubWebhookEventType::Unknown("ping".to_string())
+    );
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("push"),
+        GithubWebhookEventType::Unknown("push".to_string())
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ValidatedGithubWebhookEvent::extract_searchable_text
+// ---------------------------------------------------------------------------
+
+#[test]
+fn extract_text_pull_request() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "pull_request": {
+            "title": "fixes MACRO-abc123",
+            "body": "This PR closes MACRO-def456",
+            "head": {
+                "ref": "feature/macro-ghi789"
+            }
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 3);
+    assert_eq!(texts[0], "fixes MACRO-abc123");
+    assert_eq!(texts[1], "This PR closes MACRO-def456");
+    assert_eq!(texts[2], "feature/macro-ghi789");
+}
+
+#[test]
+fn extract_text_pull_request_null_body() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "pull_request": {
+            "title": "some title",
+            "body": null,
+            "head": {
+                "ref": "main"
+            }
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 2);
+    assert_eq!(texts[0], "some title");
+    assert_eq!(texts[1], "main");
+}
+
+#[test]
+fn extract_text_issue_comment() {
+    let payload = serde_json::json!({
+        "action": "created",
+        "comment": {
+            "body": "See MACRO-abc123 for details"
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("issue_comment".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0], "See MACRO-abc123 for details");
+}
+
+#[test]
+fn extract_text_pull_request_review() {
+    let payload = serde_json::json!({
+        "action": "submitted",
+        "review": {
+            "body": "Looks good, relates to MACRO-xyz789"
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request_review".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0], "Looks good, relates to MACRO-xyz789");
+}
+
+#[test]
+fn extract_text_pull_request_review_comment() {
+    let payload = serde_json::json!({
+        "action": "created",
+        "comment": {
+            "body": "This line relates to MACRO-abc123"
+        }
+    });
+    let event =
+        ValidatedGithubWebhookEvent::new("pull_request_review_comment".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0], "This line relates to MACRO-abc123");
+}
+
+#[test]
+fn extract_text_unknown_event() {
+    let payload = serde_json::json!({"zen": "Keep it logically awesome."});
+    let event = ValidatedGithubWebhookEvent::new("ping".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert!(texts.is_empty());
+}
