@@ -38,6 +38,7 @@ impl GithubService for MockGithubService {
 
     async fn validate_webhook_event(
         &self,
+        _event_type: &str,
         _signature: &str,
         _body: &[u8],
     ) -> Result<ValidatedGithubWebhookEvent, GithubError> {
