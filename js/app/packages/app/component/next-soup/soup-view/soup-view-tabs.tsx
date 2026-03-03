@@ -253,7 +253,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm border border-edge-muted rounded-sm p-0.5"
+      class="size-full text-sm border border-edge rounded-md p-0.5"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
