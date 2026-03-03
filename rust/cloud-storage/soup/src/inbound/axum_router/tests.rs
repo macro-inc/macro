@@ -107,6 +107,14 @@ impl EmailService for MockEmail {
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
+
+    async fn send_message(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 fn mock_router() -> Router {
@@ -181,6 +189,14 @@ impl EmailService for MockEmailLinkResult {
     }
 
     async fn create_draft(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn send_message(
         &self,
         _link: &email::domain::models::Link,
         _input: email::domain::models::CreateDraftInput,
