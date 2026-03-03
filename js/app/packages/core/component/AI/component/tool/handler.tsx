@@ -8,8 +8,7 @@ import {
   type ToolHandlerMap,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import { createStore } from 'solid-js/store';
-import { Dynamic, Show } from 'solid-js/web';
+import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { listEntitiesHandler } from './ListEntities';
 import { readHandler } from './Read';
@@ -18,10 +17,6 @@ import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import type { RenderContext } from './ToolRenderer';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
-
-const [renderStore, setRenderStore] = createStore<
-  Record<string, 'call' | 'response'>
->({});
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
@@ -59,7 +54,6 @@ export function RenderTool(props: ToolProps) {
     });
     if (isErr(maybeTool)) return null;
     const tool = maybeTool[1];
-    setRenderStore(props.tool_id, 'call');
     handler = toolHandlers[tool.name].call;
     const ctx: ToolContext<NamedTool<ToolName, 'call'>> = {
       chat_id: props.chat_id,
@@ -75,7 +69,6 @@ export function RenderTool(props: ToolProps) {
       json: props.json,
       name: props.name as ToolName,
     });
-    setRenderStore(props.tool_id, 'response');
     if (isErr(maybeTool)) return null;
     const tool = maybeTool[1];
     handler = toolHandlers[tool.name].response;
@@ -92,15 +85,13 @@ export function RenderTool(props: ToolProps) {
   }
 
   return (
-    <Show when={props.type === renderStore[props.tool_id]}>
-      <Dynamic
-        component={handler.render}
-        {...context}
-        renderContext={{
-          isStreaming: props.renderContext.renderContext.isStreaming,
-        }}
-      />
-    </Show>
+    <Dynamic
+      component={handler.render}
+      {...context}
+      renderContext={{
+        isStreaming: props.renderContext.renderContext.isStreaming,
+      }}
+    />
   );
 }
 
