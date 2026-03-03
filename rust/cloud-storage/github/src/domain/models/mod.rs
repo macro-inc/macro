@@ -1,6 +1,14 @@
 //! Domain models for the github crate.
 
+#[cfg(test)]
+mod test;
+
+use std::collections::HashSet;
+use std::fmt;
+use std::sync::LazyLock;
+
 use macro_user_id::user_id::MacroUserIdStr;
+use regex::Regex;
 use serde::Deserialize;
 
 /// Github access token
@@ -100,5 +108,80 @@ impl ValidatedGithubWebhookEvent {
             event_type,
             payload,
         }
+    }
+}
+
+/// Regex matching `MACRO-{short_uuid}` (case-insensitive).
+/// The capture group contains only the Flickr base58 short UUID portion.
+static MACRO_TASK_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)macro-([123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]+)",
+    )
+    .expect("valid regex")
+});
+
+/// A Macro task ID in the form `MACRO-{short_uuid}`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MacroTaskId {
+    /// The Flickr base58 short UUID portion
+    pub short_uuid: String,
+}
+
+impl MacroTaskId {
+    /// Create from a raw short UUID string, validating that all characters
+    /// are in the Flickr base58 alphabet.
+    pub fn from_short_uuid(s: &str) -> Option<Self> {
+        let converter = macro_uuid::ShortUuidConverter::default();
+        if converter.is_short_uuid(s) {
+            Some(Self {
+                short_uuid: s.to_string(),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Create from a full UUID by converting to a short UUID.
+    pub fn from_uuid(uuid: &uuid::Uuid) -> Self {
+        let converter = macro_uuid::ShortUuidConverter::default();
+        Self {
+            short_uuid: converter.from_uuid(uuid),
+        }
+    }
+
+    /// Convert back to a full UUID.
+    pub fn to_uuid(&self) -> anyhow::Result<uuid::Uuid> {
+        let converter = macro_uuid::ShortUuidConverter::default();
+        converter.to_uuid(&self.short_uuid)
+    }
+
+    /// Returns the canonical `MACRO-{short_uuid}` string.
+    pub fn to_task_id_string(&self) -> String {
+        format!("MACRO-{}", self.short_uuid)
+    }
+
+    /// Extract all unique `MACRO-{short_uuid}` references from text.
+    /// Matching is case-insensitive on the `MACRO-` prefix; the short UUID
+    /// portion is preserved as captured.
+    pub fn extract_from_text(text: &str) -> Vec<MacroTaskId> {
+        let mut seen = HashSet::new();
+        let mut results = Vec::new();
+
+        for caps in MACRO_TASK_ID_RE.captures_iter(text) {
+            let short = &caps[1];
+            if seen.insert(short.to_string()) {
+                if let Some(task_id) = Self::from_short_uuid(short) {
+                    results.push(task_id);
+                }
+            }
+        }
+
+        results
+    }
+}
+
+impl fmt::Display for MacroTaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MACRO-{}", self.short_uuid)
     }
 }

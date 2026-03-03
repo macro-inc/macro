@@ -4174,6 +4174,7 @@ dependencies = [
  "mockall",
  "model-error-response",
  "redis",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

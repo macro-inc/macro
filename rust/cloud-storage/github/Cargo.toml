@@ -9,9 +9,8 @@ default = ["ports", "inbound", "outbound", "axum"]
 ports = []
 inbound = ["axum", "ports"]
 outbound = [
-  "dep:sqlx", 
+  "dep:sqlx",
   "dep:reqwest",
-  "dep:serde_json",
   "dep:urlencoding",
   "dep:redis",
   "dep:tokio",
@@ -34,7 +33,8 @@ sqlx = { workspace = true, optional = true }
 uuid = { workspace = true }
 serde = { workspace = true}
 reqwest = {workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
 urlencoding = { workspace = true, optional = true }
 entity_access = { path = "../entity_access" }
 hmac = "0.12.1"
