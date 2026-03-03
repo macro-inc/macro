@@ -8,12 +8,12 @@ import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { A } from '@solidjs/router';
+import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import PlusIcon from '@macro-icons/wide/plus.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
-import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
@@ -21,8 +21,10 @@ import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 interface SidebarItem {
+  id: ListView;
   label: string;
   href: string;
   icon?: Component<
@@ -32,36 +34,43 @@ interface SidebarItem {
 
 export const SIDEBAR_LINKS = [
   {
+    id: 'inbox',
     label: 'Inbox',
     href: LIST_VIEW_PATHS.inbox,
     icon: TrayIcon,
   },
   {
+    id: 'agents',
     label: 'Agents',
     href: LIST_VIEW_PATHS.agents,
     icon: AnimatedChatIcon,
   },
   {
+    id: 'mail',
     label: 'Email',
     href: LIST_VIEW_PATHS.mail,
     icon: AnimatedEmailIcon,
   },
   {
+    id: 'documents',
     label: 'Documents',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
   },
   {
+    id: 'tasks',
     label: 'Tasks',
     href: LIST_VIEW_PATHS.tasks,
     icon: AnimatedTaskIcon,
   },
   {
+    id: 'channels',
     label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
   },
   {
+    id: 'files',
     label: 'Files',
     href: LIST_VIEW_PATHS.files,
     icon: AnimatedFolderIcon,
@@ -153,15 +162,32 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   const layout = useSplitLayout();
+  const layoutManager = globalSplitManager();
+
+  const location = useLocation();
+
+  const isActive = () => {
+    const activeContent = layoutManager?.activeSplit()?.content();
+
+    // In case we can't match on the active split, use the url path to determine
+    // if this link is active
+    if (!activeContent) {
+      const paths = location.pathname.split('/').filter(Boolean);
+      return paths.includes(props.id);
+    }
+
+    return activeContent?.id === props.id;
+  };
 
   return (
-    <A
-      class="w-full px-2 py-1 rounded-md flex items-center gap-2 text-sm hover:text-ink transition-colors"
+    <a
+      class={cn(
+        'w-full px-2 py-1 rounded-md flex items-center gap-2 text-sm text-ink/70 hover:bg-ink/10 active:bg-ink/15 hover:text-ink transition-colors',
+        isActive() && 'bg-ink/10 text-white'
+      )}
       href={`/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      activeClass="bg-ink/10 text-white"
-      inactiveClass="text-ink/70 hover:bg-ink/10 active:bg-ink/15"
       onClick={(e) => {
         // Middle mouse handling
         if (e.button === 1) return;
@@ -184,6 +210,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
         </div>
       </Show>
       {props.label}
-    </A>
+    </a>
   );
 };
