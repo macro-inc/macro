@@ -1,92 +1,97 @@
-import type { JSX } from 'solid-js';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import {
-  NODE_TRANSFORM,
-  type NodeTransformType,
-} from '@core/component/LexicalMarkdown/plugins';
-import { FORMAT_TEXT_COMMAND, type TextFormatType } from 'lexical';
 import { isMobile } from '@core/mobile/isMobile';
 import { Input } from './Input';
 import { FormattingRibbon } from './FormattingRibbon';
-import { createConfiguredChannelMarkdownEditor } from './createConfiguredChannelMarkdownEditor';
+import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
+import { createInputAttachmentTracker } from './attachment-tracker';
+import { createInputState } from './create-input-state';
+import { createMentionsTracker } from './mentions-tracker';
 import type {
-  InputActions,
-  InputAttachmentKind,
-  InputAttachmentTracker,
+  InputCallbacks,
   InputData,
+  InputDraftAdapter,
+  InputHandle,
 } from './types';
+import { applyInlineFormat, applyNodeFormat } from './formatting';
 
-type ChannelInputProps = {
+type ChannelInputProps = InputCallbacks & {
   input: InputData;
-  actions: InputActions;
-  attachmentTracker: InputAttachmentTracker;
+  markdownNamespace?: string;
+  draft?: InputDraftAdapter;
+  onReady?: (handle: InputHandle) => void;
 };
 
 export function ChannelInput(props: ChannelInputProps) {
-  const markdownEditor = createConfiguredChannelMarkdownEditor({
-    namespace: 'channel-input-markdown',
-    enableMentions: true,
-    onChange: (markdown) => {
-      props.actions.onChange?.({
-        input: props.input,
-        value: markdown,
-      });
+  const mentionsTracker = createMentionsTracker();
+  const attachmentTracker = createInputAttachmentTracker({
+    initialAttachments: props.input.attachments,
+  });
+
+  const inputState = createInputState({
+    initialInput: props.input,
+    mentions: mentionsTracker.mentions,
+    attachmentTracker,
+    callbacks: {
+      onChange: props.onChange,
+      onSend: props.onSend,
+      onToggleAttachMenu: props.onToggleAttachMenu,
+      onToggleFormatRibbon: props.onToggleFormatRibbon,
+      onToggleTaskMode: props.onToggleTaskMode,
+      onCloseDraft: props.onCloseDraft,
+      onRemoveAttachment: props.onRemoveAttachment,
     },
-    onEnter: (event, markdown) => {
+    draft: props.draft,
+  });
+
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: props.markdownNamespace ?? 'channel-input-markdown',
+    enableMentions: true,
+    onMentionCreate: (mention) => {
+      mentionsTracker.onMentionCreate(mention);
+      inputState.notifyChange();
+    },
+    onMentionRemove: (mention) => {
+      mentionsTracker.onMentionRemove(mention);
+      inputState.notifyChange();
+    },
+    onChange: (markdown) => {
+      inputState.setValue(markdown);
+    },
+    onEnter: () => {
       if (isMobile()) return false;
-      props.actions.onSend?.({
-        input: props.input,
-        event,
-        value: markdown,
-      });
+      inputState.commands.send();
       return true;
     },
   });
 
-  const selection = () => markdownEditor.selection;
-  const selectionState = () => selection();
 
-  const applyInlineFormat = (format: TextFormatType) => {
-    try {
-      const editor = markdownEditor.lexical;
-      editor.focus();
-      editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-    } catch { }
-  };
-
-  const applyNodeFormat = (format: NodeTransformType) => {
-    try {
-      const editor = markdownEditor.lexical;
-      editor.focus();
-      editor.dispatchCommand(NODE_TRANSFORM, format);
-    } catch { }
-  };
+  props.onReady?.({
+    snapshot: inputState.snapshot,
+    clear: () => markdownEditor.controls.clear(),
+    focus: () => markdownEditor.controls.focus(),
+  });
 
   return (
-    <Input.Root
-      input={props.input}
-      actions={props.actions}
-      attachmentTracker={props.attachmentTracker}
-    >
+    <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Input.Layout>
         <Input.DropOverlay />
         <Input.FormatRibbon>
           <FormattingRibbon
-            selectionState={selectionState}
-            onInlineFormat={applyInlineFormat}
-            onNodeFormat={applyNodeFormat}
+            selectionState={() => markdownEditor.selection}
+            onInlineFormat={(format) => applyInlineFormat(markdownEditor.lexical, format)}
+            onNodeFormat={(format) => applyNodeFormat(markdownEditor.lexical, format)}
           />
         </Input.FormatRibbon>
         <Input.EditorShell
           onClick={(event) => {
             event.stopPropagation();
-              markdownEditor.controls.focus();
+            markdownEditor.controls.focus();
           }}
         >
           <Input.Editor>
             <MarkdownShell
               config={markdownEditor}
-              placeholder={props.input.placeholder}
+              placeholder={inputState.view().placeholder}
               initialValue={props.input.value}
               autofocus={!isMobile()}
               class="text-sm mobile:text-base"
@@ -96,11 +101,11 @@ export function ChannelInput(props: ChannelInputProps) {
         <Input.Attachments kind="video" />
         <Input.Attachments kind="image" />
         <Input.Attachments kind="document" />
-        <Input.TaskPreview>{/** ADD task preview component **/}</Input.TaskPreview>
+        <Input.TaskPreview>
+          {/** ADD task preview component **/}
+        </Input.TaskPreview>
         <Input.Footer>
-          <Input.AttachMenu>
-            {/** ADD Attach menu **/}
-          </Input.AttachMenu>
+          <Input.AttachMenu>{/** ADD Attach menu **/}</Input.AttachMenu>
           <Input.PrimaryActions />
           <Input.SendAction />
         </Input.Footer>

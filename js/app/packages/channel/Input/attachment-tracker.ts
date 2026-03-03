@@ -1,5 +1,15 @@
-import { createMemo, createSignal } from 'solid-js';
-import type { InputAttachmentData, InputAttachmentTracker } from './types';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
+import type { InputAttachmentData } from './types';
+
+export type InputAttachmentTracker = {
+  attachments: Accessor<InputAttachmentData[]>;
+  hasPending: Accessor<boolean>;
+  addAttachment: (attachment: InputAttachmentData) => void;
+  removeAttachment: (attachmentId: string) => void;
+  setAttachmentPending: (attachmentId: string, pending: boolean) => void;
+  setAttachments: (attachments: InputAttachmentData[]) => void;
+  clearAttachments: () => void;
+};
 
 type CreateInputAttachmentTrackerOptions = {
   initialAttachments?: InputAttachmentData[];

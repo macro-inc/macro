@@ -1,10 +1,6 @@
 import { For, Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import {
-  useInput,
-  useInputActions,
-  useInputAttachmentTracker,
-} from './context';
+import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 import XIcon from '@icon/regular/x.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
@@ -16,22 +12,19 @@ type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
 
 export function Attachments(props: AttachmentsProps) {
   const input = useInput();
-  const actions = useInputActions();
-  const attachmentTracker = useInputAttachmentTracker();
+  const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
 
   const visibleAttachments = () => {
-    const items = attachmentTracker?.attachments() ?? input().attachments ?? [];
+    const items = input().attachments ?? [];
     if (!local.kind) return items;
     return items.filter((attachment) => attachment.kind === local.kind);
   };
 
   const handleRemove = (
-    event: MouseEvent | KeyboardEvent,
     attachment: InputAttachmentData
   ) => {
-    attachmentTracker?.removeAttachment(attachment.id);
-    void actions?.onRemoveAttachment?.({ input: input(), event, attachment });
+    commands.removeAttachment(attachment);
   };
 
   return (
@@ -54,23 +47,21 @@ export function Attachments(props: AttachmentsProps) {
                     {renderIcon(SpinnerIcon, 'w-4 h-4 animate-spin')}
                   </Show>
                   <span class="truncate max-w-[16rem]">{attachment.name}</span>
-                  <Show when={actions?.onRemoveAttachment}>
-                    <div
-                      role="button"
-                      tabindex={0}
-                      class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
-                      onClick={(event) => handleRemove(event, attachment)}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' && event.key !== ' ') return;
-                        handleRemove(event, attachment);
-                      }}
-                    >
-                      {renderIcon(
-                        XIcon,
-                        'text-ink-muted group-hover:text-failure size-3'
-                      )}
-                    </div>
-                  </Show>
+                  <div
+                    role="button"
+                    tabindex={0}
+                    class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
+                    onClick={() => handleRemove(attachment)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      handleRemove(attachment);
+                    }}
+                  >
+                    {renderIcon(
+                      XIcon,
+                      'text-ink-muted group-hover:text-failure size-3'
+                    )}
+                  </div>
                 </div>
               )}
             </For>

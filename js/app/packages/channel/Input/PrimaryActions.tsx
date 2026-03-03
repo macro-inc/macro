@@ -1,6 +1,6 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import { useInput, useInputActions } from './context';
+import { useInput, useInputCommands } from './context';
 import CheckSquareIcon from '@icon/regular/check-square.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
@@ -31,7 +31,7 @@ function InputActionButton(props: {
 
 export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const input = useInput();
-  const actions = useInputActions();
+  const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
@@ -47,9 +47,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
             <InputActionButton
               label={input().showAttachMenu ? 'Close attach menu' : 'Attach'}
               active={input().showAttachMenu}
-              onClick={(event) =>
-                actions?.onToggleAttachMenu?.({ input: input(), event })
-              }
+              onClick={() => commands.toggleAttachMenu()}
             >
               <Show
                 when={input().showAttachMenu}
@@ -61,27 +59,21 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
             <InputActionButton
               label="Format"
               active={input().showFormatRibbon}
-              onClick={(event) =>
-                actions?.onToggleFormatRibbon?.({ input: input(), event })
-              }
+              onClick={() => commands.toggleFormatRibbon()}
             >
               {renderIcon(FormatIcon, 'size-5')}
             </InputActionButton>
             <InputActionButton
               label="Task mode"
               active={input().taskModeEnabled}
-              onClick={(event) =>
-                actions?.onToggleTaskMode?.({ input: input(), event })
-              }
+              onClick={() => commands.toggleTaskMode()}
             >
               {renderIcon(CheckSquareIcon, 'size-5')}
             </InputActionButton>
             <Show when={input().isReplyInput}>
               <InputActionButton
                 label="Delete reply"
-                onClick={(event) =>
-                  actions?.onCloseDraft?.({ input: input(), event })
-                }
+                onClick={() => commands.closeDraft()}
               >
                 {renderIcon(TrashIcon, 'size-5')}
               </InputActionButton>

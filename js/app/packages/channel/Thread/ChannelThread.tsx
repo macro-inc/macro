@@ -1,6 +1,7 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { createSignal, Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
+import { ChannelInput } from '../Input';
 import { Thread } from './Thread';
 import { replyCenterOffsetX } from './thread-rail-geometry';
 import type { ThreadProps } from './types';
@@ -95,6 +96,23 @@ export function ChannelThread(props: ThreadProps) {
                       getMessageActions={props.getMessageActions}
                     />
                   </Suspense>
+                </Show>
+
+                <Show when={isReplying()}>
+                  <ChannelInput
+                    input={{
+                      id: `thread-reply-input-${props.data().id}`,
+                      placeholder: 'Send a reply',
+                      isReplyInput: true,
+                    }}
+                    markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
+                    onCloseDraft={() => {
+                      setIsReplying(false);
+                    }}
+                    onSend={async () => {
+                      setIsReplying(false);
+                    }}
+                  />
                 </Show>
 
                 <Show

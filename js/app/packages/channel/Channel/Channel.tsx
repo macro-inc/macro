@@ -34,11 +34,7 @@ import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { ChannelThread } from '../Thread';
-import {
-  ChannelInput,
-  createChannelInputController,
-  createInputAttachmentTracker,
-} from '../Input';
+import { ChannelInput } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
@@ -104,14 +100,6 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
   });
 
-  const attachmentTracker = createInputAttachmentTracker();
-
-  const channelInputController = createChannelInputController({
-    inputId: `channel-input-${props.channelId}`,
-    placeholder: 'Message channel',
-    attachmentTracker,
-  });
-
   return (
     <Suspense>
       <div class="relative h-full flex flex-col">
@@ -157,9 +145,10 @@ export function Channel(props: ChannelProps) {
           <StaticMarkdownContext>
             <div class="pb-2 w-full flex justify-center">
               <ChannelInput
-                input={channelInputController.input()}
-                actions={channelInputController.actions}
-                attachmentTracker={attachmentTracker}
+                input={{
+                  id: `channel-input-${props.channelId}`,
+                  placeholder: 'Message channel',
+                }}
               />
             </div>
           </StaticMarkdownContext>

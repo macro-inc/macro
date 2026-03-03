@@ -5,7 +5,6 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { createInputAttachmentTracker } from '../attachment-tracker';
-import { createChannelInputController } from '../createChannelInputController';
 
 describe('input attachment tracker', () => {
   it('deduplicates by id and tracks pending state', () => {
@@ -26,21 +25,14 @@ describe('input attachment tracker', () => {
     });
   });
 
-  it('supports add/remove through channel input controller actions', () => {
+  it('supports explicit add/remove operations', () => {
     createRoot((dispose) => {
       const tracker = createInputAttachmentTracker();
-      const controller = createChannelInputController({
-        placeholder: 'Message channel',
-        attachmentTracker: tracker,
-      });
 
       tracker.addAttachment({ id: 'a1', kind: 'document', name: 'spec.md' });
-      expect(controller.input().attachments).toHaveLength(1);
+      expect(tracker.attachments()).toHaveLength(1);
 
-      controller.actions.onRemoveAttachment?.({
-        input: controller.input(),
-        attachment: { id: 'a1', kind: 'document', name: 'spec.md' },
-      });
+      tracker.removeAttachment('a1');
 
       expect(tracker.attachments()).toHaveLength(0);
       dispose();

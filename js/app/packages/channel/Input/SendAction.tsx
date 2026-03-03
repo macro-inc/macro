@@ -1,10 +1,6 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import {
-  useInput,
-  useInputActions,
-  useInputAttachmentTracker,
-} from './context';
+import { useInput, useInputCommands } from './context';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 import { renderIcon } from './render-icon';
@@ -13,11 +9,9 @@ import { LabelAndHotKey } from '@core/component/Tooltip';
 
 export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const input = useInput();
-  const actions = useInputActions();
-  const attachmentTracker = useInputAttachmentTracker();
+  const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children']);
-  const isBlockedByPending = () =>
-    attachmentTracker?.hasPending() ?? !!input().hasPendingAttachments;
+  const isBlockedByPending = () => !!input().hasPendingAttachments;
 
   return (
     <Button
@@ -32,7 +26,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
       )}
       onPointerDown={(event) => {
         event.preventDefault();
-        void actions?.onSend?.({ input: input(), event });
+        void commands.send();
       }}
       {...rest}
     >

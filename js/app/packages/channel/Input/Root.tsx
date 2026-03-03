@@ -1,16 +1,20 @@
-import { Show, splitProps, type JSX } from 'solid-js';
+import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import {
-  InputActionsProvider,
-  InputAttachmentTrackerProvider,
-  InputProvider,
-} from './context';
-import type { InputActions, InputAttachmentTracker, InputData } from './types';
+import { InputProvider } from './context';
+import type { InputCommands, InputData } from './types';
+
+const NoopInputCommands: InputCommands = {
+  send: async () => false,
+  toggleAttachMenu: () => {},
+  toggleFormatRibbon: () => {},
+  toggleTaskMode: () => {},
+  closeDraft: () => {},
+  removeAttachment: () => {},
+};
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   input: InputData;
-  actions?: InputActions;
-  attachmentTracker?: InputAttachmentTracker;
+  commands?: InputCommands;
 };
 
 export function Root(props: RootProps) {
@@ -18,8 +22,7 @@ export function Root(props: RootProps) {
     'children',
     'class',
     'input',
-    'actions',
-    'attachmentTracker',
+    'commands',
   ]);
 
   return (
@@ -35,14 +38,13 @@ export function Root(props: RootProps) {
       data-input-id={local.input.id}
       {...rest}
     >
-      <InputProvider value={() => local.input}>
-        <InputAttachmentTrackerProvider value={local.attachmentTracker}>
-          <Show when={local.actions !== undefined} fallback={local.children}>
-            <InputActionsProvider value={local.actions}>
-              {local.children}
-            </InputActionsProvider>
-          </Show>
-        </InputAttachmentTrackerProvider>
+      <InputProvider
+        value={{
+          view: () => local.input,
+          commands: local.commands ?? NoopInputCommands,
+        }}
+      >
+        {local.children}
       </InputProvider>
     </div>
   );

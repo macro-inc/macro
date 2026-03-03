@@ -1,4 +1,6 @@
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { Accessor } from 'solid-js';
+import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
 export type InputAttachmentKind = 'video' | 'image' | 'document';
 
@@ -30,35 +32,55 @@ export type InputData = {
   tasks?: InputTaskData[];
 };
 
+
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 
-export type InputActionContext = {
-  input: InputData;
-  event?: InputActionEvent;
-  attachment?: InputAttachmentData;
-  value?: string;
+export type InputSnapshot = {
+  value: string;
+  mentions: ItemMention[];
+  attachments: InputAttachmentData[];
 };
 
+export type InputCallbacks = {
+  onChange?: (snapshot: InputSnapshot) => void | Promise<void>;
+  onSend?: (
+    snapshot: InputSnapshot,
+  ) => void | Promise<void>;
+  onToggleAttachMenu?: (open: boolean) => void | Promise<void>;
+  onToggleFormatRibbon?: (open: boolean) => void | Promise<void>;
+  onToggleTaskMode?: (enabled: boolean) => void | Promise<void>;
+  onCloseDraft?: (snapshot: InputSnapshot) => void | Promise<void>;
+  onRemoveAttachment?: (
+    attachment: InputAttachmentData,
+    snapshot: InputSnapshot
+  ) => void | Promise<void>;
+};
+
+export type InputDraftAdapter = {
+  save?: (snapshot: InputSnapshot) => void | Promise<void>;
+  clear?: () => void | Promise<void>;
+};
+
+export type InputCommands = {
+  send: () => Promise<boolean>;
+  toggleAttachMenu: () => void;
+  toggleFormatRibbon: () => void;
+  toggleTaskMode: () => void;
+  closeDraft: () => void;
+  removeAttachment: (attachment: InputAttachmentData) => void;
+};
+
+export type InputHandle = {
+  snapshot: Accessor<InputSnapshot>;
+  clear: () => void;
+  focus: () => void;
+};
+
+export type InputAttachmentTracker = Tracker;
+
+// Legacy aliases kept for compatibility.
+export type InputActionContext = InputSnapshot;
 export type InputActionHandler = (
   context: InputActionContext
 ) => void | Promise<void>;
-
-export type InputActions = {
-  onChange?: InputActionHandler;
-  onSend?: InputActionHandler;
-  onToggleAttachMenu?: InputActionHandler;
-  onToggleFormatRibbon?: InputActionHandler;
-  onToggleTaskMode?: InputActionHandler;
-  onCloseDraft?: InputActionHandler;
-  onRemoveAttachment?: InputActionHandler;
-};
-
-export type InputAttachmentTracker = {
-  attachments: Accessor<InputAttachmentData[]>;
-  hasPending: Accessor<boolean>;
-  addAttachment: (attachment: InputAttachmentData) => void;
-  removeAttachment: (attachmentId: string) => void;
-  setAttachmentPending: (attachmentId: string, pending: boolean) => void;
-  setAttachments: (attachments: InputAttachmentData[]) => void;
-  clearAttachments: () => void;
-};
+export type InputActions = InputCallbacks;
