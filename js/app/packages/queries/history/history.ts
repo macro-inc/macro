@@ -79,7 +79,6 @@ export function useHistoryQuery() {
   return baseQuery;
 }
 
-
 export async function prefetchHistory() {
   void (await catchToResult(
     async () => await queryClient.prefetchQuery(historyQueryOptions)
