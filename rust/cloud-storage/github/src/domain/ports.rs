@@ -139,4 +139,7 @@ pub trait GithubService: Send + Sync + 'static {
         &self,
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
+
+    /// Returns the github sync app installation url
+    fn get_github_sync_app_url(&self) -> &str;
 }

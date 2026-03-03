@@ -193,4 +193,8 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
 
         Ok(())
     }
+
+    fn get_github_sync_app_url(&self) -> &str {
+        &self.config.github_sync_app_url
+    }
 }
