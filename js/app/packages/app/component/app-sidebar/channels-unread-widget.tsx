@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { NotifEvent } from '@service-notification/generated/schemas';
 import type { UnifiedNotification } from '@notifications/types';
 import { For, Show, createSignal, createMemo, onMount } from 'solid-js';
 import {
@@ -9,7 +8,6 @@ import {
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 
-/** Channel notification types we care about */
 const CHANNEL_NOTIFICATION_TYPES = [
   'channel_mention',
   'channel_message_send',
@@ -18,7 +16,6 @@ const CHANNEL_NOTIFICATION_TYPES = [
 
 type ChannelNotificationType = (typeof CHANNEL_NOTIFICATION_TYPES)[number];
 
-/** Check if notification is a channel/DM notification */
 function isChannelNotification(
   notification: UnifiedNotification
 ): notification is UnifiedNotification & {
@@ -29,7 +26,6 @@ function isChannelNotification(
   );
 }
 
-/** Get channel info from notification metadata */
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
   channelType: string | null;
@@ -57,7 +53,6 @@ function getChannelInfo(notification: UnifiedNotification): {
   return { channelName: null, channelType: null, isDM: false };
 }
 
-/** Grouped channel notifications */
 interface ChannelGroup {
   entityId: string;
   channelName: string | null;
@@ -67,7 +62,6 @@ interface ChannelGroup {
   latestSenderId: string | null;
 }
 
-/** Group notifications by channel entity ID */
 function groupByChannel(
   notifications: UnifiedNotification[]
 ): Map<string, ChannelGroup> {
@@ -99,23 +93,9 @@ function groupByChannel(
     }
   }
 
-  // Sort notifications within each group by date (newest first)
-  for (const group of groups.values()) {
-    group.notifications.sort(
-      (a, b) =>
-        new Date(b.created_at ?? 0).getTime() -
-        new Date(a.created_at ?? 0).getTime()
-    );
-    // Update latestSenderId to be from the most recent notification
-    if (group.isDM && group.notifications[0]?.sender_id) {
-      group.latestSenderId = group.notifications[0].sender_id;
-    }
-  }
-
   return groups;
 }
 
-/** Hook to get sender's first name */
 function useSenderName(senderId: string | null | undefined) {
   const nameParts = useDisplayNameParts(tryMacroId(senderId ?? ''));
   return () => {
@@ -135,7 +115,6 @@ function useSenderName(senderId: string | null | undefined) {
   };
 }
 
-/** Renders a single channel group item */
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
@@ -167,7 +146,6 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         'opacity-100 translate-y-0': isVisible(),
       }}
     >
-      {/* Icon */}
       <div class="flex-shrink-0">
         <Show
           when={props.group.isDM && props.group.latestSenderId}
@@ -189,12 +167,10 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         </Show>
       </div>
 
-      {/* Channel name */}
       <span class="flex-1 text-sm font-medium text-ink truncate">
         {displayName()}
       </span>
 
-      {/* Notification count badge */}
       <Show when={count() > 0}>
         <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded">
           {count()}
@@ -204,291 +180,13 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
   );
 }
 
-/** Example notifications for testing */
-export const EXAMPLE_CHANNEL_NOTIFICATIONS: UnifiedNotification[] = [
-  // Multiple mentions in #general
-  {
-    id: 'ch_notif_001',
-    entity_type: 'channel',
-    entity_id: 'ch_general_123',
-    notification_event_type: 'channel_mention',
-    notification_metadata: {
-      tag: 'channel_mention',
-      content: {
-        channelName: 'general',
-        channelType: 'public',
-        messageId: 'msg_001',
-        messageContent: 'Hey @user, can you review this?',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|alice@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T10:00:00Z',
-    updated_at: '2026-02-27T10:00:00Z',
-  },
-  {
-    id: 'ch_notif_002',
-    entity_type: 'channel',
-    entity_id: 'ch_general_123',
-    notification_event_type: 'channel_mention',
-    notification_metadata: {
-      tag: 'channel_mention',
-      content: {
-        channelName: 'general',
-        channelType: 'public',
-        messageId: 'msg_002',
-        messageContent: '@user thoughts on this?',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|bob@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T09:30:00Z',
-    updated_at: '2026-02-27T09:30:00Z',
-  },
-  // DM from Sarah (multiple messages)
-  {
-    id: 'ch_notif_003',
-    entity_type: 'channel',
-    entity_id: 'ch_dm_sarah',
-    notification_event_type: 'channel_message_send',
-    notification_metadata: {
-      tag: 'channel_message_send',
-      content: {
-        channelType: 'directMessage',
-        messageId: 'msg_003',
-        messageContent: 'Hey, got a minute?',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|sarah.chen@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T09:00:00Z',
-    updated_at: '2026-02-27T09:00:00Z',
-  },
-  {
-    id: 'ch_notif_004',
-    entity_type: 'channel',
-    entity_id: 'ch_dm_sarah',
-    notification_event_type: 'channel_message_send',
-    notification_metadata: {
-      tag: 'channel_message_send',
-      content: {
-        channelType: 'directMessage',
-        messageId: 'msg_004',
-        messageContent: 'Need to discuss the project',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|sarah.chen@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T08:55:00Z',
-    updated_at: '2026-02-27T08:55:00Z',
-  },
-  {
-    id: 'ch_notif_005',
-    entity_type: 'channel',
-    entity_id: 'ch_dm_sarah',
-    notification_event_type: 'channel_message_send',
-    notification_metadata: {
-      tag: 'channel_message_send',
-      content: {
-        channelType: 'directMessage',
-        messageId: 'msg_005',
-        messageContent: 'Are you there?',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|sarah.chen@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T08:50:00Z',
-    updated_at: '2026-02-27T08:50:00Z',
-  },
-  // Reply in #engineering
-  {
-    id: 'ch_notif_006',
-    entity_type: 'channel',
-    entity_id: 'ch_engineering_456',
-    notification_event_type: 'channel_message_reply',
-    notification_metadata: {
-      tag: 'channel_message_reply',
-      content: {
-        channelName: 'engineering',
-        channelType: 'organization',
-        messageId: 'msg_006',
-        messageContent: 'I agree with your approach',
-        threadId: 'thread_001',
-        userId: 'macro|david@example.com',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|david.park@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T08:45:00Z',
-    updated_at: '2026-02-27T08:45:00Z',
-  },
-  // DM from Mike
-  {
-    id: 'ch_notif_007',
-    entity_type: 'channel',
-    entity_id: 'ch_dm_mike',
-    notification_event_type: 'channel_message_send',
-    notification_metadata: {
-      tag: 'channel_message_send',
-      content: {
-        channelType: 'directMessage',
-        messageId: 'msg_007',
-        messageContent: 'Quick question about the API',
-      },
-    } as NotifEvent,
-    sender_id: 'macro|mike.johnson@example.com',
-    done: false,
-    sent: true,
-    created_at: '2026-02-27T08:30:00Z',
-    updated_at: '2026-02-27T08:30:00Z',
-  },
-];
-
-/** Filters notifications to only show unread and not done */
 function filterUnreadNotDone(notifications: UnifiedNotification[]) {
   return notifications.filter((n) => !n.viewed_at && !n.done);
 }
 
-/** Debug notification templates - uses same entity IDs as example data to merge */
-const DEBUG_CHANNEL_OPTIONS = [
-  { entityId: 'ch_general_123', channelName: 'general', channelType: 'public' },
-  {
-    entityId: 'ch_engineering_456',
-    channelName: 'engineering',
-    channelType: 'organization',
-  },
-];
-
-const DEBUG_DM_OPTIONS = [
-  { entityId: 'ch_dm_sarah', senderId: 'macro|sarah.chen@example.com' },
-  { entityId: 'ch_dm_mike', senderId: 'macro|mike.johnson@example.com' },
-  { entityId: 'ch_dm_alex', senderId: 'macro|alex.kim@example.com' },
-];
-
-const DEBUG_MESSAGES = {
-  mention: [
-    'Hey @you, can you take a look?',
-    '@you thoughts on this?',
-    'Need your input @you',
-    '@you this is urgent!',
-  ],
-  dm: [
-    'Hey, got a minute?',
-    'Can we sync up later?',
-    'Just sent you the files',
-    'Thanks for your help!',
-  ],
-  reply: [
-    'Good point, I agree!',
-    'Let me check on that',
-    "Done, it's ready for review",
-    'I have a different perspective...',
-  ],
-};
-
-let debugIdCounter = 2000;
-
-function createDebugChannelNotification(): UnifiedNotification {
-  const id = debugIdCounter++;
-  const now = new Date().toISOString();
-
-  // Cycle through: mention, DM, reply
-  const notifType = id % 3;
-
-  if (notifType === 1) {
-    // DM
-    const dm = DEBUG_DM_OPTIONS[id % DEBUG_DM_OPTIONS.length];
-    return {
-      id: `ch_debug_${id}`,
-      entity_type: 'channel',
-      entity_id: dm.entityId,
-      notification_event_type: 'channel_message_send',
-      notification_metadata: {
-        tag: 'channel_message_send',
-        content: {
-          channelType: 'directMessage',
-          messageId: `msg_debug_${id}`,
-          messageContent: DEBUG_MESSAGES.dm[id % DEBUG_MESSAGES.dm.length],
-        },
-      } as NotifEvent,
-      sender_id: dm.senderId,
-      done: false,
-      sent: true,
-      created_at: now,
-      updated_at: now,
-    };
-  }
-
-  if (notifType === 2) {
-    // Reply
-    const channel = DEBUG_CHANNEL_OPTIONS[id % DEBUG_CHANNEL_OPTIONS.length];
-    return {
-      id: `ch_debug_${id}`,
-      entity_type: 'channel',
-      entity_id: channel.entityId,
-      notification_event_type: 'channel_message_reply',
-      notification_metadata: {
-        tag: 'channel_message_reply',
-        content: {
-          channelName: channel.channelName,
-          channelType: channel.channelType,
-          messageId: `msg_debug_${id}`,
-          messageContent:
-            DEBUG_MESSAGES.reply[id % DEBUG_MESSAGES.reply.length],
-          threadId: `thread_debug_${id}`,
-          userId: `user_debug_${id}`,
-        },
-      } as NotifEvent,
-      sender_id: `macro|replier${id % 3}@example.com`,
-      done: false,
-      sent: true,
-      created_at: now,
-      updated_at: now,
-    };
-  }
-
-  // Mention (default)
-  const channel = DEBUG_CHANNEL_OPTIONS[id % DEBUG_CHANNEL_OPTIONS.length];
-  return {
-    id: `ch_debug_${id}`,
-    entity_type: 'channel',
-    entity_id: channel.entityId,
-    notification_event_type: 'channel_mention',
-    notification_metadata: {
-      tag: 'channel_mention',
-      content: {
-        channelName: channel.channelName,
-        channelType: channel.channelType,
-        messageId: `msg_debug_${id}`,
-        messageContent:
-          DEBUG_MESSAGES.mention[id % DEBUG_MESSAGES.mention.length],
-      },
-    } as NotifEvent,
-    sender_id: `macro|mentioner${id % 3}@example.com`,
-    done: false,
-    sent: true,
-    created_at: now,
-    updated_at: now,
-  };
-}
-
 export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
-  const [debugNotifications, setDebugNotifications] = createSignal<
-    UnifiedNotification[]
-  >([]);
-  const [animatingIds, setAnimatingIds] = createSignal<Set<string>>(new Set());
-
-  const allNotifications = () => [
-    ...debugNotifications(),
-    ...EXAMPLE_CHANNEL_NOTIFICATIONS,
-  ];
+  const allNotifications = () => [...notificationSource.notifications()];
 
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
@@ -502,37 +200,16 @@ export const ChannelsUnreadWidget = () => {
     });
   });
 
-  const addDebugNotification = () => {
-    const newNotification = createDebugChannelNotification();
-    setAnimatingIds((prev) => new Set([...prev, newNotification.entity_id]));
-    setDebugNotifications((prev) => [newNotification, ...prev]);
-  };
-
   return (
-    <div class="w-full h-full flex flex-col">
-      {/* Debug button */}
-      <button
-        type="button"
-        onClick={addDebugNotification}
-        class="fixed bottom-0 right-0 m-2 px-3 py-1.5 text-xs font-medium bg-accent text-white rounded hover:bg-accent/90 transition-colors"
-      >
-        + Add Debug Notification
-      </button>
+    <div class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
+      <div class="text-xs font-medium text-ink-muted tracking-wide">Unread</div>
 
-      {/* Label */}
-      <div class="px-2 py-1.5 text-xs font-medium text-ink-muted tracking-wide">
-        Unread
-      </div>
-
-      {/* Channel groups list */}
       <div class="flex-1 overflow-y-auto">
-        <For each={channelGroups()}>
-          {(group) => (
-            <ChannelGroupItem
-              group={group}
-              animate={animatingIds().has(group.entityId)}
-            />
-          )}
+        <For
+          each={channelGroups()}
+          fallback={<span class="text-ink/80 text-xs">No unread messages</span>}
+        >
+          {(group) => <ChannelGroupItem group={group} animate={false} />}
         </For>
       </div>
     </div>
