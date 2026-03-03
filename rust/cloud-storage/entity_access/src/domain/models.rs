@@ -143,6 +143,28 @@ impl<T: RequiredAccessLevel> EntityAccessReceipt<T> {
     pub fn entity_permission(&self) -> &EntityPermission {
         &self.entity_permission
     }
+
+    /// Dangerously generates a EntityAccessReceipt for an internal user
+    /// **NOTE** This should only be used in specific circumstances and not as a way
+    /// to circumvent AI tool permissioning
+    /// This **DOES NOT** assert the existence of the item
+    pub fn dangerously_assert_internal_user(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T> {
+        EntityAccessReceipt {
+            auth: EntityAccessAuth::Internal,
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission: EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+            _marker: PhantomData,
+        }
+    }
 }
 
 /// Errors that can occur during access checking.
