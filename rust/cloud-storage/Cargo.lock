@@ -5116,8 +5116,7 @@ dependencies = [
 [[package]]
 name = "jsonwebtoken"
 version = "10.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0529410abe238729a60b108898784df8984c87f6054c9c4fcacc47e4803c1ce1"
+source = "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
