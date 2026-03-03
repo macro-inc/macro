@@ -37,6 +37,7 @@ serde_json = { workspace = true }
 regex = { workspace = true }
 urlencoding = { workspace = true, optional = true }
 entity_access = { path = "../entity_access" }
+jsonwebtoken = { workspace = true }
 hmac = "0.12.1"
 sha2 = { workspace = true }
 subtle = "2.6.1"

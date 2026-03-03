@@ -11,7 +11,8 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        GithubError, GithubLink, GithubWebhookEventType, MacroTaskId, ValidatedGithubWebhookEvent,
+        GithubError, GithubInstallationAccessToken, GithubLink, GithubWebhookEventType,
+        MacroTaskId, ValidatedGithubWebhookEvent,
     },
     ports::{Auth, GithubOauth, GithubRepo, GithubService},
 };
@@ -242,5 +243,58 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubService for GithubServiceImpl
 
     fn get_github_sync_app_url(&self) -> &str {
         &self.config.github_sync_app_url
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn generate_installation_access_token(
+        &self,
+        installation_id: u64,
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        let now = chrono::Utc::now().timestamp() as u64;
+
+        let claims = serde_json::json!({
+            "iat": now - 60,
+            "exp": now + (10 * 60),
+            "iss": self.config.sync_app_client_id,
+        });
+
+        let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        let encoding_key =
+            jsonwebtoken::EncodingKey::from_rsa_pem(self.config.sync_app_pem.as_bytes())
+                .map_err(|e| GithubError::Internal(anyhow::anyhow!("invalid PEM key: {e}")))?;
+
+        let jwt = jsonwebtoken::encode(&header, &claims, &encoding_key)
+            .map_err(|e| GithubError::Internal(anyhow::anyhow!("failed to encode JWT: {e}")))?;
+
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!(
+                "https://api.github.com/app/installations/{installation_id}/access_tokens"
+            ))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to create installation access token (status {status}): {error_body}"
+            )));
+        }
+
+        let token: GithubInstallationAccessToken = response
+            .json()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        Ok(token)
     }
 }

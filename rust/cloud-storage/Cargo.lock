@@ -4168,6 +4168,7 @@ dependencies = [
  "hex",
  "hmac",
  "http-body-util",
+ "jsonwebtoken",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",

@@ -23,6 +23,15 @@ impl GithubAccessToken {
     }
 }
 
+/// GitHub App installation access token response
+#[derive(Debug, Clone, Deserialize)]
+pub struct GithubInstallationAccessToken {
+    /// The installation access token
+    pub token: String,
+    /// When the token expires
+    pub expires_at: String,
+}
+
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {

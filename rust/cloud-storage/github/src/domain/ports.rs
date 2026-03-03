@@ -5,8 +5,8 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubUserInfo,
-    ValidatedGithubWebhookEvent,
+    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubInstallationAccessToken,
+    GithubUserInfo, ValidatedGithubWebhookEvent,
 };
 
 use super::models::GithubLink;
@@ -143,4 +143,10 @@ pub trait GithubService: Send + Sync + 'static {
 
     /// Returns the github sync app installation url
     fn get_github_sync_app_url(&self) -> &str;
+
+    /// Generates an installation access token for the github sync app
+    fn generate_installation_access_token(
+        &self,
+        installation_id: u64,
+    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 }
