@@ -269,7 +269,7 @@ export const UnreadNotificationsWidget = () => {
   );
 
   return (
-    <section class="w-full h-full border-b border-b-edge-muted flex flex-col">
+    <section class="w-full h-full flex flex-col">
       <header class="flex items-center justify-between py-1 px-2">
         <h1 class="text-sm font-medium text-ink-muted tracking-wide">
           Notifications

@@ -302,30 +302,33 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone
-        direction="horizontal"
-        gutter={4}
-        captureResizeCtx={splitManager.setResizeContext}
-      >
-        <For each={ids()}>
-          {(id, index) => (
-            <Show when={splitManager.getSplit(id)}>
-              {(handle) => (
-                <Suspense>
-                  <Resize.Panel id={id} minSize={400} index={index()}>
-                    <SplitPanel
-                      split={splits()[index()]!}
-                      handle={handle()}
-                      active={activeSplitSelector(id)}
-                      setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
-                    />
-                  </Resize.Panel>
-                </Suspense>
-              )}
-            </Show>
-          )}
-        </For>
-      </Resize.Zone>
+      <div class="size-full p-2">
+        <Resize.Zone
+          direction="horizontal"
+          gutter={0}
+          captureResizeCtx={splitManager.setResizeContext}
+        >
+          <For each={ids()}>
+            {(id, index) => (
+              <Show when={splitManager.getSplit(id)}>
+                {(handle) => (
+                  <Suspense>
+                    <Resize.Panel id={id} minSize={400} index={index()}>
+                      <SplitPanel
+                        split={splits()[index()]!}
+                        handle={handle()}
+                        active={activeSplitSelector(id)}
+                        setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
+                        index={index()}
+                      />
+                    </Resize.Panel>
+                  </Suspense>
+                )}
+              </Show>
+            )}
+          </For>
+        </Resize.Zone>
+      </div>
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
         onClosePopover={(id) => {
@@ -343,6 +346,7 @@ type SplitPanelProps = {
   handle: SplitHandle;
   active: boolean;
   setPanelRef: (ref: HTMLDivElement) => void;
+  index: number;
 };
 
 function SplitPanel(props: SplitPanelProps) {
@@ -401,6 +405,16 @@ function SplitPanel(props: SplitPanelProps) {
             props.setPanelRef(ref);
             attachHotKeys(ref);
           }}
+          tl={props.index === 0}
+          bl={props.index === 0}
+          tr={
+            splitLayoutHelpers.getSplitCount() > 1 &&
+            props.index === splitLayoutHelpers.getSplitCount() - 1
+          }
+          br={
+            splitLayoutHelpers.getSplitCount() > 1 &&
+            props.index === splitLayoutHelpers.getSplitCount() - 1
+          }
         >
           <Suspense>
             <Dynamic component={props.split.mount.element} />

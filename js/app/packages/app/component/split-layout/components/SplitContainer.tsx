@@ -99,6 +99,10 @@ export function SplitContainer(
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }
+            tl={props.tl}
+            bl={props.bl}
+            tr={props.tr}
+            br={props.br}
             edgeColor="transparent"
           >
             <div class="flex flex-col min-h-0 size-full bg-panel">
