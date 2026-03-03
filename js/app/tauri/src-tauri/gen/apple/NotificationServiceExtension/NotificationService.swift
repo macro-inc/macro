@@ -17,63 +17,76 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        guard let urlString = request.content.userInfo["senderProfilePictureUrl"] as? String,
-              let url = URL(string: urlString)
-        else {
+        let userInfo = request.content.userInfo
+        let senderName = content.title
+
+        // Track pending downloads
+        let group = DispatchGroup()
+        var profileImageURL: URL?
+        var attachmentImageURL: URL?
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
             contentHandler(content)
             return
         }
 
-        let senderName = content.title
+        // Download profile picture for left side (communication notification)
+        if let urlString = userInfo["senderProfilePictureUrl"] as? String,
+           let url = URL(string: urlString) {
+            group.enter()
+            URLSession.shared.downloadTask(with: url) { location, _, error in
+                defer { group.leave() }
+                guard error == nil, let location = location else { return }
+                let fileURL = tempDir.appendingPathComponent("profile.jpg")
+                try? FileManager.default.moveItem(at: location, to: fileURL)
+                profileImageURL = fileURL
+            }.resume()
+        }
 
-        URLSession.shared.downloadTask(with: url) { location, response, error in
-            if let error = error {
-                NSLog("NotificationServiceExtension: Download error: \(error.localizedDescription)")
-                contentHandler(content)
-                return
+        // Download attachment image for right side
+        if let urlString = userInfo["attachmentImageUrl"] as? String,
+           let url = URL(string: urlString) {
+            group.enter()
+            URLSession.shared.downloadTask(with: url) { location, _, error in
+                defer { group.leave() }
+                guard error == nil, let location = location else { return }
+                let fileURL = tempDir.appendingPathComponent("attachment.jpg")
+                try? FileManager.default.moveItem(at: location, to: fileURL)
+                attachmentImageURL = fileURL
+            }.resume()
+        }
+
+        group.notify(queue: .main) {
+            // Add attachment image on right side if available
+            if let attachmentURL = attachmentImageURL,
+               let attachment = try? UNNotificationAttachment(
+                   identifier: "attachment-image",
+                   url: attachmentURL
+               ) {
+                content.attachments = [attachment]
             }
 
-            guard let location = location else {
-                contentHandler(content)
-                return
-            }
-
-            let tempDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString, isDirectory: true)
-
-            do {
-                try FileManager.default.createDirectory(
-                    at: tempDir,
-                    withIntermediateDirectories: true
-                )
-            } catch {
-                contentHandler(content)
-                return
-            }
-
-            let fileURL = tempDir.appendingPathComponent("profile.jpg")
-
-            do {
-                try FileManager.default.moveItem(at: location, to: fileURL)
-            } catch {
-                contentHandler(content)
-                return
-            }
-
-            // Create a communication notification with the sender's avatar on the left (iOS 15+)
-            // No-op for iOS 14 (feature not supported)
-            if #available(iOS 15.0, *) {
-                self.configureCommunicationNotification(
-                    content: content,
-                    senderName: senderName,
-                    avatarURL: fileURL,
-                    contentHandler: contentHandler
-                )
+            // Add profile picture on left side via communication notification (iOS 15+)
+            if let profileURL = profileImageURL {
+                if #available(iOS 15.0, *) {
+                    self.configureCommunicationNotification(
+                        content: content,
+                        senderName: senderName,
+                        avatarURL: profileURL,
+                        contentHandler: contentHandler
+                    )
+                } else {
+                    contentHandler(content)
+                }
             } else {
-                // iOS 14: just deliver the notification without profile picture
                 contentHandler(content)
             }
-        }.resume()
+        }
     }
 
     @available(iOS 15.0, *)
