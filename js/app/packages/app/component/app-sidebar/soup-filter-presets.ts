@@ -210,6 +210,17 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  search: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.default,
+        },
+        clientFilters: { and: [], or: [] },
+      }),
+    },
+  },
 };
 
 /** Views whose default tab requires user context */

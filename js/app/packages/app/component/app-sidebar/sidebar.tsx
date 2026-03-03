@@ -85,7 +85,7 @@ type AppSidebarProps = {
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
-  const handleSearchClick = () => {};
+  const layout = useSplitLayout();
 
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
@@ -115,9 +115,26 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="flex items-center gap-1">
             <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
               <Button
+                as="a"
                 variant="tertiary"
                 size="icon-sm"
-                onClick={handleSearchClick}
+                href={`/component/search`}
+                onClick={(e) => {
+                  // Middle mouse handling
+                  if (e.button === 1) return;
+
+                  e.preventDefault();
+                  layout.openWithSplit(
+                    {
+                      type: 'component',
+                      id: 'search',
+                    },
+                    {
+                      preferNewSplit: e.shiftKey,
+                      mergeHistory: true,
+                    }
+                  );
+                }}
               >
                 <SearchIcon />
               </Button>

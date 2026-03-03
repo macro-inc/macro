@@ -8,6 +8,7 @@ export const LIST_VIEWS = [
   'tasks',
   'channels',
   'files',
+  'search',
 ] as const;
 
 export type ListView = (typeof LIST_VIEWS)[number];
@@ -20,6 +21,7 @@ export const LIST_VIEW_PATHS = {
   tasks: '/tasks',
   channels: '/channels',
   files: '/files',
+  search: '/search',
 } as const satisfies Record<ListView, string>;
 
 export const isListViewPath = (path: string) => {
@@ -34,6 +36,7 @@ export const LIST_VIEW_ID = {
   tasks: 'tasks',
   channels: 'channels',
   files: 'files',
+  search: 'search',
 } as const satisfies Record<ListView, string>;
 
 export const isListViewID = (id: string | null | undefined): id is ListView => {

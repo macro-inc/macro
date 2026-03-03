@@ -146,6 +146,20 @@ registerComponent('files', () => {
     />
   );
 });
+registerComponent('search', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('search', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Search"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);

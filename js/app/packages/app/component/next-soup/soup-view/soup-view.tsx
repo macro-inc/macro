@@ -157,9 +157,6 @@ export const SoupView = (props: SoupViewProps) => {
   onMount(() => {
     if (!props.initialClientFilters) return;
 
-    const { and, or } = props.initialClientFilters;
-    if (!and?.length && !or?.length) return;
-
     soup.filters.set(props.initialClientFilters);
   });
 
