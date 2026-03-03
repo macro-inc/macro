@@ -1,6 +1,7 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isTauri } from './platform';
 import shortuuid from 'short-uuid';
+import { getWebOrigin } from './webOrigin';
+export { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
   consistentLength: false,
@@ -18,14 +19,6 @@ export function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 
-export function getWebOrigin(): string {
-  if (isTauri()) {
-    return import.meta.env.MODE === 'development'
-      ? 'https://dev.macro.com'
-      : 'https://macro.com';
-  }
-  return window.location.origin;
-}
 
 export function transformShortIdInUrlPathname(pathname: string) {
   const parts = pathname.split('/');

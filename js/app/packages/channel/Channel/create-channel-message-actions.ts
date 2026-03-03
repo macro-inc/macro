@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { getWebOrigin } from '@core/util/url';
+import { getWebOrigin } from '@core/util/webOrigin';
 import type { Accessor } from 'solid-js';
 import type {
   MessageActionHandler,
