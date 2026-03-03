@@ -23,3 +23,5 @@ config:
   authentication-service:github_idp_id_key: github-idp-id-prod
   authentication-service:github_webhook_secret_key: github-webhook-secret-prod
   authentication-service:github_sync_app_url: https://github.com/apps/macro-sync
+  authentication-service:github_sync_app_pem: github-sync-app-pem-prod
+  authentication-service:github_sync_app_client_id: Iv23ctSZX2wLdqO2iqrS
