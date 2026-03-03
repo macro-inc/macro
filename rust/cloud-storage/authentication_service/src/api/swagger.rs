@@ -122,6 +122,9 @@ use model::user::{
                 /// /merge
                 merge::create_merge_request::handler,
                 merge::verify_merge_request::handler,
+
+                /// /github
+                github::inbound::github_sync_router::install_sync_handler,
         ),
         components(
             schemas(

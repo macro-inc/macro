@@ -39,8 +39,16 @@ where
 }
 
 /// Redirects the user to the github sync app installation page.
+#[utoipa::path(
+    get,
+    path = "/github/install-sync",
+    operation_id = "install_sync",
+    responses(
+        (status = 307, description = "Redirects to the github sync app installation page"),
+    )
+)]
 #[tracing::instrument(skip(ctx))]
-async fn install_sync_handler<T: GithubService>(
+pub async fn install_sync_handler<T: GithubService>(
     State(ctx): State<GithubSyncRouterState<T>>,
 ) -> Redirect {
     let url = ctx.service.get_github_sync_app_url();
