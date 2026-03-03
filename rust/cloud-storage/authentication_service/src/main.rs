@@ -146,6 +146,15 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let github_sync_app_pem = match config.environment {
+        Environment::Local => config.github_sync_app_pem.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.github_sync_app_pem)
+            .await
+            .context("unable to get github sync app pem secret")?
+            .to_string(),
+    };
+
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -253,6 +262,8 @@ async fn main() -> anyhow::Result<()> {
             idp_id: config.github_idp_id,
             webhook_secret: github_webhook_secret,
             github_sync_app_url: config.github_sync_app_url,
+            sync_app_pem: github_sync_app_pem,
+            sync_app_client_id: config.github_sync_app_client_id,
         },
     );
 

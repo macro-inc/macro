@@ -34,6 +34,10 @@ pub struct GithubConfig {
     pub webhook_secret: String,
     /// The url to the github sync app installation page
     pub github_sync_app_url: String,
+    /// The PEM key for the github sync app
+    pub sync_app_pem: String,
+    /// The client id for the github sync app
+    pub sync_app_client_id: String,
 }
 
 /// The concrete github service implementation.

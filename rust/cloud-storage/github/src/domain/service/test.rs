@@ -16,6 +16,8 @@ fn make_service() -> GithubServiceImpl<MockGithubRepo, MockGithubOauth, MockAuth
             idp_id: "test-idp-id".to_string(),
             webhook_secret: "test-webhook-secret".to_string(),
             github_sync_app_url: "test".to_string(),
+            sync_app_pem: "test-sync-app-pem".to_string(),
+            sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
     )
 }
