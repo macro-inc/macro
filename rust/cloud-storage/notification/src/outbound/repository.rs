@@ -3,11 +3,13 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::device::DeviceType;
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
+use crate::outbound::device_registration::DeviceRegistrationDbOps;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -50,7 +52,7 @@ impl<D> DbNotificationRepository<D> {
 /// Trait for database operations needed by the notification repository.
 ///
 /// This allows the adapter to work with different database client implementations.
-pub trait NotificationDbOps: Send + Sync + 'static {
+pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
     /// Get users who have muted all notifications.
     fn get_muted_users<'a>(
         &self,
@@ -856,5 +858,33 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_id: MacroUserIdStr<'_>,
     ) -> Result<(), Report> {
         self.db.delete_all_user_notifications(user_id).await
+    }
+
+    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
+        self.db.get_device_endpoint(device_token).await
+    }
+
+    async fn upsert_device(
+        &self,
+        user_id: &str,
+        device_token: &str,
+        device_endpoint: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        self.db
+            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .await
+    }
+
+    async fn delete_device_by_token(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<String, Report> {
+        self.db.delete_by_token(device_token, device_type).await
+    }
+
+    async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
+        self.db.delete_by_endpoint(endpoint_arn).await
     }
 }

@@ -72,7 +72,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
     };
 
     let internal_router = Router::new()
-        .nest("/device", device::router())
+        .nest("/device", device::router(ingress_state.clone()))
         .nest(
             "/user_notifications",
             user_notification::router(ingress_state),

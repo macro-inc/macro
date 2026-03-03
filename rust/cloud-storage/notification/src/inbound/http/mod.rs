@@ -1,9 +1,11 @@
 //! This module exposes the http adapter for inbound http requests via an axum router
 
+pub mod device;
+
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    routing::patch,
+    routing::{delete, patch},
 };
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -64,10 +66,14 @@ impl<S: NotificationReader> NotificationRouterState<S> {
 /// construct the router
 pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 'static>()
 -> Router<NotificationRouterState<S>> {
-    Router::new()
-        .route("/bulk/seen", patch(bulk_mark_seen))
-        .route("/bulk/done", patch(bulk_mark_done))
-        .route("/bulk/undone", patch(bulk_mark_undone))
+    Router::new().nest(
+        "/bulk",
+        Router::new()
+            .route("/", delete(bulk_delete_notifications))
+            .route("/seen", patch(bulk_mark_seen))
+            .route("/done", patch(bulk_mark_done))
+            .route("/undone", patch(bulk_mark_undone)),
+    )
 }
 
 /// the params for pagination

@@ -122,10 +122,6 @@ pub fn router<
             axum::routing::get(get_typed_notification_by_id::<S>)
                 .delete(::notification::inbound::http::delete_notification::<S>),
         )
-        .route(
-            "/bulk",
-            axum::routing::delete(::notification::inbound::http::bulk_delete_notifications::<S>),
-        )
         .with_state(state)
 }
 

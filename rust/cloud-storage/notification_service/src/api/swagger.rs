@@ -14,11 +14,11 @@ use utoipa::OpenApi;
 
 use crate::{
     api::{
-        device, health,
+        health,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
         user_notification,
     },
-    model::{device::DeviceRequest, notification::CreateNotification},
+    model::notification::CreateNotification,
 };
 
 #[derive(OpenApi)]
@@ -27,10 +27,6 @@ use crate::{
             terms_of_service = "https://macro.com/terms",
         ),
         paths(
-                /// /devices
-                device::register::handler,
-                device::unregister::handler,
-
                 /// /health
                 health::health_handler,
 
@@ -60,10 +56,10 @@ use crate::{
                         EmptyResponse,
                         ErrorResponse,
                         CreateNotification,
+                        notification_crate::domain::models::device::DeviceRequest,
                         UnsubscribeItemPathParams,
                         UserUnsubscribe,
                         DeviceType,
-                        DeviceRequest,
                         PushNotificationData,
                         NewEmailMetadata,
 

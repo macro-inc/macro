@@ -4,6 +4,7 @@
 //! - [`NotificationIngressService`]: For callers to send notifications (filter, persist, publish to queue)
 //! - [`NotificationEgressService`]: For workers to deliver notifications (consume from queue, deliver)
 
+pub mod device;
 mod egress;
 mod ingress;
 mod push_notification_event;
@@ -17,6 +18,7 @@ pub use ingress::NotificationIngress;
 pub use ingress::NotificationIngressService;
 pub use ingress::NotificationReader;
 pub use ingress::NotificationReaderService;
+pub use ingress::PlatformArnConfig;
 pub use push_notification_event::PushNotificationEventHandler;
 pub use push_notification_event::PushNotificationEventService;
 
