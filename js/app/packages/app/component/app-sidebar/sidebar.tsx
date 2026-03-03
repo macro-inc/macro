@@ -193,10 +193,13 @@ const SidebarLink = (props: SidebarLinkProps) => {
   };
 
   return (
-    <a
+    <Button
+      as="a"
+      variant="ghost"
+      size="sm"
       class={cn(
-        'w-full px-2 py-1 rounded-md flex items-center gap-2 text-sm text-ink/70 hover:bg-ink/10 active:bg-ink/15 hover:text-ink transition-colors',
-        isActive() && 'bg-ink/10 text-white'
+        'w-full justify-start text-sm gap-2',
+        isActive() && 'bg-ink/10 text-ink'
       )}
       href={`/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
@@ -224,6 +227,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
         </div>
       </Show>
       {props.label}
-    </a>
+    </Button>
   );
 };
