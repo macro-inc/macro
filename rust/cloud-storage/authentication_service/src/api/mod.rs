@@ -76,10 +76,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 inner: state.native_app_service.clone(),
             },
         ))
-        .nest(
-            "/github",
-            github_sync_router(github_sync_router_state),
-        )
+        .nest("/github", github_sync_router(github_sync_router_state))
         .nest("/internal", internal::router())
         .nest("/permissions", permissions::router(state.jwt_args.clone()))
         .nest("/login", login::router(state.clone()))

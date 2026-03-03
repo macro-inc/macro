@@ -140,8 +140,8 @@ impl Config {
         let github_webhook_secret_key = std::env::var("GITHUB_WEBHOOK_SECRET_KEY")
             .context("GITHUB_WEBHOOK_SECRET_KEY must be provided")?;
 
-        let github_sync_app_url = std::env::var("GITHUB_SYNC_APP_URL")
-            .context("GITHUB_SYNC_APP_URL must be provided")?;
+        let github_sync_app_url =
+            std::env::var("GITHUB_SYNC_APP_URL").context("GITHUB_SYNC_APP_URL must be provided")?;
 
         Ok(Config {
             base_url,
