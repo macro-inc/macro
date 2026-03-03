@@ -6,7 +6,7 @@ use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use tower::util::ServiceExt;
 
 use crate::domain::{
-    models::{GithubError, GithubLink, ValidatedGithubWebhookEvent},
+    models::{GithubError, GithubInstallationAccessToken, GithubLink, ValidatedGithubWebhookEvent},
     ports::GithubService,
 };
 
@@ -54,6 +54,13 @@ impl GithubService for MockGithubService {
 
     fn get_github_sync_app_url(&self) -> &str {
         &self.sync_app_url
+    }
+
+    async fn generate_installation_access_token(
+        &self,
+        _installation_id: u64,
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        unimplemented!()
     }
 }
 
