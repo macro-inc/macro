@@ -18,7 +18,7 @@ export function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 
-function getWebOrigin(): string {
+export function getWebOrigin(): string {
   if (isTauri()) {
     return import.meta.env.MODE === 'development'
       ? 'https://dev.macro.com'

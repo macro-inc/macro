@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { getWebOrigin } from '@core/util/url';
 import type { Accessor } from 'solid-js';
 import type {
   MessageActionHandler,
@@ -60,7 +61,11 @@ export type CreateChannelMessageActionsOptions = {
 
 function createDefaultEffects(): ChannelMessageActionEffects {
   return {
-    getLocationHref: () => window.location.href,
+    getLocationHref: () =>
+      getWebOrigin() +
+      window.location.pathname +
+      window.location.search +
+      window.location.hash,
     copyToClipboard: (text) => navigator.clipboard.writeText(text),
     promptForEdit: (content) => window.prompt('Edit message', content),
     notifyCopyLinkSuccess: () => {
