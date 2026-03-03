@@ -54,3 +54,6 @@ model-error-response = { path = "../model-error-response", optional = true }
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+http-body-util = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }

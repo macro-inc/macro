@@ -3,6 +3,9 @@
 //! Provides the following route(s):
 //! - `GET /install-sync` - redirects to the github sync app installation page
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use axum::{Router, extract::State, response::Redirect};
