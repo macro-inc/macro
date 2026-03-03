@@ -13,7 +13,6 @@ import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
-import { Inbox } from './Inbox';
 import { Shortcuts } from './Shortcuts';
 import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
