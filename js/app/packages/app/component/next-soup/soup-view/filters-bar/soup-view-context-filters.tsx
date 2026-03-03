@@ -3,6 +3,10 @@ import type { ListView } from '@app/constants/list-views';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import XIcon from '@icon/regular/x.svg';
+import FileCodeIcon from '@icon/regular/file-code.svg';
+import FileImageIcon from '@icon/regular/file-image.svg';
+import FilePdfIcon from '@icon/regular/file-pdf.svg';
+import FileIcon from '@icon/regular/file.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
@@ -405,10 +409,26 @@ const ChannelsFilters = () => {
 
 const FilesFilters = () => {
   const fileTypeOptions: Option[] = [
-    { value: 'file-code', label: 'Code' },
-    { value: 'file-image', label: 'Images' },
-    { value: 'file-pdf', label: 'PDFs' },
-    { value: 'file-other', label: 'Other' },
+    {
+      value: 'file-code',
+      label: 'Code',
+      icon: () => <FileCodeIcon class="size-3.5" />,
+    },
+    {
+      value: 'file-image',
+      label: 'Images',
+      icon: () => <FileImageIcon class="size-3.5" />,
+    },
+    {
+      value: 'file-pdf',
+      label: 'PDFs',
+      icon: () => <FilePdfIcon class="size-3.5" />,
+    },
+    {
+      value: 'file-other',
+      label: 'Other',
+      icon: () => <FileIcon class="size-3.5" />,
+    },
   ];
 
   const fileType = useFilterOptions(fileTypeOptions);
@@ -810,10 +830,19 @@ export const FilterChipGroup = (props: FilterChipGroupProps) => {
             )}
             onClick={() => handleClick(option)}
           >
-            <Show when={option.icon}>
+            <Show
+              when={option.icon}
+              fallback={
+                <Show when={isActive(option.value)}>
+                  <CheckIcon class="size-3.5 shrink-0" />
+                </Show>
+              }
+            >
               {(icon) => (
                 <span class="size-3.5 flex items-center justify-center shrink-0">
-                  {icon()()}
+                  <Show when={isActive(option.value)} fallback={icon()()}>
+                    <CheckIcon class="size-3.5" />
+                  </Show>
                 </span>
               )}
             </Show>
