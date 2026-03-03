@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::models::{RecipientType, UpsertedContacts, UpsertedRecipient};
+use chrono::Timelike;
 use sqlx::Row;
 
 // ── senders_by_message_ids ──────────────────────────────────────────
@@ -461,7 +462,11 @@ async fn test_scheduled_send_times_by_message_ids_empty_input(
 async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
-    let send_time = chrono::Utc::now() + chrono::Duration::hours(1);
+    // Truncate to microseconds — Postgres TIMESTAMPTZ only stores microsecond precision
+    let send_time = {
+        let t = chrono::Utc::now() + chrono::Duration::hours(1);
+        t.with_nanosecond(t.nanosecond() / 1000 * 1000).unwrap()
+    };
 
     let mut tx = pool.begin().await?;
     super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time))
@@ -491,8 +496,11 @@ async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::
 async fn test_process_scheduled_message_upsert(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
-    let send_time1 = chrono::Utc::now() + chrono::Duration::hours(1);
-    let send_time2 = chrono::Utc::now() + chrono::Duration::hours(2);
+    // Truncate to microseconds — Postgres TIMESTAMPTZ only stores microsecond precision
+    let trunc =
+        |t: chrono::DateTime<chrono::Utc>| t.with_nanosecond(t.nanosecond() / 1000 * 1000).unwrap();
+    let send_time1 = trunc(chrono::Utc::now() + chrono::Duration::hours(1));
+    let send_time2 = trunc(chrono::Utc::now() + chrono::Duration::hours(2));
 
     // Insert first
     let mut tx = pool.begin().await?;

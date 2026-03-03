@@ -1,5 +1,6 @@
 pub(crate) mod add_attachment;
 pub(crate) mod add_forwarded_attachment;
+#[allow(dead_code)]
 pub(crate) mod create;
 pub(crate) mod delete;
 pub(crate) mod remove_attachment;
