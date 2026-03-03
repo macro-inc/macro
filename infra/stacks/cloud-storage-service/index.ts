@@ -251,9 +251,9 @@ const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const GITHUB_SYNC_APP_PEM = config.require('github_sync_app_pem');
+const GITHUB_SYNC_APP_PEM_SECRET_KEY = config.require('github_sync_app_pem');
 const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM })
+  .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM_SECRET_KEY })
   .apply((secret) => secret.arn);
 
 const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
@@ -441,8 +441,8 @@ const cloudStorageService = new CloudStorageService(
         value: GITHUB_SYNC_APP_URL,
       },
       {
-        name: 'GITHUB_SYNC_APP_PEM',
-        value: GITHUB_SYNC_APP_PEM,
+        name: 'GITHUB_SYNC_APP_PEM_SECRET_KEY',
+        value: GITHUB_SYNC_APP_PEM_SECRET_KEY,
       },
       {
         name: 'GITHUB_SYNC_APP_CLIENT_ID',
