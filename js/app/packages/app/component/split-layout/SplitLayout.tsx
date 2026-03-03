@@ -37,6 +37,7 @@ import {
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
+import { isListViewID } from '@app/constants/list-views';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -370,7 +371,7 @@ function SplitPanel(props: SplitPanelProps) {
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     isNotUnifiedList: () => {
       const content = props.handle.content();
-      return !(content.type === 'component' && content.id === 'unified-list');
+      return !isListViewID(content.id);
     },
   });
 

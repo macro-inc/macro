@@ -29,6 +29,7 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
 import { setSidebarOpen } from '@app/component/Layout';
+import { isListViewID } from '@app/constants/list-views';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -107,7 +108,7 @@ function SplitCloseButton() {
 
   const label = createMemo(() => {
     const isOnlySplit = layout.manager.splits().length === 1;
-    const isNotUnifiedList = context.handle.content().id !== 'unified-list';
+    const isNotUnifiedList = !isListViewID(context.handle.content().id);
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 

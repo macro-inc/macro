@@ -18,6 +18,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
+import { isListViewID } from '@app/constants/list-views';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -58,7 +59,7 @@ export const useEntityActionHotkeys = (
   const getEntitiesForAction = (): EntityData[] => {
     if (
       splitHandle?.content().type === 'component' &&
-      splitHandle?.content().id === 'unified-list'
+      isListViewID(splitHandle?.content().id)
     ) {
       const selected = soup.selection.selected();
       if (selected.length > 0) return selected;

@@ -11,6 +11,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];
@@ -39,7 +40,7 @@ export function decodePairs(segments: string[]): SplitContent[] {
       }
     }
   }
-  return pairs.length ? pairs : [{ type: 'component', id: 'unified-list' }];
+  return pairs.length ? pairs : [{ type: 'component', id: LIST_VIEW_ID.inbox }];
 }
 
 export function encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
@@ -128,25 +129,6 @@ export function focusAdjacentSplit(direction: 'left' | 'right') {
   if (!adjacentSplitId) return;
   splitManager.activateSplit(adjacentSplitId);
   splitManager.returnFocus();
-}
-
-/**
- * Check if there's a unified-list split with a particular view open. Note: not necessarily the active split.
- */
-export function isViewOpen(manager: SplitManager | undefined, viewId: ViewId) {
-  if (!manager) return false;
-  const split = manager.getSplitByContent('component', 'unified-list');
-  return split?.meta()?.viewId === viewId;
-}
-
-/**
- * Reactive accessor indicating whether there's a unified-list split with a particular view open. Note: not necessarily the active split.
- */
-export function createIsViewOpenMemo(
-  manager: SplitManager | undefined,
-  viewId: ViewId
-) {
-  return createMemo(() => isViewOpen(manager, viewId));
 }
 
 /**

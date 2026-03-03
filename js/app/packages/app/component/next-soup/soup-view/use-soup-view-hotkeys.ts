@@ -13,6 +13,7 @@ import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { isListViewID } from '@app/constants/list-views';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -34,7 +35,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     getSplitCount,
   } = options;
 
-  const splitIsUnifiedList = () => splitHandle.content().id === 'unified-list';
+  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
   // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
   const clearMultiCondition = () =>
@@ -263,10 +264,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         return true;
       }
       if (goHomeCondition()) {
-        splitHandle.replace({
-          next: { type: 'component', id: 'unified-list' },
-          referredFrom: 'unified-list',
-        });
+        splitHandle.goBack();
         return true;
       }
       return false;

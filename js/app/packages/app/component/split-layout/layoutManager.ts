@@ -25,6 +25,7 @@ import {
   resolveComponent,
 } from './componentRegistry';
 import { createHistory, type History } from './history';
+import { LIST_VIEW_ID, ListView } from '@app/constants/list-views';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
 
@@ -96,7 +97,7 @@ export type PopoverSplitHandle = {
 };
 
 export type ReferredFrom =
-  | 'unified-list'
+  | ListView
   | 'kommand-menu'
   | 'mention'
   | 'attachment'
@@ -438,7 +439,7 @@ export function createSplitLayout(
 
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
     type: 'component',
-    id: 'unified-list',
+    id: LIST_VIEW_ID.inbox,
   };
 
   function dispatchEvent(
