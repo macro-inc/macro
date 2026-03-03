@@ -108,6 +108,25 @@ where
         })
     }
 
+    #[tracing::instrument(skip(self))]
+    fn dangerously_assert_internal_user<T: RequiredAccessLevel>(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T> {
+        EntityAccessReceipt {
+            auth: EntityAccessAuth::Internal,
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission: EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+            _marker: PhantomData,
+        }
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_access_level(
         &self,

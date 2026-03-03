@@ -95,6 +95,16 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
 
+    /// Dangerously generates a EntityAccessReceipt for an internal user
+    /// **NOTE** This should only be used in specific circumstances and not as a way
+    /// to circumvent AI tool permissioning
+    /// This **DOES NOT** assert the existence of the item
+    fn dangerously_assert_internal_user<T: RequiredAccessLevel>(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T>;
+
     /// Get the access level a user has for an entity.
     ///
     /// Returns `None` if the user has no access to the entity.
