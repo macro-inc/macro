@@ -69,6 +69,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
             const closeEvent = new CloseEvent('close', {
               code: message.data?.code || 1000,
               reason: message.data?.reason || '',
+              wasClean: true,
             });
             this.handleClose(closeEvent);
             break;
@@ -91,6 +92,14 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       this._readyState = this.CLOSED;
       const errorEvent = new Event('error');
       this.handleError(errorEvent);
+      // Fire a close event so the Websocket layer can schedule retries,
+      // matching native WebSocket behaviour where error is always followed by close.
+      const closeEvent = new CloseEvent('close', {
+        code: 1006,
+        reason: 'Connection failed',
+        wasClean: false,
+      });
+      this.handleClose(closeEvent);
     }
   }
 
@@ -213,6 +222,19 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
     }
   }
 
+  private handleSendRejection(error: unknown) {
+    console.error(`Tauri WebSocket send error for ${this._url}:`, error);
+    this._readyState = this.CLOSED;
+    this.handleError(new Event('error'));
+    this.handleClose(
+      new CloseEvent('close', {
+        code: 1006,
+        reason: 'Send failed',
+        wasClean: false,
+      })
+    );
+  }
+
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     if (!this.ws || this._readyState !== this.OPEN) {
       throw new Error(
@@ -223,7 +245,9 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
     try {
       if (typeof data === 'string') {
         // Send as text message
-        this.ws.send({ type: 'Text', data });
+        this.ws
+          .send({ type: 'Text', data })
+          .catch((e: unknown) => this.handleSendRejection(e));
       } else {
         // Convert binary data to number array for Tauri
         let uint8Array: Uint8Array;
@@ -254,7 +278,9 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
         }
 
         // Send as binary message with number array
-        this.ws.send({ type: 'Binary', data: Array.from(uint8Array) });
+        this.ws
+          .send({ type: 'Binary', data: Array.from(uint8Array) })
+          .catch((e: unknown) => this.handleSendRejection(e));
       }
     } catch (error) {
       console.error('Error sending message:', error);
