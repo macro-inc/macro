@@ -106,27 +106,10 @@ pub trait Auth: Send + Sync + 'static {
     ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>>;
 }
 
-/// Service interface for github operations.
+/// Service interface for github sync operations (webhooks and sync app).
 ///
-/// Orchestrates business logic using the repository and external services.
-pub trait GithubService: Send + Sync + 'static {
-    /// Constructs the oauth url to authenticate with github
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
-        &self,
-        redirect_uri: &str,
-        state: T,
-    ) -> Result<String, GithubError>;
-
-    /// Uses token exchange to link the user to the github account
-    fn link_user(
-        &self,
-        user_id: &MacroUserId<Lowercase<'static>>,
-        fusionauth_user_id: &uuid::Uuid,
-        in_progress_user_link: &uuid::Uuid,
-        redirect_uri: &str,
-        code: &str,
-    ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
-
+/// Handles webhook validation/processing and sync app installation token generation.
+pub trait GithubSyncService: Send + Sync + 'static {
     /// Validates the incoming webhook event and returns back the `ValidatedGithubWebhookEvent`
     fn validate_webhook_event(
         &self,
@@ -149,4 +132,26 @@ pub trait GithubService: Send + Sync + 'static {
         &self,
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+}
+
+/// Service interface for github link operations (OAuth and account linking).
+///
+/// Handles OAuth URL construction and user account linking.
+pub trait GithubLinkService: Send + Sync + 'static {
+    /// Constructs the oauth url to authenticate with github
+    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
+        &self,
+        redirect_uri: &str,
+        state: T,
+    ) -> Result<String, GithubError>;
+
+    /// Uses token exchange to link the user to the github account
+    fn link_user(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        fusionauth_user_id: &uuid::Uuid,
+        in_progress_user_link: &uuid::Uuid,
+        redirect_uri: &str,
+        code: &str,
+    ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
 }

@@ -2,40 +2,20 @@ use std::sync::Arc;
 
 use axum::{Router, http::Request};
 use http_body_util::BodyExt;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use tower::util::ServiceExt;
 
 use crate::domain::{
-    models::{GithubError, GithubInstallationAccessToken, GithubLink, ValidatedGithubWebhookEvent},
-    ports::GithubService,
+    models::{GithubError, GithubInstallationAccessToken, ValidatedGithubWebhookEvent},
+    ports::GithubSyncService,
 };
 
 use super::{GithubSyncRouterState, github_sync_router};
 
-struct MockGithubService {
+struct MockGithubSyncService {
     sync_app_url: String,
 }
 
-impl GithubService for MockGithubService {
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
-        &self,
-        _redirect_uri: &str,
-        _state: T,
-    ) -> Result<String, GithubError> {
-        unimplemented!()
-    }
-
-    async fn link_user(
-        &self,
-        _user_id: &MacroUserId<Lowercase<'static>>,
-        _fusionauth_user_id: &uuid::Uuid,
-        _in_progress_user_link: &uuid::Uuid,
-        _redirect_uri: &str,
-        _code: &str,
-    ) -> Result<GithubLink, GithubError> {
-        unimplemented!()
-    }
-
+impl GithubSyncService for MockGithubSyncService {
     async fn validate_webhook_event(
         &self,
         _event_type: &str,
@@ -66,7 +46,7 @@ impl GithubService for MockGithubService {
 
 fn mock_router(sync_app_url: &str) -> Router {
     github_sync_router(GithubSyncRouterState {
-        service: Arc::new(MockGithubService {
+        service: Arc::new(MockGithubSyncService {
             sync_app_url: sync_app_url.to_string(),
         }),
     })

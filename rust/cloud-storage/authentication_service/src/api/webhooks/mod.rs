@@ -7,7 +7,7 @@ pub(in crate::api) mod user;
 /// Webhook endpoints that use internal api key authentication
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let github_webhook_router_state = GithubWebhookRouterState {
-        service: state.github_service,
+        service: state.github_sync_service,
     };
 
     Router::new()

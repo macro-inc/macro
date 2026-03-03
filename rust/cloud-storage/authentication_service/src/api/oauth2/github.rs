@@ -3,7 +3,7 @@ use axum::{
     Json,
     response::{Html, IntoResponse, Response},
 };
-use github::domain::{models::GithubError, ports::GithubService};
+use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
 use model::response::ErrorResponse;
 use tower_cookies::Cookies;
@@ -78,7 +78,7 @@ async fn link_user(
         .map(|id| id.into_owned().lowercase())
         .context("valid macro user id")?;
 
-    ctx.github_service
+    ctx.github_link_service
         .link_user(
             &macro_user_id,
             &fusionauth_user_id,

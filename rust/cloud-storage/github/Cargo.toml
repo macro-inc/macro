@@ -5,8 +5,10 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "inbound", "outbound", "axum"]
+default = ["ports", "sync", "link", "inbound", "outbound", "axum"]
 ports = []
+sync = ["dep:reqwest", "ports"]
+link = ["ports"]
 inbound = ["axum", "ports"]
 outbound = [
   "dep:sqlx",

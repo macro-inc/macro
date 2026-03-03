@@ -1,30 +1,19 @@
-use crate::domain::{
-    models::ValidatedGithubWebhookEvent,
-    ports::{GithubService, MockAuth, MockGithubOauth, MockGithubRepo},
-};
+use crate::domain::{models::ValidatedGithubWebhookEvent, ports::GithubSyncService};
 
 use super::*;
 
-fn make_service() -> GithubServiceImpl<MockGithubRepo, MockGithubOauth, MockAuth> {
-    GithubServiceImpl::new(
-        MockGithubRepo::new(),
-        MockGithubOauth::new(),
-        MockAuth::new(),
-        GithubConfig {
-            client_id: "test-client-id".to_string(),
-            client_secret: "test-client-secret".to_string(),
-            idp_id: "test-idp-id".to_string(),
-            webhook_secret: "test-webhook-secret".to_string(),
-            github_sync_app_url: "test".to_string(),
-            sync_app_pem: "test-sync-app-pem".to_string(),
-            sync_app_client_id: "test-sync-app-client-id".to_string(),
-        },
-    )
+fn make_sync_service() -> GithubSyncServiceImpl {
+    GithubSyncServiceImpl::new(GithubSyncConfig {
+        webhook_secret: "test-webhook-secret".to_string(),
+        github_sync_app_url: "test".to_string(),
+        sync_app_pem: "test-sync-app-pem".to_string(),
+        sync_app_client_id: "test-sync-app-client-id".to_string(),
+    })
 }
 
 #[tokio::test]
 async fn pr_with_task_id_in_title() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
@@ -43,7 +32,7 @@ async fn pr_with_task_id_in_title() {
 
 #[tokio::test]
 async fn pr_with_task_id_in_branch_name() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
@@ -62,7 +51,7 @@ async fn pr_with_task_id_in_branch_name() {
 
 #[tokio::test]
 async fn issue_comment_with_task_id() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "issue_comment".to_string(),
         serde_json::json!({
@@ -79,7 +68,7 @@ async fn issue_comment_with_task_id() {
 
 #[tokio::test]
 async fn event_with_no_task_ids() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
@@ -98,7 +87,7 @@ async fn event_with_no_task_ids() {
 
 #[tokio::test]
 async fn unknown_event_type_skipped() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "ping".to_string(),
         serde_json::json!({"zen": "Keep it logically awesome."}),
@@ -110,7 +99,7 @@ async fn unknown_event_type_skipped() {
 
 #[tokio::test]
 async fn multiple_task_ids_in_one_event() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
@@ -129,7 +118,7 @@ async fn multiple_task_ids_in_one_event() {
 
 #[tokio::test]
 async fn pull_request_review_with_task_id() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request_review".to_string(),
         serde_json::json!({
@@ -146,7 +135,7 @@ async fn pull_request_review_with_task_id() {
 
 #[tokio::test]
 async fn pull_request_review_comment_with_task_id() {
-    let service = make_service();
+    let service = make_sync_service();
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request_review_comment".to_string(),
         serde_json::json!({

@@ -10,11 +10,11 @@ use std::sync::Arc;
 
 use axum::{Router, extract::State, response::Redirect};
 
-use crate::domain::ports::GithubService;
+use crate::domain::ports::GithubSyncService;
 
-/// Router state containing the github service.
+/// Router state containing the github sync service.
 pub struct GithubSyncRouterState<T> {
-    /// The github service implementation.
+    /// The github sync service implementation.
     pub service: Arc<T>,
 }
 
@@ -30,7 +30,7 @@ impl<T> Clone for GithubSyncRouterState<T> {
 /// Build the github sync router.
 pub fn github_sync_router<T, S>(state: GithubSyncRouterState<T>) -> Router<S>
 where
-    T: GithubService,
+    T: GithubSyncService,
     S: Send + Sync + 'static,
 {
     Router::new()
@@ -48,7 +48,7 @@ where
     )
 )]
 #[tracing::instrument(skip(ctx))]
-pub async fn install_sync_handler<T: GithubService>(
+pub async fn install_sync_handler<T: GithubSyncService>(
     State(ctx): State<GithubSyncRouterState<T>>,
 ) -> Redirect {
     let url = ctx.service.get_github_sync_app_url();

@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use github::domain::{models::GithubError, ports::GithubService};
+use github::domain::{models::GithubError, ports::GithubLinkService};
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
@@ -113,7 +113,7 @@ pub async fn init_github_link_handler(
     let redirect_uri = crate::api::oauth2::format_redirect_uri("github");
 
     let authorization_url = ctx
-        .github_service
+        .github_link_service
         .construct_oauth_url(&redirect_uri, state)
         .map_err(InitGithubLinkError::GithubServiceError)?;
 

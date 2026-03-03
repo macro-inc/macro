@@ -67,7 +67,7 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     let github_sync_router_state = GithubSyncRouterState {
-        service: state.github_service.clone(),
+        service: state.github_sync_service.clone(),
     };
 
     Router::new()

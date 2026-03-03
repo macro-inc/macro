@@ -14,12 +14,12 @@ use reqwest::StatusCode;
 
 use crate::domain::{
     models::{GithubError, ValidatedGithubWebhookEvent},
-    ports::GithubService,
+    ports::GithubSyncService,
 };
 
-/// Router state containing the github service.
+/// Router state containing the github sync service.
 pub struct GithubWebhookRouterState<T> {
-    /// The github service implementation.
+    /// The github sync service implementation.
     pub service: Arc<T>,
 }
 
@@ -35,7 +35,7 @@ impl<T> Clone for GithubWebhookRouterState<T> {
 /// Extractor that validates an incoming GitHub webhook event.
 ///
 /// Reads the `X-Hub-Signature-256` header and the raw request body, then
-/// delegates to [`GithubService::validate_webhook_event`] for HMAC
+/// delegates to [`GithubSyncService::validate_webhook_event`] for HMAC
 /// verification. On success the extractor yields a
 /// [`ValidatedGithubWebhookEvent`].
 pub struct GithubWebhookEventExtractor(pub ValidatedGithubWebhookEvent);
@@ -43,7 +43,7 @@ pub struct GithubWebhookEventExtractor(pub ValidatedGithubWebhookEvent);
 #[async_trait]
 impl<T> FromRequest<GithubWebhookRouterState<T>> for GithubWebhookEventExtractor
 where
-    T: GithubService,
+    T: GithubSyncService,
 {
     type Rejection = GithubError;
 
@@ -82,7 +82,7 @@ where
 /// Build the github webhook router.
 pub fn github_webhook_router<T, S>(state: GithubWebhookRouterState<T>) -> Router<S>
 where
-    T: GithubService,
+    T: GithubSyncService,
     S: Send + Sync + 'static,
 {
     Router::new()
@@ -92,7 +92,7 @@ where
 
 /// The main entrypoint for all github webhook events handling
 #[tracing::instrument(err, skip(ctx, event))]
-pub async fn github_webhook_event_handler<T: GithubService>(
+pub async fn github_webhook_event_handler<T: GithubSyncService>(
     State(ctx): State<GithubWebhookRouterState<T>>,
     GithubWebhookEventExtractor(event): GithubWebhookEventExtractor,
 ) -> Result<StatusCode, GithubError> {
