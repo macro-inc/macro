@@ -53,9 +53,6 @@ pub struct Config {
     /// The document storage service url
     pub document_storage_service_url: String,
 
-    /// The notification service url
-    pub notification_service_url: String,
-
     /// The notification queue
     pub notification_queue: String,
 
@@ -122,9 +119,6 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let notification_service_url = std::env::var("NOTIFICATION_SERVICE_URL")
-            .context("NOTIFICATION_SERVICE_URL must be provided")?;
-
         let notification_queue =
             std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
 
@@ -169,7 +163,6 @@ impl Config {
             port,
             service_internal_auth_key,
             document_storage_service_url,
-            notification_service_url,
             notification_queue,
             search_event_queue,
             stripe_price_id,

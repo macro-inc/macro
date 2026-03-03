@@ -43,8 +43,10 @@ doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
 fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
+github = { path = "../github" }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
@@ -58,7 +60,6 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
   "account_merge_request",
   "team",
 ] }
-last_online_tracker = { path = "../last_online_tracker" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env", features = ["frontend_url"] }
 macro_env_var = { path = "../macro_env_var" }
@@ -79,7 +80,6 @@ models_team = { path = "../models_team" }
 native_app_service = { path = "../native_app_service" }
 non_empty = { path = "../non_empty" }
 notification = { path = "../notification" }
-notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
 rand = { workspace = true }
 redis = { workspace = true }
@@ -111,7 +111,6 @@ user_quota = { path = "../user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-github = { path = "../github" }
 
 
 [dev-dependencies]

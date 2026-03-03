@@ -594,7 +594,6 @@ dependencies = [
  "native_app_service",
  "non_empty",
  "notification",
- "notification_service_client",
  "openssl",
  "rand 0.9.0",
  "redis",
@@ -6511,18 +6510,6 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
-]
-
-[[package]]
-name = "notification_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tracing",
 ]
 
 [[package]]

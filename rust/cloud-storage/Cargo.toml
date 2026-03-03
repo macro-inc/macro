@@ -8,8 +8,8 @@ members = [
   "ai_toolset",
   "anthropic",
   "authentication_service",
-  "channels",
   "authentication_service_client",
+  "channels",
   "comms_db_client",
   "comms_service",
   "comms_service_client",
@@ -27,8 +27,8 @@ members = [
   "document_storage_service",
   "document_storage_service_client",
   "document_sub_type",
-  "documents",
   "document_text_extractor",
+  "documents",
   "docx_unzip_handler",
   "dynamodb_client",
   "email_contact_search",
@@ -62,8 +62,8 @@ members = [
   "macro_middleware",
   "macro_project_utils",
   "macro_redis",
-  "macro_sha_count_client",
   "macro_service_client",
+  "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
   "mention_utils",
@@ -87,7 +87,6 @@ members = [
   "notification_db_client",
   "notification_sandbox",
   "notification_service",
-  "notification_service_client",
   "opensearch_client",
   "organization_retention_handler",
   "organization_retention_trigger",
@@ -149,18 +148,18 @@ base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
-csv = "1"
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
+csv = "1"
 dashmap = "6.1.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
-inquire = "0.7"
 futures = "0.3.31"
 hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
+inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
 lambda_runtime = "0.13.0"
@@ -169,6 +168,9 @@ log = "0.4.26"
 mockall = "0.13"
 nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
+opentelemetry = "0.31.0"
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
 pdfium-render = { version = "0.8.28" }
@@ -206,9 +208,6 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
-opentelemetry = "0.31.0"
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }

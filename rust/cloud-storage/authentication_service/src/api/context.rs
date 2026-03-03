@@ -56,7 +56,6 @@ pub(crate) struct ApiContext {
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
-    pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub sqs_client: Arc<sqs_client::SQS>,

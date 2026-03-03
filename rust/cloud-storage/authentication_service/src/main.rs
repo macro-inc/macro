@@ -24,7 +24,6 @@ use notification::outbound::{
     push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
     repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
 };
-use notification_service_client::NotificationServiceClient;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -173,11 +172,6 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized document storage service client");
 
-    let notification_service_client = NotificationServiceClient::new(
-        config.service_internal_auth_key.clone(),
-        config.notification_service_url.clone(),
-    );
-
     let macro_cache_client = macro_cache_client::MacroCache::new(config.redis_uri.as_str());
 
     tracing::trace!("initialized redis client");
@@ -275,7 +269,6 @@ async fn main() -> anyhow::Result<()> {
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
-            notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service: Arc::new(notification_ingress_service),
             sqs_client: Arc::new(sqs_client),
