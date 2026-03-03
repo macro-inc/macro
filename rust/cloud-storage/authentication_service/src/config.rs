@@ -73,6 +73,8 @@ pub struct Config {
     pub github_idp_id: String,
     /// The github webhook secret key
     pub github_webhook_secret_key: String,
+    /// The github sync app url
+    pub github_sync_app_url: String,
 }
 
 impl Config {
@@ -138,6 +140,9 @@ impl Config {
         let github_webhook_secret_key = std::env::var("GITHUB_WEBHOOK_SECRET_KEY")
             .context("GITHUB_WEBHOOK_SECRET_KEY must be provided")?;
 
+        let github_sync_app_url = std::env::var("GITHUB_SYNC_APP_URL")
+            .context("GITHUB_SYNC_APP_URL must be provided")?;
+
         Ok(Config {
             base_url,
             database_url,
@@ -163,6 +168,7 @@ impl Config {
             github_client_secret,
             github_idp_id,
             github_webhook_secret_key,
+            github_sync_app_url,
         })
     }
 }

@@ -41,6 +41,8 @@ const GITHUB_IDP_ID = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const GITHUB_SYNC_APP_URL = config.require('github_sync_app_url');
+
 const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
 const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
@@ -322,6 +324,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'GITHUB_WEBHOOK_SECRET_KEY',
       value: GITHUB_WEBHOOK_SECRET_KEY,
+    },
+    {
+      name: 'GITHUB_SYNC_APP_URL',
+      value: GITHUB_SYNC_APP_URL,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

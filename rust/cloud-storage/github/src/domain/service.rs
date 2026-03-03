@@ -27,6 +27,8 @@ pub struct GithubConfig {
     pub idp_id: String,
     /// The webhook secret used to validate github webhook events
     pub webhook_secret: String,
+    /// The url to the github sync app installation page
+    pub github_sync_app_url: String,
 }
 
 /// The concrete github service implementation.

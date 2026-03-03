@@ -252,6 +252,7 @@ async fn main() -> anyhow::Result<()> {
             client_secret: config.github_client_secret,
             idp_id: config.github_idp_id,
             webhook_secret: github_webhook_secret,
+            github_sync_app_url: config.github_sync_app_url,
         },
     );
 
