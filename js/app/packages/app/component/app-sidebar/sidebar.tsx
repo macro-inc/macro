@@ -22,6 +22,8 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { setSidebarOpen, sidebarOpen } from '@app/component/Layout';
+import { isMobile } from '@core/mobile/isMobile';
 
 interface SidebarItem {
   id: ListView;
@@ -92,67 +94,77 @@ export const AppSidebar = (props: AppSidebarProps) => {
   };
 
   return (
-    <div
-      class={cn(
-        'h-full border-r-edge-muted border-r-1 bg-panel pt-2 flex flex-col gap-4 mobile:fixed mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
-        props.expanded !== false
-          ? 'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
-          : '-translate-x-full overflow-hidden opacity-0'
-      )}
-    >
-      <div class="flex items-center justify-between py-2 pl-3 pr-2">
-        <LogoIcon class="size-6 text-accent" />
-        <div class="flex items-center gap-1">
-          <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
-            <button
-              type="button"
-              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
-              onClick={handleSearchClick}
+    <>
+      <Show when={isMobile() && sidebarOpen()}>
+        <div
+          class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 bg-edge-muted mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
+          onClick={() => setSidebarOpen(false)}
+        />
+      </Show>
+      <div
+        class={cn(
+          'h-full border-r-edge-muted border-r-1 bg-panel pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
+          props.expanded !== false
+            ? 'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+            : '-translate-x-full overflow-hidden opacity-0'
+        )}
+      >
+        <div class="flex items-center justify-between py-2 pl-3 pr-2">
+          <LogoIcon class="size-6 text-accent" />
+          <div class="flex items-center gap-1">
+            <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
+              <button
+                type="button"
+                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+                onClick={handleSearchClick}
+              >
+                <SearchIcon class="size-3.5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              tooltip={<LabelAndHotKey label="Command palette" shortcut="⌘K" />}
             >
-              <SearchIcon class="size-3.5" />
-            </button>
-          </Tooltip>
-          <Tooltip
-            tooltip={<LabelAndHotKey label="Command palette" shortcut="⌘K" />}
-          >
-            <button
-              type="button"
-              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
-              onClick={handleCommandPaletteClick}
+              <button
+                type="button"
+                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+                onClick={handleCommandPaletteClick}
+              >
+                <CommandIcon class="size-3.5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
             >
-              <CommandIcon class="size-3.5" />
-            </button>
-          </Tooltip>
-          <Tooltip tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}>
-            <button
-              type="button"
-              class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
-              onClick={handleCreateClick}
-            >
-              <PlusIcon class="size-3.5" />
-            </button>
-          </Tooltip>
+              <button
+                type="button"
+                class="flex items-center justify-center size-6 bg-ink/10 text-ink-muted hover:bg-ink/20 hover:text-ink rounded transition-colors"
+                onClick={handleCreateClick}
+              >
+                <PlusIcon class="size-3.5" />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        <nav>
+          <ul class="w-full h-full px-2 flex flex-col gap-1">
+            <For each={SIDEBAR_LINKS}>
+              {(link) => (
+                <li>
+                  <SidebarLink {...link} />
+                </li>
+              )}
+            </For>
+          </ul>
+        </nav>
+        <div class="block max-h-[clamp(10%,60%,20rem)]">
+          <ChannelsUnreadWidget />
+        </div>
+
+        <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto">
+          <UnreadNotificationsWidget />
         </div>
       </div>
-      <nav>
-        <ul class="w-full h-full px-2 flex flex-col gap-1">
-          <For each={SIDEBAR_LINKS}>
-            {(link) => (
-              <li>
-                <SidebarLink {...link} />
-              </li>
-            )}
-          </For>
-        </ul>
-      </nav>
-      <div class="block max-h-[clamp(10%,60%,20rem)]">
-        <ChannelsUnreadWidget />
-      </div>
-
-      <div class="block max-h-[clamp(10%,60%,20rem)] border-t border-t-edge-muted mt-auto">
-        <UnreadNotificationsWidget />
-      </div>
-    </div>
+    </>
   );
 };
 
