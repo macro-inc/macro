@@ -17,21 +17,14 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        // Debug: Log the raw userInfo
-        NSLog("NotificationServiceExtension: Raw userInfo: \(request.content.userInfo)")
-
         guard let urlString = request.content.userInfo["senderProfilePictureUrl"] as? String,
               let url = URL(string: urlString)
         else {
-            NSLog("NotificationServiceExtension: Failed to extract URL. senderProfilePictureUrl exists: \(request.content.userInfo["senderProfilePictureUrl"] != nil)")
             contentHandler(content)
             return
         }
 
-        // Extract sender name from the notification title
         let senderName = content.title
-
-        NSLog("NotificationServiceExtension: Downloading image from: \(urlString)")
 
         URLSession.shared.downloadTask(with: url) { location, response, error in
             if let error = error {
@@ -41,12 +34,9 @@ final class NotificationService: UNNotificationServiceExtension {
             }
 
             guard let location = location else {
-                NSLog("NotificationServiceExtension: No location returned")
                 contentHandler(content)
                 return
             }
-
-            NSLog("NotificationServiceExtension: Downloaded to: \(location)")
 
             let tempDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -57,7 +47,6 @@ final class NotificationService: UNNotificationServiceExtension {
                     withIntermediateDirectories: true
                 )
             } catch {
-                NSLog("NotificationServiceExtension: Failed to create temp dir: \(error)")
                 contentHandler(content)
                 return
             }
@@ -66,9 +55,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
             do {
                 try FileManager.default.moveItem(at: location, to: fileURL)
-                NSLog("NotificationServiceExtension: Moved file to: \(fileURL)")
             } catch {
-                NSLog("NotificationServiceExtension: Failed to move file: \(error)")
                 contentHandler(content)
                 return
             }
@@ -142,10 +129,8 @@ final class NotificationService: UNNotificationServiceExtension {
         // Update the notification content with the intent
         do {
             let updatedContent = try content.updating(from: intent)
-            NSLog("NotificationServiceExtension: Successfully created communication notification")
             contentHandler(updatedContent)
         } catch {
-            NSLog("NotificationServiceExtension: Failed to update content with intent: \(error)")
             contentHandler(content)
         }
     }
