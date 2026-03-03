@@ -34,6 +34,11 @@ import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { ChannelThread } from '../Thread';
+import {
+  ChannelInput,
+  createChannelInputController,
+  createInputAttachmentTracker,
+} from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
@@ -99,44 +104,67 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
   });
 
+  const attachmentTracker = createInputAttachmentTracker();
+
+  const channelInputController = createChannelInputController({
+    inputId: `channel-input-${props.channelId}`,
+    placeholder: 'Message channel',
+    attachmentTracker,
+  });
+
   return (
     <Suspense>
-      <Show when={messages().length > 0}>
-        <StaticMarkdownContext>
-          <div class="relative h-full">
-            <ThreadList
-              data={messages}
-              initialScrollTarget={threadListInitialScrollTarget()}
-              shift={shift}
-              onScrollNearTop={threadPaginator.shiftPaginate}
-              onScrollNearBottom={threadPaginator.prependPaginate}
-              onNavigationReady={setThreadListNavigation}
-              onScrollStateChange={setThreadListScrollState}
-            >
-              {(item) => {
-                const state = threadManager.getOrCreateThreadState(item.id);
-                return (
-                  <ChannelThread
-                    data={() => item}
-                    channelId={() => props.channelId}
-                    getMessageActions={getMessageActions}
-                    isExpanded={state.isExpanded}
-                    setIsExpanded={state.setIsExpanded}
-                    listMeta={listMetaByMessageId()[item.id]}
-                    threadActions={{
-                      onDismissNewMessages: activityTracker.dismissNewMessages,
-                    }}
-                  />
-                );
-              }}
-            </ThreadList>
-            <ScrollToBottomOverlay
-              navigation={threadListNavigation}
-              scrollState={threadListScrollState}
-            />
-          </div>
-        </StaticMarkdownContext>
-      </Show>
+      <div class="relative h-full flex flex-col">
+        <Show when={messages().length > 0}>
+          <StaticMarkdownContext>
+            <div class="relative flex-1 min-h-0">
+              <ThreadList
+                data={messages}
+                initialScrollTarget={threadListInitialScrollTarget()}
+                shift={shift}
+                onScrollNearTop={threadPaginator.shiftPaginate}
+                onScrollNearBottom={threadPaginator.prependPaginate}
+                onNavigationReady={setThreadListNavigation}
+                onScrollStateChange={setThreadListScrollState}
+              >
+                {(item) => {
+                  const state = threadManager.getOrCreateThreadState(item.id);
+                  return (
+                    <ChannelThread
+                      data={() => item}
+                      channelId={() => props.channelId}
+                      getMessageActions={getMessageActions}
+                      isExpanded={state.isExpanded}
+                      setIsExpanded={state.setIsExpanded}
+                      listMeta={listMetaByMessageId()[item.id]}
+                      threadActions={{
+                        onDismissNewMessages:
+                          activityTracker.dismissNewMessages,
+                      }}
+                    />
+                  );
+                }}
+              </ThreadList>
+              <ScrollToBottomOverlay
+                navigation={threadListNavigation}
+                scrollState={threadListScrollState}
+              />
+            </div>
+          </StaticMarkdownContext>
+        </Show>
+
+        <Suspense>
+          <StaticMarkdownContext>
+            <div class="pb-2 w-full flex justify-center">
+              <ChannelInput
+                input={channelInputController.input()}
+                actions={channelInputController.actions}
+                attachmentTracker={attachmentTracker}
+              />
+            </div>
+          </StaticMarkdownContext>
+        </Suspense>
+      </div>
     </Suspense>
   );
 }

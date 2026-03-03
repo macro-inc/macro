@@ -172,7 +172,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     ...(usersAndGroups() ?? []),
     ...(docs() ?? []),
     ...(channels() ?? []),
-    ...(emails() ?? []),
+    // ...(emails() ?? []),
     ...(dates() ?? []),
   ]);
 
@@ -207,12 +207,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         getData: () => channels() ?? [],
         getFullCount: () => channels()?.length ?? 0,
       },
-      {
-        id: 'emails',
-        label: 'Emails',
-        getData: () => emails() ?? [],
-        getFullCount: () => emails()?.length ?? 0,
-      },
+      // {
+      //   id: 'emails',
+      //   label: 'Emails',
+      //   getData: () => emails() ?? [],
+      //   getFullCount: () => emails()?.length ?? 0,
+      // },
       {
         id: 'dates',
         label: 'Dates',
@@ -363,7 +363,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       emailUnifiedSearchInfiniteQuery.hasNextPage &&
       !emailUnifiedSearchInfiniteQuery.isFetching
     ) {
-      emailUnifiedSearchInfiniteQuery.fetchNextPage();
+      // emailUnifiedSearchInfiniteQuery.fetchNextPage();
     }
     if (controller.selectedIndex() >= items.length) {
       controller.selectItem(items.length - 1);

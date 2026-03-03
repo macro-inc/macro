@@ -6,7 +6,7 @@ import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import { searchClient } from '@service-search/client';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, untrack } from 'solid-js';
 
 export type SearchSoupQueryArgs = {
   params: {
