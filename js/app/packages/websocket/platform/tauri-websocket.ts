@@ -223,8 +223,10 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
   }
 
   private handleSendRejection(error: unknown) {
+    if (this._readyState === this.CLOSED) return;
     console.error(`Tauri WebSocket send error for ${this._url}:`, error);
     this._readyState = this.CLOSED;
+    this.removeListener?.();
     this.handleError(new Event('error'));
     this.handleClose(
       new CloseEvent('close', {
