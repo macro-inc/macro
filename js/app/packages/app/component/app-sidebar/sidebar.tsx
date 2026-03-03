@@ -195,11 +195,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
         e.preventDefault();
         layout.openWithSplit(
           {
-            id: props.href.slice(1),
             type: 'component',
+            id: props.id,
           },
           {
             preferNewSplit: e.shiftKey,
+            mergeHistory: true,
           }
         );
       }}

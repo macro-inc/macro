@@ -1,7 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
-import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { type Accessor, createMemo, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';

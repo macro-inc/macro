@@ -1,5 +1,4 @@
-import { BlockAlias, BlockName } from '@core/block';
-import { match } from 'ts-pattern';
+import type { BlockAlias, BlockName } from '@core/block';
 
 export const LIST_VIEWS = [
   'inbox',
