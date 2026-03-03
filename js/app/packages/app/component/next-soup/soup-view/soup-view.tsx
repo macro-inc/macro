@@ -82,6 +82,7 @@ import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
@@ -225,6 +226,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setActiveTab,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
+  const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -605,7 +607,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </div>
             </Match>
             <Match when={!rows().length}>
-              <EmptyState search={!!searchText()} />
+              <EmptyState
+                search={!!searchText()}
+                hasRefinementsFromBase={hasActiveRefinements()}
+                onClearFilters={resetToTabDefaults}
+              />
             </Match>
             <Match when={rows().length}>
               <ListLayoutProvider ref={localEntityListRef}>

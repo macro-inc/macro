@@ -39,6 +39,7 @@ export function EmptyState(props: {
   viewId?: ViewId;
   search?: boolean;
   hasRefinementsFromBase?: boolean;
+  onClearFilters?: () => void;
 }) {
   const emailActive = useEmailLinksStatus();
 
@@ -48,7 +49,14 @@ export function EmptyState(props: {
         <EmptyStateInner message={'No results.'} />
       </Match>
       <Match when={props.hasRefinementsFromBase}>
-        <EmptyStateInner />
+        <EmptyStateInner
+          message="No items match your filters."
+          cta={
+            props.onClearFilters
+              ? { label: 'Clear filters', onClick: props.onClearFilters }
+              : undefined
+          }
+        />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         <EmptyStateInner message={'Email not connected.'} />
@@ -121,12 +129,12 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
         </p>
         <Show when={props.cta}>
           {(cta) => (
-            <div class="w-full flex justify-start pt-4">
+            <div class="w-full flex justify-center pt-4">
               <button
                 onMouseDown={cta().onClick}
-                class="cta py-2 px-2 bg-accent/75 text-panel"
+                class="py-2 px-4 rounded-md bg-accent/15 text-accent hover:bg-accent/25 transition-colors"
               >
-                <span class="font-medium">{cta().label.toUpperCase()}</span>
+                <span class="font-medium text-sm">{cta().label}</span>
               </button>
             </div>
           )}
