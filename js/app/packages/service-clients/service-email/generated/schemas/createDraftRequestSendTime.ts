@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Scheduled send time.
+ */
 export type CreateDraftRequestSendTime = string | null;

@@ -406,7 +406,7 @@
               }
             }
           },
-          "401": {
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -2389,6 +2389,191 @@
           }
         }
       },
+      "ApiDraftContactInfo": {
+        "type": "object",
+        "description": "Contact info for draft request/response (backward-compatible with MessageToSend shape).",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "photo_url": {
+            "type": ["string", "null"],
+            "description": "Profile photo URL."
+          }
+        }
+      },
+      "ApiDraftInput": {
+        "type": "object",
+        "description": "The draft input matching the current `MessageToSend` JSON shape for backward compat.",
+        "required": ["subject"],
+        "properties": {
+          "bcc": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "Bcc recipients."
+          },
+          "body_html": {
+            "type": ["string", "null"],
+            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded)."
+          },
+          "body_macro": {
+            "type": ["string", "null"],
+            "description": "Macro body format."
+          },
+          "body_text": {
+            "type": ["string", "null"],
+            "description": "Plain text body."
+          },
+          "cc": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "Cc recipients."
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing message DB ID (for updating an existing draft)."
+          },
+          "headers_json": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Headers JSON."
+              }
+            ]
+          },
+          "provider_id": {
+            "type": ["string", "null"],
+            "description": "Provider message ID."
+          },
+          "provider_thread_id": {
+            "type": ["string", "null"],
+            "description": "Provider thread ID."
+          },
+          "replying_to_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "ID of the message this draft is replying to."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line."
+          },
+          "thread_db_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread DB ID."
+          },
+          "to": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "To recipients."
+          }
+        }
+      },
+      "ApiDraftOutput": {
+        "type": "object",
+        "description": "The draft output matching the current `MessageToSend` JSON shape for backward compat.",
+        "required": ["link_id", "subject"],
+        "properties": {
+          "bcc": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "Bcc recipients."
+          },
+          "body_html": {
+            "type": ["string", "null"],
+            "description": "HTML body (decoded)."
+          },
+          "body_macro": {
+            "type": ["string", "null"],
+            "description": "Macro body."
+          },
+          "body_text": {
+            "type": ["string", "null"],
+            "description": "Plain text body."
+          },
+          "cc": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "Cc recipients."
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Message DB ID."
+          },
+          "headers_json": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Headers JSON."
+              }
+            ]
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Link ID."
+          },
+          "provider_id": {
+            "type": ["string", "null"],
+            "description": "Provider message ID."
+          },
+          "provider_thread_id": {
+            "type": ["string", "null"],
+            "description": "Provider thread ID."
+          },
+          "replying_to_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "ID of the message this draft is replying to."
+          },
+          "send_time": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Send time."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line."
+          },
+          "thread_db_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread DB ID."
+          },
+          "to": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ApiDraftContactInfo"
+            },
+            "description": "To recipients."
+          }
+        }
+      },
       "ApiLabel": {
         "type": "object",
         "required": [
@@ -3168,24 +3353,28 @@
       },
       "CreateDraftRequest": {
         "type": "object",
-        "description": "The request passed to send a message",
+        "description": "Request body for creating a draft.",
         "required": ["draft"],
         "properties": {
           "draft": {
-            "$ref": "#/components/schemas/MessageToSend"
+            "$ref": "#/components/schemas/ApiDraftInput",
+            "description": "The draft content."
           },
           "send_time": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Scheduled send time."
           }
         }
       },
       "CreateDraftResponse": {
         "type": "object",
+        "description": "Response body for creating a draft.",
         "required": ["draft"],
         "properties": {
           "draft": {
-            "$ref": "#/components/schemas/MessageToSend"
+            "$ref": "#/components/schemas/ApiDraftOutput",
+            "description": "The created draft."
           }
         }
       },

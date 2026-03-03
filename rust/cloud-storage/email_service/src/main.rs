@@ -3,7 +3,7 @@ use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailPreviewState, EmailThreadRouterState},
+    inbound::{EmailDraftRouterState, EmailPreviewState, EmailThreadRouterState},
     outbound::EmailPgRepo,
 };
 use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
@@ -136,6 +136,9 @@ async fn main() -> anyhow::Result<()> {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
     };
+    let email_draft_state = EmailDraftRouterState {
+        service: email_service.service(),
+    };
 
     api::setup_and_serve(ApiContext {
         db,
@@ -153,6 +156,7 @@ async fn main() -> anyhow::Result<()> {
         email_service,
         entity_access_service,
         email_thread_state,
+        email_draft_state,
     })
     .await?;
     Ok(())

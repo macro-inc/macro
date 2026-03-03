@@ -2,7 +2,7 @@ use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailPreviewState, EmailThreadRouterState},
+    inbound::{EmailDraftRouterState, EmailPreviewState, EmailThreadRouterState},
     outbound::EmailPgRepo,
 };
 use email_service::config::Config;
@@ -36,4 +36,5 @@ pub(crate) struct ApiContext {
     pub email_service: EmailPreviewState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
     pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
+    pub email_draft_state: EmailDraftRouterState<EmailSvc>,
 }

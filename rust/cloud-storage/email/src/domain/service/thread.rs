@@ -1,154 +1,24 @@
 use crate::domain::{
     assembler::{message_from_row, split_recipients, thread_from_row},
-    models::{
-        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, Message, PreviewCursorQuery,
-        Thread, UserProvider,
-    },
-    ports::{EmailRepo, EmailService},
+    models::{EmailErr, Message, Thread},
+    ports::EmailRepo,
 };
 use entity_access::domain::models::{
     AccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
-use frecency::domain::{
-    models::{AggregateId, FrecencyByIdsRequest, FrecencyData},
-    ports::FrecencyQueryService,
-};
-use macro_user_id::cowlike::CowLike;
-use model_entity::EntityType;
-use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, SimpleSortMethod};
-use std::collections::HashMap;
+use frecency::domain::ports::FrecencyQueryService;
 use uuid::Uuid;
 
-#[derive(Clone)]
-pub struct EmailServiceImpl<T, U> {
-    email_repo: T,
-    frecency_service: U,
-}
+use super::EmailServiceImpl;
 
 impl<T, U> EmailServiceImpl<T, U>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
-{
-    pub fn new(email_repo: T, frecency_service: U) -> EmailServiceImpl<T, U> {
-        EmailServiceImpl {
-            email_repo,
-            frecency_service,
-        }
-    }
-}
-
-impl<T, U> EmailService for EmailServiceImpl<T, U>
-where
-    T: EmailRepo,
-    U: FrecencyQueryService,
     anyhow::Error: From<T::Err>,
 {
-    #[tracing::instrument(err, skip(self, req))]
-    async fn get_email_thread_previews(
-        &self,
-        req: GetEmailsRequest,
-    ) -> Result<PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>, EmailErr>
-    {
-        let GetEmailsRequest {
-            view,
-            link_id,
-            macro_id,
-            limit,
-            query,
-        } = req;
-        let sort_method = *query.sort_method();
-
-        const MIN_PAGE: u32 = 20;
-        const MAX_PAGE: u32 = 500;
-
-        let limit = limit.unwrap_or_default().clamp(MIN_PAGE, MAX_PAGE);
-
-        let query = PreviewCursorQuery {
-            view,
-            link_id,
-            limit,
-            query,
-        };
-
-        let previews = self
-            .email_repo
-            .previews_for_view_cursor(query, macro_id.copied().into_owned())
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id).collect();
-
-        let ids: Vec<_> = thread_ids
-            .iter()
-            .map(|id| EntityType::EmailThread.with_entity_string(id.to_string()))
-            .collect();
-
-        let frecency_request = FrecencyByIdsRequest {
-            user_id: macro_id,
-            ids: ids.as_slice(),
-        };
-
-        let (attachment_map_result, participant_result, labels_result, frecency_scores) = tokio::join!(
-            self.email_repo.attachments_by_thread_ids(&thread_ids),
-            self.email_repo.contacts_by_thread_ids(&thread_ids),
-            self.email_repo.labels_by_thread_ids(&thread_ids),
-            self.frecency_service
-                .get_frecencies_by_ids(frecency_request)
-        );
-
-        let mut attachment_map = attachment_map_result
-            .map_err(anyhow::Error::from)?
-            .into_iter()
-            .group_by(|v| v.thread_id);
-        let mut participant_map = participant_result
-            .map_err(anyhow::Error::from)?
-            .into_iter()
-            .group_by(|v| v.thread_id);
-        let mut labels_map = labels_result
-            .map_err(anyhow::Error::from)?
-            .into_iter()
-            .group_by(|v| v.thread_id);
-
-        let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> =
-            frecency_scores?.into_inner();
-
-        Ok(previews
-            .into_iter()
-            .map(|thread| {
-                let id = AggregateId {
-                    user_id: thread.owner_id.clone(),
-                    entity: EntityType::EmailThread.with_entity_string(thread.id.to_string()),
-                };
-
-                EnrichedEmailThreadPreview {
-                    attachments: attachment_map.remove(&thread.id).unwrap_or_default(),
-                    labels: labels_map.remove(&thread.id).unwrap_or_default(),
-                    participants: participant_map.remove(&thread.id).unwrap_or_default(),
-                    frecency_score: frecency_scores_map
-                        .remove(&id)
-                        .map(|data| id.into_aggregate(data)),
-                    thread,
-                }
-            })
-            .paginate_on(limit as usize, sort_method)
-            .into_page())
-    }
-
-    async fn get_link_by_auth_id_and_macro_id(
-        &self,
-        auth_id: &str,
-        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<super::models::Link>, EmailErr> {
-        Ok(self
-            .email_repo
-            .link_by_fusionauth_and_macro_id(auth_id, macro_id, UserProvider::Gmail)
-            .await
-            .map_err(anyhow::Error::from)?)
-    }
-
     #[tracing::instrument(err, skip(self, receipt))]
-    async fn get_thread_with_messages(
+    pub(crate) async fn get_thread_with_messages_impl(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         offset: i64,

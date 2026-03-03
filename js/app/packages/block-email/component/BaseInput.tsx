@@ -615,27 +615,6 @@ export function BaseInput(props: {
       return;
     }
 
-    let linkId: string | undefined = currentThread?.link_id;
-    if (newMessage || !linkId) {
-      if (emailLinksQuery.isPending) {
-        return;
-      }
-
-      if (emailLinksQuery.isError) {
-        logger.error(
-          new Error('Failed to save email draft: could not load email links')
-        );
-        return;
-      }
-
-      const linksData = emailLinksQuery.data;
-      if (!linksData || linksData.links.length === 0) {
-        logger.error(new Error('Failed to save email draft: no links found'));
-        return;
-      }
-      linkId = linksData.links[0].id;
-    }
-
     const existingDraft = savedDraftId() !== undefined;
 
     // If there's an existing draft, we should send the sendTime so that the send time
@@ -646,7 +625,6 @@ export function BaseInput(props: {
       draft: {
         ...draftToSave,
         db_id: savedDraftId(),
-        link_id: linkId!,
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },

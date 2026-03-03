@@ -1,3 +1,8 @@
+mod draft;
+
+pub use draft::{
+    ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, CreateDraftRequest, CreateDraftResponse,
+};
 mod label;
 mod message;
 mod preview;

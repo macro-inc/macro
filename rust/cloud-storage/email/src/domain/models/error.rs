@@ -1,10 +1,29 @@
 use frecency::domain::models::FrecencyQueryErr;
 use thiserror::Error;
+use uuid::Uuid;
 
+/// Errors that can occur in the email domain.
 #[derive(Debug, Error)]
 pub enum EmailErr {
+    /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),
+    /// A frecency query error.
     #[error(transparent)]
     Frecency(#[from] FrecencyQueryErr),
+    /// The referenced message was not found.
+    #[error("Message with id {0} not found")]
+    MessageNotFound(Uuid),
+    /// The referenced message has already been sent and cannot be modified.
+    #[error("Message with id {0} has already been sent")]
+    MessageAlreadySent(Uuid),
+    /// Cannot reply to a draft message.
+    #[error("Cannot reply to a draft")]
+    CannotReplyToDraft,
+    /// Failed to decode base64 body content.
+    #[error("Failed to decode base64 HTML body")]
+    Base64DecodeError(#[from] base64::DecodeError),
+    /// Decoded bytes are not valid UTF-8.
+    #[error("Failed to convert decoded HTML body to UTF-8")]
+    Utf8Error(#[from] std::string::FromUtf8Error),
 }

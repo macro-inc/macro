@@ -1,5 +1,6 @@
 pub mod attachment;
 pub mod contact;
+pub mod draft;
 pub mod error;
 pub mod label;
 pub mod link;
@@ -12,6 +13,10 @@ mod tests;
 
 pub use attachment::{Attachment, AttachmentDraft, AttachmentForwarded, MessageAttachment};
 pub use contact::{Contact, ContactInfo, RecipientType};
+pub use draft::{
+    CreateDraftInput, CreatedDraft, ParsedAddresses, SimpleMessageInfo, UpsertedContacts,
+    UpsertedRecipient,
+};
 pub use error::EmailErr;
 pub use label::{Label, LabelListVisibility, LabelType, MessageLabel, MessageListVisibility};
 pub use link::{Link, UserProvider};

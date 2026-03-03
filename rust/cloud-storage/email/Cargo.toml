@@ -21,6 +21,7 @@ ports = ["dep:tokio", "frecency/ports"]
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 entity_access = { path = "../entity_access" }
 futures = { workspace = true }
 axum = { workspace = true, optional = true }
@@ -33,6 +34,7 @@ filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }

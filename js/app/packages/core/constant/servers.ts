@@ -9,7 +9,7 @@ const serverHostLocal: Servers = {
   'static-file': 'http://localhost:8100',
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
-  'email-service': 'http://localhost:8087',
+  'email-service': 'http://localhost:8094',
   'image-proxy-service': 'http://localhost:8097',
 } as const;
 

@@ -9,7 +9,6 @@ use crate::api::email::drafts::add_attachment::{
 use crate::api::email::drafts::add_forwarded_attachment::{
     AddForwardedAttachmentRequest, AddForwardedAttachmentResponse,
 };
-use crate::api::email::drafts::create::{CreateDraftRequest, CreateDraftResponse};
 use crate::api::email::init::InitResponse;
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
@@ -23,7 +22,9 @@ use crate::api::email::threads::labels::UpdateThreadLabelRequest;
 use crate::api::{email, health};
 use ::email::inbound;
 use ::email::inbound::{
-    ApiPaginatedThreadCursor, ApiSortMethod, ApiThread, GetPreviewsCursorParams, GetThreadResponse,
+    ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiPaginatedThreadCursor, ApiSortMethod,
+    ApiThread, CreateDraftRequest as HexCreateDraftRequest,
+    CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
 };
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
@@ -50,7 +51,7 @@ use utoipa::OpenApi;
         email::backfill::get::handler,
         email::backfill::get::active_handler,
         email::init::handler,
-        email::drafts::create::handler,
+        inbound::create_draft_handler,
         email::drafts::delete::handler,
         email::drafts::scheduled::list::handler,
         email::drafts::scheduled::remove::handler,
@@ -86,8 +87,11 @@ use utoipa::OpenApi;
             GetActiveBackfillJobResponse,
             BackfillJob,
             // Draft types
-            CreateDraftRequest,
-            CreateDraftResponse,
+            HexCreateDraftRequest,
+            HexCreateDraftResponse,
+            ApiDraftInput,
+            ApiDraftOutput,
+            ApiDraftContactInfo,
             AddDraftAttachmentRequest,
             AddDraftAttachmentResponse,
             AddForwardedAttachmentRequest,

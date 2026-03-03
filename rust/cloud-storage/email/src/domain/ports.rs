@@ -1,8 +1,8 @@
 use crate::domain::models::{
-    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link,
-    MessageAttachment, MessageLabel, MessageRow, PreviewCursorQuery, RecipientType, Thread,
-    ThreadRow, UserProvider,
+    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
+    CreatedDraft, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest,
+    Label, Link, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
+    RecipientType, SimpleMessageInfo, Thread, ThreadRow, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -100,6 +100,42 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, DateTime<Utc>>, Self::Err>> + Send;
+
+    /// Fetch a simplified message by its DB ID and link ID (for validation).
+    fn get_simple_message(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
+
+    /// Find an existing draft that replies to the given message ID.
+    fn get_draft_replying_to(
+        &self,
+        link_id: Uuid,
+        replying_to_id: Uuid,
+    ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
+
+    /// Upsert contacts from the parsed addresses. Must be called outside a transaction
+    /// to avoid deadlocks (contacts are shared across messages).
+    fn upsert_contacts(
+        &self,
+        link_id: Uuid,
+        addresses: ParsedAddresses,
+    ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
+
+    /// Insert a draft message within a transaction, including thread insert (if new),
+    /// recipients, scheduled message handling, thread metadata update, and user history.
+    /// If `new_thread` is Some, the thread is created inside the same transaction.
+    /// Returns the thread DB ID.
+    fn insert_draft_message(
+        &self,
+        input: &CreateDraftInput,
+        message_db_id: Uuid,
+        thread_db_id: Uuid,
+        contacts: &UpsertedContacts,
+        link_id: Uuid,
+        new_thread: Option<ThreadRow>,
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -126,4 +162,11 @@ pub trait EmailService: Send + Sync + 'static {
         offset: i64,
         limit: i64,
     ) -> impl Future<Output = Result<Option<Thread>, EmailErr>> + Send;
+
+    /// Create a draft message for the given link.
+    fn create_draft(
+        &self,
+        link: &Link,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
 }

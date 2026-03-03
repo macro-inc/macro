@@ -55,6 +55,14 @@ impl EmailService for NoopEmailService {
     ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
+
+    async fn create_draft(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
 }
 
 struct NoopCommsService;

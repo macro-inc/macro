@@ -446,9 +446,9 @@ export type createDraftResponse400 = {
   status: 400;
 };
 
-export type createDraftResponse401 = {
+export type createDraftResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type createDraftResponse500 = {
@@ -461,7 +461,7 @@ export type createDraftResponseSuccess = createDraftResponse201 & {
 };
 export type createDraftResponseError = (
   | createDraftResponse400
-  | createDraftResponse401
+  | createDraftResponse404
   | createDraftResponse500
 ) & {
   headers: Headers;

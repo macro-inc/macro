@@ -1,4 +1,42 @@
-use crate::contacts::normalize::{contains_email, remove_name_suffix};
+use super::{contains_email, remove_name_suffix};
+use crate::normalize_contact::normalize_contact_name;
+
+#[test]
+fn test_normalize_contact_name_generic_email() {
+    assert_eq!(
+        normalize_contact_name("noreply@example.com", Some("No Reply")),
+        None
+    );
+}
+
+#[test]
+fn test_normalize_contact_name_with_email_in_name() {
+    assert_eq!(
+        normalize_contact_name("john@example.com", Some("john@example.com")),
+        None
+    );
+}
+
+#[test]
+fn test_normalize_contact_name_with_suffix() {
+    assert_eq!(
+        normalize_contact_name("john@example.com", Some("John Doe via Gmail")),
+        Some("John Doe".to_string())
+    );
+}
+
+#[test]
+fn test_normalize_contact_name_none() {
+    assert_eq!(normalize_contact_name("john@example.com", None), None);
+}
+
+#[test]
+fn test_normalize_contact_name_regular() {
+    assert_eq!(
+        normalize_contact_name("john@example.com", Some("John Doe")),
+        Some("John Doe".to_string())
+    );
+}
 
 #[test]
 fn test_remove_name_suffix() {
@@ -80,13 +118,10 @@ fn test_remove_name_suffix() {
 
 #[test]
 fn test_contains_email_with_valid_emails() {
-    // Standard email formats
     assert!(contains_email("john@example.com"));
     assert!(contains_email("alice@domain.co.uk"));
     assert!(contains_email("user.name@subdomain.example.com"));
     assert!(contains_email("test_email@test-domain.org"));
-
-    // Emails within text
     assert!(contains_email("Contact john@example.com for info"));
     assert!(contains_email("John Doe (john@example.com)"));
     assert!(contains_email("Email: alice@test.com"));
@@ -96,7 +131,6 @@ fn test_contains_email_with_valid_emails() {
 
 #[test]
 fn test_contains_email_with_spaces_around_at() {
-    // These should NOT match (spaces around @)
     assert!(!contains_email("Gordon @ Calendly"));
     assert!(!contains_email("Sales @ Company"));
     assert!(!contains_email("Support @ Microsoft"));
@@ -106,7 +140,6 @@ fn test_contains_email_with_spaces_around_at() {
 
 #[test]
 fn test_contains_email_without_domain() {
-    // No dot after @ - should not match
     assert!(!contains_email("user@localhost"));
     assert!(!contains_email("test@domain"));
     assert!(!contains_email("Contact @ HQ"));
@@ -114,23 +147,14 @@ fn test_contains_email_without_domain() {
 
 #[test]
 fn test_contains_email_edge_cases() {
-    // Empty and whitespace
     assert!(!contains_email(""));
     assert!(!contains_email("   "));
-
-    // Just @ symbol
     assert!(!contains_email("@"));
     assert!(!contains_email(" @ "));
-
-    // Multiple @ symbols
-    assert!(contains_email("test@@example.com")); // Matches because of pattern
+    assert!(contains_email("test@@example.com"));
     assert!(contains_email("user@domain1.com and admin@domain2.org"));
-
-    // Special characters
     assert!(contains_email("user+tag@example.com"));
     assert!(contains_email("first.last@example.co.uk"));
-
-    // No @ at all
     assert!(!contains_email("John Doe"));
     assert!(!contains_email("Regular Name"));
     assert!(!contains_email("Company Name Inc."));
@@ -138,15 +162,10 @@ fn test_contains_email_edge_cases() {
 
 #[test]
 fn test_contains_email_with_formatting() {
-    // Parentheses
     assert!(contains_email("(john@example.com)"));
     assert!(contains_email("[admin@company.org]"));
-
-    // Quotes
     assert!(contains_email("\"test@example.com\""));
     assert!(contains_email("'user@domain.com'"));
-
-    // Mixed with other text
     assert!(contains_email(
         "For questions, email support@company.com or call us"
     ));
