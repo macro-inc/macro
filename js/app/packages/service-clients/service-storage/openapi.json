@@ -2498,6 +2498,18 @@
         }
       }
     },
+    "/github/install-sync": {
+      "get": {
+        "tags": ["github::inbound::github_sync_router"],
+        "summary": "Redirects the user to the github sync app installation page.",
+        "operationId": "install_sync",
+        "responses": {
+          "307": {
+            "description": "Redirects to the github sync app installation page"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
