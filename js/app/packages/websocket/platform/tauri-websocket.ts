@@ -1,5 +1,7 @@
 import { isTauri } from '@core/util/platform';
-import TauriWebsocket from '@tauri-apps/plugin-websocket';
+import TauriWebsocket, {
+  type Message as TauriMessage,
+} from '@tauri-apps/plugin-websocket';
 import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 
 /**
@@ -50,7 +52,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       this.ws = await TauriWebsocket.connect(url, config);
 
       // Set up message listener
-      this.removeListener = this.ws.addListener((message: any) => {
+      this.removeListener = this.ws.addListener((message: TauriMessage) => {
         switch (message.type) {
           case 'Text':
             this.handleMessage(message.data);
@@ -64,7 +66,6 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
             this.handleMessage(data);
             break;
           case 'Close':
-            console.error('received close event');
             this._readyState = this.CLOSED;
             const closeEvent = new CloseEvent('close', {
               code: message.data?.code || 1000,
@@ -223,7 +224,8 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
   }
 
   private handleSendRejection(error: unknown) {
-    if (this._readyState === this.CLOSED) return;
+    if (this._readyState === this.CLOSING || this._readyState === this.CLOSED)
+      return;
     console.error(`Tauri WebSocket send error for ${this._url}:`, error);
     this._readyState = this.CLOSED;
     this.removeListener?.();
@@ -244,49 +246,44 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       );
     }
 
-    try {
-      if (typeof data === 'string') {
-        // Send as text message
-        this.ws
-          .send({ type: 'Text', data })
-          .catch((e: unknown) => this.handleSendRejection(e));
+    if (typeof data === 'string') {
+      // Send as text message
+      this.ws
+        .send({ type: 'Text', data })
+        .catch((e: unknown) => this.handleSendRejection(e));
+    } else {
+      // Convert binary data to number array for Tauri
+      let uint8Array: Uint8Array;
+
+      if (data instanceof ArrayBuffer) {
+        uint8Array = new Uint8Array(data);
+      } else if (data instanceof Uint8Array) {
+        uint8Array = data;
+      } else if (data instanceof Blob) {
+        // For Blob, we need to read it first (this is async in real implementation)
+        throw new Error(
+          'Blob sending requires async handling - convert to ArrayBuffer first'
+        );
+      } else if (
+        'buffer' in data &&
+        'byteOffset' in data &&
+        'byteLength' in data
+      ) {
+        // Handle ArrayBufferView types
+        uint8Array = new Uint8Array(
+          data.buffer,
+          data.byteOffset,
+          data.byteLength
+        );
       } else {
-        // Convert binary data to number array for Tauri
-        let uint8Array: Uint8Array;
-
-        if (data instanceof ArrayBuffer) {
-          uint8Array = new Uint8Array(data);
-        } else if (data instanceof Uint8Array) {
-          uint8Array = data;
-        } else if (data instanceof Blob) {
-          // For Blob, we need to read it first (this is async in real implementation)
-          throw new Error(
-            'Blob sending requires async handling - convert to ArrayBuffer first'
-          );
-        } else if (
-          'buffer' in data &&
-          'byteOffset' in data &&
-          'byteLength' in data
-        ) {
-          // Handle ArrayBufferView types
-          uint8Array = new Uint8Array(
-            data.buffer,
-            data.byteOffset,
-            data.byteLength
-          );
-        } else {
-          // Handle SharedArrayBuffer
-          uint8Array = new Uint8Array(data);
-        }
-
-        // Send as binary message with number array
-        this.ws
-          .send({ type: 'Binary', data: Array.from(uint8Array) })
-          .catch((e: unknown) => this.handleSendRejection(e));
+        // Handle SharedArrayBuffer
+        uint8Array = new Uint8Array(data);
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
+
+      // Send as binary message with number array
+      this.ws
+        .send({ type: 'Binary', data: Array.from(uint8Array) })
+        .catch((e: unknown) => this.handleSendRejection(e));
     }
   }
 }
