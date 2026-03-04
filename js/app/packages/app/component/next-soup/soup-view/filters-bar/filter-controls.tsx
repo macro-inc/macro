@@ -3,7 +3,8 @@ import FileCodeIcon from '@icon/regular/file-code.svg';
 import FileImageIcon from '@icon/regular/file-image.svg';
 import FilePdfIcon from '@icon/regular/file-pdf.svg';
 import FileIcon from '@icon/regular/file.svg';
-import { batch, createMemo, Show } from 'solid-js';
+import FolderIcon from '@icon/regular/folder.svg';
+import { createMemo, Show } from 'solid-js';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
@@ -204,9 +205,18 @@ export const EntityTypeFilter = () => {
   );
 };
 
-export const ProjectFilter = () => {
+type FolderFilterTarget = 'chat' | 'document';
+
+interface FolderFilterProps {
+  target: FolderFilterTarget;
+  label?: string;
+}
+
+export const FolderFilter = (props: FolderFilterProps) => {
   const { setQueryFilters, queryFilters } = useSoupView();
   const projects = useProjectsQuery();
+
+  const label = () => props.label ?? 'Folder';
 
   const projectOptions = createMemo((): Option[] => {
     const data = projects.data;
@@ -218,39 +228,64 @@ export const ProjectFilter = () => {
   });
 
   const activeProjectFilter = createMemo((): Option[] => {
-    const projectIds = queryFilters().chat_filters?.project_ids;
+    const filters = queryFilters();
+
+    const projectIds =
+      props.target === 'chat'
+        ? filters.chat_filters?.project_ids
+        : filters.document_filters?.project_ids;
+
     if (!projectIds?.length) return [];
+
     const options = projectOptions();
+
     return options.filter((opt) => projectIds.includes(opt.value));
   });
 
   const handleProjectChange = (selected: Option[]) => {
     const projectIds = selected.map((opt) => opt.value);
-    batch(() => {
-      setQueryFilters((prev) => ({
+
+    const newProjectIds = projectIds.length > 0 ? projectIds : undefined;
+
+    setQueryFilters((prev) => {
+      if (props.target === 'chat') {
+        return {
+          ...prev,
+          chat_filters: {
+            ...prev.chat_filters,
+            project_ids: newProjectIds,
+          },
+        };
+      }
+
+      return {
         ...prev,
-        chat_filters: {
-          ...prev.chat_filters,
-          project_ids: projectIds.length > 0 ? projectIds : undefined,
+        document_filters: {
+          ...prev.document_filters,
+          project_ids: newProjectIds,
         },
-      }));
+      };
     });
   };
 
   return (
     <Show when={projectOptions().length > 0}>
       <FilterCombobox
-        label="Project"
+        label={label()}
         options={projectOptions()}
         active={activeProjectFilter()}
         onChange={handleProjectChange}
-        placeholder="Search projects..."
+        placeholder="Search folders..."
         displayLimit={2}
-        overflowLabel="projects"
+        overflowLabel="folders"
         showIcons={false}
       />
     </Show>
   );
+};
+
+export const ProjectFilter = () => {
+  return <FolderFilter target="chat" label="Project" />;
 };
 
 export const ReadStatusFilter = () => {
@@ -262,11 +297,11 @@ export const ReadStatusFilter = () => {
   const readStatus = useFilterOptions(readStatusOptions);
 
   return (
-    <FilterSelect
-      label="Read"
+    <FilterChipGroup
       options={readStatusOptions}
       active={readStatus.active()}
       onChange={readStatus.onChange}
+      multiple={false}
     />
   );
 };
@@ -280,11 +315,11 @@ export const DoneStatusFilter = () => {
   const doneStatus = useFilterOptions(doneStatusOptions);
 
   return (
-    <FilterSelect
-      label="Status"
+    <FilterChipGroup
       options={doneStatusOptions}
       active={doneStatus.active()}
       onChange={doneStatus.onChange}
+      multiple={false}
     />
   );
 };
@@ -307,21 +342,8 @@ export const DocumentTypeFilter = () => {
   );
 };
 
-export const InFolderFilter = () => {
-  const locationOptions: Option[] = [
-    { value: 'in-folder', label: 'In Folder' },
-  ];
-
-  const location = useFilterOptions(locationOptions);
-
-  return (
-    <FilterSelect
-      label="Location"
-      options={locationOptions}
-      active={location.active()}
-      onChange={location.onChange}
-    />
-  );
+export const DocumentFolderFilter = () => {
+  return <FolderFilter target="document" label="Folder" />;
 };
 
 export const TaskStatusFilter = () => {
@@ -461,6 +483,26 @@ export const FileTypeFilter = () => {
       options={fileTypeOptions}
       active={fileType.active()}
       onChange={fileType.onChange}
+    />
+  );
+};
+
+export const FoldersFilter = () => {
+  const foldersOptions: Option[] = [
+    {
+      value: 'folders',
+      label: 'Folders',
+      icon: () => <FolderIcon class="size-3.5" />,
+    },
+  ];
+
+  const folders = useFilterOptions(foldersOptions);
+
+  return (
+    <FilterChipGroup
+      options={foldersOptions}
+      active={folders.active()}
+      onChange={folders.onChange}
     />
   );
 };

@@ -795,6 +795,11 @@ export const createSoupFilters = (
       predicate: filesAndFolderFilter,
     },
     {
+      id: 'folders',
+      label: 'Folders',
+      predicate: projectFilter,
+    },
+    {
       id: 'active-agent',
       label: 'Running agents',
       predicate: activeAgentFilter,

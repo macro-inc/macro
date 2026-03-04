@@ -5,11 +5,12 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import {
   AssigneeFilter,
   ChannelVisibilityFilter,
+  DocumentFolderFilter,
   DocumentTypeFilter,
   DoneStatusFilter,
   EntityTypeFilter,
   FileTypeFilter,
-  InFolderFilter,
+  FoldersFilter,
   ProjectFilter,
   ReadStatusFilter,
   TaskPriorityFilter,
@@ -81,7 +82,7 @@ const DocumentsFilters = () => {
   return (
     <>
       <DocumentTypeFilter />
-      <InFolderFilter />
+      <DocumentFolderFilter />
     </>
   );
 };
@@ -105,5 +106,10 @@ const ChannelsFilters = () => {
 };
 
 const FilesFilters = () => {
-  return <FileTypeFilter />;
+  return (
+    <>
+      <FoldersFilter />
+      <FileTypeFilter />
+    </>
+  );
 };
