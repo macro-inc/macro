@@ -17,6 +17,17 @@ export const threadConnectorStyle = {
   height: '18px',
 } as const;
 
-export function getInnerRailBottom(isReplying: boolean): string {
-  return isReplying ? '0px' : 'calc(var(--user-icon-width) / 2 + 0.5rem)';
+/** Left offset for the reply-input wrapper, placing it icon-width/2 right of the inner rail. */
+export const replyInputOffsetX =
+  'calc(var(--user-icon-width) / 2 + var(--body-padding) + var(--user-icon-width) / 2)';
+
+export function getInnerRailBottom(
+  isReplying: boolean,
+  hasReplies: boolean
+): string {
+  if (!isReplying) return 'calc(var(--user-icon-width) / 2 + 0.5rem)';
+  if (!hasReplies) return '0px';
+  // When replying in a thread with replies, the rail stops above the
+  // reply-input connector (roughly at 50% of the reply input area).
+  return 'calc(var(--user-icon-width) * 2 + 1rem)';
 }

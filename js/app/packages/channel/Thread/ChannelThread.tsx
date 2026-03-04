@@ -6,7 +6,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
-import { replyCenterOffsetX } from './thread-rail-geometry';
+import {
+  replyCenterOffsetX,
+  replyInputOffsetX,
+} from './thread-rail-geometry';
 import type { ThreadProps } from './types';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
@@ -78,9 +81,12 @@ export function ChannelThread(props: ThreadProps) {
             message={props.data()}
             actions={props.getMessageActions?.(props.data())}
           />
-          <Show when={hasReplies()}>
+          <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
-              <Thread.RailDecorations isReplying={props.isReplying} />
+              <Thread.RailDecorations
+                isReplying={props.isReplying}
+                hasReplies={hasReplies}
+              />
               <Thread.RepliesContainer>
                 <Show
                   when={
@@ -104,20 +110,59 @@ export function ChannelThread(props: ThreadProps) {
                 </Show>
 
                 <Show when={props.isReplying()}>
-                  <div class="flex items-start gap-2 mb-2">
-                    <div class="flex-shrink-0 size-[var(--user-icon-width)]">
-                      <UserIcon id={replyUserId()} size="fill" />
-                    </div>
-                    <div class="flex flex-col flex-1 min-w-0 gap-1">
-                      <span class="text-sm font-semibold truncate">
-                        {displayName()}
-                      </span>
+                  <Show
+                    when={hasReplies()}
+                    fallback={
+                      <div class="flex flex-col w-full p-2">
+                        <div class="flex items-start gap-2">
+                          <div class="flex-shrink-0 size-[var(--user-icon-width)]">
+                            <UserIcon id={replyUserId()} size="fill" />
+                          </div>
+                          <div class="flex flex-col flex-1 min-w-0">
+                            <span class="text-sm font-semibold truncate">
+                              {displayName()}
+                            </span>
+                            <ChannelInput
+                              input={{
+                                id: `thread-reply-input-${props.data().id}`,
+                                placeholder: 'Send a reply',
+                                value: props.replyInputState()?.value,
+                                attachments:
+                                  props.replyInputState()?.attachments,
+                                isReplyInput: true,
+                              }}
+                              markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
+                              onChange={(snapshot) =>
+                                void props.setReplyInputState(snapshot)
+                              }
+                              onCloseDraft={() => {
+                                props.setReplyInputState(undefined);
+                                props.setIsReplying(false);
+                              }}
+                              onSend={async () => {
+                                props.setReplyInputState(undefined);
+                                props.setIsReplying(false);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <div
+                      class="relative"
+                      style={{
+                        'margin-left': replyInputOffsetX,
+                      }}
+                    >
+                      <Thread.ReplyInputConnector />
                       <ChannelInput
                         input={{
                           id: `thread-reply-input-${props.data().id}`,
                           placeholder: 'Send a reply',
                           value: props.replyInputState()?.value,
-                          attachments: props.replyInputState()?.attachments,
+                          attachments:
+                            props.replyInputState()?.attachments,
                           isReplyInput: true,
                         }}
                         markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
@@ -134,7 +179,7 @@ export function ChannelThread(props: ThreadProps) {
                         }}
                       />
                     </div>
-                  </div>
+                  </Show>
                 </Show>
 
                 <Show

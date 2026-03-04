@@ -8,6 +8,7 @@ import {
 
 type ThreadRailDecorationsProps = {
   isReplying: Accessor<boolean>;
+  hasReplies: Accessor<boolean>;
 };
 
 export function ThreadRailDecorations(props: ThreadRailDecorationsProps) {
@@ -35,7 +36,7 @@ export function ThreadRailDecorations(props: ThreadRailDecorationsProps) {
         style={{
           left: innerRailX,
           top: innerRailTop,
-          bottom: getInnerRailBottom(props.isReplying()),
+          bottom: getInnerRailBottom(props.isReplying(), props.hasReplies()),
         }}
       />
     </>

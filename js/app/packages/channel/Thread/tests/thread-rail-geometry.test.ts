@@ -4,6 +4,7 @@ import {
   innerRailTop,
   innerRailX,
   replyCenterOffsetX,
+  replyInputOffsetX,
   threadConnectorStyle,
   threadOffsetX,
 } from '../thread-rail-geometry';
@@ -22,6 +23,9 @@ describe('thread-rail-geometry', () => {
     expect(innerRailTop).toBe(
       'calc(var(--body-padding) + var(--user-icon-width) / 2)'
     );
+    expect(replyInputOffsetX).toBe(
+      'calc(var(--user-icon-width) / 2 + var(--body-padding) + var(--user-icon-width) / 2)'
+    );
   });
 
   it('exposes connector style geometry', () => {
@@ -34,8 +38,11 @@ describe('thread-rail-geometry', () => {
   });
 
   it('extends inner rail to bottom while replying', () => {
-    expect(getInnerRailBottom(true)).toBe('0px');
-    expect(getInnerRailBottom(false)).toBe(
+    expect(getInnerRailBottom(true, false)).toBe('0px');
+    expect(getInnerRailBottom(true, true)).toBe(
+      'calc(var(--user-icon-width) * 2 + 1rem)'
+    );
+    expect(getInnerRailBottom(false, true)).toBe(
       'calc(var(--user-icon-width) / 2 + 0.5rem)'
     );
   });
