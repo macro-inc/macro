@@ -20,6 +20,12 @@ import {
   TaskStatusFilter,
 } from './filter-controls';
 
+const FilterDivider = () => (
+  <div class="flex items-center self-stretch mx-1">
+    <div class="w-px h-4 bg-edge-muted" />
+  </div>
+);
+
 export const SoupViewContextFilters = () => {
   const panel = useSplitPanelOrThrow();
 
@@ -81,19 +87,20 @@ const MailFilters = () => {
 
   return (
     <>
+      {/* Status group */}
       <Show when={!isDraftsTab()}>
         <StatusFilter />
+        <FilterDivider />
       </Show>
-
+      {/* Attachment group */}
       <HasAttachmentFilter />
-
       <Show when={hasAttachmentActive()}>
         <AttachmentTypeFilter />
       </Show>
-
       <HasCalendarInviteFilter />
-
+      {/* Sender group */}
       <Show when={!isSentTab()}>
+        <FilterDivider />
         <FromSenderFilter />
       </Show>
     </>
@@ -104,6 +111,7 @@ const DocumentsFilters = () => {
   return (
     <>
       <DocumentTypeFilter />
+      <FilterDivider />
       <DocumentFolderFilter />
     </>
   );
@@ -117,6 +125,7 @@ const TasksFilters = () => {
       <TaskStatusFilter />
       <TaskPriorityFilter />
       <Show when={!soup.filters.isActive('assigned-to')}>
+        <FilterDivider />
         <AssigneeFilter />
       </Show>
     </>
@@ -131,6 +140,7 @@ const FilesFilters = () => {
   return (
     <>
       <FoldersFilter />
+      <FilterDivider />
       <FileTypeFilter />
     </>
   );
