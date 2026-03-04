@@ -380,6 +380,9 @@ export const mapSoupPageToEntityList: (
               a.filename?.toLowerCase().endsWith('.ics')
           );
 
+          const hasAttachment =
+            item.data.attachments && item.data.attachments.length > 0;
+
           return {
             ...item.data,
             createdAt: item.data.createdAt,
@@ -394,6 +397,7 @@ export const mapSoupPageToEntityList: (
             viewedAt: item.data.viewedAt,
             participants,
             hasIcsAttachment,
+            hasAttachment,
           };
         }
 

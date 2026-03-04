@@ -506,3 +506,85 @@ export const FoldersFilter = () => {
     />
   );
 };
+
+export const FromSenderFilter = () => {
+  const { setQueryFilters, queryFilters } = useSoupView();
+  const contacts = useContacts();
+
+  const senderOptions = createMemo((): Option[] => {
+    return contacts().map((contact) => ({
+      value: contact.email ?? contact.id,
+      label: contact.name || contact.email || contact.id,
+      icon: () => (
+        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
+      ),
+    }));
+  });
+
+  const activeSenderFilter = createMemo((): Option[] => {
+    const senders = queryFilters().email_filters?.senders;
+    if (!senders?.length) return [];
+
+    const options = senderOptions();
+    return options.filter((opt) => senders.includes(opt.value));
+  });
+
+  const handleSenderChange = (selected: Option[]) => {
+    const senders = selected.map((opt) => opt.value);
+    const newSenders = senders.length > 0 ? senders : undefined;
+
+    setQueryFilters((prev) => ({
+      ...prev,
+      email_filters: {
+        ...prev.email_filters,
+        senders: newSenders,
+      },
+    }));
+  };
+
+  return (
+    <Show when={senderOptions().length > 0}>
+      <FilterCombobox
+        label="From"
+        options={senderOptions()}
+        active={activeSenderFilter()}
+        onChange={handleSenderChange}
+        placeholder="Search senders..."
+        displayLimit={2}
+        overflowLabel="senders"
+      />
+    </Show>
+  );
+};
+
+export const HasCalendarInviteFilter = () => {
+  const calendarInviteOptions: Option[] = [
+    { value: 'has-calendar-invite', label: 'Has Calendar Invite' },
+  ];
+
+  const calendarInvite = useFilterOptions(calendarInviteOptions);
+
+  return (
+    <FilterChipGroup
+      options={calendarInviteOptions}
+      active={calendarInvite.active()}
+      onChange={calendarInvite.onChange}
+    />
+  );
+};
+
+export const HasAttachmentFilter = () => {
+  const attachmentOptions: Option[] = [
+    { value: 'has-attachment', label: 'Has Attachment' },
+  ];
+
+  const attachment = useFilterOptions(attachmentOptions);
+
+  return (
+    <FilterChipGroup
+      options={attachmentOptions}
+      active={attachment.active()}
+      onChange={attachment.onChange}
+    />
+  );
+};

@@ -11,6 +11,9 @@ import {
   EntityTypeFilter,
   FileTypeFilter,
   FoldersFilter,
+  FromSenderFilter,
+  HasAttachmentFilter,
+  HasCalendarInviteFilter,
   ProjectFilter,
   ReadStatusFilter,
   TaskPriorityFilter,
@@ -70,10 +73,24 @@ const AgentsFilters = () => {
 };
 
 const MailFilters = () => {
+  const { activeTab } = useSoupView();
+
+  const isDraftsTab = () => activeTab() === 'drafts';
+  const isSentTab = () => activeTab() === 'sent';
+
   return (
     <>
-      <ReadStatusFilter />
-      <DoneStatusFilter />
+      {/* Hide read/done status on drafts tab */}
+      <Show when={!isDraftsTab()}>
+        <ReadStatusFilter />
+        <DoneStatusFilter />
+      </Show>
+      {/* Hide FromSender on sent tab (already filtered to current user) */}
+      <Show when={!isSentTab()}>
+        <FromSenderFilter />
+      </Show>
+      <HasAttachmentFilter />
+      <HasCalendarInviteFilter />
     </>
   );
 };

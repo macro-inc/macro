@@ -214,6 +214,18 @@ export function noDraftsFilter(entity: EntityData): boolean {
   return !entity.isDraft;
 }
 
+export function hasCalendarInviteFilter(entity: EntityData): boolean {
+  if (entity.type !== 'email') return false;
+
+  return entity.hasIcsAttachment === true;
+}
+
+export function hasAttachmentFilter(entity: EntityData): boolean {
+  if (entity.type !== 'email') return false;
+
+  return entity.hasAttachment === true;
+}
+
 export function sharedEntity(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     const userID = getUserID();
@@ -813,6 +825,16 @@ export const createSoupFilters = (
       id: 'no-drafts',
       label: 'No drafts',
       predicate: noDraftsFilter,
+    },
+    {
+      id: 'has-calendar-invite',
+      label: 'Has calendar invite',
+      predicate: hasCalendarInviteFilter,
+    },
+    {
+      id: 'has-attachment',
+      label: 'Has attachment',
+      predicate: hasAttachmentFilter,
     },
     {
       id: 'shared-entity',
