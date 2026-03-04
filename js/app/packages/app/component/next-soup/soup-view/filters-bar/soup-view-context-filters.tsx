@@ -42,31 +42,29 @@ export const SoupViewContextFilters = () => {
   };
 
   return (
-    <div class="h-full flex items-center gap-1.5">
-      <Switch>
-        <Match when={isComponentListView('inbox')}>
-          <InboxFilters />
-        </Match>
-        <Match when={isComponentListView('agents')}>
-          <AgentsFilters />
-        </Match>
-        <Match when={isComponentListView('mail')}>
-          <MailFilters />
-        </Match>
-        <Match when={isComponentListView('documents')}>
-          <DocumentsFilters />
-        </Match>
-        <Match when={isComponentListView('tasks')}>
-          <TasksFilters />
-        </Match>
-        <Match when={isComponentListView('channels')}>
-          <ChannelsFilters />
-        </Match>
-        <Match when={isComponentListView('files')}>
-          <FilesFilters />
-        </Match>
-      </Switch>
-    </div>
+    <Switch>
+      <Match when={isComponentListView('inbox')}>
+        <InboxFilters />
+      </Match>
+      <Match when={isComponentListView('agents')}>
+        <AgentsFilters />
+      </Match>
+      <Match when={isComponentListView('mail')}>
+        <MailFilters />
+      </Match>
+      <Match when={isComponentListView('documents')}>
+        <DocumentsFilters />
+      </Match>
+      <Match when={isComponentListView('tasks')}>
+        <TasksFilters />
+      </Match>
+      <Match when={isComponentListView('channels')}>
+        <ChannelsFilters />
+      </Match>
+      <Match when={isComponentListView('files')}>
+        <FilesFilters />
+      </Match>
+    </Switch>
   );
 };
 

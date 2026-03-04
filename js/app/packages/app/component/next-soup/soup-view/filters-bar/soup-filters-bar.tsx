@@ -26,23 +26,23 @@ export const SoupFiltersBar = () => {
   };
 
   return (
-    <div class="@container w-full overflow-hidden flex gap-2 @min-small/split:items-center flex-wrap @min-small/split:flex-nowrap py-2">
-      <div class="flex gap-2 items-center @min-small/split:size-full empty:hidden">
-        <Show when={!isComponentListView('search')}>
-          <SoupViewContextFilters />
-        </Show>
-        <Show when={hasActiveRefinements()}>
-          <Button variant="ghost" size="sm" onClick={resetToTabDefaults}>
-            <XIcon class="size-3" />
-            <span>Clear all</span>
-          </Button>
-        </Show>
-      </div>
+    <div class="@container w-full overflow-hidden flex gap-2 flex-wrap py-2">
+      <Show when={!isComponentListView('search')}>
+        <SoupViewContextFilters />
+      </Show>
+      <Show when={hasActiveRefinements()}>
+        <Button variant="ghost" size="sm" onClick={resetToTabDefaults}>
+          <XIcon class="size-3" />
+          <span>Clear all</span>
+        </Button>
+      </Show>
+
+      <div class="flex-1" />
 
       <Show
         when={isComponentListView('search')}
         fallback={
-          <div class="@min-small/split:ml-auto max-w-60 w-full">
+          <div class="max-w-60 w-full">
             <SoupSearchbar />
           </div>
         }
