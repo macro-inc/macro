@@ -43,24 +43,31 @@ mod sync_impl {
         },
         ports::GithubSyncService,
     };
+    use documents::domain::ports::DocumentService;
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
+    use std::sync::Arc;
     use subtle::ConstantTimeEq;
     type HmacSha256 = Hmac<Sha256>;
 
     /// The concrete github sync service implementation.
-    pub struct GithubSyncServiceImpl {
+    pub struct GithubSyncServiceImpl<D: DocumentService> {
         config: super::GithubSyncConfig,
+        #[allow(dead_code)]
+        document_service: Arc<D>,
     }
 
-    impl GithubSyncServiceImpl {
+    impl<D: DocumentService> GithubSyncServiceImpl<D> {
         /// Create a new github sync service.
-        pub fn new(config: super::GithubSyncConfig) -> Self {
-            Self { config }
+        pub fn new(config: super::GithubSyncConfig, document_service: Arc<D>) -> Self {
+            Self {
+                config,
+                document_service,
+            }
         }
     }
 
-    impl GithubSyncService for GithubSyncServiceImpl {
+    impl<D: DocumentService> GithubSyncService for GithubSyncServiceImpl<D> {
         #[tracing::instrument(skip(self, body), err)]
         async fn validate_webhook_event(
             &self,

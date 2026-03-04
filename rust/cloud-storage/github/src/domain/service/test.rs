@@ -1,14 +1,75 @@
+use std::sync::Arc;
+
 use crate::domain::{models::ValidatedGithubWebhookEvent, ports::GithubSyncService};
+use documents::domain::{
+    models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
+    ports::DocumentService,
+};
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel};
+use macro_user_id::user_id::MacroUserIdStr;
+use model::document::{
+    DocumentBasic,
+    response::{CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3},
+};
 
 use super::*;
 
-fn make_sync_service() -> GithubSyncServiceImpl {
-    GithubSyncServiceImpl::new(GithubSyncConfig {
-        webhook_secret: "test-webhook-secret".to_string(),
-        github_sync_app_url: "test".to_string(),
-        sync_app_pem: "test-sync-app-pem".to_string(),
-        sync_app_client_id: "test-sync-app-client-id".to_string(),
-    })
+struct StubDocumentService;
+
+impl DocumentService for StubDocumentService {
+    async fn internal_get_basic_document(
+        &self,
+        _document_id: &str,
+    ) -> Result<DocumentBasic, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_document(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<GetDocumentResponseData, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_document_location(
+        &self,
+        _ctx: &DocumentBasic,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _params: LocationQueryParams,
+    ) -> Result<LocationResponseV3, DocumentError> {
+        unimplemented!()
+    }
+    async fn delete_document(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _project_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        unimplemented!()
+    }
+    async fn get_document_text(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        unimplemented!()
+    }
+    async fn create_document(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _args: CreateDocumentRepoArgs,
+        _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        unimplemented!()
+    }
+}
+
+fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService> {
+    GithubSyncServiceImpl::new(
+        GithubSyncConfig {
+            webhook_secret: "test-webhook-secret".to_string(),
+            github_sync_app_url: "test".to_string(),
+            sync_app_pem: "test-sync-app-pem".to_string(),
+            sync_app_client_id: "test-sync-app-client-id".to_string(),
+        },
+        Arc::new(StubDocumentService),
+    )
 }
 
 #[tokio::test]

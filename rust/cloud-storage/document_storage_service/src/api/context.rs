@@ -126,7 +126,12 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
 
-pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl;
+/// Type alias for the document service used by the github sync service.
+pub(crate) type GithubDocumentService =
+    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>;
+
+/// Type alias for the github sync service.
+pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<GithubDocumentService>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

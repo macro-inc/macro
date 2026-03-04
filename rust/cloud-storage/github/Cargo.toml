@@ -7,7 +7,7 @@ version = "0.1.0"
 [features]
 default = ["ports", "sync", "link", "inbound", "outbound", "axum"]
 ports = []
-sync = ["dep:reqwest", "ports"]
+sync = ["dep:reqwest", "dep:documents", "ports"]
 link = ["ports"]
 inbound = ["axum", "ports"]
 outbound = [
@@ -38,6 +38,7 @@ reqwest = {workspace = true, optional = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 urlencoding = { workspace = true, optional = true }
+documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access" }
 jsonwebtoken = { workspace = true }
 hmac = "0.12.1"
@@ -60,5 +61,6 @@ utoipa = { workspace = true, optional = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 http-body-util = { workspace = true }
+model = { path = "../model" }
 tokio = { workspace = true }
 tower = { workspace = true }
