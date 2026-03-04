@@ -1792,6 +1792,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "chat"
+version = "0.1.0"
+dependencies = [
+ "ai",
+ "anyhow",
+ "axum",
+ "chrono",
+ "http-body-util",
+ "macro_db_migrator",
+ "macro_share_permissions",
+ "macro_user_id",
+ "macro_uuid",
+ "model",
+ "model_user",
+ "models_permissions",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
