@@ -142,9 +142,61 @@ mod sync_impl {
                 return Ok(());
             }
 
+            // Acquire an installation token and fetch existing PR comments once,
+            // so we can check for duplicates without an API call per task.
+            let pr_meta = match (
+                webhook_event.installation_id(),
+                webhook_event.repo_owner(),
+                webhook_event.repo_name(),
+                webhook_event.pull_number(),
+            ) {
+                (Some(installation_id), Some(owner), Some(repo), Some(pull_number)) => {
+                    match self
+                        .generate_installation_access_token(installation_id)
+                        .await
+                    {
+                        Ok(token) => {
+                            let existing_comments = self
+                                .client
+                                .list_pr_comments(&token.token, owner, repo, pull_number)
+                                .await
+                                .inspect_err(|e| {
+                                    tracing::error!(error=?e, "failed to list PR comments");
+                                })
+                                .unwrap_or_default();
+                            Some((
+                                token,
+                                owner.to_string(),
+                                repo.to_string(),
+                                pull_number,
+                                existing_comments,
+                            ))
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                error=?e,
+                                "failed to generate installation access token for PR comment"
+                            );
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    tracing::warn!("missing PR metadata, cannot post comments");
+                    None
+                }
+            };
+
             for task_id in &new_task_ids {
                 match task_id.to_uuid() {
                     Ok(uuid) => {
+                        tracing::info!(
+                        task_id=%task_id,
+                        uuid=%uuid,
+                        event_type=?event_type,
+                        "detected potential macro task ID in github event",
+                        );
+
                         // SAFETY: This is ok as we are only using the preview information of the
                         // document
                         let entity_access = entity_access::domain::models::EntityAccessReceipt::<
@@ -163,56 +215,46 @@ mod sync_impl {
                                 {
                                     tracing::info!(task_id=%uuid, "task found");
 
-                                    if let (
-                                        Some(installation_id),
-                                        Some(owner),
-                                        Some(repo),
-                                        Some(pull_number),
-                                    ) = (
-                                        webhook_event.installation_id(),
-                                        webhook_event.repo_owner(),
-                                        webhook_event.repo_name(),
-                                        webhook_event.pull_number(),
-                                    ) {
+                                    if let Some((
+                                        ref token,
+                                        ref owner,
+                                        ref repo,
+                                        pull_number,
+                                        ref existing_comments,
+                                    )) = pr_meta
+                                    {
                                         let doc_name = &document.document_metadata.document_name;
                                         let doc_id = &document.document_metadata.document_id;
+                                        let comment_body =
+                                            create_macro_task_comment_link(doc_name, doc_id);
 
-                                        match self
-                                            .generate_installation_access_token(installation_id)
-                                            .await
+                                        // Skip if we already posted a comment linking to this task
+                                        let task_link = format!("/app/task/{doc_id})");
+                                        if existing_comments.iter().any(|c| c.contains(&task_link))
                                         {
-                                            Ok(token) => {
-                                                self.client
-                                                    .create_pr_comment(
-                                                        &token.token,
-                                                        owner,
-                                                        repo,
-                                                        pull_number,
-                                                        &create_macro_task_comment_link(
-                                                            doc_name, doc_id,
-                                                        ),
-                                                    )
-                                                    .await
-                                                    .inspect_err(|e| {
-                                                        tracing::error!(
-                                                            error=?e,
-                                                            "failed to create PR comment"
-                                                        );
-                                                    })
-                                                    .ok();
-                                            }
-                                            Err(e) => {
+                                            tracing::debug!(
+                                                task_id=%uuid,
+                                                "PR already has a comment linking to this task, skipping"
+                                            );
+                                            continue;
+                                        }
+
+                                        self.client
+                                            .create_pr_comment(
+                                                &token.token,
+                                                owner,
+                                                repo,
+                                                pull_number,
+                                                &comment_body,
+                                            )
+                                            .await
+                                            .inspect_err(|e| {
                                                 tracing::error!(
                                                     error=?e,
-                                                    "failed to generate installation access token for PR comment"
+                                                    "failed to create PR comment"
                                                 );
-                                            }
-                                        }
-                                    } else {
-                                        tracing::warn!(
-                                            task_id=%uuid,
-                                            "missing PR metadata, cannot post comment"
-                                        );
+                                            })
+                                            .ok();
                                     }
 
                                     // TODO: update task status based on event

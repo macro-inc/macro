@@ -22,6 +22,7 @@ use super::*;
 /// UUID that corresponds to the short ID `2BuyvtY3aeEvHx4uG8iD51`.
 const KNOWN_TASK_UUID: &str = "0d0dc589-f301-43f1-8b11-4ab448ca4bb4";
 
+/// SAFETY: This is used for testing only
 /// Minimal RSA private key used only for test JWT signing.
 const TEST_PEM: &str = "-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEAky4t+NMylQ8TEjJIKciwvjKWM+5EzSXDkvc+dlNN2g0/wRsr
@@ -182,6 +183,22 @@ impl GithubSyncClient for StubSyncClient {
             body: body.to_string(),
         });
         Ok(())
+    }
+
+    async fn list_pr_comments(
+        &self,
+        _access_token: &str,
+        _owner: &str,
+        _repo: &str,
+        _pull_number: u64,
+    ) -> Result<Vec<String>, GithubError> {
+        Ok(self
+            .pr_comments
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|c| c.body.clone())
+            .collect())
     }
 }
 
@@ -391,6 +408,45 @@ async fn pull_request_review_comment_with_task_id() {
 
     let result = service.process_webhook_event(&event).await;
     assert!(result.is_ok());
+}
+
+// ---------------------------------------------------------------------------
+// Deduplication: bot already posted a comment linking to the same task
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn duplicate_comment_not_posted_when_bot_already_commented() {
+    let service = make_sync_service();
+
+    let make_event = || {
+        ValidatedGithubWebhookEvent::new(
+            "pull_request".to_string(),
+            serde_json::json!({
+                "action": "opened",
+                "pull_request": {
+                    "number": 42,
+                    "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                    "body": null,
+                    "head": { "ref": "feature/some-branch" }
+                },
+                "repository": {
+                    "name": "my-repo",
+                    "owner": { "login": "my-org" }
+                },
+                "installation": { "id": 12345 }
+            }),
+        )
+    };
+
+    // First event — comment should be posted
+    let event = make_event();
+    service.process_webhook_event(&event).await.unwrap();
+    assert_eq!(service.client.pr_comments().len(), 1);
+
+    // Second event with same task ID — should NOT post a duplicate
+    let event = make_event();
+    service.process_webhook_event(&event).await.unwrap();
+    assert_eq!(service.client.pr_comments().len(), 1);
 }
 
 // ---------------------------------------------------------------------------
