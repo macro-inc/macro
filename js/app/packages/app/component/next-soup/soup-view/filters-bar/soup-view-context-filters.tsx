@@ -8,7 +8,6 @@ import {
   ChannelVisibilityFilter,
   DocumentFolderFilter,
   DocumentTypeFilter,
-  DoneStatusFilter,
   EntityTypeFilter,
   FileTypeFilter,
   FoldersFilter,
@@ -16,7 +15,7 @@ import {
   HasAttachmentFilter,
   HasCalendarInviteFilter,
   ProjectFilter,
-  ReadStatusFilter,
+  StatusFilter,
   TaskPriorityFilter,
   TaskStatusFilter,
 } from './filter-controls';
@@ -82,21 +81,21 @@ const MailFilters = () => {
 
   return (
     <>
-      {/* Hide read/done status on drafts tab */}
       <Show when={!isDraftsTab()}>
-        <ReadStatusFilter />
-        <DoneStatusFilter />
+        <StatusFilter />
       </Show>
-      {/* Hide FromSender on sent tab (already filtered to current user) */}
-      <Show when={!isSentTab()}>
-        <FromSenderFilter />
-      </Show>
+
       <HasAttachmentFilter />
-      {/* Show attachment type filter only when has-attachment is active */}
+
       <Show when={hasAttachmentActive()}>
         <AttachmentTypeFilter />
       </Show>
+
       <HasCalendarInviteFilter />
+
+      <Show when={!isSentTab()}>
+        <FromSenderFilter />
+      </Show>
     </>
   );
 };

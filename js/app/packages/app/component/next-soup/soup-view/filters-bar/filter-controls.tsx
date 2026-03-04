@@ -288,38 +288,22 @@ export const ProjectFilter = () => {
   return <FolderFilter target="chat" label="Project" />;
 };
 
-export const ReadStatusFilter = () => {
-  const readStatusOptions: Option[] = [
+export const StatusFilter = () => {
+  const statusOptions: Option[] = [
     { value: 'unread', label: 'Unread' },
     { value: 'read', label: 'Read' },
-  ];
-
-  const readStatus = useFilterOptions(readStatusOptions);
-
-  return (
-    <FilterChipGroup
-      options={readStatusOptions}
-      active={readStatus.active()}
-      onChange={readStatus.onChange}
-      multiple={false}
-    />
-  );
-};
-
-export const DoneStatusFilter = () => {
-  const doneStatusOptions: Option[] = [
     { value: 'not-done', label: 'Not Done' },
     { value: 'done', label: 'Done' },
   ];
 
-  const doneStatus = useFilterOptions(doneStatusOptions);
+  const status = useFilterOptions(statusOptions, { target: 'and' });
 
   return (
-    <FilterChipGroup
-      options={doneStatusOptions}
-      active={doneStatus.active()}
-      onChange={doneStatus.onChange}
-      multiple={false}
+    <FilterSelect
+      label="Status"
+      options={statusOptions}
+      active={status.active()}
+      onChange={status.onChange}
     />
   );
 };
