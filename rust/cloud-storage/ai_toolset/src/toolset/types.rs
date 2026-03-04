@@ -124,6 +124,7 @@ where
     /// was added.
     ///
     /// Returns an error if the tool is not found or if deserialization fails.
+    #[tracing::instrument(err, skip(self, context, request_context))]
     pub async fn try_tool_call(
         &self,
         context: ToolSetContext,

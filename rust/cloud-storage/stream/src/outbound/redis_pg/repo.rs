@@ -119,6 +119,7 @@ impl RedisPostgresStreamRepo {
     /// Delete stream data from redis and postgres.
     /// Internal / testing only. Streams are cleaned using TTL for prod.
     #[allow(unused)]
+    #[tracing::instrument(err, skip(self))]
     pub async fn cleanup_stream(&self, id: &StreamId) -> Result<()> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
         let _: () = conn
@@ -134,6 +135,7 @@ impl RedisPostgresStreamRepo {
         Ok(())
     }
 
+    #[tracing::instrument(skip(conn, item), err)]
     async fn publish_item(
         conn: &mut redis::aio::MultiplexedConnection,
         id: &StreamId,
@@ -149,6 +151,7 @@ impl RedisPostgresStreamRepo {
 #[async_trait]
 impl StreamRepo for RedisPostgresStreamRepo {
     /// Create and append to stream or append to an existing stream.
+    #[tracing::instrument(err, skip(self, payload))]
     async fn append(&self, id: &StreamId, payload: serde_json::Value) -> Result<ItemId> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
 
@@ -183,6 +186,7 @@ impl StreamRepo for RedisPostgresStreamRepo {
         Ok(item_id)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn stream_from_beginning(&self, id: &StreamId) -> Result<ItemStream> {
         // Use no response timeout for blocking XREAD — the default 500ms from redis 1.0
         // kills the connection before the block period expires.
@@ -249,6 +253,7 @@ impl StreamRepo for RedisPostgresStreamRepo {
         Ok(Box::pin(stream))
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn close(&self, id: &StreamId) -> Result<()> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
         Self::publish_item(&mut conn, id, &StoredStreamItem::End).await?;
@@ -273,6 +278,7 @@ impl StreamRepo for RedisPostgresStreamRepo {
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
         super::queries::get_active_stream_keys(&self.pg_pool, entity_id)
             .await
