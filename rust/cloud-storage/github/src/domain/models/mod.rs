@@ -3,14 +3,10 @@
 #[cfg(test)]
 mod test;
 
-#[cfg(feature = "link")]
 mod link;
-#[cfg(feature = "sync")]
 mod sync;
 
-#[cfg(feature = "link")]
 pub use link::*;
-#[cfg(feature = "sync")]
 pub use sync::*;
 
 /// Errors that can occur during github operations.

@@ -4,20 +4,17 @@ use super::*;
 // MacroTaskId::from_short_uuid
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "sync")]
 #[test]
 fn from_short_uuid_valid() {
     let task_id = MacroTaskId::from_short_uuid("2BuyvtY3ae").unwrap();
     assert_eq!(task_id.short_uuid, "2BuyvtY3ae");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn from_short_uuid_rejects_empty() {
     assert!(MacroTaskId::from_short_uuid("").is_none());
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn from_short_uuid_rejects_invalid_chars() {
     // 'O', 'I', 'l', '0' are not in Flickr base58
@@ -26,7 +23,6 @@ fn from_short_uuid_rejects_invalid_chars() {
     assert!(MacroTaskId::from_short_uuid("000abc").is_none());
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn from_short_uuid_rejects_too_long() {
     let long = "a".repeat(25);
@@ -37,7 +33,6 @@ fn from_short_uuid_rejects_too_long() {
 // MacroTaskId::from_uuid / to_uuid roundtrip
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "sync")]
 #[test]
 fn roundtrip_uuid_conversion() {
     let uuid = uuid::Uuid::parse_str("0d0dc589-f301-43f1-8b11-4ab448ca4bb4").unwrap();
@@ -48,14 +43,12 @@ fn roundtrip_uuid_conversion() {
     assert_eq!(uuid, recovered);
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn to_task_id_string() {
     let task_id = MacroTaskId::from_short_uuid("2BuyvtY3ae").unwrap();
     assert_eq!(task_id.to_task_id_string(), "MACRO-2BuyvtY3ae");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn display_impl() {
     let task_id = MacroTaskId::from_short_uuid("abc123").unwrap();
@@ -66,7 +59,6 @@ fn display_impl() {
 // MacroTaskId::extract_from_text
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_case_insensitive() {
     let text = "fixes MACRO-2BuyvtY3ae and also macro-abc123 and Macro-XYZ";
@@ -78,7 +70,6 @@ fn extract_case_insensitive() {
     assert_eq!(ids[2].short_uuid, "XYZ");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_deduplicates() {
     let text = "MACRO-abc123 and macro-abc123 again MACRO-abc123";
@@ -88,7 +79,6 @@ fn extract_deduplicates() {
     assert_eq!(ids[0].short_uuid, "abc123");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_no_match() {
     let text = "no task ids here, just MACR-123 or MACRO- or MACRO";
@@ -96,7 +86,6 @@ fn extract_no_match() {
     assert!(ids.is_empty());
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_ignores_invalid_base58_chars() {
     // '0', 'O', 'I', 'l' are not in Flickr base58
@@ -106,7 +95,6 @@ fn extract_ignores_invalid_base58_chars() {
     assert!(ids.is_empty());
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_from_branch_name() {
     let text = "feature/macro-2BuyvtY3ae";
@@ -115,7 +103,6 @@ fn extract_from_branch_name() {
     assert_eq!(ids[0].short_uuid, "2BuyvtY3ae");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_multiple_in_sentence() {
     let text = "closes MACRO-aaa111 and MACRO-bbb222";
@@ -129,7 +116,6 @@ fn extract_multiple_in_sentence() {
 // GithubWebhookEventType::from_event_header
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "sync")]
 #[test]
 fn event_type_from_known_headers() {
     assert_eq!(
@@ -150,7 +136,6 @@ fn event_type_from_known_headers() {
     );
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn event_type_unknown() {
     assert_eq!(
@@ -167,7 +152,6 @@ fn event_type_unknown() {
 // ValidatedGithubWebhookEvent::extract_searchable_text
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_pull_request() {
     let payload = serde_json::json!({
@@ -188,7 +172,6 @@ fn extract_text_pull_request() {
     assert_eq!(texts[2], "feature/macro-ghi789");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_pull_request_null_body() {
     let payload = serde_json::json!({
@@ -208,7 +191,6 @@ fn extract_text_pull_request_null_body() {
     assert_eq!(texts[1], "main");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_issue_comment() {
     let payload = serde_json::json!({
@@ -223,7 +205,6 @@ fn extract_text_issue_comment() {
     assert_eq!(texts[0], "See MACRO-abc123 for details");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_pull_request_review() {
     let payload = serde_json::json!({
@@ -238,7 +219,6 @@ fn extract_text_pull_request_review() {
     assert_eq!(texts[0], "Looks good, relates to MACRO-xyz789");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_pull_request_review_comment() {
     let payload = serde_json::json!({
@@ -254,7 +234,6 @@ fn extract_text_pull_request_review_comment() {
     assert_eq!(texts[0], "This line relates to MACRO-abc123");
 }
 
-#[cfg(feature = "sync")]
 #[test]
 fn extract_text_unknown_event() {
     let payload = serde_json::json!({"zen": "Keep it logically awesome."});
