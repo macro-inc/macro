@@ -6,12 +6,12 @@ import {
   AssigneeFilter,
   ChannelVisibilityFilter,
   DocumentTypeFilter,
-  EmailDoneStatusFilter,
-  EmailReadStatusFilter,
+  DoneStatusFilter,
   EntityTypeFilter,
   FileTypeFilter,
   InFolderFilter,
   ProjectFilter,
+  ReadStatusFilter,
   TaskPriorityFilter,
   TaskStatusFilter,
 } from './filter-controls';
@@ -71,8 +71,8 @@ const AgentsFilters = () => {
 const MailFilters = () => {
   return (
     <>
-      <EmailReadStatusFilter />
-      <EmailDoneStatusFilter />
+      <ReadStatusFilter />
+      <DoneStatusFilter />
     </>
   );
 };

@@ -767,9 +767,21 @@ export const createSoupFilters = (
       predicate: unreadFilter(notificationSource),
     },
     {
+      id: 'read',
+      label: 'Read',
+      predicate: (entity: EntityData) =>
+        !unreadFilter(notificationSource)(entity),
+    },
+    {
       id: 'not-done',
       label: 'Not done',
       predicate: notDoneFilter(notificationSource),
+    },
+    {
+      id: 'done',
+      label: 'Done',
+      predicate: (entity: EntityData) =>
+        !notDoneFilter(notificationSource)(entity),
     },
     ...ENTITY_TYPE_FILTER_CONFIGS,
     {
@@ -817,19 +829,10 @@ export const createSoupFilters = (
       label: 'Task assigned to user',
       predicate: taskAssignedToUserFilter(getUserID),
     },
-    // Contextual filters - Email
-    ...EMAIL_CONTEXTUAL_FILTERS,
-    // Contextual filters - Tasks (status handled elsewhere, priority here)
     ...TASK_PRIORITY_FILTERS,
-    // Contextual filters - Documents
     ...DOCUMENT_CONTEXTUAL_FILTERS,
-    // Contextual filters - Channels
     ...CHANNEL_CONTEXTUAL_FILTERS,
-    // Contextual filters - Chat/Agents
     ...CHAT_CONTEXTUAL_FILTERS,
-    // Contextual filters - General (apply to multiple types)
-    ...GENERAL_CONTEXTUAL_FILTERS,
-    // Contextual filters - File types
     ...FILE_TYPE_FILTERS,
   ] as const satisfies EntityFilterConfig[];
 

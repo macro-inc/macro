@@ -253,10 +253,10 @@ export const ProjectFilter = () => {
   );
 };
 
-export const EmailReadStatusFilter = () => {
+export const ReadStatusFilter = () => {
   const readStatusOptions: Option[] = [
-    { value: 'email-unread', label: 'Unread' },
-    { value: 'email-read', label: 'Read' },
+    { value: 'unread', label: 'Unread' },
+    { value: 'read', label: 'Read' },
   ];
 
   const readStatus = useFilterOptions(readStatusOptions);
@@ -271,10 +271,10 @@ export const EmailReadStatusFilter = () => {
   );
 };
 
-export const EmailDoneStatusFilter = () => {
+export const DoneStatusFilter = () => {
   const doneStatusOptions: Option[] = [
-    { value: 'email-not-done', label: 'Not Done' },
-    { value: 'email-done', label: 'Done' },
+    { value: 'not-done', label: 'Not Done' },
+    { value: 'done', label: 'Done' },
   ];
 
   const doneStatus = useFilterOptions(doneStatusOptions);
