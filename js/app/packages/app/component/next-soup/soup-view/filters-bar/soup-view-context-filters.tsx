@@ -1,38 +1,17 @@
+import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import XIcon from '@icon/regular/x.svg';
 import FileCodeIcon from '@icon/regular/file-code.svg';
 import FileImageIcon from '@icon/regular/file-image.svg';
 import FilePdfIcon from '@icon/regular/file-pdf.svg';
 import FileIcon from '@icon/regular/file.svg';
-import { Combobox } from '@kobalte/core/combobox';
-import { Select as KSelect } from '@kobalte/core/select';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
-import {
-  batch,
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { batch, createMemo, Match, Show, Switch } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useProjectsQuery } from '@queries/storage/projects';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
-import { UserIcon } from '@core/component/UserIcon';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TASK_STATUS_OPTIONS } from '@entity';
-import { useContacts } from '@queries/contacts/contacts';
-import { useUserId } from '@core/context/user';
-import type { CollectionNode } from '@kobalte/core';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import {
   getFileAssociations,
   QUERY_FILTERS_BASE,
@@ -40,6 +19,14 @@ import {
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import {
+  FilterChipGroup,
+  FilterCombobox,
+  FilterSelect,
+  type Option,
+} from './filter-primitives';
+import { useFilterOptions } from './use-filter-options';
+import { AssigneeFilter } from './filter-controls';
 
 export const SoupViewContextFilters = () => {
   const panel = useSplitPanelOrThrow();
@@ -85,88 +72,36 @@ export const SoupViewContextFilters = () => {
   );
 };
 
-type UseFilterOptionsConfig = {
-  multiple?: boolean;
-  target?: 'and' | 'or';
-  /** Optional function to compute query filters based on selected option values */
-  getQueryFilters?: (selectedIds: string[]) => SoupItemsQueryFilters;
-};
-
-const useFilterOptions = (
-  options: Option[],
-  config: UseFilterOptionsConfig = {}
-) => {
-  const { multiple = true, target = 'or', getQueryFilters } = config;
-  const { soup, setQueryFilters } = useSoupView();
-
-  const optionIds = options.map((opt) => opt.value);
-
-  const active = createMemo(() =>
-    options.filter((opt) => soup.filters.isActive(opt.value))
-  );
-
-  const onChange = (selected: Option[]) => {
-    const selectedIds = multiple
-      ? selected.map((opt) => opt.value)
-      : selected.length > 0
-        ? [selected[selected.length - 1].value]
-        : [];
-
-    batch(() => {
-      soup.filters.set((cur) => {
-        if (target === 'and') {
-          return {
-            and: [
-              ...cur.andIds.filter((id) => !optionIds.includes(id)),
-              ...selectedIds,
-            ],
-            or: cur.orIds,
-          };
-        }
-        return {
-          and: cur.andIds,
-          or: [
-            ...cur.orIds.filter((id) => !optionIds.includes(id)),
-            ...selectedIds,
-          ],
-        };
-      });
-
-      if (getQueryFilters) {
-        setQueryFilters(getQueryFilters(selectedIds));
-      }
-    });
-  };
-
-  return { active, onChange };
-};
-
 /**
- * Builds query filters for selected entity types.
- * Starts with QUERY_FILTERS_BASE (everything excluded) and
- * overrides with includes for selected types, unioning arrays.
+ * Builds query filters for selected entity types, merging with current filters.
+ * When no entity types are selected, returns currentFilters unchanged.
+ * When entity types are selected, preserves existing filter properties (like
+ * notification_filters, importance, etc.) while restricting to selected types.
  */
 const getEntityTypeQueryFilters = (
-  selectedIds: string[]
+  selectedIds: string[],
+  currentFilters: SoupItemsQueryFilters
 ): SoupItemsQueryFilters => {
-  if (selectedIds.length === 0) return {};
+  // No selection = no entity type restriction, keep current filters
+  if (selectedIds.length === 0) return currentFilters;
 
-  // Start with base (everything excluded)
+  // Start with base (everything excluded) then selectively enable types
+  // while preserving existing filter properties from currentFilters
   const result: SoupItemsQueryFilters = { ...QUERY_FILTERS_BASE };
 
   const selected = new Set(selectedIds);
 
-  // Agent
+  // Agent - preserve existing chat_filters properties
   if (selected.has('agent')) {
-    result.chat_filters = {};
+    result.chat_filters = { ...currentFilters.chat_filters };
   }
 
-  // Email
+  // Email - preserve existing email_filters properties
   if (selected.has('email')) {
-    result.email_filters = {};
+    result.email_filters = { ...currentFilters.email_filters };
   }
 
-  // Channels - union channel types
+  // Channels - preserve existing channel_filters properties, add channel_types restriction
   const includesPeople = selected.has('people');
   const includesTeams = selected.has('teams');
   if (includesPeople || includesTeams) {
@@ -181,10 +116,13 @@ const getEntityTypeQueryFilters = (
         ChannelTypeEnum.Public
       );
     }
-    result.channel_filters = { channel_types: channelTypes };
+    result.channel_filters = {
+      ...currentFilters.channel_filters,
+      channel_types: channelTypes,
+    };
   }
 
-  // Documents - union file types
+  // Documents - preserve existing document_filters properties, add file_types restriction
   const includesDocuments = selected.has('document');
   const includesTasks = selected.has('task');
   const includesFiles = selected.has('file');
@@ -199,13 +137,28 @@ const getEntityTypeQueryFilters = (
     if (includesFiles) {
       fileTypes.push(...getFileAssociations('soup'));
     }
-    result.document_filters = { file_types: [...new Set(fileTypes)] };
+    result.document_filters = {
+      ...currentFilters.document_filters,
+      file_types: [...new Set(fileTypes)],
+    };
   }
 
   return result;
 };
 
 const InboxFilters = () => {
+  const { activeTab } = useSoupView();
+
+  // Get base query filters from the current tab preset (used when clearing entity type filter)
+  const baseQueryFilters = createMemo(() => {
+    const tabId = activeTab() ?? VIEW_TAB_PRESETS.inbox.default;
+    const resolver = VIEW_TAB_PRESETS.inbox.tabs[tabId];
+    // Inbox presets don't use context, so we can pass undefined values
+    return (
+      resolver?.({ userId: undefined, email: undefined })?.queryFilters ?? {}
+    );
+  });
+
   const entityTypeOptions: Option[] = [
     {
       value: 'document',
@@ -245,7 +198,8 @@ const InboxFilters = () => {
   ];
 
   const entityType = useFilterOptions(entityTypeOptions, {
-    getQueryFilters: getEntityTypeQueryFilters,
+    getQueryFilters: (selectedIds) =>
+      getEntityTypeQueryFilters(selectedIds, baseQueryFilters()),
   });
 
   return (
@@ -373,43 +327,13 @@ const DocumentsFilters = () => {
 };
 
 const TasksFilters = () => {
-  const {
-    soup,
-    statusFilter,
-    setStatusFilter,
-    assigneeFilter,
-    setAssigneeFilter,
-  } = useSoupView();
-  const contacts = useContacts();
-  const userId = useUserId();
+  const { soup, statusFilter, setStatusFilter } = useSoupView();
 
   const statusOptions: Option[] = TASK_STATUS_OPTIONS.map((o) => ({
     value: o.value,
     label: o.label,
     icon: () => <PropertyValueIcon optionId={o.value} class="size-3.5" />,
   }));
-
-  const assigneeOptions = createMemo((): Option[] => {
-    const currentUserId = userId();
-    const noAssigneeOption: Option = {
-      value: NO_ASSIGNEE,
-      label: 'No Assignee',
-      icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
-    };
-    const contactOptions = contacts().map((contact) => ({
-      value: contact.id,
-      label:
-        contact.id === currentUserId
-          ? contact.name
-            ? `${contact.name} (me)`
-            : 'Me'
-          : contact.name || contact.id,
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
-    return [noAssigneeOption, ...contactOptions];
-  });
 
   const priorityOptions: Option[] = [
     {
@@ -466,18 +390,8 @@ const TasksFilters = () => {
     return statusOptions.filter((o) => current.includes(o.value));
   });
 
-  const activeAssignee = createMemo((): Option[] => {
-    const current = assigneeFilter();
-    const options = assigneeOptions();
-    return options.filter((o) => current.includes(o.value));
-  });
-
   const handleStatusChange = (options: Option[]) => {
     setStatusFilter(options.map((o) => o.value));
-  };
-
-  const handleAssigneeChange = (options: Option[]) => {
-    setAssigneeFilter(options.map((o) => o.value));
   };
 
   return (
@@ -495,15 +409,7 @@ const TasksFilters = () => {
         onChange={priority.onChange}
       />
       <Show when={!soup.filters.isActive('assigned-to')}>
-        <FilterCombobox
-          label="Assignee"
-          options={assigneeOptions()}
-          active={activeAssignee()}
-          onChange={handleAssigneeChange}
-          placeholder="Search assignees..."
-          displayLimit={3}
-          overflowLabel="assignees"
-        />
+        <AssigneeFilter />
       </Show>
     </>
   );
@@ -559,419 +465,5 @@ const FilesFilters = () => {
       active={fileType.active()}
       onChange={fileType.onChange}
     />
-  );
-};
-
-type Option = {
-  value: string;
-  label: string;
-  icon?: () => JSX.Element;
-};
-
-interface FilterSelectProps {
-  label: string;
-  options: Option[];
-  active: Option[];
-  onChange: (options: Option[]) => void;
-  multiple?: boolean;
-}
-
-const FilterSelect = (props: FilterSelectProps) => {
-  const multiple = () => props.multiple ?? true;
-
-  const activeFilters = createMemo(() => props.active);
-  const activeCount = createMemo(() => activeFilters().length);
-  const hasActiveFilters = createMemo(() => activeCount() > 0);
-
-  const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
-    <KSelect.Item
-      item={itemProps.item}
-      class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 group"
-    >
-      <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
-        <KSelect.ItemIndicator>
-          <CheckIcon class="size-2.5 text-page" />
-        </KSelect.ItemIndicator>
-      </span>
-
-      <Show when={itemProps.item.rawValue.icon}>
-        {(icon) => (
-          <span class="size-4 flex items-center justify-center shrink-0">
-            {icon()()}
-          </span>
-        )}
-      </Show>
-
-      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
-        {itemProps.item.rawValue.label}
-      </KSelect.ItemLabel>
-    </KSelect.Item>
-  );
-
-  // For single select: convert to/from array format
-  const value = () =>
-    multiple() ? activeFilters() : (activeFilters()[0] ?? null);
-  const handleChange = (selected: Option | Option[] | null) => {
-    if (multiple()) {
-      props.onChange(selected as Option[]);
-    } else {
-      props.onChange(selected ? [selected as Option] : []);
-    }
-  };
-
-  return (
-    <KSelect<Option>
-      options={props.options}
-      value={value() as Option & Option[]}
-      onChange={handleChange as (value: Option & Option[]) => void}
-      optionTextValue="label"
-      optionValue="value"
-      gutter={4}
-      multiple={multiple()}
-      placement="bottom-start"
-      itemComponent={renderItem}
-    >
-      <KSelect.Trigger
-        as={Button}
-        variant="secondary"
-        size="sm"
-        class={cn(
-          'relative transition-none',
-          hasActiveFilters() &&
-            'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
-        )}
-      >
-        <span class="font-medium">{props.label}</span>
-        <Show when={multiple() && hasActiveFilters()}>
-          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
-            {activeCount()}
-          </span>
-        </Show>
-        <ChevronDownIcon class="size-3" />
-      </KSelect.Trigger>
-      <KSelect.Portal>
-        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[var(--kb-popper-anchor-width)] p-1">
-          <KSelect.Listbox />
-          <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
-            <Button
-              variant="primary"
-              size="sm"
-              class="ml-auto"
-              onClick={() => props.onChange([])}
-            >
-              Clear
-            </Button>
-          </div>
-        </KSelect.Content>
-      </KSelect.Portal>
-    </KSelect>
-  );
-};
-
-interface FilterComboboxProps {
-  label: string;
-  options: Option[];
-  active: Option[];
-  onChange: (options: Option[]) => void;
-  placeholder?: string;
-  /** Maximum number of items to display before showing overflow indicator (default: 2) */
-  displayLimit?: number;
-  /** Label for overflow count, e.g. "selected" results in "3 selected" (default: "selected") */
-  overflowLabel?: string;
-  /** Whether to show stacked icons in the value area (default: true) */
-  showIcons?: boolean;
-}
-
-export const FilterCombobox = (props: FilterComboboxProps) => {
-  const [searchQuery, setSearchQuery] = createSignal('');
-  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
-
-  const displayLimit = () => props.displayLimit ?? 2;
-  const overflowLabel = () => props.overflowLabel ?? 'selected';
-  const showIcons = () => props.showIcons ?? true;
-
-  const activeFilters = createMemo(() => props.active);
-  const activeCount = createMemo(() => activeFilters().length);
-  const hasActiveFilters = createMemo(() => activeCount() > 0);
-
-  const visibleOptions = createMemo(() =>
-    activeFilters().slice(0, displayLimit())
-  );
-  const overflowCount = createMemo(() =>
-    Math.max(0, activeCount() - displayLimit())
-  );
-  const hasOverflow = createMemo(() => overflowCount() > 0);
-
-  const filteredOptions = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
-    if (!query) return props.options;
-    return props.options.filter((opt) =>
-      opt.label.toLowerCase().includes(query)
-    );
-  });
-
-  const dispatchKeyToListbox = (key: string) => {
-    listboxRef()?.dispatchEvent(
-      new KeyboardEvent('keydown', { bubbles: true, key })
-    );
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    switch (e.key) {
-      case 'j': {
-        if (!e.ctrlKey) return;
-        e.preventDefault();
-        dispatchKeyToListbox('ArrowDown');
-        break;
-      }
-      case 'k': {
-        if (!e.ctrlKey) return;
-        e.preventDefault();
-        dispatchKeyToListbox('ArrowUp');
-        break;
-      }
-    }
-  };
-
-  const onInputChange = (value: string) => {
-    setSearchQuery(value);
-    queueMicrotask(() => {
-      dispatchKeyToListbox('ArrowDown');
-    });
-  };
-
-  const onOpenChange = (open: boolean) => {
-    if (!open) {
-      setSearchQuery('');
-    }
-  };
-
-  const removeOption = (e: MouseEvent, option: Option) => {
-    e.stopPropagation();
-    props.onChange(props.active.filter((o) => o.value !== option.value));
-  };
-
-  return (
-    <Combobox<Option>
-      class="max-h-full"
-      multiple
-      options={filteredOptions()}
-      value={activeFilters()}
-      sameWidth
-      onChange={props.onChange}
-      onOpenChange={onOpenChange}
-      onInputChange={onInputChange}
-      optionValue="value"
-      optionTextValue="label"
-      optionLabel="label"
-      placeholder={props.placeholder ?? 'Search...'}
-      allowsEmptyCollection
-      placement="bottom-start"
-      gutter={4}
-      triggerMode="focus"
-      itemComponent={(itemProps) => (
-        <Combobox.Item
-          item={itemProps.item}
-          class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
-        >
-          <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
-            <Combobox.ItemIndicator>
-              <CheckIcon class="size-2.5 text-page" />
-            </Combobox.ItemIndicator>
-          </span>
-
-          <Show when={itemProps.item.rawValue.icon}>
-            {(icon) => (
-              <span class="size-4 flex items-center justify-center shrink-0">
-                {icon()()}
-              </span>
-            )}
-          </Show>
-
-          <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
-            {itemProps.item.rawValue.label}
-          </Combobox.ItemLabel>
-        </Combobox.Item>
-      )}
-    >
-      <Combobox.Control class="flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-transparent text-ink-muted border border-edge hover:bg-ink/8 hover:text-ink transition-all overflow-hidden">
-        <Show when={showIcons() && hasActiveFilters()}>
-          {/* Icons stacked on top of each other with offset */}
-          <div
-            class="relative shrink-0"
-            style={{
-              width: `${16 + (Math.min(activeCount(), displayLimit() + (hasOverflow() ? 1 : 0)) - 1) * 6}px`,
-              height: '16px',
-            }}
-          >
-            <For each={visibleOptions()}>
-              {(option, index) => (
-                <Show when={option.icon}>
-                  {(icon) => (
-                    <span
-                      class="absolute size-4 flex items-center justify-center rounded-full bg-surface-0 ring-1 ring-edge-muted"
-                      style={{ left: `${index() * 6}px`, 'z-index': index() }}
-                    >
-                      {icon()()}
-                    </span>
-                  )}
-                </Show>
-              )}
-            </For>
-            <Show when={hasOverflow()}>
-              <span
-                class="absolute size-4 flex items-center justify-center rounded-full bg-surface-1 text-ink-muted text-[9px] font-semibold ring-1 ring-edge-muted"
-                style={{
-                  left: `${displayLimit() * 6}px`,
-                  'z-index': displayLimit(),
-                }}
-              >
-                +{overflowCount()}
-              </span>
-            </Show>
-          </div>
-        </Show>
-
-        <div class="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
-          <Show
-            when={!hasOverflow()}
-            fallback={
-              <span class="flex items-center px-2 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
-                <span class="font-medium truncate">
-                  {activeCount()} {overflowLabel()} selected
-                </span>
-              </span>
-            }
-          >
-            <For each={visibleOptions()}>
-              {(option) => (
-                <span class="flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
-                  <span class="font-medium truncate">{option.label}</span>
-                  <button
-                    type="button"
-                    class="size-3.5 flex items-center justify-center rounded-full hover:bg-ink/20 transition-colors"
-                    onClick={(e) => removeOption(e, option)}
-                    aria-label={`Remove ${option.label}`}
-                  >
-                    <XIcon class="size-2" />
-                  </button>
-                </span>
-              )}
-            </For>
-          </Show>
-          <Combobox.Input
-            class="flex-1 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
-            placeholder={
-              hasActiveFilters()
-                ? 'Add more...'
-                : (props.placeholder ??
-                  `Filter by ${props.label.toLowerCase()}...`)
-            }
-          />
-        </div>
-        <Show when={hasActiveFilters()}>
-          <button
-            type="button"
-            class="size-4 flex items-center justify-center shrink-0 rounded-full hover:bg-ink/20 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onChange([]);
-            }}
-            aria-label="Clear all"
-          >
-            <XIcon class="size-2.5" />
-          </button>
-        </Show>
-        <ChevronDownIcon class="size-4" />
-      </Combobox.Control>
-
-      <Combobox.Portal>
-        <Combobox.Content
-          class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg p-1 shadow-xl min-w-[200px] max-w-[var(--kb-popper-anchor-width)]"
-          on:keydown={handleKeyDown}
-        >
-          <Show
-            when={filteredOptions().length > 0}
-            fallback={
-              <div class="py-3 px-2 text-center text-xs text-ink-muted whitespace-break-spaces break-words">
-                No options match "{searchQuery()}"
-              </div>
-            }
-          >
-            <Combobox.Listbox
-              ref={setListboxRef}
-              class="max-h-[200px] overflow-y-auto"
-            />
-          </Show>
-        </Combobox.Content>
-      </Combobox.Portal>
-    </Combobox>
-  );
-};
-
-interface FilterChipGroupProps {
-  options: Option[];
-  active: Option[];
-  onChange: (options: Option[]) => void;
-  multiple?: boolean;
-}
-
-export const FilterChipGroup = (props: FilterChipGroupProps) => {
-  const multiple = () => props.multiple ?? true;
-
-  const activeSet = createMemo(() => new Set(props.active.map((o) => o.value)));
-
-  const isActive = (value: string) => activeSet().has(value);
-
-  const handleClick = (option: Option) => {
-    const currentlyActive = isActive(option.value);
-
-    if (!multiple()) {
-      props.onChange(currentlyActive ? [] : [option]);
-      return;
-    }
-
-    if (currentlyActive) {
-      props.onChange(props.active.filter((o) => o.value !== option.value));
-    } else {
-      props.onChange([...props.active, option]);
-    }
-  };
-
-  return (
-    <div class="flex items-center gap-1 flex-wrap">
-      <For each={props.options}>
-        {(option) => (
-          <button
-            type="button"
-            class={cn(
-              'flex items-center gap-1.5 px-2 py-1 text-xs rounded-full border transition-all',
-              isActive(option.value)
-                ? 'bg-accent/15 text-accent border-accent/30 hover:bg-accent/25'
-                : 'bg-ink/8 text-ink-muted border-transparent hover:bg-ink/12 hover:text-ink'
-            )}
-            onClick={() => handleClick(option)}
-          >
-            <Show
-              when={option.icon}
-              fallback={
-                <Show when={isActive(option.value)}>
-                  <CheckIcon class="size-3.5 shrink-0" />
-                </Show>
-              }
-            >
-              {(icon) => (
-                <span class="size-3.5 flex items-center justify-center shrink-0">
-                  <Show when={isActive(option.value)} fallback={icon()()}>
-                    <CheckIcon class="size-3.5" />
-                  </Show>
-                </span>
-              )}
-            </Show>
-            <span class="font-medium">{option.label}</span>
-          </button>
-        )}
-      </For>
-    </div>
   );
 };
