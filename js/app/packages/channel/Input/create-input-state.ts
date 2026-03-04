@@ -109,10 +109,6 @@ export function createInputState(options: CreateInputStateOptions): InputState {
         return next;
       });
     },
-    toggleTaskMode: () => {
-      // No-op: task mode is now managed externally via createTaskMode.
-      // Overridden by composition in ChannelInput.
-    },
     closeDraft: () => {
       const current = snapshot();
       reset();

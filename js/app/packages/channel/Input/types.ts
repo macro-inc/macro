@@ -10,11 +10,6 @@ export type InputAttachmentData = {
   pending?: boolean;
 };
 
-export type InputTaskData = {
-  id: string;
-  title: string;
-};
-
 export type InputData = {
   id?: string;
   placeholder?: string;
@@ -25,10 +20,8 @@ export type InputData = {
   isValidChannelDrag?: boolean;
   showFormatRibbon?: boolean;
   showAttachMenu?: boolean;
-  taskModeEnabled?: boolean;
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];
-  tasks?: InputTaskData[];
 };
 
 export type InputActionEvent = MouseEvent | KeyboardEvent;
@@ -44,7 +37,6 @@ export type InputCallbacks = {
   onSend?: (snapshot: InputSnapshot) => void | Promise<void>;
   onToggleAttachMenu?: (open: boolean) => void | Promise<void>;
   onToggleFormatRibbon?: (open: boolean) => void | Promise<void>;
-  onToggleTaskMode?: (enabled: boolean) => void | Promise<void>;
   onCloseDraft?: (snapshot: InputSnapshot) => void | Promise<void>;
   onRemoveAttachment?: (
     attachment: InputAttachmentData,
@@ -61,7 +53,6 @@ export type InputCommands = {
   send: () => Promise<boolean>;
   toggleAttachMenu: () => void;
   toggleFormatRibbon: () => void;
-  toggleTaskMode: () => void;
   closeDraft: () => void;
   removeAttachment: (attachment: InputAttachmentData) => void;
 };

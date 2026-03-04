@@ -12,7 +12,6 @@ export { FormatRibbon } from './FormatRibbon';
 export { EditorShell } from './EditorShell';
 export { Editor } from './Editor';
 export { Attachments } from './Attachments';
-export { TaskPreview } from './TaskPreview';
 export { Footer } from './Footer';
 export { PrimaryActions } from './PrimaryActions';
 export { AttachMenu } from './AttachMenu';
@@ -25,7 +24,6 @@ export type {
   InputData,
   InputAttachmentData,
   InputAttachmentKind,
-  InputTaskData,
   InputSnapshot,
   InputCallbacks,
   InputDraftAdapter,

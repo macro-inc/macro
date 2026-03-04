@@ -1,7 +1,6 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
-import CheckSquareIcon from '@icon/regular/check-square.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -62,13 +61,6 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
               onClick={() => commands.toggleFormatRibbon()}
             >
               {renderIcon(FormatIcon, 'size-5')}
-            </InputActionButton>
-            <InputActionButton
-              label="Task mode"
-              active={input().taskModeEnabled}
-              onClick={() => commands.toggleTaskMode()}
-            >
-              {renderIcon(CheckSquareIcon, 'size-5')}
             </InputActionButton>
             <Show when={input().isReplyInput}>
               <InputActionButton

@@ -71,33 +71,23 @@ const baseInput: InputData = {
   value: '',
   showFormatRibbon: false,
   showAttachMenu: false,
-  taskModeEnabled: false,
   hasPendingAttachments: false,
   attachments: [],
-  tasks: [],
 };
 
 describe('Input slots', () => {
   it('composes a basic channel input with component-managed state', async () => {
-    const user = userEvent.setup();
-
     render(() => (
       <ChannelInput
         input={{
           ...baseInput,
           id: 'test-channel-input',
           placeholder: 'Message general',
-          value: 'first task\nsecond task',
         }}
       />
     ));
 
     expect(screen.getByText('Message general')).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: 'Task mode' }));
-
-    expect(screen.getByText('first task')).toBeTruthy();
-    expect(screen.getByText('second task')).toBeTruthy();
   });
 
   it('wires send and primary action handlers through context', async () => {
@@ -105,7 +95,6 @@ describe('Input slots', () => {
     const onSend = vi.fn();
     const onToggleAttachMenu = vi.fn();
     const onToggleFormatRibbon = vi.fn();
-    const onToggleTaskMode = vi.fn();
     const onCloseDraft = vi.fn();
 
     render(() =>
@@ -116,7 +105,6 @@ describe('Input slots', () => {
             onSend={onSend}
             onToggleAttachMenu={onToggleAttachMenu}
             onToggleFormatRibbon={onToggleFormatRibbon}
-            onToggleTaskMode={onToggleTaskMode}
             onCloseDraft={onCloseDraft}
           />
         );
@@ -126,26 +114,21 @@ describe('Input slots', () => {
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     await user.click(screen.getByRole('button', { name: 'Attach' }));
     await user.click(screen.getByRole('button', { name: 'Format' }));
-    await user.click(screen.getByRole('button', { name: 'Task mode' }));
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(onToggleAttachMenu).toHaveBeenCalledOnce();
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
-    expect(onToggleTaskMode).toHaveBeenCalledOnce();
     expect(onCloseDraft).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('');
-    expect(onSend.mock.calls[0]?.[1]?.source).toBe('button');
   });
 
-  it('renders placeholder, attachments, and task preview from input state', () => {
+  it('renders placeholder and attachments from input state', () => {
     render(() => (
       <ChannelInput
         input={{
           ...baseInput,
-          value: 'Task one\nTask two',
           showFormatRibbon: true,
-          taskModeEnabled: true,
           attachments: [
             { id: 'a1', kind: 'video', name: 'clip.mov' },
             { id: 'a2', kind: 'image', name: 'image.png' },
@@ -159,9 +142,6 @@ describe('Input slots', () => {
     expect(screen.getByText('clip.mov')).toBeTruthy();
     expect(screen.getByText('image.png')).toBeTruthy();
     expect(screen.getByText('spec.md')).toBeTruthy();
-    expect(screen.getByText('Task one')).toBeTruthy();
-    expect(screen.getByText('Task two')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Task mode' })).toBeTruthy();
   });
 
   it('shows invalid state in drop overlay', () => {

@@ -5,7 +5,6 @@ import { FormattingRibbon } from './FormattingRibbon';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
-import { createTaskMode } from './create-task-mode';
 import { createMentionsTracker } from './mentions-tracker';
 import type {
   InputCallbacks,
@@ -37,14 +36,11 @@ export function ChannelInput(props: ChannelInputProps) {
       onSend: props.onSend,
       onToggleAttachMenu: props.onToggleAttachMenu,
       onToggleFormatRibbon: props.onToggleFormatRibbon,
-      onToggleTaskMode: props.onToggleTaskMode,
       onCloseDraft: props.onCloseDraft,
       onRemoveAttachment: props.onRemoveAttachment,
     },
     draft: props.draft,
   });
-
-  const taskMode = createTaskMode(() => inputState.view().value ?? '');
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
@@ -73,14 +69,7 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   return (
-    <Input.Root
-      input={{
-        ...inputState.view(),
-        taskModeEnabled: taskMode.enabled(),
-        tasks: taskMode.tasks(),
-      }}
-      commands={{ ...inputState.commands, toggleTaskMode: taskMode.toggle }}
-    >
+    <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Input.Layout>
         <Input.DropOverlay />
         <Input.FormatRibbon>
@@ -113,9 +102,6 @@ export function ChannelInput(props: ChannelInputProps) {
         <Input.Attachments kind="video" />
         <Input.Attachments kind="image" />
         <Input.Attachments kind="document" />
-        <Input.TaskPreview>
-          {/** ADD task preview component **/}
-        </Input.TaskPreview>
         <Input.Footer>
           <Input.AttachMenu>{/** ADD Attach menu **/}</Input.AttachMenu>
           <Input.PrimaryActions />

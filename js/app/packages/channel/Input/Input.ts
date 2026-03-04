@@ -5,7 +5,6 @@ import { FormatRibbon } from './FormatRibbon';
 import { EditorShell } from './EditorShell';
 import { Editor } from './Editor';
 import { Attachments } from './Attachments';
-import { TaskPreview } from './TaskPreview';
 import { Footer } from './Footer';
 import { PrimaryActions } from './PrimaryActions';
 import { AttachMenu } from './AttachMenu';
@@ -19,7 +18,6 @@ export const Input = {
   EditorShell,
   Editor,
   Attachments,
-  TaskPreview,
   Footer,
   PrimaryActions,
   AttachMenu,
