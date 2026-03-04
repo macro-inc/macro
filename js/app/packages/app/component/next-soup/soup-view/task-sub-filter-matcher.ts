@@ -39,6 +39,14 @@ export const matchesTaskSubFilters = (
 
   if (hasAssigneeFilter) {
     const taskAssignees = getTaskAssigneeIds(taskEntity);
+    const includesNoAssignee = assigneeFilter.includes(NO_ASSIGNEE);
+    const hasNoAssignees = taskAssignees.length === 0;
+
+    // Match if task has no assignees and NO_ASSIGNEE filter is active
+    if (includesNoAssignee && hasNoAssignees) {
+      return true;
+    }
+
     // Match if any of the task's assignees are in the filter
     if (!taskAssignees.some((id) => assigneeFilter.includes(id))) {
       return false;

@@ -5,7 +5,7 @@ import {
 } from '@core/component/Properties/constants';
 import type { SoupProperty } from '@service-storage/generated/schemas';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
-import { matchesTaskSubFilters } from './task-sub-filter-matcher';
+import { matchesTaskSubFilters, NO_ASSIGNEE } from './task-sub-filter-matcher';
 
 const createSoupProperty = (
   definitionId: string,
@@ -202,5 +202,80 @@ describe('matchesTaskSubFilters', () => {
     expect(
       matchesTaskSubFilters(task, { statusFilter: [], assigneeFilter: [] })
     ).toBe(true);
+  });
+
+  it('matches unassigned tasks when NO_ASSIGNEE filter is active', () => {
+    const taskWithNoAssignees = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [],
+        }),
+      ],
+    });
+
+    const taskWithAssignee = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-1' }],
+        }),
+      ],
+    });
+
+    expect(
+      matchesTaskSubFilters(taskWithNoAssignees, {
+        assigneeFilter: [NO_ASSIGNEE],
+      })
+    ).toBe(true);
+
+    expect(
+      matchesTaskSubFilters(taskWithAssignee, { assigneeFilter: [NO_ASSIGNEE] })
+    ).toBe(false);
+  });
+
+  it('matches both unassigned and specific assignees when both filters are active', () => {
+    const taskWithNoAssignees = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [],
+        }),
+      ],
+    });
+
+    const taskWithUser1 = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-1' }],
+        }),
+      ],
+    });
+
+    const taskWithUser2 = createTask({
+      properties: [
+        createSoupProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [{ entity_type: 'USER', entity_id: 'user-2' }],
+        }),
+      ],
+    });
+
+    const combinedFilter = [NO_ASSIGNEE, 'user-1'];
+
+    expect(
+      matchesTaskSubFilters(taskWithNoAssignees, {
+        assigneeFilter: combinedFilter,
+      })
+    ).toBe(true);
+
+    expect(
+      matchesTaskSubFilters(taskWithUser1, { assigneeFilter: combinedFilter })
+    ).toBe(true);
+
+    expect(
+      matchesTaskSubFilters(taskWithUser2, { assigneeFilter: combinedFilter })
+    ).toBe(false);
   });
 });

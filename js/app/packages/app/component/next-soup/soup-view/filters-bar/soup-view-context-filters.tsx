@@ -30,6 +30,8 @@ import { TASK_STATUS_OPTIONS } from '@entity';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import type { CollectionNode } from '@kobalte/core';
+import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
+import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 
 export const SoupViewContextFilters = () => {
   const panel = useSplitPanelOrThrow();
@@ -262,7 +264,12 @@ const TasksFilters = () => {
 
   const assigneeOptions = createMemo((): Option[] => {
     const currentUserId = userId();
-    return contacts().map((contact) => ({
+    const noAssigneeOption: Option = {
+      value: NO_ASSIGNEE,
+      label: 'No Assignee',
+      icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
+    };
+    const contactOptions = contacts().map((contact) => ({
       value: contact.id,
       label:
         contact.id === currentUserId
@@ -274,6 +281,7 @@ const TasksFilters = () => {
         <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
       ),
     }));
+    return [noAssigneeOption, ...contactOptions];
   });
 
   const priorityOptions: Option[] = [
