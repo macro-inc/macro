@@ -2,7 +2,7 @@ import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
-import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
@@ -46,7 +46,7 @@ export const SIDEBAR_LINKS = [
     id: 'agents',
     label: 'Agents',
     href: LIST_VIEW_PATHS.agents,
-    icon: AnimatedChatIcon,
+    icon: AnimatedStarIcon,
   },
   {
     id: 'mail',

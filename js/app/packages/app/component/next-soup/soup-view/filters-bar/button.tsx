@@ -23,21 +23,21 @@ export type ButtonProps<T extends ValidComponent = 'button'> = ParentProps<
 const variantStyles: Record<ButtonVariant, string> = {
   // High emphasis - main actions (submit, confirm, save)
   primary:
-    'bg-ink text-page hover:bg-ink/90 active:bg-ink/80 data-[disabled]:bg-ink/50 data-[disabled]:text-page/70',
+    'bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80',
   // Medium emphasis - secondary actions (cancel, back)
   secondary:
-    'bg-transparent text-ink border border-edge hover:bg-ink/8 active:bg-ink/12 data-[disabled]:text-ink-faint data-[disabled]:border-edge-muted',
+    'bg-transparent text-ink border border-edge not-disabled:hover:bg-ink/8 not-disabled:active:bg-ink/12',
   // Low emphasis - minimal actions (less important options)
   tertiary:
-    'bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink active:bg-ink/15 data-[disabled]:bg-ink/5 data-[disabled]:text-ink-faint',
+    'bg-ink/8 text-ink-muted not-disabled:hover:bg-ink/12 not-disabled:hover:text-ink not-disabled:active:bg-ink/15',
   // Dangerous actions (delete, remove, disconnect)
   destructive:
-    'bg-transparent text-failure border border-failure/50 hover:bg-failure/10 active:bg-failure/20 data-[disabled]:text-failure/50 data-[disabled]:border-failure/30',
+    'bg-transparent text-failure border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20',
   // Minimal - no background, appears on hover
   ghost:
-    'bg-transparent text-ink-muted hover:bg-ink/8 hover:text-ink active:bg-ink/12 data-[disabled]:text-ink-faint data-[disabled]:hover:bg-transparent',
+    'bg-transparent text-ink-muted not-disabled:hover:bg-ink/8 not-disabled:hover:text-ink not-disabled:active:bg-ink/12',
   // Text link style
-  link: 'bg-transparent text-accent underline-offset-2 hover:underline active:text-accent/80 data-[disabled]:text-accent/50 data-[disabled]:no-underline',
+  link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -69,7 +69,7 @@ export const Button = <T extends ValidComponent = 'button'>(
       class={cn(
         'inline-flex items-center justify-center font-medium rounded-md transition-colors',
         'focus-visible:outline-none',
-        'data-[disabled]:cursor-not-allowed',
+        'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
         variantStyles[variant()],
         sizeStyles[size()],
         local.class
