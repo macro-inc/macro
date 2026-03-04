@@ -1,6 +1,6 @@
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import XIcon from '@icon/regular/x.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { Select as KSelect } from '@kobalte/core/select';
 import { cn } from '@ui/utils/classname';
@@ -120,33 +120,15 @@ interface FilterComboboxProps {
   active: Option[];
   onChange: (options: Option[]) => void;
   placeholder?: string;
-  /** Maximum number of items to display before showing overflow indicator (default: 2) */
-  displayLimit?: number;
-  /** Label for overflow count, e.g. "selected" results in "3 selected" (default: "selected") */
-  overflowLabel?: string;
-  /** Whether to show stacked icons in the value area (default: true) */
-  showIcons?: boolean;
 }
 
 export const FilterCombobox = (props: FilterComboboxProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
 
-  const displayLimit = () => props.displayLimit ?? 2;
-  const overflowLabel = () => props.overflowLabel ?? 'selected';
-  const showIcons = () => props.showIcons ?? true;
-
   const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
   const hasActiveFilters = createMemo(() => activeCount() > 0);
-
-  const visibleOptions = createMemo(() =>
-    activeFilters().slice(0, displayLimit())
-  );
-  const overflowCount = createMemo(() =>
-    Math.max(0, activeCount() - displayLimit())
-  );
-  const hasOverflow = createMemo(() => overflowCount() > 0);
 
   const filteredOptions = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
@@ -192,29 +174,21 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
     }
   };
 
-  const removeOption = (e: MouseEvent, option: Option) => {
-    e.stopPropagation();
-    props.onChange(props.active.filter((o) => o.value !== option.value));
-  };
-
   return (
     <Combobox<Option>
       class="max-h-full"
       multiple
       options={filteredOptions()}
       value={activeFilters()}
-      sameWidth
       onChange={props.onChange}
       onOpenChange={onOpenChange}
       onInputChange={onInputChange}
       optionValue="value"
       optionTextValue="label"
       optionLabel="label"
-      placeholder={props.placeholder ?? 'Search...'}
       allowsEmptyCollection
       placement="bottom-start"
       gutter={4}
-      triggerMode="focus"
       itemComponent={(itemProps) => (
         <Combobox.Item
           item={itemProps.item}
@@ -240,114 +214,70 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
         </Combobox.Item>
       )}
     >
-      <Combobox.Control class="max-h-7.5 flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-transparent text-ink-muted border border-edge hover:bg-ink/8 hover:text-ink transition-all overflow-hidden">
-        <Show when={showIcons() && hasActiveFilters()}>
-          {/* Icons stacked on top of each other with offset */}
-          <div
-            class="relative shrink-0"
-            style={{
-              width: `${16 + (Math.min(activeCount(), displayLimit() + (hasOverflow() ? 1 : 0)) - 1) * 6}px`,
-              height: '16px',
-            }}
-          >
-            <For each={visibleOptions()}>
-              {(option, index) => (
-                <Show when={option.icon}>
-                  {(icon) => (
-                    <span
-                      class="absolute size-4 flex items-center justify-center rounded-full bg-surface-0 ring-1 ring-edge-muted"
-                      style={{ left: `${index() * 6}px`, 'z-index': index() }}
-                    >
-                      {icon()()}
-                    </span>
-                  )}
-                </Show>
-              )}
-            </For>
-            <Show when={hasOverflow()}>
-              <span
-                class="absolute size-4 flex items-center justify-center rounded-full bg-surface-1 text-ink-muted text-[9px] font-semibold ring-1 ring-edge-muted"
-                style={{
-                  left: `${displayLimit() * 6}px`,
-                  'z-index': displayLimit(),
-                }}
-              >
-                +{overflowCount()}
-              </span>
-            </Show>
-          </div>
-        </Show>
-
-        <div class="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
-          <Show
-            when={!hasOverflow()}
-            fallback={
-              <span class="flex items-center px-2 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
-                <span class="font-medium truncate">
-                  {activeCount()} {overflowLabel()} selected
-                </span>
-              </span>
-            }
-          >
-            <For each={visibleOptions()}>
-              {(option) => (
-                <span class="flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full bg-ink/10 text-ink text-xs">
-                  <span class="font-medium truncate">{option.label}</span>
-                  <button
-                    type="button"
-                    class="size-3.5 flex items-center justify-center rounded-full hover:bg-ink/20 transition-colors"
-                    onClick={(e) => removeOption(e, option)}
-                    aria-label={`Remove ${option.label}`}
-                  >
-                    <XIcon class="size-2" />
-                  </button>
-                </span>
-              )}
-            </For>
+      <Combobox.Control class="flex">
+        <Combobox.Trigger
+          as={Button}
+          variant="secondary"
+          size="sm"
+          class={cn(
+            'relative transition-none',
+            hasActiveFilters() &&
+              'bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25'
+          )}
+        >
+          <span class="font-medium">{props.label}</span>
+          <Show when={hasActiveFilters()}>
+            <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
+              {activeCount()}
+            </span>
           </Show>
-          <Combobox.Input
-            class="flex-1 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
-            placeholder={
-              hasActiveFilters()
-                ? 'Add more...'
-                : (props.placeholder ??
-                  `Filter by ${props.label.toLowerCase()}...`)
-            }
-          />
-        </div>
-        <Show when={hasActiveFilters()}>
-          <button
-            type="button"
-            class="size-4 flex items-center justify-center shrink-0 rounded-full hover:bg-ink/20 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onChange([]);
-            }}
-            aria-label="Clear all"
-          >
-            <XIcon class="size-2.5" />
-          </button>
-        </Show>
-        <ChevronDownIcon class="size-4" />
+          <ChevronDownIcon class="size-3" />
+        </Combobox.Trigger>
+        <Combobox.Input class="sr-only" />
       </Combobox.Control>
 
       <Combobox.Portal>
         <Combobox.Content
-          class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg p-1 shadow-xl min-w-[200px] max-w-[var(--kb-popper-anchor-width)]"
+          class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[220px] overflow-hidden"
           on:keydown={handleKeyDown}
         >
-          <Show
-            when={filteredOptions().length > 0}
-            fallback={
-              <div class="py-3 px-2 text-center text-xs text-ink-muted whitespace-break-spaces break-words">
-                No options match "{searchQuery()}"
-              </div>
-            }
-          >
-            <Combobox.Listbox
-              ref={setListboxRef}
-              class="max-h-[200px] overflow-y-auto"
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
+            <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
+            <Combobox.Input
+              class="flex-1 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+              placeholder={
+                props.placeholder ?? `Search ${props.label.toLowerCase()}...`
+              }
             />
+          </div>
+
+          <div class="p-1">
+            <Show
+              when={filteredOptions().length > 0}
+              fallback={
+                <div class="py-3 px-2 text-center text-xs text-ink-muted whitespace-break-spaces break-words">
+                  No options match "{searchQuery()}"
+                </div>
+              }
+            >
+              <Combobox.Listbox
+                ref={setListboxRef}
+                class="max-h-[200px] overflow-y-auto"
+              />
+            </Show>
+          </div>
+
+          <Show when={hasActiveFilters()}>
+            <div class="w-full pt-1 px-1 pb-1 flex items-center border-t border-t-edge-muted">
+              <Button
+                variant="primary"
+                size="sm"
+                class="ml-auto"
+                onClick={() => props.onChange([])}
+              >
+                Clear
+              </Button>
+            </div>
           </Show>
         </Combobox.Content>
       </Combobox.Portal>

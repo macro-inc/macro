@@ -75,8 +75,6 @@ export const AssigneeFilter = () => {
       active={activeAssignee()}
       onChange={handleAssigneeChange}
       placeholder="Search assignees..."
-      displayLimit={3}
-      overflowLabel="assignees"
     />
   );
 };
@@ -276,16 +274,13 @@ export const FolderFilter = (props: FolderFilterProps) => {
         active={activeProjectFilter()}
         onChange={handleProjectChange}
         placeholder="Search folders..."
-        displayLimit={2}
-        overflowLabel="folders"
-        showIcons={false}
       />
     </Show>
   );
 };
 
 export const ProjectFilter = () => {
-  return <FolderFilter target="chat" label="Project" />;
+  return <FolderFilter target="chat" label="Folder" />;
 };
 
 export const StatusFilter = () => {
@@ -533,9 +528,7 @@ export const FromSenderFilter = () => {
         options={senderOptions()}
         active={activeSenderFilter()}
         onChange={handleSenderChange}
-        placeholder="Search senders..."
-        displayLimit={2}
-        overflowLabel="senders"
+        placeholder="Search contacts..."
       />
     </Show>
   );

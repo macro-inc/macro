@@ -85,22 +85,22 @@ const MailFilters = () => {
 
   return (
     <>
-      {/* Status group */}
       <Show when={!isDraftsTab()}>
         <StatusFilter />
+      </Show>
+
+      <Show when={!isSentTab() && !isDraftsTab()}>
+        <FromSenderFilter />
         <FilterDivider />
       </Show>
-      {/* Attachment group */}
+
       <HasAttachmentFilter />
+
       <Show when={hasAttachmentActive()}>
         <AttachmentTypeFilter />
       </Show>
+
       <HasCalendarInviteFilter />
-      {/* Sender group */}
-      <Show when={!isSentTab()}>
-        <FilterDivider />
-        <FromSenderFilter />
-      </Show>
     </>
   );
 };
