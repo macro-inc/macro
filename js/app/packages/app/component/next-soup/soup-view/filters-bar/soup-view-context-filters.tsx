@@ -26,12 +26,20 @@ import { useProjectsQuery } from '@queries/storage/projects';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { UserIcon } from '@core/component/UserIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { TASK_STATUS_OPTIONS } from '@entity';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import type { CollectionNode } from '@kobalte/core';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import {
+  getFileAssociations,
+  QUERY_FILTERS_BASE,
+} from '@app/component/next-soup/filters/filters';
+import { ChannelTypeEnum } from '@service-comms/client';
+import type { ChannelType } from '@service-comms/generated/models';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
 export const SoupViewContextFilters = () => {
   const panel = useSplitPanelOrThrow();
@@ -80,14 +88,16 @@ export const SoupViewContextFilters = () => {
 type UseFilterOptionsConfig = {
   multiple?: boolean;
   target?: 'and' | 'or';
+  /** Optional function to compute query filters based on selected option values */
+  getQueryFilters?: (selectedIds: string[]) => SoupItemsQueryFilters;
 };
 
 const useFilterOptions = (
   options: Option[],
   config: UseFilterOptionsConfig = {}
 ) => {
-  const { multiple = true, target = 'or' } = config;
-  const { soup } = useSoupView();
+  const { multiple = true, target = 'or', getQueryFilters } = config;
+  const { soup, setQueryFilters } = useSoupView();
 
   const optionIds = options.map((opt) => opt.value);
 
@@ -102,32 +112,149 @@ const useFilterOptions = (
         ? [selected[selected.length - 1].value]
         : [];
 
-    soup.filters.set((cur) => {
-      if (target === 'and') {
+    batch(() => {
+      soup.filters.set((cur) => {
+        if (target === 'and') {
+          return {
+            and: [
+              ...cur.andIds.filter((id) => !optionIds.includes(id)),
+              ...selectedIds,
+            ],
+            or: cur.orIds,
+          };
+        }
         return {
-          and: [
-            ...cur.andIds.filter((id) => !optionIds.includes(id)),
+          and: cur.andIds,
+          or: [
+            ...cur.orIds.filter((id) => !optionIds.includes(id)),
             ...selectedIds,
           ],
-          or: cur.orIds,
         };
+      });
+
+      if (getQueryFilters) {
+        setQueryFilters(getQueryFilters(selectedIds));
       }
-      return {
-        and: cur.andIds,
-        or: [
-          ...cur.orIds.filter((id) => !optionIds.includes(id)),
-          ...selectedIds,
-        ],
-      };
     });
   };
 
   return { active, onChange };
 };
 
+/**
+ * Builds query filters for selected entity types.
+ * Starts with QUERY_FILTERS_BASE (everything excluded) and
+ * overrides with includes for selected types, unioning arrays.
+ */
+const getEntityTypeQueryFilters = (
+  selectedIds: string[]
+): SoupItemsQueryFilters => {
+  if (selectedIds.length === 0) return {};
+
+  // Start with base (everything excluded)
+  const result: SoupItemsQueryFilters = { ...QUERY_FILTERS_BASE };
+
+  const selected = new Set(selectedIds);
+
+  // Agent
+  if (selected.has('agent')) {
+    result.chat_filters = {};
+  }
+
+  // Email
+  if (selected.has('email')) {
+    result.email_filters = {};
+  }
+
+  // Channels - union channel types
+  const includesPeople = selected.has('people');
+  const includesTeams = selected.has('teams');
+  if (includesPeople || includesTeams) {
+    const channelTypes: ChannelType[] = [];
+    if (includesPeople) {
+      channelTypes.push(ChannelTypeEnum.DirectMessage);
+    }
+    if (includesTeams) {
+      channelTypes.push(
+        ChannelTypeEnum.Private,
+        ChannelTypeEnum.Organization,
+        ChannelTypeEnum.Public
+      );
+    }
+    result.channel_filters = { channel_types: channelTypes };
+  }
+
+  // Documents - union file types
+  const includesDocuments = selected.has('document');
+  const includesTasks = selected.has('task');
+  const includesFiles = selected.has('file');
+  if (includesDocuments || includesTasks || includesFiles) {
+    const fileTypes: string[] = [];
+    if (includesDocuments) {
+      fileTypes.push('md', 'canvas');
+    }
+    if (includesTasks) {
+      fileTypes.push('md');
+    }
+    if (includesFiles) {
+      fileTypes.push(...getFileAssociations('soup'));
+    }
+    result.document_filters = { file_types: [...new Set(fileTypes)] };
+  }
+
+  return result;
+};
+
 const InboxFilters = () => {
+  const entityTypeOptions: Option[] = [
+    {
+      value: 'document',
+      label: 'Docs',
+      icon: () => <EntityIcon targetType="md" size="xs" />,
+    },
+    {
+      value: 'agent',
+      label: 'Agents',
+      icon: () => <EntityIcon targetType="chat" size="xs" />,
+    },
+    {
+      value: 'people',
+      label: 'People',
+      icon: () => <EntityIcon targetType="direct_message" size="xs" />,
+    },
+    {
+      value: 'teams',
+      label: 'Teams',
+      icon: () => <EntityIcon targetType="channel" size="xs" />,
+    },
+    {
+      value: 'task',
+      label: 'Tasks',
+      icon: () => <EntityIcon targetType="task" size="xs" />,
+    },
+    {
+      value: 'email',
+      label: 'Mail',
+      icon: () => <EntityIcon targetType="email" size="xs" />,
+    },
+    {
+      value: 'file',
+      label: 'Files',
+      icon: () => <EntityIcon targetType="unknown" size="xs" />,
+    },
+  ];
+
+  const entityType = useFilterOptions(entityTypeOptions, {
+    getQueryFilters: getEntityTypeQueryFilters,
+  });
+
   return (
-    <div class="flex items-center gap-1.5">{/* No inbox filters yet */}</div>
+    <FilterSelect
+      label="Type"
+      options={entityTypeOptions}
+      active={entityType.active()}
+      onChange={entityType.onChange}
+    />
   );
 };
 
