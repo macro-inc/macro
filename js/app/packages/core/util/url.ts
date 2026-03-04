@@ -1,8 +1,6 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import shortuuid from 'short-uuid';
 import { getWebOrigin } from './webOrigin';
-export { getWebOrigin } from './webOrigin';
-
 const short = shortuuid(shortuuid.constants.flickrBase58, {
   consistentLength: false,
 });
