@@ -478,8 +478,9 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
+        Ok(rows
+            .into_iter()
+            .map(|row| -> Result<UserNotificationRow<T>, rootcause::Report> {
                 let entity = EntityType::from_str(&row.event_item_type)
                     .map_err(|e| rootcause::report!(e))?
                     .with_entity_string(row.event_item_id);
@@ -512,7 +513,13 @@ impl NotificationDbOps for PgPool {
                     sender_id,
                 })
             })
-            .collect()
+            .inspect(|r: &Result<UserNotificationRow<T>, _>| {
+                if let Err(e) = r {
+                    tracing::warn!("skipping invalid notification: {e:?}");
+                }
+            })
+            .filter_map(Result::ok)
+            .collect())
     }
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
@@ -562,8 +569,9 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
+        Ok(rows
+            .into_iter()
+            .map(|row| -> Result<UserNotificationRow<T>, Report> {
                 let entity = EntityType::from_str(&row.event_item_type)
                     .map_err(|e| rootcause::report!(e))?
                     .with_entity_string(row.event_item_id);
@@ -596,7 +604,13 @@ impl NotificationDbOps for PgPool {
                     sender_id,
                 })
             })
-            .collect()
+            .inspect(|r: &Result<UserNotificationRow<T>, _>| {
+                if let Err(e) = r {
+                    tracing::warn!("skipping invalid notification: {e:?}");
+                }
+            })
+            .filter_map(Result::ok)
+            .collect())
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
