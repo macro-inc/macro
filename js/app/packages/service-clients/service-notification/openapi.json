@@ -10,124 +10,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/device/register": {
-      "post": {
-        "tags": ["device::register"],
-        "summary": "Register a user device for push notifications.",
-        "operationId": "register_device",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeviceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/device/unregister": {
-      "delete": {
-        "tags": ["device::unregister"],
-        "summary": "Unregister a device from receiving push notifications.",
-        "operationId": "unregister_device",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeviceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -1204,13 +1086,16 @@
       },
       "DeviceRequest": {
         "type": "object",
+        "description": "Request to register or unregister a device for push notifications.",
         "required": ["deviceType", "token"],
         "properties": {
           "deviceType": {
-            "$ref": "#/components/schemas/DeviceType"
+            "$ref": "#/components/schemas/DeviceType",
+            "description": "The device platform type (iOS or Android)."
           },
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "The device push notification token."
           }
         }
       },

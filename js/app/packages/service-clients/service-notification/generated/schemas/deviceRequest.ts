@@ -6,7 +6,12 @@
  */
 import type { DeviceType } from './deviceType';
 
+/**
+ * Request to register or unregister a device for push notifications.
+ */
 export interface DeviceRequest {
+  /** The device platform type (iOS or Android). */
   deviceType: DeviceType;
+  /** The device push notification token. */
   token: string;
 }
