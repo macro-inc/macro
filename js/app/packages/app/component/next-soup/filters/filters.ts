@@ -1,4 +1,5 @@
 import {
+  getEntityProjectId,
   getTaskAssigneeIds,
   isTaskEntity,
   type TaskEntityWithProperties,
@@ -570,9 +571,9 @@ export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
     },
   },
   {
-    id: 'doc-in-folder',
+    id: 'in-folder',
     label: 'In Folder',
-    predicate: (entity) => isDocumentEntity(entity) && !!entity.projectId,
+    predicate: (entity) => !!getEntityProjectId(entity),
   },
   {
     id: 'doc-markdown',

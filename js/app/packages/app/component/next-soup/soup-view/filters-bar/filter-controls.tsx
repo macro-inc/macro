@@ -307,9 +307,9 @@ export const DocumentTypeFilter = () => {
   );
 };
 
-export const DocumentLocationFilter = () => {
+export const InFolderFilter = () => {
   const locationOptions: Option[] = [
-    { value: 'doc-in-folder', label: 'In Folder' },
+    { value: 'in-folder', label: 'In Folder' },
   ];
 
   const location = useFilterOptions(locationOptions);
