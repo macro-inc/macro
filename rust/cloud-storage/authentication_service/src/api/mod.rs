@@ -3,9 +3,10 @@ use anyhow::Context;
 use axum::Router;
 use axum::http::HeaderName;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use native_app_service::inbound::RouterState;
+use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -43,9 +44,10 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
     )]);
 
     let env = state.environment;
+
     let app = api_router(state.clone())
         .with_state(state)
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
         .layer(cors)

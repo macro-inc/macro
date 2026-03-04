@@ -72,6 +72,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "tracking",
   "user_permissions",
 ] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }

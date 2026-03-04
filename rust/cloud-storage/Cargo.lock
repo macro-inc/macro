@@ -583,6 +583,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "maud",
@@ -5647,6 +5648,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_tower_layers"
+version = "0.1.0"
+dependencies = [
+ "http 1.3.1",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
@@ -9989,6 +10000,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
