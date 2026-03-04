@@ -192,7 +192,7 @@ const service = new AuthenticationService('authentication-service', {
     { name: 'ENVIRONMENT', value: stack },
     {
       name: 'RUST_LOG',
-      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'}`,
+      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'},fusionauth=debug`,
     },
     {
       name: 'DATABASE_URL',
