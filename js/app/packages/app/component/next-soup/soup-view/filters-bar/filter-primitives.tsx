@@ -48,7 +48,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
         )}
       </Show>
 
-      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
+      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
         {itemProps.item.rawValue.label}
       </KSelect.ItemLabel>
     </KSelect.Item>
@@ -208,7 +208,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
             )}
           </Show>
 
-          <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink group-data-[selected]:font-medium">
+          <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
             {itemProps.item.rawValue.label}
           </Combobox.ItemLabel>
         </Combobox.Item>

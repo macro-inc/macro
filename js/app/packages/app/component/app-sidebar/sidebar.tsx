@@ -1,3 +1,4 @@
+import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -25,6 +26,7 @@ import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { setSidebarOpen, sidebarOpen } from '@app/component/Layout';
 import { isMobile } from '@core/mobile/isMobile';
+import { useSettingsState } from '@core/constant/SettingsState';
 
 interface SidebarItem {
   id: ListView;
@@ -86,6 +88,7 @@ type AppSidebarProps = {
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
+  const { toggleSettings } = useSettingsState();
 
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
@@ -159,6 +162,22 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 onClick={handleCreateClick}
               >
                 <PlusIcon />
+              </Button>
+            </Tooltip>
+            <Tooltip
+              tooltip={
+                <LabelAndHotKey
+                  label="Settings"
+                  hotkeyToken="global.toggleSettings"
+                />
+              }
+            >
+              <Button
+                variant="tertiary"
+                size="icon-sm"
+                onClick={toggleSettings}
+              >
+                <GearIcon />
               </Button>
             </Tooltip>
           </div>
