@@ -1,4 +1,7 @@
-import { buildConfig, EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import {
+  buildConfig,
+  EditorConfigBuilder,
+} from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import {
   DefaultShortcuts,
   type ItemMention,

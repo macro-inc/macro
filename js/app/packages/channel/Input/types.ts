@@ -1,5 +1,4 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import type { Accessor } from 'solid-js';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
 export type InputAttachmentKind = 'video' | 'image' | 'document';
@@ -32,7 +31,6 @@ export type InputData = {
   tasks?: InputTaskData[];
 };
 
-
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 
 export type InputSnapshot = {
@@ -43,9 +41,7 @@ export type InputSnapshot = {
 
 export type InputCallbacks = {
   onChange?: (snapshot: InputSnapshot) => void | Promise<void>;
-  onSend?: (
-    snapshot: InputSnapshot,
-  ) => void | Promise<void>;
+  onSend?: (snapshot: InputSnapshot) => void | Promise<void>;
   onToggleAttachMenu?: (open: boolean) => void | Promise<void>;
   onToggleFormatRibbon?: (open: boolean) => void | Promise<void>;
   onToggleTaskMode?: (enabled: boolean) => void | Promise<void>;
@@ -71,16 +67,9 @@ export type InputCommands = {
 };
 
 export type InputHandle = {
-  snapshot: Accessor<InputSnapshot>;
   clear: () => void;
   focus: () => void;
 };
 
 export type InputAttachmentTracker = Tracker;
 
-// Legacy aliases kept for compatibility.
-export type InputActionContext = InputSnapshot;
-export type InputActionHandler = (
-  context: InputActionContext
-) => void | Promise<void>;
-export type InputActions = InputCallbacks;

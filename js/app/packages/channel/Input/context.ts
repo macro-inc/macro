@@ -17,6 +17,7 @@ export function useInput(): Accessor<InputData> {
 
 export function useInputCommands(): InputCommands {
   const ctx = useContext(InputContext);
-  if (!ctx) throw new Error('useInputCommands must be used within <Input.Root>');
+  if (!ctx)
+    throw new Error('useInputCommands must be used within <Input.Root>');
   return ctx.commands;
 }

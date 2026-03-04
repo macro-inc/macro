@@ -102,9 +102,9 @@ export function Channel(props: ChannelProps) {
 
   return (
     <Suspense>
-      <div class="relative h-full flex flex-col">
-        <Show when={messages().length > 0}>
-          <StaticMarkdownContext>
+      <StaticMarkdownContext>
+        <div class="relative h-full flex flex-col">
+          <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
               <ThreadList
                 data={messages}
@@ -124,6 +124,10 @@ export function Channel(props: ChannelProps) {
                       getMessageActions={getMessageActions}
                       isExpanded={state.isExpanded}
                       setIsExpanded={state.setIsExpanded}
+                      isReplying={state.isReplying}
+                      setIsReplying={state.setIsReplying}
+                      replyInputState={state.replyInputState}
+                      setReplyInputState={state.setReplyInputState}
                       listMeta={listMetaByMessageId()[item.id]}
                       threadActions={{
                         onDismissNewMessages:
@@ -138,11 +142,8 @@ export function Channel(props: ChannelProps) {
                 scrollState={threadListScrollState}
               />
             </div>
-          </StaticMarkdownContext>
-        </Show>
-
-        <Suspense>
-          <StaticMarkdownContext>
+          </Show>
+          <Suspense>
             <div class="pb-2 w-full flex justify-center">
               <ChannelInput
                 input={{
@@ -151,9 +152,9 @@ export function Channel(props: ChannelProps) {
                 }}
               />
             </div>
-          </StaticMarkdownContext>
-        </Suspense>
-      </div>
+          </Suspense>
+        </div>
+      </StaticMarkdownContext>
     </Suspense>
   );
 }

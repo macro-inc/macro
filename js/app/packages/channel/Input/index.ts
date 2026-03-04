@@ -31,10 +31,6 @@ export type {
   InputDraftAdapter,
   InputCommands,
   InputHandle,
-  // Legacy aliases
-  InputActionContext,
   InputActionEvent,
-  InputActionHandler,
-  InputActions,
   InputAttachmentTracker,
 } from './types';

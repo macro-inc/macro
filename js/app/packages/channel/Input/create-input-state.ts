@@ -8,7 +8,6 @@ import type {
   InputData,
   InputDraftAdapter,
   InputSnapshot,
-  InputTaskData,
 } from './types';
 
 type CreateInputStateOptions = {
@@ -29,30 +28,16 @@ export type InputState = {
 };
 
 export function createInputState(options: CreateInputStateOptions): InputState {
-  const [value, setValueSignal] = createSignal(options.initialInput.value ?? '');
+  const [value, setValueSignal] = createSignal(
+    options.initialInput.value ?? ''
+  );
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(
     !!options.initialInput.showFormatRibbon
   );
   const [showAttachMenu, setShowAttachMenu] = createSignal(
     !!options.initialInput.showAttachMenu
   );
-  const [taskModeEnabled, setTaskModeEnabled] = createSignal(
-    !!options.initialInput.taskModeEnabled
-  );
   const [isSending, setIsSending] = createSignal(false);
-
-  const tasks = createMemo<InputTaskData[]>(() => {
-    if (!taskModeEnabled()) return [];
-    return value()
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .slice(0, 3)
-      .map((title, index) => ({
-        id: `task-${index + 1}`,
-        title,
-      }));
-  });
 
   const snapshot = createMemo<InputSnapshot>(() => ({
     value: value(),
@@ -65,11 +50,9 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     value: value(),
     showFormatRibbon: showFormatRibbon(),
     showAttachMenu: showAttachMenu(),
-    taskModeEnabled: taskModeEnabled(),
     hasPendingAttachments:
       isSending() || options.attachmentTracker.hasPending(),
     attachments: options.attachmentTracker.attachments(),
-    tasks: tasks(),
   }));
 
   const emitChange = () => {
@@ -127,11 +110,8 @@ export function createInputState(options: CreateInputStateOptions): InputState {
       });
     },
     toggleTaskMode: () => {
-      setTaskModeEnabled((enabled) => {
-        const next = !enabled;
-        options.callbacks?.onToggleTaskMode?.(next);
-        return next;
-      });
+      // No-op: task mode is now managed externally via createTaskMode.
+      // Overridden by composition in ChannelInput.
     },
     closeDraft: () => {
       const current = snapshot();

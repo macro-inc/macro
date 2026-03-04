@@ -5,6 +5,7 @@ import { FormattingRibbon } from './FormattingRibbon';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
+import { createTaskMode } from './create-task-mode';
 import { createMentionsTracker } from './mentions-tracker';
 import type {
   InputCallbacks,
@@ -43,6 +44,8 @@ export function ChannelInput(props: ChannelInputProps) {
     draft: props.draft,
   });
 
+  const taskMode = createTaskMode(() => inputState.view().value ?? '');
+
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
@@ -64,22 +67,31 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
-
   props.onReady?.({
-    snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
   });
 
   return (
-    <Input.Root input={inputState.view()} commands={inputState.commands}>
+    <Input.Root
+      input={{
+        ...inputState.view(),
+        taskModeEnabled: taskMode.enabled(),
+        tasks: taskMode.tasks(),
+      }}
+      commands={{ ...inputState.commands, toggleTaskMode: taskMode.toggle }}
+    >
       <Input.Layout>
         <Input.DropOverlay />
         <Input.FormatRibbon>
           <FormattingRibbon
             selectionState={() => markdownEditor.selection}
-            onInlineFormat={(format) => applyInlineFormat(markdownEditor.lexical, format)}
-            onNodeFormat={(format) => applyNodeFormat(markdownEditor.lexical, format)}
+            onInlineFormat={(format) =>
+              applyInlineFormat(markdownEditor.lexical, format)
+            }
+            onNodeFormat={(format) =>
+              applyNodeFormat(markdownEditor.lexical, format)
+            }
           />
         </Input.FormatRibbon>
         <Input.EditorShell

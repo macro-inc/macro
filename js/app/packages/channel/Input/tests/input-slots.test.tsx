@@ -108,7 +108,7 @@ describe('Input slots', () => {
     const onToggleTaskMode = vi.fn();
     const onCloseDraft = vi.fn();
 
-    render(() => (
+    render(() =>
       (() => {
         return (
           <ChannelInput
@@ -121,7 +121,7 @@ describe('Input slots', () => {
           />
         );
       })()
-    ));
+    );
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     await user.click(screen.getByRole('button', { name: 'Attach' }));

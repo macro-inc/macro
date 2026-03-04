@@ -21,9 +21,7 @@ export function Attachments(props: AttachmentsProps) {
     return items.filter((attachment) => attachment.kind === local.kind);
   };
 
-  const handleRemove = (
-    attachment: InputAttachmentData
-  ) => {
+  const handleRemove = (attachment: InputAttachmentData) => {
     commands.removeAttachment(attachment);
   };
 

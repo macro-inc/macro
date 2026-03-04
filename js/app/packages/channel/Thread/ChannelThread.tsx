@@ -1,7 +1,10 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { createSignal, Show, Suspense, type Accessor } from 'solid-js';
+import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { ChannelInput } from '../Input';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import { replyCenterOffsetX } from './thread-rail-geometry';
 import type { ThreadProps } from './types';
@@ -22,8 +25,10 @@ function sliceIf<T>(
 }
 
 export function ChannelThread(props: ThreadProps) {
-  const [isReplying, setIsReplying] = createSignal(false);
-
+  const userId = useUserId();
+  const replyUserId = () => userId() ?? props.data().sender_id;
+  const macroId = () => tryMacroId(replyUserId());
+  const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
@@ -53,9 +58,9 @@ export function ChannelThread(props: ThreadProps) {
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   const shouldShowCollapsedIndicator = () =>
-    !isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    !props.isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const shouldShowReplyButton = () =>
-    hasReplies() && !isReplying() && !shouldShowCollapsedIndicator();
+    hasReplies() && !props.isReplying() && !shouldShowCollapsedIndicator();
 
   const expand = () => {
     props.setIsExpanded(true);
@@ -75,7 +80,7 @@ export function ChannelThread(props: ThreadProps) {
           />
           <Show when={hasReplies()}>
             <div class="relative w-full">
-              <Thread.RailDecorations isReplying={isReplying} />
+              <Thread.RailDecorations isReplying={props.isReplying} />
               <Thread.RepliesContainer>
                 <Show
                   when={
@@ -98,21 +103,38 @@ export function ChannelThread(props: ThreadProps) {
                   </Suspense>
                 </Show>
 
-                <Show when={isReplying()}>
-                  <ChannelInput
-                    input={{
-                      id: `thread-reply-input-${props.data().id}`,
-                      placeholder: 'Send a reply',
-                      isReplyInput: true,
-                    }}
-                    markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
-                    onCloseDraft={() => {
-                      setIsReplying(false);
-                    }}
-                    onSend={async () => {
-                      setIsReplying(false);
-                    }}
-                  />
+                <Show when={props.isReplying()}>
+                  <div class="flex items-start gap-2 mb-2">
+                    <div class="flex-shrink-0 size-[var(--user-icon-width)]">
+                      <UserIcon id={replyUserId()} size="fill" />
+                    </div>
+                    <div class="flex flex-col flex-1 min-w-0 gap-1">
+                      <span class="text-sm font-semibold truncate">
+                        {displayName()}
+                      </span>
+                      <ChannelInput
+                        input={{
+                          id: `thread-reply-input-${props.data().id}`,
+                          placeholder: 'Send a reply',
+                          value: props.replyInputState()?.value,
+                          attachments: props.replyInputState()?.attachments,
+                          isReplyInput: true,
+                        }}
+                        markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
+                        onChange={(snapshot) =>
+                          void props.setReplyInputState(snapshot)
+                        }
+                        onCloseDraft={() => {
+                          props.setReplyInputState(undefined);
+                          props.setIsReplying(false);
+                        }}
+                        onSend={async () => {
+                          props.setReplyInputState(undefined);
+                          props.setIsReplying(false);
+                        }}
+                      />
+                    </div>
+                  </div>
                 </Show>
 
                 <Show
@@ -136,7 +158,7 @@ export function ChannelThread(props: ThreadProps) {
                     </Show>
                     <Show when={shouldShowReplyButton()}>
                       <Thread.ReplyButton
-                        onClick={() => setIsReplying(true)}
+                        onClick={() => props.setIsReplying(true)}
                         aria-label="Reply"
                       />
                     </Show>
