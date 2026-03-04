@@ -19,7 +19,6 @@ export function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 
-
 export function transformShortIdInUrlPathname(pathname: string) {
   const parts = pathname.split('/');
   const newParts = [];
