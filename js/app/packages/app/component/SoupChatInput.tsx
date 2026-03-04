@@ -11,6 +11,7 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -58,10 +59,12 @@ function SoupChatInputInner() {
 
   function deriveChatName(userQuery: string): string | undefined {
     const MAX_LENGTH = 80;
-    const firstLine = userQuery
+    const plainText = markdownToPlainText(userQuery);
+    const firstLine = plainText
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)[0];
+    console.log('DERIVED CHAT NAME', firstLine);
     return firstLine ? firstLine.slice(0, MAX_LENGTH) : undefined;
   }
 
