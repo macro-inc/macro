@@ -117,14 +117,14 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           <Show when={searchText()}>
             <button
               type="button"
-              class="ml-auto size-4.5 shrink-0 hover:opacity-60"
+              class="ml-auto size-4 shrink-0 hover:opacity-60"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setSearchText('');
               }}
             >
-              <XIcon class="size-4.5" />
+              <XIcon class="size-4" />
             </button>
           </Show>
         </div>
