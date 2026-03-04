@@ -12,13 +12,13 @@ use crate::api::email::drafts::add_forwarded_attachment::{
 use crate::api::email::init::InitResponse;
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
-use crate::api::email::labels::list::ListLabelsResponse;
 use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::{email, health};
 use ::email::inbound;
+use ::email::inbound::ListLabelsResponse as HexListLabelsResponse;
 use ::email::inbound::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiPaginatedThreadCursor, ApiSortMethod,
     ApiThread, CreateDraftRequest as HexCreateDraftRequest,
@@ -73,7 +73,7 @@ use utoipa::OpenApi;
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
-        email::labels::list::handler,
+        inbound::list_labels_handler,
         email::contacts::list::list_contacts_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
@@ -101,7 +101,7 @@ use utoipa::OpenApi;
             // Label types
             CreateLabelRequest,
             CreateLabelResponse,
-            ListLabelsResponse,
+            HexListLabelsResponse,
             Label,
             // Message types
             UpdateLabelBatchRequest,

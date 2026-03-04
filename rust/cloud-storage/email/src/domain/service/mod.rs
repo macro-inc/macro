@@ -7,7 +7,7 @@ mod thread_labels;
 use crate::domain::{
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest,
-        Link, Thread, UpdateThreadLabelsResult,
+        Link, LinkLabel, Thread, UpdateThreadLabelsResult,
     },
     ports::{EmailMessageEnqueuer, EmailRepo, EmailService, GmailLabelModifier},
 };
@@ -99,6 +99,13 @@ where
         input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
         self.send_message_impl(link, input).await
+    }
+
+    async fn list_labels(&self, link: &Link) -> Result<Vec<LinkLabel>, EmailErr> {
+        self.email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
     async fn update_thread_labels(

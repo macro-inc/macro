@@ -1102,16 +1102,11 @@ export const initUser = async (
 };
 
 /**
- * @summary List user labels.
+ * @summary List all labels for the user's email link.
  */
 export type listLabelsResponse200 = {
   data: ListLabelsResponse;
   status: 200;
-};
-
-export type listLabelsResponse400 = {
-  data: ErrorResponse;
-  status: 400;
 };
 
 export type listLabelsResponse401 = {
@@ -1128,7 +1123,6 @@ export type listLabelsResponseSuccess = listLabelsResponse200 & {
   headers: Headers;
 };
 export type listLabelsResponseError = (
-  | listLabelsResponse400
   | listLabelsResponse401
   | listLabelsResponse500
 ) & {

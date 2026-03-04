@@ -485,7 +485,7 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
         staleTime: 5 * 60 * 1000,
       });
       const trashLabel = labelsData?.labels.find(
-        (l) => l.provider_label_id === 'TRASH'
+        (l) => l.providerLabelId === 'TRASH'
       );
       const labelId = trashLabel?.id;
       if (!labelId) {

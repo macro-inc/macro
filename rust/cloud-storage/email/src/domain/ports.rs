@@ -195,6 +195,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         is_starred: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetch all labels for a link.
+    fn list_labels_by_link_id(
+        &self,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<LinkLabel>, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -235,6 +241,12 @@ pub trait EmailService: Send + Sync + 'static {
         link: &Link,
         input: CreateDraftInput,
     ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
+    /// List all labels for the given link.
+    fn list_labels(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<Vec<LinkLabel>, EmailErr>> + Send;
 
     /// Add or remove a label from all messages in a thread.
     fn update_thread_labels(

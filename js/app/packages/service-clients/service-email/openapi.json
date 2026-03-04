@@ -1037,7 +1037,7 @@
     "/email/labels": {
       "get": {
         "tags": ["Labels"],
-        "summary": "List user labels.",
+        "summary": "List all labels for the user's email link.",
         "operationId": "list_labels",
         "responses": {
           "200": {
@@ -1046,16 +1046,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListLabelsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3640,12 +3630,13 @@
       },
       "ListLabelsResponse": {
         "type": "object",
+        "description": "Response body for listing labels.",
         "required": ["labels"],
         "properties": {
           "labels": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Label"
+              "$ref": "#/components/schemas/ApiLabel"
             }
           }
         }
