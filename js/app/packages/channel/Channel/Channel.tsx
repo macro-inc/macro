@@ -98,6 +98,10 @@ export function Channel(props: ChannelProps) {
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
+    onReply: (ctx) => {
+      const state = threadManager.getOrCreateThreadState(ctx.message.id);
+      state.setIsReplying(true);
+    },
   });
 
   return (

@@ -38,11 +38,10 @@ describe('thread-rail-geometry', () => {
   });
 
   it('extends inner rail to bottom while replying', () => {
-    expect(getInnerRailBottom(true, false)).toBe('0px');
-    expect(getInnerRailBottom(true, true)).toBe(
+    expect(getInnerRailBottom(true)).toBe(
       'calc(var(--user-icon-width) * 2 + 1rem)'
     );
-    expect(getInnerRailBottom(false, true)).toBe(
+    expect(getInnerRailBottom(false)).toBe(
       'calc(var(--user-icon-width) / 2 + 0.5rem)'
     );
   });
