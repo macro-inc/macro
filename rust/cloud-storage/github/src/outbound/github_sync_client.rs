@@ -50,4 +50,41 @@ impl GithubSyncClient for GithubSyncClientImpl {
 
         Ok(token)
     }
+
+    #[tracing::instrument(skip(self, access_token, body), err)]
+    async fn create_pr_comment(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        body: &str,
+    ) -> Result<(), GithubError> {
+        let response = self
+            .client
+            .post(format!(
+                "https://api.github.com/repos/{owner}/{repo}/issues/{pull_number}/comments"
+            ))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&serde_json::json!({ "body": body }))
+            .send()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to create PR comment (status {status}): {error_body}"
+            )));
+        }
+
+        Ok(())
+    }
 }

@@ -85,6 +85,83 @@ impl ValidatedGithubWebhookEvent {
         }
         texts
     }
+
+    /// Extract the pull request / issue number from the webhook payload.
+    pub fn pull_number(&self) -> Option<u64> {
+        self.payload
+            .get("pull_request")
+            .and_then(|pr| pr.get("number"))
+            .or_else(|| {
+                self.payload
+                    .get("issue")
+                    .and_then(|issue| issue.get("number"))
+            })
+            .and_then(|v| v.as_u64())
+    }
+
+    /// Extract the repository owner login from the webhook payload.
+    pub fn repo_owner(&self) -> Option<&str> {
+        self.payload
+            .get("repository")
+            .and_then(|r| r.get("owner"))
+            .and_then(|o| o.get("login"))
+            .and_then(|v| v.as_str())
+    }
+
+    /// Extract the repository name from the webhook payload.
+    pub fn repo_name(&self) -> Option<&str> {
+        self.payload
+            .get("repository")
+            .and_then(|r| r.get("name"))
+            .and_then(|v| v.as_str())
+    }
+
+    /// Extract the GitHub App installation ID from the webhook payload.
+    pub fn installation_id(&self) -> Option<u64> {
+        self.payload
+            .get("installation")
+            .and_then(|i| i.get("id"))
+            .and_then(|v| v.as_u64())
+    }
+
+    /// Extract text from the PR context (title, body, branch) regardless of
+    /// event type. For comment/review events this returns the surrounding PR
+    /// info so callers can determine which task IDs are already associated
+    /// with the PR itself. Returns empty for `PullRequest` events (since the
+    /// event *is* the PR context) and unknown events.
+    pub fn extract_pr_context_text(&self) -> Vec<String> {
+        let mut texts = Vec::new();
+
+        let pr = match self.parsed_event_type() {
+            // For PR events, the event itself is the context — nothing to compare against.
+            GithubWebhookEventType::PullRequest | GithubWebhookEventType::Unknown(_) => {
+                return texts;
+            }
+            // issue_comment payloads embed the issue (which contains PR title/body).
+            GithubWebhookEventType::IssueComment => self.payload.get("issue"),
+            // review / review_comment payloads embed the full pull_request object.
+            GithubWebhookEventType::PullRequestReview
+            | GithubWebhookEventType::PullRequestReviewComment => self.payload.get("pull_request"),
+        };
+
+        if let Some(pr) = pr {
+            if let Some(s) = pr.get("title").and_then(|v| v.as_str()) {
+                texts.push(s.to_string());
+            }
+            if let Some(s) = pr.get("body").and_then(|v| v.as_str()) {
+                texts.push(s.to_string());
+            }
+            if let Some(s) = pr
+                .get("head")
+                .and_then(|h| h.get("ref"))
+                .and_then(|v| v.as_str())
+            {
+                texts.push(s.to_string());
+            }
+        }
+
+        texts
+    }
 }
 
 /// Known GitHub webhook event types we handle.

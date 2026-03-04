@@ -149,7 +149,6 @@ impl<T: RequiredAccessLevel> EntityAccessReceipt<T> {
     /// to circumvent AI tool permissioning
     /// This **DOES NOT** assert the existence of the item
     pub fn dangerously_assert_internal_user(
-        &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> EntityAccessReceipt<T> {

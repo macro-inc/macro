@@ -43,7 +43,8 @@ mod sync_impl {
         },
         ports::{GithubSyncClient, GithubSyncService},
     };
-    use documents::domain::ports::DocumentService;
+    use documents::domain::{models::DocumentError, ports::DocumentService};
+    use entity_access::domain::models::ViewAccessLevel;
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
     use std::sync::Arc;
@@ -55,7 +56,7 @@ mod sync_impl {
         config: super::GithubSyncConfig,
         #[allow(dead_code)]
         document_service: Arc<D>,
-        client: C,
+        pub(crate) client: C,
     }
 
     impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
@@ -119,15 +120,109 @@ mod sync_impl {
                 return Ok(());
             }
 
-            for task_id in &task_ids {
+            // Filter out task IDs already present in the PR context (title, body, branch)
+            // so that e.g. a comment saying "Fixes MACRO-X" on a PR already titled MACRO-X
+            // does not trigger a duplicate association.
+            let pr_context = webhook_event.extract_pr_context_text().join(" ");
+            let existing_task_ids: std::collections::HashSet<_> =
+                MacroTaskId::extract_from_text(&pr_context)
+                    .into_iter()
+                    .collect();
+
+            let new_task_ids: Vec<_> = task_ids
+                .into_iter()
+                .filter(|id| !existing_task_ids.contains(id))
+                .collect();
+
+            if new_task_ids.is_empty() {
+                tracing::debug!(
+                    event_type=?event_type,
+                    "all task IDs already present in PR context, skipping"
+                );
+                return Ok(());
+            }
+
+            for task_id in &new_task_ids {
                 match task_id.to_uuid() {
                     Ok(uuid) => {
-                        tracing::info!(
-                            task_id=%task_id,
-                            uuid=%uuid,
-                            event_type=?event_type,
-                            "detected macro task ID in github event"
+                        // SAFETY: This is ok as we are only using the preview information of the
+                        // document
+                        let entity_access = entity_access::domain::models::EntityAccessReceipt::<
+                            ViewAccessLevel,
+                        >::dangerously_assert_internal_user(
+                            &uuid.to_string(),
+                            entity_access::domain::models::EntityType::Document,
                         );
+
+                        match self.document_service.get_document(entity_access).await {
+                            Ok(document) => {
+                                // converting to string here to avoid needing to bring models crate
+                                // into github crate
+                                if let Some(sub_type) = document.document_metadata.sub_type
+                                    && sub_type.to_string() == "task"
+                                {
+                                    tracing::info!(task_id=%uuid, "task found");
+
+                                    if let (
+                                        Some(installation_id),
+                                        Some(owner),
+                                        Some(repo),
+                                        Some(pull_number),
+                                    ) = (
+                                        webhook_event.installation_id(),
+                                        webhook_event.repo_owner(),
+                                        webhook_event.repo_name(),
+                                        webhook_event.pull_number(),
+                                    ) {
+                                        let doc_name = &document.document_metadata.document_name;
+                                        let doc_id = &document.document_metadata.document_id;
+
+                                        match self
+                                            .generate_installation_access_token(installation_id)
+                                            .await
+                                        {
+                                            Ok(token) => {
+                                                self.client
+                                                    .create_pr_comment(
+                                                        &token.token,
+                                                        owner,
+                                                        repo,
+                                                        pull_number,
+                                                        &create_macro_task_comment_link(
+                                                            doc_name, doc_id,
+                                                        ),
+                                                    )
+                                                    .await
+                                                    .inspect_err(|e| {
+                                                        tracing::error!(
+                                                            error=?e,
+                                                            "failed to create PR comment"
+                                                        );
+                                                    })
+                                                    .ok();
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    error=?e,
+                                                    "failed to generate installation access token for PR comment"
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        tracing::warn!(
+                                            task_id=%uuid,
+                                            "missing PR metadata, cannot post comment"
+                                        );
+                                    }
+
+                                    // TODO: update task status based on event
+                                }
+                            }
+                            Err(e) => match e {
+                                DocumentError::NotFound(_) => (),
+                                _ => tracing::error!(error=?e, "unable to get document"),
+                            },
+                        }
                     }
                     Err(e) => {
                         tracing::warn!(
@@ -322,6 +417,17 @@ mod link_impl {
             Ok(link)
         }
     }
+}
+
+/// Creates a macro task comment given the document name and id
+fn create_macro_task_comment_link(name: &str, id: &str) -> String {
+    let url = match macro_env::Environment::new_or_prod() {
+        macro_env::Environment::Production => "https://macro.com/app/task",
+        macro_env::Environment::Develop => "https://dev.macro.com/app/task",
+        macro_env::Environment::Local => "http://localhost:3000/app/task",
+    };
+
+    format!("[{name}]({url}/{id})")
 }
 
 #[cfg(feature = "link")]

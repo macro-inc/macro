@@ -113,6 +113,102 @@ fn extract_multiple_in_sentence() {
 }
 
 // ---------------------------------------------------------------------------
+// ValidatedGithubWebhookEvent::pull_number / repo_owner / repo_name / installation_id
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pull_number_from_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "pull_request": { "number": 42 }
+        }),
+    );
+    assert_eq!(event.pull_number(), Some(42));
+}
+
+#[test]
+fn pull_number_from_issue() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "issue": { "number": 99 }
+        }),
+    );
+    assert_eq!(event.pull_number(), Some(99));
+}
+
+#[test]
+fn pull_number_prefers_pull_request_over_issue() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "pull_request": { "number": 1 },
+            "issue": { "number": 2 }
+        }),
+    );
+    assert_eq!(event.pull_number(), Some(1));
+}
+
+#[test]
+fn pull_number_missing() {
+    let event =
+        ValidatedGithubWebhookEvent::new("ping".to_string(), serde_json::json!({"zen": "hello"}));
+    assert_eq!(event.pull_number(), None);
+}
+
+#[test]
+fn repo_owner_present() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "repository": { "owner": { "login": "my-org" }, "name": "my-repo" }
+        }),
+    );
+    assert_eq!(event.repo_owner(), Some("my-org"));
+}
+
+#[test]
+fn repo_owner_missing() {
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), serde_json::json!({}));
+    assert_eq!(event.repo_owner(), None);
+}
+
+#[test]
+fn repo_name_present() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "repository": { "name": "cool-repo", "owner": { "login": "x" } }
+        }),
+    );
+    assert_eq!(event.repo_name(), Some("cool-repo"));
+}
+
+#[test]
+fn repo_name_missing() {
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), serde_json::json!({}));
+    assert_eq!(event.repo_name(), None);
+}
+
+#[test]
+fn installation_id_present() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "installation": { "id": 12345 }
+        }),
+    );
+    assert_eq!(event.installation_id(), Some(12345));
+}
+
+#[test]
+fn installation_id_missing() {
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), serde_json::json!({}));
+    assert_eq!(event.installation_id(), None);
+}
+
+// ---------------------------------------------------------------------------
 // GithubWebhookEventType::from_event_header
 // ---------------------------------------------------------------------------
 
@@ -240,4 +336,93 @@ fn extract_text_unknown_event() {
     let event = ValidatedGithubWebhookEvent::new("ping".to_string(), payload);
     let texts = event.extract_searchable_text();
     assert!(texts.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// ValidatedGithubWebhookEvent::extract_pr_context_text
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pr_context_empty_for_pull_request_event() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "pull_request": {
+            "title": "fixes MACRO-abc123",
+            "body": "body text",
+            "head": { "ref": "feature/macro-abc123" }
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload);
+    assert!(event.extract_pr_context_text().is_empty());
+}
+
+#[test]
+fn pr_context_from_issue_comment() {
+    let payload = serde_json::json!({
+        "action": "created",
+        "issue": {
+            "title": "PR title with MACRO-abc123",
+            "body": "PR body with MACRO-def456",
+            "pull_request": {},
+            "head": { "ref": "feature/macro-ghi789" }
+        },
+        "comment": {
+            "body": "Fixes MACRO-abc123"
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("issue_comment".to_string(), payload);
+    let texts = event.extract_pr_context_text();
+    assert_eq!(texts.len(), 3);
+    assert_eq!(texts[0], "PR title with MACRO-abc123");
+    assert_eq!(texts[1], "PR body with MACRO-def456");
+    assert_eq!(texts[2], "feature/macro-ghi789");
+}
+
+#[test]
+fn pr_context_from_review() {
+    let payload = serde_json::json!({
+        "action": "submitted",
+        "pull_request": {
+            "title": "MACRO-abc123 fix",
+            "body": null,
+            "head": { "ref": "main" }
+        },
+        "review": {
+            "body": "Relates to MACRO-abc123"
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("pull_request_review".to_string(), payload);
+    let texts = event.extract_pr_context_text();
+    assert_eq!(texts.len(), 2);
+    assert_eq!(texts[0], "MACRO-abc123 fix");
+    assert_eq!(texts[1], "main");
+}
+
+#[test]
+fn pr_context_from_review_comment() {
+    let payload = serde_json::json!({
+        "action": "created",
+        "pull_request": {
+            "title": "MACRO-abc123 fix",
+            "body": "details",
+            "head": { "ref": "feature/macro-abc123" }
+        },
+        "comment": {
+            "body": "This line relates to MACRO-abc123"
+        }
+    });
+    let event =
+        ValidatedGithubWebhookEvent::new("pull_request_review_comment".to_string(), payload);
+    let texts = event.extract_pr_context_text();
+    assert_eq!(texts.len(), 3);
+    assert_eq!(texts[0], "MACRO-abc123 fix");
+    assert_eq!(texts[1], "details");
+    assert_eq!(texts[2], "feature/macro-abc123");
+}
+
+#[test]
+fn pr_context_empty_for_unknown_event() {
+    let payload = serde_json::json!({"zen": "Keep it logically awesome."});
+    let event = ValidatedGithubWebhookEvent::new("ping".to_string(), payload);
+    assert!(event.extract_pr_context_text().is_empty());
 }

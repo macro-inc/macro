@@ -15,4 +15,14 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         jwt: &str,
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
+    /// Posts a comment on a GitHub pull request (via the issues API).
+    fn create_pr_comment(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        body: &str,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
 }

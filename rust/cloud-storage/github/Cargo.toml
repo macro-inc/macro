@@ -5,50 +5,50 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "sync", "link", "inbound", "outbound", "axum"]
-ports = []
-sync = ["dep:reqwest", "dep:documents", "ports"]
-link = ["ports"]
+axum = ["dep:axum", "dep:axum-extra", "dep:model-error-response", "dep:utoipa"]
+default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
+link = ["ports"]
 outbound = [
-  "dep:sqlx",
-  "dep:reqwest",
-  "dep:urlencoding",
-  "dep:redis",
-  "dep:tokio",
   "dep:fusionauth",
-  "ports"
+  "dep:redis",
+  "dep:reqwest",
+  "dep:sqlx",
+  "dep:tokio",
+  "dep:urlencoding",
+  "ports",
 ]
-axum = [
-  "dep:axum",
-  "dep:axum-extra",
-  "dep:model-error-response",
-  "dep:utoipa",
-]
+ports = []
+sync = ["dep:documents", "dep:entity_access", "dep:reqwest", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
 chrono = { workspace = true }
-sqlx = { workspace = true, optional = true }
-uuid = { workspace = true }
-serde = { workspace = true}
-reqwest = {workspace = true, optional = true }
-serde_json = { workspace = true }
-regex = { workspace = true }
-urlencoding = { workspace = true, optional = true }
-documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
-entity_access = { path = "../entity_access" }
-jsonwebtoken = { workspace = true }
-hmac = "0.12.1"
-sha2 = { workspace = true }
-subtle = "2.6.1"
+documents = { path = "../documents", default-features = false, features = [
+  "ports",
+], optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+], optional = true }
 hex = { workspace = true }
+hmac = "0.12.1"
+jsonwebtoken = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+subtle = "2.6.1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true, optional = true }
+uuid = { workspace = true }
+macro_env = { path = "../macro_env" }
 
 fusionauth = { path = "../fusionauth", optional = true }
-macro_uuid = { path = "../macro_uuid" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 
@@ -58,9 +58,11 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+document_sub_type = { path = "../document_sub_type" }
+http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
-http-body-util = { workspace = true }
 model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
 tokio = { workspace = true }
 tower = { workspace = true }
