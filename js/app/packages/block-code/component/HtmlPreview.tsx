@@ -8,7 +8,8 @@ export function HtmlPreview() {
       <iframe
         title="HTML preview"
         class="size-full border-0 bg-white"
-        sandbox=""
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         srcdoc={blockText() ?? ''}
       />
     </div>
