@@ -681,7 +681,7 @@ async fn pr_closed_without_merge_sets_task_status_canceled() {
 }
 
 #[tokio::test]
-async fn issue_comment_does_not_update_task_status() {
+async fn issue_comment_on_open_pr_sets_task_status_in_review() {
     let (service, doc_service) = make_sync_service_with_doc_service();
     let event = ValidatedGithubWebhookEvent::new(
         "issue_comment".to_string(),
@@ -691,6 +691,40 @@ async fn issue_comment_does_not_update_task_status() {
                 "number": 99,
                 "title": "some issue",
                 "body": null,
+                "state": "open",
+                "head": { "ref": "main" }
+            },
+            "comment": {
+                "body": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51"
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "In Review");
+}
+
+#[tokio::test]
+async fn issue_comment_on_closed_pr_does_not_update_task_status() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "number": 99,
+                "title": "some issue",
+                "body": null,
+                "state": "closed",
                 "head": { "ref": "main" }
             },
             "comment": {
@@ -709,6 +743,6 @@ async fn issue_comment_does_not_update_task_status() {
     let status_calls = doc_service.task_status_calls();
     assert!(
         status_calls.is_empty(),
-        "issue_comment should not update task status"
+        "issue_comment on closed PR should not update task status"
     );
 }

@@ -269,7 +269,7 @@ mod sync_impl {
             }
 
             // Update task statuses for PR open/close/merge events
-            if let Some(status) = webhook_event.task_status_for_pr_action() {
+            if let Some(status) = webhook_event.task_status_for_event() {
                 for doc_id in &task_doc_ids {
                     let entity_access = entity_access::domain::models::EntityAccessReceipt::<
                         EditAccessLevel,
