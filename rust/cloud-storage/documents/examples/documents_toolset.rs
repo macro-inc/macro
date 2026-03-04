@@ -44,7 +44,7 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         Ok(())
     }
 
-    async fn update_task_status(&self, _task_id: &str, _status:&str) -> anyhow::Result<()> {
+    async fn update_task_status(&self, _task_id: &str, _status: &str) -> anyhow::Result<()> {
         Ok(())
     }
 }

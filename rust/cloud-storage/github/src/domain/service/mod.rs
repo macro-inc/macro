@@ -259,8 +259,7 @@ mod sync_impl {
                                     "PR already has a comment linking to this task, skipping comment"
                                 );
                             } else {
-                                task_links
-                                    .push(create_macro_task_comment_link(doc_name, doc_id));
+                                task_links.push(create_macro_task_comment_link(doc_name, doc_id));
                             }
                         }
                     }
@@ -273,16 +272,17 @@ mod sync_impl {
 
             // Post a single comment mentioning all newly discovered tasks
             if !task_links.is_empty()
-                && let Some((ref token, ref owner, ref repo, pull_number, _)) = pr_meta {
-                    let comment_body = task_links.join("\n");
-                    self.client
-                        .create_pr_comment(&token.token, owner, repo, pull_number, &comment_body)
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(error=?e, "failed to create PR comment");
-                        })
-                        .ok();
-                }
+                && let Some((ref token, ref owner, ref repo, pull_number, _)) = pr_meta
+            {
+                let comment_body = task_links.join("\n");
+                self.client
+                    .create_pr_comment(&token.token, owner, repo, pull_number, &comment_body)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to create PR comment");
+                    })
+                    .ok();
+            }
 
             // Update task statuses for all resolved tasks
             if let Some(status) = webhook_event.task_status_for_event() {

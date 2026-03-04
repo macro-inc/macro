@@ -207,8 +207,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
     ) -> Result<(), SystemPropertyError> {
         let value = PropertyValue::SelectOption(vec![status.uuid()]);
 
-        let value =
-            serde_json::to_value(&value).map_err(SystemPropertyError::Serialization)?;
+        let value = serde_json::to_value(&value).map_err(SystemPropertyError::Serialization)?;
 
         sqlx::query!(
             r#"
