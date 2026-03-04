@@ -375,3 +375,83 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     .unwrap();
     assert_eq!(user_count, 1);
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_delete_all_user_notifications(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    // Verify the notification exists before deletion
+    let count_before: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count_before, 1);
+
+    pool.delete_all_user_notifications(user.clone())
+        .await
+        .unwrap();
+
+    // Verify the user_notification row is hard-deleted
+    let count_after: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count_after, 0);
+
+    // Verify the parent notification record still exists
+    let notif_count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM notification WHERE id = $1",
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(notif_count, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_delete_all_user_notifications_does_not_affect_other_users(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+    let other_user = test_user("other@test.com");
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    // Add a user_notification for the other user
+    sqlx::query!(
+        "INSERT INTO user_notification (user_id, notification_id, created_at) VALUES ($1, $2, '2025-01-01 00:00:00')",
+        other_user.to_string(),
+        notification_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Delete all notifications for the first user only
+    pool.delete_all_user_notifications(user).await.unwrap();
+
+    // The other user's notification should still exist
+    let other_count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        other_user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(other_count, 1);
+}

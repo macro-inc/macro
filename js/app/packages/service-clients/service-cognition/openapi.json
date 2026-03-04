@@ -343,6 +343,66 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["patch_chat"],
+        "operationId": "patch_chat_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChatRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Chat patched successfully"
+          },
+          "400": {
+            "description": "Cannot modify deleted chat",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/chats/{chat_id}/copy": {

@@ -244,6 +244,20 @@ export const deleteChatQueueName = deleteChatHandler.queue.name;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
+const GITHUB_SYNC_APP_URL = config.require('github_sync_app_url');
+
+const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
+const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
+const GITHUB_SYNC_APP_PEM_SECRET_KEY = config.require('github_sync_app_pem');
+const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
+const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
@@ -273,6 +287,8 @@ const cloudStorageService = new CloudStorageService(
       authenticationServiceSecretKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       opensearchPasswordArn,
+      githubWebhookSecretKeyArn,
+      githubSyncAppPemArn,
     ],
     containerEnvVars: [
       {
@@ -415,6 +431,22 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'CONTACTS_QUEUE',
         value: pulumi.interpolate`${contactsQueueName}`,
+      },
+      {
+        name: 'GITHUB_WEBHOOK_SECRET_KEY',
+        value: GITHUB_WEBHOOK_SECRET_KEY,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_URL',
+        value: GITHUB_SYNC_APP_URL,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_PEM_SECRET_KEY',
+        value: GITHUB_SYNC_APP_PEM_SECRET_KEY,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_CLIENT_ID',
+        value: GITHUB_SYNC_APP_CLIENT_ID,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

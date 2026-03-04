@@ -1,4 +1,6 @@
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { withAnalytics } from '@coparse/analytics';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
   ChatInputProvider,
@@ -6,11 +8,9 @@ import {
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
-import { withAnalytics } from '@coparse/analytics';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -56,13 +56,21 @@ function SoupChatInputInner() {
     },
   });
 
+  function deriveChatName(userQuery: string): string | undefined {
+    const MAX_LENGTH = 80;
+    const firstLine = userQuery
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)[0];
+    return firstLine ? firstLine.slice(0, MAX_LENGTH) : undefined;
+  }
+
   const handleSend = async (request: ChatSendInput) => {
     // Create a new persistent chat
-    const response = await cognitionApiServiceClient.createChat({
-      isPersistent: true,
-    });
+    const name = deriveChatName(request.content);
+
+    const response = await cognitionApiServiceClient.createChat({ name });
     if (isErr(response)) {
-      console.error('Failed to create chat', response);
       return;
     }
     const [, { id: chatId }] = response;

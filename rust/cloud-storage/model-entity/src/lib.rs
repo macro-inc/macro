@@ -41,8 +41,6 @@ pub enum EntityType {
     Document,
     /// The entity is a collection of other entities
     Project,
-    /// The entity is an email
-    Email,
     /// The entity is an email thread
     EmailThread,
     /// The entity is a team

@@ -16,3 +16,4 @@ anyhow = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 axum = { workspace = true }
 axum-macros = { workspace = true }
+tracing = { workspace = true }

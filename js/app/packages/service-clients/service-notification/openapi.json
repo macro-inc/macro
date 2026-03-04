@@ -1268,7 +1268,6 @@
           "channel",
           "document",
           "project",
-          "email",
           "email_thread",
           "team"
         ]

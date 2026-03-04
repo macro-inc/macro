@@ -1,4 +1,7 @@
 use super::*;
+use crate::domain::models::{RecipientType, UpsertedContacts, UpsertedRecipient};
+use chrono::Timelike;
+use sqlx::Row;
 
 // ── senders_by_message_ids ──────────────────────────────────────────
 
@@ -446,6 +449,257 @@ async fn test_scheduled_send_times_by_message_ids_empty_input(
 
     let times = repo.scheduled_send_times_by_message_ids(&[]).await?;
     assert!(times.is_empty());
+
+    Ok(())
+}
+
+// ── process_scheduled_message ──────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_process_scheduled_message_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    // Truncate to microseconds — Postgres TIMESTAMPTZ only stores microsecond precision
+    let send_time = {
+        let t = chrono::Utc::now() + chrono::Duration::hours(1);
+        t.with_nanosecond(t.nanosecond() / 1000 * 1000).unwrap()
+    };
+
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time))
+        .await?;
+    tx.commit().await?;
+
+    let row = sqlx::query(
+        "SELECT send_time, sent FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+    )
+    .bind(link_id)
+    .bind(msg_id)
+    .fetch_one(&pool)
+    .await?;
+
+    let stored_time = row.get::<chrono::DateTime<chrono::Utc>, _>("send_time");
+    let sent = row.get::<bool, _>("sent");
+    assert_eq!(stored_time, send_time);
+    assert!(!sent);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_process_scheduled_message_upsert(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    // Truncate to microseconds — Postgres TIMESTAMPTZ only stores microsecond precision
+    let trunc =
+        |t: chrono::DateTime<chrono::Utc>| t.with_nanosecond(t.nanosecond() / 1000 * 1000).unwrap();
+    let send_time1 = trunc(chrono::Utc::now() + chrono::Duration::hours(1));
+    let send_time2 = trunc(chrono::Utc::now() + chrono::Duration::hours(2));
+
+    // Insert first
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time1))
+        .await?;
+    tx.commit().await?;
+
+    // Upsert with new time
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time2))
+        .await?;
+    tx.commit().await?;
+
+    let row = sqlx::query(
+        "SELECT send_time FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+    )
+    .bind(link_id)
+    .bind(msg_id)
+    .fetch_one(&pool)
+    .await?;
+
+    let stored_time = row.get::<chrono::DateTime<chrono::Utc>, _>("send_time");
+    assert_eq!(stored_time, send_time2, "Send time should be updated");
+
+    // Still only one row
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+    )
+    .bind(link_id)
+    .bind(msg_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 1);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_process_scheduled_message_delete(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let send_time = chrono::Utc::now() + chrono::Duration::hours(1);
+
+    // Insert first
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, Some(send_time))
+        .await?;
+    tx.commit().await?;
+
+    // Delete by passing None
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None).await?;
+    tx.commit().await?;
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2",
+    )
+    .bind(link_id)
+    .bind(msg_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(count, 0, "Scheduled message should be deleted");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_process_scheduled_message_delete_nonexistent(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+
+    // Delete when nothing exists — should not error
+    let mut tx = pool.begin().await?;
+    super::super::message::process_scheduled_message(&mut *tx, link_id, msg_id, None).await?;
+    tx.commit().await?;
+
+    Ok(())
+}
+
+// ── upsert_recipients ──────────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_recipients_insert(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // msg2 (draft) currently has no recipients in the fixture
+    let msg_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let bob_id = Uuid::parse_str("c0000002-0000-0000-0000-000000000002")?;
+    let carol_id = Uuid::parse_str("c0000003-0000-0000-0000-000000000003")?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![
+            UpsertedRecipient {
+                contact_id: bob_id,
+                name: Some("Bob Jones".to_string()),
+                recipient_type: RecipientType::To,
+            },
+            UpsertedRecipient {
+                contact_id: carol_id,
+                name: None,
+                recipient_type: RecipientType::Cc,
+            },
+        ],
+    };
+
+    let mut tx = pool.begin().await?;
+    super::super::message::upsert_recipients(&mut *tx, msg_id, &contacts).await?;
+    tx.commit().await?;
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1")
+            .bind(msg_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(count, 2, "Should have 2 recipients");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_recipients_removes_stale(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // msg1 has bob=TO in the fixture. Replace with carol=CC.
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let carol_id = Uuid::parse_str("c0000003-0000-0000-0000-000000000003")?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![UpsertedRecipient {
+            contact_id: carol_id,
+            name: None,
+            recipient_type: RecipientType::Cc,
+        }],
+    };
+
+    let mut tx = pool.begin().await?;
+    super::super::message::upsert_recipients(&mut *tx, msg_id, &contacts).await?;
+    tx.commit().await?;
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1")
+            .bind(msg_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        count, 1,
+        "Stale recipient should be removed, only carol remains"
+    );
+
+    let row = sqlx::query(
+        "SELECT contact_id, recipient_type::text FROM email_message_recipients WHERE message_id = $1",
+    )
+    .bind(msg_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.get::<Uuid, _>("contact_id"), carol_id);
+    assert_eq!(row.get::<String, _>("recipient_type"), "CC");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_recipients_empty_deletes_all(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // msg1 has bob=TO. Calling upsert with empty recipients should delete all existing.
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    let mut tx = pool.begin().await?;
+    super::super::message::upsert_recipients(&mut *tx, msg_id, &contacts).await?;
+    tx.commit().await?;
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1")
+            .bind(msg_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        count, 0,
+        "Empty recipients should delete all existing recipients"
+    );
 
     Ok(())
 }

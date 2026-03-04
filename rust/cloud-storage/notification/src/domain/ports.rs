@@ -164,6 +164,12 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Hard-delete all notifications for a user.
+    fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.

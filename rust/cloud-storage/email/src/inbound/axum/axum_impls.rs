@@ -3,7 +3,7 @@ use crate::{
         models::{EmailErr, Link, PreviewView},
         ports::EmailService,
     },
-    inbound::{ApiSortMethod, EmailPreviewState},
+    inbound::{ApiSortMethod, EmailRouterState},
 };
 use axum::{
     RequestPartsExt, async_trait,
@@ -103,7 +103,7 @@ impl IntoResponse for EmailLinkErr {
 #[async_trait]
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
-    EmailPreviewState<U>: FromRef<S>,
+    EmailRouterState<U>: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -115,7 +115,7 @@ where
             user_context,
             ..
         }) = parts.extract_with_state(state).await?;
-        let res = <EmailPreviewState<U>>::from_ref(state)
+        let res = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
             .await?
@@ -137,7 +137,7 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
 #[async_trait]
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
-    EmailPreviewState<U>: FromRef<S>,
+    EmailRouterState<U>: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -149,7 +149,7 @@ where
             user_context,
             ..
         }) = parts.extract_with_state(state).await?;
-        let res = <EmailPreviewState<U>>::from_ref(state)
+        let res = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
             .await?;

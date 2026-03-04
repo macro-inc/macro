@@ -1,7 +1,8 @@
 use crate::domain::{
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailThreadPreview,
-        Label, Link, MessageAttachment, MessageLabel, MessageRow, PreviewCursorQuery, ThreadRow,
+        Label, Link, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+        PreviewCursorQuery, ResolvedDraftInput, SimpleMessageInfo, ThreadRow, UpsertedContacts,
         UserProvider,
     },
     ports::{EmailRepo, RecipientsByMessageId},
@@ -12,7 +13,9 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod contact;
 mod db_types;
+mod draft;
 mod dynamic;
 mod link;
 mod message;
@@ -130,5 +133,40 @@ impl EmailRepo for EmailPgRepo {
         message_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, DateTime<Utc>>, Self::Err> {
         message::scheduled_send_times_by_message_ids(&self.pool, message_ids).await
+    }
+
+    async fn get_simple_message(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<Option<SimpleMessageInfo>, Self::Err> {
+        message::get_simple_message(&self.pool, message_id, link_id).await
+    }
+
+    async fn get_draft_replying_to(
+        &self,
+        link_id: Uuid,
+        replying_to_id: Uuid,
+    ) -> Result<Option<SimpleMessageInfo>, Self::Err> {
+        message::get_draft_replying_to(&self.pool, link_id, replying_to_id).await
+    }
+
+    async fn upsert_contacts(
+        &self,
+        link_id: Uuid,
+        addresses: ParsedAddresses,
+    ) -> Result<UpsertedContacts, Self::Err> {
+        contact::upsert_contacts(&self.pool, link_id, addresses).await
+    }
+
+    async fn insert_message(
+        &self,
+        input: &ResolvedDraftInput,
+        contacts: &UpsertedContacts,
+        link_id: Uuid,
+        new_thread: Option<ThreadRow>,
+        is_draft: bool,
+    ) -> Result<(), Self::Err> {
+        draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 }

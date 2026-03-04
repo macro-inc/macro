@@ -41,11 +41,6 @@ const GITHUB_IDP_ID = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
-const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_cache_secret_key`),
@@ -159,7 +154,6 @@ const secretKeyArns = [
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
   pulumi.interpolate`${stripePriceIdArn}`,
-  pulumi.interpolate`${githubWebhookSecretKeyArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -198,7 +192,7 @@ const service = new AuthenticationService('authentication-service', {
     { name: 'ENVIRONMENT', value: stack },
     {
       name: 'RUST_LOG',
-      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'}`,
+      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'},fusionauth=debug,warn`,
     },
     {
       name: 'DATABASE_URL',
@@ -318,10 +312,6 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'GITHUB_IDP_ID',
       value: pulumi.interpolate`${GITHUB_IDP_ID}`,
-    },
-    {
-      name: 'GITHUB_WEBHOOK_SECRET_KEY',
-      value: GITHUB_WEBHOOK_SECRET_KEY,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

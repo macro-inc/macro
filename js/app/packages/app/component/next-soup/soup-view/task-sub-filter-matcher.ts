@@ -4,6 +4,8 @@ import {
 } from '@entity/utils/task-properties';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 
+export const NO_ASSIGNEE = 'NO_ASSIGNEE';
+
 type TaskSubFilters = {
   statusFilter?: string[];
   assigneeFilter?: string[];

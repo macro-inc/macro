@@ -5,13 +5,14 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "inbound", "outbound", "axum"]
+default = ["ports", "sync", "link", "inbound", "outbound", "axum"]
 ports = []
+sync = ["dep:reqwest", "dep:documents", "ports"]
+link = ["ports"]
 inbound = ["axum", "ports"]
 outbound = [
-  "dep:sqlx", 
+  "dep:sqlx",
   "dep:reqwest",
-  "dep:serde_json",
   "dep:urlencoding",
   "dep:redis",
   "dep:tokio",
@@ -22,6 +23,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:model-error-response",
+  "dep:utoipa",
 ]
 
 [dependencies]
@@ -33,9 +35,12 @@ sqlx = { workspace = true, optional = true }
 uuid = { workspace = true }
 serde = { workspace = true}
 reqwest = {workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
 urlencoding = { workspace = true, optional = true }
+documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access" }
+jsonwebtoken = { workspace = true }
 hmac = "0.12.1"
 sha2 = { workspace = true }
 subtle = "2.6.1"
@@ -50,7 +55,12 @@ tokio = { workspace = true, features = ["sync"], optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+http-body-util = { workspace = true }
+model = { path = "../model" }
+tokio = { workspace = true }
+tower = { workspace = true }

@@ -21,6 +21,8 @@ use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use github::domain::service::GithubSyncServiceImpl;
+use github::outbound::github_sync_client::GithubSyncClientImpl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
@@ -58,10 +60,18 @@ type DssSoupState = SoupRouterState<
     SoupImpl<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+        EmailServiceImpl<
+            EmailPgRepo,
+            FrecencyQueryServiceImpl<FrecencyPgStorage>,
+            email::domain::ports::NoOpEnqueuer,
+        >,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
     >,
-    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+    EmailServiceImpl<
+        EmailPgRepo,
+        FrecencyQueryServiceImpl<FrecencyPgStorage>,
+        email::domain::ports::NoOpEnqueuer,
+    >,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -117,11 +127,20 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
 
+/// Type alias for the document service used by the github sync service.
+pub(crate) type GithubDocumentService =
+    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>;
+
+/// Type alias for the github sync service.
+pub(crate) type GithubSyncServiceType =
+    GithubSyncServiceImpl<GithubDocumentService, GithubSyncClientImpl>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
+    pub github_sync_service: Arc<GithubSyncServiceType>,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,

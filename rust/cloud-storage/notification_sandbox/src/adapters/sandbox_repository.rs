@@ -162,4 +162,11 @@ impl NotificationRepository for SandboxNotificationRepository {
             .bulk_delete_user_notifications(user_id, notification_ids)
             .await
     }
+
+    async fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Report> {
+        self.inner.delete_all_user_notifications(user_id).await
+    }
 }

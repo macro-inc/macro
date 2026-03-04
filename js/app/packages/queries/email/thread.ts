@@ -3,7 +3,7 @@ import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
-  MessageToSend,
+  ApiDraftInput,
   SendMessageResponse,
   ApiThread as Thread,
   UpsertScheduledResponse,
@@ -261,7 +261,7 @@ export function useArchiveThreadMutation(
   }));
 }
 
-type SendMessageParams = { message: MessageToSend };
+type SendMessageParams = { message: ApiDraftInput };
 
 /**
  * Mutation to send an email message.

@@ -4,8 +4,12 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MessageToSend } from './messageToSend';
+import type { ApiDraftOutput } from './apiDraftOutput';
 
+/**
+ * Response body for creating a draft.
+ */
 export interface CreateDraftResponse {
-  draft: MessageToSend;
+  /** The created draft. */
+  draft: ApiDraftOutput;
 }

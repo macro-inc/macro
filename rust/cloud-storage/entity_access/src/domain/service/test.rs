@@ -278,12 +278,7 @@ async fn test_unsupported_entity_type_returns_none() {
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
-    // Email, Team, and User entity types don't have access checks implemented
-    let result = service
-        .get_access_level(Some(&user_id), "email-1", EntityType::Email)
-        .await;
-    assert_eq!(result.unwrap(), None);
-
+    // Team, and User entity types don't have access checks implemented
     let result = service
         .get_access_level(Some(&user_id), "team-1", EntityType::Team)
         .await;
@@ -409,7 +404,7 @@ async fn test_get_entity_permission_unsupported_type_returns_bad_request() {
     let user_id = test_user_id();
 
     let result = service
-        .get_entity_permission(Some(&user_id), "email-1", EntityType::Email, None)
+        .get_entity_permission(Some(&user_id), "team-1", EntityType::Team, None)
         .await;
 
     assert!(matches!(result, Err(AccessError::BadRequest(_))));
@@ -763,8 +758,8 @@ async fn test_generate_receipt_unsupported_type_returns_bad_request() {
         .generate_entity_access_receipt::<ViewAccessLevel>(
             &user_id,
             None,
-            "email-1",
-            EntityType::Email,
+            "team-1",
+            EntityType::Team,
         )
         .await;
 

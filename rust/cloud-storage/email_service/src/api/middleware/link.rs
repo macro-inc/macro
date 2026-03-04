@@ -9,6 +9,10 @@ pub(in crate::api) async fn attach_link_context<U: EmailService>(
     next: Next,
 ) -> Result<Response, Response> {
     req.extensions_mut()
-        .insert(models_email::email::service::link::Link::mirror(link));
+        .insert(models_email::email::service::link::Link::mirror(
+            link.clone(),
+        ));
+    // Also insert the hex Link for use by hex crate handlers.
+    req.extensions_mut().insert(link);
     Ok(next.run(req).await)
 }

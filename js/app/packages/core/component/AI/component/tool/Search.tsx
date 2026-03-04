@@ -1,4 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import type { ToolContext } from '@service-cognition/generated/tools/tool';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
@@ -100,8 +101,15 @@ const UnifiedSearchToolResponse = (props: {
   };
 
   return (
-    <Show when={results().length > 0}>
-      <div class="border border-edge rounded w-full">
+    <div class="border border-edge rounded w-full">
+      <Show
+        when={props.results.length > 0}
+        fallback={
+          <div class="flex items-center justify-between w-full text-left p-2 transition-colors">
+            No Results
+          </div>
+        }
+      >
         <button
           class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors ${
             isExpanded() ? 'rounded-t border-b border-edge' : 'rounded'
@@ -122,52 +130,66 @@ const UnifiedSearchToolResponse = (props: {
             </Show>
           </div>
         </button>
+      </Show>
 
-        <Show when={isExpanded()}>
-          <div class="max-h-[480px] overflow-hidden">
-            <VList
-              data={results()}
-              bufferSize={5 * 32}
-              itemSize={32}
-              style={{
-                height: `${Math.min(results().length * 32, 480)}px`,
-                contain: 'content',
-              }}
-            >
-              {(result) => {
-                const clickHandler = getClickHandler(result);
+      <Show when={isExpanded()}>
+        <div class="max-h-[480px] overflow-hidden">
+          <VList
+            data={results()}
+            bufferSize={5 * 32}
+            itemSize={32}
+            style={{
+              height: `${Math.min(results().length * 32, 480)}px`,
+              contain: 'content',
+            }}
+          >
+            {(result) => {
+              const clickHandler = getClickHandler(result);
 
-                return (
-                  <div
-                    class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
-                    onClick={clickHandler}
-                  >
-                    <div class="flex items-center flex-1 min-w-0 gap-2">
-                      <EntityIcon
-                        size="sm"
-                        targetType={
-                          result.type === 'document'
-                            ? (result.file_type as FileType)
-                            : result.type
-                        }
-                        shared={false}
-                      />
-                      <div class="flex-1 min-w-0">
-                        <TruncatedText size="sm">
-                          <span>{getResultTitle(result)}</span>
-                        </TruncatedText>
-                      </div>
+              return (
+                <div
+                  class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
+                  onClick={clickHandler}
+                >
+                  <div class="flex items-center flex-1 min-w-0 gap-2">
+                    <EntityIcon
+                      size="sm"
+                      targetType={
+                        result.type === 'document'
+                          ? (result.file_type as FileType)
+                          : result.type
+                      }
+                      shared={false}
+                    />
+                    <div class="flex-1 min-w-0">
+                      <TruncatedText size="sm">
+                        <span>{getResultTitle(result)}</span>
+                      </TruncatedText>
                     </div>
                   </div>
-                );
-              }}
-            </VList>
-          </div>
-        </Show>
-      </div>
-    </Show>
+                </div>
+              );
+            }}
+          </VList>
+        </div>
+      </Show>
+    </div>
   );
 };
+
+function SearchText(props: {
+  ctx: ToolContext<NamedTool<'ContentSearch' | 'NameSearch', 'call'>>;
+}) {
+  const ctx = props.ctx;
+  const queryString =
+    'query' in ctx.tool.data ? ctx.tool.data.query : ctx.tool.data.name;
+
+  return (
+    <div>
+      Search <span class="text-accent"> {queryString} </span>
+    </div>
+  );
+}
 
 const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
   createToolRenderer({
@@ -175,18 +197,14 @@ const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
     renderCall: (ctx) => (
       <BaseTool
         icon={MagnifyingGlass}
-        text="Searching..."
         renderContext={ctx.renderContext}
         type="call"
-      />
+      >
+        <SearchText ctx={ctx} />
+      </BaseTool>
     ),
     renderResponse: (ctx) => (
-      <BaseTool
-        icon={MagnifyingGlass}
-        text="Found"
-        renderContext={ctx.renderContext}
-        type="response"
-      >
+      <BaseTool renderContext={ctx.renderContext} type="response">
         <UnifiedSearchToolResponse results={ctx.tool.data.results} />
       </BaseTool>
     ),

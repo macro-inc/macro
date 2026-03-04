@@ -304,6 +304,13 @@ impl NotificationRepository for MockRepository {
     ) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn delete_all_user_notifications(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -428,6 +435,13 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self)
             .bulk_delete_user_notifications(user_id, notification_ids)
             .await
+    }
+
+    async fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Report> {
+        (**self).delete_all_user_notifications(user_id).await
     }
 }
 

@@ -53,9 +53,6 @@ pub struct Config {
     /// The document storage service url
     pub document_storage_service_url: String,
 
-    /// The notification service url
-    pub notification_service_url: String,
-
     /// The notification queue
     pub notification_queue: String,
 
@@ -71,8 +68,6 @@ pub struct Config {
     pub github_client_secret: String,
     /// The github idp id
     pub github_idp_id: String,
-    /// The github webhook secret key
-    pub github_webhook_secret_key: String,
 }
 
 impl Config {
@@ -116,9 +111,6 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let notification_service_url = std::env::var("NOTIFICATION_SERVICE_URL")
-            .context("NOTIFICATION_SERVICE_URL must be provided")?;
-
         let notification_queue =
             std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
 
@@ -134,9 +126,6 @@ impl Config {
             .context("GITHUB_CLIENT_SECRET must be provided")?;
         let github_idp_id =
             std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
-
-        let github_webhook_secret_key = std::env::var("GITHUB_WEBHOOK_SECRET_KEY")
-            .context("GITHUB_WEBHOOK_SECRET_KEY must be provided")?;
 
         Ok(Config {
             base_url,
@@ -154,7 +143,6 @@ impl Config {
             port,
             service_internal_auth_key,
             document_storage_service_url,
-            notification_service_url,
             notification_queue,
             search_event_queue,
             stripe_price_id,
@@ -162,7 +150,6 @@ impl Config {
             github_client_id,
             github_client_secret,
             github_idp_id,
-            github_webhook_secret_key,
         })
     }
 }

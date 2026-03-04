@@ -1,7 +1,7 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadPreview, Label,
     LabelListVisibility, LabelType, Link, MessageAttachment, MessageLabel, MessageListVisibility,
-    MessageRow, RecipientType, ThreadRow,
+    MessageRow, RecipientType, SimpleMessageInfo, ThreadRow,
 };
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
@@ -424,6 +424,29 @@ impl From<DbRecipientRow> for (uuid::Uuid, ContactInfo, RecipientType) {
             contact,
             RecipientType::from(row.recipient_type),
         )
+    }
+}
+
+/// DB row for a simplified message used in draft validation queries.
+pub(crate) struct DbSimpleMessageRow {
+    pub id: Uuid,
+    pub thread_id: Uuid,
+    pub provider_thread_id: Option<String>,
+    pub headers_jsonb: Option<serde_json::Value>,
+    pub is_sent: bool,
+    pub is_draft: bool,
+}
+
+impl From<DbSimpleMessageRow> for SimpleMessageInfo {
+    fn from(row: DbSimpleMessageRow) -> Self {
+        Self {
+            db_id: row.id,
+            thread_db_id: row.thread_id,
+            provider_thread_id: row.provider_thread_id,
+            headers_json: row.headers_jsonb,
+            is_sent: row.is_sent,
+            is_draft: row.is_draft,
+        }
     }
 }
 

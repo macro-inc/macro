@@ -1,8 +1,9 @@
 use crate::domain::models::{
-    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link,
-    MessageAttachment, MessageLabel, MessageRow, PreviewCursorQuery, RecipientType, Thread,
-    ThreadRow, UserProvider,
+    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
+    CreatedDraft, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest,
+    Label, Link, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
+    RecipientType, ResolvedDraftInput, SimpleMessageInfo, Thread, ThreadRow, UpsertedContacts,
+    UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -13,6 +14,20 @@ use uuid::Uuid;
 
 /// Keyed map of message recipients grouped by message ID.
 pub type RecipientsByMessageId = HashMap<Uuid, Vec<(ContactInfo, RecipientType)>>;
+
+/// Port for enqueuing email messages to be sent on a schedule.
+pub trait EmailMessageEnqueuer: Send + Sync + 'static {
+    /// Error type for enqueue operations.
+    type Err: Send;
+
+    /// Enqueue a message to be sent after an optional delay.
+    fn enqueue_scheduled_message(
+        &self,
+        link_id: Uuid,
+        message_id: Uuid,
+        delay_seconds: Option<i32>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
 
 pub trait EmailRepo: Send + Sync + 'static {
     type Err: Send;
@@ -100,6 +115,40 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, DateTime<Utc>>, Self::Err>> + Send;
+
+    /// Fetch a simplified message by its DB ID and link ID (for validation).
+    fn get_simple_message(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
+
+    /// Find an existing draft that replies to the given message ID.
+    fn get_draft_replying_to(
+        &self,
+        link_id: Uuid,
+        replying_to_id: Uuid,
+    ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
+
+    /// Upsert contacts from the parsed addresses. Must be called outside a transaction
+    /// to avoid deadlocks (contacts are shared across messages).
+    fn upsert_contacts(
+        &self,
+        link_id: Uuid,
+        addresses: ParsedAddresses,
+    ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
+
+    /// Insert a message within a transaction, including thread insert (if new),
+    /// recipients, scheduled message handling, thread metadata update, and user history.
+    /// If `new_thread` is Some, the thread is created inside the same transaction.
+    fn insert_message(
+        &self,
+        input: &ResolvedDraftInput,
+        contacts: &UpsertedContacts,
+        link_id: Uuid,
+        new_thread: Option<ThreadRow>,
+        is_draft: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -126,4 +175,35 @@ pub trait EmailService: Send + Sync + 'static {
         offset: i64,
         limit: i64,
     ) -> impl Future<Output = Result<Option<Thread>, EmailErr>> + Send;
+
+    /// Create a draft message for the given link.
+    fn create_draft(
+        &self,
+        link: &Link,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
+    /// Send a message: persist it and enqueue for scheduled delivery.
+    fn send_message(
+        &self,
+        link: &Link,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+}
+
+/// No-op enqueuer for callers that don't need send capability.
+#[derive(Clone)]
+pub struct NoOpEnqueuer;
+
+impl EmailMessageEnqueuer for NoOpEnqueuer {
+    type Err = std::convert::Infallible;
+
+    async fn enqueue_scheduled_message(
+        &self,
+        _link_id: Uuid,
+        _message_id: Uuid,
+        _delay_seconds: Option<i32>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
 }

@@ -2,7 +2,6 @@ use crate::api::context::ApiContext;
 use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
-use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -15,7 +14,6 @@ pub mod context;
 // Routes
 mod device;
 mod health;
-mod notification;
 mod unsubscribe;
 pub(crate) mod user_notification;
 
@@ -80,20 +78,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
             user_notification::router(ingress_state),
         )
         .nest("/unsubscribe", unsubscribe::router())
-        .layer(middleware)
-        .nest(
-            "/notifications",
-            notification::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_extractor_with_state::<
-                        ValidInternalKey,
-                        _,
-                    >(state))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        );
+        .layer(middleware);
     Router::new()
         .nest("/:version", internal_router.clone())
         .merge(internal_router)

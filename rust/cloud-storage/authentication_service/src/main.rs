@@ -2,7 +2,7 @@ use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use github::{
-    domain::service::{GithubConfig, GithubServiceImpl},
+    domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
     outbound::{
         github_auth_client::GithubAuthImpl, github_oauth_client::GithubOauthImpl,
         pg_github_repo::PgGithubRepo,
@@ -24,7 +24,6 @@ use notification::outbound::{
     push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
     repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
 };
-use notification_service_client::NotificationServiceClient;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -137,15 +136,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let github_webhook_secret = match config.environment {
-        Environment::Local => config.github_webhook_secret_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.github_webhook_secret_key)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -163,11 +153,6 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_service_url.clone(),
     );
     tracing::trace!("initialized document storage service client");
-
-    let notification_service_client = NotificationServiceClient::new(
-        config.service_internal_auth_key.clone(),
-        config.notification_service_url.clone(),
-    );
 
     let macro_cache_client = macro_cache_client::MacroCache::new(config.redis_uri.as_str());
 
@@ -243,27 +228,25 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
-    let github_service_impl = GithubServiceImpl::new(
+    let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
         GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
-        GithubConfig {
+        GithubLinkConfig {
             client_id: config.github_client_id,
             client_secret: config.github_client_secret,
             idp_id: config.github_idp_id,
-            webhook_secret: github_webhook_secret,
         },
     );
 
     api::setup_and_serve(
         ApiContext {
             db,
-            github_service: Arc::new(github_service_impl),
+            github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
-            notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service: Arc::new(notification_ingress_service),
             sqs_client: Arc::new(sqs_client),

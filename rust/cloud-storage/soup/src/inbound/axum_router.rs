@@ -15,7 +15,7 @@ use email::{
         models::{Link, PreviewView},
         ports::EmailService,
     },
-    inbound::{EmailLinkErr, EmailLinkExtractor, EmailPreviewState},
+    inbound::{EmailLinkErr, EmailLinkExtractor, EmailRouterState},
 };
 use item_filters::{EntityFilters, ast::ExpandErr};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -78,7 +78,7 @@ pub struct SoupPage {
 
 pub struct SoupRouterState<T, U> {
     service: Arc<T>,
-    email: EmailPreviewState<U>,
+    email: EmailRouterState<U>,
 }
 
 impl<T, U> Clone for SoupRouterState<T, U> {
@@ -90,7 +90,7 @@ impl<T, U> Clone for SoupRouterState<T, U> {
     }
 }
 
-impl<T, U> FromRef<SoupRouterState<T, U>> for EmailPreviewState<U> {
+impl<T, U> FromRef<SoupRouterState<T, U>> for EmailRouterState<U> {
     fn from_ref(input: &SoupRouterState<T, U>) -> Self {
         input.email.clone()
     }
@@ -104,7 +104,7 @@ where
     pub fn new(service: T, email: U) -> Self {
         SoupRouterState {
             service: Arc::new(service),
-            email: EmailPreviewState::new(email),
+            email: EmailRouterState::new(email),
         }
     }
 

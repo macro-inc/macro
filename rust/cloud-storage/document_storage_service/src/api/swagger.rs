@@ -224,6 +224,9 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+
+        // /github
+        github::inbound::github_sync_router::install_sync_handler
     ),
     components(
         schemas(

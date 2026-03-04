@@ -150,8 +150,12 @@ async fn main() -> anyhow::Result<()> {
     // Build soup service
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service =
-        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        0,
+    );
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
         PgUserRepo::new(db.clone()),

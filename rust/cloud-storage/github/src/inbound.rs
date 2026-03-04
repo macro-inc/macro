@@ -1,7 +1,7 @@
 //! Inbound adapters for the github domain.
 
-#[cfg(feature = "axum")]
-pub mod webhook_router;
+#[cfg(all(feature = "axum", feature = "sync"))]
+pub mod github_sync_router;
 
 #[cfg(feature = "axum")]
 impl axum::response::IntoResponse for crate::domain::models::GithubError {

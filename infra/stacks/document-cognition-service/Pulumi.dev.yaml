@@ -8,7 +8,7 @@ config:
   document-cognition:jwt_secret_key: fusionauth-jwt-secret-dev
   document-cognition:legacy_jwt_secret_key: jwt-secret-dev
   document-cognition:macro_db_secret_key: macro-db-dev
-  document-cognition:openai_api_key: dcs-api-keys
+  document-cognition:openai_api_key: openai-key
   document-cognition:anthropic_api_key: anthropic-api-key-dev
   document-cognition:xai-api-key: xai-api-key
   document-cognition:open-router-api-key: open-router-api-key-dev-v2

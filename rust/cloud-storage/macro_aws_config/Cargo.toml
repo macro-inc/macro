@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 s3 = ["dep:aws-sdk-s3"]
+sqs = ["dep:aws-sdk-sqs"]
 
 [dependencies]
 aws-config = { workspace = true }
@@ -15,3 +16,4 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 aws-sdk-s3 = { workspace = true, optional = true }
+aws-sdk-sqs = { workspace = true, optional = true }

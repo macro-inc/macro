@@ -6,18 +6,18 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import {
+  err,
   isErr,
   type MaybeError,
   type MaybeResult,
   mapOk,
-  ok,
-  err,
   type ObjectLike,
+  ok,
 } from '@core/util/maybeResult';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type OpenAI from 'openai';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
+import type OpenAI from 'openai';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
