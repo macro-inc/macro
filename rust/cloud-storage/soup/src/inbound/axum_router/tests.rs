@@ -116,6 +116,13 @@ impl EmailService for MockEmail {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn update_thread_labels(
         &self,
         _access_token: &str,
@@ -212,6 +219,13 @@ impl EmailService for MockEmailLinkResult {
         _link: &email::domain::models::Link,
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

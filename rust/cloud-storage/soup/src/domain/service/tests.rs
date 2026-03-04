@@ -72,6 +72,13 @@ impl EmailService for NoopEmailService {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
     async fn update_thread_labels(
         &self,
         _access_token: &str,
