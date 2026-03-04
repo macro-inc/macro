@@ -9,7 +9,9 @@ use documents::domain::{
     models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
     ports::DocumentService,
 };
-use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{
     DocumentBasic, DocumentMetadata,
@@ -52,9 +54,28 @@ MEt9yPb3VfwFUyBSNJt4C6zDrnd+62oT+A9aJHJcUDUjqdBsmZamDu7xBAeLGxsn
 sNRx7TF4iOEBkdJgBUoY4X/rZ+51FQOrdZGqeWo+8TjBhMQN7b4=
 -----END RSA PRIVATE KEY-----";
 
-struct StubDocumentService;
+/// Recorded update_task_status call.
+#[derive(Debug, Clone)]
+struct TaskStatusCall {
+    entity_id: String,
+    status: String,
+}
+
+struct StubDocumentService {
+    task_status_calls: Mutex<Vec<TaskStatusCall>>,
+}
 
 impl StubDocumentService {
+    fn new() -> Self {
+        Self {
+            task_status_calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn task_status_calls(&self) -> Vec<TaskStatusCall> {
+        self.task_status_calls.lock().unwrap().clone()
+    }
+
     fn task_metadata(document_id: &str) -> DocumentMetadata {
         DocumentMetadata {
             document_id: document_id.to_string(),
@@ -128,6 +149,17 @@ impl DocumentService for StubDocumentService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
+    }
+    async fn update_task_status(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        status: &str,
+    ) -> Result<(), DocumentError> {
+        self.task_status_calls.lock().unwrap().push(TaskStatusCall {
+            entity_id: receipt.entity().entity_id.clone(),
+            status: status.to_string(),
+        });
+        Ok(())
     }
 }
 
@@ -203,16 +235,25 @@ impl GithubSyncClient for StubSyncClient {
 }
 
 fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncClient> {
-    GithubSyncServiceImpl::new(
+    make_sync_service_with_doc_service().0
+}
+
+fn make_sync_service_with_doc_service() -> (
+    GithubSyncServiceImpl<StubDocumentService, StubSyncClient>,
+    Arc<StubDocumentService>,
+) {
+    let doc_service = Arc::new(StubDocumentService::new());
+    let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
             github_sync_app_url: "test".to_string(),
             sync_app_pem: TEST_PEM.to_string(),
             sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
-        Arc::new(StubDocumentService),
+        doc_service.clone(),
         StubSyncClient::new(),
-    )
+    );
+    (service, doc_service)
 }
 
 #[tokio::test]
@@ -543,4 +584,131 @@ async fn review_comment_mixed_new_and_duplicate() {
 
     let result = service.process_webhook_event(&event).await;
     assert!(result.is_ok());
+}
+
+// ---------------------------------------------------------------------------
+// Task status updates based on PR action
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn pr_opened_sets_task_status_in_review() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "In Review");
+}
+
+#[tokio::test]
+async fn pr_merged_sets_task_status_completed() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "Completed");
+}
+
+#[tokio::test]
+async fn pr_closed_without_merge_sets_task_status_canceled() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "Canceled");
+}
+
+#[tokio::test]
+async fn issue_comment_does_not_update_task_status() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "number": 99,
+                "title": "some issue",
+                "body": null,
+                "head": { "ref": "main" }
+            },
+            "comment": {
+                "body": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51"
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert!(
+        status_calls.is_empty(),
+        "issue_comment should not update task status"
+    );
 }

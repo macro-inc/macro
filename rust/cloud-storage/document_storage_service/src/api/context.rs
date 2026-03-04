@@ -48,7 +48,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{
-    PgSystemPropertiesRepository, SystemPropertiesService as _, SystemPropertiesServiceImpl,
+    PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
+    SystemPropertiesServiceImpl,
 };
 
 #[derive(Debug, Clone)]
@@ -107,6 +108,14 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .attach_task_properties(entity_ids)
             .await
             .map_err(Into::into)
+    }
+
+    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+        let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
+
+        self.0.update_task_status(task_id, status_option).await?;
+
+        Ok(())
     }
 }
 

@@ -86,6 +86,37 @@ impl ValidatedGithubWebhookEvent {
         texts
     }
 
+    /// Extract the `action` field from the webhook payload (e.g. "opened", "closed", "created").
+    pub fn action(&self) -> Option<&str> {
+        self.payload.get("action").and_then(|v| v.as_str())
+    }
+
+    /// Whether the pull request was merged (only meaningful for `closed` actions).
+    pub fn is_merged(&self) -> bool {
+        self.payload
+            .get("pull_request")
+            .and_then(|pr| pr.get("merged"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Derive the task status string for a PR event action, if applicable.
+    ///
+    /// Returns `Some("In Review")` for opened/reopened, `Some("Completed")` for
+    /// merged, `Some("Canceled")` for closed-without-merge, or `None` if the
+    /// action does not map to a status change.
+    pub fn task_status_for_pr_action(&self) -> Option<&'static str> {
+        if self.parsed_event_type() != GithubWebhookEventType::PullRequest {
+            return None;
+        }
+        match self.action() {
+            Some("opened" | "reopened") => Some("In Review"),
+            Some("closed") if self.is_merged() => Some("Completed"),
+            Some("closed") => Some("Canceled"),
+            _ => None,
+        }
+    }
+
     /// Extract the pull request / issue number from the webhook payload.
     pub fn pull_number(&self) -> Option<u64> {
         self.payload

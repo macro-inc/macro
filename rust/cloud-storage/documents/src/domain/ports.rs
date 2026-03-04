@@ -4,7 +4,9 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
     CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
@@ -129,6 +131,13 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         &self,
         entity_ids: Vec<String>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Updates the tasks status
+    fn update_task_status(
+        &self,
+        entity_id: &str,
+        status: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Service interface for document operations.
@@ -176,4 +185,11 @@ pub trait DocumentService: Send + Sync + 'static {
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Updates the tasks status to what is provided
+    fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        status: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }

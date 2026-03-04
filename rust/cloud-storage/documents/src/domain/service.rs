@@ -544,4 +544,16 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
             file_type: file_type.map(|f| f.to_string()),
         })
     }
+
+    #[tracing::instrument(skip(self))]
+    async fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        status: &str,
+    ) -> Result<(), DocumentError> {
+        self.task_properties_service
+            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .await
+            .map_err(|e| DocumentError::Internal(e))
+    }
 }
