@@ -41,7 +41,7 @@ mod sync_impl {
             GithubInstallationAccessToken, GithubWebhookEventType, MacroTaskId,
             ValidatedGithubWebhookEvent,
         },
-        ports::GithubSyncService,
+        ports::{GithubSyncClient, GithubSyncService},
     };
     use documents::domain::ports::DocumentService;
     use hmac::{Hmac, Mac};
@@ -51,23 +51,25 @@ mod sync_impl {
     type HmacSha256 = Hmac<Sha256>;
 
     /// The concrete github sync service implementation.
-    pub struct GithubSyncServiceImpl<D: DocumentService> {
+    pub struct GithubSyncServiceImpl<D: DocumentService, C: GithubSyncClient> {
         config: super::GithubSyncConfig,
         #[allow(dead_code)]
         document_service: Arc<D>,
+        client: C,
     }
 
-    impl<D: DocumentService> GithubSyncServiceImpl<D> {
+    impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
         /// Create a new github sync service.
-        pub fn new(config: super::GithubSyncConfig, document_service: Arc<D>) -> Self {
+        pub fn new(config: super::GithubSyncConfig, document_service: Arc<D>, client: C) -> Self {
             Self {
                 config,
                 document_service,
+                client,
             }
         }
     }
 
-    impl<D: DocumentService> GithubSyncService for GithubSyncServiceImpl<D> {
+    impl<D: DocumentService, C: GithubSyncClient> GithubSyncService for GithubSyncServiceImpl<D, C> {
         #[tracing::instrument(skip(self, body), err)]
         async fn validate_webhook_event(
             &self,
@@ -165,36 +167,9 @@ mod sync_impl {
             let jwt = jsonwebtoken::encode(&header, &claims, &encoding_key)
                 .map_err(|e| GithubError::Internal(anyhow::anyhow!("failed to encode JWT: {e}")))?;
 
-            let client = reqwest::Client::new();
-            let response = client
-                .post(format!(
-                    "https://api.github.com/app/installations/{installation_id}/access_tokens"
-                ))
-                .header("Authorization", format!("Bearer {jwt}"))
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "Macro-Auth-Service")
-                .header("X-GitHub-Api-Version", "2022-11-28")
-                .send()
+            self.client
+                .generate_installation_access_token(&jwt, installation_id)
                 .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "unknown error".to_string());
-                return Err(GithubError::Internal(anyhow::anyhow!(
-                    "failed to create installation access token (status {status}): {error_body}"
-                )));
-            }
-
-            let token: GithubInstallationAccessToken = response
-                .json()
-                .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
-
-            Ok(token)
         }
     }
 }

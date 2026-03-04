@@ -11,7 +11,7 @@
 #![deny(missing_docs)]
 pub mod domain;
 
-#[cfg(feature = "outbound")]
+#[cfg(any(feature = "outbound", feature = "sync"))]
 pub mod outbound;
 
 #[cfg(feature = "inbound")]

@@ -28,6 +28,7 @@ use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::outbound::github_sync_client::GithubSyncClientImpl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -334,6 +335,7 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
+        GithubSyncClientImpl::default(),
     );
 
     let api_context = ApiContext {

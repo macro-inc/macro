@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::domain::{models::ValidatedGithubWebhookEvent, ports::GithubSyncService};
+use crate::domain::{
+    models::{GithubError, GithubInstallationAccessToken, ValidatedGithubWebhookEvent},
+    ports::{GithubSyncClient, GithubSyncService},
+};
 use documents::domain::{
     models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
     ports::DocumentService,
@@ -60,7 +63,19 @@ impl DocumentService for StubDocumentService {
     }
 }
 
-fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService> {
+struct StubSyncClient;
+
+impl GithubSyncClient for StubSyncClient {
+    async fn generate_installation_access_token(
+        &self,
+        _jwt: &str,
+        _installation_id: u64,
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        unimplemented!()
+    }
+}
+
+fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncClient> {
     GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
@@ -69,6 +84,7 @@ fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService> {
             sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
         Arc::new(StubDocumentService),
+        StubSyncClient,
     )
 }
 
