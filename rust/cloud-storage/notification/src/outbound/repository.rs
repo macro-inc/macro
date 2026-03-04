@@ -13,6 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
+use rootcause::prelude::ResultExt;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
@@ -480,39 +481,46 @@ impl NotificationDbOps for PgPool {
 
         Ok(rows
             .into_iter()
-            .map(|row| -> Result<UserNotificationRow<T>, rootcause::Report> {
-                let entity = EntityType::from_str(&row.event_item_type)
-                    .map_err(|e| rootcause::report!(e))?
-                    .with_entity_string(row.event_item_id);
+            .map(
+                |row| -> Result<UserNotificationRow<T>, rootcause::Report<Uuid>> {
+                    let entity = EntityType::from_str(&row.event_item_type)
+                        .map_err(|e| rootcause::report!(e))
+                        .context(row.notification_id)?
+                        .with_entity_string(row.event_item_id);
 
-                let sender_id = row
-                    .sender_id
-                    .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
-                    .transpose()
-                    .map_err(|e| rootcause::report!(e))?;
+                    let sender_id = row
+                        .sender_id
+                        .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
+                        .transpose()
+                        .map_err(|e| rootcause::report!(e))
+                        .context(row.notification_id)?;
 
-                let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
-                    .map(CowLike::into_owned)
-                    .map_err(|e| rootcause::report!(e))?;
+                    let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
+                        .map(CowLike::into_owned)
+                        .map_err(|e| rootcause::report!(e))
+                        .context(row.notification_id)?;
 
-                let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
-                    .map_err(|e| rootcause::report!(e))?;
+                    let notification_metadata =
+                        serde_json::from_value::<T>(row.notification_metadata)
+                            .map_err(|e| rootcause::report!(e))
+                            .context(row.notification_id)?;
 
-                Ok(UserNotificationRow {
-                    owner_id,
-                    notification_id: row.notification_id,
-                    notification_event_type: row.notification_event_type,
-                    entity,
-                    sent: row.sent,
-                    done: row.done,
-                    created_at: row.created_at,
-                    viewed_at: row.viewed_at,
-                    updated_at: row.updated_at,
-                    deleted_at: row.deleted_at,
-                    notification_metadata,
-                    sender_id,
-                })
-            })
+                    Ok(UserNotificationRow {
+                        owner_id,
+                        notification_id: row.notification_id,
+                        notification_event_type: row.notification_event_type,
+                        entity,
+                        sent: row.sent,
+                        done: row.done,
+                        created_at: row.created_at,
+                        viewed_at: row.viewed_at,
+                        updated_at: row.updated_at,
+                        deleted_at: row.deleted_at,
+                        notification_metadata,
+                        sender_id,
+                    })
+                },
+            )
             .inspect(|r: &Result<UserNotificationRow<T>, _>| {
                 if let Err(e) = r {
                     tracing::warn!("skipping invalid notification: {e:?}");
@@ -571,23 +579,27 @@ impl NotificationDbOps for PgPool {
 
         Ok(rows
             .into_iter()
-            .map(|row| -> Result<UserNotificationRow<T>, Report> {
+            .map(|row| -> Result<UserNotificationRow<T>, Report<Uuid>> {
                 let entity = EntityType::from_str(&row.event_item_type)
-                    .map_err(|e| rootcause::report!(e))?
+                    .map_err(|e| rootcause::report!(e))
+                    .context(row.notification_id)?
                     .with_entity_string(row.event_item_id);
 
                 let sender_id = row
                     .sender_id
                     .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
                     .transpose()
-                    .map_err(|e| rootcause::report!(e))?;
+                    .map_err(|e| rootcause::report!(e))
+                    .context(row.notification_id)?;
 
                 let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map(CowLike::into_owned)
-                    .map_err(|e| rootcause::report!(e))?;
+                    .map_err(|e| rootcause::report!(e))
+                    .context(row.notification_id)?;
 
                 let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
-                    .map_err(|e| rootcause::report!(e))?;
+                    .map_err(|e| rootcause::report!(e))
+                    .context(row.notification_id)?;
 
                 Ok(UserNotificationRow {
                     owner_id,
