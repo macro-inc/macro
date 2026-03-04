@@ -453,7 +453,7 @@ const FilterSelect = (props: FilterSelectProps) => {
       item={itemProps.item}
       class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 group"
     >
-      <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+      <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
         <KSelect.ItemIndicator>
           <CheckIcon class="size-2.5 text-page" />
         </KSelect.ItemIndicator>
@@ -639,7 +639,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
           item={itemProps.item}
           class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
         >
-          <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+          <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
             <Combobox.ItemIndicator>
               <CheckIcon class="size-2.5 text-page" />
             </Combobox.ItemIndicator>
