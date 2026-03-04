@@ -3,19 +3,29 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+#[cfg(feature = "sync")]
 use std::fmt;
-use std::sync::LazyLock;
 
-use macro_user_id::user_id::MacroUserIdStr;
-use regex::Regex;
+#[cfg(any(feature = "link", feature = "sync"))]
 use serde::Deserialize;
 
+#[cfg(feature = "sync")]
+use std::collections::HashSet;
+#[cfg(feature = "sync")]
+use std::sync::LazyLock;
+
+#[cfg(feature = "link")]
+use macro_user_id::user_id::MacroUserIdStr;
+#[cfg(feature = "sync")]
+use regex::Regex;
+
 /// Github access token
+#[cfg(feature = "link")]
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct GithubAccessToken(String);
 
+#[cfg(feature = "link")]
 impl GithubAccessToken {
     /// Creates a new GithubAccessToken
     pub fn new(token: String) -> Self {
@@ -24,6 +34,7 @@ impl GithubAccessToken {
 }
 
 /// GitHub App installation access token response
+#[cfg(feature = "sync")]
 #[derive(Debug, Clone, Deserialize)]
 pub struct GithubInstallationAccessToken {
     /// The installation access token
@@ -53,6 +64,7 @@ pub enum GithubError {
 }
 
 /// A GitHub link record (as stored in the database)
+#[cfg(feature = "link")]
 #[derive(Debug, Clone)]
 pub struct GithubLink {
     /// Unique ID for this link
@@ -72,6 +84,7 @@ pub struct GithubLink {
 }
 
 /// GitHub OAuth token exchange response
+#[cfg(feature = "link")]
 #[derive(Debug, Deserialize)]
 pub struct GithubExchangeTokenResponse {
     /// The access token for Github API calls
@@ -89,6 +102,7 @@ pub struct GithubExchangeTokenResponse {
 }
 
 /// Github user information retrieved from Github API
+#[cfg(feature = "link")]
 #[derive(Debug, Deserialize)]
 pub struct GithubUserInfo {
     /// Github user ID (numeric)
@@ -102,6 +116,7 @@ pub struct GithubUserInfo {
 }
 
 /// A validated github webhook event
+#[cfg(feature = "sync")]
 #[derive(Debug)]
 pub struct ValidatedGithubWebhookEvent {
     /// The event type from the `X-GitHub-Event` header
@@ -110,6 +125,7 @@ pub struct ValidatedGithubWebhookEvent {
     pub payload: serde_json::Value,
 }
 
+#[cfg(feature = "sync")]
 impl ValidatedGithubWebhookEvent {
     /// Create a new ValidatedGithubWebhookEvent
     pub fn new(event_type: String, payload: serde_json::Value) -> Self {
@@ -173,6 +189,7 @@ impl ValidatedGithubWebhookEvent {
 }
 
 /// Known GitHub webhook event types we handle.
+#[cfg(feature = "sync")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GithubWebhookEventType {
     /// `pull_request` events
@@ -187,6 +204,7 @@ pub enum GithubWebhookEventType {
     Unknown(String),
 }
 
+#[cfg(feature = "sync")]
 impl GithubWebhookEventType {
     /// Map the raw `X-GitHub-Event` header value to a variant.
     pub fn from_event_header(s: &str) -> Self {
@@ -202,18 +220,21 @@ impl GithubWebhookEventType {
 
 /// Regex matching `MACRO-{short_uuid}` (case-insensitive).
 /// The capture group contains only the Flickr base58 short UUID portion.
+#[cfg(feature = "sync")]
 static MACRO_TASK_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)macro-([123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]+)")
         .expect("valid regex")
 });
 
 /// A Macro task ID in the form `MACRO-{short_uuid}`.
+#[cfg(feature = "sync")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MacroTaskId {
     /// The Flickr base58 short UUID portion
     pub short_uuid: String,
 }
 
+#[cfg(feature = "sync")]
 impl MacroTaskId {
     /// Create from a raw short UUID string, validating that all characters
     /// are in the Flickr base58 alphabet.
@@ -267,6 +288,7 @@ impl MacroTaskId {
     }
 }
 
+#[cfg(feature = "sync")]
 impl fmt::Display for MacroTaskId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "MACRO-{}", self.short_uuid)

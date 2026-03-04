@@ -1,6 +1,6 @@
 //! Inbound adapters for the github domain.
 
-#[cfg(feature = "axum")]
+#[cfg(all(feature = "axum", feature = "sync"))]
 pub mod github_sync_router;
 
 #[cfg(feature = "axum")]

@@ -1,15 +1,10 @@
-//! Port definitions for the github domain.
-//!
-//! These traits define the contracts that adapters must implement.
+//! Port definitions for github link operations (OAuth and account linking).
 
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubInstallationAccessToken,
-    GithubUserInfo, ValidatedGithubWebhookEvent,
+    GithubAccessToken, GithubError, GithubExchangeTokenResponse, GithubLink, GithubUserInfo,
 };
-
-use super::models::GithubLink;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 
 /// Repository for accessing github link data from the database.
@@ -104,34 +99,6 @@ pub trait Auth: Send + Sync + 'static {
         fusionauth_user_id: &uuid::Uuid,
         github_idp_id: &str,
     ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>>;
-}
-
-/// Service interface for github sync operations (webhooks and sync app).
-///
-/// Handles webhook validation/processing and sync app installation token generation.
-pub trait GithubSyncService: Send + Sync + 'static {
-    /// Validates the incoming webhook event and returns back the `ValidatedGithubWebhookEvent`
-    fn validate_webhook_event(
-        &self,
-        event_type: &str,
-        signature: &str,
-        body: &[u8],
-    ) -> impl Future<Output = Result<ValidatedGithubWebhookEvent, GithubError>> + Send;
-
-    /// Processes and incoming github webhook event
-    fn process_webhook_event(
-        &self,
-        webhook_event: &ValidatedGithubWebhookEvent,
-    ) -> impl Future<Output = Result<(), GithubError>> + Send;
-
-    /// Returns the github sync app installation url
-    fn get_github_sync_app_url(&self) -> &str;
-
-    /// Generates an installation access token for the github sync app
-    fn generate_installation_access_token(
-        &self,
-        installation_id: u64,
-    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 }
 
 /// Service interface for github link operations (OAuth and account linking).
