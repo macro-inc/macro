@@ -12,6 +12,7 @@ type SearchbarVariant = 'filled' | 'secondary';
 
 interface SoupSearchbarProps {
   variant?: SearchbarVariant;
+  autoFocus?: boolean;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -38,6 +39,15 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     }
   });
 
+  createEffect(() => {
+    ref();
+    if (props.autoFocus) {
+      queueMicrotask(() => {
+        ref()?.focus();
+      });
+    }
+  });
+
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
     scopeId: panel.splitHotkeyScope,
@@ -58,9 +68,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   };
 
   return (
-    <div class="size-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
+    <div class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
       <Tooltip
-        class="size-full"
+        class="w-full"
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
       >

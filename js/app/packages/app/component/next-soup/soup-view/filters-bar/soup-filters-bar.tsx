@@ -6,7 +6,7 @@ import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import XIcon from '@icon/regular/x.svg';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 export const SoupFiltersBar = () => {
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
@@ -26,33 +26,31 @@ export const SoupFiltersBar = () => {
   };
 
   return (
-    <div class="@container w-full overflow-hidden flex gap-2 flex-wrap py-2">
-      <Show when={!isComponentListView('search')}>
-        <SoupViewContextFilters />
-      </Show>
-      <Show when={hasActiveRefinements()}>
-        <Button variant="ghost" size="sm" onClick={resetToTabDefaults}>
-          <XIcon class="size-3" />
-          <span>Clear all</span>
-        </Button>
-      </Show>
+    <Switch>
+      <Match when={isComponentListView('search')}>
+        <div class="w-full flex flex-col gap-2 p-2">
+          <SoupSearchbar autoFocus />
+        </div>
+      </Match>
+      <Match when={true}>
+        <div class="@container w-full overflow-hidden flex gap-2 flex-wrap py-2 pl-2 pr-1">
+          <SoupViewContextFilters />
+          <Show when={hasActiveRefinements()}>
+            <Button variant="ghost" size="sm" onClick={resetToTabDefaults}>
+              <XIcon class="size-3" />
+              <span>Clear all</span>
+            </Button>
+          </Show>
 
-      <div class="flex-1" />
+          <div class="flex-1" />
 
-      <Show
-        when={isComponentListView('search')}
-        fallback={
           <div class="max-w-60 w-full">
             <SoupSearchbar />
           </div>
-        }
-      >
-        <div class="w-full">
-          <SoupSearchbar />
-        </div>
-      </Show>
 
-      <SoupViewContextSort />
-    </div>
+          <SoupViewContextSort />
+        </div>
+      </Match>
+    </Switch>
   );
 };

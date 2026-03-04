@@ -170,7 +170,7 @@ export const SoupView = (props: SoupViewProps) => {
     >
       <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
         <div class="size-full flex flex-col">
-          <div class="flex flex-col w-full pl-2 pr-1">
+          <div class="flex flex-col w-full">
             <SplitHeaderLeft>
               <div class="h-full flex gap-2 items-center">
                 <Show when={!isMobile()}>
