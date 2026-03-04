@@ -223,7 +223,48 @@ export function hasCalendarInviteFilter(entity: EntityData): boolean {
 export function hasAttachmentFilter(entity: EntityData): boolean {
   if (entity.type !== 'email') return false;
 
-  return entity.hasAttachment === true;
+  return (entity.attachments?.length ?? 0) > 0;
+}
+
+const PDF_MIME_TYPES = ['application/pdf'];
+const IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+];
+const DOCUMENT_MIME_TYPES = [
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+];
+
+function hasAttachmentOfType(entity: EntityData, mimeTypes: string[]): boolean {
+  if (entity.type !== 'email') return false;
+  if (!entity.attachments?.length) return false;
+
+  return entity.attachments.some((a) => {
+    if (!a.mimeType) return false;
+    return mimeTypes.some((type) => a.mimeType?.startsWith(type));
+  });
+}
+
+export function hasPdfAttachmentFilter(entity: EntityData): boolean {
+  return hasAttachmentOfType(entity, PDF_MIME_TYPES);
+}
+
+export function hasImageAttachmentFilter(entity: EntityData): boolean {
+  return hasAttachmentOfType(entity, IMAGE_MIME_TYPES);
+}
+
+export function hasDocumentAttachmentFilter(entity: EntityData): boolean {
+  return hasAttachmentOfType(entity, DOCUMENT_MIME_TYPES);
 }
 
 export function sharedEntity(getUserID: () => string | undefined) {
@@ -835,6 +876,21 @@ export const createSoupFilters = (
       id: 'has-attachment',
       label: 'Has attachment',
       predicate: hasAttachmentFilter,
+    },
+    {
+      id: 'attachment-pdf',
+      label: 'PDF attachment',
+      predicate: hasPdfAttachmentFilter,
+    },
+    {
+      id: 'attachment-image',
+      label: 'Image attachment',
+      predicate: hasImageAttachmentFilter,
+    },
+    {
+      id: 'attachment-document',
+      label: 'Document attachment',
+      predicate: hasDocumentAttachmentFilter,
     },
     {
       id: 'shared-entity',

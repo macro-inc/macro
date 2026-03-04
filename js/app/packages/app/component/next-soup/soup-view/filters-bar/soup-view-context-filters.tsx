@@ -4,6 +4,7 @@ import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   AssigneeFilter,
+  AttachmentTypeFilter,
   ChannelVisibilityFilter,
   DocumentFolderFilter,
   DocumentTypeFilter,
@@ -73,10 +74,11 @@ const AgentsFilters = () => {
 };
 
 const MailFilters = () => {
-  const { activeTab } = useSoupView();
+  const { activeTab, soup } = useSoupView();
 
   const isDraftsTab = () => activeTab() === 'drafts';
   const isSentTab = () => activeTab() === 'sent';
+  const hasAttachmentActive = () => soup.filters.isActive('has-attachment');
 
   return (
     <>
@@ -90,6 +92,10 @@ const MailFilters = () => {
         <FromSenderFilter />
       </Show>
       <HasAttachmentFilter />
+      {/* Show attachment type filter only when has-attachment is active */}
+      <Show when={hasAttachmentActive()}>
+        <AttachmentTypeFilter />
+      </Show>
       <HasCalendarInviteFilter />
     </>
   );

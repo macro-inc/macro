@@ -578,13 +578,43 @@ export const HasAttachmentFilter = () => {
     { value: 'has-attachment', label: 'Has Attachment' },
   ];
 
-  const attachment = useFilterOptions(attachmentOptions);
+  const attachment = useFilterOptions(attachmentOptions, { target: 'and' });
 
   return (
     <FilterChipGroup
       options={attachmentOptions}
       active={attachment.active()}
       onChange={attachment.onChange}
+    />
+  );
+};
+
+export const AttachmentTypeFilter = () => {
+  const attachmentTypeOptions: Option[] = [
+    {
+      value: 'attachment-pdf',
+      label: 'PDFs',
+      icon: () => <FilePdfIcon class="size-3.5" />,
+    },
+    {
+      value: 'attachment-image',
+      label: 'Images',
+      icon: () => <FileImageIcon class="size-3.5" />,
+    },
+    {
+      value: 'attachment-document',
+      label: 'Documents',
+      icon: () => <FileIcon class="size-3.5" />,
+    },
+  ];
+
+  const attachmentType = useFilterOptions(attachmentTypeOptions);
+
+  return (
+    <FilterChipGroup
+      options={attachmentTypeOptions}
+      active={attachmentType.active()}
+      onChange={attachmentType.onChange}
     />
   );
 };
