@@ -746,3 +746,63 @@ async fn issue_comment_on_closed_pr_does_not_update_task_status() {
         "issue_comment on closed PR should not update task status"
     );
 }
+
+#[tokio::test]
+async fn pr_merged_updates_status_even_when_already_commented() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+
+    // First event: PR opened — posts comment and sets "In Review"
+    let opened_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+    assert_eq!(service.client.pr_comments().len(), 1);
+    assert_eq!(doc_service.task_status_calls().len(), 1);
+    assert_eq!(doc_service.task_status_calls()[0].status, "In Review");
+
+    // Second event: PR merged — should NOT post a duplicate comment,
+    // but SHOULD update status to "Completed"
+    let merged_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&merged_event).await.unwrap();
+
+    // Still only 1 comment (no duplicate)
+    assert_eq!(service.client.pr_comments().len(), 1);
+
+    // But status was updated twice: "In Review" then "Completed"
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 2);
+    assert_eq!(status_calls[1].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[1].status, "Completed");
+}

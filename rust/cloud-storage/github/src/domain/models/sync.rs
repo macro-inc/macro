@@ -112,7 +112,7 @@ impl ValidatedGithubWebhookEvent {
     pub fn task_status_for_event(&self) -> Option<&'static str> {
         match self.parsed_event_type() {
             GithubWebhookEventType::PullRequest => match self.action() {
-                Some("opened" | "reopened") => Some("In Review"),
+                Some("opened" | "reopened" | "edited") => Some("In Review"),
                 Some("closed") if self.is_merged() => Some("Completed"),
                 Some("closed") => Some("Canceled"),
                 _ => None,

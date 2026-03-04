@@ -113,28 +113,36 @@ mod sync_impl {
 
             let searchable_texts = webhook_event.extract_searchable_text();
             let combined = searchable_texts.join(" ");
-            let task_ids = MacroTaskId::extract_from_text(&combined);
+            let all_task_ids = MacroTaskId::extract_from_text(&combined);
 
-            if task_ids.is_empty() {
+            if all_task_ids.is_empty() {
                 tracing::debug!(event_type=?event_type, "no task IDs found in event");
                 return Ok(());
             }
 
-            // Filter out task IDs already present in the PR context (title, body, branch)
-            // so that e.g. a comment saying "Fixes MACRO-X" on a PR already titled MACRO-X
-            // does not trigger a duplicate association.
-            let pr_context = webhook_event.extract_pr_context_text().join(" ");
-            let existing_task_ids: std::collections::HashSet<_> =
-                MacroTaskId::extract_from_text(&pr_context)
-                    .into_iter()
-                    .collect();
+            // For PR events we process ALL task IDs (the PR itself is the context).
+            // For comment/review events we only process task IDs that are new
+            // relative to the surrounding PR context, so that e.g. a comment
+            // saying "Fixes MACRO-X" on a PR already titled MACRO-X does not
+            // trigger a duplicate comment.
+            let is_pr_event = event_type == GithubWebhookEventType::PullRequest;
 
-            let new_task_ids: Vec<_> = task_ids
-                .into_iter()
-                .filter(|id| !existing_task_ids.contains(id))
-                .collect();
+            let task_ids_for_comment: Vec<_> = if is_pr_event {
+                all_task_ids.clone()
+            } else {
+                let pr_context = webhook_event.extract_pr_context_text().join(" ");
+                let existing: std::collections::HashSet<_> =
+                    MacroTaskId::extract_from_text(&pr_context)
+                        .into_iter()
+                        .collect();
+                all_task_ids
+                    .iter()
+                    .filter(|id| !existing.contains(*id))
+                    .cloned()
+                    .collect()
+            };
 
-            if new_task_ids.is_empty() {
+            if task_ids_for_comment.is_empty() {
                 tracing::debug!(
                     event_type=?event_type,
                     "all task IDs already present in PR context, skipping"
@@ -187,11 +195,13 @@ mod sync_impl {
                 }
             };
 
-            // Collect all valid task documents first
+            // Resolve task IDs to documents. We always collect doc IDs for
+            // status updates, but only add to task_links if not already
+            // commented (to avoid duplicate PR comments).
             let mut task_links: Vec<String> = Vec::new();
             let mut task_doc_ids: Vec<String> = Vec::new();
 
-            for task_id in &new_task_ids {
+            for task_id in &task_ids_for_comment {
                 let uuid = match task_id.to_uuid() {
                     Ok(uuid) => uuid,
                     Err(e) => {
@@ -231,20 +241,27 @@ mod sync_impl {
                             let doc_name = &document.document_metadata.document_name;
                             let doc_id = &document.document_metadata.document_id;
 
-                            // Skip if we already posted a comment linking to this task
-                            if let Some((_, _, _, _, ref existing_comments)) = pr_meta {
-                                let task_link = format!("/app/task/{doc_id})");
-                                if existing_comments.iter().any(|c| c.contains(&task_link)) {
-                                    tracing::debug!(
-                                        task_id=%uuid,
-                                        "PR already has a comment linking to this task, skipping"
-                                    );
-                                    continue;
-                                }
-                            }
-
-                            task_links.push(create_macro_task_comment_link(doc_name, doc_id));
+                            // Always track for status updates
                             task_doc_ids.push(doc_id.clone());
+
+                            // Only add comment link if not already posted
+                            let already_commented = pr_meta
+                                .as_ref()
+                                .map(|(_, _, _, _, existing_comments)| {
+                                    let task_link = format!("/app/task/{doc_id})");
+                                    existing_comments.iter().any(|c| c.contains(&task_link))
+                                })
+                                .unwrap_or(false);
+
+                            if already_commented {
+                                tracing::debug!(
+                                    task_id=%uuid,
+                                    "PR already has a comment linking to this task, skipping comment"
+                                );
+                            } else {
+                                task_links
+                                    .push(create_macro_task_comment_link(doc_name, doc_id));
+                            }
                         }
                     }
                     Err(e) => match e {
@@ -254,7 +271,7 @@ mod sync_impl {
                 }
             }
 
-            // Post a single comment mentioning all discovered tasks
+            // Post a single comment mentioning all newly discovered tasks
             if !task_links.is_empty() {
                 if let Some((ref token, ref owner, ref repo, pull_number, _)) = pr_meta {
                     let comment_body = task_links.join("\n");
@@ -268,7 +285,7 @@ mod sync_impl {
                 }
             }
 
-            // Update task statuses for PR open/close/merge events
+            // Update task statuses for all resolved tasks
             if let Some(status) = webhook_event.task_status_for_event() {
                 for doc_id in &task_doc_ids {
                     let entity_access = entity_access::domain::models::EntityAccessReceipt::<
