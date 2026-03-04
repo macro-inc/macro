@@ -554,6 +554,6 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
         self.task_properties_service
             .update_task_status(&entity_access_receipt.entity().entity_id, status)
             .await
-            .map_err(|e| DocumentError::Internal(e))
+            .map_err(DocumentError::Internal)
     }
 }
