@@ -1,6 +1,7 @@
 //! Database adapter for device registration operations.
 
 use crate::domain::models::device::DeviceType;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
 
@@ -23,7 +24,7 @@ pub trait DeviceRegistrationDbOps: Send + Sync + 'static {
     /// Upsert a device registration.
     fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
@@ -71,12 +72,13 @@ impl DeviceRegistrationDbOps for PgPool {
 
     async fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {
         let id = macro_uuid::generate_uuid_v7();
+        let user_id_str = user_id.as_ref();
         sqlx::query!(
             r#"
             INSERT INTO notification_user_device_registration (id, user_id, device_token, device_endpoint, device_type)
@@ -84,7 +86,7 @@ impl DeviceRegistrationDbOps for PgPool {
             ON CONFLICT (device_endpoint) DO UPDATE SET user_id = $2, device_token = $3, device_type = $5, updated_at = NOW()
             "#,
             id,
-            user_id,
+            user_id_str,
             device_token,
             device_endpoint,
             device_type as _,

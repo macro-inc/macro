@@ -104,7 +104,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// Mark notifications as seen for a user.
     fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
@@ -185,7 +185,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// record if the endpoint already exists.
     fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,

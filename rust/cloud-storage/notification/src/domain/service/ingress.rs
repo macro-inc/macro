@@ -98,7 +98,7 @@ pub trait NotificationReader: Send + Sync + 'static {
     /// then upserts the device registration in the database.
     fn register_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
@@ -395,7 +395,7 @@ where
         match &req.status {
             NotificationStatus::Seen => {
                 self.repository
-                    .mark_notifications_seen(&req.user_id, req.notification_ids)
+                    .mark_notifications_seen(req.user_id.copied(), req.notification_ids)
                     .await?;
             }
             NotificationStatus::Done(done) => {
@@ -580,7 +580,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn register_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {

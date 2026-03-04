@@ -22,18 +22,14 @@ pub fn device_router<S: NotificationReader>() -> Router<NotificationRouterState<
 
 /// Register a device for push notifications.
 #[tracing::instrument(skip(state, macro_user, req), fields(user_id=?macro_user.macro_user_id))]
-pub async fn register_device<S: NotificationReader>(
+async fn register_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .register_device(
-            macro_user.macro_user_id.as_ref(),
-            &req.token,
-            &req.device_type,
-        )
+        .register_device(macro_user.macro_user_id, &req.token, &req.device_type)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to register device");
@@ -50,7 +46,7 @@ pub async fn register_device<S: NotificationReader>(
 
 /// Unregister a device from push notifications.
 #[tracing::instrument(skip(state, _macro_user, req))]
-pub async fn unregister_device<S: NotificationReader>(
+async fn unregister_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     _macro_user: MacroUserExtractor,
     Json(req): Json<DeviceRequest>,

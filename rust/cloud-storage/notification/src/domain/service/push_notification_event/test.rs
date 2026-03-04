@@ -93,7 +93,7 @@ impl NotificationRepository for MockNotifRepo {
     }
     async fn mark_notifications_seen(
         &self,
-        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
     ) -> Result<(), Report> {
         unimplemented!()
@@ -161,7 +161,7 @@ impl NotificationRepository for MockNotifRepo {
     }
     async fn upsert_device(
         &self,
-        _: &str,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &str,
         _: &str,
         _: &crate::domain::models::device::DeviceType,

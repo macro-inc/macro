@@ -776,11 +776,11 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.db
-            .mark_notifications_seen(user_id, notification_ids)
+            .mark_notifications_seen(&user_id, notification_ids)
             .await
     }
 
@@ -866,7 +866,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,

@@ -232,7 +232,7 @@ impl NotificationRepository for MockRepository {
 
     async fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.mark_seen_calls
@@ -319,7 +319,7 @@ impl NotificationRepository for MockRepository {
 
     async fn upsert_device(
         &self,
-        _user_id: &str,
+        _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_endpoint: &str,
         _device_type: &DeviceType,
@@ -385,7 +385,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         (**self)
@@ -477,7 +477,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,

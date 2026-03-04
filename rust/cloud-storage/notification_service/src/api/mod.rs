@@ -12,7 +12,6 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod context;
 
 // Routes
-mod device;
 mod health;
 mod unsubscribe;
 pub(crate) mod user_notification;
@@ -72,11 +71,12 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
     };
 
     let internal_router = Router::new()
-        .nest("/device", device::router(ingress_state.clone()))
         .nest(
-            "/user_notifications",
-            user_notification::router(ingress_state),
+            "/device",
+            ::notification::inbound::http::device::device_router(),
         )
+        .nest("/user_notifications", user_notification::router())
+        .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())
         .layer(middleware);
     Router::new()

@@ -2,9 +2,14 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::NotificationReader;
 use crate::domain::service::ingress::{NotificationReaderService, PlatformArnConfig};
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashMap;
 use std::sync::Mutex;
+
+fn test_user_id() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("test@example.com").unwrap()
+}
 
 // ─── Mocks ───────────────────────────────────────────────────────────────
 
@@ -45,7 +50,7 @@ impl NotificationRepository for MockNotifRepo {
 
     async fn upsert_device(
         &self,
-        user_id: &str,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
@@ -120,7 +125,7 @@ impl NotificationRepository for MockNotifRepo {
     }
     async fn mark_notifications_seen(
         &self,
-        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
     ) -> Result<(), Report> {
         unimplemented!()
@@ -303,7 +308,11 @@ async fn register_existing_token_valid_endpoint() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "device-token", &DeviceType::Ios)
+        .register_device(
+            MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap(),
+            "device-token",
+            &DeviceType::Ios,
+        )
         .await
         .unwrap();
 
@@ -319,7 +328,7 @@ async fn register_missing_token_creates_endpoint() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
         .await
         .unwrap();
 
@@ -335,7 +344,7 @@ async fn register_get_attributes_fails_creates_new_endpoint() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
         .await
         .unwrap();
 
@@ -353,7 +362,7 @@ async fn register_disabled_endpoint_re_enables() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
         .await
         .unwrap();
 
@@ -373,7 +382,7 @@ async fn register_token_mismatch_updates() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "new-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "new-token", &DeviceType::Ios)
         .await
         .unwrap();
 
@@ -389,7 +398,7 @@ async fn register_ios_uses_apns_arn() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "token", &DeviceType::Ios)
+        .register_device(test_user_id(), "token", &DeviceType::Ios)
         .await
         .unwrap();
 }
@@ -401,7 +410,7 @@ async fn register_android_uses_fcm_arn() {
     let service = make_service(db, sns);
 
     service
-        .register_device("user-1", "token", &DeviceType::Android)
+        .register_device(test_user_id(), "token", &DeviceType::Android)
         .await
         .unwrap();
 }
