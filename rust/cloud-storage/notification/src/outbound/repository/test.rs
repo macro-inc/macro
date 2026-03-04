@@ -302,6 +302,63 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     assert_eq!(row.notification_metadata.message, "hello");
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications_with_invalid"))
+)]
+async fn test_get_user_notifications_skips_invalid_entity_type(pool: Pool<Postgres>) {
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
+        .await
+        .unwrap();
+
+    // 3 notifications inserted, but only the valid one (with entity_type "document"
+    // and correct metadata) should survive. The one with "bogus_entity" and the one
+    // with non-matching metadata are silently filtered out.
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0].notification_id,
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()
+    );
+    assert_eq!(result[0].entity.entity_type, EntityType::Document);
+    assert_eq!(result[0].notification_metadata.message, "hello");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications_with_invalid"))
+)]
+async fn test_get_user_notifications_by_event_item_ids_skips_invalid(pool: Pool<Postgres>) {
+    let valid_item = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+    let invalid_entity_item =
+        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000002").unwrap();
+    let invalid_metadata_item =
+        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000003").unwrap();
+
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications_by_event_item_ids(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            &[valid_item, invalid_entity_item, invalid_metadata_item],
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
+        .await
+        .unwrap();
+
+    // All three are requested, but only the valid one survives filtering.
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0].notification_id,
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()
+    );
+    assert_eq!(result[0].entity.entity_type, EntityType::Document);
+    assert_eq!(result[0].notification_metadata.message, "hello");
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
     let result: Vec<UserNotificationRow<TestNotification>> = pool
