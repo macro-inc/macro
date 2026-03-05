@@ -70,7 +70,6 @@ function SoupChatInputInner() {
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)[0];
-    console.log('DERIVED CHAT NAME', firstLine);
     return firstLine ? firstLine.slice(0, MAX_LENGTH) : undefined;
   }
 
