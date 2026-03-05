@@ -6,7 +6,7 @@ use super::contact::ContactInfo;
 /// A lightweight label representation for parsed messages.
 #[derive(Debug, Clone)]
 pub struct ParsedLabel {
-    /// The provider label ID (e.g., "INBOX", "SENT").
+    /// The provider label ID (e.g., "INBOX", "DRAFT").
     pub provider_id: String,
     /// The human-readable label name.
     pub name: String,
