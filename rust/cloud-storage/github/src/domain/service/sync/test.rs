@@ -172,14 +172,26 @@ struct PrCommentCall {
     body: String,
 }
 
+/// Stub sync client that optionally returns pre-seeded comments from
+/// `seed_comments`, then also includes any comments created via
+/// `create_pr_comment`.
 struct StubSyncClient {
     pr_comments: Mutex<Vec<PrCommentCall>>,
+    seed_comments: Mutex<Vec<String>>,
 }
 
 impl StubSyncClient {
     fn new() -> Self {
         Self {
             pr_comments: Mutex::new(Vec::new()),
+            seed_comments: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_seed_comments(comments: Vec<String>) -> Self {
+        Self {
+            pr_comments: Mutex::new(Vec::new()),
+            seed_comments: Mutex::new(comments),
         }
     }
 
@@ -224,13 +236,15 @@ impl GithubSyncClient for StubSyncClient {
         _repo: &str,
         _pull_number: u64,
     ) -> Result<Vec<String>, GithubError> {
-        Ok(self
-            .pr_comments
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|c| c.body.clone())
-            .collect())
+        let mut result: Vec<String> = self.seed_comments.lock().unwrap().clone();
+        result.extend(
+            self.pr_comments
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|c| c.body.clone()),
+        );
+        Ok(result)
     }
 }
 
@@ -252,6 +266,26 @@ fn make_sync_service_with_doc_service() -> (
         },
         doc_service.clone(),
         StubSyncClient::new(),
+    );
+    (service, doc_service)
+}
+
+fn make_sync_service_with_seed_comments(
+    seed_comments: Vec<String>,
+) -> (
+    GithubSyncServiceImpl<StubDocumentService, StubSyncClient>,
+    Arc<StubDocumentService>,
+) {
+    let doc_service = Arc::new(StubDocumentService::new());
+    let service = GithubSyncServiceImpl::new(
+        GithubSyncConfig {
+            webhook_secret: "test-webhook-secret".to_string(),
+            github_sync_app_url: "test".to_string(),
+            sync_app_pem: TEST_PEM.to_string(),
+            sync_app_client_id: "test-sync-app-client-id".to_string(),
+        },
+        doc_service.clone(),
+        StubSyncClient::with_seed_comments(seed_comments),
     );
     (service, doc_service)
 }
@@ -805,4 +839,193 @@ async fn pr_merged_updates_status_even_when_already_commented() {
     assert_eq!(status_calls.len(), 2);
     assert_eq!(status_calls[1].entity_id, KNOWN_TASK_UUID);
     assert_eq!(status_calls[1].status, "Completed");
+}
+
+// ---------------------------------------------------------------------------
+// New behavioral tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn pr_close_does_not_post_comment() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    // No comment posted on close
+    assert!(
+        service.client.pr_comments().is_empty(),
+        "PR close should not post a new bot comment"
+    );
+
+    // But status should still be updated
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+}
+
+#[tokio::test]
+async fn pr_open_does_not_search_existing_comments() {
+    // On open, only PR title/body/branch are searched — not existing comments.
+    // The seed comment has the known task ID, but the PR text does not, so
+    // nothing should happen.
+    let (service, doc_service) =
+        make_sync_service_with_seed_comments(vec![format!("See MACRO-2BuyvtY3aeEvHx4uG8iD51")]);
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "just a normal PR",
+                "body": null,
+                "head": { "ref": "feature/some-branch" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    // No comment posted — open doesn't search existing comments for task IDs
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
+async fn pr_edit_picks_up_task_from_existing_comment() {
+    // On edit, existing PR comments ARE searched for additional task IDs.
+    let task_link = format!("[My Task](https://macro.com/app/task/{KNOWN_TASK_UUID})");
+    let (service, doc_service) =
+        make_sync_service_with_seed_comments(vec![format!("See MACRO-2BuyvtY3aeEvHx4uG8iD51")]);
+
+    // PR title has a different (non-existent) task, but the comment has the real one
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "edited",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-abc123",
+                "body": null,
+                "head": { "ref": "feature/some-branch" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    // Should pick up the task from the existing comment and post a link
+    let comments = service.client.pr_comments();
+    assert_eq!(comments.len(), 1);
+    assert_eq!(comments[0].body, task_link);
+
+    // Status should be updated
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "In Review");
+}
+
+#[tokio::test]
+async fn pr_close_picks_up_task_from_comments() {
+    // Task ID only in a comment, not title/body/branch
+    let (service, doc_service) =
+        make_sync_service_with_seed_comments(vec!["See MACRO-2BuyvtY3aeEvHx4uG8iD51".to_string()]);
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "some feature",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    // No comment posted on close
+    assert!(service.client.pr_comments().is_empty());
+
+    // Status should be updated from comment-discovered task
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[0].status, "Completed");
+}
+
+#[tokio::test]
+async fn comment_deduplicates_against_prior_comments() {
+    // A prior comment already mentions the task ID. A new comment mentioning
+    // the same task ID should not trigger a new bot comment.
+    let (service, _doc_service) =
+        make_sync_service_with_seed_comments(vec!["See MACRO-2BuyvtY3aeEvHx4uG8iD51".to_string()]);
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "number": 99,
+                "title": "some issue",
+                "body": null,
+                "state": "open",
+                "head": { "ref": "main" }
+            },
+            "comment": {
+                "body": "Also see MACRO-2BuyvtY3aeEvHx4uG8iD51"
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    // Task ID was already in a prior comment, so it should be filtered out
+    // as a duplicate — no new bot comment
+    assert!(
+        service.client.pr_comments().is_empty(),
+        "comment should not re-trigger for task already mentioned in prior comment"
+    );
 }

@@ -1,8 +1,5 @@
 //! Github service implementation.
 
-#[cfg(test)]
-mod test;
-
 #[cfg(feature = "sync")]
 mod sync;
 
