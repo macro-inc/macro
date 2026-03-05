@@ -73,6 +73,7 @@ struct ResolvedTasks {
 impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
     /// Extract PR metadata and generate an installation access token.
     /// Returns `None` if any required field is missing or token generation fails.
+    #[tracing::instrument(skip(self, event))]
     async fn acquire_pr_meta(&self, event: &ValidatedGithubWebhookEvent) -> Option<PrMeta> {
         let (installation_id, owner, repo, pull_number) = match (
             event.installation_id(),
@@ -87,16 +88,27 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
             }
         };
 
+        tracing::trace!(
+            installation_id,
+            owner,
+            repo,
+            pull_number,
+            "extracted PR metadata, generating installation token"
+        );
+
         match self
             .generate_installation_access_token(installation_id)
             .await
         {
-            Ok(token) => Some(PrMeta {
-                token,
-                owner: owner.to_string(),
-                repo: repo.to_string(),
-                pull_number,
-            }),
+            Ok(token) => {
+                tracing::trace!("installation access token acquired");
+                Some(PrMeta {
+                    token,
+                    owner: owner.to_string(),
+                    repo: repo.to_string(),
+                    pull_number,
+                })
+            }
             Err(e) => {
                 tracing::error!(
                     error=?e,
@@ -109,11 +121,18 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
 
     /// Resolve task IDs to documents, filtering for actual tasks and checking
     /// comment dedup against `existing_comments`.
+    #[tracing::instrument(skip(self, task_ids, existing_comments))]
     async fn resolve_tasks(
         &self,
         task_ids: &[MacroTaskId],
         existing_comments: &[String],
     ) -> ResolvedTasks {
+        tracing::trace!(
+            task_id_count = task_ids.len(),
+            existing_comment_count = existing_comments.len(),
+            "resolving task IDs to documents"
+        );
+
         let mut doc_ids = Vec::new();
         let mut new_task_links = Vec::new();
 
@@ -130,11 +149,7 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
                 }
             };
 
-            tracing::info!(
-                task_id=%task_id,
-                uuid=%uuid,
-                "detected potential macro task ID in github event",
-            );
+            tracing::trace!(task_id=%task_id, uuid=%uuid, "looking up document for task ID");
 
             // SAFETY: This is ok as we are only using the preview information of the
             // document
@@ -150,9 +165,9 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
                     if let Some(sub_type) = document.document_metadata.sub_type
                         && sub_type.to_string() == "task"
                     {
-                        tracing::info!(task_id=%uuid, "task found");
                         let doc_name = &document.document_metadata.document_name;
                         let doc_id = &document.document_metadata.document_id;
+                        tracing::trace!(task_id=%uuid, doc_id, doc_name, "resolved task document");
 
                         doc_ids.push(doc_id.clone());
 
@@ -162,21 +177,33 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
                         };
 
                         if already_commented {
-                            tracing::debug!(
+                            tracing::trace!(
                                 task_id=%uuid,
+                                doc_id,
                                 "PR already has a comment linking to this task, skipping comment"
                             );
                         } else {
+                            tracing::trace!(task_id=%uuid, doc_id, "adding new task link for comment");
                             new_task_links.push(create_macro_task_comment_link(doc_name, doc_id));
                         }
+                    } else {
+                        tracing::trace!(task_id=%uuid, "document found but is not a task, skipping");
                     }
                 }
                 Err(e) => match e {
-                    DocumentError::NotFound(_) => (),
+                    DocumentError::NotFound(_) => {
+                        tracing::trace!(task_id=%uuid, "no document found for task ID");
+                    }
                     _ => tracing::error!(error=?e, "unable to get document"),
                 },
             }
         }
+
+        tracing::trace!(
+            resolved_count = doc_ids.len(),
+            new_link_count = new_task_links.len(),
+            "task resolution complete"
+        );
 
         ResolvedTasks {
             doc_ids,
@@ -185,10 +212,21 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
     }
 
     /// Post a single bot comment on the PR with all new task links.
+    #[tracing::instrument(skip(self, pr_meta, task_links))]
     async fn post_task_comment(&self, pr_meta: &PrMeta, task_links: &[String]) {
         if task_links.is_empty() {
+            tracing::trace!("no new task links to post");
             return;
         }
+
+        tracing::trace!(
+            owner = %pr_meta.owner,
+            repo = %pr_meta.repo,
+            pull_number = pr_meta.pull_number,
+            link_count = task_links.len(),
+            "posting task comment on PR"
+        );
+
         let comment_body = task_links.join("\n");
         self.client
             .create_pr_comment(
@@ -206,8 +244,13 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
     }
 
     /// Update task statuses for all resolved task doc IDs.
+    #[tracing::instrument(skip(self, doc_ids))]
     async fn update_task_statuses(&self, doc_ids: &[String], status: &str) {
+        tracing::trace!(doc_count = doc_ids.len(), status, "updating task statuses");
+
         for doc_id in doc_ids {
+            tracing::trace!(doc_id, status, "updating task status");
+
             let entity_access = entity_access::domain::models::EntityAccessReceipt::<
                 EditAccessLevel,
             >::dangerously_assert_internal_user(
@@ -231,8 +274,17 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
     }
 
     /// Fetch existing PR comment bodies, returning empty vec on failure.
+    #[tracing::instrument(skip(self, pr_meta))]
     async fn fetch_pr_comments(&self, pr_meta: &PrMeta) -> Vec<String> {
-        self.client
+        tracing::trace!(
+            owner = %pr_meta.owner,
+            repo = %pr_meta.repo,
+            pull_number = pr_meta.pull_number,
+            "fetching existing PR comments"
+        );
+
+        let comments = self
+            .client
             .list_pr_comments(
                 &pr_meta.token.token,
                 &pr_meta.owner,
@@ -243,7 +295,10 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
             .inspect_err(|e| {
                 tracing::error!(error=?e, "failed to list PR comments");
             })
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        tracing::trace!(comment_count = comments.len(), "fetched PR comments");
+        comments
     }
 }
 
@@ -280,19 +335,20 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncService for GithubSyncSe
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> Result<(), GithubError> {
         let event_type = webhook_event.parsed_event_type();
-        tracing::info!(event_type=?event_type, "processing github webhook event");
+        let action = webhook_event.action();
+        tracing::info!(event_type=?event_type, action, "processing github webhook event");
 
         match event_type {
             GithubWebhookEventType::Unknown(ref name) => {
                 tracing::debug!(event_type=%name, "skipping unknown event type");
                 Ok(())
             }
-            GithubWebhookEventType::PullRequest => match webhook_event.action() {
+            GithubWebhookEventType::PullRequest => match action {
                 Some("opened" | "reopened") => self.handle_pr_open(webhook_event).await,
                 Some("edited") => self.handle_pr_edit(webhook_event).await,
                 Some("closed") => self.handle_pr_close(webhook_event).await,
                 _ => {
-                    tracing::debug!("skipping unhandled pull_request action");
+                    tracing::debug!(action, "skipping unhandled pull_request action");
                     Ok(())
                 }
             },
