@@ -223,8 +223,8 @@ export class AuthenticationService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: 512,
-              memory: 718, //1024 - (256 + 50)
+              cpu: stack === 'prod' ? 1024 : 512,
+              memory: stack === 'prod' ? 1742 : 718, // 2048 - (256+50) : 1024 - (256 + 50)
               environment: [
                 { name: 'BASE_URL', value: this.domain },
                 ...(containerEnvVars ?? []),
