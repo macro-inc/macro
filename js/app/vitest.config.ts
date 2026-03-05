@@ -79,6 +79,12 @@ export default defineConfig({
           name: 'notifications',
         },
       },
+      {
+        test: {
+          include: ['packages/block-email/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-email',
+        },
+      },
     ],
   },
 });

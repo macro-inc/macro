@@ -68,6 +68,7 @@ import {
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
+import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
@@ -724,11 +725,15 @@ export function EmailCompose(props: EmailComposeProps) {
     }
 
     const draft = form.draft;
-    if (!draft || !draft.body_html_sanitized) return;
+    if (!draft) return;
 
-    const decodedHtml = decodeBase64Utf8(draft.body_html_sanitized);
+    if (draft.body_html_sanitized) {
+      return decodeBase64Utf8(draft.body_html_sanitized);
+    }
 
-    return decodedHtml;
+    if (draft.body_text) {
+      return plainTextToHtml(draft.body_text);
+    }
   };
 
   const getRecipientOptions = () => {
