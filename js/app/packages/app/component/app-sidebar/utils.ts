@@ -13,9 +13,8 @@ export function useSenderName(senderId: string | null | undefined) {
     if (senderId?.startsWith('macro|')) {
       const email = senderId.slice(6);
       const namePart = email.split('@')[0];
-      // Convert "john.doe" to "John"
-      const first = namePart.split('.')[0];
-      return first.charAt(0).toUpperCase() + first.slice(1);
+
+      return namePart;
     }
     return null;
   };
