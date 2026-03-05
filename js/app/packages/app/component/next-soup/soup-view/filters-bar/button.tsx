@@ -26,16 +26,16 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80',
   // Medium emphasis - secondary actions (cancel, back)
   secondary:
-    'bg-transparent text-ink border border-edge not-disabled:hover:bg-ink/8 not-disabled:active:bg-ink/12',
+    'bg-transparent text-ink border border-edge not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12',
   // Low emphasis - minimal actions (less important options)
   tertiary:
-    'bg-ink/8 text-ink-muted not-disabled:hover:bg-ink/12 not-disabled:hover:text-ink not-disabled:active:bg-ink/15',
+    'bg-ink/10 text-ink-muted not-disabled:hover:bg-ink/20 not-disabled:hover:text-ink not-disabled:active:bg-ink/15',
   // Dangerous actions (delete, remove, disconnect)
   destructive:
     'bg-transparent text-failure border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20',
   // Minimal - no background, appears on hover
   ghost:
-    'bg-transparent text-ink-muted not-disabled:hover:bg-ink/8 not-disabled:hover:text-ink not-disabled:active:bg-ink/12',
+    'bg-transparent text-ink-muted not-disabled:hover:bg-ink/10 not-disabled:hover:text-ink not-disabled:active:bg-ink/12',
   // Text link style
   link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80',
 };

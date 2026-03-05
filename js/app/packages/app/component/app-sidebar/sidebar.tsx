@@ -322,7 +322,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       size="sm"
       class={cn(
         'w-full flex items-center justify-start text-sm gap-2',
-        isActive() && 'bg-ink/10 text-ink',
+        isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'justify-center'
       )}
       href={`/component${props.href}`}
