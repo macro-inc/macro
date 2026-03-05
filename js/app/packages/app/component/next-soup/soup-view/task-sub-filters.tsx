@@ -14,7 +14,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
