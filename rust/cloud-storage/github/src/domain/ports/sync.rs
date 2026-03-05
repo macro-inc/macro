@@ -3,8 +3,39 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubError, GithubInstallationAccessToken, ValidatedGithubWebhookEvent,
+    GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, ValidatedGithubWebhookEvent,
 };
+
+/// Repository for accessing github sync data from the database.
+///
+/// All methods perform database operations — SQL queries are written
+/// directly in the outbound adapter implementation.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait GithubSyncRepo: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Provides a list of all task ids for a given github key
+    fn get_task_ids(
+        &self,
+        github_key: GithubKey,
+    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+
+    /// Upserts task ids for a given github key
+    fn upsert_task_ids(
+        &self,
+        github_key: GithubKey,
+        task_ids: &[MacroTaskId],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Filters out all pre-existing tasks for the github key
+    /// Returns only new task ids
+    fn filter_duplicate_tasks(
+        &self,
+        github_key: GithubKey,
+        task_ids: &[MacroTaskId],
+    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+}
 
 /// Client interface for making GitHub sync API calls.
 ///

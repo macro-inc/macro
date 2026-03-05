@@ -2,14 +2,14 @@
 
 use crate::domain::{
     models::{GithubError, MacroTaskId, ValidatedGithubWebhookEvent},
-    ports::GithubSyncClient,
+    ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
 use std::collections::HashSet;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
     /// Handle `pull_request` events with action `opened` or `reopened`.
     ///
     /// Only looks at PR title/body/branch for task IDs — does not fetch

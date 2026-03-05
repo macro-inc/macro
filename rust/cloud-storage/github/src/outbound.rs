@@ -8,3 +8,5 @@ pub mod github_oauth_client;
 pub mod github_sync_client;
 #[cfg(feature = "link")]
 pub mod pg_github_repo;
+#[cfg(feature = "sync")]
+pub mod pg_github_sync_repo;

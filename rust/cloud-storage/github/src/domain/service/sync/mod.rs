@@ -11,7 +11,7 @@ use crate::domain::{
         GithubError, GithubInstallationAccessToken, GithubWebhookEventType, MacroTaskId,
         ValidatedGithubWebhookEvent,
     },
-    ports::{GithubSyncClient, GithubSyncService},
+    ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
 use documents::domain::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
@@ -36,19 +36,26 @@ pub struct GithubSyncConfig {
 }
 
 /// The concrete github sync service implementation.
-pub struct GithubSyncServiceImpl<D: DocumentService, C: GithubSyncClient> {
+pub struct GithubSyncServiceImpl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> {
     config: super::GithubSyncConfig,
     #[allow(dead_code)]
     document_service: Arc<D>,
+    repo: R,
     pub(crate) client: C,
 }
 
-impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
     /// Create a new github sync service.
-    pub fn new(config: super::GithubSyncConfig, document_service: Arc<D>, client: C) -> Self {
+    pub fn new(
+        config: super::GithubSyncConfig,
+        document_service: Arc<D>,
+        repo: R,
+        client: C,
+    ) -> Self {
         Self {
             config,
             document_service,
+            repo,
             client,
         }
     }
@@ -70,7 +77,7 @@ struct ResolvedTasks {
     new_task_links: Vec<String>,
 }
 
-impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
     /// Extract PR metadata and generate an installation access token.
     /// Returns `None` if any required field is missing or token generation fails.
     #[tracing::instrument(skip(self, event))]
@@ -302,7 +309,9 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
     }
 }
 
-impl<D: DocumentService, C: GithubSyncClient> GithubSyncService for GithubSyncServiceImpl<D, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncService
+    for GithubSyncServiceImpl<D, R, C>
+{
     #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(
         &self,

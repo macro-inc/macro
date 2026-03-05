@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use crate::domain::{
-    models::{GithubError, GithubInstallationAccessToken, ValidatedGithubWebhookEvent},
-    ports::{GithubSyncClient, GithubSyncService},
+    models::{
+        GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId,
+        ValidatedGithubWebhookEvent,
+    },
+    ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
 use document_sub_type::DocumentSubType;
 use documents::domain::{
@@ -163,6 +166,32 @@ impl DocumentService for StubDocumentService {
     }
 }
 
+struct StubSyncRepo;
+
+impl GithubSyncRepo for StubSyncRepo {
+    type Err = anyhow::Error;
+
+    async fn get_task_ids(&self, _github_key: GithubKey) -> Result<Vec<MacroTaskId>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn upsert_task_ids(
+        &self,
+        _github_key: GithubKey,
+        _task_ids: &[MacroTaskId],
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn filter_duplicate_tasks(
+        &self,
+        _github_key: GithubKey,
+        task_ids: &[MacroTaskId],
+    ) -> Result<Vec<MacroTaskId>, Self::Err> {
+        Ok(task_ids.to_vec())
+    }
+}
+
 /// Recorded PR comment call.
 #[derive(Debug, Clone)]
 struct PrCommentCall {
@@ -248,12 +277,12 @@ impl GithubSyncClient for StubSyncClient {
     }
 }
 
-fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncClient> {
+fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient> {
     make_sync_service_with_doc_service().0
 }
 
 fn make_sync_service_with_doc_service() -> (
-    GithubSyncServiceImpl<StubDocumentService, StubSyncClient>,
+    GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient>,
     Arc<StubDocumentService>,
 ) {
     let doc_service = Arc::new(StubDocumentService::new());
@@ -265,6 +294,7 @@ fn make_sync_service_with_doc_service() -> (
             sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
         doc_service.clone(),
+        StubSyncRepo,
         StubSyncClient::new(),
     );
     (service, doc_service)
@@ -273,7 +303,7 @@ fn make_sync_service_with_doc_service() -> (
 fn make_sync_service_with_seed_comments(
     seed_comments: Vec<String>,
 ) -> (
-    GithubSyncServiceImpl<StubDocumentService, StubSyncClient>,
+    GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient>,
     Arc<StubDocumentService>,
 ) {
     let doc_service = Arc::new(StubDocumentService::new());
@@ -285,6 +315,7 @@ fn make_sync_service_with_seed_comments(
             sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
         doc_service.clone(),
+        StubSyncRepo,
         StubSyncClient::with_seed_comments(seed_comments),
     );
     (service, doc_service)
