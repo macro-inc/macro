@@ -222,7 +222,13 @@ export async function refetchSoupEntity(
     body: filter,
   });
 
-  if (isErr(result)) return;
+  if (isErr(result)) {
+    console.error(
+      '[normalized-cache] operations: failed to fetch individual soup item',
+      result
+    );
+    return;
+  }
 
   const [, page] = result;
   if (!page.items.length) return;

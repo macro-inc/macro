@@ -61,19 +61,6 @@ function getFileNameFromPath(path: string): string {
 
 const MAX_OUTPUT_LINES = 5;
 
-function getCommandLabel(command: string): string {
-  switch (command) {
-    case 'view':
-      return 'Viewing file';
-    case 'create':
-      return 'Creating file';
-    case 'str_replace':
-      return 'Editing file';
-    default:
-      return 'Editing file';
-  }
-}
-
 function CodeFence(props: { content: string; maxLines: number }) {
   const [expanded, setExpanded] = createSignal(false);
 
@@ -317,23 +304,13 @@ const handler = createToolRenderer({
     }
   },
   renderCall: (ctx) => (
-    <BaseTool
-      icon={File}
-      text={getCommandLabel(ctx.tool.data.command)}
-      renderContext={ctx.renderContext}
-      type="call"
-    >
+    <BaseTool icon={File} renderContext={ctx.renderContext} type="call">
       <code class="text-ink-muted font-mono text-xs">{ctx.tool.data.path}</code>
     </BaseTool>
   ),
   renderResponse: (ctx) => {
     return (
-      <BaseTool
-        icon={File}
-        text="File operation"
-        renderContext={ctx.renderContext}
-        type="response"
-      >
+      <BaseTool renderContext={ctx.renderContext} type="response">
         <TextEditorResult
           content={ctx.tool.data.content}
           toolId={ctx.tool.id}

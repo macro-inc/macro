@@ -2260,6 +2260,67 @@
         }
       }
     },
+    "/documents/{document_id}/short_id": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/:document_id/short_id`.",
+        "description": "Returns the short UUID for a document.",
+        "operationId": "get_document_short_id",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/simple_save": {
       "put": {
         "tags": ["document"],
@@ -2494,6 +2555,18 @@
           },
           "404": {
             "description": "Entity not found"
+          }
+        }
+      }
+    },
+    "/github/install-sync": {
+      "get": {
+        "tags": ["github::inbound::github_sync_router"],
+        "summary": "Redirects the user to the github sync app installation page.",
+        "operationId": "install_sync",
+        "responses": {
+          "307": {
+            "description": "Redirects to the github sync app installation page"
           }
         }
       }
@@ -9438,6 +9511,17 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "ShortIdResponse": {
+        "type": "object",
+        "description": "Short ID response",
+        "required": ["shortId"],
+        "properties": {
+          "shortId": {
+            "type": "string",
+            "description": "The short id of the document"
           }
         }
       },

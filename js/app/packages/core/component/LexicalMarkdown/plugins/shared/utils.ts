@@ -1,11 +1,13 @@
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,
+  type CommandListener,
   type CommandListenerPriority,
   createCommand,
   DELETE_CHARACTER_COMMAND,
   DELETE_LINE_COMMAND,
   DELETE_WORD_COMMAND,
+  type LexicalCommand,
   type LexicalEditor,
   type UpdateListener,
 } from 'lexical';
@@ -132,6 +134,40 @@ export function autoRegister(...fns: Array<() => void>) {
     for (const fn of fns) fn();
   };
   onCleanup(cleanup);
+}
+
+/**
+ * Reactively register a Lexical command for the lifetime of the calling
+ * component. The `handler` accessor is tracked inside a `createEffect`:
+ *
+ * - When it returns `undefined` no command is registered.
+ * - When it returns a function the command is registered.
+ * - If the accessor is reactive and its value changes, the previous
+ *   registration is cleaned up and a new one is created automatically.
+ * - On component unmount the registration is always cleaned up.
+ *
+ * @example
+ * // Register only when an optional prop is provided:
+ * registerCommandEffect(
+ *   editor,
+ *   KEY_TAB_COMMAND,
+ *   () => props.onTab ? (e) => props.onTab!(e) : undefined,
+ *   COMMAND_PRIORITY_CRITICAL,
+ * );
+ */
+export function registerCommandEffect<T>(
+  editor: LexicalEditor,
+  command: LexicalCommand<T>,
+  handler: Accessor<CommandListener<T> | undefined>,
+  priority: CommandListenerPriority
+): void {
+  let cleanup: () => void = () => {};
+  createEffect(() => {
+    cleanup();
+    const fn = handler();
+    cleanup = fn ? editor.registerCommand(command, fn, priority) : () => {};
+  });
+  onCleanup(() => cleanup());
 }
 
 const LAYOUT_SHFIT_COMMAND = createCommand<void>('LAYOUT_SHIFT_COMMAND');

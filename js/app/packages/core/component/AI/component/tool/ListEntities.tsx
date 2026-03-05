@@ -94,8 +94,15 @@ const ListEntitiesToolResponse = (props: {
   };
 
   return (
-    <Show when={results().length > 0}>
-      <div class="border border-edge rounded w-full">
+    <div class="border border-edge rounded w-full">
+      <Show
+        when={props.items.length > 0}
+        fallback={
+          <div class="flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors">
+            No Results
+          </div>
+        }
+      >
         <button
           class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors ${
             isExpanded() ? 'rounded-t border-b border-edge' : 'rounded'
@@ -118,66 +125,67 @@ const ListEntitiesToolResponse = (props: {
             </Show>
           </div>
         </button>
+      </Show>
 
-        <Show when={isExpanded()}>
-          <div class="max-h-[480px] overflow-hidden">
-            <VList
-              data={results()}
-              bufferSize={5 * 32}
-              itemSize={32}
-              style={{
-                height: `${Math.min(results().length * 32, 480)}px`,
-                contain: 'content',
-              }}
-            >
-              {(item) => {
-                const clickHandler = getClickHandler(item);
+      <Show when={isExpanded()}>
+        <div class="max-h-[480px] overflow-hidden">
+          <VList
+            data={results()}
+            bufferSize={5 * 32}
+            itemSize={32}
+            style={{
+              height: `${Math.min(results().length * 32, 480)}px`,
+              contain: 'content',
+            }}
+          >
+            {(item) => {
+              const clickHandler = getClickHandler(item);
 
-                return (
-                  <div
-                    class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
-                    onClick={clickHandler}
-                  >
-                    <div class="flex items-center flex-1 min-w-0 gap-2">
-                      <EntityIcon
-                        size="sm"
-                        targetType={getIconType(item)}
-                        shared={false}
-                      />
-                      <div class="flex-1 min-w-0">
-                        <TruncatedText size="sm">
-                          <span>{getItemTitle(item)}</span>
-                        </TruncatedText>
-                      </div>
+              return (
+                <div
+                  class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
+                  onClick={clickHandler}
+                >
+                  <div class="flex items-center flex-1 min-w-0 gap-2">
+                    <EntityIcon
+                      size="sm"
+                      targetType={getIconType(item)}
+                      shared={false}
+                    />
+                    <div class="flex-1 min-w-0">
+                      <TruncatedText size="sm">
+                        <span>{getItemTitle(item)}</span>
+                      </TruncatedText>
                     </div>
                   </div>
-                );
-              }}
-            </VList>
-          </div>
-        </Show>
-      </div>
-    </Show>
+                </div>
+              );
+            }}
+          </VList>
+        </div>
+      </Show>
+    </div>
   );
 };
 
 const handler = createToolRenderer({
   name: 'ListEntities',
   renderCall: (ctx) => (
-    <BaseTool
-      icon={List}
-      text="Browsing workspace..."
-      renderContext={ctx.renderContext}
-      type="call"
-    />
+    <BaseTool icon={List} renderContext={ctx.renderContext} type="call">
+      Filter for{' '}
+      <span class="text-accent">
+        {ctx.tool.data.includeTypes
+          ? ctx.tool.data.includeTypes.join(', ')
+          : 'All'}
+      </span>{' '}
+      ordered by{' '}
+      <span class="text-accent">
+        {ctx.tool.data.sortBy.split('_').join(' ')}
+      </span>
+    </BaseTool>
   ),
   renderResponse: (ctx) => (
-    <BaseTool
-      icon={List}
-      text="Found items"
-      renderContext={ctx.renderContext}
-      type="response"
-    >
+    <BaseTool renderContext={ctx.renderContext} type="response">
       <ListEntitiesToolResponse
         items={ctx.tool.data.items}
         summary={ctx.tool.data.summary}

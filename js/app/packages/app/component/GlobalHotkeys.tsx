@@ -19,10 +19,19 @@ import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
+import {
+  openFilePicker,
+  openFolderPicker,
+  handleFolderSelect,
+} from '@core/util/upload';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import Upload from '@icon/regular/upload.svg';
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
   const { toggleSettings } = useSettingsState();
+
+  const handleFileUpload = useHandleFileUpload();
 
   const handleCommandMenu = () => {
     CommandState.toggle();
@@ -230,6 +239,32 @@ export default function GlobalShortcuts() {
       return true;
     },
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Upload files',
+    icon: () => <Upload class="size-4" />,
+    keyDownHandler: () => {
+      openFilePicker({ multiple: true }, async (files) => {
+        await handleFileUpload(files, false);
+      });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Upload folders',
+    icon: () => <Upload class="size-4" />,
+    keyDownHandler: () => {
+      openFolderPicker({ multiple: true }, async (files) => {
+        await handleFolderSelect(files, async (entries) => {
+          await handleFileUpload(entries, false);
+        });
+      });
+      return true;
+    },
   });
 
   return null;

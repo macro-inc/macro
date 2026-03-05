@@ -37,7 +37,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     useSetPropertyStatusCompleteMutation();
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'email' || entity.type === 'channel') {
+    if (
+      entity.type === 'email' ||
+      entity.type === 'channel' ||
+      entity.type === 'chat'
+    ) {
       return true;
     }
 
@@ -70,7 +74,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     for (const entity of entities) {
       if (entity.type === 'email') {
         archiveEmail(entity.id, {
-          isDone: entity.done,
+          archive: true,
           optimisticallyExclude: true,
         });
       }
@@ -115,7 +119,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     soup.selection.clear();
     const shouldNavigate =
       soup.filters.isActive('signal') || soup.filters.isActive('noise');
-    if (nextEntity && shouldNavigate) {
+
+    // marking email as done removes it in any view, so we should update selection.
+    const willBeRemoved = entities.some((e) => e.type === 'email');
+
+    if (nextEntity && (shouldNavigate || willBeRemoved)) {
       soup.focus.set(nextEntity.id);
       onNavigate?.(nextEntity);
     }

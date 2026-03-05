@@ -56,8 +56,13 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    const selected = soup.selection.selected();
-    if (selected.length > 0) return selected;
+    if (
+      splitHandle?.content().type === 'component' &&
+      splitHandle?.content().id === 'unified-list'
+    ) {
+      const selected = soup.selection.selected();
+      if (selected.length > 0) return selected;
+    }
 
     const focused = soup.focus.item();
     return focused ? [focused] : [];
@@ -72,7 +77,7 @@ export const useEntityActionHotkeys = (
 
   const group = createHotkeyGroup();
 
-  // Mark Done - 'e'
+  // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
@@ -93,7 +98,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+  });
 
   // Delete - 'delete', 'backspace'
   registerHotkey({

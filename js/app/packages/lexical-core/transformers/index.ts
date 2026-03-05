@@ -1,7 +1,6 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
-import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
@@ -24,6 +23,7 @@ import {
   I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
+import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
 import {
   BR_TAG_TO_LINE_BREAK,
@@ -46,6 +46,7 @@ export { isConversionOnlyTransformer };
  * standard markdown syntax.
  */
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
+  I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -64,7 +65,6 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_EQUATION_NODE,
   I_THEME_MENTION,
   I_WATERMARK,
-  I_SNAPSHOT_NODE,
   ...CUSTOM_TRANSFORMERS,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
@@ -101,6 +101,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
  * Complete set of transformers supporting both internal and external markdown operations.
  */
 export const ALL_TRANSFORMERS: Transformer[] = [
+  I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -111,6 +112,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,
+  E_SNAPSHOT_NODE,
   I_USER_MENTION,
   E_USER_MENTION,
   I_GROUP_MENTION,
@@ -128,8 +130,6 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_THEME_MENTION,
   I_WATERMARK,
   E_WATERMARK,
-  I_SNAPSHOT_NODE,
-  E_SNAPSHOT_NODE,
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,
   E_BLOCK_EQUATION_NODE,

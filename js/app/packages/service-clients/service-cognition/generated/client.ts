@@ -19,10 +19,9 @@ import type {
   GetChatsForAttachmentResponse,
   GetModelsResponse,
   HttpSendChatMessageRequest,
+  PatchChatRequestV2,
   SendChatMessageResponse,
   StringIDResponse,
-  StructedOutputCompletionRequest,
-  StructedOutputCompletionResponse,
   SuccessResponse,
 } from './schemas';
 
@@ -391,6 +390,67 @@ export const deleteChatHandler = async (
   } as deleteChatHandlerResponse;
 };
 
+export type patchChatHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchChatHandlerResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type patchChatHandlerResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type patchChatHandlerResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type patchChatHandlerResponseSuccess = patchChatHandlerResponse200 & {
+  headers: Headers;
+};
+export type patchChatHandlerResponseError = (
+  | patchChatHandlerResponse400
+  | patchChatHandlerResponse401
+  | patchChatHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchChatHandlerResponse =
+  | patchChatHandlerResponseSuccess
+  | patchChatHandlerResponseError;
+
+export const getPatchChatHandlerUrl = (chatId: string) => {
+  return `/chats/${chatId}`;
+};
+
+export const patchChatHandler = async (
+  chatId: string,
+  patchChatRequestV2: PatchChatRequestV2,
+  options?: RequestInit
+): Promise<patchChatHandlerResponse> => {
+  const res = await fetch(getPatchChatHandlerUrl(chatId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchChatRequestV2),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchChatHandlerResponse;
+};
+
 export type copyChatHandlerResponse201 = {
   data: StringIDResponse;
   status: 201;
@@ -628,60 +688,6 @@ export const getCitationHandler = async (
     status: res.status,
     headers: res.headers,
   } as getCitationHandlerResponse;
-};
-
-export type handlerResponse200 = {
-  data: StructedOutputCompletionResponse;
-  status: 200;
-};
-
-export type handlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type handlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type handlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type handlerResponseSuccess = handlerResponse200 & {
-  headers: Headers;
-};
-export type handlerResponseError = (
-  | handlerResponse401
-  | handlerResponse404
-  | handlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type handlerResponse = handlerResponseSuccess | handlerResponseError;
-
-export const getHandlerUrl = () => {
-  return `/completions/structured_output`;
-};
-
-export const handler = async (
-  structedOutputCompletionRequest: StructedOutputCompletionRequest,
-  options?: RequestInit
-): Promise<handlerResponse> => {
-  const res = await fetch(getHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(structedOutputCompletionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as handlerResponse;
 };
 
 /**

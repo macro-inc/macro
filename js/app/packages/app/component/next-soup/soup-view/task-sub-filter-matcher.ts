@@ -4,6 +4,8 @@ import {
 } from '@entity/utils/task-properties';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 
+export const NO_ASSIGNEE = 'NO_ASSIGNEE';
+
 type TaskSubFilters = {
   statusFilter?: string;
   assigneeFilter?: string;
@@ -29,11 +31,13 @@ export const matchesTaskSubFilters = (
     return false;
   }
 
-  if (
-    assigneeFilter &&
-    !getTaskAssigneeIds(taskEntity).includes(assigneeFilter)
-  ) {
-    return false;
+  if (assigneeFilter) {
+    const assigneeIds = getTaskAssigneeIds(taskEntity);
+    if (assigneeFilter === NO_ASSIGNEE) {
+      if (assigneeIds.length > 0) return false;
+    } else if (!assigneeIds.includes(assigneeFilter)) {
+      return false;
+    }
   }
 
   return true;

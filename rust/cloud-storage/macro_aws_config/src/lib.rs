@@ -19,6 +19,12 @@ pub async fn s3_client() -> aws_sdk_s3::Client {
     aws_sdk_s3::Client::from_conf(s3_config)
 }
 
+/// Creates an SQS client
+#[cfg(feature = "sqs")]
+pub async fn sqs_client() -> aws_sdk_sqs::Client {
+    aws_sdk_sqs::Client::new(&get_macro_aws_config().await)
+}
+
 /// Creates a aws_config to use.
 /// If you provide `LOCAL_AWS_URL` environment variable we create a local aws
 /// config with test credentials.

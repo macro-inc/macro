@@ -4,6 +4,7 @@ use crate::domain::models::AccessLevel;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::str::FromStr;
+use uuid::Uuid;
 
 /// Get the highest access level a user has for an email thread.
 ///
@@ -16,6 +17,29 @@ pub async fn get_thread_access(
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let user_id = user_id.map(AsRef::as_ref).unwrap_or("");
+
+    let thread_uuid = Uuid::parse_str(thread_id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+    let is_owner = sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM public.email_threads t
+                JOIN public.email_links l ON l.id = t.link_id
+                WHERE t.id = $1::uuid
+                  AND l.macro_id = $2
+            ) AS "exists!"
+            "#,
+        thread_uuid,
+        user_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if is_owner {
+        return Ok(Some(AccessLevel::Owner));
+    }
+
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
         -- CTE to recursively find all parent projects for the given email thread.

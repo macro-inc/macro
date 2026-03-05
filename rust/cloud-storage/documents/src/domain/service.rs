@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use document_sub_type::DocumentSubType;
-use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
+use entity_access::domain::models::{
+    EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
@@ -273,7 +275,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetDocumentResponseData, DocumentError> {
         let document_id = entity_access_receipt.entity().entity_id.clone();
         // get access level
@@ -321,7 +323,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     async fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         params: LocationQueryParams,
     ) -> Result<LocationResponseV3, DocumentError> {
         let file_type = document_context
@@ -384,7 +386,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
     #[tracing::instrument(err, skip(self))]
     async fn delete_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
         self.repo
@@ -431,12 +433,23 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
 
     async fn get_document_text(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
         self.repo
             .get_document_text(&entity_access_receipt.entity().entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    async fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        let entity_id = &entity_access_receipt.entity().entity_id;
+        let uuid = macro_uuid::string_to_uuid(entity_id)
+            .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+        let short_id = macro_uuid::ShortUuidConverter::default().from_uuid(&uuid);
+        Ok(short_id)
     }
 
     #[tracing::instrument(err, skip(self, args))]
@@ -541,5 +554,17 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
             content_type: mime_type,
             file_type: file_type.map(|f| f.to_string()),
         })
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        status: &str,
+    ) -> Result<(), DocumentError> {
+        self.task_properties_service
+            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .await
+            .map_err(DocumentError::Internal)
     }
 }

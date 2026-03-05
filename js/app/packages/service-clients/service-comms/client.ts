@@ -43,12 +43,14 @@ import { ChannelType } from './generated/models/channelType';
 import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+import type { ApiThreadReply } from '@service-storage/generated/schemas';
 
 export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 export type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+export type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
@@ -371,12 +373,29 @@ export const commsServiceClient = {
     );
   },
   async getChannelMessages(
-    args: WithChannelId & { limit: number; cursor: string | null }
+    args: WithChannelId & {
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      load_around_message_id: string | null;
+    }
   ) {
-    const { channel_id, limit, cursor } = args;
+    const {
+      channel_id,
+      limit,
+      next_cursor,
+      previous_cursor,
+      load_around_message_id,
+    } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
-    if (cursor) params.append('cursor', cursor);
+    if (load_around_message_id) {
+      params.append('load_around_message_id', load_around_message_id);
+    } else if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
     return mapOk(
       await commsFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
@@ -395,6 +414,16 @@ export const commsServiceClient = {
     return mapOk(
       await commsFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+  async getThreadReplies(args: WithChannelId & WithMessageId) {
+    const { channel_id, message_id } = args;
+    return mapOk(
+      await commsFetch<Array<ApiThreadReply>>(
+        `/channels/${channel_id}/messages/${message_id}/replies`,
         { method: 'GET' }
       ),
       (result) => result

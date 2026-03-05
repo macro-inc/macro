@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
@@ -137,41 +137,6 @@ export function AssistantMessage(props: {
     }
   };
 
-  async function generateTitleForMarkdown(markdownText: string) {
-    try {
-      const schema = {
-        type: 'object',
-        properties: {
-          title: {
-            type: 'string',
-            description:
-              'A concise and informative title that describes the following markdown text',
-          },
-        },
-        required: ['title'],
-        additionalProperties: false,
-      };
-
-      const result = await structuredOutputCompletion(
-        `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-        schema,
-        'markdown_title_generator'
-      );
-
-      if (
-        typeof result === 'object' &&
-        result !== null &&
-        'title' in result &&
-        typeof result.title === 'string'
-      ) {
-        return result.title;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return undefined;
-  }
-
   // TODO correctly convert to MD
   const handleEditInMarkdown = createCallback(async () => {
     const { replaceOrInsertSplit } = useSplitLayout();
@@ -180,9 +145,7 @@ export function AssistantMessage(props: {
       extractMessageText(props.message.content)
     );
 
-    const title: string | undefined = await generateTitleForMarkdown(
-      content.replace(/\[\[.*?\]\]/g, '')
-    );
+    const title = await generateTitle(content.replace(/\[\[.*?\]\]/g, ''));
 
     const documentId = await createMarkdownFile({
       content,
@@ -303,6 +266,41 @@ export function AssistantMessage(props: {
   );
 }
 
+// tool response should follow tool call
+function pairToolCalls(parts: AssistantMessagePart[]): AssistantMessagePart[] {
+  function takeResult(
+    parts: AssistantMessagePart[],
+    callId: string
+  ): [AssistantMessagePart | undefined, AssistantMessagePart[]] {
+    const ti = parts.findIndex(
+      (p) => p.type === 'toolCallResponseJson' && p.id === callId
+    );
+    if (ti === -1) return [undefined, parts];
+    const response = parts[ti];
+    parts.splice(ti, 1);
+    return [response, parts];
+  }
+
+  function pairParts(
+    parts: AssistantMessagePart[],
+    newParts: AssistantMessagePart[]
+  ): AssistantMessagePart[] {
+    if (parts.length === 0) return newParts;
+    const first = parts[0];
+    if (first.type === 'toolCall') {
+      const [maybeResponse, rest] = takeResult(parts.slice(1), first.id);
+      newParts.push(first);
+      if (maybeResponse) newParts.push(maybeResponse);
+      return pairParts(rest, newParts);
+    } else {
+      newParts.push(first);
+      return pairParts(parts.slice(1), newParts);
+    }
+  }
+
+  return pairParts(parts, []);
+}
+
 function AssistantMessageParts(props: {
   parts: AssistantMessagePart[];
   message: ChatMessageWithAttachments;
@@ -325,8 +323,12 @@ function AssistantMessageParts(props: {
     (id: string, completed) => completed.has(id)
   );
 
+  const parts = createMemo(() => {
+    return pairToolCalls(props.parts);
+  });
+
   return (
-    <For each={props.parts}>
+    <For each={parts()}>
       {(part, i) => {
         if (part.type === 'toolCall') {
           return (

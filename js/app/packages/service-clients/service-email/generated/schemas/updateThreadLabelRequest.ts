@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Request body for updating a thread's labels.
+ */
 export interface UpdateThreadLabelRequest {
   label_id: string;
   value: boolean;

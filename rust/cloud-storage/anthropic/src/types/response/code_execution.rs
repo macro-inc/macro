@@ -165,7 +165,7 @@ pub enum CodeExecutionErrorCode {
     /// Container expired and is no longer available
     ContainerExpired,
     /// Invalid parameters provided to the tool
-    InvalidToolInput,
+    InvalidInput,
     /// Rate limit exceeded for tool usage
     TooManyRequests,
     /// File doesn't exist (for view/edit operations) - text_editor only

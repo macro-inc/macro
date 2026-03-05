@@ -133,7 +133,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           containers: {
             service: {
               name: BASE_NAME,
-              image: 'fusionauth/fusionauth-app:1.62.0',
+              image: 'fusionauth/fusionauth-app:1.62.1',
               cpu: stack === 'prod' ? 2048 : 2048,
               memory: stack === 'prod' ? 4096 : 4096,
               environment: containerEnvVars,

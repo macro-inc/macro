@@ -3,7 +3,7 @@ use crate::{
         models::{EmailErr, Link, PreviewView},
         ports::EmailService,
     },
-    inbound::{ApiSortMethod, EmailPreviewState},
+    inbound::{ApiSortMethod, EmailRouterState},
 };
 use axum::{
     RequestPartsExt, async_trait,
@@ -13,6 +13,8 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
+use std::future::Future;
+use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
@@ -103,7 +105,7 @@ impl IntoResponse for EmailLinkErr {
 #[async_trait]
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
-    EmailPreviewState<U>: FromRef<S>,
+    EmailRouterState<U>: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -115,7 +117,7 @@ where
             user_context,
             ..
         }) = parts.extract_with_state(state).await?;
-        let res = <EmailPreviewState<U>>::from_ref(state)
+        let res = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
             .await?
@@ -137,7 +139,7 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
 #[async_trait]
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
-    EmailPreviewState<U>: FromRef<S>,
+    EmailRouterState<U>: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -149,10 +151,110 @@ where
             user_context,
             ..
         }) = parts.extract_with_state(state).await?;
-        let res = <EmailPreviewState<U>>::from_ref(state)
+        let res = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
             .await?;
         Ok(Self(res, PhantomData))
+    }
+}
+
+/// Port for fetching a Gmail access token for a given link.
+///
+/// This is an inbound concern — the domain service receives the token as an
+/// opaque `&str`.  The trait lives here (rather than in `domain::ports`)
+/// because only the axum extractor layer uses it.
+pub trait GmailTokenProvider: Send + Sync + 'static {
+    /// Fetch a Gmail OAuth access token for the given email link.
+    fn fetch_gmail_access_token(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+}
+
+/// Axum state wrapper for a [`GmailTokenProvider`] implementation.
+pub struct GmailTokenState<T> {
+    pub(crate) inner: Arc<T>,
+}
+
+impl<T> Clone for GmailTokenState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl<T> GmailTokenState<T> {
+    /// Create a new `GmailTokenState` wrapping the given provider.
+    pub fn new(provider: T) -> Self {
+        Self {
+            inner: Arc::new(provider),
+        }
+    }
+}
+
+/// Extractor that resolves the user's email link and fetches a Gmail access token.
+pub struct GmailAccessTokenExtractor<U, V> {
+    /// The fetched Gmail OAuth access token.
+    pub access_token: String,
+    /// The email link used to fetch the token.
+    pub link: Link,
+    _phantom: PhantomData<(U, V)>,
+}
+
+/// Errors from [`GmailAccessTokenExtractor`].
+#[derive(Debug, Error)]
+pub enum GmailAccessTokenErr {
+    /// Failed to resolve the email link.
+    #[error(transparent)]
+    Link(#[from] EmailLinkErr),
+    /// Failed to fetch the Gmail access token.
+    #[error("Failed to fetch Gmail access token")]
+    TokenFetch(#[source] EmailErr),
+}
+
+impl IntoResponse for GmailAccessTokenErr {
+    fn into_response(self) -> Response {
+        match self {
+            GmailAccessTokenErr::Link(e) => e.into_response(),
+            GmailAccessTokenErr::TokenFetch(e) => {
+                tracing::error!(error=?e, "gmail token fetch error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to fetch Gmail access token",
+                )
+                    .into_response()
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
+where
+    EmailRouterState<U>: FromRef<S>,
+    GmailTokenState<V>: FromRef<S>,
+    U: EmailService,
+    V: GmailTokenProvider,
+    S: Send + Sync + 'static,
+{
+    type Rejection = GmailAccessTokenErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Cached(EmailLinkExtractor(link, _)) = parts
+            .extract_with_state::<Cached<EmailLinkExtractor<U>>, S>(state)
+            .await?;
+        let token_state = <GmailTokenState<V>>::from_ref(state);
+        let token = token_state
+            .inner
+            .fetch_gmail_access_token(&link)
+            .await
+            .map_err(GmailAccessTokenErr::TokenFetch)?;
+        Ok(Self {
+            access_token: token,
+            link,
+            _phantom: PhantomData,
+        })
     }
 }

@@ -162,9 +162,20 @@ export const useUpdateNode = sharedInstance(() => {
   return createCallback(
     (id: CanvasId, updates: Partial<CanvasNode>, opts?: OperationOptions) => {
       if (!store[id]) return;
-      setStore(id, { ...store[id], ...updates });
-      setPendingUpdates(true);
-      if (opts?.autosave) saveCanvasData();
+      const current = store[id];
+
+      // only when at least one field actually changes.
+      for (const [key, next] of Object.entries(updates) as [
+        keyof CanvasNode,
+        CanvasNode[keyof CanvasNode],
+      ][]) {
+        if (next !== current[key]) {
+          setStore(id, { ...current, ...updates });
+          setPendingUpdates(true);
+          if (opts?.autosave) saveCanvasData();
+          return;
+        }
+      }
     }
   );
 });

@@ -18,6 +18,12 @@
           "url": "https://doc-storage.s3.us-east-1.amazonaws.com"
         },
         {
+          "url": "https://macro-document-storage-dev.s3.us-east-1.amazonaws.com"
+        },
+        {
+          "url": "https://macro-document-storage-prod.s3.us-east-1.amazonaws.com"
+        },
+        {
           "url": "https://static-file-storage-dev.s3.us-east-1.amazonaws.com"
         },
         {

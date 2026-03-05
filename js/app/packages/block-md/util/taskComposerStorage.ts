@@ -1,10 +1,14 @@
 import type { PropertyApiValues } from '@core/component/Properties/types';
+import type { SerializedEditorState } from 'lexical';
 
 const STORAGE_KEY = 'task-composer-draft';
 const EXPIRY_TIME_MS = 2 * 60 * 1000; // 2 minutes
 
 export interface TaskComposerDraft {
   title: string;
+  /** Serialized Lexical editor state (lossless — preserves images, dimensions, etc.) */
+  editorState?: SerializedEditorState;
+  /** Markdown text fallback (used by older drafts and for the createTask API) */
   content: string;
   propertyValues: Record<string, PropertyApiValues>;
   timestamp: number;

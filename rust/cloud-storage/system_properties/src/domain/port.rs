@@ -3,7 +3,7 @@
 //! These traits define the interfaces that the domain layer uses.
 //! Implementations live in the outbound module.
 
-use crate::domain::model::SystemPropertyError;
+use crate::{StatusOption, domain::model::SystemPropertyError};
 
 /// Repository trait for system property database operations.
 ///
@@ -21,5 +21,12 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         &self,
         from_task_id: &str,
         to_task_id: &str,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Updates the task to have the provided status
+    fn update_task_status(
+        &self,
+        task_id: &str,
+        status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }

@@ -3,11 +3,13 @@ import { useChannelName } from '@core/context/channels';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { type JSXElement, onMount, Suspense } from 'solid-js';
-import { Channel } from './Channel';
+import { Channel as NewChannel } from '@channel/Channel/Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 import { useChannelQuery } from '@queries/channel/channel';
 import { ChannelContextProvider } from '@block-channel/hooks/channel';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
+import { Channel } from './Channel';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
@@ -27,8 +29,15 @@ export type BlockChannelProps = IncomingParams & {};
 
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
-  const channelName = useChannelName(channelId);
-  const channelQuery = useChannelQuery(() => channelId);
+
+  if (ENABLE_NEW_CHANNELS) {
+    return (
+      <NewChannel
+        channelId={channelId}
+        // targetMessageId="019c2444-b1c4-7a91-a57d-14bd684388c9"
+      />
+    );
+  }
 
   const targetMessage = () => {
     const messageID = props[URL_PARAMS.message];
@@ -40,6 +49,8 @@ export default function BlockChannel(props: BlockChannelProps) {
       threadId: threadID,
     } satisfies TargetMessageInfo;
   };
+  const channelName = useChannelName(channelId);
+  const channelQuery = useChannelQuery(() => channelId);
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>

@@ -5,6 +5,7 @@ use crate::domain::StreamId;
 use sqlx::PgPool;
 
 /// Insert a new active stream entry, ignoring conflicts.
+#[tracing::instrument(err, skip(pool))]
 pub(crate) async fn insert_active_stream(
     pool: &PgPool,
     stream_id: &StreamId,
@@ -20,6 +21,7 @@ pub(crate) async fn insert_active_stream(
 }
 
 /// Delete an active stream entry.
+#[tracing::instrument(err, skip(pool))]
 pub(crate) async fn delete_active_stream(
     pool: &PgPool,
     stream_id: &StreamId,

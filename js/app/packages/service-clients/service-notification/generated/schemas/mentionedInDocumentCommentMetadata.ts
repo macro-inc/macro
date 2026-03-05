@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MentionedInDocumentCommentMetadataFileType } from './mentionedInDocumentCommentMetadataFileType';
+import type { MentionedInDocumentCommentMetadataSenderProfilePictureUrl } from './mentionedInDocumentCommentMetadataSenderProfilePictureUrl';
 
 /**
  * Notification sent when a user is mentioned in a document comment.
@@ -20,6 +21,7 @@ export interface MentionedInDocumentCommentMetadata {
   mentionId: string;
   /** The owner of the document. */
   owner: string;
+  senderProfilePictureUrl?: MentionedInDocumentCommentMetadataSenderProfilePictureUrl;
   /** the text of the comment */
   text: string;
   /** the thread id */

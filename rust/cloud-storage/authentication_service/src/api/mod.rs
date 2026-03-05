@@ -1,14 +1,12 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
-use axum::extract::Request;
 use axum::http::HeaderName;
-use axum::http::Method;
-use axum::middleware::Next;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use native_app_service::inbound::RouterState;
+use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -46,9 +44,10 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
     )]);
 
     let env = state.environment;
+
     let app = api_router(state.clone())
         .with_state(state)
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
         .layer(cors)
@@ -100,19 +99,12 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 axum::middleware::from_fn(macro_middleware::tracking::attach_ip_context_handler),
             )),
         )
-        .nest("/jwt", jwt::router(state.jwt_args))
+        .nest("/jwt", jwt::router(state.jwt_args.clone()))
         .nest("/session", session::router())
         .nest(
             "/webhooks",
             webhooks::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
-                |req: Request, next: Next| async move {
-                    match req.method() {
-                        &Method::PUT | &Method::POST | &Method::PATCH | &Method::DELETE => {
-                            tokio::task::spawn(next.run(req)).await.unwrap()
-                        }
-                        _ => next.run(req).await,
-                    }
-                },
+                macro_middleware::connection_drop_prevention_handler,
             ))),
         )
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{Notification, RateLimitConfig, RateLimitKey, TaggedContent};
+use crate::domain::models::{Notification, TaggedContent};
 use model_entity::EntityType;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};

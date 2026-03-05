@@ -14,6 +14,7 @@ use ai::tool::{
     AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
+use cowlike::CowLike;
 use models_pagination::CreatedAt;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
@@ -141,7 +142,7 @@ where
         let paginated = service_context
             .service
             .get_user_notifications::<serde_json::Value>(
-                (*request_context.user_id).as_ref(),
+                (*request_context.user_id).copied(),
                 Some(limit),
                 models_pagination::Query::Sort(CreatedAt, ()),
             )

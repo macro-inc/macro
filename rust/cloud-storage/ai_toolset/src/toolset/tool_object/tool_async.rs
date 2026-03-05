@@ -54,6 +54,7 @@ where
     T: AsyncTool<ToolContext> + Send + Sync,
     T::Output: Serialize,
 {
+    #[tracing::instrument(err, skip_all)]
     async fn call(
         &self,
         context: ToolSetContext,
@@ -94,6 +95,7 @@ where
     ParentContext: Send + Sync,
     SubContext: FromRef<ParentContext> + Send + Sync,
 {
+    #[tracing::instrument(err, skip_all)]
     async fn call(
         &self,
         context: ParentContext,
@@ -119,6 +121,7 @@ pub type AsyncToolObject<ToolSetContext> = ToolObject<AsyncDeserializer<ToolSetC
 
 impl<ToolSetContext> ToolObject<AsyncDeserializer<ToolSetContext>> {
     /// Attempts to deserialize JSON input into a callable async tool instance.
+    #[tracing::instrument(err, skip(self))]
     pub fn try_deserialize(
         &self,
         data: &serde_json::Value,

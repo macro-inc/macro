@@ -343,6 +343,66 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["patch_chat"],
+        "operationId": "patch_chat_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChatRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Chat patched successfully"
+          },
+          "400": {
+            "description": "Cannot modify deleted chat",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/chats/{chat_id}/copy": {
@@ -556,64 +616,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocumentTextPart"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/completions/structured_output": {
-      "post": {
-        "tags": ["structured_output"],
-        "operationId": "handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StructedOutputCompletionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StructedOutputCompletionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
                 }
               }
             }
@@ -2760,26 +2762,6 @@
           "id": {
             "type": "string"
           }
-        }
-      },
-      "StructedOutputCompletionRequest": {
-        "type": "object",
-        "required": ["prompt", "schema", "schema_name"],
-        "properties": {
-          "prompt": {
-            "type": "string"
-          },
-          "schema": {},
-          "schema_name": {
-            "type": "string"
-          }
-        }
-      },
-      "StructedOutputCompletionResponse": {
-        "type": "object",
-        "required": ["completion"],
-        "properties": {
-          "completion": {}
         }
       },
       "SuccessResponse": {

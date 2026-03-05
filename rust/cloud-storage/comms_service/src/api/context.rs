@@ -2,7 +2,7 @@ use axum_macros::FromRef;
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
 use frecency::outbound::postgres::FrecencyPgStorage;
@@ -52,4 +52,4 @@ pub struct AppState {
     pub comms_state: CommsRouterState<ChannelImpl>,
 }
 
-pub type ChannelImpl = ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
+pub type ChannelImpl = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;

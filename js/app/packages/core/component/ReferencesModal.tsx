@@ -11,7 +11,7 @@ import { References } from './References';
 import { Tooltip } from './Tooltip';
 
 false && clickOutside;
-const DRAWER_ID = 'references';
+export const REFERENCES_DRAWER_ID = 'references';
 
 export function ReferencesButton(props: {
   documentId: string;
@@ -19,7 +19,7 @@ export function ReferencesButton(props: {
   entityType?: ItemType;
   buttonSize?: 'sm';
 }) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const [referenceCount] = createResource(
     () => props.documentId,
     async (id) => {
@@ -72,7 +72,12 @@ export function ReferencesDrawer(props: {
     );
   };
   return (
-    <SplitDrawer id={DRAWER_ID} side="right" size={768} title={title()}>
+    <SplitDrawer
+      id={REFERENCES_DRAWER_ID}
+      side="right"
+      size={768}
+      title={title()}
+    >
       <Suspense
         fallback={
           <div class="flex justify-center py-8">
@@ -97,7 +102,7 @@ export type ReferencesModalProps = {
 };
 
 export function ReferencesModal(props: ReferencesModalProps) {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+  const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const [referenceCount] = createResource(
     () => props.documentId,
     async (id) => {
@@ -145,7 +150,12 @@ export function ReferencesModal(props: ReferencesModalProps) {
           <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
         </div>
       </Tooltip>
-      <SplitDrawer id={DRAWER_ID} side="right" size={768} title={title()}>
+      <SplitDrawer
+        id={REFERENCES_DRAWER_ID}
+        side="right"
+        size={768}
+        title={title()}
+      >
         <Suspense
           fallback={
             <div class="flex justify-center py-8">

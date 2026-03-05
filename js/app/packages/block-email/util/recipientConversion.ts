@@ -4,7 +4,7 @@ import {
   emailToId,
   recipientEntityMapper,
 } from '@core/user';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import type { EmailRecipient } from '../component/EmailContext';
 
 const extractedContactInfo = (contact: ContactInfo): ExtractedContactInfo => ({
@@ -34,7 +34,7 @@ export const convertContactInfoToEmailRecipient = (
 
 // Note: because of the logic, this works with a reference message that is either the message being replied to, or the draft.
 export const getReplyAllRecipients = (
-  referenceMessage: MessageWithBodyReplyless | undefined,
+  referenceMessage: ApiMessage | undefined,
   userEmail: string
 ): {
   to: EmailRecipient[];
@@ -76,7 +76,7 @@ export const getReplyAllRecipients = (
 };
 
 export const getReplyRecipientsFromParent = (
-  replyingTo: MessageWithBodyReplyless | undefined,
+  replyingTo: ApiMessage | undefined,
   userEmail: string
 ): {
   to: EmailRecipient[];

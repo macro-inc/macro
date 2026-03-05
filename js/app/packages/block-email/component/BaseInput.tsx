@@ -51,8 +51,8 @@ import {
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import type {
-  MessageToSendDbId,
-  MessageWithBodyReplyless,
+  ApiDraftOutputDbId,
+  ApiMessage,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
@@ -310,17 +310,25 @@ type UndoReplySnapshot = {
   bodyHtml: string;
   attachments: DraftFormAttachment[];
 };
+// Set on send, persists across navigation, only consumed by undoSend.
+let undoSendSnapshot: UndoReplySnapshot | null = null;
+// Only set by undoSend for inline reply remount, consumed on mount.
 let undoReplySnapshot: UndoReplySnapshot | null = null;
+// Registered by the current BaseInput instance so stale undoSend closures
+// from a previous mount can restore state into the live component.
+let restoreUndoCallback:
+  | ((snapshot: UndoReplySnapshot, draftId: string) => void)
+  | null = null;
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  replyingTo: Accessor<ApiMessage | undefined>;
   // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
   isEditingExisting?: boolean;
-  draft?: MessageWithBodyReplyless;
+  draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
-  sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -379,7 +387,7 @@ export function BaseInput(props: {
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
-    MessageToSendDbId | undefined
+    ApiDraftOutputDbId | undefined
   >(
     props.draft?.db_id ??
       (undoReplySnapshot?.threadId === ctx.thread()?.db_id
@@ -402,6 +410,22 @@ export function BaseInput(props: {
       }
     });
   }
+
+  // Register a callback so stale undoSend closures from a previous mount can
+  // restore state into this (the live) component instance.
+  restoreUndoCallback = (snapshot, draftId) => {
+    setSavedDraftId(draftId);
+    const currentEditor = editor();
+    if (currentEditor && snapshot.bodyHtml) {
+      setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
+    }
+    for (const attachment of snapshot.attachments) {
+      form().attachments.add(attachment);
+    }
+  };
+  onCleanup(() => {
+    restoreUndoCallback = null;
+  });
 
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
@@ -437,29 +461,19 @@ export function BaseInput(props: {
         });
       }
 
-      if (props.setShowReply) {
-        // Inline reply: component was unmounted by clearDraftState.
-        // Re-show the reply box — the new BaseInput instance will
-        // pick up undoReplySnapshot on mount and restore from it.
-        props.setShowReply(true);
-      } else {
-        // Bottom reply: component is still mounted. Restore compose box
-        // after reactive updates from setQueryData have settled
-        // (form may have re-keyed).
-        const snapshot = undoReplySnapshot;
-        if (snapshot) {
-          setTimeout(() => {
-            setSavedDraftId(draftId);
-            const currentEditor = editor();
-            if (currentEditor && snapshot.bodyHtml) {
-              setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
-            }
-            for (const attachment of snapshot.attachments) {
-              form().attachments.add(attachment);
-            }
-            undoReplySnapshot = null;
-          }, 0);
-        }
+      const snapshot = undoSendSnapshot;
+      undoSendSnapshot = null;
+
+      if (snapshot && restoreUndoCallback) {
+        // A live BaseInput is mounted — restore after reactive updates from
+        // setQueryData have settled (form may have re-keyed).
+        const cb = restoreUndoCallback;
+        setTimeout(() => cb(snapshot, draftId), 0);
+      } else if (snapshot) {
+        // No live component (e.g. inline reply was unmounted).
+        // Stash for mount-time restore.
+        undoReplySnapshot = snapshot;
+        props.setShowReply?.(true);
       }
 
       toast.success('Send cancelled');
@@ -615,27 +629,6 @@ export function BaseInput(props: {
       return;
     }
 
-    let linkId: string | undefined = currentThread?.link_id;
-    if (newMessage || !linkId) {
-      if (emailLinksQuery.isPending) {
-        return;
-      }
-
-      if (emailLinksQuery.isError) {
-        logger.error(
-          new Error('Failed to save email draft: could not load email links')
-        );
-        return;
-      }
-
-      const linksData = emailLinksQuery.data;
-      if (!linksData || linksData.links.length === 0) {
-        logger.error(new Error('Failed to save email draft: no links found'));
-        return;
-      }
-      linkId = linksData.links[0].id;
-    }
-
     const existingDraft = savedDraftId() !== undefined;
 
     // If there's an existing draft, we should send the sendTime so that the send time
@@ -646,7 +639,6 @@ export function BaseInput(props: {
       draft: {
         ...draftToSave,
         db_id: savedDraftId(),
-        link_id: linkId!,
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
@@ -819,7 +811,13 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
-    // Snapshot editor state before watermark so undo-send can restore it
+    // Ensure draft is saved before sending so undo-send always has a draft to restore
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    await executeSaveDraft();
+
+    // Snapshot editor state before watermark so undo-send can restore it.
+    // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
+    // navigation but isn't mistakenly auto-restored on next mount.
     if (currentEditor) {
       const snapshotHtml = currentEditor.read(() =>
         $generateHtmlFromNodes(currentEditor)
@@ -827,7 +825,7 @@ export function BaseInput(props: {
       const snapshotDraftId = savedDraftId();
       const snapshotThreadId = ctx.thread()?.db_id;
       if (snapshotDraftId && snapshotThreadId) {
-        undoReplySnapshot = {
+        undoSendSnapshot = {
           threadId: snapshotThreadId,
           draftId: snapshotDraftId,
           bodyHtml: snapshotHtml,
@@ -865,15 +863,11 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
-    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
     const sendTime = form().sendTime();
 
     if (sendTime) {
-      // Just in case, always get a fresh save of the draft so we don't miss any information
-      const draftID = await executeSaveDraft();
-
-      if (!draftID) {
+      if (!currentDraftID) {
         console.error('No draft');
         toast.failure('Failed to schedule message', 'Draft required');
         cleanupWatermark();
@@ -881,7 +875,7 @@ export function BaseInput(props: {
       }
 
       scheduleMessageMutation.mutate({
-        draftID,
+        draftID: currentDraftID,
         sendTime,
       });
 
@@ -903,7 +897,6 @@ export function BaseInput(props: {
         subject: form().subject(),
         thread_db_id: currentThread?.db_id,
         to,
-        link_id: linkId!,
       },
     });
 

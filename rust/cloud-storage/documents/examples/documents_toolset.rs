@@ -43,6 +43,10 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn update_task_status(&self, _task_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// The prompt to use in the example.

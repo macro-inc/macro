@@ -263,10 +263,10 @@ where
     async fn poll_email_digests<T: NotificationExtEmail>(
         &self,
         f: fn(DigestBatch) -> Result<T, Report>,
-    ) -> Result<(), Report> {
+    ) -> Result<ClaimResult<()>, Report> {
         let batch = match self.digest_batcher.claim_ready_digest().await? {
             ClaimResult::Ready(batch) => batch,
-            ClaimResult::Empty | ClaimResult::Wait(_) => return Ok(()),
+            v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
         };
 
         let recipient = batch.user_id.clone();
@@ -283,6 +283,6 @@ where
                 tracing::error!(error=?e, "failed to queue digest email");
             })?;
 
-        Ok(())
+        Ok(ClaimResult::Ready(()))
     }
 }

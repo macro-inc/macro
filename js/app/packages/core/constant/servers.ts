@@ -9,7 +9,8 @@ const serverHostLocal: Servers = {
   'static-file': 'http://localhost:8100',
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
-  'email-service': 'http://localhost:8087',
+  'email-service': 'http://localhost:8094',
+  'image-proxy-service': 'http://localhost:8097',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -26,6 +27,7 @@ const serverHostRemote = {
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
+  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -46,9 +48,14 @@ function selectLocalServers(): Servers {
     return serverHostLocal;
   }
 
+  function assertValidName(name: string): name is keyof Servers {
+    if (!(name in serverHostRemote))
+      throw new Error(`unknown server name ${name}`);
+    return true;
+  }
   const servers = selectedLocalServers
     .split(',')
-    .filter((name) => name in serverHostRemote)
+    .filter(assertValidName)
     .reduce((acc: Servers, key: keyof Servers) => {
       acc[key] = serverHostLocal[key];
       console.log(`Using local server ${key}: ${acc}`);

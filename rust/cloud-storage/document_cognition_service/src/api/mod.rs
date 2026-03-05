@@ -2,6 +2,7 @@ use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
+use axum::routing::post;
 use context::GLOBAL_CONTEXT;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
@@ -77,7 +78,12 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/preview", preview::router())
         .nest("/id_mapping", id_mapping::router())
         .with_state(api_context.clone())
-        .nest("/completions", completions::router())
+        .route(
+            "/chat/completions",
+            post(completions::handler).layer(ServiceBuilder::new().layer(
+                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
+            )),
+        )
         .nest("/models", models::router())
         .layer(
             ServiceBuilder::new()

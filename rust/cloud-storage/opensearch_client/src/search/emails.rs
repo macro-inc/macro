@@ -3,7 +3,10 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, parse_highlight_hit},
+        model::{
+            NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
+            inject_fragment_size, parse_highlight_hit,
+        },
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -239,8 +242,6 @@ pub(crate) struct EmailIndex {
     pub subject: Option<String>,
     /// The sent at time of the email message
     pub sent_at_seconds: Option<i64>,
-    /// The content of the email message
-    pub content: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -297,7 +298,10 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
 impl EmailSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: EmailQueryBuilder = self.into();
-        Ok(builder.build_search_request()?.to_json())
+        let mut json = builder.build_search_request()?.to_json();
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
+        Ok(json)
     }
 }
 

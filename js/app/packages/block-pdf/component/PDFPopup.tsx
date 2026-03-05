@@ -2,7 +2,7 @@ import type { IHighlight } from '@block-pdf/model/Highlight';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -162,41 +162,6 @@ export function PDFPopup(props: PDFPopupProps) {
     }
   };
 
-  async function generateTitleForMarkdown(markdownText: string) {
-    try {
-      const schema = {
-        type: 'object',
-        properties: {
-          title: {
-            type: 'string',
-            description:
-              'A concise and informative title that describes the following text excerpt',
-          },
-        },
-        required: ['title'],
-        additionalProperties: false,
-      };
-
-      const result = await structuredOutputCompletion(
-        `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-        schema,
-        'markdown_title_generator'
-      );
-
-      if (
-        typeof result === 'object' &&
-        result !== null &&
-        'title' in result &&
-        typeof result.title === 'string'
-      ) {
-        return result.title;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return undefined;
-  }
-
   const name = useBlockDocumentName();
   const handleEditInMarkdown = createCallback(async () => {
     setIsLoading(true);
@@ -205,7 +170,7 @@ export function PDFPopup(props: PDFPopupProps) {
       return;
     }
 
-    const title: string | undefined = await generateTitleForMarkdown(content);
+    const title = await generateTitle(content);
     const documentId = await createMarkdownFile({
       content,
       title: title ?? `${name()} - AI Explanation`,

@@ -6,7 +6,6 @@ use crate::service::attachment::{AttachmentDraft, AttachmentForwarded, Attachmen
 use crate::service::body_parsing::body_parsed::{
     get_body_parsed_for_message, get_body_parsed_linkless_for_message,
 };
-use crate::service::body_parsing::body_replyless::get_body_replyless_for_message;
 use crate::service::label::Label;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -106,7 +105,11 @@ pub struct MessageWithBodyReplyless {
 impl From<Message> for MessageWithBodyReplyless {
     fn from(message: Message) -> Self {
         Self {
-            body_replyless: get_body_replyless_for_message(&message),
+            body_replyless: email_utils::body_replyless::compute_body_replyless(
+                message.subject.as_deref(),
+                message.body_html_sanitized.as_deref(),
+                message.body_text.as_deref(),
+            ),
             inner: message,
         }
     }

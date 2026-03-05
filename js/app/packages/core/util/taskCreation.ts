@@ -1,4 +1,7 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { createTask } from './create';
 
@@ -45,6 +48,14 @@ function buildPropertyInputs(
       value: { type: 'date', value: task.dueDate.toISOString() },
     });
   }
+
+  properties.push({
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    value: {
+      type: 'select_option',
+      option_id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+    },
+  });
 
   if (options.parentTaskId) {
     properties.push({

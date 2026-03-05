@@ -218,7 +218,7 @@ impl ChannelRow {
     }
 }
 
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip(db), err(Debug))]
 pub async fn get_user_channels_dynamic(
     db: &PgPool,
     params: &GetChannelsParams,

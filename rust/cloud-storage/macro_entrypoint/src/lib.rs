@@ -103,12 +103,12 @@ impl MacroEntrypoint {
                     .json()
                     .with_current_span(true)
                     .with_span_list(false)
-                    .flatten_event(true);
+                    .flatten_event(true)
+                    .with_file(true)
+                    .with_line_number(true);
 
                 let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(false)
-                    .with_file(true)
-                    .with_line_number(true)
                     .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
                     .event_format(datadog_fmt::DatadogFormat { inner: json_format });
 

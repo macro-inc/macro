@@ -297,7 +297,7 @@ This keeps implementation files focused and makes tests easier to locate and mai
 
 ### Tracing
 
-- Include `err` when adding the `tracing::instrument` attribute to functions. Never include `level = "info"`.
+- Include `err` when adding the `tracing::instrument` attribute to functions that return `Result`. Do not include `err` on functions that return `Option`, `()`, or other non-`Result` types. Never include `level = "info"`.
 - When including an error with a log, include it like so: `tracing::error!(error=?e, "error msg");`
 don't inject it directly into the error message.
 - Prefer using `.inspect_err` instead of `if let Err(e)` in order to do logging.

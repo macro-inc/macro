@@ -68,6 +68,7 @@ import {
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
+import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
@@ -257,14 +258,6 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const linkID = link()?.id;
-    if (!linkID || hasLinkError()) {
-      logger.error(
-        new Error('Failed to save email draft: could not load email links')
-      );
-      return;
-    }
-
     const existingDraft = currentDraftID() !== undefined;
 
     // If there's an existing draft, we should send the sendTime so that the send time
@@ -275,7 +268,6 @@ export function EmailCompose(props: EmailComposeProps) {
       draft: {
         ...draftToSave,
         db_id: currentDraftID(),
-        link_id: linkID,
       },
       sendTime,
     });
@@ -661,7 +653,6 @@ export function EmailCompose(props: EmailComposeProps) {
 
     sendMutation.mutate({
       message: {
-        link_id: currentLink.id,
         to: convertToContactInfoArray(recipients.to),
         cc:
           recipients.cc.length > 0
@@ -676,7 +667,6 @@ export function EmailCompose(props: EmailComposeProps) {
         body_html: data.html,
         body_macro: data.raw,
         db_id: currentDraftID(),
-        send_time: sendTime,
       },
     });
 
@@ -735,11 +725,15 @@ export function EmailCompose(props: EmailComposeProps) {
     }
 
     const draft = form.draft;
-    if (!draft || !draft.body_html_sanitized) return;
+    if (!draft) return;
 
-    const decodedHtml = decodeBase64Utf8(draft.body_html_sanitized);
+    if (draft.body_html_sanitized) {
+      return decodeBase64Utf8(draft.body_html_sanitized);
+    }
 
-    return decodedHtml;
+    if (draft.body_text) {
+      return plainTextToHtml(draft.body_text);
+    }
   };
 
   const getRecipientOptions = () => {

@@ -141,6 +141,12 @@
         "rust/cloud-storage/dlp_handler/**"
       ],
       "stack_path": "infra/stacks/dlp-handler/**"
+    },
+    "image-proxy-service": {
+      "source_paths": [
+        "rust/cloud-storage/image_proxy_service/**"
+      ],
+      "stack_path": "infra/stacks/image-proxy-service/**"
     }
   }
 }

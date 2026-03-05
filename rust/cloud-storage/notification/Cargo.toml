@@ -35,6 +35,8 @@ hex = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+strum = { workspace = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }

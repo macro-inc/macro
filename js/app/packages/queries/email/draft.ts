@@ -2,8 +2,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
 import { emailClient } from '@service-email/client';
 import type {
+  ApiDraftInput,
   CreateDraftResponse,
-  MessageToSend,
 } from '@service-email/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -12,7 +12,7 @@ import { emailKeys } from './keys';
 import { invalidateSoupEntity, invalidateAllSoup } from '@queries/soup/cache';
 
 type CreateDraftParams = {
-  draft: MessageToSend;
+  draft: ApiDraftInput;
   sendTime?: Date | null;
 };
 
