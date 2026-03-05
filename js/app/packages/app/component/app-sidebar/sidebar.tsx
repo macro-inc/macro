@@ -26,6 +26,9 @@ import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 import { useSettingsState } from '@core/constant/SettingsState';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 
 interface SidebarItem {
   id: ListView;
@@ -34,6 +37,7 @@ interface SidebarItem {
   icon?: Component<
     JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
   >;
+  hotkey: ValidHotkey;
 }
 
 export const SIDEBAR_LINKS = [
@@ -42,42 +46,49 @@ export const SIDEBAR_LINKS = [
     label: 'Inbox',
     href: LIST_VIEW_PATHS.inbox,
     icon: TrayIcon,
+    hotkey: 'i',
   },
   {
     id: 'agents',
     label: 'Agents',
     href: LIST_VIEW_PATHS.agents,
     icon: AnimatedStarIcon,
+    hotkey: 'a',
   },
   {
     id: 'mail',
     label: 'Email',
     href: LIST_VIEW_PATHS.mail,
     icon: AnimatedEmailIcon,
+    hotkey: 'e',
   },
   {
     id: 'documents',
     label: 'Documents',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
+    hotkey: 'd',
   },
   {
     id: 'tasks',
     label: 'Tasks',
     href: LIST_VIEW_PATHS.tasks,
     icon: AnimatedTaskIcon,
+    hotkey: 't',
   },
   {
     id: 'channels',
     label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
+    hotkey: 'c',
   },
   {
     id: 'files',
     label: 'Files',
     href: LIST_VIEW_PATHS.files,
     icon: AnimatedFolderIcon,
+    hotkey: 'f',
   },
 ] as const satisfies SidebarItem[];
 
@@ -99,6 +110,44 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const handleCreateClick = () => {
     setCreateMenuOpen((p) => !p);
   };
+
+  const registerHotkeys = () => {
+    // Register 'g' as a leader key that activates the global GO_TO command scope
+    registerHotkey({
+      hotkey: GO_TO_LEADER_KEY,
+      scopeId: 'global',
+      description: 'Go to page',
+      keyDownHandler: () => false,
+      activateCommandScopeId: GO_TO_COMMAND_SCOPE,
+      hide: true,
+      registrationType: 'add',
+    });
+
+    // Register navigation shortcuts in the global GO_TO command scope
+    for (const link of SIDEBAR_LINKS) {
+      registerHotkey({
+        hotkey: link.hotkey,
+        scopeId: GO_TO_COMMAND_SCOPE,
+        description: `Go to ${link.label}`,
+        keyDownHandler: (e) => {
+          e?.preventDefault();
+          layout.openWithSplit(
+            {
+              type: 'component',
+              id: link.id,
+            },
+            {
+              preferNewSplit: e?.shiftKey,
+              mergeHistory: true,
+            }
+          );
+          return true;
+        },
+      });
+    }
+  };
+
+  registerHotkeys();
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';

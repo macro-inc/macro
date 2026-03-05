@@ -1,11 +1,13 @@
 import { CommandState } from '@app/component/command/state';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   getHotkeyCommand,
   getScopeElement,
+  isScopeInActiveBranch,
   runCommand,
 } from '@core/hotkey/utils';
 import { isSearchEntity } from '@entity';
@@ -78,20 +80,23 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: true,
   }).withGroup(group);
 
-  // g g - Jump to top of list (vim-style command scope)
-  const { commandScopeId } = registerHotkey({
-    hotkey: ['g'],
+  // g g - Jump to top of list (vim-style, uses global GO_TO command scope)
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
     scopeId,
     description: 'Go to top of list',
-    keyDownHandler: () => true,
-    activateCommandScope: true,
+    keyDownHandler: () => false,
+    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
     hide: true,
   }).withGroup(group);
 
+  // Register 'g' in the global GO_TO command scope for g+g (jump to top)
+  // Uses condition to only run for the soup-view that was focused when 'g' was pressed
   registerHotkey({
-    hotkey: ['g'],
-    scopeId: commandScopeId!,
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: GO_TO_COMMAND_SCOPE,
     description: 'Go to top of list',
+    condition: () => isScopeInActiveBranch(scopeId),
     keyDownHandler: () => {
       const next = soup.navigate.toFirst();
       if (next) {
@@ -99,6 +104,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return true;
     },
+    registrationType: 'add',
   }).withGroup(group);
 
   // shift+g, end - Jump to bottom of list
