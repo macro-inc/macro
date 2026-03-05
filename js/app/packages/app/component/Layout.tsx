@@ -41,7 +41,7 @@ const AUTH_URLS = [
 ];
 
 export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
-  !isMobile() ? 'slim' : 'hidden'
+  !isMobile() ? 'expanded' : 'hidden'
 );
 
 export function Layout(props: RouteSectionProps) {

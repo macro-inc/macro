@@ -302,7 +302,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div class="size-full p-2">
+      <div class="size-full p-2 pl-0 mobile:p-0">
         <Resize.Zone
           direction="horizontal"
           gutter={0}
