@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tower_http::trace::OnResponse;
-use tracing::subscriber::with_default;
+use tracing::subscriber::{set_default, with_default};
 
 /// Minimal tracing subscriber that records whether WARN or INFO events were emitted.
 struct LevelCapture {
@@ -90,6 +90,25 @@ fn warns_when_latency_equals_threshold() {
         let span = tracing::info_span!("test");
         on_response.on_response(&response, Duration::from_millis(200), &span);
     });
+
+    assert!(saw_warn.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn starvation_detector_warns_when_runtime_blocked() {
+    let (subscriber, saw_warn, _saw_info) = LevelCapture::new();
+    let _guard = set_default(subscriber);
+
+    spawn_starvation_detector(Duration::from_millis(10));
+
+    // Let the detector initialize, consume its first tick, and enter the timing loop
+    tokio::time::sleep(Duration::from_millis(15)).await;
+
+    // Block the runtime thread — simulates starvation
+    std::thread::sleep(Duration::from_millis(50));
+
+    // Let the detector observe the delay and emit the warning
+    tokio::time::sleep(Duration::from_millis(15)).await;
 
     assert!(saw_warn.load(Ordering::SeqCst));
 }
