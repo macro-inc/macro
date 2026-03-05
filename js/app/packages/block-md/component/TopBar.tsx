@@ -57,7 +57,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { createEffect, For, on, Show, untrack, type JSX } from 'solid-js';
+import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
