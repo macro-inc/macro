@@ -106,6 +106,12 @@ impl DocumentService for StubDocumentService {
     ) -> Result<DocumentBasic, DocumentError> {
         unimplemented!()
     }
+    async fn get_short_id(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        unimplemented!()
+    }
     async fn get_document(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
