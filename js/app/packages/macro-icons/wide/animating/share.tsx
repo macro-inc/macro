@@ -22,7 +22,13 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
           {/* White base = visible */}
           <rect x="-10" y="-40" width="100" height="140" fill="white" />
           {/* Black where left head is = hidden (animates with left head) */}
-          <circle class="mask-left-head" fill="black" cx="5.48" cy="4" r="5.5" />
+          <circle
+            class="mask-left-head"
+            fill="black"
+            cx="5.48"
+            cy="4"
+            r="5.5"
+          />
           {/* Black where left shoulders are = hidden */}
           <circle fill="black" cx="5.48" cy="13.5" r="7" />
           {/* Black at bottom = hidden */}

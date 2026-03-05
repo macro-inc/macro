@@ -10,6 +10,7 @@ export const AnimatedInboxIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
+      overflow="visible"
       class={`animated-inbox-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
       <title>Animated inbox icon</title>

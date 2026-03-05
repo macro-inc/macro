@@ -150,7 +150,7 @@ export default function IconGallery() {
     THEME_COLORS[0]
   );
   const [customColor, setCustomColor] = createSignal('');
-  const [iconSize, setIconSize] = createSignal(24);
+  const [iconSize, setIconSize] = createSignal(48);
   const [animationTriggers, setAnimationTriggers] = createSignal<
     Record<string, boolean>
   >({});
@@ -226,7 +226,7 @@ export default function IconGallery() {
             <span class="mb-1.5 block text-xs text-ink">
               Color: <span class="text-muted">{selectedColor().name}</span>
             </span>
-            <div class="inline-grid grid-cols-5 gap-0.5">
+            <div class="inline-grid grid-cols-5 gap-1">
               {/* Theme color swatches */}
               <For each={THEME_COLORS}>
                 {(color) => (
