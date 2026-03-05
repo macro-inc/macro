@@ -97,11 +97,7 @@ pub(crate) async fn get_messages(
                         .inspect_err(|e| tracing::error!(error=?e, "Error parsing attachments"))
                         .ok()
                 })
-                .map(|raws| {
-                    raws.into_iter()
-                        .filter_map(|raw| parse_raw_attachment(raw))
-                        .collect()
-                })
+                .map(|raws| raws.into_iter().filter_map(parse_raw_attachment).collect())
                 .unwrap_or_default();
 
             let content =

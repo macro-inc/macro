@@ -4,16 +4,15 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateChatRequestAttachments } from './createChatRequestAttachments';
-import type { CreateChatRequestIsPersistent } from './createChatRequestIsPersistent';
-import type { CreateChatRequestModel } from './createChatRequestModel';
 import type { CreateChatRequestName } from './createChatRequestName';
 import type { CreateChatRequestProjectId } from './createChatRequestProjectId';
 
+/**
+ * Request body for creating a chat.
+ */
 export interface CreateChatRequest {
-  attachments?: CreateChatRequestAttachments;
-  isPersistent?: CreateChatRequestIsPersistent;
-  model?: CreateChatRequestModel;
+  /** Optional name for the chat. */
   name?: CreateChatRequestName;
+  /** Optional project to associate the chat with. */
   projectId?: CreateChatRequestProjectId;
 }

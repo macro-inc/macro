@@ -44,12 +44,9 @@ pub(crate) async fn permanently_delete_chat(
     .execute(tx.as_mut())
     .await?;
 
-    sqlx::query!(
-        r#"DELETE FROM "Chat" WHERE id = $1"#,
-        chat_id,
-    )
-    .execute(tx.as_mut())
-    .await?;
+    sqlx::query!(r#"DELETE FROM "Chat" WHERE id = $1"#, chat_id,)
+        .execute(tx.as_mut())
+        .await?;
 
     Ok(())
 }

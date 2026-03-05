@@ -144,8 +144,10 @@ async fn edit_channel_share_permissions(
 
     if !to_upsert.is_empty() {
         let channel_ids: Vec<String> = to_upsert.iter().map(|csp| csp.channel_id.clone()).collect();
-        let access_levels: Vec<String> =
-            to_upsert.iter().map(|csp| csp.access_level.to_string()).collect();
+        let access_levels: Vec<String> = to_upsert
+            .iter()
+            .map(|csp| csp.access_level.to_string())
+            .collect();
 
         sqlx::query!(
             r#"

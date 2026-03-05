@@ -1,7 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
 use crate::domain::ports::ChatRepo;
@@ -31,16 +31,14 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
     assert!(!chat_id.is_empty());
 
     // verify the chat row exists
-    let row = sqlx::query!(
-        r#"SELECT "userId", name FROM "Chat" WHERE id = $1"#,
-        &chat_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let row = sqlx::query(r#"SELECT "userId", name FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
-    assert_eq!(row.name, "Test Chat");
-    assert_eq!(row.userId, "macro|test@example.com");
+    assert_eq!(row.get::<String, _>("name"), "Test Chat");
+    assert_eq!(row.get::<String, _>("userId"), "macro|test@example.com");
 }
 
 #[sqlx::test(
@@ -64,15 +62,15 @@ async fn create_chat_creates_permission(pool: Pool<Postgres>) {
         .await
         .unwrap();
 
-    let perm = sqlx::query!(
-        r#"SELECT "sharePermissionId" FROM "ChatPermission" WHERE "chatId" = $1"#,
-        &chat_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let row =
+        sqlx::query(r#"SELECT "sharePermissionId" FROM "ChatPermission" WHERE "chatId" = $1"#)
+            .bind(&chat_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
-    assert!(!perm.sharePermissionId.is_empty());
+    let share_permission_id: String = row.get("sharePermissionId");
+    assert!(!share_permission_id.is_empty());
 }
 
 #[sqlx::test(
@@ -96,20 +94,23 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
         .await
         .unwrap();
 
-    let access = sqlx::query!(
+    let row = sqlx::query(
         r#"
         SELECT "access_level"::text as "access_level"
         FROM "UserItemAccess"
         WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = 'chat'
         "#,
-        "macro|test@example.com",
-        &chat_id,
     )
+    .bind("macro|test@example.com")
+    .bind(&chat_id)
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(access.access_level, Some("owner".to_string()));
+    assert_eq!(
+        row.get::<Option<String>, _>("access_level"),
+        Some("owner".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -133,19 +134,19 @@ async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
         .await
         .unwrap();
 
-    let history = sqlx::query!(
+    let row = sqlx::query(
         r#"
         SELECT "itemType" FROM "UserHistory"
         WHERE "userId" = $1 AND "itemId" = $2
         "#,
-        "macro|test@example.com",
-        &chat_id,
     )
+    .bind("macro|test@example.com")
+    .bind(&chat_id)
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(history.itemType, "chat");
+    assert_eq!(row.get::<String, _>("itemType"), "chat");
 }
 
 #[sqlx::test(
@@ -169,12 +170,16 @@ async fn create_chat_with_project_id(pool: Pool<Postgres>) {
         .await
         .unwrap();
 
-    let row = sqlx::query!(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#, &chat_id,)
+    let row = sqlx::query(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
         .fetch_one(&pool)
         .await
         .unwrap();
 
-    assert_eq!(row.projectId, Some("project-123".to_string()));
+    assert_eq!(
+        row.get::<Option<String>, _>("projectId"),
+        Some("project-123".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -242,12 +247,14 @@ async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
 
     repo.delete(&chat_id).await.unwrap();
 
-    let row = sqlx::query!(r#"SELECT "deletedAt" FROM "Chat" WHERE id = $1"#, &chat_id,)
+    let row = sqlx::query(r#"SELECT "deletedAt" FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
         .fetch_one(&pool)
         .await
         .unwrap();
 
-    assert!(row.deletedAt.is_some());
+    let deleted_at: Option<chrono::NaiveDateTime> = row.get("deletedAt");
+    assert!(deleted_at.is_some());
 }
 
 #[sqlx::test(
@@ -273,15 +280,15 @@ async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
 
     repo.delete(&chat_id).await.unwrap();
 
-    let count = sqlx::query_scalar!(
+    let count: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = 'chat'"#,
-        &chat_id,
     )
+    .bind(&chat_id)
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(count, Some(0));
+    assert_eq!(count.0, 0);
 }
 
 #[sqlx::test(
@@ -307,12 +314,13 @@ async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
 
     repo.permanently_delete(&chat_id).await.unwrap();
 
-    let count = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "Chat" WHERE id = $1"#, &chat_id,)
+    let count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
         .fetch_one(&pool)
         .await
         .unwrap();
 
-    assert_eq!(count, Some(0));
+    assert_eq!(count.0, 0);
 }
 
 #[sqlx::test(
@@ -338,15 +346,14 @@ async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
 
     repo.permanently_delete(&chat_id).await.unwrap();
 
-    let count = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) FROM "ChatPermission" WHERE "chatId" = $1"#,
-        &chat_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let count: (i64,) =
+        sqlx::query_as(r#"SELECT COUNT(*) FROM "ChatPermission" WHERE "chatId" = $1"#)
+            .bind(&chat_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
-    assert_eq!(count, Some(0));
+    assert_eq!(count.0, 0);
 }
 
 #[sqlx::test(
@@ -372,15 +379,15 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
 
     repo.permanently_delete(&chat_id).await.unwrap();
 
-    let count = sqlx::query_scalar!(
+    let count: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM "UserItemAccess" WHERE "item_id" = $1 AND "item_type" = 'chat'"#,
-        &chat_id,
     )
+    .bind(&chat_id)
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(count, Some(0));
+    assert_eq!(count.0, 0);
 }
 
 #[sqlx::test(
@@ -459,12 +466,16 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let row = sqlx::query!(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#, &chat_id,)
+    let row = sqlx::query(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
         .fetch_one(&pool)
         .await
         .unwrap();
 
-    assert_eq!(row.projectId, Some("project-123".to_string()));
+    assert_eq!(
+        row.get::<Option<String>, _>("projectId"),
+        Some("project-123".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -503,12 +514,13 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let row = sqlx::query!(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#, &chat_id,)
+    let row = sqlx::query(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
         .fetch_one(&pool)
         .await
         .unwrap();
 
-    assert_eq!(row.projectId, None);
+    assert_eq!(row.get::<Option<String>, _>("projectId"), None::<String>);
 }
 
 #[sqlx::test(
@@ -576,13 +588,13 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
         .unwrap();
 
     // Insert a message into the source chat
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO "ChatMessage" ("chatId", "content", "role")
         VALUES ($1, '"hello"', 'user')
         "#,
-        &source_id,
     )
+    .bind(&source_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -606,15 +618,14 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
     assert_eq!(copy.name, "Copied Chat");
 
     // Verify the message was copied
-    let msg_count = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) FROM "ChatMessage" WHERE "chatId" = $1"#,
-        &copied_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_count: (i64,) =
+        sqlx::query_as(r#"SELECT COUNT(*) FROM "ChatMessage" WHERE "chatId" = $1"#)
+            .bind(&copied_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
-    assert_eq!(msg_count, Some(1));
+    assert_eq!(msg_count.0, 1);
 }
 
 #[sqlx::test(
@@ -651,15 +662,15 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
     assert!(chat.deleted_at.is_none());
 
     // Confirm history was re-added
-    let count = sqlx::query_scalar!(
+    let count: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = 'chat'"#,
-        &chat_id,
     )
+    .bind(&chat_id)
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(count, Some(1));
+    assert_eq!(count.0, 1);
 }
 
 #[sqlx::test(

@@ -44,7 +44,11 @@ pub(crate) async fn get_chat_share_permission(
         if let Some(channel_share_permissions) = result.channel_share_permissions {
             let parsed: Vec<ChannelSharePermission> =
                 serde_json::from_value(channel_share_permissions)?;
-            if parsed.is_empty() { None } else { Some(parsed) }
+            if parsed.is_empty() {
+                None
+            } else {
+                Some(parsed)
+            }
         } else {
             None
         };

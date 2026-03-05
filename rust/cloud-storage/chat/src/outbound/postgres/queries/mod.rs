@@ -2,8 +2,8 @@
 
 pub(crate) mod copy_messages;
 pub(crate) mod create_chat_permission;
-pub(crate) mod get_access_level;
 pub(crate) mod edit_share_permission;
+pub(crate) mod get_access_level;
 pub(crate) mod get_chat;
 pub(crate) mod get_messages;
 pub(crate) mod get_permissions;

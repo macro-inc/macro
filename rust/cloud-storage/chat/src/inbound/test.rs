@@ -2,7 +2,7 @@ use axum::Extension;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use model::chat::Chat;
+use model::chat::{Chat, ChatBasic};
 use model::response::StringIDResponse;
 use model_user::UserContext;
 use tower::util::ServiceExt;
@@ -10,7 +10,10 @@ use tower::util::ServiceExt;
 use super::*;
 use crate::domain::ports::ChatRepo;
 use crate::models::{ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs};
-use models_permissions::share_permission::access_level::AccessLevel;
+use entity_access::domain::models::{AccessError, AccessLevel, EntityPermission, EntityType};
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::lowercased::Lowercase;
+use macro_user_id::user_id::MacroUserId;
 
 struct MockRepo;
 
@@ -78,7 +81,10 @@ impl ChatRepo for MockRepo {
         Ok(())
     }
 
-    async fn get_permissions(&self, _chat_id: &str) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
         anyhow::bail!("not implemented")
     }
 
@@ -140,7 +146,10 @@ impl ChatRepo for ErrorRepo {
         anyhow::bail!("db error")
     }
 
-    async fn get_permissions(&self, _chat_id: &str) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
         anyhow::bail!("db error")
     }
 
@@ -202,7 +211,10 @@ impl ChatRepo for NotFoundRepo {
         anyhow::bail!("db error")
     }
 
-    async fn get_permissions(&self, _chat_id: &str) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
         anyhow::bail!("db error")
     }
 
@@ -224,6 +236,63 @@ impl ChatRepo for NotFoundRepo {
     }
 }
 
+#[derive(Clone)]
+struct MockAccessService;
+
+impl EntityAccessService for MockAccessService {
+    async fn generate_entity_access_receipt<
+        T: entity_access::domain::models::RequiredAccessLevel,
+    >(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError> {
+        unreachable!("not used by ChatAccessLevelExtractor")
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(Some(AccessLevel::Owner))
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Ok(AccessLevel::Owner)
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Ok(AccessLevel::Owner)
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        Ok(EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        })
+    }
+}
+
 fn user_extension() -> Extension<UserContext> {
     Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
@@ -233,16 +302,43 @@ fn user_extension() -> Extension<UserContext> {
     })
 }
 
-fn mock_router() -> Router {
-    chat_router(ChatRouterState::new(MockRepo)).layer(user_extension())
+fn chat_basic_extension() -> Extension<ChatBasic> {
+    Extension(ChatBasic {
+        id: "some-chat-id".to_string(),
+        name: "Mock Chat".to_string(),
+        user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+            "macro|test@example.com".to_string(),
+        )
+        .unwrap(),
+        project_id: None,
+        deleted_at: None,
+    })
 }
 
-fn error_router() -> Router {
-    chat_router(ChatRouterState::new(ErrorRepo)).layer(user_extension())
+fn mock_create_router() -> Router {
+    chat_create_router(ChatRouterState::new(MockRepo, MockAccessService)).layer(user_extension())
 }
 
-fn not_found_router() -> Router {
-    chat_router(ChatRouterState::new(NotFoundRepo)).layer(user_extension())
+fn mock_id_router() -> Router {
+    chat_id_router(ChatRouterState::new(MockRepo, MockAccessService))
+        .layer(chat_basic_extension())
+        .layer(user_extension())
+}
+
+fn error_id_router() -> Router {
+    chat_id_router(ChatRouterState::new(ErrorRepo, MockAccessService))
+        .layer(chat_basic_extension())
+        .layer(user_extension())
+}
+
+fn not_found_id_router() -> Router {
+    chat_id_router(ChatRouterState::new(NotFoundRepo, MockAccessService))
+        .layer(chat_basic_extension())
+        .layer(user_extension())
+}
+
+fn error_create_router() -> Router {
+    chat_create_router(ChatRouterState::new(ErrorRepo, MockAccessService)).layer(user_extension())
 }
 
 // -- create_chat tests --
@@ -256,7 +352,7 @@ async fn create_chat_returns_id() {
         .body(Body::from(r#"{"name": "My Chat"}"#))
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_create_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -273,7 +369,7 @@ async fn create_chat_with_default_name() {
         .body(Body::from(r#"{}"#))
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_create_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -286,13 +382,13 @@ async fn create_chat_repo_error_returns_500() {
         .body(Body::from(r#"{"name": "My Chat"}"#))
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_create_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
 async fn create_chat_without_auth_returns_401() {
-    let router: Router = chat_router(ChatRouterState::new(MockRepo));
+    let router: Router = chat_create_router(ChatRouterState::new(MockRepo, MockAccessService));
 
     let req = Request::builder()
         .method("POST")
@@ -314,7 +410,7 @@ async fn get_chat_returns_chat() {
         .body(Body::empty())
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -331,7 +427,7 @@ async fn get_chat_not_found_returns_404() {
         .body(Body::empty())
         .unwrap();
 
-    let res = not_found_router().oneshot(req).await.unwrap();
+    let res = not_found_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
 
@@ -342,7 +438,7 @@ async fn get_chat_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -356,7 +452,7 @@ async fn delete_chat_returns_ok() {
         .body(Body::empty())
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -368,7 +464,7 @@ async fn delete_chat_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -382,7 +478,7 @@ async fn permanently_delete_chat_returns_ok() {
         .body(Body::empty())
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -394,7 +490,7 @@ async fn permanently_delete_chat_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -409,7 +505,7 @@ async fn patch_chat_returns_ok() {
         .body(Body::from(r#"{"name": "Renamed"}"#))
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -422,7 +518,7 @@ async fn patch_chat_repo_error_returns_500() {
         .body(Body::from(r#"{"name": "Renamed"}"#))
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -436,7 +532,7 @@ async fn copy_chat_returns_id() {
         .body(Body::empty())
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -452,7 +548,7 @@ async fn copy_chat_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -466,7 +562,7 @@ async fn revert_delete_returns_ok() {
         .body(Body::empty())
         .unwrap();
 
-    let res = mock_router().oneshot(req).await.unwrap();
+    let res = mock_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -478,7 +574,7 @@ async fn revert_delete_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
@@ -491,6 +587,6 @@ async fn get_permissions_repo_error_returns_500() {
         .body(Body::empty())
         .unwrap();
 
-    let res = error_router().oneshot(req).await.unwrap();
+    let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

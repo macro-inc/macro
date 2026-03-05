@@ -28,10 +28,7 @@ impl PgChatRepo {
         Self { pool }
     }
 
-    async fn get_messages(
-        &self,
-        chat_id: &str,
-    ) -> anyhow::Result<Vec<ChatMessageWithAttachments>> {
+    async fn get_messages(&self, chat_id: &str) -> anyhow::Result<Vec<ChatMessageWithAttachments>> {
         queries::get_messages::get_messages(&self.pool, chat_id).await
     }
 
@@ -177,11 +174,7 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn revert_delete(
-        &self,
-        chat_id: &str,
-        project_id: Option<&str>,
-    ) -> anyhow::Result<()> {
+    async fn revert_delete(&self, chat_id: &str, project_id: Option<&str>) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id, project_id).await?;
         tx.commit().await?;
@@ -210,7 +203,12 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn patch(&self, user_id: MacroUserIdStr<'static>, chat_id: &str, args: PatchChatArgs) -> anyhow::Result<()> {
+    async fn patch(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        chat_id: &str,
+        args: PatchChatArgs,
+    ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
 
         queries::patch_chat::patch_chat(

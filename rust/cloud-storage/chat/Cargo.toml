@@ -2,12 +2,14 @@
 name = "chat"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 ai = { path = "../ai" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound"] }
 macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }

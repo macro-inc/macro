@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * New name for the chat.
+ */
 export type PatchChatRequestName = string | null;

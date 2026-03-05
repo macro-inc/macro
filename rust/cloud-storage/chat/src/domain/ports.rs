@@ -10,7 +10,6 @@ This refactor is not a complete refactor of DCS only a refactor of the chat api
 it does not handle streaming, or any of the other stuff that DCS does. This is only
 intended to be an abstraction over the Chat and ChatMessage table
 
-This is an append-only refactor. We are not going to delete anything from DCS (for now)
 */
 
 use crate::models::{ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs};
