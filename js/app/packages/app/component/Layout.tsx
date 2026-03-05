@@ -148,12 +148,10 @@ export function Layout(props: RouteSectionProps) {
           id={'main-layout'}
         >
           <ItemDndProvider>
-            <Show when={isAuthenticated()}>
-              <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-                {props.children}
-              </Resize.Panel>
-              <SettingsWrapper />
-            </Show>
+            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
+              {props.children}
+            </Resize.Panel>
+            <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
