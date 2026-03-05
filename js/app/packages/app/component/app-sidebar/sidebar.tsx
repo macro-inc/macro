@@ -21,7 +21,6 @@ import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
