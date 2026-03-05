@@ -42,6 +42,7 @@ import {
   type ProjectEntity,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -103,6 +104,10 @@ const useSoupNotificationInvalidators = () => {
     (notification) => {
       refetchSoupEntity(notification.entity_id, 'emailThread');
       invalidateSoupEntity(notification.entity_id);
+      // invalidate thread cache so thread gets fetched (with new message) on next load
+      entityQueryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
+      });
     }
   );
 
