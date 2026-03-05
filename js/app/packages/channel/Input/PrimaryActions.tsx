@@ -1,13 +1,13 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
-import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import XIcon from '@icon/regular/x.svg';
+import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { renderIcon } from './render-icon';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
+import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 
 function InputActionButton(props: {
   label: string;
@@ -32,6 +32,20 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const input = useInput();
   const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children']);
+  let fileInputRef: HTMLInputElement | undefined;
+
+  const openAttachPicker = () => {
+    fileInputRef?.click();
+  };
+
+  const onAttachFiles: JSX.EventHandlerUnion<HTMLInputElement, Event> = (
+    event
+  ) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    if (files.length === 0) return;
+    void commands.attachFiles(files);
+  };
 
   return (
     <div
@@ -39,21 +53,26 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
       data-input-primary-actions
       {...rest}
     >
+      <input
+        ref={(element) => {
+          fileInputRef = element;
+        }}
+        type="file"
+        class="hidden"
+        multiple
+        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        onChange={onAttachFiles}
+        data-input-attach-file-picker
+      />
       <Show
         when={local.children}
         fallback={
           <>
             <InputActionButton
-              label={input().showAttachMenu ? 'Close attach menu' : 'Attach'}
-              active={input().showAttachMenu}
-              onClick={() => commands.toggleAttachMenu()}
+              label="Attach files"
+              onClick={() => openAttachPicker()}
             >
-              <Show
-                when={input().showAttachMenu}
-                fallback={renderIcon(PlusIcon, 'size-5')}
-              >
-                {renderIcon(XIcon, 'size-5')}
-              </Show>
+              {renderIcon(PaperclipIcon, 'size-5')}
             </InputActionButton>
             <InputActionButton
               label="Format"

@@ -7,7 +7,6 @@ import { Editor } from './Editor';
 import { Attachments } from './Attachments';
 import { Footer } from './Footer';
 import { PrimaryActions } from './PrimaryActions';
-import { AttachMenu } from './AttachMenu';
 import { SendAction } from './SendAction';
 
 export const Input = {
@@ -20,6 +19,5 @@ export const Input = {
   Attachments,
   Footer,
   PrimaryActions,
-  AttachMenu,
   SendAction,
 };

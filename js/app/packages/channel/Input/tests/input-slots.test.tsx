@@ -70,7 +70,6 @@ const baseInput: InputData = {
   placeholder: 'Message channel',
   value: '',
   showFormatRibbon: false,
-  showAttachMenu: false,
   hasPendingAttachments: false,
   attachments: [],
 };
@@ -93,7 +92,6 @@ describe('Input slots', () => {
   it('wires send and primary action handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    const onToggleAttachMenu = vi.fn();
     const onToggleFormatRibbon = vi.fn();
     const onCloseDraft = vi.fn();
 
@@ -101,9 +99,8 @@ describe('Input slots', () => {
       (() => {
         return (
           <ChannelInput
-            input={{ ...baseInput, isReplyInput: true, showAttachMenu: false }}
+            input={{ ...baseInput, isReplyInput: true }}
             onSend={onSend}
-            onToggleAttachMenu={onToggleAttachMenu}
             onToggleFormatRibbon={onToggleFormatRibbon}
             onCloseDraft={onCloseDraft}
           />
@@ -112,12 +109,14 @@ describe('Input slots', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
-    await user.click(screen.getByRole('button', { name: 'Attach' }));
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
+    await user.click(screen.getByRole('button', { name: 'Attach files' }));
     await user.click(screen.getByRole('button', { name: 'Format' }));
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
-    expect(onToggleAttachMenu).toHaveBeenCalledOnce();
+    expect(clickSpy).toHaveBeenCalledOnce();
+    clickSpy.mockRestore();
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
     expect(onCloseDraft).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('');

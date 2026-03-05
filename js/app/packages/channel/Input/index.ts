@@ -14,7 +14,6 @@ export { Editor } from './Editor';
 export { Attachments } from './Attachments';
 export { Footer } from './Footer';
 export { PrimaryActions } from './PrimaryActions';
-export { AttachMenu } from './AttachMenu';
 export { SendAction } from './SendAction';
 export { RibbonButton } from './RibbonButton';
 export { FormattingRibbon } from './FormattingRibbon';

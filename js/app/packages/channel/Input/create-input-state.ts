@@ -14,6 +14,7 @@ type CreateInputStateOptions = {
   initialInput: InputData;
   mentions: Accessor<ItemMention[]>;
   attachmentTracker: InputAttachmentTracker;
+  attachFiles?: (files: File[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
   draft?: InputDraftAdapter;
 };
@@ -34,9 +35,6 @@ export function createInputState(options: CreateInputStateOptions): InputState {
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(
     !!options.initialInput.showFormatRibbon
   );
-  const [showAttachMenu, setShowAttachMenu] = createSignal(
-    !!options.initialInput.showAttachMenu
-  );
   const [isSending, setIsSending] = createSignal(false);
 
   const snapshot = createMemo<InputSnapshot>(() => ({
@@ -49,7 +47,6 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     ...options.initialInput,
     value: value(),
     showFormatRibbon: showFormatRibbon(),
-    showAttachMenu: showAttachMenu(),
     hasPendingAttachments:
       isSending() || options.attachmentTracker.hasPending(),
     attachments: options.attachmentTracker.attachments(),
@@ -69,7 +66,6 @@ export function createInputState(options: CreateInputStateOptions): InputState {
   const reset = () => {
     setValueSignal('');
     options.attachmentTracker.clearAttachments();
-    setShowAttachMenu(false);
   };
 
   const removeAttachment = (attachment: InputAttachmentData) => {
@@ -95,12 +91,9 @@ export function createInputState(options: CreateInputStateOptions): InputState {
         setIsSending(false);
       }
     },
-    toggleAttachMenu: () => {
-      setShowAttachMenu((open) => {
-        const next = !open;
-        options.callbacks?.onToggleAttachMenu?.(next);
-        return next;
-      });
+    attachFiles: async (files: File[]) => {
+      if (files.length === 0) return;
+      await options.attachFiles?.(files);
     },
     toggleFormatRibbon: () => {
       setShowFormatRibbon((open) => {

@@ -1,4 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
 export type InputAttachmentKind = 'video' | 'image' | 'document';
@@ -7,6 +8,7 @@ export type InputAttachmentData = {
   id: string;
   name: string;
   kind: InputAttachmentKind;
+  iconType?: EntityIconSelector;
   pending?: boolean;
 };
 
@@ -19,7 +21,6 @@ export type InputData = {
   isDraggingOverChannel?: boolean;
   isValidChannelDrag?: boolean;
   showFormatRibbon?: boolean;
-  showAttachMenu?: boolean;
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];
 };
@@ -35,7 +36,6 @@ export type InputSnapshot = {
 export type InputCallbacks = {
   onChange?: (snapshot: InputSnapshot) => void | Promise<void>;
   onSend?: (snapshot: InputSnapshot) => void | Promise<void>;
-  onToggleAttachMenu?: (open: boolean) => void | Promise<void>;
   onToggleFormatRibbon?: (open: boolean) => void | Promise<void>;
   onCloseDraft?: (snapshot: InputSnapshot) => void | Promise<void>;
   onRemoveAttachment?: (
@@ -51,7 +51,7 @@ export type InputDraftAdapter = {
 
 export type InputCommands = {
   send: () => Promise<boolean>;
-  toggleAttachMenu: () => void;
+  attachFiles: (files: File[]) => Promise<void>;
   toggleFormatRibbon: () => void;
   closeDraft: () => void;
   removeAttachment: (attachment: InputAttachmentData) => void;
@@ -63,4 +63,3 @@ export type InputHandle = {
 };
 
 export type InputAttachmentTracker = Tracker;
-

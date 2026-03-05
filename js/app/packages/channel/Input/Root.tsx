@@ -5,7 +5,7 @@ import type { InputCommands, InputData } from './types';
 
 const NoopInputCommands: InputCommands = {
   send: async () => false,
-  toggleAttachMenu: () => {},
+  attachFiles: async () => {},
   toggleFormatRibbon: () => {},
   closeDraft: () => {},
   removeAttachment: () => {},

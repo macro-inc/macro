@@ -6,6 +6,8 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
+import { chatRuleset, uploadFile } from '@core/util/upload';
+import { uploadInputAttachments } from './upload-attachments';
 import type {
   InputCallbacks,
   InputData,
@@ -26,21 +28,35 @@ export function ChannelInput(props: ChannelInputProps) {
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: props.input.attachments,
   });
+  let notifyInputChange = () => {};
 
   const inputState = createInputState({
     initialInput: props.input,
     mentions: mentionsTracker.mentions,
     attachmentTracker,
+    attachFiles: async (files) => {
+      await uploadInputAttachments({
+        files,
+        tracker: attachmentTracker,
+        uploadFile: async (file) => {
+          return uploadFile(file, chatRuleset, {
+            hideProgressIndicator: true,
+          });
+        },
+        onUpdated: notifyInputChange,
+      });
+    },
     callbacks: {
       onChange: props.onChange,
       onSend: props.onSend,
-      onToggleAttachMenu: props.onToggleAttachMenu,
       onToggleFormatRibbon: props.onToggleFormatRibbon,
       onCloseDraft: props.onCloseDraft,
       onRemoveAttachment: props.onRemoveAttachment,
     },
     draft: props.draft,
   });
+
+  notifyInputChange = inputState.notifyChange;
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
@@ -99,11 +115,9 @@ export function ChannelInput(props: ChannelInputProps) {
             />
           </Input.Editor>
         </Input.EditorShell>
-        <Input.Attachments kind="video" />
-        <Input.Attachments kind="image" />
+        <Input.Attachments kind="media" />
         <Input.Attachments kind="document" />
         <Input.Footer>
-          <Input.AttachMenu>{/** ADD Attach menu **/}</Input.AttachMenu>
           <Input.PrimaryActions />
           <Input.SendAction />
         </Input.Footer>
