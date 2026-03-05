@@ -8,7 +8,7 @@ mod handle_pr;
 
 use crate::domain::{
     models::{
-        GithubError, GithubInstallationAccessToken, GithubWebhookEventType, MacroTaskId,
+        GithubError, GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
         ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
@@ -37,8 +37,7 @@ pub struct GithubSyncConfig {
 
 /// The concrete github sync service implementation.
 pub struct GithubSyncServiceImpl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> {
-    config: super::GithubSyncConfig,
-    #[allow(dead_code)]
+    config: GithubSyncConfig,
     document_service: Arc<D>,
     repo: R,
     pub(crate) client: C,
@@ -46,12 +45,7 @@ pub struct GithubSyncServiceImpl<D: DocumentService, R: GithubSyncRepo, C: Githu
 
 impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
     /// Create a new github sync service.
-    pub fn new(
-        config: super::GithubSyncConfig,
-        document_service: Arc<D>,
-        repo: R,
-        client: C,
-    ) -> Self {
+    pub fn new(config: GithubSyncConfig, document_service: Arc<D>, repo: R, client: C) -> Self {
         Self {
             config,
             document_service,
@@ -73,8 +67,8 @@ struct PrMeta {
 struct ResolvedTasks {
     /// Document IDs for all resolved tasks (used for status updates).
     doc_ids: Vec<String>,
-    /// Markdown links for tasks not yet commented on the PR.
-    new_task_links: Vec<String>,
+    /// Markdown links for resolved tasks (used for PR comments).
+    task_links: Vec<String>,
 }
 
 impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
@@ -126,22 +120,26 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         }
     }
 
-    /// Resolve task IDs to documents, filtering for actual tasks and checking
-    /// comment dedup against `existing_comments`.
-    #[tracing::instrument(skip(self, task_ids, existing_comments))]
-    async fn resolve_tasks(
-        &self,
-        task_ids: &[MacroTaskId],
-        existing_comments: &[String],
-    ) -> ResolvedTasks {
+    /// Build a [`GithubKey`] from the webhook event, if owner/repo/pull_number
+    /// are all present.
+    fn github_key(event: &ValidatedGithubWebhookEvent) -> Option<GithubKey> {
+        match (event.repo_owner(), event.repo_name(), event.pull_number()) {
+            (Some(o), Some(r), Some(p)) => Some(GithubKey::new(o, r, p)),
+            _ => None,
+        }
+    }
+
+    /// Resolve task IDs to documents, returning doc IDs and markdown links
+    /// for all tasks that are actually task-type documents.
+    #[tracing::instrument(skip(self, task_ids))]
+    async fn resolve_tasks(&self, task_ids: &[MacroTaskId]) -> ResolvedTasks {
         tracing::trace!(
             task_id_count = task_ids.len(),
-            existing_comment_count = existing_comments.len(),
             "resolving task IDs to documents"
         );
 
         let mut doc_ids = Vec::new();
-        let mut new_task_links = Vec::new();
+        let mut task_links = Vec::new();
 
         for task_id in task_ids {
             let uuid = match task_id.to_uuid() {
@@ -177,22 +175,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
                         tracing::trace!(task_id=%uuid, doc_id, doc_name, "resolved task document");
 
                         doc_ids.push(doc_id.clone());
-
-                        let already_commented = {
-                            let task_link = format!("/app/task/{doc_id})");
-                            existing_comments.iter().any(|c| c.contains(&task_link))
-                        };
-
-                        if already_commented {
-                            tracing::trace!(
-                                task_id=%uuid,
-                                doc_id,
-                                "PR already has a comment linking to this task, skipping comment"
-                            );
-                        } else {
-                            tracing::trace!(task_id=%uuid, doc_id, "adding new task link for comment");
-                            new_task_links.push(create_macro_task_comment_link(doc_name, doc_id));
-                        }
+                        task_links.push(create_macro_task_comment_link(doc_name, doc_id));
                     } else {
                         tracing::trace!(task_id=%uuid, "document found but is not a task, skipping");
                     }
@@ -208,13 +191,13 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
         tracing::trace!(
             resolved_count = doc_ids.len(),
-            new_link_count = new_task_links.len(),
+            link_count = task_links.len(),
             "task resolution complete"
         );
 
         ResolvedTasks {
             doc_ids,
-            new_task_links,
+            task_links,
         }
     }
 
@@ -278,34 +261,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
                 })
                 .ok();
         }
-    }
-
-    /// Fetch existing PR comment bodies, returning empty vec on failure.
-    #[tracing::instrument(skip(self, pr_meta))]
-    async fn fetch_pr_comments(&self, pr_meta: &PrMeta) -> Vec<String> {
-        tracing::trace!(
-            owner = %pr_meta.owner,
-            repo = %pr_meta.repo,
-            pull_number = pr_meta.pull_number,
-            "fetching existing PR comments"
-        );
-
-        let comments = self
-            .client
-            .list_pr_comments(
-                &pr_meta.token.token,
-                &pr_meta.owner,
-                &pr_meta.repo,
-                pr_meta.pull_number,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to list PR comments");
-            })
-            .unwrap_or_default();
-
-        tracing::trace!(comment_count = comments.len(), "fetched PR comments");
-        comments
     }
 }
 

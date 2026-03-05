@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::{
@@ -166,29 +167,64 @@ impl DocumentService for StubDocumentService {
     }
 }
 
-struct StubSyncRepo;
+/// Stateful stub repo that tracks task IDs per github key.
+struct StubSyncRepo {
+    tasks: Mutex<HashMap<String, HashSet<String>>>,
+}
+
+impl StubSyncRepo {
+    fn new() -> Self {
+        Self {
+            tasks: Mutex::new(HashMap::new()),
+        }
+    }
+}
 
 impl GithubSyncRepo for StubSyncRepo {
     type Err = anyhow::Error;
 
-    async fn get_task_ids(&self, _github_key: GithubKey) -> Result<Vec<MacroTaskId>, Self::Err> {
-        Ok(Vec::new())
+    async fn get_task_ids(&self, github_key: GithubKey) -> Result<Vec<MacroTaskId>, Self::Err> {
+        let tasks = self.tasks.lock().unwrap();
+        let ids = tasks
+            .get(github_key.as_ref())
+            .map(|set| {
+                set.iter()
+                    .filter_map(|s| MacroTaskId::from_short_uuid(s))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(ids)
     }
 
     async fn upsert_task_ids(
         &self,
-        _github_key: GithubKey,
-        _task_ids: &[MacroTaskId],
+        github_key: GithubKey,
+        task_ids: &[MacroTaskId],
     ) -> Result<(), Self::Err> {
+        let mut tasks = self.tasks.lock().unwrap();
+        let set = tasks.entry(github_key.as_ref().to_string()).or_default();
+        for id in task_ids {
+            set.insert(id.short_uuid.clone());
+        }
         Ok(())
     }
 
     async fn filter_duplicate_tasks(
         &self,
-        _github_key: GithubKey,
+        github_key: GithubKey,
         task_ids: &[MacroTaskId],
     ) -> Result<Vec<MacroTaskId>, Self::Err> {
-        Ok(task_ids.to_vec())
+        let tasks = self.tasks.lock().unwrap();
+        let existing = tasks.get(github_key.as_ref());
+        Ok(task_ids
+            .iter()
+            .filter(|t| {
+                existing
+                    .map(|set| !set.contains(&t.short_uuid))
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect())
     }
 }
 
@@ -201,26 +237,14 @@ struct PrCommentCall {
     body: String,
 }
 
-/// Stub sync client that optionally returns pre-seeded comments from
-/// `seed_comments`, then also includes any comments created via
-/// `create_pr_comment`.
 struct StubSyncClient {
     pr_comments: Mutex<Vec<PrCommentCall>>,
-    seed_comments: Mutex<Vec<String>>,
 }
 
 impl StubSyncClient {
     fn new() -> Self {
         Self {
             pr_comments: Mutex::new(Vec::new()),
-            seed_comments: Mutex::new(Vec::new()),
-        }
-    }
-
-    fn with_seed_comments(comments: Vec<String>) -> Self {
-        Self {
-            pr_comments: Mutex::new(Vec::new()),
-            seed_comments: Mutex::new(comments),
         }
     }
 
@@ -257,24 +281,6 @@ impl GithubSyncClient for StubSyncClient {
         });
         Ok(())
     }
-
-    async fn list_pr_comments(
-        &self,
-        _access_token: &str,
-        _owner: &str,
-        _repo: &str,
-        _pull_number: u64,
-    ) -> Result<Vec<String>, GithubError> {
-        let mut result: Vec<String> = self.seed_comments.lock().unwrap().clone();
-        result.extend(
-            self.pr_comments
-                .lock()
-                .unwrap()
-                .iter()
-                .map(|c| c.body.clone()),
-        );
-        Ok(result)
-    }
 }
 
 fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient> {
@@ -294,29 +300,8 @@ fn make_sync_service_with_doc_service() -> (
             sync_app_client_id: "test-sync-app-client-id".to_string(),
         },
         doc_service.clone(),
-        StubSyncRepo,
+        StubSyncRepo::new(),
         StubSyncClient::new(),
-    );
-    (service, doc_service)
-}
-
-fn make_sync_service_with_seed_comments(
-    seed_comments: Vec<String>,
-) -> (
-    GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient>,
-    Arc<StubDocumentService>,
-) {
-    let doc_service = Arc::new(StubDocumentService::new());
-    let service = GithubSyncServiceImpl::new(
-        GithubSyncConfig {
-            webhook_secret: "test-webhook-secret".to_string(),
-            github_sync_app_url: "test".to_string(),
-            sync_app_pem: TEST_PEM.to_string(),
-            sync_app_client_id: "test-sync-app-client-id".to_string(),
-        },
-        doc_service.clone(),
-        StubSyncRepo,
-        StubSyncClient::with_seed_comments(seed_comments),
     );
     (service, doc_service)
 }
@@ -517,11 +502,11 @@ async fn pull_request_review_comment_with_task_id() {
 }
 
 // ---------------------------------------------------------------------------
-// Deduplication: bot already posted a comment linking to the same task
+// Deduplication: repo tracks tasks already associated with a PR
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn duplicate_comment_not_posted_when_bot_already_commented() {
+async fn duplicate_comment_not_posted_when_task_already_tracked() {
     let service = make_sync_service();
 
     let make_event = || {
@@ -562,30 +547,59 @@ async fn duplicate_comment_not_posted_when_bot_already_commented() {
 #[tokio::test]
 async fn issue_comment_duplicate_task_id_skipped() {
     let service = make_sync_service();
-    // PR title already contains MACRO-abc123, comment also mentions it
-    let event = ValidatedGithubWebhookEvent::new(
+
+    // First, open the PR with the task ID to populate the repo
+    let pr_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 99,
+                "title": "fixes MACRO-abc123",
+                "body": null,
+                "head": { "ref": "main" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&pr_event).await.unwrap();
+
+    // Comment mentions the same task ID — should be skipped
+    let comment_event = ValidatedGithubWebhookEvent::new(
         "issue_comment".to_string(),
         serde_json::json!({
             "action": "created",
             "issue": {
+                "number": 99,
                 "title": "fixes MACRO-abc123",
                 "body": null,
                 "head": { "ref": "main" }
             },
             "comment": {
                 "body": "Fixes MACRO-abc123"
-            }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
         }),
     );
 
-    let result = service.process_webhook_event(&event).await;
+    let result = service.process_webhook_event(&comment_event).await;
     assert!(result.is_ok());
+    // No additional comment posted (PR open posted one, comment should not)
+    assert_eq!(service.client.pr_comments().len(), 0);
 }
 
 #[tokio::test]
 async fn issue_comment_new_task_id_not_skipped() {
     let service = make_sync_service();
-    // PR title has MACRO-abc123, but comment introduces MACRO-def456
+    // Comment introduces a new task ID not previously tracked
     let event = ValidatedGithubWebhookEvent::new(
         "issue_comment".to_string(),
         serde_json::json!({
@@ -606,9 +620,10 @@ async fn issue_comment_new_task_id_not_skipped() {
 }
 
 #[tokio::test]
-async fn review_duplicate_task_id_skipped() {
+async fn review_duplicate_task_id_skipped_via_pr_context() {
     let service = make_sync_service();
-    // PR title already has the task ID, review body repeats it
+    // PR title already has the task ID. The comment handler upserts PR context
+    // tasks, so the review body's mention is considered a duplicate.
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request_review".to_string(),
         serde_json::json!({
@@ -631,7 +646,8 @@ async fn review_duplicate_task_id_skipped() {
 #[tokio::test]
 async fn review_comment_mixed_new_and_duplicate() {
     let service = make_sync_service();
-    // PR has MACRO-abc123 in branch, comment mentions both abc123 (dup) and def456 (new)
+    // PR has MACRO-abc123 in branch (will be upserted as PR context),
+    // comment mentions both abc123 (dup via context) and def456 (new)
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request_review_comment".to_string(),
         serde_json::json!({
@@ -813,7 +829,7 @@ async fn issue_comment_on_closed_pr_does_not_update_task_status() {
 }
 
 #[tokio::test]
-async fn pr_merged_updates_status_even_when_already_commented() {
+async fn pr_merged_updates_status_even_when_already_tracked() {
     let (service, doc_service) = make_sync_service_with_doc_service();
 
     // First event: PR opened — posts comment and sets "In Review"
@@ -915,10 +931,8 @@ async fn pr_close_does_not_post_comment() {
 #[tokio::test]
 async fn pr_open_does_not_search_existing_comments() {
     // On open, only PR title/body/branch are searched — not existing comments.
-    // The seed comment has the known task ID, but the PR text does not, so
-    // nothing should happen.
-    let (service, doc_service) =
-        make_sync_service_with_seed_comments(vec![format!("See MACRO-2BuyvtY3aeEvHx4uG8iD51")]);
+    // No tasks in the PR text, so nothing should happen.
+    let (service, doc_service) = make_sync_service_with_doc_service();
 
     let event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
@@ -940,28 +954,25 @@ async fn pr_open_does_not_search_existing_comments() {
 
     service.process_webhook_event(&event).await.unwrap();
 
-    // No comment posted — open doesn't search existing comments for task IDs
     assert!(service.client.pr_comments().is_empty());
     assert!(doc_service.task_status_calls().is_empty());
 }
 
 #[tokio::test]
-async fn pr_edit_picks_up_task_from_existing_comment() {
-    // On edit, existing PR comments ARE searched for additional task IDs.
-    let task_link = format!("[My Task](https://macro.com/app/task/{KNOWN_TASK_UUID})");
-    let (service, doc_service) =
-        make_sync_service_with_seed_comments(vec![format!("See MACRO-2BuyvtY3aeEvHx4uG8iD51")]);
+async fn pr_close_picks_up_task_from_repo() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
 
-    // PR title has a different (non-existent) task, but the comment has the real one
-    let event = ValidatedGithubWebhookEvent::new(
+    // First, open PR with the task to populate the repo
+    let open_event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
-            "action": "edited",
+            "action": "opened",
             "pull_request": {
                 "number": 42,
-                "title": "fixes MACRO-abc123",
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
                 "body": null,
-                "head": { "ref": "feature/some-branch" }
+                "head": { "ref": "feature/some-branch" },
+                "merged": false
             },
             "repository": {
                 "name": "my-repo",
@@ -970,28 +981,10 @@ async fn pr_edit_picks_up_task_from_existing_comment() {
             "installation": { "id": 12345 }
         }),
     );
+    service.process_webhook_event(&open_event).await.unwrap();
 
-    service.process_webhook_event(&event).await.unwrap();
-
-    // Should pick up the task from the existing comment and post a link
-    let comments = service.client.pr_comments();
-    assert_eq!(comments.len(), 1);
-    assert_eq!(comments[0].body, task_link);
-
-    // Status should be updated
-    let status_calls = doc_service.task_status_calls();
-    assert_eq!(status_calls.len(), 1);
-    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
-    assert_eq!(status_calls[0].status, "In Review");
-}
-
-#[tokio::test]
-async fn pr_close_picks_up_task_from_comments() {
-    // Task ID only in a comment, not title/body/branch
-    let (service, doc_service) =
-        make_sync_service_with_seed_comments(vec!["See MACRO-2BuyvtY3aeEvHx4uG8iD51".to_string()]);
-
-    let event = ValidatedGithubWebhookEvent::new(
+    // Close with a different title (no task ID in text), but repo remembers it
+    let close_event = ValidatedGithubWebhookEvent::new(
         "pull_request".to_string(),
         serde_json::json!({
             "action": "closed",
@@ -1010,32 +1003,51 @@ async fn pr_close_picks_up_task_from_comments() {
         }),
     );
 
-    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&close_event).await.unwrap();
 
     // No comment posted on close
-    assert!(service.client.pr_comments().is_empty());
+    assert_eq!(service.client.pr_comments().len(), 1); // only from open
 
-    // Status should be updated from comment-discovered task
+    // Status should be updated from repo-tracked task
     let status_calls = doc_service.task_status_calls();
-    assert_eq!(status_calls.len(), 1);
-    assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
-    assert_eq!(status_calls[0].status, "Completed");
+    assert_eq!(status_calls.len(), 2); // "In Review" from open, "Completed" from close
+    assert_eq!(status_calls[1].entity_id, KNOWN_TASK_UUID);
+    assert_eq!(status_calls[1].status, "Completed");
 }
 
 #[tokio::test]
-async fn comment_deduplicates_against_prior_comments() {
-    // A prior comment already mentions the task ID. A new comment mentioning
-    // the same task ID should not trigger a new bot comment.
-    let (service, _doc_service) =
-        make_sync_service_with_seed_comments(vec!["See MACRO-2BuyvtY3aeEvHx4uG8iD51".to_string()]);
+async fn comment_deduplicates_against_repo() {
+    let (service, _doc_service) = make_sync_service_with_doc_service();
 
-    let event = ValidatedGithubWebhookEvent::new(
+    // Open PR with a task — tracked in repo
+    let pr_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 99,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "main" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&pr_event).await.unwrap();
+    assert_eq!(service.client.pr_comments().len(), 1);
+
+    // A comment mentions the same task ID — should be deduped by the repo
+    let comment_event = ValidatedGithubWebhookEvent::new(
         "issue_comment".to_string(),
         serde_json::json!({
             "action": "created",
             "issue": {
                 "number": 99,
-                "title": "some issue",
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
                 "body": null,
                 "state": "open",
                 "head": { "ref": "main" }
@@ -1051,12 +1063,12 @@ async fn comment_deduplicates_against_prior_comments() {
         }),
     );
 
-    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&comment_event).await.unwrap();
 
-    // Task ID was already in a prior comment, so it should be filtered out
-    // as a duplicate — no new bot comment
-    assert!(
-        service.client.pr_comments().is_empty(),
-        "comment should not re-trigger for task already mentioned in prior comment"
+    // No additional comment — task was already tracked in repo
+    assert_eq!(
+        service.client.pr_comments().len(),
+        1,
+        "comment should not re-trigger for task already tracked in repo"
     );
 }

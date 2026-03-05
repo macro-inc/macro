@@ -58,15 +58,6 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         pull_number: u64,
         body: &str,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
-
-    /// Lists comment bodies on a GitHub pull request (via the issues API).
-    fn list_pr_comments(
-        &self,
-        access_token: &str,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-    ) -> impl Future<Output = Result<Vec<String>, GithubError>> + Send;
 }
 
 /// Service interface for github sync operations (webhooks and sync app).
