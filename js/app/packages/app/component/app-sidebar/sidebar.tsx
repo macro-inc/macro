@@ -29,6 +29,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { ROUTER_BASE } from '@app/constants/routerBase';
 
 interface SidebarItem {
   id: ListView;
@@ -325,7 +326,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
         isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'justify-center'
       )}
-      href={`/component${props.href}`}
+      href={`${ROUTER_BASE}/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={(e) => {
