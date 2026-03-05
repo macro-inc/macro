@@ -372,7 +372,7 @@ async function navigateToLocation(
 
 export async function archiveEmail(
   id: string,
-  options: { isDone: boolean; optimisticallyExclude?: boolean }
+  options: { archive: boolean; optimisticallyExclude?: boolean }
 ) {
   await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
@@ -415,7 +415,7 @@ export async function archiveEmail(
   }
 
   try {
-    await emailClient.flagArchived({ value: !options.isDone, id });
+    await emailClient.flagArchived({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
