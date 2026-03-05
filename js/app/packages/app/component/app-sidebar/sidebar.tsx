@@ -266,7 +266,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <ul class="w-full h-full px-2 flex flex-col gap-1">
             <For each={SIDEBAR_LINKS}>
               {(link) => (
-                <li>
+                <li class="flex items-center justify-center">
                   <SidebarLink
                     {...link}
                     sidebarState={props.sidebarState ?? 'expanded'}
@@ -319,11 +319,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
     <Button
       as="a"
       variant="ghost"
-      size="sm"
+      size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'w-full flex items-center justify-start text-sm gap-2',
+        'flex items-center justify-start text-sm gap-2',
         isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'justify-center'
+        props.sidebarState === 'slim' && 'justify-center aspect-square',
+        props.sidebarState !== 'slim' && 'w-full'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
@@ -346,7 +347,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       }}
     >
       <Show when={props.icon}>
-        <div class="shrink-0 size-4">
+        <div class="shrink-0 [&_svg]:size-4">
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
