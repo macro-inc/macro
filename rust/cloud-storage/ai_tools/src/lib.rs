@@ -13,6 +13,9 @@ pub mod web_fetch;
 use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
+use email::inbound::toolset::{
+    CreateDraft, EmailToolContext, GetThread, ListLabels, UpdateThreadLabels,
+};
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
@@ -43,6 +46,14 @@ pub fn all_tools() -> ToolSetWithPrompt {
         // .expect("failed to add list toolset")
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
         .expect("failed to add list entities tool")
+        .add_tool::<ListLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
+        .expect("failed to add list labels tool")
+        .add_tool::<UpdateThreadLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
+        .expect("failed to add update thread labels tool")
+        .add_tool::<CreateDraft, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
+        .expect("failed to add create draft tool")
+        .add_tool::<GetThread, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
+        .expect("failed to add get thread tool")
         .add_tool::<read::Read, Arc<ToolScribe>>()
         .expect("read tool");
     let prompt = prompts::TOOLS_PROMPT;

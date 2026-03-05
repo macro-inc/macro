@@ -6,7 +6,7 @@ use redis::aio::MultiplexedConnection;
 use std::sync::Arc;
 
 use crate::domain::models::{EmailErr, Link};
-use crate::inbound::GmailTokenProvider;
+use crate::domain::ports::GmailTokenProvider;
 
 /// Ten minutes less than the hour the token is valid for, for long-running jobs.
 static GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS: u64 = 3000;

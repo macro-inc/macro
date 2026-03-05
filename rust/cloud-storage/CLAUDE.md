@@ -64,7 +64,7 @@ names are camelCased and not snake_cased (refer to the `schema.prisma` file for 
 So you need to cast as the snake_cased version of the column name when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
 Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in
-`macro-api/cloud-storage/macro_db_client` to update the .sqlx.
+the root directory of the crate you made the changes in, to update the .sqlx directory.
 
 ## Development Commands
 

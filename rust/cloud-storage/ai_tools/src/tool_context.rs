@@ -3,6 +3,7 @@ use comms::{
     domain::service::ChannelServiceImpl,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
+use email::inbound::toolset::EmailToolContext;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use scribe::{
@@ -23,12 +24,20 @@ pub type ToolScribe =
 /// Type alias for the frecency service implementation
 pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 
+/// Type alias for the Gmail token provider implementation
+pub type ToolGmailTokenProvider = email::outbound::GmailTokenProviderImpl;
+
+/// Type alias for the entity access service implementation
+pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
+    entity_access::outbound::PgAccessRepository,
+>;
+
 /// Type alias for the email service implementation
 pub type ToolEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     email::domain::ports::NoOpEnqueuer,
-    email::domain::ports::NoOpGmailLabelModifier,
+    email::outbound::GmailClientLabelModifier,
 >;
 
 /// Type alias for the comms/channels service implementation
@@ -44,6 +53,9 @@ pub type ToolSoupService =
 pub struct ToolServiceContext {
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
+    pub email_service: Arc<ToolEmailService>,
+    pub gmail_token_provider: Arc<ToolGmailTokenProvider>,
+    pub entity_access_service: Arc<ToolEntityAccessService>,
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
 }
@@ -59,5 +71,17 @@ impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService> {
         SoupToolContext {
             service: ctx.soup_service.clone(),
         }
+    }
+}
+
+impl FromRef<ToolServiceContext>
+    for EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>
+{
+    fn from_ref(ctx: &ToolServiceContext) -> Self {
+        EmailToolContext::new(
+            ctx.email_service.clone(),
+            ctx.gmail_token_provider.clone(),
+            ctx.entity_access_service.clone(),
+        )
     }
 }

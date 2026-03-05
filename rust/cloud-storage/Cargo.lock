@@ -99,6 +99,7 @@ dependencies = [
  "cool_asserts",
  "email",
  "email_service_client",
+ "entity_access",
  "frecency",
  "item_filters",
  "lazy_static",
@@ -2773,6 +2774,7 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
+ "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -2789,8 +2791,10 @@ dependencies = [
  "doppleganger",
  "email",
  "email_service_client",
+ "entity_access",
  "frecency",
  "futures",
+ "gmail_client",
  "http-body-util",
  "last_online_tracker",
  "lazy_static",
@@ -3297,7 +3301,9 @@ dependencies = [
 name = "email"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "authentication_service_client",
  "axum",
  "axum-extra",
@@ -3330,6 +3336,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
 ]
