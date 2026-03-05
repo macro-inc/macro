@@ -59,8 +59,7 @@ impl GithubSyncRepo for PgGithubSyncRepo {
             .map(|_| macro_uuid::generate_uuid_v7())
             .collect();
         let github_key = github_key.as_ref();
-        let github_keys: Vec<&str> = std::iter::repeat_n(github_key, short_ids.len())
-            .collect();
+        let github_keys: Vec<&str> = std::iter::repeat_n(github_key, short_ids.len()).collect();
 
         sqlx::query!(
             r#"
