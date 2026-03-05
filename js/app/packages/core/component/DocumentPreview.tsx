@@ -20,6 +20,7 @@ import {
   type PreviewItemNoAccess,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 // Icon imports
@@ -29,6 +30,7 @@ import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
 import MessageIcon from '@icon/regular/chat-circle.svg';
 import ThreadIcon from '@icon/regular/chats-circle.svg';
 import Clipboard from '@icon/regular/clipboard.svg';
+import GitBranchIcon from '@icon/regular/git-branch.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import ColumnsPlusRight from '@icon/regular/columns-plus-right.svg';
 import HighlightIcon from '@icon/regular/highlighter-circle.svg';
@@ -376,6 +378,15 @@ export function PopupPreview(props: {
     }
   };
 
+  const handleCopyBranchName = () => {
+    const previewItem = item();
+    const docName =
+      props.documentInfo.name ||
+      ('name' in previewItem ? (previewItem.name as string) : '') ||
+      '';
+    copyBranchNameToClipboard(props.documentInfo.id, docName);
+  };
+
   const openInNewSplit = createCallback(() => {
     const splitManager = globalSplitManager();
     if (splitManager) {
@@ -456,6 +467,16 @@ export function PopupPreview(props: {
         icon={Clipboard}
       />
     );
+
+    if (props.documentInfo.type === 'task') {
+      buttons.push(
+        <PopupIconButton
+          tooltip="Copy Branch Name"
+          onClick={handleCopyBranchName}
+          icon={GitBranchIcon}
+        />
+      );
+    }
 
     if (props.documentInfo.isOpenable) {
       buttons.push(

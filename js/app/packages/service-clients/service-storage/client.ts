@@ -535,6 +535,19 @@ export const storageServiceClient = {
     );
   },
 
+  async getDocumentShortId({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<MaybeResult<FetchWithTokenErrorCode, string>> {
+    return mapOk(
+      await dssFetch<{ shortId: string }>(`/documents/${documentId}/short_id`, {
+        method: 'GET',
+      }),
+      (result) => result.shortId
+    );
+  },
+
   async exportDocument({ documentId }) {
     return mapOk(
       await dssFetch<ExportDocumentResponse>(

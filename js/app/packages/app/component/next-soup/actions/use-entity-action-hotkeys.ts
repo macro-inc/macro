@@ -5,6 +5,7 @@ import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,
+  makeCopyBranchNameAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -52,6 +53,8 @@ export const useEntityActionHotkeys = (
   const moveToProjectAction = makeMoveToProjectAction();
 
   const copyLinkAction = makeCopyLinkAction();
+
+  const copyBranchNameAction = makeCopyBranchNameAction();
 
   const shareAction = makeShareAction();
 
@@ -221,6 +224,30 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Copy branch name - 'shift+cmd+b'
+  registerHotkey({
+    hotkey: ['shift+cmd+b'],
+    hotkeyToken: TOKENS.entity.action.copyBranchName,
+    scopeId,
+    description: 'Copy branch name',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!copyBranchNameAction.canExecute(entities[0])) return false;
+      copyBranchNameAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length === 1 && copyBranchNameAction.canExecute(entities[0])
+      );
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
