@@ -1,7 +1,7 @@
 import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-
+import SidebarIcon from '@phosphor-icons/core/fill/sidebar-simple-fill.svg?component-solid';
 import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -12,7 +12,7 @@ import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import PlusIcon from '@macro-icons/wide/plus.svg';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
@@ -24,7 +24,6 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UnreadNotificationsWidget } from '@app/component/app-sidebar/unread-notifications-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { setSidebarOpen, sidebarOpen } from '@app/component/Layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { useSettingsState } from '@core/constant/SettingsState';
 
@@ -82,8 +81,11 @@ export const SIDEBAR_LINKS = [
   },
 ] as const satisfies SidebarItem[];
 
+export type SidebarState = 'hidden' | 'expanded' | 'slim';
+
 type AppSidebarProps = {
-  expanded?: boolean;
+  sidebarState?: SidebarState;
+  onOpenChange: (open: boolean) => void;
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
@@ -93,119 +95,155 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
   };
+
   const handleCreateClick = () => {
     setCreateMenuOpen((p) => !p);
   };
 
+  const isExpanded = () => props.sidebarState === 'expanded';
+  const isSlim = () => props.sidebarState === 'slim';
+
   return (
     <>
-      <Show when={isMobile() && sidebarOpen()}>
+      <Show when={isMobile() && isExpanded()}>
         <div
           class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 bg-edge-muted mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => props.onOpenChange(false)}
         />
       </Show>
       <div
         class={cn(
           'h-full bg-page pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
-          props.expanded !== false
-            ? 'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
-            : '-translate-x-full overflow-hidden opacity-0'
+          isExpanded() &&
+            'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          props.sidebarState === 'hidden' &&
+            '-translate-x-full overflow-hidden opacity-0',
+
+          isSlim() &&
+            'max-w-10 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
         )}
       >
-        <div class="flex items-center justify-between py-2 pl-3 pr-2">
+        <div
+          class={cn(
+            'flex items-center justify-between py-2 pl-3 pr-2',
+            isSlim() && 'flex-col gap-2 px-2 justify-center'
+          )}
+        >
           <LogoIcon class="size-6 text-accent" />
           <div class="flex items-center gap-1">
-            <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
-              <Button
-                as="a"
-                variant="tertiary"
-                size="icon-sm"
-                href={`/component/search`}
-                onClick={(e) => {
-                  // Middle mouse handling
-                  if (e.button === 1) return;
+            <Show when={isExpanded()}>
+              <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
+                <Button
+                  as="a"
+                  variant="tertiary"
+                  size="icon-sm"
+                  href={`/component/search`}
+                  onClick={(e) => {
+                    // Middle mouse handling
+                    if (e.button === 1) return;
 
-                  e.preventDefault();
-                  layout.openWithSplit(
-                    {
-                      type: 'component',
-                      id: 'search',
-                    },
-                    {
-                      preferNewSplit: e.shiftKey,
-                      mergeHistory: true,
-                    }
-                  );
-                }}
+                    e.preventDefault();
+                    layout.openWithSplit(
+                      {
+                        type: 'component',
+                        id: 'search',
+                      },
+                      {
+                        preferNewSplit: e.shiftKey,
+                        mergeHistory: true,
+                      }
+                    );
+                  }}
+                >
+                  <SearchIcon />
+                </Button>
+              </Tooltip>
+              <Tooltip
+                tooltip={
+                  <LabelAndHotKey label="Command palette" shortcut="⌘K" />
+                }
               >
-                <SearchIcon />
-              </Button>
-            </Tooltip>
-            <Tooltip
-              tooltip={<LabelAndHotKey label="Command palette" shortcut="⌘K" />}
-            >
-              <Button
-                variant="tertiary"
-                size="icon-sm"
-                onClick={handleCommandPaletteClick}
+                <Button
+                  variant="tertiary"
+                  size="icon-sm"
+                  onClick={handleCommandPaletteClick}
+                >
+                  <CommandIcon />
+                </Button>
+              </Tooltip>
+              <Tooltip
+                tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
               >
-                <CommandIcon />
-              </Button>
-            </Tooltip>
-            <Tooltip
-              tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-            >
-              <Button
-                variant="tertiary"
-                size="icon-sm"
-                onClick={handleCreateClick}
+                <Button
+                  variant="tertiary"
+                  size="icon-sm"
+                  onClick={handleCreateClick}
+                >
+                  <PlusIcon />
+                </Button>
+              </Tooltip>
+              <Tooltip
+                tooltip={
+                  <LabelAndHotKey
+                    label="Settings"
+                    hotkeyToken="global.toggleSettings"
+                  />
+                }
               >
-                <PlusIcon />
-              </Button>
-            </Tooltip>
-            <Tooltip
-              tooltip={
-                <LabelAndHotKey
-                  label="Settings"
-                  hotkeyToken="global.toggleSettings"
-                />
-              }
-            >
-              <Button
-                variant="tertiary"
-                size="icon-sm"
-                onClick={toggleSettings}
-              >
-                <GearIcon />
-              </Button>
-            </Tooltip>
+                <Button
+                  variant="tertiary"
+                  size="icon-sm"
+                  onClick={toggleSettings}
+                >
+                  <GearIcon />
+                </Button>
+              </Tooltip>
+            </Show>
+            <Show when={!isMobile()}>
+              <Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => props.onOpenChange(isSlim())}
+                >
+                  <SidebarIcon />
+                </Button>
+              </Tooltip>
+            </Show>
           </div>
         </div>
+
         <nav>
           <ul class="w-full h-full px-2 flex flex-col gap-1">
             <For each={SIDEBAR_LINKS}>
               {(link) => (
                 <li>
-                  <SidebarLink {...link} />
+                  <SidebarLink
+                    {...link}
+                    sidebarState={props.sidebarState ?? 'expanded'}
+                  />
                 </li>
               )}
             </For>
           </ul>
         </nav>
-        <div class="block max-h-[clamp(10%,60%,20rem)]">
-          <ChannelsUnreadWidget />
-        </div>
+        <Show when={isExpanded()}>
+          <div class="block max-h-[clamp(10%,60%,20rem)]">
+            <ChannelsUnreadWidget />
+          </div>
 
-        <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto">
-          <UnreadNotificationsWidget />
-        </div>
+          <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto">
+            <UnreadNotificationsWidget />
+          </div>
+        </Show>
       </div>
     </>
   );
 };
 
-interface SidebarLinkProps extends SidebarItem {}
+interface SidebarLinkProps extends SidebarItem {
+  sidebarState: SidebarState;
+}
 
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
@@ -234,8 +272,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size="sm"
       class={cn(
-        'w-full justify-start text-sm gap-2',
-        isActive() && 'bg-ink/10 text-ink'
+        'w-full flex items-center justify-start text-sm gap-2',
+        isActive() && 'bg-ink/10 text-ink',
+        props.sidebarState === 'slim' && 'justify-center'
       )}
       href={`/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
@@ -258,11 +297,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
       }}
     >
       <Show when={props.icon}>
-        <div class="size-4">
+        <div class="shrink-0 size-4">
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      {props.label}
+      <Show when={props.sidebarState === 'expanded'}>{props.label}</Show>
     </Button>
   );
 };

@@ -28,8 +28,8 @@ import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
-import { setSidebarOpen } from '@app/component/Layout';
 import { isListViewID } from '@app/constants/list-views';
+import { setSidebarState } from '@app/component/Layout';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -192,7 +192,9 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
               type="button"
               class="p-2"
               onClick={() => {
-                setSidebarOpen((p) => !p);
+                setSidebarState((p) =>
+                  p === 'expanded' ? 'hidden' : 'expanded'
+                );
               }}
             >
               <HamburgerIcon class="size-6" />

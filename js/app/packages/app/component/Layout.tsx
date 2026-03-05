@@ -25,7 +25,10 @@ import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
-import { AppSidebar } from '@app/component/app-sidebar/sidebar';
+import {
+  AppSidebar,
+  type SidebarState,
+} from '@app/component/app-sidebar/sidebar';
 import { isMobile } from '@core/mobile/isMobile';
 
 const AUTH_URLS = [
@@ -37,7 +40,9 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
 
-export const [sidebarOpen, setSidebarOpen] = createSignal(!isMobile());
+export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
+  !isMobile() ? 'slim' : 'hidden'
+);
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -124,7 +129,17 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <AppSidebar expanded={sidebarOpen()} />
+        <AppSidebar
+          sidebarState={sidebarState()}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSidebarState(isMobile() ? 'hidden' : 'slim');
+              return;
+            }
+
+            setSidebarState('expanded');
+          }}
+        />
 
         <Resize.Zone
           gutter={4}
