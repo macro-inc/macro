@@ -2,15 +2,16 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
 import { useSplitLayout } from '../component/split-layout/layout';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import { toast } from '@core/component/Toast/Toast';
 
 export function useHandleFileUpload({
   projectId,
 }: {
   projectId?: string;
 } = {}) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { replaceOrInsertSplit, openWithSplit } = useSplitLayout();
 
-  return async (files: UploadInput[]) => {
+  return async (files: UploadInput[], withOpen = true) => {
     const results = await uploadFiles(files, 'dss', {
       projectId,
     });
@@ -26,33 +27,49 @@ export function useHandleFileUpload({
       .filter((result) => result.pending)
       .filter((result) => result.type === 'folder');
 
-    // refetch soup for folders once all pending uploads are done
-    Promise.allSettled(pendingUploads.map((upload) => upload.projectId)).then(
-      (results) => {
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value) {
-            refetchSoupEntity(result.value, 'project');
-          }
-        }
-      }
-    );
+    // Refetch soup for folders once pending uploads are done, and show a success
+    // toast with an action to open the created folder/project.
+    for (const upload of pendingUploads) {
+      upload.projectId.then((createdProjectId) => {
+        if (!createdProjectId) return;
 
-    // if there is a single file uploaded then open it
-    if (successfulUploads.length !== 1 || failedUploads.length > 0) {
-      return;
+        refetchSoupEntity(createdProjectId, 'project');
+
+        toast.success(`Uploaded ${upload.name}`, undefined, {
+          text: 'Open folder',
+          onClick: () => {
+            openWithSplit(
+              { type: 'project', id: createdProjectId },
+              { referredFrom: 'file-upload', activate: true }
+            );
+          },
+        });
+      });
     }
 
-    const upload = successfulUploads[0];
-    // refetch the uploaded document into soup
-    if (upload.type === 'document') {
-      refetchSoupEntity(upload.documentId, 'document');
-      replaceOrInsertSplit(
-        {
-          type: fileTypeToBlockName(upload.fileType),
-          id: upload.documentId,
-        },
-        'file-upload'
-      );
+    // refetch soup for uploaded docs
+    for (const upload of successfulUploads) {
+      if (upload.type === 'document') {
+        refetchSoupEntity(upload.documentId, 'document');
+      }
+    }
+
+    // optionally nav to singular uploaded doc
+    if (
+      withOpen &&
+      successfulUploads.length === 1 &&
+      failedUploads.length === 0
+    ) {
+      const upload = successfulUploads[0];
+      if (upload.type === 'document') {
+        replaceOrInsertSplit(
+          {
+            type: fileTypeToBlockName(upload.fileType),
+            id: upload.documentId,
+          },
+          'file-upload'
+        );
+      }
     }
   };
 }

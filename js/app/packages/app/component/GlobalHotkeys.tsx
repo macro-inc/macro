@@ -20,9 +20,9 @@ import { CommandState } from './command';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 import {
-  handleFolderSelect,
   openFilePicker,
   openFolderPicker,
+  handleFolderSelect,
 } from '@core/util/upload';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import Upload from '@icon/regular/upload.svg';
@@ -247,7 +247,7 @@ export default function GlobalShortcuts() {
     icon: () => <Upload class="size-4" />,
     keyDownHandler: () => {
       openFilePicker({ multiple: true }, async (files) => {
-        await handleFileUpload(files);
+        await handleFileUpload(files, false);
       });
       return true;
     },
@@ -255,19 +255,14 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    icon: () => <Upload class="size-4" />,
     description: 'Upload folders',
+    icon: () => <Upload class="size-4" />,
     keyDownHandler: () => {
-      openFolderPicker(
-        {
-          multiple: true,
-        },
-        async (files) => {
-          await handleFolderSelect(files, async (entries) => {
-            await handleFileUpload(entries);
-          });
-        }
-      );
+      openFolderPicker({ multiple: true }, async (files) => {
+        await handleFolderSelect(files, async (entries) => {
+          await handleFileUpload(entries, false);
+        });
+      });
       return true;
     },
   });
