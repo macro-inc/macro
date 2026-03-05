@@ -25,17 +25,17 @@ export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
             class="bottom-mask"
             fill="black"
             x="-10"
-            y="13.5"
+            y="12"
             width="100"
             height="20"
           />
           {/* Hide behind head */}
-          <circle class="head-mask" fill="black" cx="9" cy="5.25" r="5.25" />
+          <circle class="head-mask" fill="black" cx="9" cy="3.75" r="5.25" />
         </mask>
 
         {/* Clip to cut off shoulders at bottom */}
         <clipPath id={clipBottomId}>
-          <rect x="-10" y="-10" width="100" height="23.5" />
+          <rect x="-10" y="-10" width="100" height="22" />
         </clipPath>
       </defs>
 
@@ -71,13 +71,13 @@ export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
       {/* Frame pieces - masked behind person */}
       <g mask={`url(#${frameMaskId})`}>
         {/* Top-right corner bracket */}
-        <path d="M17.25,1.5h-8.25v1.5h7.5v9h1.5V2.25c0-.41-.34-.75-.75-.75Z" />
+        <path d="M17.25,0h-8.25v1.5h7.5v9h1.5V0.75c0-.41-.34-.75-.75-.75Z" />
         {/* Top-left bar */}
-        <rect x="1.5" y="1.5" width="7.5" height="1.5" />
+        <rect x="1.5" y="0" width="7.5" height="1.5" />
         {/* Bottom-left corner bracket */}
-        <path d="M0.75,13.5h3.25v-1.5h-2.5V3h-1.5v9.75c0,.41.34.75.75.75Z" />
+        <path d="M0.75,12h3.25v-1.5h-2.5V1.5h-1.5v9.75c0,.41.34.75.75.75Z" />
         {/* Bottom-right bar */}
-        <rect x="13.5" y="12" width="3" height="1.5" />
+        <rect x="13.5" y="10.5" width="3" height="1.5" />
       </g>
 
       {/* Person shapes */}
@@ -85,10 +85,10 @@ export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
         {/* Head - bobs down and up */}
         <path
           class="head"
-          d="M9,9c-2.07,0-3.75-1.68-3.75-3.75s1.68-3.75,3.75-3.75,3.75,1.68,3.75,3.75-1.68,3.75-3.75,3.75ZM9,3c-1.24,0-2.25,1.01-2.25,2.25s1.01,2.25,2.25,2.25,2.25-1.01,2.25-2.25-1.01-2.25-2.25-2.25Z"
+          d="M9,7.5c-2.07,0-3.75-1.68-3.75-3.75s1.68-3.75,3.75-3.75,3.75,1.68,3.75,3.75-1.68,3.75-3.75,3.75ZM9,1.5c-1.24,0-2.25,1.01-2.25,2.25s1.01,2.25,2.25,2.25,2.25-1.01,2.25-2.25-1.01-2.25-2.25-2.25Z"
         />
         {/* Shoulders - static */}
-        <path d="M9,22.04c-3.6,0-6.52-2.92-6.52-6.52s2.93-6.52,6.52-6.52,6.52,2.93,6.52,6.52-2.93,6.52-6.52,6.52ZM9,10.5c-2.77,0-5.02,2.25-5.02,5.02s2.25,5.02,5.02,5.02,5.02-2.25,5.02-5.02-2.25-5.02-5.02-5.02Z" />
+        <path d="M9,20.54c-3.6,0-6.52-2.92-6.52-6.52s2.93-6.52,6.52-6.52,6.52,2.93,6.52,6.52-2.93,6.52-6.52,6.52ZM9,9c-2.77,0-5.02,2.25-5.02,5.02s2.25,5.02,5.02,5.02,5.02-2.25,5.02-5.02-2.25-5.02-5.02-5.02Z" />
       </g>
     </svg>
   );

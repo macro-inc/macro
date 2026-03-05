@@ -171,3 +171,9 @@ if (DEV_MODE_ENV) {
     )
   );
 }
+
+// Icon gallery
+registerComponent(
+  'icon-gallery',
+  lazy(() => import('@core/internal/IconGallery'))
+);

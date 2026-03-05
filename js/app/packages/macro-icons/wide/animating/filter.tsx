@@ -3,7 +3,7 @@ export const AnimatedFilterIcon = (props: { triggerAnimation?: boolean }) => {
     <svg
       width="100%"
       height="100%"
-      viewBox="0 -3 18 18"
+      viewBox="0 -4.5 18 18"
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"

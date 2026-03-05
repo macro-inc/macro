@@ -20,24 +20,18 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
         {/* Mask for right person - hides areas behind left person and bottom */}
         <mask id={maskRightPersonId} maskUnits="userSpaceOnUse">
           {/* White base = visible */}
-          <rect x="-10" y="-10" width="100" height="100" fill="white" />
+          <rect x="-10" y="-40" width="100" height="140" fill="white" />
           {/* Black where left head is = hidden (animates with left head) */}
-          <circle
-            class="mask-left-head"
-            fill="black"
-            cx="7.74"
-            cy="5.5"
-            r="5.5"
-          />
+          <circle class="mask-left-head" fill="black" cx="5.48" cy="4" r="5.5" />
           {/* Black where left shoulders are = hidden */}
-          <circle fill="black" cx="7.74" cy="15.25" r="7.25" />
+          <circle fill="black" cx="5.48" cy="13.5" r="7" />
           {/* Black at bottom = hidden */}
-          <rect fill="black" y="13.5" width="23.24" height="9" />
+          <rect fill="black" y="12" width="20" height="10" />
         </mask>
 
         {/* Clip path to cut off bottom of left shoulders */}
         <clipPath id={clipBottomId}>
-          <rect x="0" y="0" width="23.24" height="13.5" />
+          <rect x="0" y="0" width="20" height="12" />
         </clipPath>
       </defs>
 
@@ -78,12 +72,12 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
         {/* Head */}
         <path
           class="head-right"
-          d="M14.74,9.5c-2.21,0-4-1.79-4-4s1.79-4,4-4,4,1.79,4,4-1.79,4-4,4ZM14.74,3c-1.38,0-2.5,1.12-2.5,2.5s1.12,2.5,2.5,2.5,2.5-1.12,2.5-2.5-1.12-2.5-2.5-2.5Z"
+          d="M12.48 8C10.27 8 8.48 6.21 8.48 4C8.48 1.79 10.27 0 12.48 0C14.69 0 16.48 1.79 16.48 4C16.48 6.21 14.69 8 12.48 8ZM12.48 1.5C11.1 1.5 9.98 2.62 9.98 4C9.98 5.38 11.1 6.5 12.48 6.5C13.86 6.5 14.98 5.38 14.98 4C14.98 2.62 13.86 1.5 12.48 1.5Z"
         />
         {/* Shoulders */}
         <path
           class="shoulders-right"
-          d="M14.74,21c-3.17,0-5.75-2.58-5.75-5.75s2.58-5.75,5.75-5.75,5.75,2.58,5.75,5.75-2.58,5.75-5.75,5.75ZM14.74,11c-2.34,0-4.25,1.91-4.25,4.25s1.91,4.25,4.25,4.25,4.25-1.91,4.25-4.25-1.91-4.25-4.25-4.25Z"
+          d="M12.48 19.5C9.31 19.5 6.73 16.92 6.73 13.75C6.73 10.58 9.31 8 12.48 8C15.65 8 18.23 10.58 18.23 13.75C18.23 16.92 15.65 19.5 12.48 19.5ZM12.48 9.5C10.14 9.5 8.23 11.41 8.23 13.75C8.23 16.09 10.14 18 12.48 18C14.82 18 16.73 16.09 16.73 13.75C16.73 11.41 14.82 9.5 12.48 9.5Z"
         />
       </g>
 
@@ -91,13 +85,13 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
       {/* Head - no clipping needed */}
       <path
         class="head-left"
-        d="M7.74,9.5c-2.21,0-4-1.79-4-4S5.53,1.5,7.74,1.5s4,1.79,4,4-1.79,4-4,4ZM7.74,3c-1.38,0-2.5,1.12-2.5,2.5s1.12,2.5,2.5,2.5,2.5-1.12,2.5-2.5-1.12-2.5-2.5-2.5Z"
+        d="M5.48 8C3.27 8 1.48 6.21 1.48 4C1.48 1.79 3.27 0 5.48 0C7.69 0 9.48 1.79 9.48 4C9.48 6.21 7.69 8 5.48 8ZM5.48 1.5C4.1 1.5 2.98 2.62 2.98 4C2.98 5.38 4.1 6.5 5.48 6.5C6.86 6.5 7.98 5.38 7.98 4C7.98 2.62 6.86 1.5 5.48 1.5Z"
       />
       {/* Shoulders - clipped at bottom */}
       <g clip-path={`url(#${clipBottomId})`}>
         <path
           class="shoulders-left"
-          d="M7.74,21c-3.17,0-5.75-2.58-5.75-5.75s2.58-5.75,5.75-5.75,5.75,2.58,5.75,5.75-2.58,5.75-5.75,5.75ZM7.74,11c-2.34,0-4.25,1.91-4.25,4.25s1.91,4.25,4.25,4.25,4.25-1.91,4.25-4.25-1.91-4.25-4.25-4.25Z"
+          d="M5.48 19.5C2.31 19.5 -0.27 16.92 -0.27 13.75C-0.27 10.58 2.31 8 5.48 8C8.65 8 11.23 10.58 11.23 13.75C11.23 16.92 8.65 19.5 5.48 19.5ZM5.48 9.5C3.14 9.5 1.23 11.41 1.23 13.75C1.23 16.09 3.14 18 5.48 18C7.82 18 9.73 16.09 9.73 13.75C9.73 11.41 7.82 9.5 5.48 9.5Z"
         />
       </g>
     </svg>
