@@ -1,5 +1,8 @@
 #![deny(missing_docs)]
 //! This crate provides small reusable tower-http utilities which are useful across macro's http services
+
+#[cfg(test)]
+mod test;
 use std::{
     cmp,
     sync::{
