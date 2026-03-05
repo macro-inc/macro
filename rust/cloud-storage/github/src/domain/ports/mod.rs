@@ -6,12 +6,8 @@
 mod link;
 #[cfg(feature = "sync")]
 mod sync;
-#[cfg(feature = "sync")]
-mod sync_client;
 
 #[cfg(feature = "link")]
 pub use link::*;
 #[cfg(feature = "sync")]
 pub use sync::*;
-#[cfg(feature = "sync")]
-pub use sync_client::*;
