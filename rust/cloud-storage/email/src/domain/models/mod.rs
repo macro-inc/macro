@@ -5,6 +5,7 @@ pub mod error;
 pub mod label;
 pub mod link;
 pub mod message;
+pub mod parsed_message;
 pub mod preview;
 pub mod thread;
 
@@ -24,6 +25,7 @@ pub use label::{
 };
 pub use link::{Link, UserProvider};
 pub use message::{Message, MessageRow, SimpleMessage};
+pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,
     PreviewView, PreviewViewStandardLabel,

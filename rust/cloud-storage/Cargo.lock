@@ -3571,6 +3571,7 @@ name = "email_utils"
 version = "0.1.0"
 dependencies = [
  "ego-tree",
+ "html2text",
  "lazy_static",
  "regex",
  "scraper",
@@ -6101,7 +6102,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "email_utils",
- "html2text",
  "macro_user_id",
  "models_pagination",
  "schemars",

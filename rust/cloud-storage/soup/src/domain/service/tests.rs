@@ -56,6 +56,15 @@ impl EmailService for NoopEmailService {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,

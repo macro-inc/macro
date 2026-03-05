@@ -7,7 +7,7 @@ mod thread_labels;
 use crate::domain::{
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest,
-        Link, LinkLabel, Thread, UpdateThreadLabelsResult,
+        Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
     },
     ports::{EmailMessageEnqueuer, EmailRepo, EmailService, GmailLabelModifier},
 };
@@ -83,6 +83,15 @@ where
     ) -> Result<Option<Thread>, EmailErr> {
         self.get_thread_with_messages_impl(receipt, offset, limit)
             .await
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Option<ParsedThread>, EmailErr> {
+        self.get_thread_parsed_impl(receipt, offset, limit).await
     }
 
     async fn create_draft(

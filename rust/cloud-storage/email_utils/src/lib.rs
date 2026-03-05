@@ -1,3 +1,4 @@
+pub mod body_parsed;
 pub mod body_replyless;
 pub mod generic_email;
 pub mod normalize_contact;

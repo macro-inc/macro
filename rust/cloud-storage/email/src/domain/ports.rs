@@ -2,8 +2,8 @@ use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest,
     Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
-    PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo,
-    Thread, ThreadRow, UpdateThreadLabelsResult, UpsertedContacts, UserProvider,
+    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage,
+    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -227,6 +227,14 @@ pub trait EmailService: Send + Sync + 'static {
         offset: i64,
         limit: i64,
     ) -> impl Future<Output = Result<Option<Thread>, EmailErr>> + Send;
+
+    /// Fetch a thread with lightweight parsed messages (no attachments or scheduled send times).
+    fn get_thread_parsed(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<ParsedThread>, EmailErr>> + Send;
 
     /// Create a draft message for the given link.
     fn create_draft(
