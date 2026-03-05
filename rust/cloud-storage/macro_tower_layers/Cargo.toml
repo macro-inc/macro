@@ -8,4 +8,8 @@ version = "0.1.0"
 http = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["request-id", "util"] }
+tokio = { workspace = true, features = ["time", "rt"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
