@@ -184,6 +184,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
                 <Button
                   as="a"
+                  class="cursor-default"
                   variant="tertiary"
                   size="icon-sm"
                   href={`/component/search`}
@@ -321,7 +322,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2',
+        'flex items-center justify-start text-sm gap-2 cursor-default',
         isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'justify-center aspect-square',
         props.sidebarState !== 'slim' && 'w-full'
