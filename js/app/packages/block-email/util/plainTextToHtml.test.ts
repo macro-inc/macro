@@ -32,9 +32,7 @@ describe('plainTextToHtml', () => {
 
   describe('html escaping', () => {
     it('escapes ampersands', () => {
-      expect(plainTextToHtml('a & b')).toBe(
-        `<div>${span('a &amp; b')}</div>`
-      );
+      expect(plainTextToHtml('a & b')).toBe(`<div>${span('a &amp; b')}</div>`);
     });
 
     it('escapes angle brackets', () => {
