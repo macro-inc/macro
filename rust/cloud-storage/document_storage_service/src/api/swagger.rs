@@ -71,6 +71,7 @@ use channels::inbound::axum_router::{
     ApiThreadInfo, ApiThreadReply,
 };
 use document_sub_type::DocumentSubType;
+use documents_hex::inbound::axum_router::ShortIdResponse;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -153,6 +154,7 @@ use utoipa::OpenApi;
         documents::get_document_views::get_document_views_handler,
         documents::location::get_location_handler,
         documents_hex::inbound::axum_router::get_location_v3_handler,
+        documents_hex::inbound::axum_router::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
         documents::get_batch_preview::get_batch_preview_handler,
@@ -376,6 +378,7 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            ShortIdResponse,
         ),
     ),
     tags(

@@ -441,6 +441,17 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
             .map_err(|e| DocumentError::Internal(e.into()))
     }
 
+    async fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        let entity_id = &entity_access_receipt.entity().entity_id;
+        let uuid = macro_uuid::string_to_uuid(entity_id)
+            .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+        let short_id = macro_uuid::ShortUuidConverter::default().from_uuid(&uuid);
+        Ok(short_id)
+    }
+
     #[tracing::instrument(err, skip(self, args))]
     async fn create_document(
         &self,
