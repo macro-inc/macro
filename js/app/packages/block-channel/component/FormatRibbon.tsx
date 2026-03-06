@@ -21,6 +21,11 @@ export type FormatRibbonProps = {
 };
 
 export function FormatRibbon(props: FormatRibbonProps) {
+  const dispatchFormat = (transform: NodeTransformType) => {
+    const hasFormat = props.state.elementsInRange.has(transform);
+    props.nodeFormat(hasFormat ? 'paragraph' : transform);
+  };
+
   return (
     <div
       class="flex flex-row w-full gap-2 items-center p-2"
@@ -83,7 +88,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-bullet')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-bullet');
+          dispatchFormat('list-bullet');
         }}
       >
         <ListBullets width={20} height={20} />
@@ -94,7 +99,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-number')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-number');
+          dispatchFormat('list-number');
         }}
       >
         <ListNumbers width={20} height={20} />
@@ -105,7 +110,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-check')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-check');
+          dispatchFormat('list-check');
         }}
       >
         <ListChecks width={20} height={20} />
@@ -116,7 +121,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('quote')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('quote');
+          dispatchFormat('quote');
         }}
       >
         <TextQuote width={20} height={20} />
