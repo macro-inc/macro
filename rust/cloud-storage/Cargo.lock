@@ -5744,7 +5744,6 @@ dependencies = [
 name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
- "axum",
  "http 1.3.1",
  "tokio",
  "tower 0.5.2",
