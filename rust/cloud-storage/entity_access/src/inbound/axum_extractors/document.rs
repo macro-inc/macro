@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -39,7 +39,6 @@ pub struct DocumentAccessExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for DocumentAccessExtractor<T, Svc>
 where
     T: RequiredPermission,

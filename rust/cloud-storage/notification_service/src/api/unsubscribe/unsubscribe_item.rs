@@ -22,7 +22,7 @@ pub struct UnsubscribeItemPathParams {
 #[utoipa::path(
         post,
         operation_id = "unsubscribe_item",
-        path = "/unsubscribe/item/:item_type/:item_id",
+        path = "/unsubscribe/item/{item_type}/{item_id}",
         responses(
             (status = 200, body=EmptyResponse),
             (status = 401, body=ErrorResponse),

@@ -17,13 +17,13 @@ mod get_mapping;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route(
-            "/:source_id",
+            "/{source_id}",
             post(create::create_id_mapping_handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
             )),
         )
         .route(
-            "/:source_id",
+            "/{source_id}",
             get(get_mapping::get_id_mapping_handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
             )),

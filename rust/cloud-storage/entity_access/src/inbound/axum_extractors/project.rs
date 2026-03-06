@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
@@ -35,7 +35,6 @@ pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
@@ -228,7 +227,6 @@ impl<T: RequiredPermission, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     }
 }
 
-#[async_trait]
 impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
     T: RequiredPermission,

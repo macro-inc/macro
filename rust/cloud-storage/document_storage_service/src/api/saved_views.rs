@@ -4,7 +4,7 @@ use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Extension, Router, routing::get};
-use axum::{Json, async_trait};
+use axum::Json;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use saved_views::{ExcludedDefaultViewStorage, PgViewStorage, ViewStorage};
@@ -23,8 +23,8 @@ pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", get(get_views_handler))
         .route("/", post(create_view_handler))
-        .route("/:saved_view_id", delete(delete_view_handler))
-        .route("/:saved_view_id", patch(patch_view_handler))
+        .route("/{saved_view_id}", delete(delete_view_handler))
+        .route("/{saved_view_id}", patch(patch_view_handler))
         .route("/exclude_default", post(exclude_default_view_handler))
 }
 
@@ -112,7 +112,6 @@ async fn authorize_view_access(
 #[derive(Debug)]
 struct SavedViewOwner(pub UserContext);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for SavedViewOwner
 where
     S: Send + Sync,

@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -34,7 +34,6 @@ pub struct ChatAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ChatAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,

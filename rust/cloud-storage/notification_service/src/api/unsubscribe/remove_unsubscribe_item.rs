@@ -15,7 +15,7 @@ use super::unsubscribe_item::UnsubscribeItemPathParams;
 #[utoipa::path(
         delete,
         operation_id = "remove_unsubscribe_item",
-        path = "/unsubscribe/item/:item_type/:item_id",
+        path = "/unsubscribe/item/{item_type}/{item_id}",
         responses(
             (status = 200, body=EmptyResponse),
             (status = 401, body=ErrorResponse),

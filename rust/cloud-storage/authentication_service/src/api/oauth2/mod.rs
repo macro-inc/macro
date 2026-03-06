@@ -8,7 +8,7 @@ mod login;
 
 pub fn router() -> Router<ApiContext> {
     Router::new().route(
-        "/:provider/callback",
+        "/{provider}/callback",
         get(handler).layer(CookieManagerLayer::new()),
     )
 }
