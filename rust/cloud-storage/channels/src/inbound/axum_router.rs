@@ -18,7 +18,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
-        models::{EntityAccessReceipt, RequiredAccessLevel, ViewAccessLevel},
+        models::{EntityAccessReceipt, MemberParticipantRole, RequiredPermission},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
@@ -63,7 +63,7 @@ impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-fn channel_id_from_receipt<T: RequiredAccessLevel>(
+fn channel_id_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<Uuid, ChannelsHandlerErr> {
     Uuid::parse_str(&receipt.entity().entity_id)
@@ -182,7 +182,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
     cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
@@ -254,7 +254,7 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
 #[tracing::instrument(err, skip_all)]
 pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    _access: ChannelAccessLevelExtractor<ViewAccessLevel, Svc>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Path(path): Path<ThreadRepliesPath>,
 ) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
     let channel_id = path.channel_id;
@@ -293,7 +293,7 @@ pub async fn get_channel_attachments_handler<
     Svc: EntityAccessService,
 >(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
@@ -330,7 +330,7 @@ pub async fn get_channel_participants_handler<
     Svc: EntityAccessService,
 >(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let participants = state.service.get_channel_participants(channel_id).await?;

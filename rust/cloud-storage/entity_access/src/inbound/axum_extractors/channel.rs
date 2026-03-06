@@ -9,11 +9,11 @@ use axum::{
     http::request::Parts,
 };
 
-use super::{ExtractorError, InternalUser, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser};
 use crate::domain::{
     models::{
         Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        ParticipantRole, channel_role_meets_required_level,
+        ParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -24,12 +24,12 @@ struct ChannelAccessParams {
     channel_id: String,
 }
 
-/// Validates that the user has at least the required access level to a channel.
+/// Validates that the user satisfies the required permission for a channel.
 ///
-/// Type parameter `T` specifies the required access level.
+/// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.
 #[derive(Debug)]
-pub struct ChannelAccessLevelExtractor<T: RequiredAccessLevel, Svc> {
+pub struct ChannelAccessLevelExtractor<T: RequiredPermission, Svc> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
@@ -38,7 +38,7 @@ pub struct ChannelAccessLevelExtractor<T: RequiredAccessLevel, Svc> {
 #[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ChannelAccessLevelExtractor<T, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -110,7 +110,7 @@ where
             EntityPermission::AccessLevel { .. } => return Err(ExtractorError::Internal),
         };
 
-        if !channel_role_meets_required_level(role, T::required_level()) {
+        if !(EntityPermission::ChannelRole { role }).satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }
 

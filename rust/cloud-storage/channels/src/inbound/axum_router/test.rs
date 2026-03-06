@@ -13,7 +13,7 @@ use axum::{
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-        ParticipantRole as EntityParticipantRole, RequiredAccessLevel,
+        ParticipantRole as EntityParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -66,7 +66,7 @@ impl TestAccessService {
 }
 
 impl EntityAccessService for TestAccessService {
-    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,

@@ -24,7 +24,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model_error_response::ErrorResponse;
 
-pub use crate::domain::models::RequiredAccessLevel;
+pub use crate::domain::models::RequiredPermission;
 
 /// Marker struct for internal service-to-service requests.
 ///

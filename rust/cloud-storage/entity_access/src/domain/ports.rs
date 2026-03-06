@@ -5,7 +5,7 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, ChannelRoleResult, EntityAccessReceipt, EntityPermission,
-    RequiredAccessLevel,
+    RequiredPermission,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::future::Future;
@@ -85,9 +85,9 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Generates an [`EntityAccessReceipt<T>`] for a given entity and user.
     ///
-    /// The type parameter `T` specifies the minimum access level required.
-    /// Returns an error if the user does not have at least that level.
-    fn generate_entity_access_receipt<T: RequiredAccessLevel>(
+    /// The type parameter `T` specifies the minimum permission required.
+    /// Returns an error if the user does not satisfy that requirement.
+    fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
         user_org_id: Option<i64>,
