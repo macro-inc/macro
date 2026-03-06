@@ -1,22 +1,16 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
-import { ChannelInput } from '../Input';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
-import {
-  replyCenterOffsetX,
-  replyInputOffsetX,
-} from './thread-rail-geometry';
 import type { ThreadProps } from './types';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
-} from './thread-reply-indicator-helpers';
+} from './utils/thread-reply-indicator-helpers';
 
 function sliceIf<T>(
   val: Array<T>,
@@ -107,81 +101,18 @@ export function ChannelThread(props: ThreadProps) {
                 </Show>
 
                 <Show when={props.isReplying()}>
-                  <Show
-                    when={hasReplies()}
-                    fallback={
-                      <>
-                        <div class="flex items-start gap-2 p-2">
-                          <div class="flex-shrink-0 size-[var(--user-icon-width)]">
-                            <UserIcon id={replyUserId()} size="fill" />
-                          </div>
-                          <span class="text-sm font-semibold truncate mt-1">
-                            {displayName()}
-                          </span>
-                        </div>
-                        <div
-                          class="relative"
-                          style={{
-                            'margin-left': replyInputOffsetX,
-                          }}
-                        >
-                          <Thread.ReplyInputConnector />
-                          <ChannelInput
-                            input={{
-                              id: `thread-reply-input-${props.data().id}`,
-                              placeholder: 'Send a reply',
-                              value: props.replyInputState()?.value,
-                              attachments:
-                                props.replyInputState()?.attachments,
-                              isReplyInput: true,
-                            }}
-                            markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
-                            onChange={(snapshot) =>
-                              void props.setReplyInputState(snapshot)
-                            }
-                            onCloseDraft={() => {
-                              props.setReplyInputState(undefined);
-                              props.setIsReplying(false);
-                            }}
-                            onSend={async () => {
-                              props.setReplyInputState(undefined);
-                              props.setIsReplying(false);
-                            }}
-                          />
-                        </div>
-                      </>
-                    }
-                  >
-                    <div
-                      class="relative"
-                      style={{
-                        'margin-left': replyInputOffsetX,
-                      }}
-                    >
-                      <Thread.ReplyInputConnector />
-                      <ChannelInput
-                        input={{
-                          id: `thread-reply-input-${props.data().id}`,
-                          placeholder: 'Send a reply',
-                          value: props.replyInputState()?.value,
-                          attachments: props.replyInputState()?.attachments,
-                          isReplyInput: true,
-                        }}
-                        markdownNamespace={`thread-reply-input-${props.data().id}-markdown`}
-                        onChange={(snapshot) =>
-                          void props.setReplyInputState(snapshot)
-                        }
-                        onCloseDraft={() => {
-                          props.setReplyInputState(undefined);
-                          props.setIsReplying(false);
-                        }}
-                        onSend={async () => {
-                          props.setReplyInputState(undefined);
-                          props.setIsReplying(false);
-                        }}
-                      />
-                    </div>
+                  <Show when={!hasReplies()}>
+                    <Thread.ReplyAuthor
+                      userId={replyUserId()}
+                      displayName={displayName()}
+                    />
                   </Show>
+                  <Thread.ReplyInput
+                    messageId={props.data().id}
+                    replyInputState={props.replyInputState}
+                    setReplyInputState={props.setReplyInputState}
+                    setIsReplying={props.setIsReplying}
+                  />
                 </Show>
 
                 <Show
@@ -189,12 +120,7 @@ export function ChannelThread(props: ThreadProps) {
                     shouldShowCollapsedIndicator() || shouldShowReplyButton()
                   }
                 >
-                  <div
-                    class="relative z-10 w-fit"
-                    style={{
-                      'margin-left': `calc(${replyCenterOffsetX} - var(--user-icon-width) / 2)`,
-                    }}
-                  >
+                  <Thread.ActionsFooter>
                     <Show when={shouldShowCollapsedIndicator()}>
                       <Thread.CollapsedIndicator
                         collapsedRepliesCount={collapsedRepliesCount()}
@@ -209,7 +135,7 @@ export function ChannelThread(props: ThreadProps) {
                         aria-label="Reply"
                       />
                     </Show>
-                  </div>
+                  </Thread.ActionsFooter>
                 </Show>
               </Thread.RepliesContainer>
             </div>

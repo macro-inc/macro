@@ -4,10 +4,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInputAttachmentTracker } from '../attachment-tracker';
-import {
-  getAttachmentKindFromFile,
-  uploadInputAttachments,
-} from '../upload-attachments';
+import { getAttachmentKindFromFile } from '../utils/file-helpers';
+import { uploadInputAttachments } from '../upload-attachments';
 
 const { toastFailureMock } = vi.hoisted(() => {
   return {

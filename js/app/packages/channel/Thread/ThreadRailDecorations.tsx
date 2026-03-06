@@ -4,7 +4,7 @@ import {
   innerRailTop,
   innerRailX,
   threadConnectorStyle,
-} from './thread-rail-geometry';
+} from './utils/thread-rail-geometry';
 
 type ThreadRailDecorationsProps = {
   isReplying: Accessor<boolean>;

@@ -66,6 +66,7 @@ import { DropOverlay } from '../DropOverlay';
 import type { InputData } from '../types';
 
 const baseInput: InputData = {
+  mode: 'channel',
   id: 'input-1',
   placeholder: 'Message channel',
   value: '',
@@ -99,7 +100,7 @@ describe('Input slots', () => {
       (() => {
         return (
           <ChannelInput
-            input={{ ...baseInput, isReplyInput: true }}
+            input={{ ...baseInput, mode: 'reply' }}
             onSend={onSend}
             onToggleFormatRibbon={onToggleFormatRibbon}
             onCloseDraft={onCloseDraft}

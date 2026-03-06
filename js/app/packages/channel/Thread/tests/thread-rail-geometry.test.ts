@@ -7,7 +7,7 @@ import {
   replyInputOffsetX,
   threadConnectorStyle,
   threadOffsetX,
-} from '../thread-rail-geometry';
+} from '../utils/thread-rail-geometry';
 
 describe('thread-rail-geometry', () => {
   it('exports stable offsets for thread layout alignment', () => {

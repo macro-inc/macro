@@ -1,10 +1,11 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
+import { isReplyInput } from './types';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { renderIcon } from './render-icon';
+import { renderIcon } from './utils/render-icon';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -81,7 +82,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
             >
               {renderIcon(FormatIcon, 'size-5')}
             </InputActionButton>
-            <Show when={input().isReplyInput}>
+            <Show when={isReplyInput(input())}>
               <InputActionButton
                 label="Delete reply"
                 onClick={() => commands.closeDraft()}

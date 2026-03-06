@@ -1,6 +1,7 @@
 import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput } from './context';
+import { isReplyInput } from './types';
 
 type DropOverlayProps = JSX.HTMLAttributes<HTMLDivElement> & {
   invalidMessage?: string;
@@ -18,7 +19,7 @@ export function DropOverlay(props: DropOverlayProps) {
 
   const open = () =>
     !!input().isDraggedOver ||
-    (!!input().isDraggingOverChannel && !input().isReplyInput);
+    (!!input().isDraggingOverChannel && !isReplyInput(input()));
   const valid = () => input().isValidChannelDrag !== false;
 
   return (

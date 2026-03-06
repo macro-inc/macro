@@ -11,16 +11,16 @@ import type {
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { TextFormatType } from 'lexical';
-import { renderIcon } from './render-icon';
+import { renderIcon } from './utils/render-icon';
 import { RibbonButton } from './RibbonButton';
 
-type FormattingRibbonProps = {
+type FormatButtonsProps = {
   selectionState: Accessor<SelectionData | undefined>;
   onInlineFormat: (format: TextFormatType) => void;
   onNodeFormat: (format: NodeTransformType) => void;
 };
 
-export function FormattingRibbon(props: FormattingRibbonProps) {
+export function FormatButtons(props: FormatButtonsProps) {
   return (
     <>
       <RibbonButton

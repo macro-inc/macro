@@ -151,6 +151,7 @@ export function Channel(props: ChannelProps) {
             <div class="pb-2 w-full flex justify-center">
               <ChannelInput
                 input={{
+                  mode: 'channel',
                   id: `channel-input-${props.channelId}`,
                   placeholder: 'Message channel',
                 }}

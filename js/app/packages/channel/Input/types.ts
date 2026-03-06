@@ -12,11 +12,10 @@ export type InputAttachmentData = {
   pending?: boolean;
 };
 
-export type InputData = {
+type InputDataBase = {
   id?: string;
   placeholder?: string;
   value?: string;
-  isReplyInput?: boolean;
   isDraggedOver?: boolean;
   isDraggingOverChannel?: boolean;
   isValidChannelDrag?: boolean;
@@ -24,6 +23,13 @@ export type InputData = {
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];
 };
+
+export type ChannelInputMode = InputDataBase & { mode: 'channel' };
+export type ReplyInputMode = InputDataBase & { mode: 'reply' };
+export type InputData = ChannelInputMode | ReplyInputMode;
+
+export const isReplyInput = (input: InputData): input is ReplyInputMode =>
+  input.mode === 'reply';
 
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 

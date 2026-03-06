@@ -11,7 +11,7 @@ import {
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
-} from '../Thread/message-actions';
+} from '../Thread/utils/message-actions';
 
 type AddReactionInput = {
   channelId: string;

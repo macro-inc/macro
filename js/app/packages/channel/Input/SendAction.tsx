@@ -3,7 +3,7 @@ import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import { renderIcon } from './render-icon';
+import { renderIcon } from './utils/render-icon';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 

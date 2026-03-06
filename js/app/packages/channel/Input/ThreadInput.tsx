@@ -9,7 +9,7 @@ export function ThreadInput(props: ThreadInputProps) {
       {...props}
       input={{
         ...props.input,
-        isReplyInput: true,
+        mode: 'reply',
       }}
       markdownNamespace={props.markdownNamespace ?? 'thread-input-markdown'}
     />

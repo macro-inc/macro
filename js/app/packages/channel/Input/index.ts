@@ -3,7 +3,7 @@ export { ChannelInput } from './ChannelInput';
 export { ThreadInput } from './ThreadInput';
 export { createInputAttachmentTracker } from './attachment-tracker';
 export { createInputState } from './create-input-state';
-export { createConfiguredChannelMarkdownEditor } from './createConfiguredChannelMarkdownEditor';
+export { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 
 export { Root } from './Root';
 export { Layout } from './Layout';
@@ -16,11 +16,15 @@ export { Footer } from './Footer';
 export { PrimaryActions } from './PrimaryActions';
 export { SendAction } from './SendAction';
 export { RibbonButton } from './RibbonButton';
-export { FormattingRibbon } from './FormattingRibbon';
+export { FormatButtons } from './FormatButtons';
 export { useInput, useInputCommands, InputProvider } from './context';
+
+export { isReplyInput } from './types';
 
 export type {
   InputData,
+  ChannelInputMode,
+  ReplyInputMode,
   InputAttachmentData,
   InputAttachmentKind,
   InputSnapshot,

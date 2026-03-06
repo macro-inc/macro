@@ -1,7 +1,7 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
 import { Input } from './Input';
-import { FormattingRibbon } from './FormattingRibbon';
+import { FormatButtons } from './FormatButtons';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
@@ -14,7 +14,7 @@ import type {
   InputDraftAdapter,
   InputHandle,
 } from './types';
-import { applyInlineFormat, applyNodeFormat } from './formatting';
+import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -28,7 +28,6 @@ export function ChannelInput(props: ChannelInputProps) {
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: props.input.attachments,
   });
-  let notifyInputChange = () => {};
 
   const inputState = createInputState({
     initialInput: props.input,
@@ -43,7 +42,6 @@ export function ChannelInput(props: ChannelInputProps) {
             hideProgressIndicator: true,
           });
         },
-        onUpdated: notifyInputChange,
       });
     },
     callbacks: {
@@ -56,18 +54,14 @@ export function ChannelInput(props: ChannelInputProps) {
     draft: props.draft,
   });
 
-  notifyInputChange = inputState.notifyChange;
-
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
-      inputState.notifyChange();
     },
     onMentionRemove: (mention) => {
       mentionsTracker.onMentionRemove(mention);
-      inputState.notifyChange();
     },
     onChange: (markdown) => {
       inputState.setValue(markdown);
@@ -89,7 +83,7 @@ export function ChannelInput(props: ChannelInputProps) {
       <Input.Layout>
         <Input.DropOverlay />
         <Input.FormatRibbon>
-          <FormattingRibbon
+          <FormatButtons
             selectionState={() => markdownEditor.selection}
             onInlineFormat={(format) =>
               applyInlineFormat(markdownEditor.lexical, format)

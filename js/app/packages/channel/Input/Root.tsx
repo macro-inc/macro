@@ -1,7 +1,7 @@
 import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { InputProvider } from './context';
-import type { InputCommands, InputData } from './types';
+import { isReplyInput, type InputCommands, type InputData } from './types';
 
 const NoopInputCommands: InputCommands = {
   send: async () => false,
@@ -30,7 +30,7 @@ export function Root(props: RootProps) {
         'relative macro-message-width flex flex-col flex-1 items-center justify-between bg-input border border-edge-muted rounded-[5px]',
         local.class,
         {
-          'rounded-b-[5px] border-b mb-4': local.input.isReplyInput,
+          'rounded-b-[5px] border-b mb-4': isReplyInput(local.input),
         }
       )}
       data-input

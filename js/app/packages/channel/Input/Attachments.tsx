@@ -7,7 +7,7 @@ import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 import XIcon from '@icon/regular/x.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import { renderIcon } from './render-icon';
+import { renderIcon } from './utils/render-icon';
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
