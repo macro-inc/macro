@@ -7,6 +7,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use chat::domain::service::ChatServiceImpl;
 use chat::inbound::{ChatRouterState, chat_create_router, chat_id_router};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
@@ -17,7 +18,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let access_repo = PgAccessRepository::new(state.db.clone());
     let access_service = EntityAccessServiceImpl::new(access_repo);
     let chat_repo = PgChatRepo::new(state.db.clone());
-    let chat_state = ChatRouterState::new(chat_repo, access_service);
+    let chat_service = ChatServiceImpl::new(chat_repo);
+    let chat_state = ChatRouterState::new(chat_service, access_service);
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(
         state.clone(),

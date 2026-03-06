@@ -2,97 +2,69 @@ use axum::Extension;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use model::chat::{Chat, ChatBasic};
+use model::chat::ChatBasic;
 use model::response::StringIDResponse;
 use model_user::UserContext;
 use tower::util::ServiceExt;
 
 use super::*;
-use crate::domain::ports::ChatRepo;
-use crate::models::{ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::models::{ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::ports::ChatService;
 use entity_access::domain::models::{AccessError, AccessLevel, EntityPermission, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
 
-struct MockRepo;
+struct MockService;
 
-impl ChatRepo for MockRepo {
+impl ChatService for MockService {
     async fn create(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String, ChatErr> {
         Ok("test-chat-id".to_string())
     }
 
     #[allow(deprecated)]
-    async fn get_chat(&self, chat_id: &str) -> anyhow::Result<ChatResponse> {
-        Ok(ChatResponse {
-            id: chat_id.to_string(),
-            user_id: "macro|test@example.com".to_string(),
-            project_id: None,
-            name: "Mock Chat".to_string(),
-            messages: Vec::new(),
-            model: None,
-            created_at: None,
-            updated_at: None,
-            attachments: Vec::new(),
-            token_count: None,
-            available_models: Vec::new(),
-            web_citations: Vec::new(),
-            is_persistent: false,
-        })
-    }
-
-    async fn get_metadata(&self, chat_id: &str) -> anyhow::Result<Chat> {
-        Ok(Chat {
-            id: chat_id.to_string(),
-            name: "Mock Chat".to_string(),
-            user_id: "macro|test@example.com".to_string(),
-            model: None,
-            project_id: None,
-            created_at: None,
-            updated_at: None,
-            deleted_at: None,
-            token_count: None,
-            is_persistent: false,
-        })
-    }
-
-    async fn get_access_level(
+    async fn get_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        _chat_id: &str,
-    ) -> anyhow::Result<AccessLevel> {
-        Ok(AccessLevel::Owner)
+        chat_id: &str,
+    ) -> Result<GetChatResponse, ChatErr> {
+        Ok(GetChatResponse {
+            chat: ChatResponse {
+                id: chat_id.to_string(),
+                user_id: "macro|test@example.com".to_string(),
+                project_id: None,
+                name: "Mock Chat".to_string(),
+                messages: Vec::new(),
+                model: None,
+                created_at: None,
+                updated_at: None,
+                attachments: Vec::new(),
+                token_count: None,
+                available_models: Vec::new(),
+                web_citations: Vec::new(),
+                is_persistent: false,
+            },
+            user_access_level: AccessLevel::Owner,
+        })
     }
 
     async fn copy_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _source_chat_id: &str,
-        _args: CopyChatArgs,
-    ) -> anyhow::Result<String> {
+        _chat_id: &str,
+    ) -> Result<String, ChatErr> {
         Ok("copied-chat-id".to_string())
     }
 
-    async fn revert_delete(&self, _chat_id: &str, _project_id: Option<&str>) -> anyhow::Result<()> {
+    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
         Ok(())
     }
 
-    async fn get_permissions(
-        &self,
-        _chat_id: &str,
-    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
-        anyhow::bail!("not implemented")
-    }
-
-    async fn delete(&self, _chat_id: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn permanently_delete(&self, _chat_id: &str) -> anyhow::Result<()> {
+    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
         Ok(())
     }
 
@@ -101,64 +73,55 @@ impl ChatRepo for MockRepo {
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _chat_id: &str,
         _args: PatchChatArgs,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ChatErr> {
         Ok(())
+    }
+
+    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Ok(())
+    }
+
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
 }
 
-struct ErrorRepo;
+struct ErrorService;
 
-impl ChatRepo for ErrorRepo {
+impl ChatService for ErrorService {
     async fn create(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("db error")
+    ) -> Result<String, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn get_chat(&self, _chat_id: &str) -> anyhow::Result<ChatResponse> {
-        anyhow::bail!("db error")
-    }
-
-    async fn get_metadata(&self, _chat_id: &str) -> anyhow::Result<Chat> {
-        anyhow::bail!("db error")
-    }
-
-    async fn get_access_level(
+    async fn get_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _chat_id: &str,
-    ) -> anyhow::Result<AccessLevel> {
-        anyhow::bail!("db error")
+    ) -> Result<GetChatResponse, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn copy_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _source_chat_id: &str,
-        _args: CopyChatArgs,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("db error")
-    }
-
-    async fn revert_delete(&self, _chat_id: &str, _project_id: Option<&str>) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
-    }
-
-    async fn get_permissions(
-        &self,
         _chat_id: &str,
-    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
-        anyhow::bail!("db error")
+    ) -> Result<String, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn delete(&self, _chat_id: &str) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn patch(
@@ -166,64 +129,55 @@ impl ChatRepo for ErrorRepo {
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _chat_id: &str,
         _args: PatchChatArgs,
-    ) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    ) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 }
 
-struct NotFoundRepo;
+struct NotFoundService;
 
-impl ChatRepo for NotFoundRepo {
+impl ChatService for NotFoundService {
     async fn create(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("db error")
+    ) -> Result<String, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn get_chat(&self, _chat_id: &str) -> anyhow::Result<ChatResponse> {
-        anyhow::bail!("no rows returned by a query that expected to return at least one row")
-    }
-
-    async fn get_metadata(&self, _chat_id: &str) -> anyhow::Result<Chat> {
-        anyhow::bail!("no rows returned by a query that expected to return at least one row")
-    }
-
-    async fn get_access_level(
+    async fn get_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _chat_id: &str,
-    ) -> anyhow::Result<AccessLevel> {
-        anyhow::bail!("db error")
+    ) -> Result<GetChatResponse, ChatErr> {
+        Err(ChatErr::NotFound)
     }
 
     async fn copy_chat(
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _source_chat_id: &str,
-        _args: CopyChatArgs,
-    ) -> anyhow::Result<String> {
-        anyhow::bail!("db error")
-    }
-
-    async fn revert_delete(&self, _chat_id: &str, _project_id: Option<&str>) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
-    }
-
-    async fn get_permissions(
-        &self,
         _chat_id: &str,
-    ) -> anyhow::Result<models_permissions::share_permission::SharePermissionV2> {
-        anyhow::bail!("db error")
+    ) -> Result<String, ChatErr> {
+        Err(ChatErr::NotFound)
     }
 
-    async fn delete(&self, _chat_id: &str) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn patch(
@@ -231,8 +185,19 @@ impl ChatRepo for NotFoundRepo {
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _chat_id: &str,
         _args: PatchChatArgs,
-    ) -> anyhow::Result<()> {
-        anyhow::bail!("db error")
+    ) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
+    }
+
+    async fn get_permissions(
+        &self,
+        _chat_id: &str,
+    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 }
 
@@ -316,29 +281,30 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_create_router() -> Router {
-    chat_create_router(ChatRouterState::new(MockRepo, MockAccessService)).layer(user_extension())
+    chat_create_router(ChatRouterState::new(MockService, MockAccessService)).layer(user_extension())
 }
 
 fn mock_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(MockRepo, MockAccessService))
+    chat_id_router(ChatRouterState::new(MockService, MockAccessService))
         .layer(chat_basic_extension())
         .layer(user_extension())
 }
 
 fn error_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(ErrorRepo, MockAccessService))
+    chat_id_router(ChatRouterState::new(ErrorService, MockAccessService))
         .layer(chat_basic_extension())
         .layer(user_extension())
 }
 
 fn not_found_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(NotFoundRepo, MockAccessService))
+    chat_id_router(ChatRouterState::new(NotFoundService, MockAccessService))
         .layer(chat_basic_extension())
         .layer(user_extension())
 }
 
 fn error_create_router() -> Router {
-    chat_create_router(ChatRouterState::new(ErrorRepo, MockAccessService)).layer(user_extension())
+    chat_create_router(ChatRouterState::new(ErrorService, MockAccessService))
+        .layer(user_extension())
 }
 
 // -- create_chat tests --
@@ -388,7 +354,8 @@ async fn create_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn create_chat_without_auth_returns_401() {
-    let router: Router = chat_create_router(ChatRouterState::new(MockRepo, MockAccessService));
+    let router: Router =
+        chat_create_router(ChatRouterState::new(MockService, MockAccessService));
 
     let req = Request::builder()
         .method("POST")

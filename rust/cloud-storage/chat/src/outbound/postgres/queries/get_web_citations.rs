@@ -1,6 +1,6 @@
 //! Fetch web citations for a chat.
 
-use crate::models::WebCitation;
+use crate::domain::models::WebCitation;
 use sqlx::PgPool;
 use std::collections::HashMap;
 

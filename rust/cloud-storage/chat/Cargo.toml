@@ -4,24 +4,37 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = ["ports", "inbound", "outbound"]
+ports = []
+inbound = ["ports", "dep:axum", "dep:entity_access", "dep:model_user"]
+outbound = ["ports", "dep:sqlx", "dep:macro_share_permissions", "dep:macro_uuid"]
+
 [dependencies]
+# Domain (always included)
 ai = { path = "../ai" }
 anyhow = { workspace = true }
-axum = { workspace = true }
 chrono = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false, features = ["inbound"] }
-macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
-model_user = { path = "../model_user" }
 models_permissions = { path = "../models_permissions" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
+
+# Inbound (HTTP handlers)
+axum = { workspace = true, optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound"], optional = true }
+model_user = { path = "../model_user", optional = true }
 utoipa = { workspace = true }
+
+# Outbound (database adapters)
+macro_share_permissions = { path = "../macro_share_permissions", optional = true }
+sqlx = { workspace = true, optional = true }
+
+macro_uuid = { path = "../macro_uuid", optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

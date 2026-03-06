@@ -163,6 +163,10 @@ function SoupChatInputInner() {
   );
 }
 
+document.addEventListener('focusin', (f) => console.log('focus changed', f));
+document.addEventListener('focusout', (f) => console.log('focus changed', f));
+document.addEventListener('focus', (f) => console.log('focus changed', f));
+
 export function SoupChatInput() {
   return (
     <ChatInputProvider autoAttach={false}>

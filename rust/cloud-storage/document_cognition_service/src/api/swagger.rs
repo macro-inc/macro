@@ -22,7 +22,7 @@ use ai::types::{ModelMetadata, Provider};
 use chat::inbound::{
     self as chat_inbound, CreateChatRequest, GetChatPermissionsResponse, PatchChatRequest,
 };
-use chat::models::{ChatResponse, GetChatResponse, WebCitation};
+use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 
 use model::{
     chat::{

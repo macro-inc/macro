@@ -4,8 +4,10 @@ mod queries;
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::{
+    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, WebCitation,
+};
 use crate::domain::ports::ChatRepo;
-use crate::models::{ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, WebCitation};
 use ai::types::Model;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,6 +18,17 @@ use sqlx::PgPool;
 
 /// The default model used when no model is set on a chat.
 const FALLBACK_MODEL: Model = Model::Claude45Haiku;
+
+/// Convert an [`anyhow::Error`] to a [`ChatErr`], detecting `sqlx::RowNotFound`.
+fn to_chat_err(e: anyhow::Error) -> ChatErr {
+    if e.downcast_ref::<sqlx::Error>()
+        .is_some_and(|e| matches!(e, sqlx::Error::RowNotFound))
+    {
+        ChatErr::NotFound
+    } else {
+        ChatErr::Unknown(e)
+    }
+}
 
 /// Postgres adapter for chat repository operations.
 pub struct PgChatRepo {
@@ -46,8 +59,8 @@ impl ChatRepo for PgChatRepo {
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
-    ) -> anyhow::Result<String> {
-        let mut tx = self.pool.begin().await?;
+    ) -> Result<String, ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -55,7 +68,8 @@ impl ChatRepo for PgChatRepo {
             &args.name,
             args.project_id.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         let share_permission = SharePermissionV2::new_chat_share_permission();
         queries::create_chat_permission::create_chat_permission(
@@ -63,12 +77,16 @@ impl ChatRepo for PgChatRepo {
             &chat_id,
             &share_permission,
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         queries::upsert_user_history::upsert_user_history(&mut tx, user_id.copied(), &chat_id)
-            .await?;
+            .await
+            .map_err(to_chat_err)?;
 
-        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id).await?;
+        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id)
+            .await
+            .map_err(to_chat_err)?;
 
         queries::insert_user_item_access::insert_user_item_access(
             &mut tx,
@@ -76,11 +94,12 @@ impl ChatRepo for PgChatRepo {
             &chat_id,
             AccessLevel::Owner,
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
-            anyhow::Error::from(e)
+            ChatErr::Unknown(e.into())
         })?;
 
         Ok(chat_id)
@@ -88,9 +107,9 @@ impl ChatRepo for PgChatRepo {
 
     #[tracing::instrument(err, skip(self))]
     #[allow(deprecated)]
-    async fn get_chat(&self, chat_id: &str) -> anyhow::Result<ChatResponse> {
+    async fn get_chat(&self, chat_id: &str) -> Result<ChatResponse, ChatErr> {
         let chat = self.get_metadata(chat_id).await?;
-        let mut messages = self.get_messages(chat_id).await?;
+        let mut messages = self.get_messages(chat_id).await.map_err(to_chat_err)?;
         messages.retain(|m| m.role != ai::types::Role::System);
         let web_citations = self.get_web_citations(chat_id).await.unwrap_or_default();
 
@@ -112,8 +131,10 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_metadata(&self, chat_id: &str) -> anyhow::Result<model::chat::Chat> {
-        queries::get_chat::get_chat(&self.pool, chat_id).await
+    async fn get_metadata(&self, chat_id: &str) -> Result<model::chat::Chat, ChatErr> {
+        queries::get_chat::get_chat(&self.pool, chat_id)
+            .await
+            .map_err(to_chat_err)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -121,8 +142,10 @@ impl ChatRepo for PgChatRepo {
         &self,
         user_id: MacroUserIdStr<'_>,
         chat_id: &str,
-    ) -> anyhow::Result<AccessLevel> {
-        queries::get_access_level::get_access_level(&self.pool, user_id.as_ref(), chat_id).await
+    ) -> Result<AccessLevel, ChatErr> {
+        queries::get_access_level::get_access_level(&self.pool, user_id.as_ref(), chat_id)
+            .await
+            .map_err(to_chat_err)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -131,8 +154,8 @@ impl ChatRepo for PgChatRepo {
         user_id: MacroUserIdStr<'static>,
         source_chat_id: &str,
         args: CopyChatArgs,
-    ) -> anyhow::Result<String> {
-        let mut tx = self.pool.begin().await?;
+    ) -> Result<String, ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -140,7 +163,8 @@ impl ChatRepo for PgChatRepo {
             &args.name,
             args.project_id.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         let share_permission = SharePermissionV2::new_chat_share_permission();
         queries::create_chat_permission::create_chat_permission(
@@ -148,12 +172,16 @@ impl ChatRepo for PgChatRepo {
             &chat_id,
             &share_permission,
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         queries::upsert_user_history::upsert_user_history(&mut tx, user_id.copied(), &chat_id)
-            .await?;
+            .await
+            .map_err(to_chat_err)?;
 
-        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id).await?;
+        queries::upsert_item_last_accessed::upsert_item_last_accessed(&mut tx, &chat_id)
+            .await
+            .map_err(to_chat_err)?;
 
         queries::insert_user_item_access::insert_user_item_access(
             &mut tx,
@@ -161,44 +189,59 @@ impl ChatRepo for PgChatRepo {
             &chat_id,
             AccessLevel::Owner,
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
-        queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id).await?;
+        queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
+            .await
+            .map_err(to_chat_err)?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");
-            anyhow::Error::from(e)
+            ChatErr::Unknown(e.into())
         })?;
 
         Ok(chat_id)
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn revert_delete(&self, chat_id: &str, project_id: Option<&str>) -> anyhow::Result<()> {
-        let mut tx = self.pool.begin().await?;
-        queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id, project_id).await?;
-        tx.commit().await?;
+    async fn revert_delete(
+        &self,
+        chat_id: &str,
+        project_id: Option<&str>,
+    ) -> Result<(), ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id, project_id)
+            .await
+            .map_err(to_chat_err)?;
+        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_permissions(&self, chat_id: &str) -> anyhow::Result<SharePermissionV2> {
-        queries::get_permissions::get_chat_share_permission(&self.pool, chat_id).await
+    async fn get_permissions(&self, chat_id: &str) -> Result<SharePermissionV2, ChatErr> {
+        queries::get_permissions::get_chat_share_permission(&self.pool, chat_id)
+            .await
+            .map_err(to_chat_err)
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, chat_id: &str) -> anyhow::Result<()> {
-        let mut tx = self.pool.begin().await?;
-        queries::soft_delete_chat::soft_delete_chat(&mut tx, chat_id).await?;
-        tx.commit().await?;
+    async fn delete(&self, chat_id: &str) -> Result<(), ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        queries::soft_delete_chat::soft_delete_chat(&mut tx, chat_id)
+            .await
+            .map_err(to_chat_err)?;
+        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn permanently_delete(&self, chat_id: &str) -> anyhow::Result<()> {
-        let mut tx = self.pool.begin().await?;
-        queries::permanently_delete_chat::permanently_delete_chat(&mut tx, chat_id).await?;
-        tx.commit().await?;
+    async fn permanently_delete(&self, chat_id: &str) -> Result<(), ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        queries::permanently_delete_chat::permanently_delete_chat(&mut tx, chat_id)
+            .await
+            .map_err(to_chat_err)?;
+        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
 
@@ -208,8 +251,8 @@ impl ChatRepo for PgChatRepo {
         user_id: MacroUserIdStr<'static>,
         chat_id: &str,
         args: PatchChatArgs,
-    ) -> anyhow::Result<()> {
-        let mut tx = self.pool.begin().await?;
+    ) -> Result<(), ChatErr> {
+        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
 
         queries::patch_chat::patch_chat(
             &mut tx,
@@ -217,7 +260,8 @@ impl ChatRepo for PgChatRepo {
             args.name.as_deref(),
             args.project_id.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(to_chat_err)?;
 
         if let Some(ref share_permission) = args.share_permission {
             queries::edit_share_permission::edit_chat_permission(
@@ -225,7 +269,8 @@ impl ChatRepo for PgChatRepo {
                 chat_id,
                 share_permission,
             )
-            .await?;
+            .await
+            .map_err(to_chat_err)?;
 
             macro_share_permissions::user_item_access::update_user_item_access(
                 &mut tx,
@@ -234,10 +279,11 @@ impl ChatRepo for PgChatRepo {
                 "chat",
                 share_permission,
             )
-            .await?;
+            .await
+            .map_err(to_chat_err)?;
         }
 
-        tx.commit().await?;
+        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
 }

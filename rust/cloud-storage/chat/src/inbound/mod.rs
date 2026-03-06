@@ -12,29 +12,26 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
-use entity_access::domain::models::{
-    EditAccessLevel, EntityPermission, OwnerAccessLevel, ViewAccessLevel,
-};
+use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use model::response::StringIDResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use serde::Deserialize;
-use thiserror::Error;
 use utoipa::ToSchema;
 
-use crate::domain::ports::ChatRepo;
-use crate::models::{CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::models::{ChatErr, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::ports::ChatService;
 
-/// Shared state for the chat router, wrapping a [`ChatRepo`] implementation
+/// Shared state for the chat router, wrapping a [`ChatService`] implementation
 /// and an [`EntityAccessService`] for authorization.
-pub struct ChatRouterState<R, Svc> {
-    inner: Arc<R>,
+pub struct ChatRouterState<S, Svc> {
+    inner: Arc<S>,
     access_service: Arc<Svc>,
 }
 
-impl<R, Svc> Clone for ChatRouterState<R, Svc> {
+impl<S, Svc> Clone for ChatRouterState<S, Svc> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -43,17 +40,17 @@ impl<R, Svc> Clone for ChatRouterState<R, Svc> {
     }
 }
 
-impl<R, Svc> FromRef<ChatRouterState<R, Svc>> for Arc<Svc> {
-    fn from_ref(state: &ChatRouterState<R, Svc>) -> Self {
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for Arc<Svc> {
+    fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
         state.access_service.clone()
     }
 }
 
-impl<R: ChatRepo, Svc: EntityAccessService> ChatRouterState<R, Svc> {
-    /// Create a new [`ChatRouterState`] from a repo and access service.
-    pub fn new(repo: R, access_service: Svc) -> Self {
+impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
+    /// Create a new [`ChatRouterState`] from a service and access service.
+    pub fn new(service: S, access_service: Svc) -> Self {
         Self {
-            inner: Arc::new(repo),
+            inner: Arc::new(service),
             access_service: Arc::new(access_service),
         }
     }
@@ -63,11 +60,11 @@ impl<R: ChatRepo, Svc: EntityAccessService> ChatRouterState<R, Svc> {
 ///
 /// This is separated so that DCS can apply different middleware
 /// (e.g. `ensure_user_exists` + quota checks) without `ensure_chat_exists`.
-pub fn chat_create_router<R: ChatRepo, Svc: EntityAccessService, T: Send + Sync + 'static>(
-    state: ChatRouterState<R, Svc>,
+pub fn chat_create_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync + 'static>(
+    state: ChatRouterState<S, Svc>,
 ) -> Router<T> {
     Router::new()
-        .route("/", post(create_chat_handler::<R, Svc>))
+        .route("/", post(create_chat_handler::<S, Svc>))
         .with_state(state)
 }
 
@@ -75,50 +72,60 @@ pub fn chat_create_router<R: ChatRepo, Svc: EntityAccessService, T: Send + Sync 
 ///
 /// These routes require `ensure_chat_exists` middleware to populate
 /// `ChatBasic` in extensions before the [`ChatAccessLevelExtractor`] runs.
-pub fn chat_id_router<R: ChatRepo, Svc: EntityAccessService, T: Send + Sync + 'static>(
-    state: ChatRouterState<R, Svc>,
+pub fn chat_id_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync + 'static>(
+    state: ChatRouterState<S, Svc>,
 ) -> Router<T> {
     Router::new()
         .route(
             "/:chat_id",
-            get(get_chat_handler::<R, Svc>)
-                .delete(delete_chat_handler::<R, Svc>)
-                .patch(patch_chat_handler::<R, Svc>),
+            get(get_chat_handler::<S, Svc>)
+                .delete(delete_chat_handler::<S, Svc>)
+                .patch(patch_chat_handler::<S, Svc>),
         )
         .route(
             "/:chat_id/permanent",
-            delete(permanently_delete_chat_handler::<R, Svc>),
+            delete(permanently_delete_chat_handler::<S, Svc>),
         )
-        .route("/:chat_id/copy", post(copy_chat_handler::<R, Svc>))
+        .route("/:chat_id/copy", post(copy_chat_handler::<S, Svc>))
         .route(
             "/:chat_id/revert_delete",
-            put(revert_delete_handler::<R, Svc>),
+            put(revert_delete_handler::<S, Svc>),
         )
         .route(
             "/:chat_id/permissions",
-            get(get_chat_permissions_handler::<R, Svc>),
+            get(get_chat_permissions_handler::<S, Svc>),
         )
         .with_state(state)
 }
 
-/// Error type for chat handlers.
-#[derive(Debug, Error)]
-pub enum ChatErr {
+/// HTTP error type for chat handlers, mapped from [`ChatErr`].
+#[derive(Debug)]
+pub enum ChatHandlerErr {
     /// Something went wrong internally.
-    #[error("Internal server error")]
     Internal,
     /// The requested resource was not found.
-    #[error("Not found")]
     NotFound,
 }
 
-impl IntoResponse for ChatErr {
+impl From<ChatErr> for ChatHandlerErr {
+    fn from(err: ChatErr) -> Self {
+        match err {
+            ChatErr::NotFound => ChatHandlerErr::NotFound,
+            ChatErr::Unknown(e) => {
+                tracing::error!(error=?e, "chat handler error");
+                ChatHandlerErr::Internal
+            }
+        }
+    }
+}
+
+impl IntoResponse for ChatHandlerErr {
     fn into_response(self) -> axum::response::Response {
-        let status = match self {
-            ChatErr::Internal => StatusCode::INTERNAL_SERVER_ERROR,
-            ChatErr::NotFound => StatusCode::NOT_FOUND,
+        let (status, msg) = match self {
+            ChatHandlerErr::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
+            ChatHandlerErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
         };
-        (status, self.to_string()).into_response()
+        (status, msg).into_response()
     }
 }
 
@@ -145,11 +152,11 @@ pub struct CreateChatRequest {
 )]
 /// Create a new chat.
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.macro_user_id))]
-pub async fn create_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
-    State(state): State<ChatRouterState<R, Svc>>,
+pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
+    State(state): State<ChatRouterState<S, Svc>>,
     user: MacroUserExtractor,
     Json(req): Json<CreateChatRequest>,
-) -> Result<Json<StringIDResponse>, ChatErr> {
+) -> Result<Json<StringIDResponse>, ChatHandlerErr> {
     let id = state
         .inner
         .create(
@@ -159,9 +166,7 @@ pub async fn create_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
                 project_id: req.project_id,
             },
         )
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to create chat"))
-        .map_err(|_| ChatErr::Internal)?;
+        .await?;
 
     Ok(Json(StringIDResponse { id }))
 }
@@ -181,35 +186,21 @@ pub async fn create_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
 )]
 /// Get a chat by ID with messages and web citations.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
-pub async fn get_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> Result<Json<GetChatResponse>, ChatErr> {
-    let chat = state
-        .inner
-        .get_chat(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to get chat"))
-        .map_err(|e| {
-            if e.to_string()
-                .contains("no rows returned by a query that expected to return at least one row")
-            {
-                ChatErr::NotFound
-            } else {
-                ChatErr::Internal
-            }
-        })?;
-
-    let user_access_level = match access.entity_access_receipt.entity_permission() {
-        EntityPermission::AccessLevel { access_level } => *access_level,
-        _ => unreachable!("chat permissions are always access levels"),
+) -> Result<Json<GetChatResponse>, ChatHandlerErr> {
+    let user_id = match access.entity_access_receipt.auth() {
+        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => {
+            macro_user_id::user_id::MacroUserIdStr(id.clone())
+        }
+        _ => return Err(ChatHandlerErr::Internal),
     };
 
-    Ok(Json(GetChatResponse {
-        chat,
-        user_access_level,
-    }))
+    let response = state.inner.get_chat(user_id, &chat_id).await?;
+
+    Ok(Json(response))
 }
 
 #[utoipa::path(
@@ -226,18 +217,12 @@ pub async fn get_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
 )]
 /// Soft-delete a chat.
 #[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
-pub async fn delete_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
     _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> Result<StatusCode, ChatErr> {
-    state
-        .inner
-        .delete(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to delete chat"))
-        .map_err(|_| ChatErr::Internal)?;
-
+) -> Result<StatusCode, ChatHandlerErr> {
+    state.inner.delete(&chat_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -255,18 +240,12 @@ pub async fn delete_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
 )]
 /// Permanently delete a chat and all associated data.
 #[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
-pub async fn permanently_delete_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn permanently_delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
     _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> Result<StatusCode, ChatErr> {
-    state
-        .inner
-        .permanently_delete(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to permanently delete chat"))
-        .map_err(|_| ChatErr::Internal)?;
-
+) -> Result<StatusCode, ChatHandlerErr> {
+    state.inner.permanently_delete(&chat_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -297,17 +276,17 @@ pub struct PatchChatRequest {
 )]
 /// Patch a chat's name, project, or share permissions.
 #[tracing::instrument(skip(state, access, req), fields(chat_id = %chat_id))]
-pub async fn patch_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<PatchChatRequest>,
-) -> Result<StatusCode, ChatErr> {
+) -> Result<StatusCode, ChatHandlerErr> {
     let user_id = match access.entity_access_receipt.auth() {
         entity_access::domain::models::EntityAccessAuth::Authenticated(id) => {
             macro_user_id::user_id::MacroUserIdStr(id.clone())
         }
-        _ => return Err(ChatErr::Internal),
+        _ => return Err(ChatHandlerErr::Internal),
     };
 
     state
@@ -321,9 +300,7 @@ pub async fn patch_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
                 share_permission: req.share_permission,
             },
         )
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to patch chat"))
-        .map_err(|_| ChatErr::Internal)?;
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -343,41 +320,13 @@ pub async fn patch_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
 )]
 /// Copy a chat and its messages into a new chat.
 #[tracing::instrument(skip(state, _access, user), fields(user_id = %user.macro_user_id, chat_id = %chat_id))]
-pub async fn copy_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
     _access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     user: MacroUserExtractor,
     Path(chat_id): Path<String>,
-) -> Result<Json<StringIDResponse>, ChatErr> {
-    let chat = state
-        .inner
-        .get_metadata(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to get chat for copy"))
-        .map_err(|e| {
-            if e.to_string()
-                .contains("no rows returned by a query that expected to return at least one row")
-            {
-                ChatErr::NotFound
-            } else {
-                ChatErr::Internal
-            }
-        })?;
-
-    let id = state
-        .inner
-        .copy_chat(
-            user.macro_user_id,
-            &chat_id,
-            CopyChatArgs {
-                name: format!("{} Copy", chat.name),
-                project_id: None,
-            },
-        )
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to copy chat"))
-        .map_err(|_| ChatErr::Internal)?;
-
+) -> Result<Json<StringIDResponse>, ChatHandlerErr> {
+    let id = state.inner.copy_chat(user.macro_user_id, &chat_id).await?;
     Ok(Json(StringIDResponse { id }))
 }
 
@@ -395,25 +344,12 @@ pub async fn copy_chat_handler<R: ChatRepo, Svc: EntityAccessService>(
 )]
 /// Revert a soft-deleted chat.
 #[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
-pub async fn revert_delete_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn revert_delete_handler<S: ChatService, Svc: EntityAccessService>(
     _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> Result<StatusCode, ChatErr> {
-    let chat = state
-        .inner
-        .get_metadata(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to get chat for revert"))
-        .map_err(|_| ChatErr::Internal)?;
-
-    state
-        .inner
-        .revert_delete(&chat_id, chat.project_id.as_deref())
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to revert delete chat"))
-        .map_err(|_| ChatErr::Internal)?;
-
+) -> Result<StatusCode, ChatHandlerErr> {
+    state.inner.revert_delete(&chat_id).await?;
     Ok(StatusCode::OK)
 }
 
@@ -439,17 +375,11 @@ pub struct GetChatPermissionsResponse {
 )]
 /// Get the share permissions for a chat.
 #[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
-pub async fn get_chat_permissions_handler<R: ChatRepo, Svc: EntityAccessService>(
+pub async fn get_chat_permissions_handler<S: ChatService, Svc: EntityAccessService>(
     _access: ChatAccessLevelExtractor<EditAccessLevel, Svc>,
-    State(state): State<ChatRouterState<R, Svc>>,
+    State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> Result<Json<GetChatPermissionsResponse>, ChatErr> {
-    let permissions = state
-        .inner
-        .get_permissions(&chat_id)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to get chat permissions"))
-        .map_err(|_| ChatErr::Internal)?;
-
+) -> Result<Json<GetChatPermissionsResponse>, ChatHandlerErr> {
+    let permissions = state.inner.get_permissions(&chat_id).await?;
     Ok(Json(GetChatPermissionsResponse { permissions }))
 }

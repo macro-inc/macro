@@ -1,10 +1,22 @@
-//! Types used by the chat domain ports.
+//! Types and errors used by the chat domain ports.
 
 use ai::types::Model;
 use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use utoipa::ToSchema;
+
+/// Domain error type for chat operations.
+#[derive(Debug, Error)]
+pub enum ChatErr {
+    /// The requested chat was not found.
+    #[error("chat not found")]
+    NotFound,
+    /// An unexpected error occurred.
+    #[error(transparent)]
+    Unknown(#[from] anyhow::Error),
+}
 
 /// Arguments for creating a new chat.
 #[derive(Debug)]

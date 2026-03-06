@@ -4,8 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
+use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
 use crate::domain::ports::ChatRepo;
-use crate::models::{CopyChatArgs, CreateChatArgs, PatchChatArgs};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -221,7 +221,7 @@ async fn get_chat_not_found(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool);
 
     let result = repo.get_metadata("nonexistent-id").await;
-    assert!(result.is_err());
+    assert!(matches!(result, Err(ChatErr::NotFound)));
 }
 
 #[sqlx::test(
@@ -563,7 +563,7 @@ async fn get_chat_not_found_returns_error(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool);
 
     let result = repo.get_chat("nonexistent-id").await;
-    assert!(result.is_err());
+    assert!(matches!(result, Err(ChatErr::NotFound)));
 }
 
 #[sqlx::test(
