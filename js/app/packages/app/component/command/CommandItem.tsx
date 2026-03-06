@@ -16,7 +16,7 @@ export interface CommandItemProps {
   index: number;
   selected: boolean;
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onHover: (index: number) => void;
+  onHover?: (index: number) => void;
 }
 
 function CommandItemHotkey(props: { item: CommandMenuItem }) {
@@ -105,7 +105,7 @@ export function CommandItem(props: CommandItemProps) {
           'hover:bg-hover/30': !props.selected,
         }
       )}
-      onMouseMove={() => props.onHover(props.index)}
+      onMouseMove={() => props.onHover?.(props.index)}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();

@@ -1,17 +1,23 @@
-import WideChannel from '@macro-icons/wide/channel.svg';
-import SignalIcon from '@macro-icons/wide/signal.svg';
-import WideFolder from '@macro-icons/wide/folder.svg';
-import WidePlus from '@macro-icons/wide/plus.svg';
-import WideTask from '@macro-icons/wide/task.svg';
+import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
+import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
+import DotsThreeIcon from '@phosphor-icons/core/regular/dots-three.svg?component-solid';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import type { Component, JSX } from 'solid-js';
+import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { Popover } from '@kobalte/core/popover';
 import { cn } from '@ui/utils/classname';
-import { setCreateMenuOpen } from '../Launcher';
-import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
-import { useSoup } from '@app/component/next-soup/soup-context';
+import { useSplitLayout } from '../split-layout/layout';
+import { SIDEBAR_LINKS } from '../app-sidebar/sidebar';
+import { type ListView } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { SearchState } from './mobileSearchState';
 
 type MobileDockButtonProps = {
-  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  icon: Component<
+    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+  >;
   label: string;
   onClick: () => void;
   active?: boolean;
@@ -30,98 +36,103 @@ function MobileDockButton(props: MobileDockButtonProps) {
         props.active && 'text-accent'
       )}
     >
-      <props.icon class="w-6 h-6" />
+      <div class="w-6 h-6 [&_svg]:size-6">
+        <Dynamic component={props.icon} />
+      </div>
       <span class="text-xs">{props.label}</span>
     </button>
   );
 }
 
+const PRIMARY_IDS = ['inbox', 'channels', 'files'] as const;
+
+const MORE_VIEWS = SIDEBAR_LINKS.filter(
+  (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
+);
+
+function MorePopover(props: {
+  active: boolean;
+  onNavigate: (id: ListView) => void;
+}) {
+  const [open, setOpen] = createSignal(false);
+
+  return (
+    <Popover open={open()} onOpenChange={setOpen} placement="top">
+      <Popover.Trigger
+        as="button"
+        type="button"
+        onClick={() => impactFeedback('light')}
+        class={cn(
+          'flex flex-col items-center justify-center w-[20%] pt-3',
+          props.active && 'text-accent'
+        )}
+      >
+        <DotsThreeIcon class="w-6 h-6" />
+        <span class="text-xs">More</span>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content class="z-popover bg-panel border border-edge-muted rounded-md shadow-lg p-1 flex flex-col gap-1">
+          <For each={MORE_VIEWS}>
+            {(item) => (
+              <button
+                type="button"
+                class="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-hover text-ink"
+                onClick={() => {
+                  impactFeedback('light');
+                  props.onNavigate(item.id);
+                  setOpen(false);
+                }}
+              >
+                <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+                  <Dynamic component={item.icon} />
+                </div>
+                <span>{item.label}</span>
+              </button>
+            )}
+          </For>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
 export function MobileDock() {
-  const splitContext = useSplitPanelOrThrow();
-  const soup = useSoup();
+  const { openWithSplit } = useSplitLayout();
+  const layoutManager = globalSplitManager();
 
-  const splitContent = () => splitContext.handle.content();
+  const activeId = () => layoutManager?.activeSplit()?.content()?.id;
+  const isActive = (id: ListView) => activeId() === id;
+  const isMoreActive = () => MORE_VIEWS.some((v) => v.id === activeId());
 
-  const splitIsUnifiedList = () => {
-    const id = splitContent().id;
-    const type = splitContent().type;
-
-    return type === 'component' && id === 'unified-list';
-  };
-
-  const ensureUnifiedList = () => {
-    if (splitIsUnifiedList()) return;
-    splitContext.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
-    });
-  };
-
-  const isInboxActive = () =>
-    soup.filters.isActive('signal') && splitIsUnifiedList();
-  const isPeopleTeamsActive = () =>
-    soup.filters.isActive('channels') && splitIsUnifiedList();
-  const isTasksActive = () =>
-    soup.filters.isActive('task') && splitIsUnifiedList();
-  const isAllActive = () =>
-    !isInboxActive() &&
-    !isPeopleTeamsActive() &&
-    !isTasksActive() &&
-    splitIsUnifiedList();
-
-  const setSignalFilter = (value: boolean) => {
-    // If we're going to be removing the signal filter,
-    // we should replace it with the explicit-noise filter
-    if (!value) {
-      soup.filters.set({ and: ['explicit-noise'] });
-    } else {
-      soup.filters.set({ and: ['signal', 'not-done'] });
-    }
+  const navigate = (id: ListView) => {
+    openWithSplit({ type: 'component', id }, { mergeHistory: true });
   };
 
   return (
     <div class="flex flex-row justify-between bg-page border-t border-edge-muted">
       <MobileDockButton
-        icon={WideFolder}
-        label="All"
-        active={isAllActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          soup.filters.clear();
-        }}
-      />
-      <MobileDockButton
-        icon={SignalIcon}
+        icon={TrayIcon}
         label="Inbox"
-        active={isInboxActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          setSignalFilter(true);
-        }}
+        active={isActive('inbox')}
+        onClick={() => navigate('inbox')}
       />
       <MobileDockButton
-        icon={WideChannel}
-        label="People"
-        active={isPeopleTeamsActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          soup.filters.set({ and: ['explicit-noise', 'channels'] });
-        }}
+        icon={AnimatedChannelIcon}
+        label="Channels"
+        active={isActive('channels')}
+        onClick={() => navigate('channels')}
       />
       <MobileDockButton
-        icon={WideTask}
-        label="Tasks"
-        active={isTasksActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          soup.filters.set({ and: ['explicit-noise', 'task'] });
-        }}
+        icon={AnimatedFolderIcon}
+        label="Files"
+        active={isActive('files')}
+        onClick={() => navigate('files')}
       />
+      <MorePopover active={isMoreActive()} onNavigate={navigate} />
       <MobileDockButton
-        icon={WidePlus}
-        label="Create"
-        onClick={() => {
-          setCreateMenuOpen(true);
-        }}
+        icon={SearchIcon}
+        label="Search"
+        onClick={() => SearchState.open()}
       />
     </div>
   );

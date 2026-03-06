@@ -187,19 +187,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel">
         <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
-          <div class="hidden mobile:block">
-            <button
-              type="button"
-              class="p-2"
-              onClick={() => {
-                setSidebarState((p) =>
-                  p === 'expanded' ? 'hidden' : 'expanded'
-                );
-              }}
-            >
-              <HamburgerIcon class="size-6" />
-            </button>
-          </div>
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>

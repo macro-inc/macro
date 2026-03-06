@@ -3,7 +3,7 @@ import { splitProps, type JSX } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { cn } from '@ui/utils/classname';
 
-type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
+export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   active?: boolean;
   edgeColor?: JSX.CSSProperties['color'];
   tr?: boolean;
@@ -12,7 +12,7 @@ type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   br?: boolean;
 };
 
-export function ClippedPanel(props: PanelProps) {
+export function ClippedPanel(props: ClippedPanelProps) {
   const [local, rest] = splitProps(props, [
     'active',
     'edgeColor',
