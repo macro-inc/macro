@@ -411,3 +411,5 @@ export const documentCognitionServiceSgId =
 export const documentCognitionServiceAlbSgId =
   documentCognitionService.serviceAlbSg.id;
 export const documentCognitionServiceUrl = pulumi.interpolate`${documentCognitionService.domain}`;
+export const documentCognitionServiceRoleArn =
+  documentCognitionService.role.arn;

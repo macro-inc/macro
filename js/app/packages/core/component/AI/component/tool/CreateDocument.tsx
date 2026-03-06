@@ -1,4 +1,4 @@
-import { InlineItemPreview } from '@core/component/ItemPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import FilePlus from '@phosphor-icons/core/regular/file-plus.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
@@ -15,8 +15,7 @@ const handler = createToolRenderer({
   ),
   renderResponse: (ctx) => (
     <BaseTool renderContext={ctx.renderContext} type="response">
-      Created{' '}
-      <InlineItemPreview id={ctx.tool.data.documentId} type="document" />
+      <ItemPreview id={ctx.tool.data.documentId} type="document" />
     </BaseTool>
   ),
 });

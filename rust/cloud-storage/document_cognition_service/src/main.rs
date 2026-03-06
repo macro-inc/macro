@@ -1,5 +1,5 @@
-use ai_tools::NoOpTaskProperties;
 use crate::api::context::ApiContext;
+use ai_tools::NoOpTaskProperties;
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -273,11 +273,13 @@ async fn main() -> anyhow::Result<()> {
         NoOpTaskProperties,
         db.clone(),
     );
-    let entity_access_service =
-        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
-    let document_tool_context =
-        DocumentToolContext::new(document_service, entity_access_service, lexical_client_for_tools);
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        entity_access_service,
+        lexical_client_for_tools,
+    );
 
     tracing::info!("initialized document tool context");
 

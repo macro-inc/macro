@@ -124,13 +124,17 @@ impl Config {
             std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")
                 .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL must be provided")?;
 
-        let cloudfront_signer_public_key_id =
-            std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")
-                .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
+        let cloudfront_signer_public_key_id = std::env::var(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        )
+        .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
 
-        let cloudfront_signer_private_key =
-            std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME")
-                .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME must be provided")?;
+        let cloudfront_signer_private_key = std::env::var(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME",
+        )
+        .context(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME must be provided",
+        )?;
 
         let EnvVars { redis_host } = env_vars;
 

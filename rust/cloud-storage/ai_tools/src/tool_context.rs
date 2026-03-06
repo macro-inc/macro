@@ -9,9 +9,7 @@ use documents::{
     outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
 };
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
-use entity_access::{
-    domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository,
-};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
@@ -47,6 +45,9 @@ pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, Frecency
 pub struct NoOpTaskProperties;
 
 impl TaskPropertiesPort for NoOpTaskProperties {
+    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
         Ok(())
     }
@@ -63,7 +64,8 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
 pub type ToolEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 /// Type alias for the document tool context
-pub type ToolDocumentToolContext = DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
+pub type ToolDocumentToolContext =
+    DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
 
 /// Type alias for the soup service implementation
 pub type ToolSoupService =
