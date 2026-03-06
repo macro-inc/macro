@@ -5,7 +5,6 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import {
   AssigneeFilter,
   AttachmentTypeFilter,
-  ChannelVisibilityFilter,
   DocumentFolderFilter,
   DocumentTypeFilter,
   EntityTypeFilter,
@@ -133,7 +132,7 @@ const TasksFilters = () => {
 const ChannelsFilters = () => {
   // No channels filters for now
   // TODO: Add channel filters
-  return;
+  return null;
 };
 
 const FilesFilters = () => {
