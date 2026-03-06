@@ -171,7 +171,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
           isSlim() &&
             'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
         )}
-        data-state={props.sidebarState}
+        data-expanded={isExpanded()}
+        data-slim={isSlim()}
       >
         <div
           class={cn(
@@ -179,7 +180,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             isSlim() && 'flex-col px-2 pb-0 justify-center'
           )}
         >
-          <LogoIcon class="size-6 text-accent opacity-100 group-data-[state='slim']/sidebar:opacity-0 group-data-[state='slim']/sidebar:size-0" />
+          <LogoIcon class="size-6 text-accent opacity-100 group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:size-0" />
           <div class="flex items-center gap-1">
             <Show when={isExpanded()}>
               <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
@@ -259,13 +260,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
         >
           <Button
             class={
-              "justify-center group-data-[state='slim']/sidebar:aspect-square group-data-[state='expanded']/sidebar:justify-start group-data-[state='expanded']/sidebar:w-full"
+              'justify-center group-data-[slim=true]/sidebar:aspect-square group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full'
             }
             size={isSlim() ? 'icon-md' : 'md'}
             onClick={handleCreateClick}
           >
             <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[state='slim']/sidebar:sr-only group-data-[state='slim']/sidebar:opacity-0">
+            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
               Create
             </span>
           </Button>
@@ -361,7 +362,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      <span class="opacity-100 group-data-[state='slim']/sidebar:sr-only group-data-[state='slim']/sidebar:opacity-0">
+      <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
         {props.label}
       </span>
     </Button>
