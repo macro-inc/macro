@@ -29,6 +29,11 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { debounce } from '@solid-primitives/scheduled';
+import { Hotkey } from '@core/component/Hotkey';
+import { cornerClip } from '@core/util/clipPath';
+import { clearPressedKeys } from '@core/hotkey/state';
+import { activateClosestDOMScope } from '@core/hotkey/utils';
 
 interface SidebarItem {
   id: ListView;
@@ -103,6 +108,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
 
+  const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
+
+  const resetHotkeysState = () => {
+    setHotkeyVisible(false);
+
+    // To prevent the next key from triggering the hotkey handler,
+    // we reset the pressed keys state and exit the command scope
+    clearPressedKeys();
+    activateClosestDOMScope();
+  };
+
+  const debounceResetHotkeysState = debounce(resetHotkeysState, 1500);
+
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
   };
@@ -117,10 +135,28 @@ export const AppSidebar = (props: AppSidebarProps) => {
       hotkey: GO_TO_LEADER_KEY,
       scopeId: 'global',
       description: 'Go to page',
-      keyDownHandler: () => false,
+      keyDownHandler: () => {
+        setHotkeyVisible(true);
+        debounceResetHotkeysState();
+        return true;
+      },
       activateCommandScopeId: GO_TO_COMMAND_SCOPE,
       hide: true,
       registrationType: 'add',
+    });
+
+    registerHotkey({
+      hotkey: 'g',
+      scopeId: GO_TO_COMMAND_SCOPE,
+      description: 'Reset hotkey state',
+      hide: true,
+      keyDownHandler: () => {
+        // Reset the hotkey
+        if (hotkeyVisible()) {
+          resetHotkeysState();
+        }
+        return false;
+      },
     });
 
     // Register navigation shortcuts in the global GO_TO command scope
@@ -271,6 +307,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   <SidebarLink
                     {...link}
                     sidebarState={props.sidebarState ?? 'expanded'}
+                    hotkeyVisible={hotkeyVisible()}
                   />
                 </li>
               )}
@@ -293,6 +330,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
 interface SidebarLinkProps extends SidebarItem {
   sidebarState: SidebarState;
+  hotkeyVisible: boolean;
 }
 
 const SidebarLink = (props: SidebarLinkProps) => {
@@ -322,7 +360,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default',
+        'relative flex items-center justify-start text-sm gap-2 cursor-default',
         isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'justify-center aspect-square',
         props.sidebarState !== 'slim' && 'w-full'
@@ -353,6 +391,21 @@ const SidebarLink = (props: SidebarLinkProps) => {
         </div>
       </Show>
       <Show when={props.sidebarState === 'expanded'}>{props.label}</Show>
+      <Show when={props.hotkeyVisible}>
+        <div
+          class={cn(
+            'bg-accent-180 text-page text-xs w-4 aspect-square text-center',
+            props.sidebarState === 'slim' &&
+              'text-xxs text-page absolute -bottom-1 -right-1',
+            props.sidebarState !== 'slim' && 'ml-auto'
+          )}
+          style={{
+            'clip-path': cornerClip('3px', 0, 0, 0),
+          }}
+        >
+          <Hotkey shortcut={props.hotkey} />
+        </div>
+      </Show>
     </Button>
   );
 };
