@@ -1976,7 +1976,7 @@ dependencies = [
  "chrono",
  "comms",
  "comms_db_client",
- "connection_gateway",
+ "connection_gateway_client",
  "doppleganger",
  "frecency",
  "futures",
@@ -2053,6 +2053,8 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
+ "connection_gateway_client",
+ "connection_gateway_models",
  "cool_asserts",
  "cowlike",
  "dashmap",
@@ -2074,7 +2076,6 @@ dependencies = [
  "model-entity",
  "models_bulk_upload",
  "redis",
- "reqwest",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
@@ -2092,6 +2093,29 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+]
+
+[[package]]
+name = "connection_gateway_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "connection_gateway_models",
+ "model-entity",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "connection_gateway_models"
+version = "0.1.0"
+dependencies = [
+ "model-entity",
+ "serde",
+ "serde_json",
+ "utoipa",
 ]
 
 [[package]]
@@ -2166,7 +2190,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
- "connection_gateway",
+ "connection_gateway_client",
  "contacts_db_client",
  "http-body-util",
  "macro_auth",
@@ -2881,7 +2905,7 @@ dependencies = [
  "comms",
  "comms_db_client",
  "comms_service",
- "connection_gateway",
+ "connection_gateway_client",
  "cool_asserts",
  "cowlike",
  "document_sub_type",
@@ -3447,7 +3471,7 @@ dependencies = [
  "bytes",
  "chrono",
  "cloudfront_sign",
- "connection_gateway",
+ "connection_gateway_client",
  "document_storage_service_client",
  "doppleganger",
  "ego-tree",
@@ -10385,7 +10409,7 @@ dependencies = [
  "aws-sdk-sqs",
  "aws_lambda_events",
  "chrono",
- "connection_gateway",
+ "connection_gateway_client",
  "document_storage_service_client",
  "dynamodb_client",
  "futures",

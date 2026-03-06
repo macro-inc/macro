@@ -1,13 +1,15 @@
-use crate::api::BatchSendMessageBody;
-use crate::api::BatchSendUniqueMessagesBody;
-use crate::api::SendMessageBody;
-use crate::model::message::UniqueMessage;
-use crate::model::sender::MessageReceipt;
+//! Connection gateway HTTP client.
+
+use connection_gateway_models::{
+    BatchSendMessageBody, BatchSendUniqueMessagesBody, MessageReceipt, SendMessageBody,
+    UniqueMessage,
+};
 use model_entity::Entity;
 
 mod email;
 mod project;
 
+/// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
 pub struct ConnectionGatewayClient {
     connection_gateway_url: String,
@@ -15,11 +17,12 @@ pub struct ConnectionGatewayClient {
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub struct Response {
+struct Response {
     receipts: Vec<MessageReceipt>,
 }
 
 impl ConnectionGatewayClient {
+    /// Create a new connection gateway client.
     pub fn new(internal_auth_key: String, connection_gateway_url: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("x-internal-auth-key", internal_auth_key.parse().unwrap());
@@ -65,7 +68,7 @@ impl ConnectionGatewayClient {
         Ok(receipts.receipts)
     }
 
-    /// send a message to multiple entities
+    /// Send a message to multiple entities
     pub async fn batch_send_message(
         &self,
         message_type: String,
@@ -94,7 +97,7 @@ impl ConnectionGatewayClient {
         Ok(receipts.receipts)
     }
 
-    /// send unique messages to multiple entities
+    /// Send unique messages to multiple entities
     pub async fn batch_send_unique_messages(
         &self,
         messages: Vec<UniqueMessage>,
@@ -117,7 +120,7 @@ impl ConnectionGatewayClient {
         Ok(receipts.receipts)
     }
 
-    /// get users who are interacting with a given item
+    /// Get users who are interacting with a given item
     pub async fn track_entity_users(
         &self,
         entity_type: String,

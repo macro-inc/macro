@@ -190,11 +190,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized stream repo");
 
     let connection_manager =
-        connection_gateway_client::service::dynamodb::create_dynamo_db_connection_manager(
-            dynamodb_client,
-        )
-        .await
-        .context("failed to create connection manager")?;
+        connection_gateway::service::dynamodb::create_dynamo_db_connection_manager(dynamodb_client)
+            .await
+            .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
 

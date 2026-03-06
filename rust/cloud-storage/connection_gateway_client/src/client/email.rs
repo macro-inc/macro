@@ -1,8 +1,9 @@
-use crate::{client::ConnectionGatewayClient, model::sender::MessageReceipt};
+use super::ConnectionGatewayClient;
+use connection_gateway_models::MessageReceipt;
 use serde_json::json;
 
 impl ConnectionGatewayClient {
-    // trigger refresh of the user's emails
+    /// Trigger refresh of the user's emails
     #[tracing::instrument(skip(self))]
     pub async fn refresh_email(
         &self,
@@ -18,6 +19,7 @@ impl ConnectionGatewayClient {
         .await
     }
 
+    /// Invalidate a user's contacts cache
     #[tracing::instrument(skip(self), err)]
     pub async fn invalidate_contacts(&self, user_id: &str) -> anyhow::Result<Vec<MessageReceipt>> {
         self.send_message(

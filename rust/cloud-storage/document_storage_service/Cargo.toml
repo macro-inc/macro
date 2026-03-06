@@ -47,7 +47,7 @@ clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 comms = { path = "../comms", features = ["outbound"] }
-connection_gateway = { path = "../connection_gateway" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
@@ -138,4 +138,4 @@ frecency = { path = "../frecency", features = ["mock"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["connection_gateway"]
+ignored = ["connection_gateway_client"]
