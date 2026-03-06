@@ -118,7 +118,7 @@ where
 
         let access_level = match service
             .get_access_level(
-                macro_user_id.as_ref().map(|user_id| &**user_id),
+                macro_user_id.as_deref(),
                 &document_context.document_id,
                 EntityType::Document,
             )

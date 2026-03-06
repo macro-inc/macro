@@ -93,11 +93,7 @@ where
         }
 
         let access_level = match service
-            .get_access_level(
-                macro_user_id.as_ref().map(|user_id| &**user_id),
-                &item_id,
-                entity_type,
-            )
+            .get_access_level(macro_user_id.as_deref(), &item_id, entity_type)
             .await
             .map_err(ExtractorError::from)?
         {

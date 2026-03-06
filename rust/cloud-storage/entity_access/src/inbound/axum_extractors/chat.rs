@@ -112,11 +112,7 @@ where
         }
 
         let access_level = match service
-            .get_access_level(
-                macro_user_id.as_ref().map(|user_id| &**user_id),
-                &chat_context.id,
-                EntityType::Chat,
-            )
+            .get_access_level(macro_user_id.as_deref(), &chat_context.id, EntityType::Chat)
             .await
             .map_err(ExtractorError::from)?
         {

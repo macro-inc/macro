@@ -114,7 +114,7 @@ where
 
         let access_level = match service
             .get_access_level(
-                macro_user_id.as_ref().map(|user_id| &**user_id),
+                macro_user_id.as_deref(),
                 &project_context.id,
                 EntityType::Project,
             )
@@ -293,11 +293,7 @@ where
         }
 
         let access_level = match service
-            .get_access_level(
-                macro_user_id.as_ref().map(|user_id| &**user_id),
-                project.id(),
-                EntityType::Project,
-            )
+            .get_access_level(macro_user_id.as_deref(), project.id(), EntityType::Project)
             .await
             .map_err(ExtractorError::from)?
         {
