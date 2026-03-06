@@ -3,6 +3,7 @@
 //! These extractors validate that the requesting user has sufficient
 //! access to the entity being accessed.
 
+mod channel;
 mod chat;
 mod document;
 mod entity_permission;
@@ -10,6 +11,7 @@ mod history;
 mod project;
 mod thread;
 
+pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
 pub use entity_permission::EntityPermissionExtractor;

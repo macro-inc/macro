@@ -731,6 +731,66 @@ async fn test_generate_receipt_channel_with_role() {
 }
 
 #[tokio::test]
+async fn test_generate_receipt_channel_member_fails_edit_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<EditAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_admin_satisfies_edit_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<EditAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_admin_fails_owner_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
 async fn test_generate_receipt_channel_not_found_returns_not_found() {
     let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NotFound);
     let service = EntityAccessServiceImpl::new(repo);

@@ -58,6 +58,23 @@ pub enum ParticipantRole {
     Member,
 }
 
+/// Checks whether a channel participant role satisfies a required access level.
+///
+/// Channel permissions map to access levels as:
+/// - `View`/`Comment`: any channel role
+/// - `Edit`: `Owner` or `Admin`
+/// - `Owner`: `Owner` only
+pub fn channel_role_meets_required_level(
+    role: ParticipantRole,
+    required_level: AccessLevel,
+) -> bool {
+    match required_level {
+        AccessLevel::View | AccessLevel::Comment => true,
+        AccessLevel::Edit => matches!(role, ParticipantRole::Owner | ParticipantRole::Admin),
+        AccessLevel::Owner => matches!(role, ParticipantRole::Owner),
+    }
+}
+
 /// A user's permission for an entity, discriminated by entity kind.
 ///
 /// Items (documents, chats, projects, threads) use access levels.

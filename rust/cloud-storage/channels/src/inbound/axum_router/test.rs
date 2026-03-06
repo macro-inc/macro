@@ -3,41 +3,191 @@ use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelParticipant, MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
-    ChannelAccessCheck, ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
-    ChannelMessagesQueryResult, ChannelMessagesService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
+    ChannelMessagesService,
 };
 use axum::{
     Extension, Router,
     http::{Request, StatusCode},
 };
+use entity_access::domain::{
+    models::{
+        AccessError, AccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
+        ParticipantRole as EntityParticipantRole, RequiredAccessLevel,
+    },
+    ports::EntityAccessService,
+};
 use http_body_util::BodyExt;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
 use tower::util::ServiceExt;
 
-// --- Access check implementations for tests ---
+// --- Access service implementations for tests ---
 
-struct AlwaysAllow;
+#[derive(Clone)]
+struct AllowAccess;
 
-impl ChannelAccessCheck for AlwaysAllow {
-    async fn is_channel_member(
+#[derive(Clone)]
+struct DenyAccess;
+
+#[derive(Clone)]
+struct NotFoundAccess;
+
+impl EntityAccessService for AllowAccess {
+    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
         &self,
-        _channel_id: Uuid,
-        _user_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        Ok(true)
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(Some(AccessLevel::View))
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Ok(AccessLevel::View)
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Ok(AccessLevel::View)
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        match entity_type {
+            EntityType::Channel => Ok(EntityPermission::ChannelRole {
+                role: EntityParticipantRole::Member,
+            }),
+            _ => Ok(EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            }),
+        }
     }
 }
 
-struct AlwaysDeny;
-
-impl ChannelAccessCheck for AlwaysDeny {
-    async fn is_channel_member(
+impl EntityAccessService for DenyAccess {
+    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
         &self,
-        _channel_id: Uuid,
-        _user_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        Ok(false)
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Unauthorized)
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(None)
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::Unauthorized)
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::Unauthorized)
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        Err(AccessError::Unauthorized)
+    }
+}
+
+impl EntityAccessService for NotFoundAccess {
+    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::NotFound("Channel not found"))
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(None)
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::NotFound("Channel not found"))
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        Err(AccessError::NotFound("Channel not found"))
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        Err(AccessError::NotFound("Channel not found"))
     }
 }
 
@@ -239,15 +389,19 @@ fn user_extension() -> Extension<UserContext> {
 }
 
 fn mock_router() -> Router {
-    channels_router(ChannelsRouterState::new(MockService, AlwaysAllow)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(MockService, AllowAccess)).layer(user_extension())
 }
 
 fn error_router() -> Router {
-    channels_router(ChannelsRouterState::new(ErrorService, AlwaysAllow)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(ErrorService, AllowAccess)).layer(user_extension())
 }
 
 fn denied_router() -> Router {
-    channels_router(ChannelsRouterState::new(MockService, AlwaysDeny)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(MockService, DenyAccess)).layer(user_extension())
+}
+
+fn not_found_router() -> Router {
+    channels_router(ChannelsRouterState::new(MockService, NotFoundAccess)).layer(user_extension())
 }
 
 #[tokio::test]
@@ -390,7 +544,7 @@ async fn participants_returns_empty_list() {
 
 #[tokio::test]
 async fn participants_returns_data_with_correct_shape() {
-    let router = channels_router(ChannelsRouterState::new(ParticipantsService, AlwaysAllow))
+    let router = channels_router(ChannelsRouterState::new(ParticipantsService, AllowAccess))
         .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
@@ -589,7 +743,7 @@ async fn messages_around_returns_empty_page() {
 
 #[tokio::test]
 async fn messages_around_returns_previous_cursor_when_items_present() {
-    let router = channels_router(ChannelsRouterState::new(AroundHasItemsService, AlwaysAllow))
+    let router = channels_router(ChannelsRouterState::new(AroundHasItemsService, AllowAccess))
         .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -611,7 +765,7 @@ async fn messages_around_returns_previous_cursor_when_items_present() {
 
 #[tokio::test]
 async fn messages_around_returns_404_when_not_found() {
-    let router = channels_router(ChannelsRouterState::new(NotFoundService, AlwaysAllow))
+    let router = channels_router(ChannelsRouterState::new(NotFoundService, AllowAccess))
         .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -650,7 +804,7 @@ async fn thread_replies_returns_empty_list() {
 
 #[tokio::test]
 async fn thread_replies_returns_404_when_not_found() {
-    let router = channels_router(ChannelsRouterState::new(NotFoundService, AlwaysAllow))
+    let router = channels_router(ChannelsRouterState::new(NotFoundService, AllowAccess))
         .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -679,11 +833,14 @@ async fn non_member_cannot_access_messages() {
         .unwrap();
 
     let res = router.oneshot(request).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(json["message"], "Not a channel member");
+    assert_eq!(
+        json["message"],
+        "User does not have access to the requested resource"
+    );
 }
 
 #[tokio::test]
@@ -696,7 +853,7 @@ async fn non_member_cannot_access_attachments() {
         .unwrap();
 
     let res = router.oneshot(request).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -709,7 +866,7 @@ async fn non_member_cannot_access_participants() {
         .unwrap();
 
     let res = router.oneshot(request).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -723,5 +880,18 @@ async fn non_member_cannot_access_thread_replies() {
         .unwrap();
 
     let res = router.oneshot(request).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn missing_channel_returns_404() {
+    let router = not_found_router();
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!("/{channel_id}/messages"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }

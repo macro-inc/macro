@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::domain::{
     models::{
         AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredAccessLevel,
+        EntityPermission, EntityType, RequiredAccessLevel, channel_role_meets_required_level,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -91,10 +91,17 @@ where
             .await?;
 
         // Verify the user meets the minimum required access level
-        if let EntityPermission::AccessLevel { access_level } = &entity_permission
-            && *access_level < T::required_level()
-        {
-            return Err(AccessError::Unauthorized);
+        match &entity_permission {
+            EntityPermission::AccessLevel { access_level } => {
+                if *access_level < T::required_level() {
+                    return Err(AccessError::Unauthorized);
+                }
+            }
+            EntityPermission::ChannelRole { role } => {
+                if !channel_role_meets_required_level(*role, T::required_level()) {
+                    return Err(AccessError::Unauthorized);
+                }
+            }
         }
 
         Ok(EntityAccessReceipt {
