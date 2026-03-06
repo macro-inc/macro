@@ -13,3 +13,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }
+tokio = { workspace = true, features = ["time", "rt", "macros", "test-util"] }
