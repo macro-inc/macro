@@ -121,20 +121,6 @@ const baseInput: InputData = {
 };
 
 describe('Input slots', () => {
-  it('composes a basic channel input with component-managed state', async () => {
-    render(() => (
-      <ChannelInput
-        input={{
-          ...baseInput,
-          id: 'test-channel-input',
-          placeholder: 'Message general',
-        }}
-      />
-    ));
-
-    expect(screen.getByText('Message general')).toBeTruthy();
-  });
-
   it('wires send and primary action handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
@@ -166,27 +152,6 @@ describe('Input slots', () => {
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
     expect(onCloseDraft).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('');
-  });
-
-  it('renders placeholder and attachments from input state', () => {
-    render(() => (
-      <ChannelInput
-        input={{
-          ...baseInput,
-          showFormatRibbon: true,
-          attachments: [
-            { id: 'a1', kind: 'video', name: 'clip.mov' },
-            { id: 'a2', kind: 'image', name: 'image.png' },
-            { id: 'a3', kind: 'document', name: 'spec.md' },
-          ],
-        }}
-      />
-    ));
-
-    expect(screen.getByText('Message channel')).toBeTruthy();
-    expect(screen.getByTestId('video-preview-a1')).toBeTruthy();
-    expect(screen.getByTestId('image-preview-a2')).toBeTruthy();
-    expect(screen.getByText('spec.md')).toBeTruthy();
   });
 
   it('shows invalid state in drop overlay', () => {

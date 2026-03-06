@@ -1,4 +1,4 @@
-import { children, Show, splitProps, type JSX } from 'solid-js';
+import { children, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { MessageActionsProvider, MessageProvider } from './context';
 import type { MessageActions, MessageData } from './types';
@@ -17,7 +17,10 @@ export function Root(props: RootProps) {
     'actions',
     'highlighted',
   ]);
-  const resolved = children(() => local.children);
+  const renderResolvedChildren = () => {
+    const resolved = children(() => local.children);
+    return resolved();
+  };
 
   return (
     <div
@@ -40,11 +43,15 @@ export function Root(props: RootProps) {
         )}
       />
       <MessageProvider value={() => local.message}>
-        <Show when={local.actions !== undefined} fallback={resolved()}>
-          <MessageActionsProvider value={local.actions}>
-            {resolved()}
-          </MessageActionsProvider>
-        </Show>
+        {() =>
+          local.actions !== undefined ? (
+            <MessageActionsProvider value={local.actions}>
+              {() => renderResolvedChildren()}
+            </MessageActionsProvider>
+          ) : (
+            renderResolvedChildren()
+          )
+        }
       </MessageProvider>
     </div>
   );

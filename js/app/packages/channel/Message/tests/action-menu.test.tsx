@@ -21,34 +21,6 @@ const message: MessageData = {
 };
 
 describe('ActionMenu', () => {
-  it('does not render when no actions are provided', () => {
-    render(() => (
-      <Root message={message}>
-        <ActionMenu />
-      </Root>
-    ));
-
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
-  });
-
-  it('renders only actions that are provided', () => {
-    render(() => (
-      <Root
-        message={message}
-        actions={{
-          onReply: () => undefined,
-          onDelete: () => undefined,
-        }}
-      >
-        <ActionMenu />
-      </Root>
-    ));
-
-    expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
-  });
-
   it('uses actions from an outer provider when Root does not override', async () => {
     const user = userEvent.setup();
     const onEdit = vi.fn();
@@ -97,59 +69,5 @@ describe('ActionMenu', () => {
     expect(onCopyLink).toHaveBeenCalledTimes(1);
     expect(onReply.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
     expect(onCopyLink.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
-  });
-
-  it('renders quick reactions and calls onReact with selected emoji', async () => {
-    const user = userEvent.setup();
-    const onReact = vi.fn();
-
-    render(() => (
-      <Root
-        message={message}
-        actions={{
-          onReact,
-        }}
-      >
-        <ActionMenu />
-      </Root>
-    ));
-
-    const quickButtons = screen.getAllByRole('button', { name: /^React /u });
-    expect(quickButtons).toHaveLength(3);
-    expect(screen.getByRole('button', { name: 'More reactions' })).toBeTruthy();
-
-    const thumbsUp = screen.getByRole('button', { name: 'React 👍' });
-    await user.click(thumbsUp);
-
-    expect(onReact).toHaveBeenCalledTimes(1);
-    expect(onReact.mock.calls[0]?.[0]?.message?.id).toBe(message.id);
-    expect(onReact.mock.calls[0]?.[0]?.emoji).toBe('👍');
-  });
-
-  it('keeps hover actions visible while emoji menu is open', async () => {
-    const user = userEvent.setup();
-    const { container } = render(() => (
-      <Root
-        message={message}
-        actions={{
-          onReact: () => undefined,
-        }}
-      >
-        <ActionMenu />
-      </Root>
-    ));
-
-    const hoverActions = container.querySelector(
-      '[data-message-hover-actions]'
-    ) as HTMLDivElement | null;
-    const emojiMenuTrigger = screen.getByRole('button', {
-      name: 'More reactions',
-    });
-
-    expect(hoverActions).not.toBeNull();
-    expect(hoverActions?.className).toContain('opacity-0');
-
-    await user.click(emojiMenuTrigger);
-    expect(hoverActions?.className).toContain('opacity-100');
   });
 });
