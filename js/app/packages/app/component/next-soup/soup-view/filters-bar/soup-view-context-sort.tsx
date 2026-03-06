@@ -2,7 +2,10 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
 import {
-  SORT_OPTIONS,
+  CHANNEL_SORT_OPTIONS,
+  DEFAULT_SORT_OPTIONS,
+  DOCUMENT_SORT_OPTIONS,
+  EMAIL_SORT_OPTIONS,
   TASK_SORT_OPTIONS,
   type SortOption,
   type SystemSortOption,
@@ -52,7 +55,7 @@ export const SoupViewContextSort = () => {
   );
 };
 
-const useSortDropdown = (options: SortOption[] = SORT_OPTIONS) => {
+const useSortDropdown = (options: SortOption[] = DEFAULT_SORT_OPTIONS) => {
   const { soup } = useSoupView();
 
   const value = createMemo(
@@ -91,7 +94,7 @@ const AgentsSort = () => {
 };
 
 const MailSort = () => {
-  const sort = useSortDropdown();
+  const sort = useSortDropdown(EMAIL_SORT_OPTIONS);
 
   return (
     <SortDropdown
@@ -103,7 +106,7 @@ const MailSort = () => {
 };
 
 const DocumentsSort = () => {
-  const sort = useSortDropdown();
+  const sort = useSortDropdown(DOCUMENT_SORT_OPTIONS);
 
   return (
     <SortDropdown
@@ -127,7 +130,7 @@ const TasksSort = () => {
 };
 
 const ChannelsSort = () => {
-  const sort = useSortDropdown();
+  const sort = useSortDropdown(CHANNEL_SORT_OPTIONS);
 
   return (
     <SortDropdown

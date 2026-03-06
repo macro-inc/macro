@@ -170,7 +170,7 @@ export const SORT_CONFIGS = {
   },
 } satisfies Record<string, SortConfig<SoupEntity>>;
 
-export const SORT_OPTIONS: SortOption[] = [
+const SORT_OPTIONS = [
   {
     value: 'viewed_at',
     label: 'Last viewed',
@@ -191,10 +191,6 @@ export const SORT_OPTIONS: SortOption[] = [
     label: 'Frecency',
     icon: () => <ChartLineUpIcon class="size-3.5" />,
   },
-];
-
-export const TASK_SORT_OPTIONS: SortOption[] = [
-  ...SORT_OPTIONS,
   {
     value: 'priority',
     label: 'Priority',
@@ -205,4 +201,43 @@ export const TASK_SORT_OPTIONS: SortOption[] = [
     label: 'Status',
     icon: () => <ListChecksIcon class="size-3.5" />,
   },
-];
+] as const satisfies SortOption[];
+
+type OptionValue = (typeof SORT_OPTIONS)[number]['value'];
+
+export const buildSortOptions = (options: OptionValue[]) => {
+  return SORT_OPTIONS.filter((o) => options.includes(o.value));
+};
+
+export const DEFAULT_SORT_OPTIONS = buildSortOptions([
+  'viewed_at',
+  'updated_at',
+  'created_at',
+  'frecency',
+]);
+
+export const TASK_SORT_OPTIONS = buildSortOptions([
+  'viewed_at',
+  'updated_at',
+  'created_at',
+  'status',
+  'priority',
+]);
+
+export const DOCUMENT_SORT_OPTIONS = buildSortOptions([
+  'viewed_at',
+  'updated_at',
+  'created_at',
+]);
+
+export const EMAIL_SORT_OPTIONS = buildSortOptions([
+  'viewed_at',
+  'updated_at',
+  'created_at',
+]);
+
+export const CHANNEL_SORT_OPTIONS = buildSortOptions([
+  'viewed_at',
+  'updated_at',
+  'created_at',
+]);

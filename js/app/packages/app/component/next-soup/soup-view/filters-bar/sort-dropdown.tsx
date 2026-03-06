@@ -2,10 +2,9 @@ import { type Component, For, Show } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@icon/regular/check.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import {
-  SORT_OPTIONS,
-  type SortOption,
-  type SystemSortOption,
+import type {
+  SortOption,
+  SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 
@@ -15,7 +14,7 @@ export interface SortDropdownProps {
   /** Handler for sort change */
   onChange: (value: SystemSortOption) => void;
   /** Available sort options (defaults to SORT_OPTIONS) */
-  options?: SortOption[];
+  options: SortOption[];
   /** Controlled open state (optional - uses internal state if not provided) */
   open?: boolean;
   /** Controlled open state setter (optional - uses internal state if not provided) */
@@ -23,7 +22,7 @@ export interface SortDropdownProps {
 }
 
 export const SortDropdown: Component<SortDropdownProps> = (props) => {
-  const options = () => props.options ?? SORT_OPTIONS;
+  const options = () => props.options ?? [];
 
   const currentOption = () => options().find((o) => o.value === props.value());
 
