@@ -417,25 +417,24 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <Trash />
               </Button>
             </Show>
-            <Button
-              disabled={props.isSubmitting || props.disabled}
-              onClick={() => {
-                handleSend();
-              }}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-            >
-              <Show
-                when={!props.isSubmitting}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
-                }
-              >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                </div>
-              </Show>
-            </Button>
           </div>
+
+          <Button
+            disabled={props.isSubmitting || props.disabled}
+            onClick={() => {
+              handleSend();
+            }}
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+          >
+            <Show
+              when={!props.isSubmitting}
+              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+            >
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Show>
+          </Button>
         </Show>
       </div>
     </div>
