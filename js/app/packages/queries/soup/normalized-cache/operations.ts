@@ -20,6 +20,7 @@ import type {
   SoupEntityPartial,
 } from './types';
 import type { SoupApiItemFilter } from '../items';
+import { isAfter } from 'date-fns';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -348,15 +349,9 @@ function shouldUpdateOptimisticTimestamp(
   currentUpdatedAt: string | undefined,
   incomingUpdatedAt: string
 ): boolean {
-  const incomingMs = Date.parse(incomingUpdatedAt);
-  if (Number.isNaN(incomingMs)) return false;
-
-  if (!currentUpdatedAt) return true;
-
-  const currentMs = Date.parse(currentUpdatedAt);
-  if (Number.isNaN(currentMs)) return true;
-
-  return incomingMs > currentMs;
+  return currentUpdatedAt
+    ? isAfter(Date.parse(incomingUpdatedAt), Date.parse(currentUpdatedAt))
+    : true;
 }
 
 /** @private */
