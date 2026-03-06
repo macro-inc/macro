@@ -1,4 +1,4 @@
-import type { NotifEvent } from '@service-notification/generated/schemas';
+import type { NotifEvent } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,

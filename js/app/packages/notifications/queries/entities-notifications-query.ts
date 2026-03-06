@@ -1,7 +1,7 @@
 import type { Entity } from '@core/types';
 import { isErr } from '@core/util/maybeResult';
 import { notificationServiceClient } from '@service-notification/client';
-import type { ApiUserNotification } from '@service-notification/generated/schemas';
+import type { ApiUserNotification } from '@service-storage/generated/schemas';
 
 type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'>;
 

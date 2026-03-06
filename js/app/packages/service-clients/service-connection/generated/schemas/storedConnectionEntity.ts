@@ -4,7 +4,7 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityType } from './entityType';
+import type { NotificationEntityType } from './notificationEntityType';
 import type { StoredConnectionEntityLastPing } from './storedConnectionEntityLastPing';
 
 export interface StoredConnectionEntity {
@@ -20,7 +20,7 @@ export interface StoredConnectionEntity {
   /** id of the entity */
   entity_id: string;
   /** type of the entity */
-  entity_type: EntityType;
+  entity_type: NotificationEntityType;
   /**
    * the timestamp of the last ping
    * @minimum 0

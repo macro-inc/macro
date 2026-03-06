@@ -4,10 +4,10 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityType } from './entityType';
+import type { NotificationEntityType } from './notificationEntityType';
 
 export interface StreamId {
   entity_id: string;
-  entity_type: EntityType;
+  entity_type: NotificationEntityType;
   stream_id: string;
 }

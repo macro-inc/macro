@@ -21,8 +21,19 @@ pub fn device_router<S: NotificationReader>() -> Router<NotificationRouterState<
 }
 
 /// Register a device for push notifications.
+#[utoipa::path(
+    post,
+    operation_id = "register_device",
+    path = "/v1/device/register",
+    request_body = DeviceRequest,
+    responses(
+        (status = 200),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(skip(state, macro_user, req), fields(user_id=?macro_user.macro_user_id))]
-async fn register_device<S: NotificationReader>(
+pub async fn register_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<DeviceRequest>,
@@ -45,8 +56,18 @@ async fn register_device<S: NotificationReader>(
 }
 
 /// Unregister a device from push notifications.
+#[utoipa::path(
+    delete,
+    operation_id = "unregister_device",
+    path = "/v1/device/unregister",
+    request_body = DeviceRequest,
+    responses(
+        (status = 200),
+        (status = 404, body = ErrorResponse),
+    )
+)]
 #[tracing::instrument(skip(state, _macro_user, req))]
-async fn unregister_device<S: NotificationReader>(
+pub async fn unregister_device<S: NotificationReader>(
     State(state): State<NotificationRouterState<S>>,
     _macro_user: MacroUserExtractor,
     Json(req): Json<DeviceRequest>,

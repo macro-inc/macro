@@ -139,7 +139,7 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn list_typed_notifications<S: ::notification::domain::service::NotificationReader>(
+pub(crate) async fn list_typed_notifications<S: ::notification::domain::service::NotificationReader>(
     State(state): State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     query: axum::extract::Query<::notification::inbound::http::Params>,
@@ -246,7 +246,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn bulk_get_typed_notifications_by_event_item_ids<
+pub(crate) async fn bulk_get_typed_notifications_by_event_item_ids<
     S: ::notification::domain::service::NotificationReader,
 >(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
@@ -301,7 +301,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_typed_by_event_item_id<S: ::notification::domain::service::NotificationReader>(
+pub(crate) async fn get_typed_by_event_item_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     path: axum::extract::Path<::notification::inbound::http::EventItemIdPath>,
@@ -353,7 +353,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_typed_notification_by_id<S: ::notification::domain::service::NotificationReader>(
+pub(crate) async fn get_typed_notification_by_id<S: ::notification::domain::service::NotificationReader>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,
     path: axum::extract::Path<::notification::inbound::http::NotificationIdPath>,

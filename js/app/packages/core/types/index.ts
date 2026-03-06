@@ -15,7 +15,7 @@ export type Entity = {
 };
 
 export type { ApiPaginatedThreadCursor as ThreadPreview } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
-import type { NotifEvent } from '@service-notification/generated/schemas';
+import type { NotifEvent } from '@service-storage/generated/schemas';
 export type NotificationType = NotifEvent['tag'];
 
 export type Nullable<T> = T | null;

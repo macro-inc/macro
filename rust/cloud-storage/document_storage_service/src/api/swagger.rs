@@ -6,6 +6,7 @@
 use crate::api::saved_views::{
     CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
+use crate::api::user_notification;
 use crate::{
     api::{
         activity, annotations,
@@ -228,7 +229,17 @@ use utoipa::OpenApi;
         saved_views::exclude_default_view_handler,
 
         // /github
-        github::inbound::github_sync_router::install_sync_handler
+        github::inbound::github_sync_router::install_sync_handler,
+
+        // notifications
+        user_notification::list_typed_notifications,
+        user_notification::bulk_get_typed_notifications_by_event_item_ids,
+        user_notification::get_typed_by_event_item_id,
+        user_notification::get_typed_notification_by_id,
+
+        // device
+        notification::inbound::http::device::register_device,
+        notification::inbound::http::device::unregister_device,
     ),
     components(
         schemas(
@@ -379,6 +390,32 @@ use utoipa::OpenApi;
             CreateViewRequest,
             ExcludeDefaultViewRequest,
             ShortIdResponse,
+
+            // Notifications
+            user_notification::ApiUserNotification,
+            user_notification::GetAllUserNotificationsResponse,
+            model_notifications::NotifEvent,
+            model_notifications::ChannelMentionMetadata,
+            model_notifications::DocumentMentionMetadata,
+            model_notifications::MentionedInDocumentCommentMetadata,
+            model_notifications::ChannelInviteMetadata,
+            model_notifications::ChannelMessageSendMetadata,
+            model_notifications::ChannelReplyMetadata,
+            model_notifications::NewEmailMetadata,
+            model_notifications::InviteToTeamMetadata,
+            model_notifications::TaskAssignedMetadata,
+            model_notifications::AiResponseMetadata,
+            model_notifications::CommonChannelMetadata,
+            model_notifications::UserUnsubscribe,
+            model_notifications::ChannelMessageDocumentMetadata,
+            notification::inbound::http::BulkGetByEventItemIdsRequest,
+            notification::inbound::http::NotificationBulkRequest,
+            notification::domain::models::device::DeviceRequest,
+            notification::domain::models::device::DeviceType,
+
+            // Re-register after notification schemas to prevent auto-discovered
+            // notification types from overwriting these with incompatible enum values.
+            models_properties::shared::EntityType,
         ),
     ),
     tags(

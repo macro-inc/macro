@@ -221,23 +221,10 @@
             "description": "The id of that entity"
           },
           "entity_type": {
-            "$ref": "#/components/schemas/EntityType",
+            "$ref": "#/components/schemas/NotificationEntityType",
             "description": "The type of entity we are describing"
           }
         }
-      },
-      "EntityType": {
-        "type": "string",
-        "description": "The type of an entity in Macro",
-        "enum": [
-          "user",
-          "chat",
-          "channel",
-          "document",
-          "project",
-          "email_thread",
-          "team"
-        ]
       },
       "GenericErrorResponse": {
         "type": "object",
@@ -273,6 +260,19 @@
             "description": "The user id of the user who received the message"
           }
         }
+      },
+      "NotificationEntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "document",
+          "project",
+          "email_thread",
+          "team"
+        ]
       },
       "SendMessageBody": {
         "type": "object",
@@ -335,7 +335,7 @@
             "description": "id of the entity"
           },
           "entity_type": {
-            "$ref": "#/components/schemas/EntityType",
+            "$ref": "#/components/schemas/NotificationEntityType",
             "description": "type of the entity"
           },
           "last_ping": {
@@ -409,7 +409,7 @@
             "type": "string"
           },
           "entity_type": {
-            "$ref": "#/components/schemas/EntityType"
+            "$ref": "#/components/schemas/NotificationEntityType"
           },
           "stream_id": {
             "type": "string"

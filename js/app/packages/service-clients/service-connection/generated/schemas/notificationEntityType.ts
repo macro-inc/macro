@@ -8,10 +8,11 @@
 /**
  * The type of an entity in Macro
  */
-export type EntityType = (typeof EntityType)[keyof typeof EntityType];
+export type NotificationEntityType =
+  (typeof NotificationEntityType)[keyof typeof NotificationEntityType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const EntityType = {
+export const NotificationEntityType = {
   user: 'user',
   chat: 'chat',
   channel: 'channel',

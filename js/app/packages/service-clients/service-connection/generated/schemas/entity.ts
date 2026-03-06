@@ -4,7 +4,7 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityType } from './entityType';
+import type { NotificationEntityType } from './notificationEntityType';
 
 /**
  * The Entity describes the minimum amount of information required to describe a unique thing in Macro
@@ -14,5 +14,5 @@ export interface Entity {
   /** The id of that entity */
   entity_id: string;
   /** The type of entity we are describing */
-  entity_type: EntityType;
+  entity_type: NotificationEntityType;
 }

@@ -1,4 +1,4 @@
-import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
+import type { ApiUserNotification } from '@service-storage/generated/schemas/apiUserNotification';
 import type { Accessor } from 'solid-js';
 
 export type Notification = Omit<ApiUserNotification, 'owner_id'>;

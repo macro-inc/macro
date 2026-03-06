@@ -2,8 +2,8 @@ import type { Maybe } from '@core/types';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
-import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
-import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
+import type { ApiUserNotification } from '@service-storage/generated/schemas/apiUserNotification';
+import type { GetAllUserNotificationsResponse } from '@service-storage/generated/schemas/getAllUserNotificationsResponse';
 import {
   type InfiniteData,
   type MutationFunction,

@@ -4,8 +4,8 @@
 
 import { err, ok } from '@core/util/maybeResult';
 import type { UnifiedNotification } from '@notifications/types';
-import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
-import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
+import type { ApiUserNotification } from '@service-storage/generated/schemas/apiUserNotification';
+import type { GetAllUserNotificationsResponse } from '@service-storage/generated/schemas/getAllUserNotificationsResponse';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';

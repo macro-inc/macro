@@ -329,10 +329,12 @@ async fn main() -> anyhow::Result<()> {
     // Notification egress worker
     let egress_repository = DbNotificationRepository::new(db.clone());
 
-    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-        internal_api_secret.as_ref().to_string(),
-        config.vars.connection_gateway_url.as_ref().to_string(),
-    ));
+    let websocket_adapter = WebSocketGatewayAdapter::new(
+        notification::outbound::websocket::ConnectionGatewayClient::new(
+            internal_api_secret.as_ref().to_string(),
+            config.vars.connection_gateway_url.as_ref().to_string(),
+        ),
+    );
 
     let mobile_adapter = MobilePushAdapter::new(
         aws_sdk_sns::Client::new(&aws_config),

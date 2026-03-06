@@ -7,7 +7,7 @@ import {
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
-import type { UserUnsubscribe } from '@service-notification/generated/schemas';
+import type { UserUnsubscribe } from '@service-storage/generated/schemas';
 import type {
   UseInfiniteQueryResult,
   UseQueryResult,

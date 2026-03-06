@@ -20,6 +20,7 @@ pub struct AiResponseMetadata {
 }
 
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
+#[schema(as = NotificationChannelType)]
 #[dg(backward = models_comms::channel::ChannelType)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelType {

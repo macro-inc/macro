@@ -7,9 +7,9 @@
 
 export * from './batchSendMessageBody';
 export * from './entity';
-export * from './entityType';
 export * from './genericErrorResponse';
 export * from './messageReceipt';
+export * from './notificationEntityType';
 export * from './sendMessageBody';
 export * from './sendMessageResponse';
 export * from './storedConnectionEntity';

@@ -7546,6 +7546,1378 @@ export const deleteUserDocumentViewLocationResponse = zod
   );
 
 /**
+ * @summary Register a device for push notifications.
+ */
+export const registerDeviceBody = zod
+  .object({
+    deviceType: zod
+      .enum(['ios', 'android'])
+      .describe('The device platform type.'),
+    token: zod.string().describe('The device push notification token.'),
+  })
+  .describe(
+    'Request to register or unregister a device for push notifications.'
+  );
+
+/**
+ * @summary Unregister a device from push notifications.
+ */
+export const unregisterDeviceBody = zod
+  .object({
+    deviceType: zod
+      .enum(['ios', 'android'])
+      .describe('The device platform type.'),
+    token: zod.string().describe('The device push notification token.'),
+  })
+  .describe(
+    'Request to register or unregister a device for push notifications.'
+  );
+
+/**
+ * Rows that fail to deserialize are dropped with a warning log.
+ * @summary Wrapper handler that calls the inner generic list handler with `serde_json::Value`,
+then converts each row to [`UserNotificationRow<NotifEvent>`].
+ */
+export const listTypedNotificationsQueryLimitMin = 0;
+
+export const listTypedNotificationsQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(listTypedNotificationsQueryLimitMin)
+    .optional()
+    .describe('Size limit per page.'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Cursor value. Base64 encoded timestamp and item id.'),
+});
+
+export const listTypedNotificationsResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('The id of that entity'),
+            entity_type: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+              ])
+              .describe('The type of an entity in Macro'),
+          })
+          .describe(
+            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+          )
+          .and(
+            zod.object({
+              created_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was created.'),
+              deleted_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              id: zod.string().uuid().describe('The notification ID.'),
+              notification_event_type: zod
+                .string()
+                .describe(
+                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                ),
+              notification_metadata: zod
+                .union([
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_mention']),
+                    })
+                    .describe('Someone mentioned you in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                        })
+                        .describe('Someone mentioned a document in a channel'),
+                      tag: zod.enum(['document_mention']),
+                    })
+                    .describe('Someone mentioned a document in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          commentId: zod.number().describe('the comment id'),
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document.'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document.'),
+                          mentionId: zod.string().describe('The mention ID.'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document.'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          text: zod
+                            .string()
+                            .describe('the text of the comment'),
+                          threadId: zod.number().describe('the thread id'),
+                        })
+                        .describe(
+                          'Notification sent when a user is mentioned in a document comment.'
+                        ),
+                      tag: zod.enum(['mentioned_in_document_comment']),
+                    })
+                    .describe('User was mentioned in a comment in a document'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            invitedBy: zod.string(),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        )
+                        .describe(
+                          'Metadata for when a user is invited to a channel'
+                        ),
+                      tag: zod.enum(['channel_invite']),
+                    })
+                    .describe('The user was invited to a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .optional()
+                              .describe('The content of the message'),
+                            messageId: zod.string().describe('The message id'),
+                            sender: zod
+                              .string()
+                              .describe('The user who sent the message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_send']),
+                    })
+                    .describe('A user sent a message in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The id of the new message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .describe(
+                                'The id of the thread that has the reply'
+                              ),
+                            threadParentSenderId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The user who sent the root message of the thread'
+                              ),
+                            userId: zod
+                              .string()
+                              .describe('The sender id of the reply'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_reply']),
+                    })
+                    .describe(
+                      'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod.object({
+                        sender: zod.string().nullish(),
+                        snippet: zod.string(),
+                        subject: zod.string(),
+                        threadId: zod.string(),
+                        toEmail: zod.string(),
+                      }),
+                      tag: zod.enum(['new_email']),
+                    })
+                    .describe('A new email has been sent to the user.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        invitedBy: zod
+                          .string()
+                          .describe('The user who sent the invitation'),
+                        role: zod
+                          .string()
+                          .nullish()
+                          .describe('Role/permission level in the team'),
+                        teamId: zod
+                          .string()
+                          .describe('The unique identifier of the team'),
+                        teamName: zod
+                          .string()
+                          .describe('The name of the team being invited to'),
+                      }),
+                      tag: zod.enum(['invite_to_team']),
+                    })
+                    .describe('A user was invited to a team.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          assignedBy: zod
+                            .string()
+                            .describe('The user who assigned the task'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          taskId: zod
+                            .string()
+                            .describe('The unique identifier of the task'),
+                          taskName: zod
+                            .string()
+                            .nullish()
+                            .describe('The name of the task (optional)'),
+                        })
+                        .describe(
+                          'Metadata for when a user is assigned to a task'
+                        ),
+                      tag: zod.enum(['task_assigned']),
+                    })
+                    .describe('A user was assigned to a task.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        messageId: zod.string(),
+                        summary: zod.string(),
+                      }),
+                      tag: zod.enum(['ai_response']),
+                    })
+                    .describe('An AI assistant responded to a chat.'),
+                ])
+                .describe(
+                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                ),
+              owner_id: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              sender_id: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              updated_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was last updated.'),
+              viewed_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was viewed/seen.'),
+            })
+          )
+      )
+      .describe('The list of items returned.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('The next page cursor if it exists.'),
+  })
+  .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * Rows that fail to deserialize are dropped with a warning log.
+ * @summary Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,
+then converts each row to [`UserNotificationRow<NotifEvent>`].
+ */
+export const bulkGetTypedNotificationsByEventItemIdsQueryLimitMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(bulkGetTypedNotificationsByEventItemIdsQueryLimitMin)
+    .optional()
+    .describe('Size limit per page. Default 20, max 500.'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Cursor value. Base64 encoded timestamp and item id.'),
+});
+
+export const bulkGetTypedNotificationsByEventItemIdsBody = zod
+  .object({
+    eventItemIds: zod
+      .array(zod.string().uuid())
+      .describe('The event item IDs to filter notifications by.'),
+  })
+  .describe('Request body for bulk-fetching notifications by event item IDs.');
+
+export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('The id of that entity'),
+            entity_type: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+              ])
+              .describe('The type of an entity in Macro'),
+          })
+          .describe(
+            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+          )
+          .and(
+            zod.object({
+              created_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was created.'),
+              deleted_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              id: zod.string().uuid().describe('The notification ID.'),
+              notification_event_type: zod
+                .string()
+                .describe(
+                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                ),
+              notification_metadata: zod
+                .union([
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_mention']),
+                    })
+                    .describe('Someone mentioned you in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                        })
+                        .describe('Someone mentioned a document in a channel'),
+                      tag: zod.enum(['document_mention']),
+                    })
+                    .describe('Someone mentioned a document in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          commentId: zod.number().describe('the comment id'),
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document.'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document.'),
+                          mentionId: zod.string().describe('The mention ID.'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document.'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          text: zod
+                            .string()
+                            .describe('the text of the comment'),
+                          threadId: zod.number().describe('the thread id'),
+                        })
+                        .describe(
+                          'Notification sent when a user is mentioned in a document comment.'
+                        ),
+                      tag: zod.enum(['mentioned_in_document_comment']),
+                    })
+                    .describe('User was mentioned in a comment in a document'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            invitedBy: zod.string(),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        )
+                        .describe(
+                          'Metadata for when a user is invited to a channel'
+                        ),
+                      tag: zod.enum(['channel_invite']),
+                    })
+                    .describe('The user was invited to a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .optional()
+                              .describe('The content of the message'),
+                            messageId: zod.string().describe('The message id'),
+                            sender: zod
+                              .string()
+                              .describe('The user who sent the message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_send']),
+                    })
+                    .describe('A user sent a message in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The id of the new message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .describe(
+                                'The id of the thread that has the reply'
+                              ),
+                            threadParentSenderId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The user who sent the root message of the thread'
+                              ),
+                            userId: zod
+                              .string()
+                              .describe('The sender id of the reply'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_reply']),
+                    })
+                    .describe(
+                      'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod.object({
+                        sender: zod.string().nullish(),
+                        snippet: zod.string(),
+                        subject: zod.string(),
+                        threadId: zod.string(),
+                        toEmail: zod.string(),
+                      }),
+                      tag: zod.enum(['new_email']),
+                    })
+                    .describe('A new email has been sent to the user.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        invitedBy: zod
+                          .string()
+                          .describe('The user who sent the invitation'),
+                        role: zod
+                          .string()
+                          .nullish()
+                          .describe('Role/permission level in the team'),
+                        teamId: zod
+                          .string()
+                          .describe('The unique identifier of the team'),
+                        teamName: zod
+                          .string()
+                          .describe('The name of the team being invited to'),
+                      }),
+                      tag: zod.enum(['invite_to_team']),
+                    })
+                    .describe('A user was invited to a team.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          assignedBy: zod
+                            .string()
+                            .describe('The user who assigned the task'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          taskId: zod
+                            .string()
+                            .describe('The unique identifier of the task'),
+                          taskName: zod
+                            .string()
+                            .nullish()
+                            .describe('The name of the task (optional)'),
+                        })
+                        .describe(
+                          'Metadata for when a user is assigned to a task'
+                        ),
+                      tag: zod.enum(['task_assigned']),
+                    })
+                    .describe('A user was assigned to a task.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        messageId: zod.string(),
+                        summary: zod.string(),
+                      }),
+                      tag: zod.enum(['ai_response']),
+                    })
+                    .describe('An AI assistant responded to a chat.'),
+                ])
+                .describe(
+                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                ),
+              owner_id: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              sender_id: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              updated_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was last updated.'),
+              viewed_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was viewed/seen.'),
+            })
+          )
+      )
+      .describe('The list of items returned.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('The next page cursor if it exists.'),
+  })
+  .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Typed wrapper for getting notifications by a single event item ID.
+ */
+export const getTypedNotificationsByEventItemIdParams = zod.object({
+  event_item_id: zod.string().uuid().describe('The event item ID'),
+});
+
+export const getTypedNotificationsByEventItemIdQueryLimitMin = 0;
+
+export const getTypedNotificationsByEventItemIdQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getTypedNotificationsByEventItemIdQueryLimitMin)
+    .optional()
+    .describe('Size limit per page.'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Cursor value. Base64 encoded timestamp and item id.'),
+});
+
+export const getTypedNotificationsByEventItemIdResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('The id of that entity'),
+            entity_type: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+              ])
+              .describe('The type of an entity in Macro'),
+          })
+          .describe(
+            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+          )
+          .and(
+            zod.object({
+              created_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was created.'),
+              deleted_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was deleted.'),
+              done: zod
+                .boolean()
+                .describe('Whether the notification is marked as done.'),
+              id: zod.string().uuid().describe('The notification ID.'),
+              notification_event_type: zod
+                .string()
+                .describe(
+                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                ),
+              notification_metadata: zod
+                .union([
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_mention']),
+                    })
+                    .describe('Someone mentioned you in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                        })
+                        .describe('Someone mentioned a document in a channel'),
+                      tag: zod.enum(['document_mention']),
+                    })
+                    .describe('Someone mentioned a document in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          commentId: zod.number().describe('the comment id'),
+                          documentName: zod
+                            .string()
+                            .describe('The name of the document.'),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('The file type of the document.'),
+                          mentionId: zod.string().describe('The mention ID.'),
+                          owner: zod
+                            .string()
+                            .describe('The owner of the document.'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          text: zod
+                            .string()
+                            .describe('the text of the comment'),
+                          threadId: zod.number().describe('the thread id'),
+                        })
+                        .describe(
+                          'Notification sent when a user is mentioned in a document comment.'
+                        ),
+                      tag: zod.enum(['mentioned_in_document_comment']),
+                    })
+                    .describe('User was mentioned in a comment in a document'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            invitedBy: zod.string(),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        )
+                        .describe(
+                          'Metadata for when a user is invited to a channel'
+                        ),
+                      tag: zod.enum(['channel_invite']),
+                    })
+                    .describe('The user was invited to a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .optional()
+                              .describe('The content of the message'),
+                            messageId: zod.string().describe('The message id'),
+                            sender: zod
+                              .string()
+                              .describe('The user who sent the message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_send']),
+                    })
+                    .describe('A user sent a message in a channel.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The id of the new message'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .describe(
+                                'The id of the thread that has the reply'
+                              ),
+                            threadParentSenderId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The user who sent the root message of the thread'
+                              ),
+                            userId: zod
+                              .string()
+                              .describe('The sender id of the reply'),
+                          })
+                        ),
+                      tag: zod.enum(['channel_message_reply']),
+                    })
+                    .describe(
+                      'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod.object({
+                        sender: zod.string().nullish(),
+                        snippet: zod.string(),
+                        subject: zod.string(),
+                        threadId: zod.string(),
+                        toEmail: zod.string(),
+                      }),
+                      tag: zod.enum(['new_email']),
+                    })
+                    .describe('A new email has been sent to the user.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        invitedBy: zod
+                          .string()
+                          .describe('The user who sent the invitation'),
+                        role: zod
+                          .string()
+                          .nullish()
+                          .describe('Role/permission level in the team'),
+                        teamId: zod
+                          .string()
+                          .describe('The unique identifier of the team'),
+                        teamName: zod
+                          .string()
+                          .describe('The name of the team being invited to'),
+                      }),
+                      tag: zod.enum(['invite_to_team']),
+                    })
+                    .describe('A user was invited to a team.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          assignedBy: zod
+                            .string()
+                            .describe('The user who assigned the task'),
+                          senderProfilePictureUrl: zod.string().nullish(),
+                          taskId: zod
+                            .string()
+                            .describe('The unique identifier of the task'),
+                          taskName: zod
+                            .string()
+                            .nullish()
+                            .describe('The name of the task (optional)'),
+                        })
+                        .describe(
+                          'Metadata for when a user is assigned to a task'
+                        ),
+                      tag: zod.enum(['task_assigned']),
+                    })
+                    .describe('A user was assigned to a task.'),
+                  zod
+                    .object({
+                      content: zod.object({
+                        messageId: zod.string(),
+                        summary: zod.string(),
+                      }),
+                      tag: zod.enum(['ai_response']),
+                    })
+                    .describe('An AI assistant responded to a chat.'),
+                ])
+                .describe(
+                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                ),
+              owner_id: zod
+                .string()
+                .describe('The user who owns this notification.'),
+              sender_id: zod
+                .string()
+                .nullish()
+                .describe('The user who triggered the notification.'),
+              sent: zod
+                .boolean()
+                .describe('Whether the notification has been sent.'),
+              updated_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was last updated.'),
+              viewed_at: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the notification was viewed/seen.'),
+            })
+          )
+      )
+      .describe('The list of items returned.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('The next page cursor if it exists.'),
+  })
+  .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Typed wrapper for getting a single notification by ID.
+ */
+export const getTypedNotificationByIdParams = zod.object({
+  notification_id: zod.string().uuid().describe('ID of the notification'),
+});
+
+export const getTypedNotificationByIdResponse = zod
+  .object({
+    entity_id: zod.string().describe('The id of that entity'),
+    entity_type: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'document',
+        'project',
+        'email_thread',
+        'team',
+      ])
+      .describe('The type of an entity in Macro'),
+  })
+  .describe(
+    'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+  )
+  .and(
+    zod.object({
+      created_at: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('When the notification was created.'),
+      deleted_at: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('When the notification was deleted.'),
+      done: zod
+        .boolean()
+        .describe('Whether the notification is marked as done.'),
+      id: zod.string().uuid().describe('The notification ID.'),
+      notification_event_type: zod
+        .string()
+        .describe(
+          'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+        ),
+      notification_metadata: zod
+        .union([
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    messageContent: zod
+                      .string()
+                      .describe('The message content'),
+                    messageId: zod
+                      .string()
+                      .describe('The message you were mentioned in'),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    threadId: zod
+                      .string()
+                      .nullish()
+                      .describe('the id of the thread'),
+                  })
+                ),
+              tag: zod.enum(['channel_mention']),
+            })
+            .describe('Someone mentioned you in a channel.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  documentName: zod
+                    .string()
+                    .describe('The name of the document'),
+                  fileType: zod
+                    .string()
+                    .nullish()
+                    .describe('The file type of the document'),
+                  owner: zod.string().describe('The owner of the document'),
+                  senderProfilePictureUrl: zod.string().nullish(),
+                })
+                .describe('Someone mentioned a document in a channel'),
+              tag: zod.enum(['document_mention']),
+            })
+            .describe('Someone mentioned a document in a channel.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  commentId: zod.number().describe('the comment id'),
+                  documentName: zod
+                    .string()
+                    .describe('The name of the document.'),
+                  fileType: zod
+                    .string()
+                    .nullish()
+                    .describe('The file type of the document.'),
+                  mentionId: zod.string().describe('The mention ID.'),
+                  owner: zod.string().describe('The owner of the document.'),
+                  senderProfilePictureUrl: zod.string().nullish(),
+                  text: zod.string().describe('the text of the comment'),
+                  threadId: zod.number().describe('the thread id'),
+                })
+                .describe(
+                  'Notification sent when a user is mentioned in a document comment.'
+                ),
+              tag: zod.enum(['mentioned_in_document_comment']),
+            })
+            .describe('User was mentioned in a comment in a document'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    invitedBy: zod.string(),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                  })
+                )
+                .describe('Metadata for when a user is invited to a channel'),
+              tag: zod.enum(['channel_invite']),
+            })
+            .describe('The user was invited to a channel.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    messageContent: zod
+                      .string()
+                      .optional()
+                      .describe('The content of the message'),
+                    messageId: zod.string().describe('The message id'),
+                    sender: zod
+                      .string()
+                      .describe('The user who sent the message'),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                  })
+                ),
+              tag: zod.enum(['channel_message_send']),
+            })
+            .describe('A user sent a message in a channel.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    messageContent: zod
+                      .string()
+                      .describe('The message content'),
+                    messageId: zod
+                      .string()
+                      .describe('The id of the new message'),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    threadId: zod
+                      .string()
+                      .describe('The id of the thread that has the reply'),
+                    threadParentSenderId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The user who sent the root message of the thread'
+                      ),
+                    userId: zod.string().describe('The sender id of the reply'),
+                  })
+                ),
+              tag: zod.enum(['channel_message_reply']),
+            })
+            .describe(
+              'Someone replied to a thread in a channel that the user is part of.'
+            ),
+          zod
+            .object({
+              content: zod.object({
+                sender: zod.string().nullish(),
+                snippet: zod.string(),
+                subject: zod.string(),
+                threadId: zod.string(),
+                toEmail: zod.string(),
+              }),
+              tag: zod.enum(['new_email']),
+            })
+            .describe('A new email has been sent to the user.'),
+          zod
+            .object({
+              content: zod.object({
+                invitedBy: zod
+                  .string()
+                  .describe('The user who sent the invitation'),
+                role: zod
+                  .string()
+                  .nullish()
+                  .describe('Role/permission level in the team'),
+                teamId: zod
+                  .string()
+                  .describe('The unique identifier of the team'),
+                teamName: zod
+                  .string()
+                  .describe('The name of the team being invited to'),
+              }),
+              tag: zod.enum(['invite_to_team']),
+            })
+            .describe('A user was invited to a team.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  assignedBy: zod
+                    .string()
+                    .describe('The user who assigned the task'),
+                  senderProfilePictureUrl: zod.string().nullish(),
+                  taskId: zod
+                    .string()
+                    .describe('The unique identifier of the task'),
+                  taskName: zod
+                    .string()
+                    .nullish()
+                    .describe('The name of the task (optional)'),
+                })
+                .describe('Metadata for when a user is assigned to a task'),
+              tag: zod.enum(['task_assigned']),
+            })
+            .describe('A user was assigned to a task.'),
+          zod
+            .object({
+              content: zod.object({
+                messageId: zod.string(),
+                summary: zod.string(),
+              }),
+              tag: zod.enum(['ai_response']),
+            })
+            .describe('An AI assistant responded to a chat.'),
+        ])
+        .describe(
+          'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+        ),
+      owner_id: zod.string().describe('The user who owns this notification.'),
+      sender_id: zod
+        .string()
+        .nullish()
+        .describe('The user who triggered the notification.'),
+      sent: zod.boolean().describe('Whether the notification has been sent.'),
+      updated_at: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('When the notification was last updated.'),
+      viewed_at: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('When the notification was viewed/seen.'),
+    })
+  );
+
+/**
  * @summary Edit document v2
 Edits traits of a document such as owner, or name as well as modify the documents share
 permissions.

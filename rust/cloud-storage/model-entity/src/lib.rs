@@ -28,6 +28,7 @@ mod tests;
     Eq,
     IntoStaticStr,
 )]
+#[schema(as = NotificationEntityType)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum EntityType {
