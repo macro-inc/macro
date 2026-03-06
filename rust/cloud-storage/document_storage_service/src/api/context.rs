@@ -96,7 +96,7 @@ pub(crate) type NotificationIngressType = NotificationIngressService<
 pub(crate) type NotificationReaderType = notification::domain::service::NotificationReaderService<
     DbNotificationRepository<PgPool>,
     SqsNotificationQueue,
-    notification::outbound::sns_endpoint::SnsEndpointManagerAdapter,
+    notification::outbound::sns_endpoint::SnsEndpointManagerAdapter<aws_sdk_sns::Client>,
 >;
 pub(crate) type NotificationState =
     notification::inbound::http::NotificationRouterState<NotificationReaderType>;
