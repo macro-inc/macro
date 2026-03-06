@@ -17,7 +17,6 @@ const serviceToCrate: Record<string, string> = {
   'properties-service': 'properties_service',
   'document-cognition': 'document_cognition_service',
   'auth-service': 'authentication_service',
-  'notification-service': 'document_storage_service',
   'static-files': 'static_file_service',
   'connection-gateway': 'connection_gateway',
   'contacts-service': 'contacts_service',

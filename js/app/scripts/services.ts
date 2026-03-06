@@ -49,14 +49,6 @@ export const services: Service[] = [
     orvalKey: "authService",
   },
   {
-    name: "notification-service",
-    dev: "https://cloud-storage-dev.macro.com/api-doc/openapi.json",
-    prod: "https://cloud-storage.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8086/api-doc/openapi.json",
-    output: "../packages/service-clients/service-notification/",
-    orvalKey: "notificationService",
-  },
-  {
     name: "static-files",
     dev: "https://static-file-service-dev.macro.com/api/api-doc/openapi.json",
     prod: "https://static-file-service.macro.com/api/api-doc/openapi.json",
