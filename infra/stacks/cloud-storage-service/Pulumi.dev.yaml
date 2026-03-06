@@ -17,3 +17,9 @@ config:
   cloud-storage-service:github_sync_app_url: https://github.com/apps/dev-macro-sync
   cloud-storage-service:github_sync_app_pem: github-sync-app-pem-dev
   cloud-storage-service:github_sync_app_client_id: Iv23livpJoVJw98dlKCk
+  cloud-storage-service:apple_team_id: apple-team-id
+  cloud-storage-service:apple_bundle_id: apple-bundle-id-prod
+  cloud-storage-service:apns_key_id: apns-key-id
+  cloud-storage-service:apns_private_key:
+    secure: AAABABgzjPffyo4Dh/SryGRapUIuJ2WXRrv2O879SfFOTC6sAu2uIKnCtzDyZSgCJ1Or8opS7RBV648ysgMygoIPZnwGn0lkSxbz8L4GiDk0Wd9MHedXJpi7oDdcR7AHdf+GBievPO2Afi6Ta7LVmb4BM5ig8rMDG9B5U3FofsgQNDvVXu5r8dsRZjKKGqN76mXQ+eSCxlJLWHlRluy28Ns7Aay8AzJLRnD3h8+qrF9mc49lr45f003aOu0/YojWn6QlAcK0tb0O3B+PsM+LDrk99B6oAzOZpPkT1qfFfOy0Wk76jlvsm0zOIA==
+  cloud-storage-service:fcm_secret_key: fcm-credential-dev

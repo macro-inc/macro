@@ -37,6 +37,7 @@ type CreateCloudStorageServiceServiceArgs = {
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
+  snsPlatformArns: Array<pulumi.Output<string> | string>;
   tags: { [key: string]: string };
 };
 
@@ -68,6 +69,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
+      snsPlatformArns,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -142,8 +144,58 @@ export class CloudStorageService extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Action: ['sqs:SendMessage'],
+              Action: ['sqs:*'],
               Resource: queueArns,
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const sesPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-ses-policy`,
+      {
+        name: `${BASE_NAME}-ses-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                'ses:SendEmail',
+                'ses:SendRawEmail',
+                'ses:SendTemplatedEmail',
+              ],
+              Resource: [
+                `arn:aws:ses:us-east-1:569036502058:identity/notification.macro.com`,
+              ],
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const snsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-sns-policy`,
+      {
+        name: `${BASE_NAME}-sns-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                'sns:CreatePlatformEndpoint',
+                'sns:DeleteEndpoint',
+                'sns:GetEndpointAttributes',
+                'sns:SetEndpointAttributes',
+                'sns:Publish',
+              ],
+              Resource: snsPlatformArns,
               Effect: 'Allow',
             },
           ],
@@ -207,6 +259,24 @@ export class CloudStorageService extends pulumi.ComponentResource {
         policyArn: queuePolicy.arn,
       },
       { parent: this, dependsOn: [queuePolicy, this.role] }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-ses-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: sesPolicy.arn,
+      },
+      { parent: this, dependsOn: [sesPolicy, this.role] }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-sns-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: snsPolicy.arn,
+      },
+      { parent: this, dependsOn: [snsPolicy, this.role] }
     );
 
     // ecr image
