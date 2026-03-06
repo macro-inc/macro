@@ -25,16 +25,47 @@ use tower::util::ServiceExt;
 
 // --- Access service implementations for tests ---
 
-#[derive(Clone)]
-struct AllowAccess;
+#[derive(Clone, Copy)]
+enum AccessMode {
+    Allow,
+    Deny,
+    NotFound,
+}
 
 #[derive(Clone)]
-struct DenyAccess;
+struct TestAccessService {
+    mode: AccessMode,
+}
 
-#[derive(Clone)]
-struct NotFoundAccess;
+impl TestAccessService {
+    const fn allow() -> Self {
+        Self {
+            mode: AccessMode::Allow,
+        }
+    }
 
-impl EntityAccessService for AllowAccess {
+    const fn deny() -> Self {
+        Self {
+            mode: AccessMode::Deny,
+        }
+    }
+
+    const fn not_found() -> Self {
+        Self {
+            mode: AccessMode::NotFound,
+        }
+    }
+
+    fn access_err(&self) -> AccessError {
+        match self.mode {
+            AccessMode::Allow => AccessError::Internal,
+            AccessMode::Deny => AccessError::Unauthorized,
+            AccessMode::NotFound => AccessError::NotFound("Channel not found"),
+        }
+    }
+}
+
+impl EntityAccessService for TestAccessService {
     async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
@@ -42,7 +73,7 @@ impl EntityAccessService for AllowAccess {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        Err(self.access_err())
     }
 
     async fn get_access_level(
@@ -51,7 +82,10 @@ impl EntityAccessService for AllowAccess {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(Some(AccessLevel::View))
+        Ok(match self.mode {
+            AccessMode::Allow => Some(AccessLevel::View),
+            AccessMode::Deny | AccessMode::NotFound => None,
+        })
     }
 
     async fn check_access(
@@ -61,7 +95,11 @@ impl EntityAccessService for AllowAccess {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Ok(AccessLevel::View)
+        match self.mode {
+            AccessMode::Allow => Ok(AccessLevel::View),
+            AccessMode::Deny => Err(AccessError::Unauthorized),
+            AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
+        }
     }
 
     async fn check_public_access(
@@ -70,7 +108,11 @@ impl EntityAccessService for AllowAccess {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Ok(AccessLevel::View)
+        match self.mode {
+            AccessMode::Allow => Ok(AccessLevel::View),
+            AccessMode::Deny => Err(AccessError::Unauthorized),
+            AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
+        }
     }
 
     async fn get_entity_permission(
@@ -80,114 +122,18 @@ impl EntityAccessService for AllowAccess {
         entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        match entity_type {
-            EntityType::Channel => Ok(EntityPermission::ChannelRole {
-                role: EntityParticipantRole::Member,
-            }),
-            _ => Ok(EntityPermission::AccessLevel {
-                access_level: AccessLevel::View,
-            }),
+        match self.mode {
+            AccessMode::Allow => match entity_type {
+                EntityType::Channel => Ok(EntityPermission::ChannelRole {
+                    role: EntityParticipantRole::Member,
+                }),
+                _ => Ok(EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                }),
+            },
+            AccessMode::Deny => Err(AccessError::Unauthorized),
+            AccessMode::NotFound => Err(AccessError::NotFound("Channel not found")),
         }
-    }
-}
-
-impl EntityAccessService for DenyAccess {
-    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
-        &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
-        _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Unauthorized)
-    }
-
-    async fn get_access_level(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(None)
-    }
-
-    async fn check_access(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Unauthorized)
-    }
-
-    async fn check_public_access(
-        &self,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Unauthorized)
-    }
-
-    async fn get_entity_permission(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::Unauthorized)
-    }
-}
-
-impl EntityAccessService for NotFoundAccess {
-    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
-        &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
-        _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::NotFound("Channel not found"))
-    }
-
-    async fn get_access_level(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-    ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(None)
-    }
-
-    async fn check_access(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::NotFound("Channel not found"))
-    }
-
-    async fn check_public_access(
-        &self,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::NotFound("Channel not found"))
-    }
-
-    async fn get_entity_permission(
-        &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
-        _user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::NotFound("Channel not found"))
     }
 }
 
@@ -389,19 +335,35 @@ fn user_extension() -> Extension<UserContext> {
 }
 
 fn mock_router() -> Router {
-    channels_router(ChannelsRouterState::new(MockService, AllowAccess)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension())
 }
 
 fn error_router() -> Router {
-    channels_router(ChannelsRouterState::new(ErrorService, AllowAccess)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(
+        ErrorService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension())
 }
 
 fn denied_router() -> Router {
-    channels_router(ChannelsRouterState::new(MockService, DenyAccess)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::deny(),
+    ))
+    .layer(user_extension())
 }
 
 fn not_found_router() -> Router {
-    channels_router(ChannelsRouterState::new(MockService, NotFoundAccess)).layer(user_extension())
+    channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::not_found(),
+    ))
+    .layer(user_extension())
 }
 
 #[tokio::test]
@@ -544,8 +506,11 @@ async fn participants_returns_empty_list() {
 
 #[tokio::test]
 async fn participants_returns_data_with_correct_shape() {
-    let router = channels_router(ChannelsRouterState::new(ParticipantsService, AllowAccess))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        ParticipantsService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .uri(format!("/{channel_id}/participants"))
@@ -743,8 +708,11 @@ async fn messages_around_returns_empty_page() {
 
 #[tokio::test]
 async fn messages_around_returns_previous_cursor_when_items_present() {
-    let router = channels_router(ChannelsRouterState::new(AroundHasItemsService, AllowAccess))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        AroundHasItemsService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -765,8 +733,11 @@ async fn messages_around_returns_previous_cursor_when_items_present() {
 
 #[tokio::test]
 async fn messages_around_returns_404_when_not_found() {
-    let router = channels_router(ChannelsRouterState::new(NotFoundService, AllowAccess))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        NotFoundService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -804,8 +775,11 @@ async fn thread_replies_returns_empty_list() {
 
 #[tokio::test]
 async fn thread_replies_returns_404_when_not_found() {
-    let router = channels_router(ChannelsRouterState::new(NotFoundService, AllowAccess))
-        .layer(user_extension());
+    let router = channels_router(ChannelsRouterState::new(
+        NotFoundService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
