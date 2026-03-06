@@ -93,6 +93,7 @@ import {
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -218,13 +219,17 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <Button
-                variant={soup.previewEntity() ? 'tertiary' : 'ghost'}
-                size="icon-sm"
-                onClick={togglePreview}
+              <Tooltip
+                tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
               >
-                <PreviewIcon />
-              </Button>
+                <Button
+                  variant={soup.previewEntity() ? 'tertiary' : 'ghost'}
+                  size="icon-sm"
+                  onClick={togglePreview}
+                >
+                  <PreviewIcon />
+                </Button>
+              </Tooltip>
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
