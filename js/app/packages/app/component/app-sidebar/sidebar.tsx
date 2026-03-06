@@ -38,6 +38,7 @@ interface SidebarItem {
     JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
+  standaloneHotkey?: boolean;
 }
 
 export const SIDEBAR_LINKS = [
@@ -47,6 +48,14 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.inbox,
     icon: TrayIcon,
     hotkey: 'i',
+  },
+  {
+    id: 'search',
+    label: 'Search',
+    href: LIST_VIEW_PATHS.search,
+    icon: SearchIcon,
+    hotkey: '/',
+    standaloneHotkey: true,
   },
   {
     id: 'agents',
@@ -90,7 +99,7 @@ export const SIDEBAR_LINKS = [
     icon: AnimatedFolderIcon,
     hotkey: 'f',
   },
-] as const satisfies SidebarItem[];
+] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
 
@@ -127,7 +136,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     for (const link of SIDEBAR_LINKS) {
       registerHotkey({
         hotkey: link.hotkey,
-        scopeId: GO_TO_COMMAND_SCOPE,
+        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
         description: `Go to ${link.label}`,
         keyDownHandler: (e) => {
           e?.preventDefault();
@@ -183,33 +192,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <LogoIcon class="size-6 text-accent opacity-100 group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:size-0" />
           <div class="flex items-center gap-1">
             <Show when={isExpanded()}>
-              <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
-                <Button
-                  as="a"
-                  class="cursor-default"
-                  variant="tertiary"
-                  size="icon-sm"
-                  href={`/component/search`}
-                  onClick={(e) => {
-                    // Middle mouse handling
-                    if (e.button === 1) return;
-
-                    e.preventDefault();
-                    layout.openWithSplit(
-                      {
-                        type: 'component',
-                        id: 'search',
-                      },
-                      {
-                        preferNewSplit: e.shiftKey,
-                        mergeHistory: true,
-                      }
-                    );
-                  }}
-                >
-                  <SearchIcon />
-                </Button>
-              </Tooltip>
               <Tooltip
                 tooltip={
                   <LabelAndHotKey label="Command palette" shortcut="⌘K" />
