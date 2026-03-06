@@ -10,6 +10,8 @@ import {
   isChannelNotification,
   useSenderName,
 } from '@app/component/app-sidebar/utils';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -82,6 +84,8 @@ function groupByChannel(
 }
 
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
+  const layout = useSplitLayout();
+
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -105,11 +109,29 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
   };
 
   return (
-    <div
-      class="flex items-center gap-3 p-2 hover:bg-surface-hover cursor-pointer transition-all duration-300 ease-out"
+    <Button
+      as={'a'}
+      href={`/channel/${props.group.entityId}`}
+      class="flex items-center justify-start gap-3 w-full"
+      variant="ghost"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
+      }}
+      onClick={(e) => {
+        // Middle mouse handling
+        if (e.button === 1) return;
+
+        e.preventDefault();
+        layout.openWithSplit(
+          {
+            type: 'channel',
+            id: props.group.entityId,
+          },
+          {
+            preferNewSplit: e.shiftKey,
+          }
+        );
       }}
     >
       <div class="flex-shrink-0">
@@ -133,16 +155,14 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         </Show>
       </div>
 
-      <span class="flex-1 text-sm font-medium text-ink truncate">
-        {displayName()}
-      </span>
+      <span class="text-sm font-medium text-ink truncate">{displayName()}</span>
 
       <Show when={count() > 0}>
-        <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded">
+        <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
           {count()}
         </span>
       </Show>
-    </div>
+    </Button>
   );
 }
 
