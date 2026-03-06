@@ -14,7 +14,9 @@ export type CodeBlockMode = 'code' | 'render';
 export default function BlockCode() {
   const isNestedBlock = useIsNestedBlock();
   const blockMetadata = blockMetadataSignal.get;
-  const isHtmlFile = createMemo(() => isHtmlFileType(blockMetadata()?.fileType));
+  const isHtmlFile = createMemo(() =>
+    isHtmlFileType(blockMetadata()?.fileType)
+  );
   const [mode, setMode] = createSignal<CodeBlockMode>('code');
 
   createEffect(
