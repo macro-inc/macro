@@ -162,23 +162,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <div
         class={cn(
-          'h-full bg-page pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
+          'group/sidebar h-full bg-page pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-150 ease-in-out',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
             '-translate-x-full overflow-hidden opacity-0',
 
           isSlim() &&
-            'max-w-10 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+            'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
         )}
+        data-state={props.sidebarState}
       >
         <div
           class={cn(
             'flex items-center justify-between py-2 pl-3 pr-2',
-            isSlim() && 'flex-col gap-2 px-2 justify-center'
+            isSlim() && 'flex-col px-2 pb-0 justify-center'
           )}
         >
-          <LogoIcon class="size-6 text-accent" />
+          <LogoIcon class="size-6 text-accent opacity-100 group-data-[state='slim']/sidebar:opacity-0 group-data-[state='slim']/sidebar:size-0" />
           <div class="flex items-center gap-1">
             <Show when={isExpanded()}>
               <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
@@ -222,17 +223,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 </Button>
               </Tooltip>
               <Tooltip
-                tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-              >
-                <Button
-                  variant="tertiary"
-                  size="icon-sm"
-                  onClick={handleCreateClick}
-                >
-                  <PlusIcon />
-                </Button>
-              </Tooltip>
-              <Tooltip
                 tooltip={
                   <LabelAndHotKey
                     label="Settings"
@@ -263,6 +253,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </div>
         </div>
 
+        <Tooltip
+          class={isSlim() ? 'px-0.5 flex items-center justify-center' : 'px-2'}
+          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
+        >
+          <Button
+            class={
+              "justify-center group-data-[state='slim']/sidebar:aspect-square group-data-[state='expanded']/sidebar:justify-start group-data-[state='expanded']/sidebar:w-full"
+            }
+            size={isSlim() ? 'icon-md' : 'md'}
+            onClick={handleCreateClick}
+          >
+            <PlusIcon class="size-4 shrink-0" />
+            <span class="opacity-100 group-data-[state='slim']/sidebar:sr-only group-data-[state='slim']/sidebar:opacity-0">
+              Create
+            </span>
+          </Button>
+        </Tooltip>
+
         <nav>
           <ul class="w-full h-full px-2 flex flex-col gap-1">
             <For each={SIDEBAR_LINKS}>
@@ -277,6 +285,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             </For>
           </ul>
         </nav>
+
         <Show when={isExpanded()}>
           <div class="block max-h-[clamp(10%,60%,20rem)]">
             <ChannelsUnreadWidget />
@@ -324,7 +333,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       class={cn(
         'flex items-center justify-start text-sm gap-2 cursor-default',
         isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'justify-center aspect-square',
+        props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
         props.sidebarState !== 'slim' && 'w-full'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
@@ -352,7 +361,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      <Show when={props.sidebarState === 'expanded'}>{props.label}</Show>
+      <span class="opacity-100 group-data-[state='slim']/sidebar:sr-only group-data-[state='slim']/sidebar:opacity-0">
+        {props.label}
+      </span>
     </Button>
   );
 };
