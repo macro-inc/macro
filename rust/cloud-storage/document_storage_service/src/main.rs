@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
