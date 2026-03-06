@@ -20,8 +20,7 @@ import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
-const notificationHost: string = SERVER_HOSTS['notification-service'];
-// const notificationHost: string = 'http://localhost:8086';
+const notificationHost: string = SERVER_HOSTS['document-storage-service'];
 
 export const NOTIFICATION_WEBSOCKET_EVENT = 'notification';
 type NotificationEventType = typeof NOTIFICATION_WEBSOCKET_EVENT;

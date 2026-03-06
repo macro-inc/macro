@@ -50,9 +50,9 @@ export const services: Service[] = [
   },
   {
     name: "notification-service",
-    dev: "https://notifications-dev.macro.com/api-doc/openapi.json",
-    prod: "https://notifications.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8089/api-doc/openapi.json",
+    dev: "https://cloud-storage-dev.macro.com/api-doc/openapi.json",
+    prod: "https://cloud-storage.macro.com/api-doc/openapi.json",
+    local: "http://localhost:8086/api-doc/openapi.json",
     output: "../packages/service-clients/service-notification/",
     orvalKey: "notificationService",
   },
