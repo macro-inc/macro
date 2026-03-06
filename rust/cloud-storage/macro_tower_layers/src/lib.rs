@@ -164,7 +164,7 @@ pub fn spawn_starvation_detector(interval: Duration) {
             let before = tokio::time::Instant::now();
             tick.tick().await;
             let elapsed = before.elapsed();
-            if elapsed > interval {
+            if elapsed > interval + Duration::from_millis(5) {
                 tracing::warn!(
                     expected_ms = interval.as_millis() as u64,
                     actual_ms = elapsed.as_millis() as u64,
