@@ -26,15 +26,23 @@ export function DropOverlay(props: DropOverlayProps) {
     <Show when={open()}>
       <div
         class={cn(
-          'absolute inset-0 z-20 flex flex-col gap-1 items-center justify-center bg-input/90 border border-edge-muted text-sm',
+          'absolute inset-0 z-20 bg-modal-overlay pattern-diagonal-8 flex items-center justify-center',
+          valid() ? 'pattern-edge-muted' : 'pattern-failure-bg',
           local.class
         )}
         data-input-drop-overlay
         {...rest}
       >
-        <Show when={valid()} fallback={local.invalidMessage ?? 'Invalid file'}>
-          {local.children ?? local.hint ?? 'Drop files to attach'}
-        </Show>
+        <div class="bg-menu border-1 border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
+          <Show
+            when={valid()}
+            fallback={local.invalidMessage ?? 'Invalid file'}
+          >
+            {local.children ??
+              local.hint ??
+              'Drop any file here to add it to the conversation'}
+          </Show>
+        </div>
       </div>
     </Show>
   );

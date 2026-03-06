@@ -38,6 +38,8 @@ import { ChannelInput } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
+import { createChannelDragState } from './create-channel-drag-state';
+import { ChannelDropZone } from './ChannelDropZone';
 
 type ChannelProps = {
   channelId: string;
@@ -91,6 +93,10 @@ export function Channel(props: ChannelProps) {
     buildChannelMessageListMeta(messages(), activityTracker.isNewMessage)
   );
 
+  const dragState = createChannelDragState({
+    channelId: props.channelId,
+  });
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -107,7 +113,7 @@ export function Channel(props: ChannelProps) {
   return (
     <Suspense>
       <StaticMarkdownContext>
-        <div class="relative h-full flex flex-col">
+        <ChannelDropZone dragState={dragState}>
           <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
               <ThreadList
@@ -154,11 +160,17 @@ export function Channel(props: ChannelProps) {
                   mode: 'channel',
                   id: `channel-input-${props.channelId}`,
                   placeholder: 'Message channel',
+                  isDraggingOverChannel: dragState.isDraggingOverChannel(),
+                  isValidChannelDrag: dragState.isValidChannelDrag(),
+                }}
+                attachmentTracker={dragState.tracker}
+                onReady={(handle) => {
+                  dragState.setAttachFilesToChannel(handle.attachFiles);
                 }}
               />
             </div>
           </Suspense>
-        </div>
+        </ChannelDropZone>
       </StaticMarkdownContext>
     </Suspense>
   );

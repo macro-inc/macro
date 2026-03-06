@@ -66,6 +66,7 @@ export type InputCommands = {
 export type InputHandle = {
   clear: () => void;
   focus: () => void;
+  attachFiles: (files: File[]) => Promise<void>;
 };
 
 export type InputAttachmentTracker = Tracker;

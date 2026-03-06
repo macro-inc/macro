@@ -31,6 +31,7 @@ export type InputView = {
   setValue: (value: string) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   setIsSending: (value: boolean) => void;
+  setIsDraggedOver: (value: boolean) => void;
   reset: () => void;
 };
 
@@ -42,6 +43,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     !!options.initialInput.showFormatRibbon
   );
   const [isSending, setIsSending] = createSignal(false);
+  const [isDraggedOver, setIsDraggedOver] = createSignal(false);
 
   const snapshot = createMemo<InputSnapshot>(() => ({
     value: value(),
@@ -52,6 +54,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
   const view = createMemo<InputData>(() => ({
     ...options.initialInput,
     value: value(),
+    isDraggedOver: isDraggedOver() || options.initialInput.isDraggedOver,
     showFormatRibbon: showFormatRibbon(),
     hasPendingAttachments:
       isSending() || options.attachmentTracker.hasPending(),
@@ -87,6 +90,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     setValue,
     setShowFormatRibbon,
     setIsSending,
+    setIsDraggedOver,
     reset,
   };
 }

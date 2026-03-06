@@ -1,6 +1,7 @@
 import { Root } from './Root';
 import { Layout } from './Layout';
 import { DropOverlay } from './DropOverlay';
+import { DropZone } from './DropZone';
 import { FormatRibbon } from './FormatRibbon';
 import { EditorShell } from './EditorShell';
 import { Editor } from './Editor';
@@ -13,6 +14,7 @@ export const Input = {
   Root,
   Layout,
   DropOverlay,
+  DropZone,
   FormatRibbon,
   EditorShell,
   Editor,

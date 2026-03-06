@@ -8,6 +8,7 @@ export { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 export { Root } from './Root';
 export { Layout } from './Layout';
 export { DropOverlay } from './DropOverlay';
+export { DropZone } from './DropZone';
 export { FormatRibbon } from './FormatRibbon';
 export { EditorShell } from './EditorShell';
 export { Editor } from './Editor';
