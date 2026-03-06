@@ -1,4 +1,4 @@
-import { Show, splitProps, type JSX } from 'solid-js';
+import { children, Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
@@ -11,6 +11,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const input = useInput();
   const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const resolved = children(() => local.children);
   const isBlockedByPending = () => !!input().hasPendingAttachments;
 
   return (
@@ -37,7 +38,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
           'size-6 animate-spin cursor-disabled'
         )}
       >
-        {local.children ?? (
+        {resolved() ?? (
           <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
             {renderIcon(
               ArrowUpIcon,

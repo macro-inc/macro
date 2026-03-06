@@ -4,7 +4,52 @@
 
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  });
+});
+
+vi.mock('@core/util/upload', () => ({
+  chatRuleset: {},
+  uploadFile: vi.fn(),
+}));
+
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
+}));
+
+vi.mock('../utils/render-icon', () => ({
+  renderIcon: () => null,
+}));
+
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: () => <span data-testid="entity-icon" />,
+}));
+
+vi.mock('@core/component/ImagePreview', () => ({
+  ImagePreview: (props: { image: { id: string } }) => (
+    <div data-testid={`image-preview-${props.image.id}`} />
+  ),
+}));
+
+vi.mock('@core/component/VideoPreview', () => ({
+  VideoPreview: (props: { id: string }) => (
+    <div data-testid={`video-preview-${props.id}`} />
+  ),
+}));
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string }) => (
@@ -139,8 +184,8 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByText('Message channel')).toBeTruthy();
-    expect(screen.getByText('clip.mov')).toBeTruthy();
-    expect(screen.getByText('image.png')).toBeTruthy();
+    expect(screen.getByTestId('video-preview-a1')).toBeTruthy();
+    expect(screen.getByTestId('image-preview-a2')).toBeTruthy();
     expect(screen.getByText('spec.md')).toBeTruthy();
   });
 

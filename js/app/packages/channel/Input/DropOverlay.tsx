@@ -1,4 +1,4 @@
-import { Show, splitProps, type JSX } from 'solid-js';
+import { children, Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput } from './context';
 import { isReplyInput } from './types';
@@ -16,6 +16,7 @@ export function DropOverlay(props: DropOverlayProps) {
     'invalidMessage',
     'hint',
   ]);
+  const resolved = children(() => local.children);
 
   const open = () =>
     !!input().isDraggedOver ||
@@ -38,7 +39,7 @@ export function DropOverlay(props: DropOverlayProps) {
             when={valid()}
             fallback={local.invalidMessage ?? 'Invalid file'}
           >
-            {local.children ??
+            {resolved() ??
               local.hint ??
               'Drop any file here to add it to the conversation'}
           </Show>

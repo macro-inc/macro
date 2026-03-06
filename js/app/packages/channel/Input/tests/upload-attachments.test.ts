@@ -3,6 +3,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
+}));
+
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { getAttachmentKindFromFile } from '../utils/file-helpers';
 import { uploadInputAttachments } from '../upload-attachments';

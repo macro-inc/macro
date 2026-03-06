@@ -1,4 +1,12 @@
-import { For, Match, Show, splitProps, Switch, type JSX } from 'solid-js';
+import {
+  children,
+  For,
+  Match,
+  Show,
+  splitProps,
+  Switch,
+  type JSX,
+} from 'solid-js';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { VideoPreview } from '@core/component/VideoPreview';
@@ -95,6 +103,7 @@ export function Attachments(props: AttachmentsProps) {
   const input = useInput();
   const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
+  const resolved = children(() => local.children);
 
   const visibleAttachments = () => {
     const items = input().attachments ?? [];
@@ -123,7 +132,7 @@ export function Attachments(props: AttachmentsProps) {
         {...rest}
       >
         <Show
-          when={local.children}
+          when={resolved()}
           fallback={
             <For each={visibleAttachments()}>
               {(attachment) => (
@@ -149,7 +158,7 @@ export function Attachments(props: AttachmentsProps) {
             </For>
           }
         >
-          {local.children}
+          {(children) => children()}
         </Show>
       </div>
     </Show>

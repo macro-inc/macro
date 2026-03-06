@@ -1,4 +1,4 @@
-import { Show, splitProps, type JSX } from 'solid-js';
+import { children, Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
 import { isReplyInput } from './types';
@@ -33,6 +33,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const input = useInput();
   const commands = useInputCommands();
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const resolved = children(() => local.children);
   let fileInputRef: HTMLInputElement | undefined;
 
   const openAttachPicker = () => {
@@ -66,7 +67,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
         data-input-attach-file-picker
       />
       <Show
-        when={local.children}
+        when={resolved()}
         fallback={
           <>
             <InputActionButton
@@ -93,7 +94,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
           </>
         }
       >
-        {local.children}
+        {(children) => children()}
       </Show>
     </div>
   );
