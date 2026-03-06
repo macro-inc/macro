@@ -746,14 +746,6 @@ export function BaseInput(props: {
   const scheduleMessageMutation = useScheduleMessageMutation({
     onSuccess: () => {
       toast.success('Email scheduled');
-
-      const thread = ctx.thread();
-
-      if (!thread?.db_id) return;
-
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(thread.db_id).queryKey,
-      });
     },
     onError: () => {
       toast.failure('Failed to schedule email');
@@ -877,6 +869,7 @@ export function BaseInput(props: {
       scheduleMessageMutation.mutate({
         draftID: currentDraftID,
         sendTime,
+        threadID: currentThread?.db_id,
       });
 
       cleanupWatermark();
