@@ -193,6 +193,17 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="flex items-center gap-1">
             <Show when={isExpanded()}>
               <Tooltip
+                tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
+              >
+                <Button
+                  class={'justify-center'}
+                  size={'icon-sm'}
+                  onClick={handleCreateClick}
+                >
+                  <PlusIcon class="size-4 shrink-0" />
+                </Button>
+              </Tooltip>{' '}
+              <Tooltip
                 tooltip={
                   <LabelAndHotKey label="Command palette" shortcut="⌘K" />
                 }
@@ -236,23 +247,22 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </div>
         </div>
 
-        <Tooltip
-          class={isSlim() ? 'px-0.5 flex items-center justify-center' : 'px-2'}
-          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-        >
-          <Button
-            class={
-              'justify-center group-data-[slim=true]/sidebar:aspect-square group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full'
-            }
-            size={isSlim() ? 'icon-md' : 'md'}
-            onClick={handleCreateClick}
+        <Show when={isSlim()}>
+          <Tooltip
+            class={'px-0.5 flex items-center justify-center'}
+            tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
           >
-            <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
-              Create
-            </span>
-          </Button>
-        </Tooltip>
+            <Button
+              class={
+                'justify-center group-data-[slim=true]/sidebar:aspect-square group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full'
+              }
+              size={'icon-md'}
+              onClick={handleCreateClick}
+            >
+              <PlusIcon class="size-4 shrink-0" />
+            </Button>
+          </Tooltip>
+        </Show>
 
         <nav>
           <ul class="w-full h-full px-2 flex flex-col gap-1">
