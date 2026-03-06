@@ -112,3 +112,22 @@ async fn starvation_detector_warns_when_runtime_blocked() {
 
     assert!(saw_warn.load(Ordering::SeqCst));
 }
+
+#[tokio::test]
+async fn starvation_detector_does_not_warn_within_grace_period() {
+    tokio::time::pause();
+
+    let (subscriber, saw_warn, _saw_info) = LevelCapture::new();
+    let _guard = set_default(subscriber);
+
+    spawn_starvation_detector(Duration::from_millis(50));
+
+    // Let the detector initialize and consume its first tick
+    tokio::task::yield_now().await;
+
+    // Advance time by interval + 4ms, within the 5ms grace period
+    tokio::time::advance(Duration::from_millis(54)).await;
+    tokio::task::yield_now().await;
+
+    assert!(!saw_warn.load(Ordering::SeqCst));
+}

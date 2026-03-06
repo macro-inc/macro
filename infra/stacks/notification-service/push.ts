@@ -78,6 +78,7 @@ export class PushNotificationEventHandler extends pulumi.ComponentResource {
         topic: this.pushDeliveryTopic.arn,
         protocol: 'sqs',
         endpoint: pulumi.interpolate`${this.pushDeliveryQueue.arn}`,
+        rawMessageDelivery: true,
       },
       { parent: this }
     );
