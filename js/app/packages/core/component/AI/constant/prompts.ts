@@ -1,5 +1,7 @@
 import { useUserContext } from '@core/context/user';
 import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
+import { authServiceClient } from '@service-auth/client';
+import { createResource } from 'solid-js';
 
 const ABOUT_MACRO = `
 Macro is an AI workspace with all the latest models and built-in editors for pdfs, docs, notes, images, diagrams, chats and more. Macro is like ChatGPT but you can do all your work inside it+
@@ -26,12 +28,23 @@ Internal terminology and knowledge
 
 export function useAdditionalInstructions() {
   const userInstructionsQuery = useInstructionsMdTextQuery();
-  const { userInfo } = useUserContext();
+  const { email } = useUserContext();
+  const [userName] = createResource(async () => {
+    const [, response] = await authServiceClient.getUserName();
+    return response ?? null;
+  });
   return () => {
     let prompt = ABOUT_MACRO;
-    const name = userInfo()?.name;
-    if (name) {
-      prompt += `\nYou are talking to ${name}.`;
+    const name = userName();
+    const parts = [name?.first_name, name?.last_name].filter(Boolean);
+    if (parts.length > 0 || email()) {
+      prompt += '\nAbout the user you are talking to:';
+      if (parts.length > 0) {
+        prompt += `\nName: ${parts.join(' ')}`;
+      }
+      if (email()) {
+        prompt += `\nEmail: ${email()}`;
+      }
     }
     const userInstructions =
       userInstructionsQuery.isSuccess && userInstructionsQuery.data;
