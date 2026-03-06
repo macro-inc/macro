@@ -14,10 +14,9 @@ pub async fn process_threads_pre_insert(
     db: &sqlx::PgPool,
     sfs_client: &StaticFileServiceClient,
     threads: &mut Vec<service::thread::Thread>,
-    environment: Environment,
 ) {
     // store the linked images in messages in sfs, acting as a cdn (prod only)
-    if matches!(environment, Environment::Production) {
+    if matches!(Environment::new_or_prod(), Environment::Production) {
         store_threads_images(threads, db, sfs_client).await;
     }
 
@@ -32,10 +31,9 @@ pub async fn process_message_pre_insert(
     db: &sqlx::PgPool,
     sfs_client: &StaticFileServiceClient,
     message: &mut service::message::Message,
-    environment: Environment,
 ) {
     // store the linked images in messages in sfs, acting as a cdn (prod only)
-    if matches!(environment, Environment::Production)
+    if matches!(Environment::new_or_prod(), Environment::Production)
         && let Err(err) = store_message_images(db, sfs_client, message).await
     {
         tracing::warn!(

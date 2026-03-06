@@ -5,7 +5,6 @@ use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
-use macro_env::Environment;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -25,7 +24,6 @@ pub async fn run_worker(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     notifications_enabled: bool,
-    environment: Environment,
 ) {
     let ctx = PubSubContext {
         db,
@@ -41,7 +39,6 @@ pub async fn run_worker(
         system_properties_service,
         notifications_enabled,
         retry_worker: false,
-        environment,
     };
 
     loop {

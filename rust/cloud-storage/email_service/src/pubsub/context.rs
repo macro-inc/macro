@@ -3,7 +3,6 @@ use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use gmail_client::GmailClient;
-use macro_env::Environment;
 use notification::domain::models::email_notification_digest::StateMachineDriverA;
 use notification::domain::service::NotificationIngressService;
 use notification::outbound::{
@@ -48,5 +47,4 @@ pub struct PubSubContext {
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub notifications_enabled: bool,
     pub retry_worker: bool,
-    pub environment: Environment,
 }

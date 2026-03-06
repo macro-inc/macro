@@ -265,7 +265,6 @@ async fn main() -> anyhow::Result<()> {
                 system_properties_service_inbox_sync,
                 config.notifications_enabled,
                 false,
-                config.environment,
             )
             .await;
         });
@@ -302,7 +301,6 @@ async fn main() -> anyhow::Result<()> {
                 system_properties_service_inbox_sync,
                 config.notifications_enabled,
                 true,
-                config.environment,
             )
             .await;
         });
@@ -338,7 +336,6 @@ async fn main() -> anyhow::Result<()> {
                 dss_client_backfill,
                 system_properties_service_backfill,
                 config.notifications_enabled,
-                config.environment,
             )
             .await;
         });
