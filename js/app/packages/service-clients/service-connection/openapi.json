@@ -192,6 +192,7 @@
     "schemas": {
       "BatchSendMessageBody": {
         "type": "object",
+        "description": "The body of a batch send message request.",
         "required": ["message", "entities", "message_type"],
         "properties": {
           "entities": {
@@ -254,6 +255,7 @@
       },
       "MessageReceipt": {
         "type": "object",
+        "description": "A receipt for a message that was sent to a user.",
         "required": ["user_id", "delivery_count", "active"],
         "properties": {
           "active": {
@@ -274,23 +276,29 @@
       },
       "SendMessageBody": {
         "type": "object",
+        "description": "The body of a send message request.",
         "required": ["message", "message_type"],
         "properties": {
-          "message": {},
+          "message": {
+            "description": "the message to send"
+          },
           "message_type": {
-            "type": "string"
+            "type": "string",
+            "description": "the type of the message we are sending"
           }
         }
       },
       "SendMessageResponse": {
         "type": "object",
+        "description": "The response from sending a message.",
         "required": ["receipts"],
         "properties": {
           "receipts": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MessageReceipt"
-            }
+            },
+            "description": "the receipts for each message sent"
           }
         }
       },
