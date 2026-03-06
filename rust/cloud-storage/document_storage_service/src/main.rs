@@ -38,7 +38,12 @@ use macro_sha_count_client::Redis;
 use notification::domain::models::email_notification_digest::{
     EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
 };
-use notification::domain::service::NotificationIngressService;
+use notification::domain::service::{NotificationEgressService, NotificationIngressService};
+use notification::inbound::worker::NotificationWorker;
+use notification::outbound::email::EmailAdapter;
+use notification::outbound::mobile::MobilePushAdapter;
+use notification::outbound::rate_limit::RedisRateLimitAdapter;
+use notification::outbound::websocket::WebSocketGatewayAdapter;
 use notification::outbound::{
     digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
     push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
@@ -251,6 +256,136 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(make_notification_ingress());
     tracing::trace!("initialized notification ingress service");
 
+    // Build NotificationReaderService for device + user_notification routers
+    let sns_endpoint_manager =
+        ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+            aws_sdk_sns::Client::new(&aws_config),
+        );
+    let platform_config = ::notification::domain::service::PlatformArnConfig {
+        apns_platform_arn: config.vars.sns_apns_platform_arn.as_ref().to_string(),
+        fcm_platform_arn: config.vars.sns_fcm_platform_arn.as_ref().to_string(),
+    };
+    let reader_notification_repository = DbNotificationRepository::new(db.clone());
+    let reader_notification_queue = SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
+    let reader_service = ::notification::domain::service::NotificationReaderService::new(
+        reader_notification_repository,
+        reader_notification_queue.clone(),
+        sns_endpoint_manager,
+        platform_config,
+    );
+    let notification_router_state =
+        ::notification::inbound::http::NotificationRouterState::new(reader_service);
+    tracing::trace!("initialized notification reader service");
+
+    // Push notification event handler worker
+    #[cfg(feature = "push_notification_event_handler")]
+    {
+        let event_notif_repo = DbNotificationRepository::new(db.clone());
+        let event_sns_manager =
+            ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+                aws_sdk_sns::Client::new(&aws_config),
+            );
+
+        let push_event_redis_conn = redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .context("failed to get redis connection for push event digest state machine")?;
+
+        let digest_failure_sm =
+            ::notification::domain::models::email_notification_digest::StateMachineDriverC {
+                message_receipt_repo:
+                    ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                        db.clone(),
+                    ),
+                digest_batcher: RedisDigestBatcher::new(push_event_redis_conn),
+                notif_repo: DbNotificationRepository::new(db.clone()),
+                digest_window: std::time::Duration::from_secs(30 * 60),
+            };
+
+        let event_service = ::notification::domain::service::PushNotificationEventService::new(
+            event_notif_repo,
+            event_sns_manager,
+            digest_failure_sm,
+        );
+        let event_queue =
+            ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                config.vars.push_notification_event_handler_queue.as_ref().to_string(),
+                config.notification_queue_max_messages,
+                config.notification_queue_wait_time_seconds,
+            );
+        let event_worker =
+            ::notification::inbound::push_notification_event_worker::PushNotificationEventWorker::new(
+                event_service,
+                event_queue,
+            );
+        tokio::spawn(async move { event_worker.run().await });
+        tracing::info!("started push notification event handler worker");
+    }
+
+    // Notification egress worker
+    let egress_repository = DbNotificationRepository::new(db.clone());
+
+    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_api_secret.as_ref().to_string(),
+        config.vars.connection_gateway_url.as_ref().to_string(),
+    ));
+
+    let mobile_adapter = MobilePushAdapter::new(
+        aws_sdk_sns::Client::new(&aws_config),
+        config.vars.apple_bundle_id.as_ref().to_string(),
+    );
+
+    let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
+    let email_adapter = EmailAdapter::new(
+        ses_client,
+        config.vars.sender_base_address.as_ref().to_string(),
+    );
+
+    let egress_redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for egress state machine")?;
+    let egress_redis_client = redis_client.clone();
+    let rate_limit_adapter = RedisRateLimitAdapter::new(egress_redis_client);
+
+    let egress_state_machine =
+        ::notification::domain::models::email_notification_digest::StateMachineDriverB {
+            message_receipt_repo:
+                ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                    db.clone(),
+                ),
+            digest_batcher: RedisDigestBatcher::new(egress_redis_multiplexed_conn.clone()),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+        };
+
+    let egress_digest_batcher = RedisDigestBatcher::new(egress_redis_multiplexed_conn);
+
+    let egress_notification_queue = SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
+
+    let egress_service = NotificationEgressService {
+        queue: egress_notification_queue,
+        repository: egress_repository,
+        websocket: websocket_adapter,
+        mobile: mobile_adapter,
+        email: email_adapter,
+        rate_limiter: rate_limit_adapter,
+        state_machine: egress_state_machine,
+        digest_batcher: egress_digest_batcher,
+    };
+
+    let worker = NotificationWorker::new(egress_service);
+    tokio::spawn(async move {
+        tracing::info!("starting notification egress worker");
+        worker.run().await
+    });
+
     let permission_checker = PermissionServiceImpl::new(db.clone());
     let notification_service = NotificationServiceImpl::new(make_notification_ingress());
     let properties_service = PropertiesServiceImpl::new(
@@ -382,6 +517,7 @@ async fn main() -> anyhow::Result<()> {
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
             PgChannelAccessCheck::new(db.clone()),
         ),
+        notification_router_state,
     };
 
     api::setup_and_serve(api_context).await?;

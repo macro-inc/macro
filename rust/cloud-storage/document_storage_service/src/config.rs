@@ -21,6 +21,11 @@ pub struct Config {
     /// The document limit for free users
     pub document_limit: u64,
 
+    /// The notification queue max messages per poll
+    pub notification_queue_max_messages: i32,
+    /// The notification queue wait time seconds
+    pub notification_queue_wait_time_seconds: i32,
+
     /// The number of seconds a presigned url is valid for
     pub document_storage_service_presigned_url_expiry_seconds: u64,
     /// The number of seconds a browser cache for a presigned url is valid for
@@ -55,6 +60,11 @@ env_var! {
         pub ContactsQueue,
         pub GithubSyncAppUrl,
         pub GithubSyncAppClientId,
+        pub SnsApnsPlatformArn,
+        pub SnsFcmPlatformArn,
+        pub SenderBaseAddress,
+        pub AppleBundleId,
+        pub PushNotificationEventHandlerQueue,
     }
 }
 
@@ -106,6 +116,18 @@ impl Config {
                 .and_then(|v| v.as_ref().parse::<u64>().ok())
                 .unwrap_or(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS);
 
+        let notification_queue_max_messages: i32 =
+            std::env::var("NOTIFICATION_QUEUE_MAX_MESSAGES")
+                .unwrap_or("9".to_string())
+                .parse::<i32>()
+                .unwrap();
+
+        let notification_queue_wait_time_seconds: i32 =
+            std::env::var("NOTIFICATION_QUEUE_WAIT_TIME_SECONDS")
+                .unwrap_or("4".to_string())
+                .parse::<i32>()
+                .unwrap();
+
         let vars = EnvVars::new()?;
 
         Ok(Config {
@@ -113,6 +135,8 @@ impl Config {
             port,
             environment,
             document_limit,
+            notification_queue_max_messages,
+            notification_queue_wait_time_seconds,
             document_storage_service_presigned_url_expiry_seconds,
             document_storage_service_presigned_url_browser_cache_expiry_seconds,
             document_storage_service_cloudfront_signer_private_key,

@@ -46,6 +46,7 @@ mod items;
 mod permissions;
 pub(crate) mod swagger;
 mod threads;
+pub(crate) mod user_notification;
 
 // Constants
 // auth based constants
@@ -185,6 +186,16 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+        )
+        .nest(
+            "/device",
+            ::notification::inbound::http::device::device_router()
+                .with_state(state.notification_router_state.clone()),
+        )
+        .nest(
+            "/user_notifications",
+            user_notification::router()
+                .with_state(state.notification_router_state.clone()),
         )
         .layer(
             ServiceBuilder::new()

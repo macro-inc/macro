@@ -23,16 +23,19 @@ path = "src/openapi.rs"
 
 [features]
 connection_gateway = []
-default = ["connection_gateway", "location_check"]
+default = ["connection_gateway", "location_check", "push_notification_event_handler"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
+push_notification_event_handler = []
 
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros", "multipart", "tower-log"] }
 axum-extra = { workspace = true }
@@ -64,6 +67,7 @@ github = { path = "../github", default-features = false, features = [
   "sync",
 ] }
 hex = { workspace = true }
+itertools = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
@@ -88,6 +92,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../model" }
+model-error-response = { path = "../model-error-response" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }
@@ -97,7 +102,7 @@ models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
-notification = { path = "../notification" }
+notification = { path = "../notification", features = ["axum"] }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
 properties_service = { path = "../properties_service" }
@@ -114,6 +119,7 @@ schemars = { workspace = true }
 search_service = { path = "../search_service" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
+sns_client = { path = "../sns_client" }
 serde_json = { workspace = true }
 soup = { path = "../soup", features = ["axum", "inbound", "outbound"] }
 sqlx = { workspace = true }

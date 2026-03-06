@@ -74,12 +74,6 @@
       ],
       "stack_path": "infra/stacks/email-service/**"
     },
-    "notification-service": {
-      "source_paths": [
-        "rust/cloud-storage/notification_service/**"
-      ],
-      "stack_path": "infra/stacks/notification-service/**"
-    },
     "organization-retention": {
       "source_paths": [
         "rust/cloud-storage/organization_retention/**"

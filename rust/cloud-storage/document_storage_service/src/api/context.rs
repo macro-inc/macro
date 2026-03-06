@@ -93,6 +93,13 @@ pub(crate) type NotificationIngressType = NotificationIngressService<
     SqsNotificationQueue,
     StateMachine,
 >;
+pub(crate) type NotificationReaderType = notification::domain::service::NotificationReaderService<
+    DbNotificationRepository<PgPool>,
+    SqsNotificationQueue,
+    notification::outbound::sns_endpoint::SnsEndpointManagerAdapter,
+>;
+pub(crate) type NotificationState =
+    notification::inbound::http::NotificationRouterState<NotificationReaderType>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl,
@@ -174,6 +181,7 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub notification_router_state: NotificationState,
 }
 
 env_var! {
