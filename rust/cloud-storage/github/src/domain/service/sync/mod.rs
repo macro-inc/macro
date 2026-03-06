@@ -69,6 +69,8 @@ struct ResolvedTasks {
     doc_ids: Vec<String>,
     /// Markdown links for resolved tasks (used for PR comments).
     task_links: Vec<String>,
+    /// Task IDs that were validated as actual task documents.
+    validated_task_ids: Vec<MacroTaskId>,
 }
 
 impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
@@ -140,6 +142,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
         let mut doc_ids = Vec::new();
         let mut task_links = Vec::new();
+        let mut validated_task_ids = Vec::new();
 
         for task_id in task_ids {
             let uuid = match task_id.to_uuid() {
@@ -176,6 +179,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
                         doc_ids.push(doc_id.clone());
                         task_links.push(create_macro_task_comment_link(doc_name, doc_id));
+                        validated_task_ids.push(task_id.clone());
                     } else {
                         tracing::trace!(task_id=%uuid, "document found but is not a task, skipping");
                     }
@@ -198,6 +202,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         ResolvedTasks {
             doc_ids,
             task_links,
+            validated_task_ids,
         }
     }
 

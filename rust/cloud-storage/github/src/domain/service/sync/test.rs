@@ -1078,3 +1078,37 @@ async fn comment_deduplicates_against_repo() {
         "comment should not re-trigger for task already tracked in repo"
     );
 }
+
+#[tokio::test]
+async fn false_positive_macro_prefix_ignored() {
+    // "macro-inc" matches the regex but does not correspond to a real task document.
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "update macro-inc dependency",
+                "body": null,
+                "head": { "ref": "feature/update-deps" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(
+        service.client.pr_comments().is_empty(),
+        "false positive macro- prefix should not trigger a comment"
+    );
+    assert!(
+        doc_service.task_status_calls().is_empty(),
+        "false positive macro- prefix should not trigger a status update"
+    );
+}

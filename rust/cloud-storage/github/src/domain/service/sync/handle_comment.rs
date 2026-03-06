@@ -37,12 +37,22 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
         let github_key = Self::github_key(event);
 
+        // Validate comment task IDs against the document service
+        let resolved = self.resolve_tasks(&comment_task_ids).await;
+
+        if resolved.validated_task_ids.is_empty() {
+            tracing::debug!("no valid task documents found for extracted IDs");
+            return Ok(());
+        }
+
         // Ensure PR context task IDs are tracked in the repo (handles PRs
         // that existed before the tracking table was introduced).
         if let Some(ref key) = github_key {
             let pr_context_tasks = {
                 let pr_context = event.extract_pr_context_text().join(" ");
-                MacroTaskId::extract_from_text(&pr_context)
+                let extracted = MacroTaskId::extract_from_text(&pr_context);
+                // Validate PR context task IDs too
+                self.resolve_tasks(&extracted).await.validated_task_ids
             };
             if !pr_context_tasks.is_empty() {
                 tracing::trace!(
@@ -59,15 +69,15 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             }
         }
 
-        // Filter to only truly new task IDs using the repo
+        // Filter to only truly new validated task IDs using the repo
         let truly_new = if let Some(ref key) = github_key {
             self.repo
-                .filter_duplicate_tasks(key.clone(), &comment_task_ids)
+                .filter_duplicate_tasks(key.clone(), &resolved.validated_task_ids)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
-                .unwrap_or_else(|_| comment_task_ids.clone())
+                .unwrap_or_else(|_| resolved.validated_task_ids.clone())
         } else {
-            comment_task_ids.clone()
+            resolved.validated_task_ids.clone()
         };
 
         tracing::trace!(
@@ -76,22 +86,27 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             "filtered to truly new task IDs"
         );
 
-        if truly_new.is_empty() {
-            tracing::debug!("all task IDs already tracked for this PR, skipping");
-            return Ok(());
+        if !truly_new.is_empty() {
+            let new_task_id_set: std::collections::HashSet<&MacroTaskId> =
+                truly_new.iter().collect();
+            let new_task_links: Vec<_> = resolved
+                .validated_task_ids
+                .iter()
+                .zip(resolved.task_links.iter())
+                .filter(|(id, _)| new_task_id_set.contains(id))
+                .map(|(_, link)| link.clone())
+                .collect();
+
+            let pr_meta = self.acquire_pr_meta(event).await;
+            if let Some(ref meta) = pr_meta {
+                self.post_task_comment(meta, &new_task_links).await;
+            }
         }
 
-        let resolved = self.resolve_tasks(&truly_new).await;
-
-        let pr_meta = self.acquire_pr_meta(event).await;
-        if let Some(ref meta) = pr_meta {
-            self.post_task_comment(meta, &resolved.task_links).await;
-        }
-
-        // Track the new task IDs in the repo
+        // Track only validated task IDs in the repo
         if let Some(ref key) = github_key {
             self.repo
-                .upsert_task_ids(key.clone(), &comment_task_ids)
+                .upsert_task_ids(key.clone(), &resolved.validated_task_ids)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to upsert comment task IDs"))
                 .ok();

@@ -31,38 +31,55 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             return Ok(());
         }
 
-        let github_key = Self::github_key(event);
+        // Resolve all extracted IDs against the document service to validate
+        // they are actual task documents (filters out false positives like "macro-inc")
+        let resolved_all = self.resolve_tasks(&task_ids).await;
 
-        // Determine which tasks are new for this PR
-        let new_task_ids = if let Some(ref key) = github_key {
-            self.repo
-                .filter_duplicate_tasks(key.clone(), &task_ids)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
-                .unwrap_or_else(|_| task_ids.clone())
-        } else {
-            task_ids.clone()
-        };
-
-        // Resolve new tasks and post comment
-        let new_resolved = self.resolve_tasks(&new_task_ids).await;
-
-        let pr_meta = self.acquire_pr_meta(event).await;
-        if let Some(ref meta) = pr_meta {
-            self.post_task_comment(meta, &new_resolved.task_links).await;
+        if resolved_all.validated_task_ids.is_empty() {
+            tracing::debug!("no valid task documents found for extracted IDs");
+            return Ok(());
         }
 
-        // Track all task IDs in the repo
+        let github_key = Self::github_key(event);
+
+        // Determine which validated tasks are new for this PR
+        let new_task_ids = if let Some(ref key) = github_key {
+            self.repo
+                .filter_duplicate_tasks(key.clone(), &resolved_all.validated_task_ids)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
+                .unwrap_or_else(|_| resolved_all.validated_task_ids.clone())
+        } else {
+            resolved_all.validated_task_ids.clone()
+        };
+
+        // Post comment for newly discovered tasks
+        if !new_task_ids.is_empty() {
+            let new_task_id_set: HashSet<&MacroTaskId> = new_task_ids.iter().collect();
+            let new_task_links: Vec<_> = resolved_all
+                .validated_task_ids
+                .iter()
+                .zip(resolved_all.task_links.iter())
+                .filter(|(id, _)| new_task_id_set.contains(id))
+                .map(|(_, link)| link.clone())
+                .collect();
+
+            let pr_meta = self.acquire_pr_meta(event).await;
+            if let Some(ref meta) = pr_meta {
+                self.post_task_comment(meta, &new_task_links).await;
+            }
+        }
+
+        // Track only validated task IDs in the repo
         if let Some(ref key) = github_key {
             self.repo
-                .upsert_task_ids(key.clone(), &task_ids)
+                .upsert_task_ids(key.clone(), &resolved_all.validated_task_ids)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to upsert task IDs"))
                 .ok();
         }
 
-        // Update status for all tasks from PR text
-        let resolved_all = self.resolve_tasks(&task_ids).await;
+        // Update status for all validated tasks
         self.update_task_statuses(&resolved_all.doc_ids, "In Review")
             .await;
 
@@ -95,38 +112,55 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             return Ok(());
         }
 
-        let github_key = Self::github_key(event);
+        // Resolve all extracted IDs against the document service to validate
+        // they are actual task documents (filters out false positives like "macro-inc")
+        let resolved_all = self.resolve_tasks(&task_ids).await;
 
-        // Determine which tasks are new for this PR
-        let new_task_ids = if let Some(ref key) = github_key {
-            self.repo
-                .filter_duplicate_tasks(key.clone(), &task_ids)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
-                .unwrap_or_else(|_| task_ids.clone())
-        } else {
-            task_ids.clone()
-        };
-
-        // Resolve new tasks and post comment
-        let new_resolved = self.resolve_tasks(&new_task_ids).await;
-
-        let pr_meta = self.acquire_pr_meta(event).await;
-        if let Some(ref meta) = pr_meta {
-            self.post_task_comment(meta, &new_resolved.task_links).await;
+        if resolved_all.validated_task_ids.is_empty() {
+            tracing::debug!("no valid task documents found for extracted IDs");
+            return Ok(());
         }
 
-        // Track all task IDs in the repo
+        let github_key = Self::github_key(event);
+
+        // Determine which validated tasks are new for this PR
+        let new_task_ids = if let Some(ref key) = github_key {
+            self.repo
+                .filter_duplicate_tasks(key.clone(), &resolved_all.validated_task_ids)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
+                .unwrap_or_else(|_| resolved_all.validated_task_ids.clone())
+        } else {
+            resolved_all.validated_task_ids.clone()
+        };
+
+        // Post comment for newly discovered tasks
+        if !new_task_ids.is_empty() {
+            let new_task_id_set: HashSet<&MacroTaskId> = new_task_ids.iter().collect();
+            let new_task_links: Vec<_> = resolved_all
+                .validated_task_ids
+                .iter()
+                .zip(resolved_all.task_links.iter())
+                .filter(|(id, _)| new_task_id_set.contains(id))
+                .map(|(_, link)| link.clone())
+                .collect();
+
+            let pr_meta = self.acquire_pr_meta(event).await;
+            if let Some(ref meta) = pr_meta {
+                self.post_task_comment(meta, &new_task_links).await;
+            }
+        }
+
+        // Track only validated task IDs in the repo
         if let Some(ref key) = github_key {
             self.repo
-                .upsert_task_ids(key.clone(), &task_ids)
+                .upsert_task_ids(key.clone(), &resolved_all.validated_task_ids)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to upsert task IDs"))
                 .ok();
         }
 
-        // Update status for all tasks from PR text
-        let resolved_all = self.resolve_tasks(&task_ids).await;
+        // Update status for all validated tasks
         self.update_task_statuses(&resolved_all.doc_ids, "In Review")
             .await;
 
@@ -161,6 +195,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         );
 
         // Also include all previously tracked tasks from the repo
+        // (these were already validated when they were stored)
         if let Some(key) = Self::github_key(event) {
             match self.repo.get_task_ids(key).await {
                 Ok(repo_tasks) => {
@@ -188,6 +223,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             "total task IDs for close event"
         );
 
+        // resolve_tasks validates each ID is an actual task document
         let resolved = self.resolve_tasks(&all_task_ids).await;
 
         // No bot comment on close
