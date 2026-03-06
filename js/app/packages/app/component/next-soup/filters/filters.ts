@@ -220,10 +220,16 @@ export function hasCalendarInviteFilter(entity: EntityData): boolean {
   return entity.hasIcsAttachment === true;
 }
 
+const ICS_MIME_TYPE = 'application/ics';
+
 export function hasAttachmentFilter(entity: EntityData): boolean {
   if (entity.type !== 'email') return false;
 
-  return (entity.attachments?.length ?? 0) > 0;
+  const filteredAttachments = entity.attachments?.filter(
+    (a) => a.mimeType !== ICS_MIME_TYPE
+  );
+
+  return (filteredAttachments?.length ?? 0) > 0;
 }
 
 const PDF_MIME_TYPES = ['application/pdf'];
