@@ -9,6 +9,7 @@ import ListChecks from '@icon/regular/list-checks.svg';
 import ListNumbers from '@icon/regular/list-numbers.svg';
 import TextItalic from '@icon/regular/text-italic.svg';
 import TextStriketrough from '@icon/regular/text-strikethrough.svg';
+import TextQuote from '@icon/regular/quotes.svg';
 import type { TextFormatType } from 'lexical';
 import { ActionButton } from './ActionButton';
 
@@ -108,6 +109,17 @@ export function FormatRibbon(props: FormatRibbonProps) {
         }}
       >
         <ListChecks width={20} height={20} />
+      </ActionButton>
+      <ActionButton
+        tooltip="Blockquote"
+        darker
+        clicked={props.state.elementsInRange.has('quote')}
+        onClick={(e) => {
+          e.preventDefault();
+          props.nodeFormat('quote');
+        }}
+      >
+        <TextQuote width={20} height={20} />
       </ActionButton>
     </div>
   );

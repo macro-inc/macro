@@ -427,6 +427,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     'heading3',
     'paragraph',
     'code',
+    'quote',
     'list-bullet',
     'list-number',
     'list-check',
@@ -639,6 +640,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     'list-number',
     'list-check',
     'code',
+    'quote',
   ];
 
   if (props.withinPopup) {
@@ -664,6 +666,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               e.preventDefault();
               e.stopPropagation();
               nodeFormat('code');
+            }}
+            buttonIsDisabled={buttonIsDisabled}
+          />
+          <ElementFormatButton
+            format="quote"
+            selection={selection}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              nodeFormat('quote');
             }}
             buttonIsDisabled={buttonIsDisabled}
           />
