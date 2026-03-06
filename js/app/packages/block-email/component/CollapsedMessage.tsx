@@ -61,7 +61,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
             classList={{
-              'pt-1.5': !props.isFirstMessage,
+              'pt-2': !props.isFirstMessage,
               'opacity-80': hasMouseLeft() && !hover(),
               'opacity-100': !hasMouseLeft() || hover(),
             }}
@@ -105,8 +105,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             <div
               class="flex-1 flex items-center min-w-0"
               style={{
-                'padding-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                'padding-left': 'var(--body-padding)',
               }}
             >
               <span class="text-ink font-semibold w-16 shrink-0 truncate text-sm">
