@@ -27,6 +27,7 @@ import {
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
+import { isListViewID } from '@app/constants/list-views';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -295,10 +296,15 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
+  const activeSplitContentID = splitManager.activeSplit()?.content().id;
+
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom: 'unified-list',
+      referredFrom:
+        activeSplitContentID && isListViewID(activeSplitContentID)
+          ? activeSplitContentID
+          : undefined,
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
@@ -372,7 +378,7 @@ async function navigateToLocation(
 
 export async function archiveEmail(
   id: string,
-  options: { isDone: boolean; optimisticallyExclude?: boolean }
+  options: { archive: boolean; optimisticallyExclude?: boolean }
 ) {
   await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
@@ -415,7 +421,7 @@ export async function archiveEmail(
   }
 
   try {
-    await emailClient.flagArchived({ value: !options.isDone, id });
+    await emailClient.flagArchived({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {

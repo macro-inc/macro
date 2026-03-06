@@ -1,0 +1,267 @@
+import {
+  QUERY_FILTERS,
+  type FilterID,
+} from '@app/component/next-soup/filters/filters';
+import {
+  applyInboxQueryFilters,
+  applyOtherQueryFilters,
+} from '@app/component/next-soup/filters/inbox-query-filters';
+import type { ListView } from '@app/constants/list-views';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
+
+export type SoupFiltersPreset = {
+  queryFilters: SoupItemsQueryFilters;
+  clientFilters: {
+    and?: FilterID[];
+    or?: FilterID[];
+  };
+};
+
+// Tab preset configuration types
+export type PresetContext = {
+  userId: string | undefined;
+  email: string | undefined;
+};
+
+export type TabPresetResolver = (
+  ctx: PresetContext
+) => SoupFiltersPreset | undefined;
+
+export type TabConfig = Record<string, TabPresetResolver>;
+
+export type ViewTabConfig = {
+  default: string;
+  tabs: TabConfig;
+};
+
+export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
+  inbox: {
+    default: 'signal',
+    tabs: {
+      signal: () => ({
+        queryFilters: applyInboxQueryFilters({}),
+        clientFilters: { and: ['signal', 'not-done'] },
+      }),
+      noise: () => ({
+        queryFilters: applyOtherQueryFilters({}),
+        clientFilters: { and: ['noise', 'not-done'] },
+      }),
+      all: () => ({
+        queryFilters: {},
+        clientFilters: { and: ['explicit-noise'] },
+      }),
+    },
+  },
+  agents: {
+    default: 'owned',
+    tabs: {
+      owned: (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.agent,
+            chat_filters: { owners: [ctx.userId] },
+          },
+          clientFilters: { and: ['agent'] },
+        };
+      },
+      running: () => ({
+        queryFilters: QUERY_FILTERS.agent,
+        clientFilters: { and: ['agent'] },
+      }),
+      shared: () => ({
+        queryFilters: QUERY_FILTERS.agent,
+        clientFilters: { and: ['agent', 'shared-agent'] },
+      }),
+    },
+  },
+  mail: {
+    default: 'important',
+    tabs: {
+      important: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          email_filters: { importance: true },
+        },
+        clientFilters: { and: ['email', 'no-drafts'] },
+      }),
+      noise: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          email_filters: { importance: false },
+        },
+        clientFilters: { and: ['email', 'no-drafts'] },
+      }),
+      drafts: () => ({
+        queryFilters: QUERY_FILTERS.email,
+        clientFilters: { and: ['email-drafts'] },
+      }),
+      sent: (ctx) => {
+        if (!ctx.email) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.email,
+            email_filters: { senders: [ctx.email] },
+          },
+          clientFilters: { and: ['email', 'no-drafts'] },
+        };
+      },
+    },
+  },
+  documents: {
+    default: 'owned',
+    tabs: {
+      owned: (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.document,
+            document_filters: { owners: [ctx.userId] },
+          },
+          clientFilters: { and: ['document'] },
+        };
+      },
+      shared: () => ({
+        queryFilters: QUERY_FILTERS.document,
+        clientFilters: { and: ['document', 'shared-entity'] },
+      }),
+      all: () => ({
+        queryFilters: QUERY_FILTERS.document,
+        clientFilters: { and: ['document'] },
+      }),
+    },
+  },
+  tasks: {
+    default: 'assigned-to-me',
+    tabs: {
+      'assigned-to-me': (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.task,
+            document_filters: { owners: [ctx.userId] },
+          },
+          clientFilters: { and: ['task', 'assigned-to'] },
+        };
+      },
+      'created-by-me': (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.task,
+            document_filters: { owners: [ctx.userId] },
+          },
+          clientFilters: { and: ['task'] },
+        };
+      },
+      all: () => ({
+        queryFilters: QUERY_FILTERS.task,
+        clientFilters: { and: ['task'] },
+      }),
+    },
+  },
+  channels: {
+    default: 'recent',
+    tabs: {
+      recent: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.channels,
+          channel_filters: { importance: true },
+        },
+        clientFilters: { and: ['channels'] },
+      }),
+      people: () => ({
+        queryFilters: QUERY_FILTERS.people,
+        clientFilters: { and: ['people'] },
+      }),
+      teams: () => ({
+        queryFilters: QUERY_FILTERS.teams,
+        clientFilters: { and: ['teams'] },
+      }),
+    },
+  },
+  files: {
+    default: 'owned',
+    tabs: {
+      owned: (ctx) => {
+        if (!ctx.userId) return undefined;
+        return {
+          queryFilters: {
+            ...QUERY_FILTERS.file,
+            document_filters: {
+              ...QUERY_FILTERS.file.document_filters,
+              owners: [ctx.userId],
+            },
+            project_filters: { owners: [ctx.userId] },
+          },
+          clientFilters: { and: ['file-folder'] },
+        };
+      },
+      shared: () => ({
+        queryFilters: QUERY_FILTERS.file,
+        clientFilters: { and: ['file-folder', 'shared-entity'] },
+      }),
+      all: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.file,
+          project_filters: {},
+        },
+        clientFilters: { and: ['file-folder'] },
+      }),
+    },
+  },
+  search: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.default,
+        },
+        clientFilters: { and: [], or: [] },
+      }),
+    },
+  },
+};
+
+/** Views whose default tab requires user context */
+type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'files';
+
+/** Views whose default tab works without user context */
+type ContextOptionalView = Exclude<ListView, ContextRequiredView>;
+
+/**
+ * Returns the default filter preset for a list view.
+ * Uses the view's default tab, falling back to the first available tab
+ * if the default requires context values that aren't provided.
+ *
+ * @param view - The list view to get the preset for
+ * @param ctx - User context (required for agents, documents, tasks, files)
+ */
+export function getDefaultListViewPreset(
+  view: ContextRequiredView,
+  ctx: PresetContext
+): SoupFiltersPreset;
+export function getDefaultListViewPreset(
+  view: ContextOptionalView,
+  ctx?: PresetContext
+): SoupFiltersPreset;
+export function getDefaultListViewPreset(
+  view: ListView,
+  ctx: PresetContext = { userId: undefined, email: undefined }
+): SoupFiltersPreset {
+  const config = VIEW_TAB_PRESETS[view];
+  const defaultResolver = config.tabs[config.default];
+
+  // Try default tab with provided context
+  const resolved = defaultResolver(ctx);
+  if (resolved) return resolved;
+
+  // Fallback: find first tab that works with provided context
+  for (const resolver of Object.values(config.tabs)) {
+    const fallback = resolver(ctx);
+    if (fallback) return fallback;
+  }
+
+  // Last resort: empty filters
+  return { queryFilters: {}, clientFilters: {} };
+}

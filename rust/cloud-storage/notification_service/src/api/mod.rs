@@ -2,9 +2,11 @@ use crate::api::context::ApiContext;
 use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -29,7 +31,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
         .merge(health::router())
         .layer(
             ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
+                .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
                 .layer(axum::middleware::from_fn_with_state(
                     ServiceNameState {
                         service_name: VersionedApiServiceName::NotificationService,

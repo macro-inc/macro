@@ -75,10 +75,12 @@ interface SoupViewContextValues {
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
-  statusFilter: Accessor<string | undefined>;
-  setStatusFilter: Setter<string | undefined>;
-  assigneeFilter: Accessor<string | undefined>;
-  setAssigneeFilter: Setter<string | undefined>;
+  statusFilter: Accessor<string[]>;
+  setStatusFilter: Setter<string[]>;
+  assigneeFilter: Accessor<string[]>;
+  setAssigneeFilter: Setter<string[]>;
+  activeTab: Accessor<string | undefined>;
+  setActiveTab: Setter<string | undefined>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -102,6 +104,15 @@ interface SoupViewContextProviderProps {
   queryFilters?: SoupItemsQueryFilters;
 }
 
+type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
+const VALID_API_SORT_METHODS: ApiSortMethod[] = [
+  'viewed_at',
+  'created_at',
+  'updated_at',
+  'viewed_updated',
+  'frecency',
+];
+
 export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
@@ -109,26 +120,32 @@ export const SoupViewContextProvider: FlowComponent<
 
   const queryClient = useQueryClient();
 
-  const soupParams = createMemo(
-    (): SoupParams => ({
+  const soupParams = createMemo((): SoupParams => {
+    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
+
+    // Client-only sorts (priority, status) fall back to created_at for the API
+    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
+      ? (sortId as ApiSortMethod)
+      : 'created_at';
+
+    return {
       limit: 100,
-      sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
-    })
-  );
+      sort_method: sortMethod,
+    };
+  });
 
   const [internalQueryFilters, setInternalQueryFilters] =
-    createSignal<SoupItemsQueryFilters>({});
+    createSignal<SoupItemsQueryFilters>({ ...(props.queryFilters ?? {}) });
 
-  const [statusFilter, setStatusFilter] = createSignal<string | undefined>();
-  const [assigneeFilter, setAssigneeFilter] = createSignal<
-    string | undefined
-  >();
+  const [statusFilter, setStatusFilter] = createSignal<string[]>([]);
+  const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
+  const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
     if (!soup.filters.isActive('task')) {
-      setStatusFilter(undefined);
-      setAssigneeFilter(undefined);
+      setStatusFilter([]);
+      setAssigneeFilter([]);
     }
   });
 
@@ -137,27 +154,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     return {
       ...base,
-      ...props.queryFilters,
-      channel_filters: {
-        ...base.channel_filters,
-        ...props.queryFilters?.channel_filters,
-      },
-      chat_filters: {
-        ...base.chat_filters,
-        ...props.queryFilters?.chat_filters,
-      },
-      document_filters: {
-        ...base.document_filters,
-        ...props.queryFilters?.document_filters,
-      },
-      email_filters: {
-        ...base.email_filters,
-        ...props.queryFilters?.email_filters,
-      },
-      project_filters: {
-        ...base.project_filters,
-        ...props.queryFilters?.project_filters,
-      },
     };
   });
 
@@ -287,7 +283,6 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const baseEntities = () => {
-    const filters = soup.filters.active();
     let transformed = items();
 
     const next = [];
@@ -296,13 +291,13 @@ export const SoupViewContextProvider: FlowComponent<
     const currentAssigneeFilter = assigneeFilter();
 
     for (const entity of transformed) {
-      if (!filters.every((f) => f.predicate(entity))) {
+      if (!soup.filters.test(entity)) {
         continue;
       }
 
       // Apply task sub-filters
       if (
-        (currentStatusFilter || currentAssigneeFilter) &&
+        (currentStatusFilter.length > 0 || currentAssigneeFilter.length > 0) &&
         isTaskEntity(entity)
       ) {
         const taskEntity = entity as unknown as TaskEntityWithProperties;
@@ -394,6 +389,8 @@ export const SoupViewContextProvider: FlowComponent<
     setStatusFilter,
     assigneeFilter,
     setAssigneeFilter,
+    activeTab,
+    setActiveTab,
   };
 
   return (

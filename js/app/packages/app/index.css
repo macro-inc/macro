@@ -588,12 +588,6 @@
     --container-c: 0;
 
     /* --shadow-*: initial; */
-    --radius-sm: 6px;
-    --radius-md: 6px;
-    --radius-lg: 6px;
-    --radius-xl: 6px;
-    --radius-2xl: 6px;
-    --radius-3xl: 6px;
 }
 
 @custom-variant drop-valid (&[data-drop-valid]);

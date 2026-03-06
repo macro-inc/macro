@@ -38,6 +38,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }

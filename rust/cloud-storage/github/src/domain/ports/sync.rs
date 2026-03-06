@@ -3,8 +3,62 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubError, GithubInstallationAccessToken, ValidatedGithubWebhookEvent,
+    GithubError, GithubInstallationAccessToken, GithubKey, MacroTaskId, ValidatedGithubWebhookEvent,
 };
+
+/// Repository for accessing github sync data from the database.
+///
+/// All methods perform database operations — SQL queries are written
+/// directly in the outbound adapter implementation.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait GithubSyncRepo: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Provides a list of all task ids for a given github key
+    fn get_task_ids(
+        &self,
+        github_key: GithubKey,
+    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+
+    /// Upserts task ids for a given github key
+    fn upsert_task_ids(
+        &self,
+        github_key: GithubKey,
+        task_ids: &[MacroTaskId],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Filters out all pre-existing tasks for the github key
+    /// Returns only new task ids
+    fn filter_duplicate_tasks(
+        &self,
+        github_key: GithubKey,
+        task_ids: &[MacroTaskId],
+    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+}
+
+/// Client interface for making GitHub sync API calls.
+///
+/// Abstracts HTTP communication with GitHub's API so the service
+/// layer does not need to manage its own HTTP client.
+pub trait GithubSyncClient: Send + Sync + 'static {
+    /// Generates an installation access token for a given GitHub App installation.
+    fn generate_installation_access_token(
+        &self,
+        jwt: &str,
+        installation_id: u64,
+    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
+    /// Posts a comment on a GitHub pull request (via the issues API).
+    fn create_pr_comment(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        body: &str,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}
 
 /// Service interface for github sync operations (webhooks and sync app).
 ///

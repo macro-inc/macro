@@ -79,6 +79,7 @@ import { unwrap } from 'solid-js/store';
 import { emailClient } from '@service-email/client';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -544,7 +545,7 @@ export function EmailCompose(props: EmailComposeProps) {
       toast.success('Email scheduled');
 
       replaceSplit({
-        content: { type: 'component', id: 'unified-list' },
+        content: { type: 'component', id: LIST_VIEW_ID.mail },
         mergeHistory: true,
       });
     },

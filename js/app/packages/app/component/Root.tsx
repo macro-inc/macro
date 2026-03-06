@@ -199,6 +199,37 @@ const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
+  /** BEGIN - APP ROUTES */
+  {
+    path: '/inbox',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/agents',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/mail',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/documents',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/tasks',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/channels',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/files',
+    component: LAYOUT_ROUTE.component,
+  },
+  /** END - APP ROUTES */
+
   {
     path: '/',
     component: BasePathComponent,

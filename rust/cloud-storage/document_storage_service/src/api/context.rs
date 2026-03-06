@@ -23,6 +23,7 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
@@ -144,7 +145,7 @@ pub(crate) type GithubDocumentService =
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
-    GithubSyncServiceImpl<GithubDocumentService, GithubSyncClientImpl>;
+    GithubSyncServiceImpl<GithubDocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

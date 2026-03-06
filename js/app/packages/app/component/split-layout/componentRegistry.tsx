@@ -8,6 +8,8 @@ import { EmailCompose } from '../../../block-email/component/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { useUserContext } from '@core/context/user';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -55,7 +57,111 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <SoupView />);
+registerComponent('unified-list', () => <SoupView viewName="Unified list" />);
+
+/** BEGIN - APP ROUTES */
+registerComponent('inbox', () => {
+  const preset = getDefaultListViewPreset('inbox');
+  return (
+    <SoupView
+      viewName="Inbox"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('agents', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('agents', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Agents"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('mail', () => {
+  const preset = getDefaultListViewPreset('mail');
+  return (
+    <SoupView
+      viewName="Mail"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('documents', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('documents', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Documents"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('tasks', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('tasks', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Tasks"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('channels', () => {
+  const preset = getDefaultListViewPreset('channels');
+  return (
+    <SoupView
+      viewName="Channels"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('files', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('files', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Files"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+registerComponent('search', () => {
+  const user = useUserContext();
+  const preset = getDefaultListViewPreset('search', {
+    userId: user.userId(),
+    email: user.email(),
+  });
+  return (
+    <SoupView
+      viewName="Search"
+      queryFilters={preset.queryFilters}
+      initialClientFilters={preset.clientFilters}
+    />
+  );
+});
+/** END - APP ROUTES */
+
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', (params) => (
