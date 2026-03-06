@@ -52,14 +52,14 @@ async fn test_soft_delete_document(pool: Pool<Postgres>) {
     repo.soft_delete_document("document-one").await.unwrap();
 
     // Verify deleted_at is set
-    let row = sqlx::query!(
-        r#"SELECT "deletedAt"::timestamptz as deleted_at FROM "Document" WHERE id = $1"#,
-        "document-one"
+    let deleted_at = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
+        r#"SELECT "deletedAt" FROM "Document" WHERE id = $1"#,
     )
+    .bind("document-one")
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(row.deleted_at.is_some());
+    assert!(deleted_at.is_some());
 }
 
 #[sqlx::test(
