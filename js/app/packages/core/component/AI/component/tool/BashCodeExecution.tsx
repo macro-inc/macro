@@ -24,12 +24,18 @@ function CodeFence(props: { content: string; maxLines: number }) {
   const [expanded, setExpanded] = createSignal(false);
 
   const lines = () => props.content.split('\n');
-  const needsTruncation = () => lines().length > props.maxLines;
+  const needsTruncation = () =>
+    lines().length > props.maxLines ||
+    props.content.length > MAX_COMMAND_LENGTH;
+
   const displayContent = () => {
     if (expanded() || !needsTruncation()) {
       return props.content;
     }
-    return lines().slice(0, props.maxLines).join('\n');
+    return lines()
+      .slice(0, props.maxLines)
+      .join('\n')
+      .slice(0, MAX_COMMAND_LENGTH);
   };
 
   return (
@@ -69,7 +75,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
     return parts.join('\n');
   };
 
-  const hasOutput = () => output().trim().length > 0;
+  const hasOutput = () => props.result.stdout.trim().length > 0;
 
   return (
     <div class="flex flex-col gap-1">
