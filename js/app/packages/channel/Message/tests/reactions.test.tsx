@@ -5,9 +5,9 @@
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { Root } from './Root';
-import { Reactions } from './Reactions';
-import type { MessageData } from './types';
+import { Root } from '../Root';
+import { Reactions } from '../Reactions';
+import type { MessageData } from '../types';
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user-1',
