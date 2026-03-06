@@ -10,124 +10,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/device/register": {
-      "post": {
-        "tags": ["device::register"],
-        "summary": "Register a user device for push notifications.",
-        "operationId": "register_device",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeviceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/device/unregister": {
-      "delete": {
-        "tags": ["device::unregister"],
-        "summary": "Unregister a device from receiving push notifications.",
-        "operationId": "unregister_device",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeviceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -951,6 +833,18 @@
   },
   "components": {
     "schemas": {
+      "AiResponseMetadata": {
+        "type": "object",
+        "required": ["summary", "messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
       "ApiUserNotification": {
         "allOf": [
           {
@@ -1047,6 +941,9 @@
             "properties": {
               "invitedBy": {
                 "type": "string"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               }
             }
           }
@@ -1069,6 +966,9 @@
               "messageId": {
                 "type": "string",
                 "description": "The message you were mentioned in"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               },
               "threadId": {
                 "type": ["string", "null"],
@@ -1098,6 +998,9 @@
               "sender": {
                 "type": "string",
                 "description": "The user who sent the message"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               }
             }
           }
@@ -1119,6 +1022,9 @@
               "messageId": {
                 "type": "string",
                 "description": "The id of the new message"
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"]
               },
               "threadId": {
                 "type": "string",
@@ -1180,13 +1086,16 @@
       },
       "DeviceRequest": {
         "type": "object",
+        "description": "Request to register or unregister a device for push notifications.",
         "required": ["deviceType", "token"],
         "properties": {
           "deviceType": {
-            "$ref": "#/components/schemas/DeviceType"
+            "$ref": "#/components/schemas/DeviceType",
+            "description": "The device platform type (iOS or Android)."
           },
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "The device push notification token."
           }
         }
       },
@@ -1210,6 +1119,9 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -1241,7 +1153,6 @@
           "channel",
           "document",
           "project",
-          "email",
           "email_thread",
           "team"
         ]
@@ -1362,6 +1273,9 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           },
           "text": {
             "type": "string",
@@ -1531,6 +1445,21 @@
                 "enum": ["task_assigned"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "An AI assistant responded to a chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AiResponseMetadata",
+                "description": "An AI assistant responded to a chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["ai_response"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -1562,6 +1491,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
       },
@@ -1573,6 +1506,9 @@
           "assignedBy": {
             "type": "string",
             "description": "The user who assigned the task"
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"]
           },
           "taskId": {
             "type": "string",

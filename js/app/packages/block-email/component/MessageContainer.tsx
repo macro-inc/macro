@@ -16,10 +16,7 @@ import { isErr } from '@core/util/maybeResult';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
-import type {
-  Attachment,
-  MessageWithBodyReplyless,
-} from '@service-email/generated/schemas';
+import type { Attachment, ApiMessage } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -27,7 +24,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isFocused: boolean;
@@ -144,7 +141,6 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   const onClickAttachment = async (
-    event: MouseEvent,
     attachment: Attachment,
     fileType: FileType | undefined
   ) => {
@@ -185,7 +181,7 @@ export function MessageContainer(props: MessageContainerProps) {
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
     openWithSplit(
       { type: blockName, id: document_id },
-      { preferNewSplit: event.shiftKey }
+      { preferNewSplit: true }
     );
   };
 
@@ -284,8 +280,8 @@ export function MessageContainer(props: MessageContainerProps) {
                         fileName: attachment.filename ?? '',
                         mimeType: attachment.mime_type ?? undefined,
                       }}
-                      onClick={(event, fileType) =>
-                        onClickAttachment(event, attachment, fileType)
+                      onClick={(fileType) =>
+                        onClickAttachment(attachment, fileType)
                       }
                     />
                   )}

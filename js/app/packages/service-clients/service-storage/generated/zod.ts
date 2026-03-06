@@ -874,7 +874,19 @@ export const getChannelMessagesQueryParams = zod.object({
     .min(getChannelMessagesQueryLimitMin)
     .optional()
     .describe('Page size (1-100, default 50)'),
-  cursor: zod.string().optional().describe('Base64 encoded cursor value'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+  load_around_message_id: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe('Return a centered window around this message ID'),
 });
 
 export const getChannelMessagesResponse = zod
@@ -1010,8 +1022,72 @@ export const getChannelMessagesResponse = zod
       .string()
       .nullish()
       .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
   })
   .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+ */
+export const getThreadRepliesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+  message_id: zod
+    .string()
+    .uuid()
+    .describe('Message ID (thread parent or reply id)'),
+});
+
+export const getThreadRepliesResponseItem = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the attachment was created.'),
+            entity_id: zod.string().describe('Entity id.'),
+            entity_type: zod.string().describe('Type of entity.'),
+            id: zod.string().uuid().describe('Attachment id.'),
+          })
+          .describe('An attachment on a message.')
+      )
+      .describe('Attachments on this reply.'),
+    content: zod.string().describe('Reply content.'),
+    created_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was created.'),
+    edited_at: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the reply was edited.'),
+    id: zod.string().uuid().describe('Reply id.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('The emoji string.'),
+            users: zod
+              .array(zod.string())
+              .describe('User ids who added this reaction.'),
+          })
+          .describe('A reaction with emoji and user list.')
+      )
+      .describe('Reactions on this reply.'),
+    sender_id: zod.string().describe('Sender user id.'),
+    updated_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was last updated.'),
+  })
+  .describe('A thread reply shown in preview.');
+export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
 
 /**
  * @summary Handler for `GET /channels/:channel_id/participants`.
@@ -1166,9 +1242,11 @@ export const getUserDocumentsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Handles creating a document
+ * Creates a new document, generates an S3 presigned upload URL, and returns
+the document metadata with the URL for the client to upload to.
+ * @summary Handler for `POST /documents`.
  */
-export const createDocumentHandlerBody = zod.object({
+export const createDocumentBody = zod.object({
   branchedFromId: zod
     .string()
     .nullish()
@@ -1202,7 +1280,11 @@ export const createDocumentHandlerBody = zod.object({
     .string()
     .nullish()
     .describe('Optional file type of the document.'),
-  id: zod.string().nullish().describe('The id of the document in the database'),
+  id: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe('The id of the document in the database'),
   isTask: zod
     .boolean()
     .optional()
@@ -1221,7 +1303,7 @@ export const createDocumentHandlerBody = zod.object({
     .describe(
       'The content type of the document (currently only used for logging matches against file type).'
     ),
-  projectId: zod.string().nullish(),
+  projectId: zod.string().uuid().nullish(),
   sha: zod.string().describe('The sha of the document.'),
   skipHistory: zod
     .boolean()
@@ -1231,7 +1313,7 @@ export const createDocumentHandlerBody = zod.object({
     ),
 });
 
-export const createDocumentHandlerResponse = zod.object({
+export const createDocumentResponse = zod.object({
   data: zod
     .object({
       documentMetadata: zod.object({
@@ -1344,6 +1426,7 @@ export const createTaskHandlerBody = zod
   .object({
     projectId: zod
       .string()
+      .uuid()
       .nullish()
       .describe('Optional project id to associate the task with'),
     propertyValues: zod
@@ -2220,6 +2303,14 @@ export const revertDeleteDocumentResponse = zod.object({
     success: zod.boolean().describe('Indicates if the request was successful'),
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * Returns the short UUID for a document.
+ * @summary Handler for `GET /documents/:document_id/short_id`.
+ */
+export const getDocumentShortIdParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
 });
 
 /**
@@ -3936,6 +4027,23 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -3973,6 +4081,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4016,6 +4141,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4028,6 +4170,17 @@ export const postItemsSoupBody = zod
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           ),
+        task_filters: zod
+          .object({
+            include_cbm_atm_nc: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
+              ),
+          })
+          .optional()
+          .describe('Task-only filters nested under document filters.'),
       })
       .optional()
       .describe(
@@ -4053,12 +4206,41 @@ export const postItemsSoupBody = zod
           .describe(
             "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
           ),
+        exclude_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
+          ),
         importance: zod
           .boolean()
           .nullish()
           .describe(
-            'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+            'Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums).'
           ),
+        include_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -4084,6 +4266,23 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -5849,36 +6048,357 @@ export const uploadFolderHandlerBody = zod.object({
                 'pdf',
                 'md',
                 'canvas',
-                'py',
-                'js',
-                'ts',
-                'jsx',
-                'tsx',
-                'json',
-                'html',
+                'coffee',
+                'cson',
+                'iced',
+                'c',
+                'i',
+                'cpp',
+                'cppm',
+                'cc',
+                'ccm',
+                'cxx',
+                'cxxm',
+                'cplusplus',
+                'cplusplusm',
+                'hpp',
+                'hh',
+                'hxx',
+                'hplusplus',
+                'h',
+                'ii',
+                'ino',
+                'inl',
+                'ipp',
+                'ixx',
+                'tpp',
+                'txx',
+                'hppin',
+                'hin',
+                'cu',
+                'cuh',
+                'cs',
+                'csx',
+                'cake',
                 'css',
-                'xml',
-                'yaml',
-                'yml',
-                'sql',
+                'dart',
+                'diff',
+                'patch',
+                'rej',
+                'dockerfile',
+                'containerfile',
+                'go',
+                'handlebars',
+                'hbs',
+                'hjs',
+                'hlsl',
+                'hlsli',
+                'fx',
+                'fxh',
+                'vsh',
+                'psh',
+                'cginc',
+                'compute',
+                'html',
+                'htm',
+                'shtml',
+                'xhtml',
+                'xht',
+                'mdoc',
+                'jsp',
+                'asp',
+                'aspx',
+                'jshtm',
+                'volt',
+                'ejs',
+                'rhtml',
+                'ini',
+                'conf',
+                'properties',
+                'cfg',
+                'directory',
+                'gitattributes',
+                'gitconfig',
+                'gitmodules',
+                'editorconfig',
+                'repo',
+                'java',
+                'jav',
+                'jsx',
+                'js',
+                'es6',
+                'mjs',
+                'cjs',
+                'pac',
+                'json',
+                'bowerrc',
+                'jscsrc',
+                'webmanifest',
+                'jsmap',
+                'cssmap',
+                'tsmap',
+                'har',
+                'jslintrc',
+                'jsonld',
+                'geojson',
+                'ipynb',
+                'vuerc',
+                'jsonc',
+                'eslintrc',
+                'eslintrcjson',
+                'jsfmtrc',
+                'jshintrc',
+                'swcrc',
+                'hintrc',
+                'babelrc',
+                'jsonl',
+                'ndjson',
+                'codesnippets',
+                'jl',
+                'jmd',
+                'sty',
+                'cls',
+                'bbx',
+                'cbx',
+                'tex',
+                'ltx',
+                'ctx',
+                'bib',
+                'less',
+                'log',
+                'lua',
+                'mak',
+                'mk',
+                'mkd',
+                'mdwn',
+                'mdown',
+                'markdown',
+                'markdn',
+                'mdtxt',
+                'mdtext',
+                'workbook',
+                'm',
+                'mm',
+                'pl',
+                'pm',
+                'pod',
+                't',
+                'psgi',
+                'raku',
+                'rakumod',
+                'rakutest',
+                'rakudoc',
+                'nqp',
+                'p6',
+                'pl6',
+                'pm6',
+                'php',
+                'php4',
+                'php5',
+                'phtml',
+                'ctp',
+                'ps1',
+                'psm1',
+                'psd1',
+                'pssc',
+                'psrc',
+                'py',
+                'rpy',
+                'pyw',
+                'cpy',
+                'gyp',
+                'gypi',
+                'pyi',
+                'ipy',
+                'pyt',
+                'r',
+                'rhistory',
+                'rprofile',
+                'rt',
+                'cshtml',
+                'razor',
+                'rb',
+                'rbx',
+                'rjs',
+                'gemspec',
+                'rake',
+                'ru',
+                'erb',
+                'podspec',
+                'rbi',
+                'rs',
+                'scss',
+                'sass',
+                'shader',
                 'sh',
                 'bash',
-                'markdown',
+                'bashrc',
+                'bashaliases',
+                'bashprofile',
+                'bashlogin',
+                'ebuild',
+                'eclass',
+                'profile',
+                'bashlogout',
+                'xprofile',
+                'xsession',
+                'xsessionrc',
+                'zsh',
+                'zshrc',
+                'zprofile',
+                'zlogin',
+                'zlogout',
+                'zshenv',
+                'zshtheme',
+                'fish',
+                'ksh',
+                'csh',
+                'cshrc',
+                'tcshrc',
+                'yashrc',
+                'yashprofile',
+                'sql',
+                'dsql',
+                'swift',
+                'ts',
+                'cts',
+                'mts',
+                'tsx',
+                'tsbuildinfo',
+                'xml',
+                'xsd',
+                'ascx',
+                'atom',
+                'axml',
+                'axaml',
+                'bpmn',
+                'cpt',
+                'csl',
+                'csproj',
+                'csprojuser',
+                'dita',
+                'ditamap',
+                'dtd',
+                'ent',
+                'mod',
+                'dtml',
+                'fsproj',
+                'fxml',
+                'iml',
+                'isml',
+                'jmx',
+                'launch',
+                'menu',
+                'mxml',
+                'nuspec',
+                'opml',
+                'owl',
+                'proj',
+                'props',
+                'pt',
+                'publishsettings',
+                'pubxml',
+                'pubxmluser',
+                'rbxlx',
+                'rbxmx',
+                'rdf',
+                'rng',
+                'rss',
+                'shproj',
+                'storyboard',
+                'targets',
+                'tld',
+                'tmx',
+                'vbproj',
+                'vbprojuser',
+                'vcxproj',
+                'vcxprojfilters',
+                'wsdl',
+                'wxi',
+                'wxl',
+                'wxs',
+                'xaml',
+                'xbl',
+                'xib',
+                'xlf',
+                'xliff',
+                'xpdl',
+                'xul',
+                'xoml',
+                'xsl',
+                'xslt',
+                'yaml',
+                'yml',
+                'eyaml',
+                'eyml',
+                'cff',
+                'yamltmlanguage',
+                'yamltmpreferences',
+                'yamltmtheme',
+                'winget',
                 'txt',
                 'csv',
+                'tsv',
                 'jpeg',
                 'jpg',
                 'png',
                 'gif',
                 'svg',
                 'webp',
+                'avif',
+                'bmp',
+                'ico',
+                'tiff',
+                'tif',
                 'heic',
                 'heif',
-                'zip',
                 'tar',
                 'targz',
                 'tgz',
                 'gz',
+                'bz2',
+                'tarbz2',
+                'tbz2',
+                'z',
+                'tarz',
+                'lz',
+                'tarlz',
+                'xz',
+                'tarxz',
+                'txz',
+                'lzma',
+                'tarlzma',
+                'rar',
+                'sevenz',
+                'zst',
+                'tarzst',
+                'tzst',
+                'zip',
+                'exe',
+                'msi',
+                'dll',
+                'bat',
+                'cmd',
+                'com',
+                'appimage',
+                'app',
+                'bin',
+                'deb',
+                'rpm',
+                'apk',
+                'dmg',
+                'pkg',
+                'crx',
+                'xpi',
+                'mp3',
+                'wav',
+                'ogg',
+                'flac',
+                'aac',
+                'm4a',
+                'wma',
+                'mid',
+                'midi',
                 'mp4',
                 'mkv',
                 'webm',
@@ -5891,10 +6411,61 @@ export const uploadFolderHandlerBody = zod.object({
                 'flv',
                 'f4v',
                 'threegp',
+                'ttf',
+                'otf',
+                'woff',
+                'woff2',
+                'eot',
+                'rtf',
+                'odt',
+                'ods',
+                'odp',
+                'odg',
+                'odf',
+                'epub',
+                'mobi',
+                'azw',
+                'azw3',
+                'djvu',
                 'xls',
                 'ppt',
                 'pptx',
                 'xlsx',
+                'db',
+                'sqlite',
+                'sqlite3',
+                'mdb',
+                'accdb',
+                'dbf',
+                'plist',
+                'toml',
+                'env',
+                'dot',
+                'gv',
+                'torrent',
+                'ics',
+                'vcf',
+                'ai',
+                'eps',
+                'ps',
+                'dxf',
+                'dwg',
+                'stl',
+                'obj',
+                'fbx',
+                'blend',
+                'dae',
+                'threeds',
+                'gltf',
+                'glb',
+                'vhd',
+                'vhdx',
+                'vmdk',
+                'ova',
+                'ovf',
+                'iso',
+                'img',
+                'swf',
               ])
               .describe(
                 'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
@@ -5971,36 +6542,357 @@ export const uploadFolderHandlerResponse = zod.object({
                     'pdf',
                     'md',
                     'canvas',
-                    'py',
-                    'js',
-                    'ts',
-                    'jsx',
-                    'tsx',
-                    'json',
-                    'html',
+                    'coffee',
+                    'cson',
+                    'iced',
+                    'c',
+                    'i',
+                    'cpp',
+                    'cppm',
+                    'cc',
+                    'ccm',
+                    'cxx',
+                    'cxxm',
+                    'cplusplus',
+                    'cplusplusm',
+                    'hpp',
+                    'hh',
+                    'hxx',
+                    'hplusplus',
+                    'h',
+                    'ii',
+                    'ino',
+                    'inl',
+                    'ipp',
+                    'ixx',
+                    'tpp',
+                    'txx',
+                    'hppin',
+                    'hin',
+                    'cu',
+                    'cuh',
+                    'cs',
+                    'csx',
+                    'cake',
                     'css',
-                    'xml',
-                    'yaml',
-                    'yml',
-                    'sql',
+                    'dart',
+                    'diff',
+                    'patch',
+                    'rej',
+                    'dockerfile',
+                    'containerfile',
+                    'go',
+                    'handlebars',
+                    'hbs',
+                    'hjs',
+                    'hlsl',
+                    'hlsli',
+                    'fx',
+                    'fxh',
+                    'vsh',
+                    'psh',
+                    'cginc',
+                    'compute',
+                    'html',
+                    'htm',
+                    'shtml',
+                    'xhtml',
+                    'xht',
+                    'mdoc',
+                    'jsp',
+                    'asp',
+                    'aspx',
+                    'jshtm',
+                    'volt',
+                    'ejs',
+                    'rhtml',
+                    'ini',
+                    'conf',
+                    'properties',
+                    'cfg',
+                    'directory',
+                    'gitattributes',
+                    'gitconfig',
+                    'gitmodules',
+                    'editorconfig',
+                    'repo',
+                    'java',
+                    'jav',
+                    'jsx',
+                    'js',
+                    'es6',
+                    'mjs',
+                    'cjs',
+                    'pac',
+                    'json',
+                    'bowerrc',
+                    'jscsrc',
+                    'webmanifest',
+                    'jsmap',
+                    'cssmap',
+                    'tsmap',
+                    'har',
+                    'jslintrc',
+                    'jsonld',
+                    'geojson',
+                    'ipynb',
+                    'vuerc',
+                    'jsonc',
+                    'eslintrc',
+                    'eslintrcjson',
+                    'jsfmtrc',
+                    'jshintrc',
+                    'swcrc',
+                    'hintrc',
+                    'babelrc',
+                    'jsonl',
+                    'ndjson',
+                    'codesnippets',
+                    'jl',
+                    'jmd',
+                    'sty',
+                    'cls',
+                    'bbx',
+                    'cbx',
+                    'tex',
+                    'ltx',
+                    'ctx',
+                    'bib',
+                    'less',
+                    'log',
+                    'lua',
+                    'mak',
+                    'mk',
+                    'mkd',
+                    'mdwn',
+                    'mdown',
+                    'markdown',
+                    'markdn',
+                    'mdtxt',
+                    'mdtext',
+                    'workbook',
+                    'm',
+                    'mm',
+                    'pl',
+                    'pm',
+                    'pod',
+                    't',
+                    'psgi',
+                    'raku',
+                    'rakumod',
+                    'rakutest',
+                    'rakudoc',
+                    'nqp',
+                    'p6',
+                    'pl6',
+                    'pm6',
+                    'php',
+                    'php4',
+                    'php5',
+                    'phtml',
+                    'ctp',
+                    'ps1',
+                    'psm1',
+                    'psd1',
+                    'pssc',
+                    'psrc',
+                    'py',
+                    'rpy',
+                    'pyw',
+                    'cpy',
+                    'gyp',
+                    'gypi',
+                    'pyi',
+                    'ipy',
+                    'pyt',
+                    'r',
+                    'rhistory',
+                    'rprofile',
+                    'rt',
+                    'cshtml',
+                    'razor',
+                    'rb',
+                    'rbx',
+                    'rjs',
+                    'gemspec',
+                    'rake',
+                    'ru',
+                    'erb',
+                    'podspec',
+                    'rbi',
+                    'rs',
+                    'scss',
+                    'sass',
+                    'shader',
                     'sh',
                     'bash',
-                    'markdown',
+                    'bashrc',
+                    'bashaliases',
+                    'bashprofile',
+                    'bashlogin',
+                    'ebuild',
+                    'eclass',
+                    'profile',
+                    'bashlogout',
+                    'xprofile',
+                    'xsession',
+                    'xsessionrc',
+                    'zsh',
+                    'zshrc',
+                    'zprofile',
+                    'zlogin',
+                    'zlogout',
+                    'zshenv',
+                    'zshtheme',
+                    'fish',
+                    'ksh',
+                    'csh',
+                    'cshrc',
+                    'tcshrc',
+                    'yashrc',
+                    'yashprofile',
+                    'sql',
+                    'dsql',
+                    'swift',
+                    'ts',
+                    'cts',
+                    'mts',
+                    'tsx',
+                    'tsbuildinfo',
+                    'xml',
+                    'xsd',
+                    'ascx',
+                    'atom',
+                    'axml',
+                    'axaml',
+                    'bpmn',
+                    'cpt',
+                    'csl',
+                    'csproj',
+                    'csprojuser',
+                    'dita',
+                    'ditamap',
+                    'dtd',
+                    'ent',
+                    'mod',
+                    'dtml',
+                    'fsproj',
+                    'fxml',
+                    'iml',
+                    'isml',
+                    'jmx',
+                    'launch',
+                    'menu',
+                    'mxml',
+                    'nuspec',
+                    'opml',
+                    'owl',
+                    'proj',
+                    'props',
+                    'pt',
+                    'publishsettings',
+                    'pubxml',
+                    'pubxmluser',
+                    'rbxlx',
+                    'rbxmx',
+                    'rdf',
+                    'rng',
+                    'rss',
+                    'shproj',
+                    'storyboard',
+                    'targets',
+                    'tld',
+                    'tmx',
+                    'vbproj',
+                    'vbprojuser',
+                    'vcxproj',
+                    'vcxprojfilters',
+                    'wsdl',
+                    'wxi',
+                    'wxl',
+                    'wxs',
+                    'xaml',
+                    'xbl',
+                    'xib',
+                    'xlf',
+                    'xliff',
+                    'xpdl',
+                    'xul',
+                    'xoml',
+                    'xsl',
+                    'xslt',
+                    'yaml',
+                    'yml',
+                    'eyaml',
+                    'eyml',
+                    'cff',
+                    'yamltmlanguage',
+                    'yamltmpreferences',
+                    'yamltmtheme',
+                    'winget',
                     'txt',
                     'csv',
+                    'tsv',
                     'jpeg',
                     'jpg',
                     'png',
                     'gif',
                     'svg',
                     'webp',
+                    'avif',
+                    'bmp',
+                    'ico',
+                    'tiff',
+                    'tif',
                     'heic',
                     'heif',
-                    'zip',
                     'tar',
                     'targz',
                     'tgz',
                     'gz',
+                    'bz2',
+                    'tarbz2',
+                    'tbz2',
+                    'z',
+                    'tarz',
+                    'lz',
+                    'tarlz',
+                    'xz',
+                    'tarxz',
+                    'txz',
+                    'lzma',
+                    'tarlzma',
+                    'rar',
+                    'sevenz',
+                    'zst',
+                    'tarzst',
+                    'tzst',
+                    'zip',
+                    'exe',
+                    'msi',
+                    'dll',
+                    'bat',
+                    'cmd',
+                    'com',
+                    'appimage',
+                    'app',
+                    'bin',
+                    'deb',
+                    'rpm',
+                    'apk',
+                    'dmg',
+                    'pkg',
+                    'crx',
+                    'xpi',
+                    'mp3',
+                    'wav',
+                    'ogg',
+                    'flac',
+                    'aac',
+                    'm4a',
+                    'wma',
+                    'mid',
+                    'midi',
                     'mp4',
                     'mkv',
                     'webm',
@@ -6013,10 +6905,61 @@ export const uploadFolderHandlerResponse = zod.object({
                     'flv',
                     'f4v',
                     'threegp',
+                    'ttf',
+                    'otf',
+                    'woff',
+                    'woff2',
+                    'eot',
+                    'rtf',
+                    'odt',
+                    'ods',
+                    'odp',
+                    'odg',
+                    'odf',
+                    'epub',
+                    'mobi',
+                    'azw',
+                    'azw3',
+                    'djvu',
                     'xls',
                     'ppt',
                     'pptx',
                     'xlsx',
+                    'db',
+                    'sqlite',
+                    'sqlite3',
+                    'mdb',
+                    'accdb',
+                    'dbf',
+                    'plist',
+                    'toml',
+                    'env',
+                    'dot',
+                    'gv',
+                    'torrent',
+                    'ics',
+                    'vcf',
+                    'ai',
+                    'eps',
+                    'ps',
+                    'dxf',
+                    'dwg',
+                    'stl',
+                    'obj',
+                    'fbx',
+                    'blend',
+                    'dae',
+                    'threeds',
+                    'gltf',
+                    'glb',
+                    'vhd',
+                    'vhdx',
+                    'vmdk',
+                    'ova',
+                    'ovf',
+                    'iso',
+                    'img',
+                    'swf',
                   ])
                   .describe(
                     'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use model_entity::Entity;
 use serde::{Deserialize, Serialize};
+use stream::domain::StreamEvent;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -8,6 +9,19 @@ pub struct Message {
     #[serde(rename = "type")]
     pub message_type: String,
     pub data: String,
+}
+
+static STREAM_EVENT_TYPE: &str = "stream_event";
+impl TryFrom<StreamEvent> for Message {
+    type Error = anyhow::Error;
+    fn try_from(value: StreamEvent) -> Result<Self, Self::Error> {
+        serde_json::to_string(&value)
+            .map(|data| Self {
+                data,
+                message_type: STREAM_EVENT_TYPE.into(),
+            })
+            .map_err(anyhow::Error::from)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

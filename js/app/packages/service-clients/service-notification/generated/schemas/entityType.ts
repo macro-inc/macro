@@ -17,7 +17,6 @@ export const EntityType = {
   channel: 'channel',
   document: 'document',
   project: 'project',
-  email: 'email',
   email_thread: 'email_thread',
   team: 'team',
 } as const;

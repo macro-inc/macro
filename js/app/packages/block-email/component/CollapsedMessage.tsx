@@ -1,6 +1,6 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { UserIcon } from '@core/component/UserIcon';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
 import {
@@ -10,7 +10,7 @@ import {
 import { formatShortDate } from './EmailMessageTopBar';
 
 interface CollapsedMessageProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFocused: boolean;
   isFirstMessage: boolean;
   onClick: () => void;
@@ -61,7 +61,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
             classList={{
-              'pt-1.5': !props.isFirstMessage,
+              'pt-2': !props.isFirstMessage,
               'opacity-80': hasMouseLeft() && !hover(),
               'opacity-100': !hasMouseLeft() || hover(),
             }}
@@ -105,8 +105,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             <div
               class="flex-1 flex items-center min-w-0"
               style={{
-                'padding-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                'padding-left': 'var(--body-padding)',
               }}
             >
               <span class="text-ink font-semibold w-16 shrink-0 truncate text-sm">
@@ -115,7 +114,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
+            <div class="text-xs text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 formatShortDate(props.message.internal_date_ts)}
             </div>

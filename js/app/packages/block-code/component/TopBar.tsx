@@ -1,29 +1,37 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
+import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
-import { ReferencesModal } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import {
+  DocumentPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from '@core/component/DocumentPropertiesModal';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
+import { blockTextSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 
@@ -34,7 +42,10 @@ export const TopBar: Component = () => {
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const userPermissions = useGetPermissions();
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(() => {
     const content = text();
@@ -57,45 +68,49 @@ export const TopBar: Component = () => {
     { op: 'delete', divideAbove: true },
   ];
 
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={blockId}
+          documentName={name()}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="document"
-            name={name()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <ReferencesModal
-            documentId={blockId}
-            documentName={name()}
-            buttonSize="sm"
-          />
-          <DocumentPropertiesModal
-            documentId={blockId}
-            blockType="code"
-            buttonSize="sm"
-          />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={name()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
-        </div>
-      </SplitToolbarRight>
+
+      <ResponsivePermissionsBadge />
+
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={ops}
+        id={blockId}
+        itemType="document"
+        name={name()}
+      />
     </>
   );
 };

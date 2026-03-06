@@ -8,41 +8,54 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
-use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::{
+    EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
+    CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
 use model::document::{
-    CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
+    CONVERTED_DOCUMENT_FILE_NAME, ContentType, DocumentBasic, FileType, FileTypeExt,
     build_cloud_storage_bucket_document_key,
 };
 use model::response::PresignedUrl;
 use sqlx::PgPool;
 use tracing;
 
-use super::models::{CloudFrontConfig, DocumentError, LocationQueryParams};
-use super::ports::{DocumentRepo, DocumentService};
+use super::models::{CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
+use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
 /// The concrete document service implementation.
-pub struct DocumentServiceImpl<R: DocumentRepo> {
+pub struct DocumentServiceImpl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> {
     repo: R,
     cloudfront_config: CloudFrontConfig,
     sync_service_client: sync_service_client::SyncServiceClient,
+    upload_url_service: U,
+    task_properties_service: T,
     db: PgPool,
 }
 
-impl<R: DocumentRepo> DocumentServiceImpl<R> {
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
+    DocumentServiceImpl<R, U, T>
+{
     /// Create a new document service.
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,
         sync_service_client: sync_service_client::SyncServiceClient,
+        upload_url_service: U,
+        task_properties_service: T,
         db: PgPool,
     ) -> Self {
         Self {
             repo,
             cloudfront_config,
             sync_service_client,
+            upload_url_service,
+            task_properties_service,
             db,
         }
     }
@@ -66,7 +79,13 @@ impl<R: DocumentRepo> DocumentServiceImpl<R> {
     fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
         let constructed_url = format!("{}/{}", self.cloudfront_config.distribution_url, key);
         let options = self.get_signed_options();
-        let signed_url = get_signed_url(&constructed_url, &options)?;
+
+        let signed_url = if !macro_aws_config::is_local_aws() {
+            get_signed_url(&constructed_url, &options)?
+        } else {
+            constructed_url
+        };
+
         Ok(signed_url)
     }
 
@@ -241,13 +260,22 @@ impl<R: DocumentRepo> DocumentServiceImpl<R> {
             }
         }
     }
+
+    /// Clean up a document on creation error.
+    async fn cleanup_document(&self, document_id: &str) {
+        if let Err(e) = self.repo.delete_document_by_id(document_id).await {
+            tracing::error!(error=?e, document_id=?document_id, "failed to clean up document");
+        }
+    }
 }
 
-impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> DocumentService
+    for DocumentServiceImpl<R, U, T>
+{
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetDocumentResponseData, DocumentError> {
         let document_id = entity_access_receipt.entity().entity_id.clone();
         // get access level
@@ -295,7 +323,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
     async fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         params: LocationQueryParams,
     ) -> Result<LocationResponseV3, DocumentError> {
         let file_type = document_context
@@ -358,11 +386,11 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
     #[tracing::instrument(err, skip(self))]
     async fn delete_document(
         &self,
-        entity_access_receipt: EntityAccessReceipt,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
         self.repo
-            .soft_delete_document(&entity_access_receipt.entity().entity_id)
+            .soft_delete_document(&entity_access_receipt.entity().entity_id.clone())
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
@@ -401,5 +429,142 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
                     DocumentError::Internal(err)
                 }
             })
+    }
+
+    async fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        self.repo
+            .get_document_text(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    async fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        let entity_id = &entity_access_receipt.entity().entity_id;
+        let uuid = macro_uuid::string_to_uuid(entity_id)
+            .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+        let short_id = macro_uuid::ShortUuidConverter::default().from_uuid(&uuid);
+        Ok(short_id)
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        let file_type = args.file_type;
+        let project_id = args.project_id;
+        let sha = args.sha.clone();
+
+        // Create document metadata in the database (full transaction)
+        let document_metadata = self.repo.create_document(args).await.map_err(|e| {
+            let err: anyhow::Error = e.into();
+            if err.to_string().contains("document with ID already exists") {
+                DocumentError::Conflict("document with ID already exists".to_string())
+            } else {
+                DocumentError::Internal(err)
+            }
+        })?;
+
+        let document_id = document_metadata.document_id.clone();
+
+        // Update upload job if job_id provided (outside the main transaction)
+        if let Some(job_id) = &job_id
+            && let Err(e) = self.repo.update_upload_job(&document_id, job_id).await
+        {
+            tracing::error!(error=?e, document_id=?document_id, "failed to update upload job");
+            self.cleanup_document(&document_id).await;
+            return Err(DocumentError::Internal(anyhow!(
+                "unable to update upload job"
+            )));
+        }
+
+        // Build the S3 key for upload
+        let key = build_cloud_storage_bucket_document_key(
+            document_metadata.owner.as_ref(),
+            &document_id,
+            document_metadata.document_version_id,
+            file_type.as_ref().map(|s| s.as_str()),
+        );
+
+        let content_type = match file_type {
+            Some(FileType::Docx) => ContentType::Docx,
+            _ => file_type.into(),
+        };
+
+        let mime_type = content_type.mime_type().to_string();
+
+        // Generate presigned upload URL
+        let presigned_url = match file_type {
+            Some(FileType::Docx) => self
+                .upload_url_service
+                .put_docx_upload_presigned_url(&key, &sha, content_type)
+                .await,
+            _ => self
+                .upload_url_service
+                .put_document_storage_presigned_url(&key, &sha, content_type)
+                .await,
+        }
+        .map_err(|e| {
+            tracing::error!(error=?e, key=?key, document_id=?document_id, "unable to generate presigned url");
+            DocumentError::Internal(anyhow!("unable to generate presigned url"))
+        })?;
+
+        // Convert metadata to response format
+        let document_response_metadata =
+            DocumentResponseMetadata::from_document_metadata(&document_metadata).map_err(|e| {
+                tracing::error!(error=?e, document_id=?document_id, "unable to convert document metadata");
+                DocumentError::Internal(anyhow!("unable to convert document metadata"))
+            })?;
+
+        // Update project modified timestamp (fire-and-forget)
+        macro_project_utils::update_project_modified(
+            &self.db,
+            macro_project_utils::ProjectModifiedArgs {
+                project_id,
+                old_project_id: None,
+                user_id: user_id.as_ref().to_string(),
+            },
+        )
+        .await;
+
+        // Attach task properties if creating a task
+        if document_response_metadata.sub_type == Some(DocumentSubType::Task) {
+            self.task_properties_service
+                .attach_task_properties(vec![document_response_metadata.document_id.clone()])
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, document_id=?document_id, "failed to attach task properties");
+                    DocumentError::Internal(anyhow!("failed to attach task properties"))
+                })?;
+        }
+
+        Ok(CreateDocumentResponseData {
+            document_response: DocumentResponse {
+                document_metadata: document_response_metadata,
+                presigned_url: Some(presigned_url),
+            },
+            content_type: mime_type,
+            file_type: file_type.map(|f| f.to_string()),
+        })
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        status: &str,
+    ) -> Result<(), DocumentError> {
+        self.task_properties_service
+            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .await
+            .map_err(DocumentError::Internal)
     }
 }

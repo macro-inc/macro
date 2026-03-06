@@ -1,16 +1,16 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAttachments } from '@core/component/AI/signal/attachment';
-import { useTabAttachments } from '@core/component/AI/signal/tabAttachments';
+import { globalTabAttachments } from '@core/component/AI/signal/globalAttachments';
 import type {
   Attachment,
   Attachments,
-  ChatMessageStream,
   ChatMessageWithAttachments,
   Model,
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
 import type { Accessor, ParentProps, Setter } from 'solid-js';
 import {
@@ -53,10 +53,9 @@ export function ChatInputProvider(
   const attachments = useAttachments(props.initialAttachments);
   const uploadQueue = useUploadAttachment();
 
-  const tabAttachments = useTabAttachments();
   if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && props.autoAttach !== false) {
     createEffect(
-      on(tabAttachments, (tabs, p) => {
+      on(globalTabAttachments, (tabs, p) => {
         for (const prev of p ?? []) {
           if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
             attachments.removeAttachment(prev.attachmentId);
@@ -164,21 +163,26 @@ export function ChatProvider(
   // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
   createEffect(() => {
     const activeStreams = getEntityStreams('chat', props.chatId)();
+    const currentStream = untrack(stream);
 
     for (const s of activeStreams) {
       const sid = s.id()?.stream_id;
-      if (!sid || s.isDone()) continue;
+      if (!sid) {
+        console.warn('reject chat stream: no id');
+        continue;
+      }
+      if (currentStream?.isDone() && currentStream?.id()?.stream_id === sid) {
+        console.warn('reject chat stream: duplicate stream');
+        continue;
+      }
 
       const isInMessages = untrack(() => messages().some((m) => m.id === sid));
-      if (isInMessages) continue;
+      if (isInMessages) {
+        console.warn('reject chat stream: already has message');
+        continue;
+      }
 
-      setStream({
-        data: s.data,
-        isDone: s.isDone,
-        model: DEFAULT_MODEL,
-        attachments: [],
-        streamId: sid,
-      });
+      setStream(s);
       break;
     }
   });

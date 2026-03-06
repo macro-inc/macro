@@ -2,10 +2,11 @@ use crate::api::context::ApiContext;
 use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -13,15 +14,13 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod context;
 
 // Routes
-mod device;
 mod health;
-mod notification;
 mod unsubscribe;
 pub(crate) mod user_notification;
 
 pub(crate) mod swagger;
 
-pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIngress>(
+pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> anyhow::Result<()> {
@@ -32,7 +31,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIng
         .merge(health::router())
         .layer(
             ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
+                .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
                 .layer(axum::middleware::from_fn_with_state(
                     ServiceNameState {
                         service_name: VersionedApiServiceName::NotificationService,
@@ -58,7 +57,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIng
         .context("error starting service")
 }
 
-fn api_router<S: ::notification::domain::service::NotificationIngress>(
+fn api_router<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> Router<ApiContext> {
@@ -74,26 +73,14 @@ fn api_router<S: ::notification::domain::service::NotificationIngress>(
     };
 
     let internal_router = Router::new()
-        .nest("/device", device::router())
         .nest(
-            "/user_notifications",
-            user_notification::router(ingress_state),
+            "/device",
+            ::notification::inbound::http::device::device_router(),
         )
+        .nest("/user_notifications", user_notification::router())
+        .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())
-        .layer(middleware)
-        .nest(
-            "/notifications",
-            notification::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_extractor_with_state::<
-                        ValidInternalKey,
-                        _,
-                    >(state))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        );
+        .layer(middleware);
     Router::new()
         .nest("/:version", internal_router.clone())
         .merge(internal_router)

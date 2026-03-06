@@ -61,6 +61,7 @@ export interface OperationOptions {
   autosave?: boolean;
   preview?: boolean;
   debug?: boolean;
+  initialize?: boolean;
 }
 
 export const useSetAllNodes = sharedInstance(() => {
@@ -76,7 +77,7 @@ export const useSetAllNodes = sharedInstance(() => {
         rq.addNode(node.id);
       }
     });
-    setPendingUpdates(true);
+    if (!opts?.initialize) setPendingUpdates(true);
     if (opts?.autosave) saveCanvasData();
   });
 });
@@ -161,9 +162,20 @@ export const useUpdateNode = sharedInstance(() => {
   return createCallback(
     (id: CanvasId, updates: Partial<CanvasNode>, opts?: OperationOptions) => {
       if (!store[id]) return;
-      setStore(id, { ...store[id], ...updates });
-      setPendingUpdates(true);
-      if (opts?.autosave) saveCanvasData();
+      const current = store[id];
+
+      // only when at least one field actually changes.
+      for (const [key, next] of Object.entries(updates) as [
+        keyof CanvasNode,
+        CanvasNode[keyof CanvasNode],
+      ][]) {
+        if (next !== current[key]) {
+          setStore(id, { ...current, ...updates });
+          setPendingUpdates(true);
+          if (opts?.autosave) saveCanvasData();
+          return;
+        }
+      }
     }
   );
 });
@@ -219,7 +231,7 @@ export const useSetAllEdges = sharedInstance(() => {
         rq.addEdge(edge.id);
       }
     });
-    setPendingUpdates(true);
+    if (!opts?.initialize) setPendingUpdates(true);
     if (opts?.autosave) saveCanvasData();
   });
 });
@@ -520,7 +532,7 @@ export const useSetAllGroups = sharedInstance(() => {
 
   return createCallback((groups: CanvasGroup[], opts?: OperationOptions) => {
     setStore(Object.fromEntries(groups.map((group) => [group.id, group])));
-    setPendingUpdates(true);
+    if (!opts?.initialize) setPendingUpdates(true);
     if (opts?.autosave) saveCanvasData();
   });
 });
@@ -753,9 +765,9 @@ export const useLoadCanvasData = sharedInstance(() => {
       }
     );
 
-    nodes.initialize(nodeMap);
-    edges.initialize(edgeMap);
-    groups.initialize(groupMap);
+    nodes.initialize(nodeMap, { initialize: true });
+    edges.initialize(edgeMap, { initialize: true });
+    groups.initialize(groupMap, { initialize: true });
     setHighestOrder(highestSortOrder);
   };
 });

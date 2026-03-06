@@ -14,6 +14,7 @@ fn test_email_search_request_json_serialization() {
             recipients: vec![],
             email_thread_ids: vec![],
             importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,
@@ -100,6 +101,7 @@ fn test_email_search_request_round_trip() {
             recipients: vec![],
             email_thread_ids: vec![],
             importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,

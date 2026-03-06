@@ -1,9 +1,7 @@
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas';
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { createSignal } from 'solid-js';
-import type { ChatMessageStream } from '../../../types';
 import {
   ChatInputProvider,
   ChatProvider,
@@ -12,18 +10,8 @@ import {
 import { ChatMessages } from '../../message/ChatMessages';
 import { StreamStatus } from './StreamStatus';
 
-function toChat(stream: MessageStream): ChatMessageStream {
-  return {
-    data: stream.data,
-    isDone: stream.isDone,
-    model: DEFAULT_MODEL,
-    attachments: [],
-    streamId: stream.request.stream_id,
-  };
-}
-
 export function StreamDebuggerWithControls(props: {
-  stream: () => MessageStream;
+  stream: () => ChatMessageStream;
   messages?: ChatMessageWithAttachments[];
   autoStart?: true;
 }) {
@@ -40,16 +28,16 @@ export function StreamDebuggerWithControls(props: {
 }
 
 function StreamDebuggerWithControlsInner(props: {
-  stream: () => MessageStream;
+  stream: () => ChatMessageStream;
   autoStart?: true;
 }) {
   const chat = useChatContext();
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
 
   if (props.autoStart) {
     const s = props.stream();
     setStream(s);
-    chat.setStream(toChat(s));
+    chat.setStream(s);
   }
 
   return (
@@ -60,7 +48,7 @@ function StreamDebuggerWithControlsInner(props: {
           onClick={() => {
             const stream = props.stream();
             setStream(stream);
-            chat.setStream(toChat(stream));
+            chat.setStream(stream);
           }}
           theme="accent"
         />

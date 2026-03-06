@@ -1,13 +1,15 @@
 pub mod create;
 pub mod delete;
-pub mod list;
 
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, post};
 
 use crate::api::ApiContext;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
+    let hex_list_labels_routes =
+        email::inbound::list_labels_router::<ApiContext, crate::api::context::EmailSvc>();
+
     Router::new()
         .route("/", post(create::handler))
         .route("/:id", delete(delete::handler))
@@ -15,9 +17,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             state.clone(),
             crate::api::middleware::gmail_token::attach_gmail_token,
         ))
-        .route("/", get(list::handler))
         .layer(axum::middleware::from_fn_with_state(
             state.email_service,
             crate::api::middleware::link::attach_link_context,
         ))
+        .merge(hex_list_labels_routes)
 }

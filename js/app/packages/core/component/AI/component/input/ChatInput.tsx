@@ -1,15 +1,17 @@
 import { withAnalytics } from '@coparse/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { SMART_MODE_MODEL } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
 import type { Model, ToolSet } from '@core/component/AI/types';
+import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Hotkey, modifierMap } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { pressedKeys } from '@core/hotkey/state';
+import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -17,27 +19,28 @@ import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
-import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
-import type { UseChatMarkdown } from './useChatMarkdownArea';
 
 const { track, TrackingEvents } = withAnalytics();
 
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
+  onEscape?: (e: KeyboardEvent) => boolean;
   isPersistent?: boolean;
   showActiveTabs?: boolean;
-  captureEditor?: (editor: LexicalEditor) => void;
   autoFocusOnMount?: boolean;
   chatId?: string;
+  extraRightControls?: () => import('solid-js').JSX.Element;
 };
 
 export type ChatInputComponentProps = {
-  markdown: UseChatMarkdown;
+  editor: EditorConfigBuilder;
+  initialValue?: string;
+  onChange?: (markdown: string) => void;
 } & ChatInputProps;
 
 export function ChatInput(props: ChatInputComponentProps) {
@@ -54,6 +57,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
+  const [markdownText, setMarkdownText] = createSignal('');
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -65,7 +69,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       });
   });
 
-  const isEmptyInput = () => props.markdown.markdownText().trim().length === 0;
+  const isEmptyInput = () => markdownText().trim().length === 0;
   const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
@@ -74,48 +78,56 @@ export function ChatInput(props: ChatInputComponentProps) {
   let mdRef: undefined | HTMLDivElement;
   const isMultiline = () => {
     // Access markdownText to create reactive dependency
-    const text = props.markdown.markdownText();
+    const text = markdownText();
     if (text.trim().length === 0) return false;
     if (!mdRef) return false;
     return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
   };
 
-  const sendMessage = createCallback(async (modelOverride?: Model) => {
-    if (!canSendMessage()) return;
+  const sendMessage = createCallback(
+    async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
+      if (!canSendMessage()) return;
 
-    if (isNativeMobilePlatform() && !hasConsent()) {
-      requestConsent(() => sendMessage(modelOverride));
-      return;
+      if (isNativeMobilePlatform() && !hasConsent()) {
+        requestConsent(() => sendMessage(opts));
+        return;
+      }
+
+      const sendInput: ChatSendInput = {
+        content: markdownText(),
+        model: opts?.modelOverride ?? model(),
+        attachments: attachments.attached(),
+        toolset: toolsetSignal[0](),
+        metaKey: opts?.metaKey,
+      };
+      props.editor.controls.clear();
+      props.onSend(sendInput);
     }
+  );
 
-    const input: ChatSendInput = {
-      content: props.markdown.markdownText(),
-      model: modelOverride ?? model(),
-      attachments: attachments.attached(),
-      toolset: toolsetSignal[0](),
-    };
-    props.markdown.clear();
-    props.onSend(input);
-  });
-
-  function handleEnter(e: KeyboardEvent): boolean {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-
-      if (canSendMessage()) {
-        if (e.metaKey) {
-          sendMessage(SMART_MODE_MODEL);
-        } else {
-          sendMessage();
+  props.editor
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        if (directories.length > 0) {
+          toast.failure('Folder upload not supported here');
+          return;
         }
+        handleFileFolderDrop(files, directories, (entries) => {
+          uploadQueue.upload(entries.map((e) => e.file));
+        });
+      },
+    })
+    .onEnter((e) => {
+      if (canSendMessage()) {
+        sendMessage({ metaKey: e?.metaKey });
       }
       return true;
-    } else {
-      return false;
-    }
-  }
-
-  const availableAttachments = useChatAttachableHistory();
+    })
+    .onEscape((e) => props.onEscape?.(e) ?? false)
+    .onChange((md) => {
+      setMarkdownText(md);
+      props.onChange?.(md);
+    });
 
   const hasAttachments = () =>
     attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
@@ -134,41 +146,11 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Switch>
       <Match when={!isTouchDevice()}>
         <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
-          <Show when={generating()}>
-            <Tooltip tooltip="ctrl+c to stop" placement="top">
-              <div
-                class="flex items-center gap-1"
-                classList={{
-                  'text-accent': pressedKeys().has('ctrl'),
-                }}
-              >
-                <span>Stop</span>
-                <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
-                  <Hotkey shortcut="ctrl+c" />
-                </div>
-              </div>
-            </Tooltip>
-          </Show>
-          <Tooltip tooltip="Enter to send with Haiku" placement="top">
+          {props.extraRightControls?.()}
+          <Tooltip tooltip="Enter to send with Opus" placement="top">
             <div class="flex items-center gap-1">
               <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
                 <Hotkey shortcut="Enter" />
-              </div>
-              <span>Haiku</span>
-            </div>
-          </Tooltip>
-          <Tooltip
-            tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
-            placement="top"
-          >
-            <div
-              class="flex items-center gap-1"
-              classList={{
-                'text-accent': pressedKeys().has('cmd'),
-              }}
-            >
-              <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
-                <Hotkey shortcut={'meta+Enter'} />
               </div>
               <span>Opus</span>
             </div>
@@ -178,7 +160,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       <Match when={isTouchDevice()}>
         <div class="flex flex-row gap-1 items-center shrink-0">
           <Show when={!generating()}>
-            <Button onClick={() => sendMessage('claude-opus-4-6')}>
+            <Button
+              onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
+            >
               <div class="group hover:bg-accent transition ease-in-out size-6 p-[2px] border border-accent rounded-full flex items-center justify-center">
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
               </div>
@@ -247,15 +231,15 @@ export function ChatInput(props: ChatInputComponentProps) {
           }}
           ref={mdRef}
         >
-          <props.markdown.MarkdownArea
-            onEnter={handleEnter}
+          <MarkdownShell
+            config={props.editor}
             placeholder="Ask AI, @mention anything"
-            history={availableAttachments}
-            dontFocusOnMount={
-              isTouchDevice() || props.autoFocusOnMount === false
+            initialValue={props.initialValue}
+            autofocus={
+              !isMobile() &&
+              !isTouchDevice() &&
+              props.autoFocusOnMount !== false
             }
-            onPasteFile={uploadQueue.upload}
-            captureEditor={props.captureEditor}
           />
         </div>
 

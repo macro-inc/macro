@@ -4,11 +4,11 @@ import WideFolder from '@macro-icons/wide/folder.svg';
 import WidePlus from '@macro-icons/wide/plus.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import { batch, type Component, type JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
 import { useSoup } from '@app/component/next-soup/soup-context';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
 
 type MobileDockButtonProps = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -25,11 +25,10 @@ function MobileDockButton(props: MobileDockButtonProps) {
         impactFeedback('light');
         props.onClick();
       }}
-      class="flex flex-col items-center justify-center w-[20%] py-4"
-      classList={{
-        'text-ink-muted': !props.active,
-        'text-ink bg-panel': props.active,
-      }}
+      class={cn(
+        'flex flex-col items-center justify-center w-[20%] pt-3',
+        props.active && 'text-accent'
+      )}
     >
       <props.icon class="w-6 h-6" />
       <span class="text-xs">{props.label}</span>
@@ -69,35 +68,25 @@ export function MobileDock() {
     !isTasksActive() &&
     splitIsUnifiedList();
 
-  const activateFilter = (filter: FilterID) => {
-    soup.filters.activate(filter);
-  };
-
-  const toggleSignalFilter = (value: boolean) => {
+  const setSignalFilter = (value: boolean) => {
     // If we're going to be removing the signal filter,
     // we should replace it with the explicit-noise filter
     if (!value) {
-      activateFilter('explicit-noise');
-      soup.filters.deactivate('not-done');
+      soup.filters.set({ and: ['explicit-noise'] });
     } else {
-      activateFilter('signal');
-      activateFilter('not-done');
+      soup.filters.set({ and: ['signal', 'not-done'] });
     }
   };
 
-  const clearSearchFilters = () => {
-    soup.filters.clear();
-  };
-
   return (
-    <div class="flex flex-row justify-between bg-linear-to-t from-page to-panel border-t border-edge-muted">
+    <div class="flex flex-row justify-between bg-page border-t border-edge-muted">
       <MobileDockButton
         icon={WideFolder}
         label="All"
         active={isAllActive()}
         onClick={() => {
           ensureUnifiedList();
-          clearSearchFilters();
+          soup.filters.clear();
         }}
       />
       <MobileDockButton
@@ -106,10 +95,7 @@ export function MobileDock() {
         active={isInboxActive()}
         onClick={() => {
           ensureUnifiedList();
-          batch(() => {
-            clearSearchFilters();
-            toggleSignalFilter(true);
-          });
+          setSignalFilter(true);
         }}
       />
       <MobileDockButton
@@ -118,10 +104,7 @@ export function MobileDock() {
         active={isPeopleTeamsActive()}
         onClick={() => {
           ensureUnifiedList();
-          batch(() => {
-            toggleSignalFilter(false);
-            activateFilter('channels');
-          });
+          soup.filters.set({ and: ['explicit-noise', 'channels'] });
         }}
       />
       <MobileDockButton
@@ -130,10 +113,7 @@ export function MobileDock() {
         active={isTasksActive()}
         onClick={() => {
           ensureUnifiedList();
-          batch(() => {
-            toggleSignalFilter(false);
-            activateFilter('task');
-          });
+          soup.filters.set({ and: ['explicit-noise', 'task'] });
         }}
       />
       <MobileDockButton

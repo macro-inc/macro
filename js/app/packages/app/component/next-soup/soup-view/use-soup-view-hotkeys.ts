@@ -1,29 +1,21 @@
-import {
-  konsoleOpen,
-  resetKonsoleMode,
-  setKonsoleMode,
-  toggleKonsoleVisibility,
-} from '@app/component/command/state';
-import {
-  resetCommandCategoryIndex,
-  searchCategories,
-  setCommandCategoryIndex,
-  setKonsoleContextInformation,
-} from '@app/component/command/KonsoleItem';
+import { CommandState } from '@app/component/command/state';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   getHotkeyCommand,
   getScopeElement,
+  isScopeInActiveBranch,
   runCommand,
 } from '@core/hotkey/utils';
 import { isSearchEntity } from '@entity';
-import type { Accessor } from 'solid-js';
+import { onCleanup, type Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { isListViewID } from '@app/constants/list-views';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -45,7 +37,32 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     getSplitCount,
   } = options;
 
-  const splitIsUnifiedList = () => splitHandle.content().id === 'unified-list';
+  const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
+
+  // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
+  const clearMultiCondition = () =>
+    soup.selection.count() > 0 && splitIsUnifiedList();
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const goHomeCondition = () => !splitIsUnifiedList();
+  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
+
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    if (closeSplitCondition()) {
+      return 'Close split';
+    }
+    if (goHomeCondition()) {
+      return 'Go home';
+    }
+    return '';
+  };
+
+  const group = createHotkeyGroup();
 
   // home - Jump to top of list
   registerHotkey({
@@ -61,22 +78,25 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
 
-  // g g - Jump to top of list (vim-style command scope)
-  const { commandScopeId } = registerHotkey({
-    hotkey: ['g'],
+  // g g - Jump to top of list (vim-style, uses global GO_TO command scope)
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
     scopeId,
     description: 'Go to top of list',
-    keyDownHandler: () => true,
-    activateCommandScope: true,
+    keyDownHandler: () => false,
+    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
     hide: true,
-  });
+  }).withGroup(group);
 
+  // Register 'g' in the global GO_TO command scope for g+g (jump to top)
+  // Uses condition to only run for the soup-view that was focused when 'g' was pressed
   registerHotkey({
-    hotkey: ['g'],
-    scopeId: commandScopeId,
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: GO_TO_COMMAND_SCOPE,
     description: 'Go to top of list',
+    condition: () => isScopeInActiveBranch(scopeId),
     keyDownHandler: () => {
       const next = soup.navigate.toFirst();
       if (next) {
@@ -84,7 +104,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return true;
     },
-  });
+    registrationType: 'add',
+  }).withGroup(group);
 
   // shift+g, end - Jump to bottom of list
   registerHotkey({
@@ -100,7 +121,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
 
   // enter - Open entity in split
   registerHotkey({
@@ -127,7 +148,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 4,
-  });
+  }).withGroup(group);
 
   // cmd+enter - Focus preview block
   registerHotkey({
@@ -180,7 +201,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 4,
-  });
+  }).withGroup(group);
 
   // x - Toggle select item
   registerHotkey({
@@ -194,71 +215,37 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     displayPriority: 10,
-  });
+  }).withGroup(group);
 
   // cmd+k - Open command menu with selection context
+  // When there's a selection, opens in entity action mode showing only
+  // selection modification commands with a preview of the selected entities
   registerHotkey({
     scopeId,
     description: () => {
-      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+      return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
     hotkey: 'cmd+k',
-    condition: () => !konsoleOpen(),
+    condition: () => !CommandState.isOpen(),
     keyDownHandler: (e) => {
       e?.preventDefault();
       const multiSelectEntities = soup.selection.selected();
 
-      const hasSelection = multiSelectEntities.length > 0;
-
-      if (hasSelection) {
-        setKonsoleMode('SELECTION_MODIFICATION');
-        const selectionIndex = searchCategories.getCategoryIndex('Selection');
-
-        if (selectionIndex === undefined) return false;
-
-        setCommandCategoryIndex(selectionIndex);
-
-        searchCategories.showCategory('Selection');
-
-        setKonsoleContextInformation({
-          multiSelectEntities: multiSelectEntities.slice(),
-        });
-
-        toggleKonsoleVisibility();
-        return true;
+      if (multiSelectEntities.length > 0) {
+        // Open in entity action mode with selection
+        CommandState.openForEntityAction(multiSelectEntities.slice());
+      } else {
+        // Normal toggle
+        CommandState.toggle();
       }
-      searchCategories.hideCategory('Selection');
-      resetCommandCategoryIndex();
-      resetKonsoleMode();
-      return false;
+      return true;
     },
     displayPriority: 10,
-    hide: konsoleOpen,
+    hide: CommandState.isOpen,
     runWithInputFocused: true,
-  });
+  }).withGroup(group);
 
   // escape - Multi-purpose: Clear selection / Close spotlight / Close split / Go home
-  const clearMultiCondition = () => soup.selection.count() > 0;
-  const closeSpotlightCondition = () => splitHandle.isSpotLight();
-  const goHomeCondition = () => !splitIsUnifiedList();
-  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
-
-  const escapeDescription = () => {
-    if (clearMultiCondition()) {
-      return 'Clear multi selection';
-    }
-    if (closeSpotlightCondition()) {
-      return 'Close spotlight';
-    }
-    if (closeSplitCondition()) {
-      return 'Close split';
-    }
-    if (goHomeCondition()) {
-      return 'Go home';
-    }
-    return '';
-  };
-
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
@@ -283,16 +270,14 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         return true;
       }
       if (goHomeCondition()) {
-        splitHandle.replace({
-          next: { type: 'component', id: 'unified-list' },
-          referredFrom: 'unified-list',
-        });
+        splitHandle.goBack();
         return true;
       }
       return false;
     },
   });
 
+  // shift+enter - Open in new split
   registerHotkey({
     hotkey: ['shift+enter'],
     scopeId,
@@ -308,5 +293,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  });
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 };

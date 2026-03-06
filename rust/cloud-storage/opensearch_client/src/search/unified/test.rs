@@ -446,6 +446,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             cc: vec!["id1".to_string(), "id2".to_string()],
             bcc: vec!["id1".to_string(), "id2".to_string()],
             recipients: vec!["id1".to_string(), "id2".to_string()],
+            ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -473,7 +474,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": {
-            "number_of_fragments": 500,
+            "number_of_fragments": 1,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
@@ -664,13 +665,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "must_not": [
-                  {
-                    "term": {
-                      "labels": "TRASH"
-                    }
-                  }
-                ]
               }
             },
             {
@@ -822,6 +816,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             cc: vec!["id1".to_string(), "id2".to_string()],
             bcc: vec!["id1".to_string(), "id2".to_string()],
             recipients: vec!["id1".to_string(), "id2".to_string()],
+            ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -875,7 +870,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": {
-            "number_of_fragments": 500,
+            "number_of_fragments": 1,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"

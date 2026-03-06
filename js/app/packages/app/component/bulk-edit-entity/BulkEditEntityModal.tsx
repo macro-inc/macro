@@ -137,7 +137,9 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   onFinish?: () => void;
   onCancel?: () => void;
 } | null>(null);
-const [modalOpen, setModalOpen] = createControlledOpenSignal();
+const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
+  id: 'entity-edit',
+});
 
 export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';

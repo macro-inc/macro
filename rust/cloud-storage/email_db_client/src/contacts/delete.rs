@@ -1,4 +1,3 @@
-use anyhow::Context;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 
@@ -13,8 +12,7 @@ where
         message_id
     )
     .execute(executor)
-    .await
-    .with_context(|| format!("Failed to delete recipients for message_id {}", message_id))?;
+    .await?;
 
     let deleted_count = result.rows_affected();
 

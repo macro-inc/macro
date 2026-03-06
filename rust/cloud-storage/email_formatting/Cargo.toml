@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "email_formatting"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+askama = "0.14"
+chrono = { workspace = true }
+model_notifications = { path = "../model_notifications" }
+notification = { path = "../notification" }
+rootcause = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tracing = { workspace = true }

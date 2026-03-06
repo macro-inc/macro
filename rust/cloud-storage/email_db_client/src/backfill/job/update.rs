@@ -1,4 +1,3 @@
-use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service;
 use sqlx::PgPool;
@@ -24,8 +23,7 @@ where
         job_id
     )
     .execute(executor)
-    .await
-    .with_context(|| format!("Failed to update status for backfill job {}", job_id))?;
+    .await?;
 
     if result.rows_affected() == 0 {
         return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));
@@ -49,13 +47,7 @@ pub async fn cancel_active_jobs_by_link_id(pool: &PgPool, link_id: Uuid) -> anyh
         link_id
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update status for backfill jobs with link_id: {}",
-            link_id
-        )
-    })?;
+    .await?;
 
     let rows_affected = result.rows_affected() as usize;
     Ok(rows_affected)
@@ -77,8 +69,7 @@ pub async fn update_job_total_threads(
         job_id
     )
     .execute(pool)
-    .await
-    .with_context(|| format!("Failed to update num_threads for backfill job {}", job_id))?;
+    .await?;
 
     if result.rows_affected() == 0 {
         return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));
@@ -103,13 +94,7 @@ pub async fn update_job_threads_retrieved_count(
         job_id
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update threads_retrieved_count for backfill job {}",
-            job_id
-        )
-    })?;
+    .await?;
 
     if result.rows_affected() == 0 {
         return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));

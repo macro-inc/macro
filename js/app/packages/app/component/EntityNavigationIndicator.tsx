@@ -1,5 +1,6 @@
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { isListViewID } from '@app/constants/list-views';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
@@ -16,14 +17,14 @@ const EntityNavigationIndicator = () => {
   return (
     <Show
       when={
-        panel.handle.referredFrom() === 'unified-list' &&
+        isListViewID(panel.handle.referredFrom()) &&
         soup.data()?.length &&
         selectedEntity() &&
         panel.handle.content().type !== 'component' &&
         panel.handle.content().type !== 'project'
       }
     >
-      <div class="flex gap-1 items-center font-mono text-xs text-ink/50 pl-2 pr-4">
+      <div class="flex gap-1 items-center font-mono text-xs text-ink/50">
         <div>
           [<span class="text-ink">{selectedEntityIndex() + 1}</span>/
           {soup.data()?.length}]

@@ -4,13 +4,13 @@ const serverHostLocal: Servers = {
   'document-storage-service': 'http://localhost:8086',
   'websocket-service': 'ws://localhost:6969',
   'cognition-service': 'http://localhost:8085',
-  'cognition-websocket-service': 'ws://localhost:8085',
   'connection-gateway': 'ws://localhost:8082',
   'notification-service': 'http://localhost:8089',
   'static-file': 'http://localhost:8100',
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
-  'email-service': 'http://localhost:8087',
+  'email-service': 'http://localhost:8094',
+  'image-proxy-service': 'http://localhost:8097',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -21,13 +21,13 @@ const serverHostRemote = {
   'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
-  'cognition-websocket-service': `wss://document-cognition${devServerSuffix}.macro.com`,
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
   'notification-service': `https://notifications${devServerSuffix}.macro.com`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
+  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -48,9 +48,14 @@ function selectLocalServers(): Servers {
     return serverHostLocal;
   }
 
+  function assertValidName(name: string): name is keyof Servers {
+    if (!(name in serverHostRemote))
+      throw new Error(`unknown server name ${name}`);
+    return true;
+  }
   const servers = selectedLocalServers
     .split(',')
-    .filter((name) => name in serverHostRemote)
+    .filter(assertValidName)
     .reduce((acc: Servers, key: keyof Servers) => {
       acc[key] = serverHostLocal[key];
       console.log(`Using local server ${key}: ${acc}`);

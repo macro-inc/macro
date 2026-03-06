@@ -522,7 +522,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
             }
         });
 
-    // Mock: get task name (only if we expect notifications)
+    // Mock: get task name and profile picture (only if we expect notifications)
     if test_case.expected_notification_count > 0 {
         let task_id_clone = task_id;
         let task_name_result = task_name.clone();
@@ -532,6 +532,8 @@ async fn check_notifications(test_case: NotificationTestCase) {
                 let name = task_name_result.clone();
                 Box::pin(async move { Ok(name) })
             });
+        repo.expect_get_user_profile_picture()
+            .returning(|_| Box::pin(async { Ok(None) }));
     }
 
     // Mock: send notifications
@@ -695,6 +697,10 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     // Mock: get task name
     repo.expect_get_document_name()
         .returning(|_| Box::pin(async { Ok(Some("Test Task".to_string())) }));
+
+    // Mock: get sender profile picture
+    repo.expect_get_user_profile_picture()
+        .returning(|_| Box::pin(async { Ok(None) }));
 
     // Mock: permissions should be granted to all assignees
     let entity_id_clone = entity_id.clone();

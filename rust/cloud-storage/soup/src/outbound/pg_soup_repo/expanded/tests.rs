@@ -3959,6 +3959,185 @@ async fn test_dyn_filter_multiple_file_types(db: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+// ---- Notification + task include filters (3 tests) ----
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_filter_notification_done_false(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{
+        ChatFilters, DocumentFilters, EntityFilters, NotificationFilters, ProjectFilters,
+    };
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: NotificationFilters {
+                done: Some(false),
+                seen: None,
+            },
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            notification_filters: NotificationFilters {
+                done: Some(false),
+                seen: None,
+            },
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            notification_filters: NotificationFilters {
+                done: Some(false),
+                seen: None,
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+    let expected: HashSet<Uuid> = [DYN_DOC_ROOT_PDF, DYN_CHAT_ROOT, DYN_PROJECT_ROOT]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    assert_eq!(
+        ids, expected,
+        "done=false should only return entities with matching not-done notifications"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_filter_notification_done_and_seen_false(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{
+        ChatFilters, DocumentFilters, EntityFilters, NotificationFilters, ProjectFilters,
+    };
+
+    let notification_filters = NotificationFilters {
+        done: Some(false),
+        seen: Some(false),
+    };
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: notification_filters.clone(),
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            notification_filters: notification_filters.clone(),
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            notification_filters,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+    let expected: HashSet<Uuid> = [DYN_DOC_ROOT_PDF, DYN_CHAT_ROOT, DYN_PROJECT_ROOT]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    assert_eq!(
+        ids, expected,
+        "done=false + seen=false should require both constraints on notifications"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_task_include_cbm_atm_nc_bypasses_document_filters(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters, TaskFilters};
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            task_filters: TaskFilters {
+                include_cbm_atm_nc: Some(true),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let doc_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(d) => Some(d.id),
+            _ => None,
+        })
+        .collect();
+
+    let expected_docs: HashSet<Uuid> = [DYN_DOC_ROOT_PDF, DYN_DOC_DEEP_PDF, DYN_DOC_TASK_NO_STATUS]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    assert_eq!(
+        doc_ids, expected_docs,
+        "include_cbm_atm_nc should OR in matching assigned not-completed tasks"
+    );
+
+    Ok(())
+}
+
 // ---- Task completion & document fields (2 tests) ----
 
 /// 11. Task documents should have correct is_completed values.
@@ -4408,6 +4587,69 @@ async fn test_dyn_all_types_filtered_to_empty(db: PgPool) -> anyhow::Result<()> 
     assert!(
         items.is_empty(),
         "All types filtered to nothing should return empty"
+    );
+
+    Ok(())
+}
+
+/// Reproduces a 500 error when all filter types are provided simultaneously.
+/// The `chat_filters.owners` filter generates `c.owner` but the Chat table
+/// uses `"userId"` as its owner column, not `owner`.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_all_filter_types_combined(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{
+        ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
+    };
+
+    let nil = "00000000-0000-0000-0000-000000000000".to_string();
+
+    let entity_filters = EntityFilters {
+        channel_filters: ChannelFilters {
+            channel_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        document_filters: DocumentFilters {
+            document_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        email_filters: EmailFilters {
+            recipients: vec![nil.clone()],
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            project_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            owners: vec!["macro|user-1@test.com".to_string()],
+            ..Default::default()
+        },
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        100,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    // The query should execute without a SQL error.
+    // With the nil UUID filters we expect no document/project matches,
+    // but the chat owner filter should return chats owned by the user.
+    assert!(
+        items.iter().all(|i| matches!(i, SoupItem::Chat(_))),
+        "Only chats should match (documents/projects filtered to nil UUID)"
     );
 
     Ok(())

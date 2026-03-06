@@ -28,7 +28,7 @@ where
 {
     tracing::trace!("sending message to entity");
     let api_context: &ApiContext = ctx.as_ref();
-    let redis_connection = api_context.get_multiplexed_tokio_connection().await?;
+    let redis_connection = api_context.get_multiplexed_async_connection().await?;
 
     let instant = Instant::now();
     let connections = api_context

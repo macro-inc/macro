@@ -14,7 +14,10 @@ use macro_env::Environment;
 use service::{auth::Auth, db::Db};
 use sqlx::postgres::PgPoolOptions;
 
-use crate::config::{EnvVars, SeedCliContext};
+use crate::{
+    config::{EnvVars, SeedCliContext},
+    service::s3::S3,
+};
 
 /// The Seed CLI for populating Macro with seed data.
 #[derive(Debug, Parser)]
@@ -35,7 +38,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let db = PgPoolOptions::new()
         .min_connections(1)
-        .max_connections(50)
+        .max_connections(95)
         .connect(
             &env_vars
                 .database_url
@@ -60,6 +63,10 @@ pub async fn main() -> anyhow::Result<()> {
     let context = SeedCliContext {
         db: Db::new(db),
         fusionauth_client: Auth::new(fusionauth_client),
+        s3: S3::new(
+            &env_vars.document_storage_bucket,
+            macro_aws_config::s3_client().await,
+        ),
     };
 
     let cli = Cli::parse();

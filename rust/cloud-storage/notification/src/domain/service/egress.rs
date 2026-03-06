@@ -3,10 +3,19 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
-use crate::domain::models::queue_message::{
-    ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification, Node,
-    NotificationChannel, QueueMessage,
+use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::email_notification_digest::ports::{
+    ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
 };
+use crate::domain::models::email_notification_digest::{
+    BulkDigestEgressStateMachine, ResumeMachineBRequest,
+};
+use crate::domain::models::mobile::MessageAttributes;
+use crate::domain::models::queue_message::{
+    APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
+    EmailNotification, NotificationChannel, QueueMessage,
+};
+use crate::domain::models::{NotificationExtEmail, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitPort, WebSocketSender,
@@ -15,20 +24,55 @@ use either::Either;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 
+/// Wraps a single iOS push notification send for the bulk-digest state machine.
+///
+/// The state machine calls [`NotificationSendChecker::send_notification`] to perform the actual
+/// push delivery, then records the SNS message ID or queues for batch email on failure.
+struct IosPushSend<'a, M> {
+    mobile: &'a M,
+    endpoint_arn: &'a str,
+    notif: &'a APNSPushNotification<serde_json::Value>,
+    attributes: &'a MessageAttributes,
+}
+
+impl<M: NotificationSender> NotificationSendChecker for IosPushSend<'_, M> {
+    type Ok = String;
+    type Err = Report;
+
+    async fn send_notification(self) -> Result<String, Report> {
+        self.mobile
+            .send_ios_push_notification(self.endpoint_arn, self.notif, self.attributes)
+            .await
+    }
+
+    fn extract_message_id(res: &String) -> MessageId {
+        MessageId(res.clone())
+    }
+}
+
 /// Service for delivering notifications (egress side).
 ///
 /// Handles consuming from queue and delivering via WebSocket, push, and email.
-pub struct NotificationEgressService<Q, N, W, M, E, R> {
-    queue: Q,
-    #[allow(dead_code)]
-    repository: N,
-    websocket: W,
-    mobile: M,
-    email: E,
-    rate_limiter: R,
+pub struct NotificationEgressService<Q, N, W, M, E, R, S, D> {
+    /// Queue for receiving notification messages.
+    pub queue: Q,
+    /// Notification repository for DB operations.
+    pub repository: N,
+    /// WebSocket sender for real-time delivery.
+    pub websocket: W,
+    /// Mobile push sender (APNS/FCM).
+    pub mobile: M,
+    /// Email sender.
+    pub email: E,
+    /// Rate limiter.
+    pub rate_limiter: R,
+    /// Bulk digest egress state machine.
+    pub state_machine: S,
+    /// Digest batcher for claiming ready email digests.
+    pub digest_batcher: D,
 }
 
-impl<Q, N, W, M, E, R> NotificationEgressService<Q, N, W, M, E, R>
+impl<Q, N, W, M, E, R, S, D> NotificationEgressService<Q, N, W, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -36,26 +80,9 @@ where
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitPort,
+    S: BulkDigestEgressStateMachine,
+    D: DigestBatcher,
 {
-    /// Create a new egress service.
-    pub fn new(
-        queue: Q,
-        repository: N,
-        websocket: W,
-        mobile: M,
-        email: E,
-        rate_limiter: R,
-    ) -> Self {
-        Self {
-            queue,
-            repository,
-            websocket,
-            mobile,
-            email,
-            rate_limiter,
-        }
-    }
-
     /// Deliver a notification from a queue message.
     ///
     /// Processes the delivery chain, attempting each channel and falling back
@@ -66,50 +93,25 @@ where
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
-        // Check rate limit if configured
-        if let Some((key, config)) = message.rate_limit {
-            match self.rate_limiter.check_and_increment(key, config).await {
-                Ok(crate::domain::models::RateLimitResult::Exceeded(exceeded)) => {
-                    return vec![Err(report!(exceeded).context(DeliveryFailure::RateLimit))];
-                }
-                Err(e) => return vec![Err(e.context(DeliveryFailure::RateLimit))],
-                Ok(_) => {
-                    // Rate limit allowed, continue
-                }
+        let content = message.into_inner();
+
+        let results = match content {
+            NotificationChannel::ConnGateway(ref conn) => Either::Left([self
+                .deliver_conn_gateway(conn)
+                .await
+                .context(DeliveryFailure::Other)]),
+            NotificationChannel::Email(ref email) => {
+                Either::Left([self.deliver_email(email).await])
             }
-        }
-
-        self.deliver_notification_inner(&message.message_type, message.content, Vec::new())
-            .await
-            .into_iter()
-            .map(|r| r.context(DeliveryFailure::Other))
-            .collect()
-    }
-
-    /// Deliver a single node, with fallback on failure.
-    async fn deliver_notification_inner(
-        &self,
-        message_type: &str,
-        node: Node<'static, serde_json::Value, serde_json::Value>,
-        mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
-    ) -> Vec<Result<DeliverySuccess, Report>> {
-        let result = match &node.notif {
-            NotificationChannel::ConnGateway(conn) => {
-                Either::Left([self.deliver_conn_gateway(conn).await])
-            }
-            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
-            NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
-        };
-        let all_failed = result.iter().all(Result::is_err);
-        recursion_tail.extend(result.into_iter());
-
-        match (all_failed, node.on_failure) {
-            (false, _) | (true, None) => recursion_tail,
-            (true, Some(fallback)) => {
-                Box::pin(self.deliver_notification_inner(message_type, *fallback, recursion_tail))
+            NotificationChannel::Ios(apns) => Either::Right(
+                self.deliver_ios(&apns)
                     .await
-            }
-        }
+                    .into_iter()
+                    .map(|r| r.context(DeliveryFailure::Other)),
+            ),
+        };
+
+        results.into_iter().collect()
     }
 
     /// Deliver via connection gateway (WebSocket).
@@ -124,19 +126,64 @@ where
     }
 
     /// Deliver via iOS push (APNS).
+    ///
+    /// Iterates per-user. If a user has a digest state machine entry, all
+    /// endpoints are passed to [`BulkDigestEgressStateMachine::continue_machine`]
+    /// in a single call. The state machine records SNS message IDs for successes
+    /// and only queues a batch email if ALL endpoints fail.
+    /// Users without a state machine entry are sent directly.
     async fn deliver_ios(
         &self,
-        apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
+        apns: &APNSTargets<serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
-        let mut out = Vec::with_capacity(apns.ios_device_endpoints.len());
-        for endpoint in &apns.ios_device_endpoints {
-            let res = self
-                .mobile
-                .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                .await
-                .map(|()| DeliverySuccess::Ios);
-            out.push(res)
+        let total: usize = apns
+            .ios_device_endpoints
+            .values()
+            .map(|u| u.endpoints.len())
+            .sum();
+        let mut out = Vec::with_capacity(total);
+
+        for user_apns in apns.ios_device_endpoints.values() {
+            if let Some(ref entry) = user_apns.digest_state {
+                // Build all send checkers for this user's endpoints
+                let checkers: Vec<_> = user_apns
+                    .endpoints
+                    .iter()
+                    .map(|endpoint| IosPushSend {
+                        mobile: &self.mobile,
+                        endpoint_arn: endpoint,
+                        notif: &apns.notif,
+                        attributes: &apns.attributes,
+                    })
+                    .collect();
+
+                let req = ResumeMachineBRequest {
+                    notification_enabled: entry.inner().clone(),
+                    send_notifs: checkers,
+                };
+
+                let (results, batch_decision) = self.state_machine.continue_machine(req).await;
+
+                if let Either::Right(Err(ref batch_err)) = batch_decision {
+                    tracing::error!(error=?batch_err, "failed to queue digest batch after all pushes failed");
+                }
+
+                for result in results {
+                    out.push(result.map(|_| DeliverySuccess::Ios));
+                }
+            } else {
+                // No state machine entry — send directly
+                for endpoint in &user_apns.endpoints {
+                    let res = self
+                        .mobile
+                        .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
+                        .await
+                        .map(|_| DeliverySuccess::Ios);
+                    out.push(res);
+                }
+            }
         }
+
         out
     }
 
@@ -144,15 +191,29 @@ where
     async fn deliver_email(
         &self,
         email: &EmailNotification<'static>,
-    ) -> Result<DeliverySuccess, Report> {
+    ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
+        let (config, key) = email.rate_limit();
+
+        match self.rate_limiter.check_and_increment(key, config).await {
+            Ok(RateLimitResult::Exceeded(exceeded)) => {
+                return Err(report!(exceeded).context(DeliveryFailure::RateLimit));
+            }
+            Ok(RateLimitResult::Allowed { .. }) => {
+                // Rate limit allowed, continue
+            }
+            Err(e) => return Err(e.context(DeliveryFailure::Other)),
+        }
+
         self.email
-            .send_email(email.to.clone(), &email.content)
-            .await?;
+            .send_email(email.to().clone(), &email.content)
+            .await
+            .context(DeliveryFailure::Other)?;
         Ok(DeliverySuccess::Email)
     }
 }
 
-impl<Q, N, W, M, E, R> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R>
+impl<Q, N, W, M, E, R, S, D> NotificationEgress
+    for NotificationEgressService<Q, N, W, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -160,6 +221,8 @@ where
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitPort,
+    S: BulkDigestEgressStateMachine,
+    D: DigestBatcher,
 {
     #[tracing::instrument(ret, skip(self))]
     async fn poll_and_deliver(&self) -> Vec<Result<DeliverySuccess, Report>> {
@@ -194,5 +257,32 @@ where
         }
 
         results
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn poll_email_digests<T: NotificationExtEmail>(
+        &self,
+        f: fn(DigestBatch) -> Result<T, Report>,
+    ) -> Result<ClaimResult<()>, Report> {
+        let batch = match self.digest_batcher.claim_ready_digest().await? {
+            ClaimResult::Ready(batch) => batch,
+            v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
+        };
+
+        let recipient = batch.user_id.clone();
+        let email_notif: T = f(batch)?;
+        let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
+
+        let message: QueueMessage<'_, T, ()> =
+            QueueMessage::new(NotificationChannel::Email(email_content));
+
+        self.queue
+            .publish(std::iter::once(message))
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to queue digest email");
+            })?;
+
+        Ok(ClaimResult::Ready(()))
     }
 }

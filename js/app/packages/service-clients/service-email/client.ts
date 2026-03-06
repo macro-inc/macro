@@ -26,6 +26,8 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateThreadLabelRequest,
+  UpdateThreadLabelsResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
@@ -117,6 +119,21 @@ export const emailClient = {
         method: 'PATCH',
         body: JSON.stringify({ value, label_id, message_ids }),
       }),
+      (result) => result
+    );
+  },
+  async updateThreadLabel(
+    args: { thread_id: string } & UpdateThreadLabelRequest
+  ) {
+    const { thread_id, label_id, value } = args;
+    return mapOk(
+      await emailFetch<UpdateThreadLabelsResponse>(
+        `/email/threads/${thread_id}/labels`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ label_id, value }),
+        }
+      ),
       (result) => result
     );
   },

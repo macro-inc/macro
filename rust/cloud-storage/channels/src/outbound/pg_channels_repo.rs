@@ -3,11 +3,12 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ParticipantRole,
-        ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
+        MessagePageDirection, ParticipantRole, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
-    ports::ChannelMessagesRepo,
+    ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
+use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -50,6 +51,18 @@ struct ThreadDataRow {
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
     reply_count: i64,
     latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Intermediate row for full thread replies query.
+#[derive(Debug, sqlx::FromRow)]
+struct ThreadReplyOnlyRow {
+    id: Uuid,
+    thread_id: Uuid,
+    sender_id: String,
+    content: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    edited_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Intermediate row for reactions.
@@ -101,45 +114,98 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         &self,
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
+        direction: MessagePageDirection,
         limit: u16,
-    ) -> Result<Vec<TopLevelMessageRow>, Self::Err> {
+    ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
         let (cursor_created_at, cursor_id) = match query.vals() {
             (Some(id), Some(val)) => (Some(*val), Some(*id)),
             _ => (None, None),
         };
+        let limit_i64 = i64::from(limit);
+        let limit_usize = usize::from(limit);
 
-        let rows = sqlx::query_as!(
-            TopLevelRow,
-            r#"
-            SELECT
-                m.id,
-                m.channel_id,
-                m.sender_id,
-                m.content,
-                m.created_at,
-                m.updated_at,
-                m.edited_at::timestamptz AS "edited_at?",
-                m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages m
-            WHERE m.channel_id = $1
-              AND m.thread_id IS NULL
-              AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_messages r
-                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-              ))
-              AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
-            ORDER BY m.created_at DESC, m.id DESC
-            LIMIT $4
-            "#,
-            channel_id,
-            cursor_created_at,
-            cursor_id,
-            i64::from(limit) as i64,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let (rows, has_more_newer) = match direction {
+            MessagePageDirection::Older => {
+                let rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
+                    SELECT
+                        m.id,
+                        m.channel_id,
+                        m.sender_id,
+                        m.content,
+                        m.created_at,
+                        m.updated_at,
+                        m.edited_at::timestamptz AS "edited_at?",
+                        m.deleted_at::timestamptz AS "deleted_at?"
+                    FROM comms_messages m
+                    WHERE m.channel_id = $1
+                      AND m.thread_id IS NULL
+                      AND (m.deleted_at IS NULL OR EXISTS (
+                          SELECT 1 FROM comms_messages r
+                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+                      ))
+                      AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
+                    ORDER BY m.created_at DESC, m.id DESC
+                    LIMIT $4
+                    "#,
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64,
+                )
+                .fetch_all(&self.pool)
+                .await?;
 
-        Ok(rows
+                // For older pagination with a cursor, there is always at least one newer item
+                // (the cursor anchor itself) from the API's perspective.
+                (rows, cursor_created_at.is_some())
+            }
+            MessagePageDirection::Newer => {
+                // Query in ASC so we can overfetch one newer row and trim while preserving the
+                // "nearest newer page" semantics before reversing back to DESC.
+                let mut rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
+                    SELECT
+                        m.id,
+                        m.channel_id,
+                        m.sender_id,
+                        m.content,
+                        m.created_at,
+                        m.updated_at,
+                        m.edited_at::timestamptz AS "edited_at?",
+                        m.deleted_at::timestamptz AS "deleted_at?"
+                    FROM comms_messages m
+                    WHERE m.channel_id = $1
+                      AND m.thread_id IS NULL
+                      AND (m.deleted_at IS NULL OR EXISTS (
+                          SELECT 1 FROM comms_messages r
+                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+                      ))
+                      AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
+                    ORDER BY m.created_at ASC, m.id ASC
+                    LIMIT $4
+                    "#,
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64 + 1,
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let has_more_newer = rows.len() > limit_usize;
+                if has_more_newer {
+                    rows.truncate(limit_usize);
+                }
+
+                rows.reverse();
+                (rows, has_more_newer)
+            }
+        };
+
+        let rows = rows
             .into_iter()
             .map(|r| TopLevelMessageRow {
                 id: r.id,
@@ -151,7 +217,12 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 edited_at: r.edited_at,
                 deleted_at: r.deleted_at,
             })
-            .collect())
+            .collect();
+
+        Ok(TopLevelMessagesQueryResult {
+            rows,
+            has_more_newer,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -183,12 +254,15 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     r.edited_at,
                     COUNT(*) OVER (PARTITION BY r.thread_id) AS reply_count,
                     MAX(r.created_at) OVER (PARTITION BY r.thread_id)::timestamptz AS latest_reply_at,
-                    ROW_NUMBER() OVER (PARTITION BY r.thread_id ORDER BY r.created_at DESC) AS rn
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.thread_id
+                        ORDER BY r.created_at ASC, r.id ASC
+                    ) AS rn
                 FROM comms_messages r
                 WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
             ) sub
             WHERE rn <= $2
-            ORDER BY thread_id, created_at ASC
+            ORDER BY thread_id, created_at ASC, id ASC
             "#,
             parent_ids,
             i64::from(preview_count) as i64,
@@ -215,6 +289,42 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         }
 
         Ok(map)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_replies(&self, parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
+        let rows = sqlx::query_as::<_, ThreadReplyOnlyRow>(
+            r#"
+            SELECT
+                id,
+                thread_id,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS edited_at
+            FROM comms_messages
+            WHERE thread_id = $1
+              AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#,
+        )
+        .bind(parent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ThreadReplyRow {
+                id: r.id,
+                thread_id: r.thread_id,
+                sender_id: r.sender_id,
+                content: r.content,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                edited_at: r.edited_at,
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -376,5 +486,139 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 left_at: r.left_at,
             })
             .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_top_level_parent(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<TopLevelMessageRow>, Self::Err> {
+        let row = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.id = COALESCE(
+                (SELECT thread_id FROM comms_messages WHERE id = $1 AND channel_id = $2),
+                $1
+            )
+            AND m.channel_id = $2
+            AND m.thread_id IS NULL
+            "#,
+            message_id,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| TopLevelMessageRow {
+            id: r.id,
+            channel_id: r.channel_id,
+            sender_id: r.sender_id,
+            content: r.content,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            edited_at: r.edited_at,
+            deleted_at: r.deleted_at,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_top_level_messages_around(
+        &self,
+        channel_id: Uuid,
+        anchor_created_at: DateTime<Utc>,
+        anchor_id: Uuid,
+        limit: u16,
+    ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
+        let limit_i64 = i64::from(limit);
+
+        let before_fut = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.channel_id = $1
+              AND m.thread_id IS NULL
+              AND (m.deleted_at IS NULL OR EXISTS (
+                  SELECT 1 FROM comms_messages r
+                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+              ))
+              AND (m.created_at, m.id) < ($2, $3)
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT $4
+            "#,
+            channel_id,
+            anchor_created_at,
+            anchor_id,
+            limit_i64,
+        )
+        .fetch_all(&self.pool);
+
+        let after_fut = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.channel_id = $1
+              AND m.thread_id IS NULL
+              AND (m.deleted_at IS NULL OR EXISTS (
+                  SELECT 1 FROM comms_messages r
+                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+              ))
+              AND (m.created_at, m.id) > ($2, $3)
+            ORDER BY m.created_at ASC, m.id ASC
+            LIMIT $4
+            "#,
+            channel_id,
+            anchor_created_at,
+            anchor_id,
+            limit_i64,
+        )
+        .fetch_all(&self.pool);
+
+        let (before_rows, after_rows): (Vec<TopLevelRow>, Vec<TopLevelRow>) =
+            tokio::try_join!(before_fut, after_fut)?;
+
+        let to_row = |r: TopLevelRow| TopLevelMessageRow {
+            id: r.id,
+            channel_id: r.channel_id,
+            sender_id: r.sender_id,
+            content: r.content,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            edited_at: r.edited_at,
+            deleted_at: r.deleted_at,
+        };
+
+        let before: Vec<TopLevelMessageRow> = before_rows.into_iter().map(to_row).collect();
+        let after: Vec<TopLevelMessageRow> = after_rows.into_iter().map(to_row).collect();
+
+        Ok((before, after))
     }
 }

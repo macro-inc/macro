@@ -6,6 +6,7 @@ use crate::{
     error::MacroAuthError,
 };
 
+/// Extracts the access token from request headers
 pub fn extract_access_token_from_request_headers(
     headers: &axum::http::HeaderMap,
 ) -> Result<String, MacroAuthError> {
@@ -56,6 +57,7 @@ pub fn extract_access_token_from_request_headers(
     Err(MacroAuthError::NoAccessTokenProvided)
 }
 
+/// Extracts refresh token from request headers
 pub fn extract_refresh_token_from_request_headers(
     headers: &axum::http::HeaderMap,
 ) -> Result<String, MacroAuthError> {

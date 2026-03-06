@@ -4,10 +4,12 @@
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
 use crate::domain::models::apple::{APNSPushNotification, Aps};
+use crate::domain::models::device::DeviceType;
+use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
-    NotificationChannel, QueueMessage,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, NotificationChannel, QueueMessage,
+    QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
     GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
@@ -15,25 +17,37 @@ use crate::domain::models::request::{
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
 };
-use crate::domain::ports::{NotificationQueue, NotificationRepository};
+use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::SendNotificationError;
+use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Trait for sending notifications through the ingress service.
 pub trait NotificationIngress: Send + Sync + 'static {
     /// Send a notification to the specified recipients.
-    fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
-        &self,
+    fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
         req: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
+}
 
+/// Trait for reading and updating notifications.
+///
+/// This is separated from [`NotificationIngress`] because these operations
+/// do not require the bulk-digest state machine.
+pub trait NotificationReader: Send + Sync + 'static {
     /// Mark notifications as seen for a user and enqueue push notification clearing.
     fn update_notifications(
         &self,
@@ -46,7 +60,7 @@ pub trait NotificationIngress: Send + Sync + 'static {
     /// not deleted and not done, ordered by creation time descending.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
@@ -60,40 +74,311 @@ pub trait NotificationIngress: Send + Sync + 'static {
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
 
     /// Soft-delete a single user notification.
     fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Soft-delete multiple user notifications.
     fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Register a device for push notifications.
+    ///
+    /// Resolves the SNS platform endpoint (creating or re-enabling as needed),
+    /// then upserts the device registration in the database.
+    fn register_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Unregister a device from push notifications.
+    ///
+    /// Deletes the device registration from the database (by token + type),
+    /// then deletes the SNS endpoint.
+    fn unregister_device(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
 ///
 /// Handles recipient filtering, DB persistence, and queue publishing.
 /// Does NOT handle delivery - that's done by [`super::NotificationEgressService`].
-pub struct NotificationIngressService<N, Q> {
+pub struct NotificationIngressService<N, Q, S> {
     repository: N,
     queue: Q,
+    state_machine_driver: S,
     service_name: &'static str,
 }
 
-impl<N, Q> NotificationIngress for NotificationIngressService<N, Q>
+impl<N, Q, S> NotificationIngress for NotificationIngressService<N, Q, S>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
+    S: BulkDigestStateMachine,
 {
+    fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        request: SendNotificationRequest<'a, T, U>,
+    ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
+    {
+        self.send_notification_impl(request)
+    }
+}
+
+impl<N, Q, S> NotificationIngressService<N, Q, S>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: BulkDigestStateMachine,
+{
+    /// Create a new ingress service.
+    pub fn new(repository: N, queue: Q, state_machine_driver: S) -> Self {
+        Self {
+            repository,
+            queue,
+            state_machine_driver,
+            service_name: std::env!("CARGO_PKG_NAME"),
+        }
+    }
+
+    /// Send a notification to the specified recipients.
+    ///
+    /// This method performs the following steps:
+    /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
+    /// 2. Create notification in the database
+    /// 3. Build and publish QueueMessage to SQS
+    /// 4. Return result (delivery happens async via worker)
+    async fn send_notification_impl<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        request: SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let mut request = self
+            .filter_recipients(request)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        if request.req.recipient_ids.is_empty() {
+            return Ok(None);
+        }
+
+        let notification_id = Uuid::now_v7();
+        let (queue_messages, apns_collapse_key) = self
+            .build_queue_message(notification_id, &mut request)
+            .await?;
+
+        let notified_recipients = request.req.recipient_ids.clone();
+
+        // Create notification in DB (with collapse key if APNS was built)
+        let created = self
+            .repository
+            .create_notification(
+                request.req,
+                notification_id,
+                self.service_name,
+                apns_collapse_key.as_deref(),
+            )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // If notification already exists (idempotent), return early
+        let Some(n) = created else {
+            return Ok(Some(NotificationResult {
+                notification_id,
+                notified_recipients: HashSet::new(),
+            }));
+        };
+
+        let results = join_all(
+            n.into_iter()
+                .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
+        )
+        .await;
+
+        self.queue
+            .publish(queue_messages.with_state_decisions(results))
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // Return result (delivery happens async)
+        Ok(Some(NotificationResult {
+            notification_id,
+            notified_recipients,
+        }))
+    }
+
+    /// Filter recipients based on:
+    /// - Sender (sender cannot receive their own notification)
+    /// - Muted notifications
+    /// - Unsubscribed from item
+    async fn filter_recipients<'a, T, U>(
+        &self,
+        req: SendNotificationRequest<'a, T, U>,
+    ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
+        let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
+
+        // Fetch all filter data upfront
+        let (muted_users, unsubscribed_users) = tokio::try_join!(
+            self.repository.get_muted_users(&recipient_ids),
+            self.repository
+                .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
+        )?;
+
+        let (out, _excluded) = req.update_recipients(muted_users, unsubscribed_users);
+        Ok(out)
+    }
+
+    /// Build queue messages for each delivery channel.
+    ///
+    /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
+    /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
+    /// - `build_email`: Creates one message per recipient (1:1)
+    ///   Returns `(queue_messages, apns_collapse_key)`.
+    async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
+        &self,
+        notification_id: Uuid,
+        notification: &mut SendNotificationRequest<'a, T, U>,
+    ) -> Result<
+        (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
+        Report<SendNotificationError>,
+    > {
+        let mut messages = Vec::new();
+        let mut apns_collapse_key = None;
+
+        // Connection gateway: 1:M (single message for all recipients)
+        if notification.send_conn_gateway {
+            messages.push(QueueMessage::new(NotificationChannel::ConnGateway(
+                ConnGatewayNotification::clone_from_request(notification_id, notification),
+            )));
+        }
+
+        // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
+        if let Some(ref mut build_apns) = notification.build_apns {
+            let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
+            let device_endpoints = self
+                .repository
+                .get_device_endpoints(&recipients_vec)
+                .await
+                .context(SendNotificationError::Other)?;
+
+            let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
+                .into_iter()
+                .filter_map(|(user_id, endpoints)| {
+                    let ios: Vec<String> = endpoints
+                        .into_iter()
+                        .filter_map(|e| match e {
+                            DeviceEndpoint::Ios(arn) => Some(arn),
+                            DeviceEndpoint::Android(_) => None,
+                        })
+                        .collect();
+                    if ios.is_empty() {
+                        None
+                    } else {
+                        Some((
+                            user_id,
+                            UserApnsEndpoints {
+                                endpoints: ios,
+                                digest_state: None,
+                            },
+                        ))
+                    }
+                })
+                .collect();
+
+            if !ios_endpoints.is_empty()
+                && let Some((apns_notif, attributes)) =
+                    build_apns(notification.req.notification.clone(), notification_id)
+            {
+                apns_collapse_key = Some(attributes.collapse_key.clone());
+                messages.push(QueueMessage::new(NotificationChannel::Ios(Box::new(
+                    APNSTargets {
+                        notif: apns_notif,
+                        attributes,
+                        ios_device_endpoints: ios_endpoints,
+                    },
+                ))));
+            }
+        }
+
+        // Email: 1:1 (one message per recipient)
+        if let Some(ref mut build_email) = notification.build_email {
+            for recipient in &notification.req.recipient_ids {
+                let email_content = build_email(&notification.req.notification);
+                messages.push(QueueMessage::new(NotificationChannel::Email(
+                    email_content.with_recipient(recipient.clone()),
+                )));
+            }
+        }
+
+        Ok((
+            QueueMessageNeedsStateMachine::new(messages),
+            apns_collapse_key,
+        ))
+    }
+}
+
+/// Configuration for SNS platform ARNs.
+pub struct PlatformArnConfig {
+    /// SNS platform ARN for iOS (APNS).
+    pub apns_platform_arn: String,
+    /// SNS platform ARN for Android (FCM).
+    pub fcm_platform_arn: String,
+}
+
+/// Service for reading and updating notifications.
+///
+/// Handles notification queries, status updates, and deletion.
+/// Does not require a bulk-digest state machine.
+pub struct NotificationReaderService<N, Q, S> {
+    pub(crate) repository: N,
+    pub(crate) queue: Q,
+    pub(crate) sns_endpoint: S,
+    pub(crate) platform_config: PlatformArnConfig,
+}
+
+impl<N, Q, S> NotificationReaderService<N, Q, S>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: SnsEndpointManager,
+{
+    /// Create a new reader service.
+    pub fn new(
+        repository: N,
+        queue: Q,
+        sns_endpoint: S,
+        platform_config: PlatformArnConfig,
+    ) -> Self {
+        Self {
+            repository,
+            queue,
+            sns_endpoint,
+            platform_config,
+        }
+    }
+
     /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
     /// This method performs the following steps:
@@ -103,14 +388,14 @@ where
     ///    b. Look up the user's iOS device endpoints
     ///    c. Publish silent background push messages to clear badges on devices
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications(
+    async fn update_notifications_impl(
         &self,
         req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report> {
         match &req.status {
             NotificationStatus::Seen => {
                 self.repository
-                    .mark_notifications_seen(&req.user_id, req.notification_ids)
+                    .mark_notifications_seen(req.user_id.copied(), req.notification_ids)
                     .await?;
             }
             NotificationStatus::Done(done) => {
@@ -138,12 +423,27 @@ where
             .get_device_endpoints(&[req.user_id.copied()])
             .await?;
 
-        let ios_endpoints: Vec<String> = device_endpoints
-            .values()
-            .flatten()
-            .filter_map(|e| match e {
-                DeviceEndpoint::Ios(arn) => Some(arn.clone()),
-                DeviceEndpoint::Android(_) => None,
+        let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
+            .into_iter()
+            .filter_map(|(user_id, endpoints)| {
+                let ios: Vec<String> = endpoints
+                    .into_iter()
+                    .filter_map(|e| match e {
+                        DeviceEndpoint::Ios(arn) => Some(arn),
+                        DeviceEndpoint::Android(_) => None,
+                    })
+                    .collect();
+                if ios.is_empty() {
+                    None
+                } else {
+                    Some((
+                        user_id,
+                        UserApnsEndpoints {
+                            endpoints: ios,
+                            digest_state: None,
+                        },
+                    ))
+                }
             })
             .collect();
 
@@ -156,102 +456,49 @@ where
                 .into_iter()
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
-                    QueueMessage {
-                        message_type: "clear_push_notification".to_string(),
-                        rate_limit: None,
-                        content: Node {
-                            notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                                notif: APNSPushNotification {
-                                    aps: Aps {
-                                        content_available: Some(1),
-                                        sound: None,
-                                        ..Default::default()
-                                    },
-                                    push_notification_data: ClearPushIdentifier {
-                                        identifier: collapse_key.clone(),
-                                    },
-                                },
-                                attributes: MessageAttributes {
-                                    push_type: PushType::Background,
-                                    collapse_key,
-                                },
-                                ios_device_endpoints: ios_endpoints.clone(),
-                            })),
-                            on_failure: None,
+                    QueueMessage::new(NotificationChannel::Ios(Box::new(APNSTargets {
+                        notif: APNSPushNotification {
+                            aps: Aps {
+                                content_available: Some(1),
+                                sound: None,
+                                ..Default::default()
+                            },
+                            push_notification_data: ClearPushIdentifier {
+                                identifier: collapse_key.clone(),
+                            },
                         },
-                    }
+                        attributes: MessageAttributes {
+                            push_type: PushType::Background,
+                            collapse_key,
+                        },
+                        ios_device_endpoints: ios_endpoints.clone(),
+                    })))
                 })
                 .collect();
 
-        self.queue.publish(&messages).await?;
+        self.queue.publish(messages.into_iter()).await?;
 
         Ok(())
     }
+}
 
-    /// Send a notification to the specified recipients.
-    ///
-    /// This method performs the following steps:
-    /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
-    /// 2. Create notification in the database
-    /// 3. Build and publish QueueMessage to SQS
-    /// 4. Return result (delivery happens async via worker)
-    async fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
+impl<N, Q, S> NotificationReader for NotificationReaderService<N, Q, S>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: SnsEndpointManager,
+{
+    fn update_notifications(
         &self,
-        request: SendNotificationRequest<'a, T, U>,
-    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
-        let request = self
-            .filter_recipients(request)
-            .await
-            .context(SendNotificationError::Other)?;
-
-        if request.req.recipient_ids.is_empty() {
-            return Ok(None);
-        }
-
-        // Build queue messages first so we can extract the APNS collapse key
-        let mut request = request;
-
-        let notification_id = Uuid::now_v7();
-        let (queue_messages, apns_collapse_key) = self
-            .build_queue_message(notification_id, &mut request)
-            .await?;
-
-        // Create notification in DB (with collapse key if APNS was built)
-        let created = self
-            .repository
-            .create_notification(
-                &request.req,
-                notification_id,
-                self.service_name,
-                apns_collapse_key.as_deref(),
-            )
-            .await
-            .context(SendNotificationError::Other)?;
-
-        // If notification already exists (idempotent), return early
-        let Some(notification_id) = created else {
-            return Ok(Some(NotificationResult {
-                notification_id,
-                notified_recipients: HashSet::new(),
-            }));
-        };
-
-        self.queue
-            .publish(&queue_messages)
-            .await
-            .context(SendNotificationError::Other)?;
-
-        // Return result (delivery happens async)
-        Ok(Some(NotificationResult {
-            notification_id,
-            notified_recipients: request.req.recipient_ids,
-        }))
+        req: UpdateNotificationsRequest<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        self.update_notifications_impl(req)
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
@@ -300,7 +547,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<Option<UserNotificationRow<T>>, Report> {
         self.repository
@@ -311,7 +558,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn delete_user_notification(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
         self.repository
@@ -322,136 +569,83 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn bulk_delete_user_notifications(
         &self,
-        user_id: &str,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.repository
             .bulk_delete_user_notifications(user_id, notification_ids)
             .await
     }
-}
 
-impl<N, Q> NotificationIngressService<N, Q>
-where
-    N: NotificationRepository,
-    Q: NotificationQueue,
-{
-    /// Create a new ingress service.
-    pub fn new(repository: N, queue: Q) -> Self {
-        Self {
-            repository,
-            queue,
-            service_name: std::env!("CARGO_PKG_NAME"),
-        }
+    #[tracing::instrument(err, skip(self))]
+    async fn register_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        let platform_arn = match device_type {
+            DeviceType::Ios => &self.platform_config.apns_platform_arn,
+            DeviceType::Android => &self.platform_config.fcm_platform_arn,
+        };
+
+        // Get endpoint if exists, otherwise create new one
+        let endpoint = match self.repository.get_device_endpoint(device_token).await {
+            Ok(Some(endpoint)) => endpoint,
+            _ => {
+                self.sns_endpoint
+                    .create_platform_endpoint(platform_arn, device_token)
+                    .await?
+            }
+        };
+
+        // Verify endpoint validity, update or create new endpoint if needed
+        let endpoint = match self.sns_endpoint.get_endpoint_attributes(&endpoint).await {
+            Err(_) => {
+                self.sns_endpoint
+                    .create_platform_endpoint(platform_arn, device_token)
+                    .await?
+            }
+            Ok(attributes) => match (attributes.get("Enabled"), attributes.get("Token")) {
+                (Some(endpoint_enabled), Some(endpoint_token))
+                    if endpoint_enabled == "false" || endpoint_token != device_token =>
+                {
+                    self.sns_endpoint
+                        .set_endpoint_attributes(
+                            &endpoint,
+                            HashMap::from([
+                                ("Enabled".to_string(), "true".to_string()),
+                                ("Token".to_string(), device_token.to_string()),
+                            ]),
+                        )
+                        .await?;
+
+                    endpoint
+                }
+                _ => endpoint,
+            },
+        };
+
+        self.repository
+            .upsert_device(user_id, device_token, &endpoint, device_type)
+            .await?;
+
+        Ok(())
     }
 
-    /// Filter recipients based on:
-    /// - Sender (sender cannot receive their own notification)
-    /// - Muted notifications
-    /// - Unsubscribed from item
-    async fn filter_recipients<'a, T, U>(
+    #[tracing::instrument(err, skip(self))]
+    async fn unregister_device(
         &self,
-        req: SendNotificationRequest<'a, T, U>,
-    ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
-        let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        let endpoint = self
+            .repository
+            .delete_device_by_token(device_token, device_type)
+            .await?;
 
-        // Fetch all filter data upfront
-        let (muted_users, unsubscribed_users) = tokio::try_join!(
-            self.repository.get_muted_users(&recipient_ids),
-            self.repository
-                .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
-        )?;
+        self.sns_endpoint.delete_endpoint(&endpoint).await?;
 
-        let (out, _excluded) = req.update_recipients(muted_users, unsubscribed_users);
-        Ok(out)
-    }
-
-    /// Build queue messages for each delivery channel.
-    ///
-    /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
-    /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
-    /// - `build_email`: Creates one message per recipient (1:1)
-    ///   Returns `(queue_messages, apns_collapse_key)`.
-    async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
-        &self,
-        notification_id: Uuid,
-        notification: &mut SendNotificationRequest<'a, T, U>,
-    ) -> Result<(Vec<QueueMessage<'a, T, U>>, Option<String>), Report<SendNotificationError>> {
-        let rate_limit = notification.req.get_rate_limit()?;
-        let message_type = T::TYPE_NAME.to_string();
-        let mut messages = Vec::new();
-        let mut apns_collapse_key = None;
-
-        // Connection gateway: 1:M (single message for all recipients)
-        if notification.send_conn_gateway {
-            messages.push(QueueMessage {
-                message_type: message_type.clone(),
-                rate_limit: rate_limit.clone(),
-                content: Node {
-                    notif: NotificationChannel::ConnGateway(
-                        ConnGatewayNotification::clone_from_request(notification_id, notification),
-                    ),
-                    on_failure: None,
-                },
-            });
-        }
-
-        // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
-        if let Some(ref mut build_apns) = notification.build_apns {
-            let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
-            let device_endpoints = self
-                .repository
-                .get_device_endpoints(&recipients_vec)
-                .await
-                .context(SendNotificationError::Other)?;
-
-            let ios_endpoints: Vec<String> = device_endpoints
-                .values()
-                .flatten()
-                .filter_map(|e| match e {
-                    DeviceEndpoint::Ios(arn) => Some(arn.clone()),
-                    DeviceEndpoint::Android(_) => None,
-                })
-                .collect();
-
-            if !ios_endpoints.is_empty()
-                && let Some((apns_notif, attributes)) =
-                    build_apns(notification.req.notification.clone(), notification_id)
-            {
-                apns_collapse_key = Some(attributes.collapse_key.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: Node {
-                        notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                            notif: apns_notif,
-                            attributes,
-                            ios_device_endpoints: ios_endpoints,
-                        })),
-                        on_failure: None,
-                    },
-                });
-            }
-        }
-
-        // Email: 1:1 (one message per recipient)
-        if let Some(ref mut build_email) = notification.build_email {
-            for recipient in &notification.req.recipient_ids {
-                let email_content = build_email(notification.req.notification.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: Node {
-                        notif: NotificationChannel::Email(EmailNotification {
-                            to: recipient.clone(),
-                            content: email_content,
-                        }),
-                        on_failure: None,
-                    },
-                });
-            }
-        }
-
-        Ok((messages, apns_collapse_key))
+        Ok(())
     }
 }

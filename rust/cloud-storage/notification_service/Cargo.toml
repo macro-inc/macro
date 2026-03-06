@@ -27,8 +27,8 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 email_validator = { path = "../email_validator" }
-futures = { workspace = true }
 http-body-util = { workspace = true }
+itertools = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }
@@ -38,6 +38,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
@@ -60,7 +61,6 @@ serde_json = { workspace = true }
 ses_client = { path = "../ses_client" }
 sns_client = { path = "../sns_client" }
 sqlx = { workspace = true }
-sqs_worker = { path = "../sqs_worker" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

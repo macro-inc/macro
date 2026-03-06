@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentMentionMetadataFileType } from './documentMentionMetadataFileType';
+import type { DocumentMentionMetadataSenderProfilePictureUrl } from './documentMentionMetadataSenderProfilePictureUrl';
 
 /**
  * Someone mentioned a document in a channel
@@ -16,4 +17,5 @@ export interface DocumentMentionMetadata {
   fileType?: DocumentMentionMetadataFileType;
   /** The owner of the document */
   owner: string;
+  senderProfilePictureUrl?: DocumentMentionMetadataSenderProfilePictureUrl;
 }

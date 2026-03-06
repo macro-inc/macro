@@ -2,7 +2,8 @@ import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
 } from '@block-channel/hooks/participants';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { useChannelContext } from '@block-channel/hooks/channel';
+import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DialogWrapper } from '@core/component/DialogWrapper';
@@ -25,28 +26,53 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
-type ParticipantManagerProps = {
-  channelId: string;
-  channelType?: string;
-  participants: ChannelParticipant[];
-  participantCount: number;
-};
+export function ParticipantManagerButton(props: { onClick: () => void }) {
+  const channelContext = useChannelContext();
+  const channelType = () => channelContext.channelType();
+  const canManageParticipants = () =>
+    channelType() !== ChannelType.organization;
+  const title = () =>
+    canManageParticipants() ? 'Manage Participants' : 'View Participants';
+  const participantCount = () =>
+    channelContext.channel()?.participants.length ?? 0;
 
-export function ParticipantManager(props: ParticipantManagerProps) {
-  const channelType = () => props.channelType ?? 'private';
+  return (
+    <Tooltip tooltip={title()}>
+      <div
+        class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
+        tabIndex={0}
+        role="button"
+        onClick={props.onClick}
+      >
+        <BracketLeft class="h-4 w-2 text-edge" />
+        <UsersIcon class="size-4 text-ink" />
+        <span class="text-xs">{participantCount().toString()}</span>
+        <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
+      </div>
+    </Tooltip>
+  );
+}
+
+export function ParticipantManagerDialog(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const blockId = useBlockId();
+  const channelContext = useChannelContext();
   const users = useContacts();
   const userId = useUserId();
+
+  const channelType = () => channelContext.channelType() ?? 'private';
+  const participants = () => channelContext.channel()?.participants ?? [];
+
   const [usersToInvite, setUsersToInvite] = createSignal<
     WithCustomUserInput<'user'>[]
   >([]);
   const canManageParticipants = () =>
     channelType() !== ChannelType.organization;
-  const addParticipantsToChannel = useAddParticipantsToChannel(
-    () => props.channelId
-  );
+  const addParticipantsToChannel = useAddParticipantsToChannel(() => blockId);
 
   function handleAddParticipants() {
     const destination = getDestinationFromOptions(usersToInvite());
@@ -55,94 +81,72 @@ export function ParticipantManager(props: ParticipantManagerProps) {
     setUsersToInvite([]);
   }
 
-  const editable = () => canManageParticipants();
-
   const title = () =>
     canManageParticipants() ? 'Manage Participants' : 'View Participants';
 
   const options = () =>
     users()
       ?.filter((user) => {
-        return !props.participants.find(
+        return !participants().find(
           (participant) => participant.user_id === user.id
         );
       })
       .map(recipientEntityMapper('user')) ?? [];
 
   return (
-    <Dialog>
-      <Dialog.Trigger>
-        <Tooltip tooltip={title()}>
-          <div
-            class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
-            tabIndex={0}
-            role="button"
-          >
-            <BracketLeft class="h-4 w-2 text-edge" />
-            <UsersIcon class="size-4 text-ink" />
-            <span class="text-xs">{props.participantCount.toString()}</span>
-            <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
-          </div>
-        </Tooltip>
-      </Dialog.Trigger>
-
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
         <DialogWrapper>
-          <Dialog.Content>
-            <ClippedPanel tl={!beveledCorners()} active>
-              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                <Dialog.CloseButton>
-                  <DeprecatedIconButton
-                    tooltip={{ label: 'Close' }}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
-                  />
-                </Dialog.CloseButton>
-                <Dialog.Title class="text-sm">{title()}</Dialog.Title>
-              </div>
-              <Show
-                when={
-                  channelType() &&
-                  ['private'].includes(channelType()!) &&
-                  canManageParticipants()
+          <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+            <Dialog.CloseButton>
+              <DeprecatedIconButton
+                tooltip={{ label: 'Close' }}
+                icon={CloseIcon}
+                iconSize={16}
+                theme="clear"
+                size="sm"
+              />
+            </Dialog.CloseButton>
+            <Dialog.Title class="text-sm">{title()}</Dialog.Title>
+          </div>
+          <Show
+            when={
+              channelType() &&
+              ['private'].includes(channelType()!) &&
+              canManageParticipants()
+            }
+          >
+            <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
+              <RecipientSelector<'user'>
+                setSelectedOptions={setUsersToInvite}
+                selectedOptions={usersToInvite()}
+                placeholder={'Search'}
+                options={options}
+                hideBorder
+                noPadding
+              />
+              <DeprecatedTextButton
+                disabled={usersToInvite().length === 0}
+                onClick={handleAddParticipants}
+                icon={InvitedIcon}
+                text={
+                  usersToInvite().length > 1
+                    ? 'Add Participants'
+                    : 'Add Participant'
                 }
-              >
-                <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
-                  <RecipientSelector<'user'>
-                    setSelectedOptions={setUsersToInvite}
-                    selectedOptions={usersToInvite()}
-                    placeholder={'Search'}
-                    options={options}
-                    hideBorder
-                    noPadding
-                  />
-                  <DeprecatedTextButton
-                    disabled={usersToInvite().length === 0}
-                    onClick={handleAddParticipants}
-                    icon={InvitedIcon}
-                    text={
-                      usersToInvite().length > 1
-                        ? 'Add Participants'
-                        : 'Add Participant'
-                    }
-                    theme="accent"
-                  />
-                </div>
-              </Show>
+                theme="accent"
+              />
+            </div>
+          </Show>
 
-              <div class="flex flex-col">
-                <ParticipantList
-                  channelId={props.channelId}
-                  editable={editable()}
-                  participants={props.participants}
-                  userId={userId()!}
-                />
-              </div>
-            </ClippedPanel>
-          </Dialog.Content>
+          <div class="flex flex-col">
+            <ParticipantList
+              channelId={blockId}
+              editable={canManageParticipants()}
+              participants={participants()}
+              userId={userId()!}
+            />
+          </div>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

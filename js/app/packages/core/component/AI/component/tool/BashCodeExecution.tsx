@@ -89,12 +89,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
 const handler = createToolRenderer({
   name: 'bash_code_execution',
   renderCall: (ctx) => (
-    <BaseTool
-      icon={Terminal}
-      text="Executing bash"
-      renderContext={ctx.renderContext}
-      type="call"
-    >
+    <BaseTool icon={Terminal} renderContext={ctx.renderContext} type="call">
       <code class="text-ink-muted font-mono text-xs">
         {truncateCommand(ctx.tool.data.command)}
       </code>
@@ -104,12 +99,7 @@ const handler = createToolRenderer({
     const isError =
       ctx.tool.data.content.type === 'bash_code_execution_tool_result_error';
     return (
-      <BaseTool
-        icon={Terminal}
-        text="Executed bash"
-        renderContext={ctx.renderContext}
-        type="response"
-      >
+      <BaseTool renderContext={ctx.renderContext} type="response">
         <Switch>
           <Match when={isError}>
             <span class="text-ink-error">Execution failed</span>

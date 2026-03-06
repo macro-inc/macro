@@ -10,8 +10,11 @@ pub struct LegacyUserInfo {
     pub group: Option<String>,
     pub has_chrome_ext: bool,
     pub ai_data_consent: bool,
+    pub has_trialed: bool,
 }
 
+/// Gets the legacy user info
+#[tracing::instrument(skip(db), err)]
 pub async fn get_legacy_user_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &MacroUserId<Lowercase<'_>>,
@@ -20,16 +23,18 @@ pub async fn get_legacy_user_info(
         LegacyUserInfo,
         r#"
         SELECT
-            "id" as "user_id",
-            "email" as "email",
-            "stripeCustomerId" as "stripe_customer_id?",
-            "name" as name,
-            "tutorialComplete" as tutorial_complete,
-            "group" as "group?",
-            "hasChromeExt" as has_chrome_ext,
-            "aiDataConsent" as ai_data_consent
-        FROM "User"
-        WHERE "id" = $1
+            u."id" as "user_id",
+            u."email" as "email",
+            u."stripeCustomerId" as "stripe_customer_id?",
+            u."name" as name,
+            u."tutorialComplete" as tutorial_complete,
+            u."group" as "group?",
+            u."hasChromeExt" as has_chrome_ext,
+            u."aiDataConsent" as ai_data_consent,
+            mu.has_trialed as has_trialed
+        FROM "User" u
+        JOIN "macro_user" mu ON u.macro_user_id = mu.id
+        WHERE u."id" = $1
         "#,
         user_id.as_ref()
     )

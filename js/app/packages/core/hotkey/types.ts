@@ -105,6 +105,14 @@ export interface HotkeyRegistrationOptions {
   activateCommandScope?: boolean;
 
   /**
+   * If provided, pressing the hotkey will activate the specified command scope
+   * instead of creating a new one. Use this to share a command scope across
+   * multiple components. The specified scope must already exist (created via `registerScope`).
+   * Takes precedence over `activateCommandScope` if both are provided.
+   */
+  activateCommandScopeId?: string;
+
+  /**
    * If true, the keyDownHandler will be run even if the input is focused.
    */
   runWithInputFocused?: boolean;
@@ -154,9 +162,18 @@ export interface HotkeyRegistrationOptions {
   shouldReturnFocusOnClose?: boolean;
 }
 
+export type HotkeyGroup = {
+  /** Add a hotkey registration to this group */
+  add: <T extends RegisterHotkeyReturn>(registration: T) => T;
+  /** Dispose all hotkeys in this group */
+  dispose: () => void;
+};
+
 export type RegisterHotkeyReturn = {
   dispose: () => void;
   commandScopeId?: string;
+  /** Add this registration to a group for grouped disposal */
+  withGroup: (group: HotkeyGroup) => RegisterHotkeyReturn;
 };
 
 export type ScopeNodeBase = {

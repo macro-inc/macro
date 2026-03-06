@@ -3,7 +3,9 @@
 use super::*;
 use crate::domain::models::{AggregateId, FrecencyData};
 use chrono::Utc;
-use item_filters::{ChatFilters, DocumentFilters, EntityFilters, ProjectFilters};
+use item_filters::{
+    ChatFilters, DocumentFilters, EntityFilters, NotificationFilters, ProjectFilters, TaskFilters,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -435,4 +437,245 @@ async fn test_dynamic_filter_no_matches(pool: PgPool) {
         .unwrap();
 
     assert_eq!(results.len(), 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    let doc_id_1 = Uuid::new_v4();
+    let doc_id_2 = Uuid::new_v4();
+
+    for (id, score) in [(doc_id_1.to_string(), 100.0), (doc_id_2.to_string(), 90.0)] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: test_user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    // Notification for doc 1 is not done/unseen.
+    let notification_id_1 = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO notification
+            (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
+        VALUES
+            ($1, 'test', $2, 'document', 'test', '{}'::jsonb, NULL)
+        "#,
+    )
+    .bind(notification_id_1)
+    .bind(doc_id_1.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Notification for doc 2 is done/seen.
+    let notification_id_2 = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO notification
+            (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
+        VALUES
+            ($1, 'test', $2, 'document', 'test', '{}'::jsonb, NULL)
+        "#,
+    )
+    .bind(notification_id_2)
+    .bind(doc_id_2.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
+        VALUES ($1, $2, NOW(), NULL, false), ($1, $3, NOW(), NOW(), true)
+        "#,
+    )
+    .bind(test_user_id.as_ref())
+    .bind(notification_id_1)
+    .bind(notification_id_2)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: NotificationFilters {
+                done: Some(false),
+                seen: None,
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .unwrap()
+    .unwrap();
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id.entity.entity_id, doc_id_1.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Ensure owner row exists for foreign keys from Document.owner.
+    sqlx::query(
+        r#"
+        INSERT INTO "User" ("id", "email")
+        VALUES ($1, $2)
+        ON CONFLICT ("id") DO NOTHING
+        "#,
+    )
+    .bind(test_user_id.as_ref())
+    .bind("test@example.com")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let matching_task_id = Uuid::new_v4();
+    let non_matching_task_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "Document" ("id", "name", "owner", "fileType", "createdAt", "updatedAt")
+        VALUES
+            ($1, 'Matching Task', $3, 'txt', NOW(), NOW()),
+            ($2, 'Non Matching Task', $3, 'txt', NOW(), NOW())
+        "#,
+    )
+    .bind(matching_task_id.to_string())
+    .bind(non_matching_task_id.to_string())
+    .bind(test_user_id.as_ref())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO document_sub_type (document_id, sub_type)
+        VALUES ($1, 'task'), ($2, 'task')
+        "#,
+    )
+    .bind(matching_task_id.to_string())
+    .bind(non_matching_task_id.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Matching task: assigned to current user + status in progress.
+    sqlx::query(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES
+            (
+                gen_random_uuid(),
+                $1,
+                'TASK',
+                '00000001-0000-0000-0000-000000000001',
+                jsonb_build_object(
+                    'type', 'EntityReference',
+                    'value', jsonb_build_array(
+                        jsonb_build_object('entity_id', $3, 'entity_type', 'USER')
+                    )
+                )
+            ),
+            (
+                gen_random_uuid(),
+                $1,
+                'TASK',
+                '00000001-0000-0000-0000-000000000002',
+                '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000002"]}'::jsonb
+            ),
+            (
+                gen_random_uuid(),
+                $2,
+                'TASK',
+                '00000001-0000-0000-0000-000000000001',
+                '{"type":"EntityReference","value":[{"entity_id":"macro|other@example.com","entity_type":"USER"}]}'::jsonb
+            ),
+            (
+                gen_random_uuid(),
+                $2,
+                'TASK',
+                '00000001-0000-0000-0000-000000000002',
+                '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000002"]}'::jsonb
+            )
+        "#,
+    )
+    .bind(matching_task_id.to_string())
+    .bind(non_matching_task_id.to_string())
+    .bind(test_user_id.as_ref())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for (id, score) in [
+        (matching_task_id.to_string(), 100.0),
+        (non_matching_task_id.to_string(), 90.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: test_user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
+        document_filters: DocumentFilters {
+            task_filters: TaskFilters {
+                include_cbm_atm_nc: Some(true),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .unwrap()
+    .unwrap();
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id.entity.entity_id, matching_task_id.to_string());
 }

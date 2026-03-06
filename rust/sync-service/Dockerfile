@@ -43,5 +43,5 @@ RUN worker-build --release
 
 EXPOSE 8787
 
-# Run wrangler dev - use docker config without build command
-CMD ["npx", "wrangler", "dev", "--local", "--ip", "0.0.0.0", "--port", "8787", "--config", "wrangler.docker.toml"]
+# Generate .dev.vars from environment variables so wrangler can resolve secret bindings, then start
+CMD sh -c 'echo "LOCAL_API_KEY=${INTERNAL_API_SECRET_KEY}\nDOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSIONS_SECRET}" > .dev.vars && npx wrangler dev --local --ip 0.0.0.0 --port 8787 --config wrangler.docker.toml'

@@ -1,4 +1,4 @@
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import {
   DEFAULT_MODEL,
   MODEL_PRETTYNAME,
@@ -10,7 +10,6 @@ import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid'
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import type { Model } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
@@ -18,6 +17,7 @@ import { useSplitLayout } from 'app/component/split-layout/layout';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { extractMessageText } from './AssistantMessage';
 
 type AssistantActionProps = {
   message: ChatMessageWithAttachments;
@@ -37,26 +37,6 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
     if (!icon) return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
     return icon;
   };
-
-  function extractMessageText(content: ChatMessageContent) {
-    if (typeof content === 'string') {
-      return content;
-    } else if (Array.isArray(content)) {
-      return content
-        .map((part) => {
-          if (part.type === 'text') {
-            return part.text;
-          } else if (part.type === 'toolCall') {
-            // TODO - handle tool call
-            return '';
-          }
-        })
-        .join('\n');
-    } else {
-      // TODO - handle tool response
-      return '';
-    }
-  }
 
   const handleCopy = async () => {
     const text = extractMessageText(props.message.content);
@@ -93,9 +73,7 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
       extractMessageText(props.message.content)
     );
 
-    const title: string | undefined = await generateTitleForMarkdown(
-      content.replace(/\[\[.*?\]\]/g, '')
-    );
+    const title = await generateTitle(content.replace(/\[\[.*?\]\]/g, ''));
 
     const documentId = await createMarkdownFile({
       content,
@@ -114,41 +92,6 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
     });
     setIsLoading(false);
   });
-
-  async function generateTitleForMarkdown(markdownText: string) {
-    try {
-      const schema = {
-        type: 'object',
-        properties: {
-          title: {
-            type: 'string',
-            description:
-              'A concise and informative title that describes the following markdown text',
-          },
-        },
-        required: ['title'],
-        additionalProperties: false,
-      };
-
-      const result = await structuredOutputCompletion(
-        `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-        schema,
-        'markdown_title_generator'
-      );
-
-      if (
-        typeof result === 'object' &&
-        result !== null &&
-        'title' in result &&
-        typeof result.title === 'string'
-      ) {
-        return result.title;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return undefined;
-  }
 
   return (
     <div class="flex flex-row w-full justify-start items-center h-[32px] px-2 space-x-2">

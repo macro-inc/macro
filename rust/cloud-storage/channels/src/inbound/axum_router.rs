@@ -3,43 +3,127 @@ mod test;
 
 use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
-    ParticipantRole, ThreadInfo, ThreadReply,
+    MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
-use crate::domain::ports::{ChannelMessagesErr, ChannelMessagesService};
+use crate::domain::ports::{
+    ChannelAccessCheck, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
+    ChannelMessagesService,
+};
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Path, Query, State},
+    http::{StatusCode, request::Parts},
     response::IntoResponse,
     routing::get,
 };
 use chrono::{DateTime, Utc};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_pagination::{CreatedAt, CursorExtractor, PaginatedOpaqueCursor, TypeEraseCursor};
+use models_pagination::{
+    Base64Str, BidirectionalCursor, BidirectionalCursorExtractor, CreatedAt, Cursor,
+    CursorExtractor, CursorVal, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
+};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 /// State for the channels router.
-pub struct ChannelsRouterState<S> {
+pub struct ChannelsRouterState<S, A> {
     service: Arc<S>,
+    access: Arc<A>,
 }
 
-impl<S> Clone for ChannelsRouterState<S> {
+impl<S, A> Clone for ChannelsRouterState<S, A> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            access: self.access.clone(),
         }
     }
 }
 
-impl<S: ChannelMessagesService> ChannelsRouterState<S> {
-    /// Create a new router state wrapping the service.
-    pub fn new(service: S) -> Self {
+impl<S: ChannelMessagesService, A: ChannelAccessCheck> ChannelsRouterState<S, A> {
+    /// Create a new router state wrapping the service and access checker.
+    pub fn new(service: S, access: A) -> Self {
         Self {
             service: Arc::new(service),
+            access: Arc::new(access),
         }
+    }
+}
+
+/// Verified channel member. Rejects the request if the authenticated user is not an active
+/// participant in the channel identified by the `:channel_id` path parameter.
+pub struct ChannelMember {
+    /// The channel id from the path.
+    pub channel_id: Uuid,
+}
+
+/// Rejection returned by the [`ChannelMember`] extractor.
+#[derive(Debug)]
+pub enum ChannelMemberRejection {
+    /// The user is not authenticated.
+    Unauthenticated,
+    /// The `:channel_id` path parameter is missing or invalid.
+    InvalidPath,
+    /// The user is not a member of the channel.
+    Forbidden,
+    /// A database or internal error occurred.
+    Internal,
+}
+
+impl IntoResponse for ChannelMemberRejection {
+    fn into_response(self) -> axum::response::Response {
+        let (status, message) = match self {
+            Self::Unauthenticated => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+            Self::InvalidPath => (StatusCode::BAD_REQUEST, "Invalid channel_id"),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "Not a channel member"),
+            Self::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "An internal server error occurred",
+            ),
+        };
+        (status, Json(ErrorResponse { message })).into_response()
+    }
+}
+
+#[axum::async_trait]
+impl<S, A> FromRequestParts<ChannelsRouterState<S, A>> for ChannelMember
+where
+    S: ChannelMessagesService,
+    A: ChannelAccessCheck,
+{
+    type Rejection = ChannelMemberRejection;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &ChannelsRouterState<S, A>,
+    ) -> Result<Self, Self::Rejection> {
+        let user = MacroUserExtractor::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ChannelMemberRejection::Unauthenticated)?;
+
+        let Path(path_params) = Path::<HashMap<String, String>>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ChannelMemberRejection::InvalidPath)?;
+        let channel_id = path_params
+            .get("channel_id")
+            .ok_or(ChannelMemberRejection::InvalidPath)
+            .and_then(|raw| {
+                Uuid::parse_str(raw.as_str()).map_err(|_| ChannelMemberRejection::InvalidPath)
+            })?;
+
+        let is_member = state
+            .access
+            .is_channel_member(channel_id, &user.user_context.user_id)
+            .await
+            .map_err(|_| ChannelMemberRejection::Internal)?;
+
+        if !is_member {
+            return Err(ChannelMemberRejection::Forbidden);
+        }
+
+        Ok(ChannelMember { channel_id })
     }
 }
 
@@ -49,26 +133,85 @@ pub struct Params {
     /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
+    /// When set, return a centered window of messages around this message id
+    /// instead of cursor-paginated results.
+    #[serde(default)]
+    load_around_message_id: Option<Uuid>,
+}
+
+/// Path params for thread replies endpoint.
+#[derive(Debug, Deserialize)]
+pub struct ThreadRepliesPath {
+    /// Channel ID from path.
+    channel_id: Uuid,
+    /// Message ID from path.
+    message_id: Uuid,
+}
+
+fn parse_messages_query(
+    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
+) -> (
+    PaginationQuery<Uuid, CreatedAt, ()>,
+    MessagePageDirection,
+    bool,
+) {
+    match cursor {
+        BidirectionalCursorExtractor::Some(BidirectionalCursor::Next(cursor)) => (
+            PaginationQuery::Cursor(cursor),
+            MessagePageDirection::Older,
+            true,
+        ),
+        BidirectionalCursorExtractor::Some(BidirectionalCursor::Previous(cursor)) => (
+            PaginationQuery::Cursor(cursor),
+            MessagePageDirection::Newer,
+            true,
+        ),
+        BidirectionalCursorExtractor::None => (
+            PaginationQuery::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            false,
+        ),
+    }
+}
+
+fn cursor_from_first_message(
+    page: &ChannelMessagesPage,
+    limit: u16,
+) -> Option<Cursor<Uuid, CursorVal<CreatedAt>, ()>> {
+    page.items.first().map(|first| Cursor {
+        id: first.id,
+        limit: usize::from(limit),
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: first.created_at,
+        },
+        filter: (),
+    })
 }
 
 /// Create the channels router.
-pub fn channels_router<S, T>(state: ChannelsRouterState<S>) -> Router<T>
+pub fn channels_router<S, A, T>(state: ChannelsRouterState<S, A>) -> Router<T>
 where
     S: ChannelMessagesService,
+    A: ChannelAccessCheck,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/:channel_id/messages",
-            get(get_channel_messages_handler::<S>),
+            get(get_channel_messages_handler::<S, A>),
+        )
+        .route(
+            "/:channel_id/messages/:message_id/replies",
+            get(get_thread_replies_handler::<S, A>),
         )
         .route(
             "/:channel_id/attachments",
-            get(get_channel_attachments_handler::<S>),
+            get(get_channel_attachments_handler::<S, A>),
         )
         .route(
             "/:channel_id/participants",
-            get(get_channel_participants_handler::<S>),
+            get(get_channel_participants_handler::<S, A>),
         )
         .with_state(state)
 }
@@ -81,30 +224,104 @@ where
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
         ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
-        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value for older messages"),
+        ("previous_cursor" = Option<String>, Query, description = "Base64 encoded cursor value for newer messages"),
+        ("load_around_message_id" = Option<Uuid>, Query, description = "Return a centered window around this message ID"),
     ),
     responses(
         (status = 200, body = ApiChannelMessagesPage),
+        (status = 400, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
     Query(params): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
-) -> Result<Json<PaginatedOpaqueCursor<ApiChannelMessage>>, ChannelsHandlerErr> {
-    let limit = params.limit.unwrap_or(50);
-    let query = cursor.into_query(CreatedAt, ());
+    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
+) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let (query, direction, has_cursor) = parse_messages_query(cursor);
 
-    let page = state
+    let (page, has_more_newer) = match params.load_around_message_id {
+        Some(message_id) => {
+            let page = state
+                .service
+                .get_channel_messages_around(member.channel_id, message_id, limit)
+                .await?;
+            (page, false)
+        }
+        None => {
+            let ChannelMessagesQueryResult {
+                page,
+                has_more_newer,
+            } = state
+                .service
+                .get_channel_messages(member.channel_id, query, direction, limit)
+                .await?;
+            (page, has_more_newer)
+        }
+    };
+
+    let can_emit_previous = has_cursor || params.load_around_message_id.is_some();
+    let previous_cursor = if !can_emit_previous {
+        None
+    } else {
+        match cursor_from_first_message(&page, limit) {
+            Some(first_cursor) => {
+                let has_previous = match direction {
+                    MessagePageDirection::Older => true,
+                    MessagePageDirection::Newer => has_more_newer,
+                };
+
+                has_previous.then(|| Base64Str::encode_json(first_cursor).type_erase())
+            }
+            None => None,
+        }
+    };
+
+    let page = page.type_erase().map(ApiChannelMessage::from);
+    Ok(Json(ApiChannelMessagesPage {
+        items: page.items,
+        next_cursor: page.next_cursor,
+        previous_cursor,
+    }))
+}
+
+/// Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+#[utoipa::path(
+    get,
+    operation_id = "get_thread_replies",
+    path = "/channels/{channel_id}/messages/{message_id}/replies",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID (thread parent or reply id)")
+    ),
+    responses(
+        (status = 200, body = Vec<ApiThreadReply>),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_thread_replies_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    _member: ChannelMember,
+    Path(path): Path<ThreadRepliesPath>,
+) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
+    let channel_id = path.channel_id;
+    let message_id = path.message_id;
+
+    let replies = state
         .service
-        .get_channel_messages(channel_id, query, limit)
+        .get_thread_replies(channel_id, message_id)
         .await?;
 
-    Ok(Json(page.type_erase().map(ApiChannelMessage::from)))
+    Ok(Json(
+        replies.into_iter().map(ApiThreadReply::from).collect(),
+    ))
 }
 
 /// Handler for `GET /channels/:channel_id/attachments`.
@@ -123,10 +340,9 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_attachments_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
     Query(params): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
@@ -135,7 +351,7 @@ pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
 
     let page = state
         .service
-        .get_channel_attachments(channel_id, query, limit)
+        .get_channel_attachments(member.channel_id, query, limit)
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
@@ -155,12 +371,14 @@ pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_participants_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_participants_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
-    let participants = state.service.get_channel_participants(channel_id).await?;
+    let participants = state
+        .service
+        .get_channel_participants(member.channel_id)
+        .await?;
 
     Ok(Json(
         participants
@@ -177,6 +395,8 @@ pub struct ApiChannelMessagesPage {
     items: Vec<ApiChannelMessage>,
     /// Cursor for the next page, null if no more pages.
     next_cursor: Option<String>,
+    /// Cursor for the previous page, null if no newer page exists.
+    previous_cursor: Option<String>,
 }
 
 /// A top-level channel message with thread info.
@@ -433,6 +653,9 @@ impl From<ChannelParticipant> for ApiChannelParticipant {
 /// Errors from the channels handler.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelsHandlerErr {
+    /// Bad request.
+    #[error("{0}")]
+    BadRequest(&'static str),
     /// Internal server error.
     #[error("An internal server error occurred")]
     Internal(#[from] ChannelMessagesErr),
@@ -440,13 +663,32 @@ pub enum ChannelsHandlerErr {
 
 impl IntoResponse for ChannelsHandlerErr {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!(error=?self, "channels handler error");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "An internal server error occurred",
-            }),
-        )
-            .into_response()
+        match self {
+            ChannelsHandlerErr::BadRequest(message) => {
+                (StatusCode::BAD_REQUEST, Json(ErrorResponse { message })).into_response()
+            }
+            ChannelsHandlerErr::Internal(err) => match err {
+                ChannelMessagesErr::MessageNotFound(id) => {
+                    tracing::warn!(message_id=?id, "message not found");
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            message: "Message not found",
+                        }),
+                    )
+                        .into_response()
+                }
+                ChannelMessagesErr::Repo(repo_err) => {
+                    tracing::error!(error=?repo_err, "channels handler error");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: "An internal server error occurred",
+                        }),
+                    )
+                        .into_response()
+                }
+            },
+        }
     }
 }

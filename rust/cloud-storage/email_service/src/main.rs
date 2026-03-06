@@ -1,8 +1,14 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
+use email::{
+    domain::service::EmailServiceImpl,
+    inbound::{EmailRouterState, EmailThreadRouterState, GmailTokenState},
+    outbound::{EmailPgRepo, GmailTokenProviderImpl},
+};
 use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -25,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -62,9 +68,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to db")?;
 
-    let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
-
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
+    let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
@@ -120,23 +124,51 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let sqs_client = Arc::new(sqs_client);
+    let gmail_client = Arc::new(gmail_client);
+    let gmail_label_modifier = email::outbound::GmailClientLabelModifier::new(gmail_client.clone());
+    let email_service = EmailRouterState::new(EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+        (*sqs_client).clone(),
+        gmail_label_modifier,
+        config.sent_undo_delay_secs,
+    ));
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
+    let email_thread_state = EmailThreadRouterState {
+        service: email_service.service(),
+        access_service: entity_access_service.clone(),
+    };
+    let auth_service_client = Arc::new(auth_service_client);
+    let redis_conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for gmail token provider")?;
+    let redis_client = Arc::new(redis_client);
+    let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
+        redis_conn,
+        auth_service_client.clone(),
+    ));
     api::setup_and_serve(ApiContext {
-        db: db.clone(),
+        db,
         config: Arc::new(config),
-        auth_service_client: Arc::new(auth_service_client),
-        redis_client: Arc::new(redis_client),
-        sqs_client: Arc::new(sqs_client),
+        auth_service_client,
+        redis_client,
+        sqs_client,
         sfs_client: Arc::new(sfs_client),
-        gmail_client: Arc::new(gmail_client),
+        gmail_client: gmail_client.clone(),
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
         system_properties_service,
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
-        email_service: EmailPreviewState::new(EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
-            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db)),
-        )),
+        email_service,
+        entity_access_service,
+        email_thread_state,
+        gmail_token_state,
     })
     .await?;
     Ok(())

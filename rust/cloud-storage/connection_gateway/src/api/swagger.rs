@@ -3,10 +3,12 @@ use super::message;
 use super::message::{BatchSendMessageBody, SendMessageBody, SendMessageResponse};
 use crate::model::connection::StoredConnectionEntity;
 use crate::model::sender::MessageReceipt;
+use crate::model::tracking::TrackAction;
 use crate::model::websocket::{ToWebsocketMessage, TrackEntityMessage};
 use model::response::{GenericErrorResponse, StringIDResponse};
-use model_entity::{Entity, EntityType, TrackAction};
+use model_entity::{Entity, EntityType};
 use models_bulk_upload::UploadFolderStatusUpdate;
+use stream::domain::{StreamEvent, StreamItem};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -35,7 +37,10 @@ use utoipa::OpenApi;
                 StoredConnectionEntity,
                 EntityType,
 
-                UploadFolderStatusUpdate
+                UploadFolderStatusUpdate,
+
+                StreamEvent,
+                StreamItem,
             ),
         ),
         tags(

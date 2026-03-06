@@ -21,6 +21,19 @@ VALUES
     -- user-2 is a member of channel D (DM)
     ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'member', 'macro|user-2@test.com', '2024-01-04 10:00:00');
 
+-- Notifications for channel notification filter tests
+INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
+VALUES
+    ('eeeeeeea-0000-0000-0000-000000000001', 'test', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', 'test', '{}'::jsonb, 'macro|user-2@test.com'),
+    ('eeeeeeeb-0000-0000-0000-000000000002', 'test', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'channel', 'test', '{}'::jsonb, 'macro|user-2@test.com');
+
+INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
+VALUES
+    -- Channel A: not done + unread
+    ('macro|user-1@test.com', 'eeeeeeea-0000-0000-0000-000000000001', '2024-01-05 10:00:00', NULL, false),
+    -- Channel B: done + seen
+    ('macro|user-1@test.com', 'eeeeeeeb-0000-0000-0000-000000000002', '2024-01-05 10:01:00', '2024-01-05 11:00:00', true);
+
 -- Messages for latest message tests
 INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content, created_at, updated_at, deleted_at)
 VALUES

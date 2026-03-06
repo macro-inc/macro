@@ -11,6 +11,15 @@ pub struct GetChannelMessagesRequest {
     pub limit: u16,
 }
 
+/// Direction for cursor-based message pagination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessagePageDirection {
+    /// Fetch older messages than the cursor.
+    Older,
+    /// Fetch newer messages than the cursor.
+    Newer,
+}
+
 /// A top-level message with thread info, reactions, and attachments.
 #[derive(Debug)]
 pub struct ChannelMessage {
@@ -62,7 +71,7 @@ pub struct ThreadInfo {
     pub reply_count: i64,
     /// Timestamp of the most recent reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
-    /// Last N replies for the collapsed thread preview.
+    /// Oldest N replies for the collapsed thread preview.
     pub preview: Vec<ThreadReply>,
 }
 
@@ -214,7 +223,7 @@ pub struct ThreadData {
     pub reply_count: i64,
     /// Timestamp of the latest reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
-    /// Last N replies for the thread preview (oldest-first).
+    /// Oldest N replies for the thread preview (oldest-first).
     pub preview_replies: Vec<ThreadReplyRow>,
 }
 

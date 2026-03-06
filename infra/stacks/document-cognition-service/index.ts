@@ -111,6 +111,15 @@ const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
   .getOutput('connectionGatewayRedisUrl')
   .apply((url) => url as string);
 
+const connectionGatewayTableName: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayTableName')
+  .apply((name) => name as string);
+
+const connectionGatewayTablePolicyArn: pulumi.Output<string> =
+  connectionGatewayStack
+    .getOutput('connectionGatewayTablePolicyArn')
+    .apply((arn) => arn as string);
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -121,6 +130,34 @@ const cloudStorageServiceStack = new pulumi.StackReference(
     name: `macro-inc/cloud-storage-service/${stack}`,
   }
 );
+
+const linksharingStack = new pulumi.StackReference('linksharing-stack', {
+  name: `macro-inc/link-sharing/${stack}`,
+});
+
+const cloudfronDistributionUrl: pulumi.Output<string> = linksharingStack
+  .getOutput('cloudfrontDistributionUrl')
+  .apply((url) => url as string);
+
+const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
+  .getOutput('cloudfrontDistributionPublicKeyId')
+  .apply((key) => key as string);
+
+const CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME = `linksharing-private-key-${stack}`;
+
+const cloudfrontPrivateKeySecretArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretOutput({
+    name: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
+  })
+  .apply((secret) => secret.arn);
+
+const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
+  .getOutput('docxUploadBucketName')
+  .apply((name) => name as string);
+
+const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
+  .getOutput('docxUploadBucketArn')
+  .apply((arn) => arn as string);
 
 export const documentStorageServiceUrl: pulumi.Output<string> =
   cloudStorageServiceStack
@@ -156,6 +193,10 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
+const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
+  .getOutput('documentStorageBucketArn')
+  .apply((arn) => arn as string);
+
 export const deleteChatQueueArn: pulumi.Output<string> =
   cloudStorageServiceStack
     .getOutput('deleteChatQueueArn')
@@ -188,15 +229,18 @@ const documentCognitionService = new DocumentCognitionService(
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       authenticationServiceInternalApiKeyArn,
+      cloudfrontPrivateKeySecretArn,
     ],
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
+    bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
     queueArns: [
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
       searchEventQueueArn,
       notificationQueueArn,
     ],
+    connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
       {
         name: 'DATABASE_URL',
@@ -324,8 +368,28 @@ const documentCognitionService = new DocumentCognitionService(
         value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
       {
-        name: 'REDIS_URL',
+        name: 'REDIS_HOST',
         value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
+      },
+      {
+        name: 'CONNECTION_GATEWAY_TABLE',
+        value: pulumi.interpolate`${connectionGatewayTableName}`,
+      },
+      {
+        name: 'DOCX_DOCUMENT_UPLOAD_BUCKET',
+        value: pulumi.interpolate`${docxUploadBucketName}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
+        value: pulumi.interpolate`${cloudfronDistributionUrl}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+        value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
       },
       // OpenTelemetry / Datadog tracing configuration
       {
@@ -347,3 +411,5 @@ export const documentCognitionServiceSgId =
 export const documentCognitionServiceAlbSgId =
   documentCognitionService.serviceAlbSg.id;
 export const documentCognitionServiceUrl = pulumi.interpolate`${documentCognitionService.domain}`;
+export const documentCognitionServiceRoleArn =
+  documentCognitionService.role.arn;

@@ -43,6 +43,7 @@ ports = ["dep:tokio", "frecency/ports"]
 [dependencies]
 ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
+cowlike = { path = "../cowlike" }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
@@ -90,6 +91,7 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 ai = { path = "../ai" }
+entity_access = { path = "../entity_access" }
 
 [[example]]
 name = "ai_tools_cli"

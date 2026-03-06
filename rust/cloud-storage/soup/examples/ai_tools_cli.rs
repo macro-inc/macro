@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! CLI example for testing soup AI tools interactively.
 //!
 //! This example creates a CLI interface to test the soup toolset with real database connections.
@@ -51,7 +52,13 @@ async fn main() {
 
     // Create the email service with real database connections
     let email_repo = EmailPgRepo::new(pool.clone());
-    let email_service = EmailServiceImpl::new(email_repo, frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        email_repo,
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
 
     // Create the channels service with real database connections
     let comms_repo = PgCommsRepo { pool: pool.clone() };

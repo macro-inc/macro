@@ -21,8 +21,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use notification::domain::service::{NotificationIngress, NotificationIngressService};
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -50,9 +49,7 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
-    State(notification_ingress_service): State<
-        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
-    >,
+    State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
@@ -74,6 +71,15 @@ pub async fn create_comment_handler(
             if let Some(Mentions { users, mention_id }) = &req.mentions
                 && let Some(comment) = res.comment_thread.comments.first()
             {
+                let sender_profile_picture_url =
+                    macro_db_client::user::update_profile_picture::get_profile_pictures(
+                        &db,
+                        &vec![user_id.clone()],
+                    )
+                    .await
+                    .ok()
+                    .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url));
+
                 let request = build_mention_notif(
                     req.text,
                     comment,
@@ -85,6 +91,7 @@ pub async fn create_comment_handler(
                     user_id.clone().try_into().ok(),
                     document_id.to_string(),
                     mention_id,
+                    sender_profile_picture_url,
                 )
                 .into_request()
                 .with_apns()

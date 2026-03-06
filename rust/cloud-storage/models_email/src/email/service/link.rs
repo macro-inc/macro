@@ -1,12 +1,10 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = email::domain::models::Link)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Link {
     pub id: Uuid,
     #[schema(value_type = String)]
@@ -20,8 +18,7 @@ pub struct Link {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize, PartialEq, Eq)]
-#[dg(backward = email::domain::models::UserProvider)]
+#[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserProvider {
     Gmail,
 }

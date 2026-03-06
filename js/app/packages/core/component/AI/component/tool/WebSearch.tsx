@@ -6,22 +6,12 @@ import { createToolRenderer } from './ToolRenderer';
 const handler = createToolRenderer({
   name: 'web_search',
   renderCall: (ctx) => (
-    <BaseTool
-      icon={Globe}
-      text="Searching For"
-      renderContext={ctx.renderContext}
-      type="call"
-    >
-      <div class="italic">{ctx.tool.data.query}</div>
+    <BaseTool icon={Globe} renderContext={ctx.renderContext} type="call">
+      Searched for <span class="text-accent">{ctx.tool.data.query}</span>
     </BaseTool>
   ),
   renderResponse: (ctx) => (
-    <BaseTool
-      icon={Globe}
-      text="Search Results"
-      renderContext={ctx.renderContext}
-      type="response"
-    >
+    <BaseTool renderContext={ctx.renderContext} type="response">
       <UnfurledLinkCollection
         links={ctx.tool.data.content.map((result) => ({
           title: result.title,

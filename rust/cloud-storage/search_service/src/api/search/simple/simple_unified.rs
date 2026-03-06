@@ -84,7 +84,7 @@ fn compute_next_cursor(
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
-#[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
+#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
@@ -403,8 +403,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
 
-    println!("{:?} {:?}", content_next_cursor, content_hits.len());
-
     // Track original counts before combining
     let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();
@@ -601,14 +599,18 @@ pub(in crate::api::search) async fn perform_unified_search(
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    tracing::info!("simple_unified_search");
+    tracing::info!(
+        user_id = user_context.user_id,
+        terms = ?req.terms,
+        search_on = ?req.search_on,
+        "simple_unified_search"
+    );
 
     let (results, _next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;

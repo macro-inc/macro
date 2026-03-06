@@ -40,6 +40,8 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateThreadLabelRequest,
+  UpdateThreadLabelsResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -445,9 +447,9 @@ export type createDraftResponse400 = {
   status: 400;
 };
 
-export type createDraftResponse401 = {
+export type createDraftResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type createDraftResponse500 = {
@@ -460,7 +462,7 @@ export type createDraftResponseSuccess = createDraftResponse201 & {
 };
 export type createDraftResponseError = (
   | createDraftResponse400
-  | createDraftResponse401
+  | createDraftResponse404
   | createDraftResponse500
 ) & {
   headers: Headers;
@@ -1100,16 +1102,11 @@ export const initUser = async (
 };
 
 /**
- * @summary List user labels.
+ * @summary List all labels for the user's email link.
  */
 export type listLabelsResponse200 = {
   data: ListLabelsResponse;
   status: 200;
-};
-
-export type listLabelsResponse400 = {
-  data: ErrorResponse;
-  status: 400;
 };
 
 export type listLabelsResponse401 = {
@@ -1126,7 +1123,6 @@ export type listLabelsResponseSuccess = listLabelsResponse200 & {
   headers: Headers;
 };
 export type listLabelsResponseError = (
-  | listLabelsResponse400
   | listLabelsResponse401
   | listLabelsResponse500
 ) & {
@@ -1369,7 +1365,7 @@ export const listLinks = async (
 };
 
 /**
- * @summary Send an email message.
+ * @summary Send a message.
  */
 export type sendMessageResponse201 = {
   data: SendMessageResponse;
@@ -1381,9 +1377,9 @@ export type sendMessageResponse400 = {
   status: 400;
 };
 
-export type sendMessageResponse401 = {
+export type sendMessageResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type sendMessageResponse500 = {
@@ -1396,7 +1392,7 @@ export type sendMessageResponseSuccess = sendMessageResponse201 & {
 };
 export type sendMessageResponseError = (
   | sendMessageResponse400
-  | sendMessageResponse401
+  | sendMessageResponse404
   | sendMessageResponse500
 ) & {
   headers: Headers;
@@ -1834,86 +1830,6 @@ export const previewsInboxCursor = async (
 };
 
 /**
- * @summary Get a thread with a paginated number of messages.
- */
-export type getThreadResponse200 = {
-  data: GetThreadResponse;
-  status: 200;
-};
-
-export type getThreadResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getThreadResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getThreadResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getThreadResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getThreadResponseSuccess = getThreadResponse200 & {
-  headers: Headers;
-};
-export type getThreadResponseError = (
-  | getThreadResponse400
-  | getThreadResponse401
-  | getThreadResponse404
-  | getThreadResponse500
-) & {
-  headers: Headers;
-};
-
-export type getThreadResponse =
-  | getThreadResponseSuccess
-  | getThreadResponseError;
-
-export const getGetThreadUrl = (id: string, params: GetThreadParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/threads/${id}?${stringifiedParams}`
-    : `/email/threads/${id}`;
-};
-
-export const getThread = async (
-  id: string,
-  params: GetThreadParams,
-  options?: RequestInit
-): Promise<getThreadResponse> => {
-  const res = await fetch(getGetThreadUrl(id, params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getThreadResponse;
-};
-
-/**
  * @summary Change the archived status of a thread.
  */
 export type archiveThreadResponse200 = {
@@ -1975,6 +1891,79 @@ export const archiveThread = async (
     status: res.status,
     headers: res.headers,
   } as archiveThreadResponse;
+};
+
+/**
+ * @summary Add or remove a label from all messages in a thread.
+ */
+export type addRemoveThreadLabelResponse200 = {
+  data: UpdateThreadLabelsResponse;
+  status: 200;
+};
+
+export type addRemoveThreadLabelResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addRemoveThreadLabelResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type addRemoveThreadLabelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addRemoveThreadLabelResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addRemoveThreadLabelResponseSuccess =
+  addRemoveThreadLabelResponse200 & {
+    headers: Headers;
+  };
+export type addRemoveThreadLabelResponseError = (
+  | addRemoveThreadLabelResponse400
+  | addRemoveThreadLabelResponse401
+  | addRemoveThreadLabelResponse404
+  | addRemoveThreadLabelResponse500
+) & {
+  headers: Headers;
+};
+
+export type addRemoveThreadLabelResponse =
+  | addRemoveThreadLabelResponseSuccess
+  | addRemoveThreadLabelResponseError;
+
+export const getAddRemoveThreadLabelUrl = (id: string) => {
+  return `/email/threads/${id}/labels`;
+};
+
+export const addRemoveThreadLabel = async (
+  id: string,
+  updateThreadLabelRequest: UpdateThreadLabelRequest,
+  options?: RequestInit
+): Promise<addRemoveThreadLabelResponse> => {
+  const res = await fetch(getAddRemoveThreadLabelUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadLabelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addRemoveThreadLabelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRemoveThreadLabelResponse;
 };
 
 export type getThreadMessagesHandlerResponse200 = {
@@ -2119,6 +2108,86 @@ export const threadSeen = async (
     status: res.status,
     headers: res.headers,
   } as threadSeenResponse;
+};
+
+/**
+ * @summary Get a thread with paginated messages.
+ */
+export type getThreadResponse200 = {
+  data: GetThreadResponse;
+  status: 200;
+};
+
+export type getThreadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getThreadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getThreadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getThreadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getThreadResponseSuccess = getThreadResponse200 & {
+  headers: Headers;
+};
+export type getThreadResponseError = (
+  | getThreadResponse400
+  | getThreadResponse401
+  | getThreadResponse404
+  | getThreadResponse500
+) & {
+  headers: Headers;
+};
+
+export type getThreadResponse =
+  | getThreadResponseSuccess
+  | getThreadResponseError;
+
+export const getGetThreadUrl = (threadId: string, params?: GetThreadParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/threads/${threadId}?${stringifiedParams}`
+    : `/email/threads/${threadId}`;
+};
+
+export const getThread = async (
+  threadId: string,
+  params?: GetThreadParams,
+  options?: RequestInit
+): Promise<getThreadResponse> => {
+  const res = await fetch(getGetThreadUrl(threadId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadResponse;
 };
 
 /**

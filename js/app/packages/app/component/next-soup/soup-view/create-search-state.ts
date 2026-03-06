@@ -3,57 +3,33 @@ import {
   type FilterID,
   getFileAssociations,
 } from '@app/component/next-soup/filters/filters';
+import { useSearchContext } from '@app/component/next-soup/search-context';
+import {
+  createSoupFreshSearch,
+  getValidSearchFilters,
+  intersectEntityPools,
+  nameFuzzySearchFilter,
+} from '@app/component/next-soup/search-utils';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
-import { fuzzyMatch } from '@core/util/fuzzy';
-import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
-import type { EntityData, WithSearch } from '@entity';
+import type { EntityData } from '@entity';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
-  type SoupItemsQueryFilters,
-  type SoupItemsQueryArgs,
-  useSoupItemsQuery,
-} from '@queries/soup/items';
-import { useSearchSoupQuery } from '@queries/soup/search';
+  useSearchSoupQuery,
+  validateSearchServiceText,
+} from '@queries/soup/search';
 import type {
   UnifiedSearchIndex,
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
-import {
-  type Accessor,
-  createMemo,
-  createRenderEffect,
-  createSignal,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+const FEATURED_COUNT = 3;
 
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 500, sort_method: 'updated_at' },
-  body: {
-    chat_filters: { chat_ids: [NIL_UUID] },
-    document_filters: { document_ids: [NIL_UUID] },
-    email_filters: { recipients: [NIL_UUID] },
-    project_filters: { project_ids: [NIL_UUID] },
-    channel_filters: {
-      channel_types: [],
-    },
-  },
-};
-
-function mergeEntityPools(
-  items: EntityData[],
-  extra: EntityData[]
-): EntityData[] {
-  if (extra.length === 0) return items;
-  const existingIds = new Set(items.map((e) => e.id));
-  const newItems = extra.filter((e) => !existingIds.has(e.id));
-  if (newItems.length === 0) return items;
-  return [...items, ...newItems];
-}
+const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
@@ -80,6 +56,10 @@ export const createSearchState = ({
 
   const isSearching = createMemo(() => trimmedSearchText().length > 0);
 
+  const isSearchServiceDebounceSettled = createMemo(
+    () => trimmedSearchText() === debouncedSearchForService()
+  );
+
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
       const types = soup.filters.activeIds() as FilterID[];
@@ -98,15 +78,7 @@ export const createSearchState = ({
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with(
-            'signal',
-            'noise',
-            'explicit-noise',
-            'unread',
-            'not-done',
-            () => {}
-          )
-          .exhaustive();
+          .otherwise(() => {});
       }
       return Array.from(new Set(includeArray));
     },
@@ -114,10 +86,9 @@ export const createSearchState = ({
     { equals: arrayEquals }
   );
 
-  const validSearchTerms = createMemo(
-    () => debouncedSearchForService().length >= 3
+  const isSearchServiceDisabled = createMemo(
+    () => !validateSearchServiceText(debouncedSearchForService())
   );
-  const isSearchDisabled = createMemo(() => !validSearchTerms());
 
   const searchFilters = createMemo(() => {
     const {
@@ -171,19 +142,6 @@ export const createSearchState = ({
     }
   );
 
-  const itemsQuery = useSoupItemsQuery(
-    () => ({
-      params: {
-        limit: 100,
-        sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
-      },
-      body: { ...queryFilters(), emailView: 'all' },
-    }),
-    () => ({
-      enabled: isSearchDisabled(),
-    })
-  );
-
   const searchQuery = useSearchSoupQuery(
     () => ({
       params: {
@@ -194,64 +152,86 @@ export const createSearchState = ({
       },
     }),
     () => ({
-      enabled:
-        !isSearchDisabled() &&
-        trimmedSearchText() === debouncedSearchForService(),
+      enabled: !isSearchServiceDisabled() && isSearchServiceDebounceSettled(),
     })
   );
 
-  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
-  createRenderEffect(() => {
-    if (
-      channelItemsQuery.hasNextPage &&
-      !channelItemsQuery.isFetchingNextPage
-    ) {
-      channelItemsQuery.fetchNextPage();
+  const { entityPool } = useSearchContext();
+
+  const localFuzzyResults = createMemo(
+    on(debouncedSearchForLocal, (query) => {
+      if (!query || query.length === 0) return [];
+      const pool = entityPool();
+      // TODO: we can optimize fresh search for small feature counts since we
+      // don't need to sort everything, we just need the featured results
+      const freshSearchResults = freshSearch(pool, query);
+      // NOTE: this is a temporary hack because the fresh search fuzzy library
+      // does not give us the highlighted matches
+      const results = nameFuzzySearchFilter(
+        freshSearchResults.map((r) => r.item.data),
+        query
+      );
+      return results;
+    })
+  );
+
+  const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
+    if (!localFuzzyResults()) return new Map();
+    const allFilters = getValidSearchFilters(soup.filters.available);
+    const filterToResultMap = new Map<string, EntityData[]>();
+    for (const filter of allFilters) {
+      filterToResultMap.set(
+        filter.id,
+        localFuzzyResults().filter((e) => filter.predicate(e))
+      );
     }
+    return filterToResultMap;
   });
 
-  const nameFuzzySearchFilter = (items: EntityData[]) => {
-    const query = debouncedSearchForLocal();
-    if (!query || query.length === 0) return items;
-
-    const matchResults = fuzzyMatch(query, items, (item) => item.name);
-
-    return matchResults.map((result) => {
-      return {
-        ...result.item,
-        search: {
-          nameHighlight: mergeAdjacentMacroEmTags(result.nameHighlight),
-          contentHitData: null,
-          source: 'local',
-        },
-      } as WithSearch<EntityData>;
-    });
-  };
-
-  const localFuzzyResults = createMemo(() => {
-    const pool = mergeEntityPools(
-      itemsQuery.data ?? [],
-      channelItemsQuery.data ?? []
-    );
-    return nameFuzzySearchFilter(pool);
+  const filteredLocalFuzzyResults = createMemo(() => {
+    if (!localFuzzyResults()) return [];
+    const activeFilters = getValidSearchFilters(soup.filters.active());
+    if (activeFilters.length === 0)
+      return localFuzzyResults().slice(0, FEATURED_COUNT);
+    const pools = activeFilters.map((f) => allFiltersResults().get(f.id) ?? []);
+    const merged = intersectEntityPools(pools);
+    return merged.slice(0, FEATURED_COUNT);
   });
 
-  const freshSearchResults = createMemo<EntityData[]>(() => {
-    if (isSearchDisabled()) return [];
-    if (trimmedSearchText() !== debouncedSearchForService()) return [];
+  const serviceSearchResults = createMemo<EntityData[]>(() => {
+    if (isSearchServiceDisabled()) return [];
+    if (!isSearchServiceDebounceSettled()) return [];
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
     return searchQuery.data ?? [];
+  });
+
+  const featuredIds = createMemo(() => {
+    const ids = filteredLocalFuzzyResults().map((r) => r.id);
+    return ids;
+  });
+
+  const isLocalSearchSettling = createMemo(
+    () => isSearching() && trimmedSearchText() !== debouncedSearchForLocal()
+  );
+
+  const isSearchServiceLoading = createMemo(() => {
+    if (!isSearching()) return false;
+    if (!validateSearchServiceText(trimmedSearchText())) return false;
+    if (!isSearchServiceDebounceSettled()) return true;
+    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return true;
+    return false;
   });
 
   return {
     searchText,
     setSearchText,
     isSearching,
-    isSearchDisabled,
-    localFuzzyResults,
-    freshSearchResults,
-    itemsQuery,
+    localFuzzyResults: filteredLocalFuzzyResults,
+    serviceSearchResults,
+    featuredIds,
     searchQuery,
+    isSearchServiceLoading,
+    isLocalSearchSettling,
   };
 };
 

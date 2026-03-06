@@ -9,20 +9,23 @@ use crate::api::email::drafts::add_attachment::{
 use crate::api::email::drafts::add_forwarded_attachment::{
     AddForwardedAttachmentRequest, AddForwardedAttachmentResponse,
 };
-use crate::api::email::drafts::create::{CreateDraftRequest, CreateDraftResponse};
 use crate::api::email::init::InitResponse;
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
-use crate::api::email::labels::list::ListLabelsResponse;
 use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
-use crate::api::email::messages::send::{SendMessageRequest, SendMessageResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
-use crate::api::email::threads::get::GetThreadResponse;
 use crate::api::{email, health};
 use ::email::inbound;
-use ::email::inbound::{ApiPaginatedThreadCursor, ApiSortMethod, GetPreviewsCursorParams};
+use ::email::inbound::ListLabelsResponse as HexListLabelsResponse;
+use ::email::inbound::{
+    ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, ApiPaginatedThreadCursor, ApiSortMethod,
+    ApiThread, CreateDraftRequest as HexCreateDraftRequest,
+    CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
+    SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
+};
+use ::email::inbound::{UpdateThreadLabelRequest, UpdateThreadLabelsResponse};
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
 use models_email::email::service;
@@ -31,8 +34,8 @@ use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
 use models_email::email::service::thread::{PreviewView, PreviewViewStandardLabel};
 use models_email::service::label::Label;
-use models_email::service::message::{MessageToSend, ParsedMessage};
-use models_email::service::thread::{APIThread, ThreadPreviewCursor};
+use models_email::service::message::ParsedMessage;
+use models_email::service::thread::ThreadPreviewCursor;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -48,7 +51,7 @@ use utoipa::OpenApi;
         email::backfill::get::handler,
         email::backfill::get::active_handler,
         email::init::handler,
-        email::drafts::create::handler,
+        inbound::create_draft_handler,
         email::drafts::delete::handler,
         email::drafts::scheduled::list::handler,
         email::drafts::scheduled::remove::handler,
@@ -60,16 +63,17 @@ use utoipa::OpenApi;
         email::messages::get::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
-        email::messages::send::send_handler,
+        inbound::send_message_handler,
         email::threads::seen::seen_handler,
-        email::threads::get::get_thread_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
+        inbound::update_thread_labels_handler,
         inbound::cursor_handler,
+        inbound::get_thread_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
-        email::labels::list::handler,
+        inbound::list_labels_handler,
         email::contacts::list::list_contacts_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
@@ -83,8 +87,11 @@ use utoipa::OpenApi;
             GetActiveBackfillJobResponse,
             BackfillJob,
             // Draft types
-            CreateDraftRequest,
-            CreateDraftResponse,
+            HexCreateDraftRequest,
+            HexCreateDraftResponse,
+            ApiDraftInput,
+            ApiDraftOutput,
+            ApiDraftContactInfo,
             AddDraftAttachmentRequest,
             AddDraftAttachmentResponse,
             AddForwardedAttachmentRequest,
@@ -94,20 +101,21 @@ use utoipa::OpenApi;
             // Label types
             CreateLabelRequest,
             CreateLabelResponse,
-            ListLabelsResponse,
+            HexListLabelsResponse,
             Label,
             // Message types
             UpdateLabelBatchRequest,
             UpdateLabelBatchResponse,
-            SendMessageRequest,
-            SendMessageResponse,
+            HexSendMessageRequest,
+            HexSendMessageResponse,
             ParsedMessage,
-            MessageToSend,
             // Thread types
-            GetThreadResponse,
             ArchiveThreadRequest,
-            APIThread,
+            UpdateThreadLabelRequest,
+            UpdateThreadLabelsResponse,
             ThreadPreviewCursor,
+            GetThreadResponse,
+            ApiThread,
             // Preview types
             GetPreviewsCursorParams,
             ApiPaginatedThreadCursor,

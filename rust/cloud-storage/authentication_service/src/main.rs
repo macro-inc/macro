@@ -1,6 +1,13 @@
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
+use github::{
+    domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
+    outbound::{
+        github_auth_client::GithubAuthImpl, github_oauth_client::GithubOauthImpl,
+        pg_github_repo::PgGithubRepo,
+    },
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -8,10 +15,15 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
+use notification::domain::models::email_notification_digest::{
+    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
+};
 use notification::domain::service::NotificationIngressService;
-use notification::outbound::queue::SqsNotificationQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use notification_service_client::NotificationServiceClient;
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -142,11 +154,6 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized document storage service client");
 
-    let notification_service_client = NotificationServiceClient::new(
-        config.service_internal_auth_key.clone(),
-        config.notification_service_url.clone(),
-    );
-
     let macro_cache_client = macro_cache_client::MacroCache::new(config.redis_uri.as_str());
 
     tracing::trace!("initialized redis client");
@@ -163,13 +170,40 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let redis_state_machine_client = redis::Client::open(config.redis_uri.as_str())
+        .context("failed to create redis client for state machine")?;
+    let redis_multiplexed_conn = redis_state_machine_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for state machine")?;
+
     let notification_repository = DbNotificationRepository::new(db.clone());
     let notification_queue = SqsNotificationQueue::new(
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
+    let state_machine = StateMachineDriverA {
+        user_checker: DbUserExistenceChecker::new(db.clone()),
+        notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
+            db.clone(),
+        )),
+        online_checker: LastOnlineCheckerImpl::new(
+            last_online_tracker::domain::services::LastOnlineService::new(
+                last_online_tracker::outbound::time::DefaultTime,
+                last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                    redis_multiplexed_conn.clone(),
+                ),
+            ),
+        ),
+        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+        block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+        invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
+            .append::<model_notifications::ChannelInviteMetadata>(),
+        digest_window: std::time::Duration::from_secs(30 * 60),
+        online_duration_threshold: std::time::Duration::from_secs(60 * 60),
+    };
     let notification_ingress_service =
-        NotificationIngressService::new(notification_repository, notification_queue);
+        NotificationIngressService::new(notification_repository, notification_queue, state_machine);
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -194,14 +228,25 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_service.clone(),
     );
 
+    let github_link_service_impl = GithubLinkServiceImpl::new(
+        PgGithubRepo::new(db.clone()),
+        GithubOauthImpl::default(),
+        GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
+        GithubLinkConfig {
+            client_id: config.github_client_id,
+            client_secret: config.github_client_secret,
+            idp_id: config.github_idp_id,
+        },
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
+            github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
-            notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service: Arc::new(notification_ingress_service),
             sqs_client: Arc::new(sqs_client),

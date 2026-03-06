@@ -2,13 +2,12 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
+// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
-import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
 import {
   createMenuOpenSignal,
   MenuPriority,
@@ -21,35 +20,37 @@ import {
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
+  $canConvertCheckboxesToTasks,
+  CONVERT_CHECKBOXES_TO_TASKS,
+  isCheckboxToTaskPluginEnabled,
+} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
+import {
   HIGHLIGHT_SELECTED_NODES,
   POPUP_REPLACE_TEXT,
   popupPlugin,
   RECOMPUTE_SELECTION_RECT,
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
-import {
-  $canConvertCheckboxesToTasks,
-  CONVERT_CHECKBOXES_TO_TASKS,
-  isCheckboxToTaskPluginEnabled,
-} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
-import { toast } from '@core/component/Toast/Toast';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { debouncedDependent } from '@core/util/debounce';
 import { createMarkdownFile } from '@core/util/create';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
-import { useUserId } from '@core/context/user';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
-import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { GlitchText } from '@ui/components/GlitchText';
@@ -70,8 +71,6 @@ import {
   useContext,
 } from 'solid-js';
 import { FormatTools } from './FormatTools';
-import { isMobile } from '@core/mobile/isMobile';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 const MENU_ID = 'markdown-popup';
 
@@ -141,9 +140,9 @@ export function MarkdownPopup(props: {
     observe(block);
   });
 
-  const selectedText = () => selection()?.text ?? undefined;
-  const selectedNodesText = () => selection()?.nodeText ?? undefined;
-  const selectionType = () => selection()?.type ?? undefined;
+  const _selectedText = () => selection()?.text ?? undefined;
+  const _selectedNodesText = () => selection()?.nodeText ?? undefined;
+  const _selectionType = () => selection()?.type ?? undefined;
 
   createEffect(
     on([selection], () => {
@@ -208,12 +207,12 @@ export function MarkdownPopup(props: {
   );
 
   const MarkdownPopupToolbar = () => {
-    const isAuthenticated = useIsAuthenticated();
-    const [completion, setCompletion] = createSignal<Completion | undefined>(
+    const _isAuthenticated = useIsAuthenticated();
+    const [completion, _setCompletion] = createSignal<Completion | undefined>(
       undefined
     );
 
-    const [completionType, setCompletionType] = createSignal<
+    const [completionType, _setCompletionType] = createSignal<
       'explain' | 'bullet' | 'translate' | 'rewrite' | undefined
     >(undefined);
 
@@ -262,41 +261,6 @@ export function MarkdownPopup(props: {
       }
     };
 
-    async function generateTitleForMarkdown(markdownText: string) {
-      try {
-        const schema = {
-          type: 'object',
-          properties: {
-            title: {
-              type: 'string',
-              description:
-                'A concise and informative title that describes the following text excerpt',
-            },
-          },
-          required: ['title'],
-          additionalProperties: false,
-        };
-
-        const result = await structuredOutputCompletion(
-          `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-          schema,
-          'markdown_title_generator'
-        );
-
-        if (
-          typeof result === 'object' &&
-          result !== null &&
-          'title' in result &&
-          typeof result.title === 'string'
-        ) {
-          return result.title;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-      return undefined;
-    }
-
     const handleReplaceText = createCallback(async (newText: string) => {
       editor.dispatchCommand(POPUP_REPLACE_TEXT, newText);
       setPopupVisible(false);
@@ -310,7 +274,7 @@ export function MarkdownPopup(props: {
         return;
       }
 
-      const title: string | undefined = await generateTitleForMarkdown(content);
+      const title = await generateTitle(content);
       const documentId = await createMarkdownFile({
         content,
         title: title ?? `${name()} - AI Explanation`,
@@ -352,7 +316,7 @@ export function MarkdownPopup(props: {
       });
     };
 
-    const contentSize = () => {
+    const _contentSize = () => {
       let charCount = 0;
       editor.getEditorState().read(() => {
         const root = $getRoot();
@@ -362,7 +326,7 @@ export function MarkdownPopup(props: {
       return charCount;
     };
 
-    let handleRewrite = (_instructions: string) => {};
+    const handleRewrite = (_instructions: string) => {};
 
     createEffect(
       on([completionType, rewriteInputRef], () => {
@@ -416,29 +380,29 @@ export function MarkdownPopup(props: {
           class="gap-1 flex flex-row items-center flex-nowrap"
           ref={buttonRowRef}
         >
-          <Show
-            when={
-              ENABLE_MARKDOWN_AI_GENERATE &&
-              isAuthenticated() &&
-              !!selectedText() &&
-              selectionType() === 'range' &&
-              blockId
-            }
-          >
-            <AskAi
-              attachmentId={blockId}
-              blockName="md"
-              setCompletion={setCompletion}
-              setCompletionType={setCompletionType}
-              selectedText={selectedText()!}
-              canEdit={canEdit()}
-              contentSize={contentSize}
-              selectedNodesText={selectedNodesText()}
-              registerRewriteMethod={(fn: (instructions: string) => void) => {
-                handleRewrite = fn;
-              }}
-            />
-          </Show>
+          {/*<Show
+						when={
+							ENABLE_MARKDOWN_AI_GENERATE &&
+							isAuthenticated() &&
+							!!selectedText() &&
+							selectionType() === "range" &&
+							blockId
+						}
+					>
+						<AskAi
+							attachmentId={blockId}
+							blockName="md"
+							setCompletion={setCompletion}
+							setCompletionType={setCompletionType}
+							selectedText={selectedText()!}
+							canEdit={canEdit()}
+							contentSize={contentSize}
+							selectedNodesText={selectedNodesText()}
+							registerRewriteMethod={(fn: (instructions: string) => void) => {
+								handleRewrite = fn;
+							}}
+						/>
+					</Show>*/}
           <Show when={!isMobile() && (canEdit() || canComment())}>
             <FormatTools withinPopup />
           </Show>

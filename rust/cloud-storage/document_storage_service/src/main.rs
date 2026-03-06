@@ -1,19 +1,22 @@
+#![recursion_limit = "256"]
 use crate::{
-    api::context::{ApiContext, DocumentStorageServiceAuthKey},
+    api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        GithubSyncAppPemSecretKey, GithubWebhookSecretKey,
     },
     service::s3::S3,
 };
 use anyhow::Context;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::service::ChannelMessagesServiceImpl,
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
 };
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -21,15 +24,26 @@ use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
+use notification::domain::models::email_notification_digest::{
+    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
+};
 use notification::domain::service::NotificationIngressService;
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -87,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (50, 150),
-        Environment::Develop => (15, 50),
+        Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
 
@@ -112,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized dynamodb client");
 
-    let s3_client = aws_sdk_s3::Client::new(&aws_config);
+    let s3_client = macro_aws_config::s3_client().await;
 
     tracing::trace!("initialized s3 client");
 
@@ -166,19 +180,6 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config
-            .vars
-            .authentication_service_secret_key
-            .as_ref()
-            .to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.authentication_service_secret_key)
-            .await
-            .context("unable to get auth service secret")?
-            .to_string(),
-    };
-
     // Initialize OpenSearch client
     let opensearch_password = match config.environment {
         Environment::Local => config.vars.opensearch_password.as_ref().to_string(),
@@ -204,17 +205,48 @@ async fn main() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service =
-        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for state machine")?;
+
     let make_notification_ingress = || {
         let notification_repository = DbNotificationRepository::new(db.clone());
         let notification_queue = SqsNotificationQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
             config.vars.notification_queue.as_ref().to_string(),
         );
-        NotificationIngressService::new(notification_repository, notification_queue)
+        let state_machine = StateMachineDriverA {
+            user_checker: DbUserExistenceChecker::new(db.clone()),
+            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
+                db.clone(),
+            )),
+            online_checker: LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        redis_multiplexed_conn.clone(),
+                    ),
+                ),
+            ),
+            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
+            )
+            .append::<model_notifications::ChannelInviteMetadata>(),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
+        };
+        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
     };
     let notification_ingress_service = Arc::new(make_notification_ingress());
     tracing::trace!("initialized notification ingress service");
@@ -228,20 +260,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
-    let auth_service_url: reqwest::Url = config
-        .vars
-        .authentication_service_url
-        .as_ref()
-        .parse()
-        .context("AUTHENTICATION_SERVICE_URL must be a valid url")?;
     let channel_service_for_soup = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
-        UserRepoImpl::new(auth_service_secret_key.clone(), auth_service_url.clone()),
+        PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
         PgCommsRepo { pool: db.clone() },
-        UserRepoImpl::new(auth_service_secret_key, auth_service_url),
+        PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
 
@@ -253,6 +279,14 @@ async fn main() -> anyhow::Result<()> {
             entity_access::outbound::PgAccessRepository::new(db.clone()),
         ),
     );
+
+    let s3 = Arc::new(S3::new(
+        s3_client,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+        config.vars.upload_staging_bucket.as_ref(),
+    ));
+    let system_properties_service = Arc::new(system_properties_service);
 
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_config = CloudFrontConfig {
@@ -274,11 +308,38 @@ async fn main() -> anyhow::Result<()> {
         browser_cache_expiry_seconds: config
             .document_storage_service_presigned_url_browser_cache_expiry_seconds,
     };
-    let document_service = DocumentServiceImpl::new(
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        macro_aws_config::s3_client().await,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+    );
+    let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
+        s3_upload_adapter,
+        TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
+    ));
+
+    let github_webhook_secret = secretsmanager_client
+        .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
+        .await?;
+
+    let github_sync_app_pem = secretsmanager_client
+        .get_maybe_secret_value(env, GithubSyncAppPemSecretKey::new()?)
+        .await?;
+
+    let github_sync_service_impl = GithubSyncServiceImpl::new(
+        GithubSyncConfig {
+            webhook_secret: github_webhook_secret.as_ref().to_string(),
+            github_sync_app_url: config.vars.github_sync_app_url.to_string(),
+            sync_app_pem: github_sync_app_pem.as_ref().to_string(),
+            sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
+        },
+        document_service.clone(),
+        PgGithubSyncRepo::new(db.clone()),
+        GithubSyncClientImpl::default(),
     );
 
     let api_context = ApiContext {
@@ -291,21 +352,17 @@ async fn main() -> anyhow::Result<()> {
             ),
             email_service,
         ),
+        github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
-        s3_client: Arc::new(S3::new(
-            s3_client,
-            config.vars.document_storage_bucket.as_ref(),
-            config.vars.docx_document_upload_bucket.as_ref(),
-            config.vars.upload_staging_bucket.as_ref(),
-        )),
+        s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
-        system_properties_service: Arc::new(system_properties_service),
+        system_properties_service: system_properties_service.clone(),
         properties_service: Arc::new(properties_service),
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
@@ -317,13 +374,14 @@ async fn main() -> anyhow::Result<()> {
         permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
-            service: Arc::new(document_service),
+            service: document_service,
             access_service: entity_access_service,
             pool: db.clone(),
         },
-        channels_state: ChannelsRouterState::new(ChannelMessagesServiceImpl::new(
-            PgChannelMessagesRepo::new(db.clone()),
-        )),
+        channels_state: ChannelsRouterState::new(
+            ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
+            PgChannelAccessCheck::new(db.clone()),
+        ),
     };
 
     api::setup_and_serve(api_context).await?;

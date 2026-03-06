@@ -1,6 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import {
   type EntityData,
+  isCurrentUserAssigned,
+  isTaskClosed,
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
@@ -11,11 +13,7 @@ import {
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import type { PropertiesEntityType } from '@service-properties/client';
 import type { SoupState } from '../create-soup-state';
-import {
-  archiveEmail,
-  isCurrentUserAssigned,
-  isTaskClosed,
-} from '@app/component/next-soup/utils';
+import { archiveEmail } from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
   userId: () => string | undefined;
@@ -39,7 +37,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     useSetPropertyStatusCompleteMutation();
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'email' || entity.type === 'channel') {
+    if (
+      entity.type === 'email' ||
+      entity.type === 'channel' ||
+      entity.type === 'chat'
+    ) {
       return true;
     }
 
@@ -72,7 +74,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     for (const entity of entities) {
       if (entity.type === 'email') {
         archiveEmail(entity.id, {
-          isDone: entity.done,
+          archive: true,
           optimisticallyExclude: true,
         });
       }
@@ -95,7 +97,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     );
   };
 
-  const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: SoupState,
+    onNavigate?: (entity: EntityData) => void
+  ) => {
     const currentIndex = soup.focus.index();
     const nextEntity =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
@@ -111,8 +117,15 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     await execute(entities);
 
     soup.selection.clear();
-    if (nextEntity) {
+    const shouldNavigate =
+      soup.filters.isActive('signal') || soup.filters.isActive('noise');
+
+    // marking email as done removes it in any view, so we should update selection.
+    const willBeRemoved = entities.some((e) => e.type === 'email');
+
+    if (nextEntity && (shouldNavigate || willBeRemoved)) {
       soup.focus.set(nextEntity.id);
+      onNavigate?.(nextEntity);
     }
   };
 

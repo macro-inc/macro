@@ -7,6 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -89,6 +90,58 @@ impl EmailService for MockEmail {
             updated_at: Default::default(),
         }))
     }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn create_draft(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn send_message(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn update_thread_labels(
+        &self,
+        _access_token: &str,
+        _link: &email::domain::models::Link,
+        _thread_id: uuid::Uuid,
+        _label_id: uuid::Uuid,
+        _add: bool,
+    ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 fn mock_router() -> Router {
@@ -151,6 +204,58 @@ impl EmailService for MockEmailLinkResult {
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)()
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn create_draft(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn send_message(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn update_thread_labels(
+        &self,
+        _access_token: &str,
+        _link: &email::domain::models::Link,
+        _thread_id: uuid::Uuid,
+        _label_id: uuid::Uuid,
+        _add: bool,
+    ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 }
 
@@ -620,6 +725,161 @@ async fn it_parses_channel_filters() {
             ..
         } => {
             assert!(!channel_filters.channel_ids.is_empty());
+        }
+    )
+}
+
+#[tokio::test]
+async fn it_parses_notification_and_task_filters() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "document_filters": {
+                    "notification_filters": { "done": false, "seen": false },
+                    "task_filters": { "include_cbm_atm_nc": true }
+                },
+                "chat_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                },
+                "project_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                },
+                "channel_filters": {
+                    "notification_filters": { "done": false, "seen": false }
+                }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard.pop().unwrap()
+    };
+
+    assert_matches!(
+        arg,
+        SoupRequest {
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+                _,
+                EntityFilters {
+                    document_filters,
+                    chat_filters,
+                    project_filters,
+                    channel_filters,
+                    ..
+                },
+            ))),
+            ..
+        } => {
+            assert_eq!(document_filters.notification_filters.done, Some(false));
+            assert_eq!(document_filters.notification_filters.seen, Some(false));
+            assert_eq!(document_filters.task_filters.include_cbm_atm_nc, Some(true));
+            assert_eq!(chat_filters.notification_filters.done, Some(false));
+            assert_eq!(chat_filters.notification_filters.seen, Some(false));
+            assert_eq!(project_filters.notification_filters.done, Some(false));
+            assert_eq!(project_filters.notification_filters.seen, Some(false));
+            assert_eq!(channel_filters.notification_filters.done, Some(false));
+            assert_eq!(channel_filters.notification_filters.seen, Some(false));
+        }
+    )
+}
+
+#[tokio::test]
+async fn it_can_filter_chat_owners() {
+    let json = r#"{
+"channel_filters": {
+"channel_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"document_filters": {
+"document_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"email_filters": {
+"recipients": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"project_filters": {
+"project_ids": [
+"00000000-0000-0000-0000-000000000000"
+]
+},
+"chat_filters": {
+"owners": [
+"macro|rahul@macro.com"
+]
+},
+"emailView": "all",
+"limit": 100,
+"sort_method": "updated_at"
+}"#;
+
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(json))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard.pop().unwrap()
+    };
+
+    assert_matches!(
+        arg,
+        SoupRequest {
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+                _,
+                EntityFilters {
+                    chat_filters,
+                    ..
+                },
+            ))),
+            ..
+        } => {
+            assert_eq!(chat_filters.owners, vec!["macro|rahul@macro.com".to_string()]);
         }
     )
 }

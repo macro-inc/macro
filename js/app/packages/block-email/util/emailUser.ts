@@ -1,11 +1,11 @@
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { getFirstName } from './name';
 
 /**
  * Check if a message is from the current user
  */
 export function isMessageFromCurrentUser(
-  message: MessageWithBodyReplyless,
+  message: ApiMessage,
   currentUserEmail?: string
 ): boolean {
   if (!currentUserEmail) return false;
@@ -18,7 +18,7 @@ export function isMessageFromCurrentUser(
  * Get the sender display name, showing "Me" for the current user
  */
 export function getSenderDisplayName(
-  message: MessageWithBodyReplyless,
+  message: ApiMessage,
   currentUserEmail?: string
 ): string {
   if (isMessageFromCurrentUser(message, currentUserEmail)) {

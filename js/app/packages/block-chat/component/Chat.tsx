@@ -2,11 +2,11 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
+import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
   ChatInputProvider,
@@ -16,13 +16,19 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import {
+  DEV_MODE_ENV,
+  ENABLE_SNAPSHOT_NODE,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -33,12 +39,13 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { withAnalytics } from '@coparse/analytics';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
-import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
+
+const { track, TrackingEvents } = withAnalytics();
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -69,12 +76,23 @@ function ChatInner(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
-  const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+  const [showStreamDebug, setShowStreamDebug] = createSignal(false);
+  const [markdownText, setMarkdownText] = createSignal(
+    props.loadedInputText ?? ''
+  );
 
-  const chatMarkdownArea = useChatMarkdownArea({
-    initialValue: props.loadedInputText,
-    addAttachment: (a) => input.attachments.addAttachment(a),
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      track(TrackingEvents.CHAT.MENTION.SELECT);
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    block: 'chat',
+    showOpenTabs: true,
+    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   // Local stream signal for registerToolHandler
@@ -139,7 +157,7 @@ function ChatInner(props: {
   };
 
   createEffect(() => {
-    const inputText = chatMarkdownArea.markdownText();
+    const inputText = markdownText();
     const attached = input.attachments.attached();
     const model_ = input.model();
     saveChatState({ attachments: attached, input: inputText, model: model_ });
@@ -176,12 +194,8 @@ function ChatInner(props: {
     hotkey: 'enter',
     description: 'Focus Chat Input',
     keyDownHandler: () => {
-      const editor = chatEditor();
-      if (editor) {
-        editor.focus(undefined, { defaultSelection: 'rootStart' });
-        return true;
-      }
-      return false;
+      editor.controls.focus();
+      return true;
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,
@@ -203,6 +217,26 @@ function ChatInner(props: {
       isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
+      <Show when={DEV_MODE_ENV}>
+        <button
+          class="text-xs px-2 py-0.5 text-secondary hover:text-ink"
+          onClick={() => setShowStreamDebug((p) => !p)}
+        >
+          {showStreamDebug() ? 'Hide' : 'Show'} Stream Debug
+        </button>
+      </Show>
+      <Show when={showStreamDebug()}>
+        <div class="px-2 py-1 bg-menu border-b border-edge text-ink font-mono text-sm">
+          <Show when={chat.stream()} fallback={<div>No active stream</div>}>
+            {(stream) => (
+              <div class="flex gap-x-4">
+                <span>chunks: {stream().data().length}</span>
+                <span>isDone: {String(stream().isDone())}</span>
+              </div>
+            )}
+          </Show>
+        </div>
+      </Show>
       <div class="size-full flex-1 min-h-0 p-2 relative">
         <div class="absolute inset-0 pointer-events-none" use:droppable />
         <div
@@ -223,11 +257,12 @@ function ChatInner(props: {
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
             <ChatInput
-              markdown={chatMarkdownArea}
+              editor={editor}
+              initialValue={props.loadedInputText}
+              onChange={setMarkdownText}
               chatId={chat.chatId()}
               onSend={onSend}
-              captureEditor={setChatEditor}
-              autoFocusOnMount={!navigatedFromJK()}
+              autoFocusOnMount={true}
             />
           </div>
         </div>

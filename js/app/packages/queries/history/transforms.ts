@@ -20,6 +20,7 @@ export function transformHistoryItem(item: Item): HistoryItem {
         type: 'document',
         fileType: item.fileType,
         subType: item.subType,
+        ownerId: item.owner,
       };
 
     case 'chat':
@@ -27,12 +28,14 @@ export function transformHistoryItem(item: Item): HistoryItem {
         ...base,
         type: 'chat',
         isPersistent: item.isPersistent,
+        ownerId: item.userId,
       };
 
     case 'project':
       return {
         ...base,
         type: 'project',
+        ownerId: item.userId,
       };
   }
 }

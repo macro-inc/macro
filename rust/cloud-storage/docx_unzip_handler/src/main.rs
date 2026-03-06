@@ -42,7 +42,7 @@ async fn main() -> Result<(), Error> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
     let lambda_client = lambda_client::Lambda::new(aws_sdk_lambda::Client::new(&aws_config));

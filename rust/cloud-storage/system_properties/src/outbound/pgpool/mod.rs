@@ -3,12 +3,16 @@
 #[cfg(test)]
 mod test;
 
+use models_properties::api::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::{
-    model::{PropertyRow, SystemPropertyError, SystemPropertyKey},
-    port::SystemPropertiesRepository,
+use crate::{
+    StatusOption,
+    domain::{
+        model::{PropertyRow, SystemPropertyError, SystemPropertyKey},
+        port::SystemPropertiesRepository,
+    },
 };
 use macro_uuid::generate_uuid_v7;
 
@@ -188,6 +192,31 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             &ids,
             &entity_ids as &[&str],
             &system_task_property_ids,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn update_task_status(
+        &self,
+        task_id: &str,
+        status: StatusOption,
+    ) -> Result<(), SystemPropertyError> {
+        let value = PropertyValue::SelectOption(vec![status.uuid()]);
+
+        let value = serde_json::to_value(&value).map_err(SystemPropertyError::Serialization)?;
+
+        sqlx::query!(
+            r#"
+            UPDATE entity_properties
+            SET values = $2
+            WHERE entity_id = $1;
+            "#,
+            task_id,
+            value
         )
         .execute(&self.pool)
         .await?;

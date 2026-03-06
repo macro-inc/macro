@@ -1,10 +1,10 @@
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 
 export type ReplyType = 'reply' | 'reply-all' | 'forward';
 
 export const getReplyTypeFromDraft: (
-  draft: MessageWithBodyReplyless | undefined
-) => ReplyType | undefined = (draft: MessageWithBodyReplyless | undefined) => {
+  draft: ApiMessage | undefined
+) => ReplyType | undefined = (draft: ApiMessage | undefined) => {
   if (!draft) {
     return undefined;
   }

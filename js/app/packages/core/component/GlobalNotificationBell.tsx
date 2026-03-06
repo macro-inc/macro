@@ -22,9 +22,7 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
   const notificationSource = useGlobalNotificationSource();
 
   const unreadNotifications = () =>
-    allUnreadNotifications().filter(
-      (n) => !n.done && n.entity_type !== 'email'
-    );
+    allUnreadNotifications().filter((n) => !n.done);
 
   const unreadCount = () => unreadNotifications().length;
 

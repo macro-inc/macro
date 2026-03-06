@@ -1,129 +1,206 @@
-import type { ChannelWithParticipants, IUser } from '@core/user';
-import type { EmailEntity } from '@entity';
+import type { IUser } from '@core/user';
+import type {
+  EntityData,
+  ChannelEntity,
+  ChatEntity,
+  DocumentEntity,
+  TaskEntity,
+  EmailEntity,
+  ProjectEntity,
+} from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
-import type { HistoryItem as Item } from '@queries/history/history';
+import {
+  useQuickAccess,
+  type QuickAccessItem,
+  type EntityItem,
+  type UserItem,
+  type Bucket,
+} from '@core/context/quickAccess';
+import { match } from 'ts-pattern';
+
+export type EntityTypeItemMap = {
+  USER: UserItem;
+  CHANNEL: EntityItem<ChannelEntity>;
+  DOCUMENT: EntityItem<DocumentEntity>;
+  PROJECT: EntityItem<ProjectEntity>;
+  CHAT: EntityItem<ChatEntity>;
+  TASK: EntityItem<TaskEntity>;
+  THREAD: EntityItem<EmailEntity>;
+  COMPANY: never;
+};
+
+/**
+ * Maps EntityType to quickAccess buckets
+ */
+export function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
+  const buckets = match(entityType)
+    .with('USER', () => ['person'] as const)
+    .with('CHANNEL', () => ['channel', 'dm'] as const)
+    .with('DOCUMENT', () => ['document', 'note'] as const)
+    .with('PROJECT', () => ['project'] as const)
+    .with('CHAT', () => ['chat'] as const)
+    .with('TASK', () => ['task'] as const)
+    .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
+    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .exhaustive();
+  return buckets;
+}
+
+/**
+ * Hook to get QuickAccessItems for a given EntityType.
+ * Returns items from the appropriate buckets based on entity type.
+ */
+export function useQuickAccessEntities<T extends EntityType>(
+  entityType: Accessor<T | T[] | null | undefined>
+): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
+  const quickAccess = useQuickAccess();
+
+  const buckets = () => {
+    const entityType_ = entityType();
+    if (!entityType_) return null;
+    if (Array.isArray(entityType_))
+      return entityType_.flatMap(entityTypeToBuckets);
+    return entityTypeToBuckets(entityType_);
+  };
+  const items = (): EntityTypeItemMap[T][] => {
+    const b = buckets();
+    if (b === null) {
+      return quickAccess.useList()() as EntityTypeItemMap[T][];
+    }
+    if (b.length === 0) {
+      return [];
+    }
+    return quickAccess.useList(...b)() as EntityTypeItemMap[T][];
+  };
+  return { items, isLoading: quickAccess.isLoading };
+}
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
-  | { kind: 'item'; id: string; data: Item }
-  | { kind: 'user'; id: string; data: IUser }
-  | { kind: 'channel'; id: string; data: ChannelWithParticipants }
-  | { kind: 'company'; id: string; data: null }
-  | { kind: 'thread'; id: string; data: EmailEntity };
+  | { kind: 'entity'; id: string; data: EntityData }
+  | { kind: 'user'; id: string; data: IUser };
 
-/** Creates a mapper function for a specific entity kind */
-export function entityMapper(kind: 'item' | 'user' | 'channel') {
-  return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
-    return { kind, data, id: data.id } as CombinedEntity;
-  };
+/** Converts a QuickAccessItem to CombinedEntity */
+export function quickAccessItemToEntity(item: QuickAccessItem): CombinedEntity {
+  if (item.kind === 'user') {
+    return { kind: 'user', id: item.id, data: item.data };
+  }
+  return { kind: 'entity', id: item.id, data: item.data };
 }
 
-/** Maps an email entity to a CombinedEntity */
+/** Maps an EntityData to a CombinedEntity */
+export function entityDataToEntity(data: EntityData): CombinedEntity {
+  return { kind: 'entity', id: data.id, data };
+}
+
+/** Maps an IUser to a CombinedEntity */
+export function userToEntity(user: IUser): CombinedEntity {
+  return { kind: 'user', id: user.id, data: user };
+}
+
+/** Maps an email entity to a CombinedEntity (alias for entityDataToEntity) */
 export function threadMapper(email: EmailEntity): CombinedEntity {
-  return { kind: 'thread', id: email.id, data: email };
+  return entityDataToEntity(email);
 }
 
 /** Gets the display name for an entity */
 export function getEntityName(entity: CombinedEntity): string {
-  switch (entity.kind) {
-    case 'item':
-      return entity.data.name;
-    case 'user': {
-      const { name, email } = entity.data;
-      if (name === email) return email;
-      return name;
-    }
-    case 'channel':
-      return entity.data.name ?? '';
-    case 'company':
-      return entity.id;
-    case 'thread':
-      return entity.data.name ?? 'No Subject';
+  if (entity.kind === 'user') {
+    const { name, email } = entity.data;
+    if (name === email) return email;
+    return name;
   }
+
+  const data = entity.data;
+  if (data.type === 'email') {
+    return data.name ?? 'No Subject';
+  }
+  return data.name ?? '';
 }
 
 /** Gets searchable text for an entity (used with createFreshSearch) */
 export function getEntitySearchText(entity: CombinedEntity): string {
-  switch (entity.kind) {
-    case 'item':
-      return entity.data.name;
-    case 'user': {
-      const { name, email } = entity.data;
-      if (name === email) return `${email} | ${email}`;
-      return `${name} | ${email}`;
-    }
-    case 'channel':
-      return entity.data.name ?? '';
-    case 'company':
-      return entity.id;
-    case 'thread':
-      return entity.data.name ?? '';
+  if (entity.kind === 'user') {
+    const { name, email } = entity.data;
+    if (name === email) return `${email} | ${email}`;
+    return `${name} | ${email}`;
   }
+
+  return entity.data.name ?? '';
 }
 
 /** Gets the EntityType string for an entity */
 export function getEntityType(entity: CombinedEntity): EntityType {
-  switch (entity.kind) {
-    case 'user':
-      return 'USER';
+  if (entity.kind === 'user') {
+    return 'USER';
+  }
+
+  const data = entity.data;
+  switch (data.type) {
     case 'channel':
       return 'CHANNEL';
-    case 'item':
-      if (
-        entity.data.type === 'document' &&
-        entity.data.subType?.type === 'task'
-      ) {
+    case 'document':
+      if (data.subType?.type === 'task') {
         return 'TASK';
       }
-      return entity.data.type.toUpperCase() as EntityType;
-    case 'company':
-      return 'COMPANY';
-    case 'thread':
+      return 'DOCUMENT';
+    case 'chat':
+      return 'CHAT';
+    case 'project':
+      return 'PROJECT';
+    case 'email':
       return 'THREAD';
+    default:
+      return (data as EntityData).type.toUpperCase() as EntityType;
   }
 }
 
 /** Check if entity is a channel */
 export function isChannelEntity(item: CombinedEntity): boolean {
-  return item.kind === 'channel';
+  return item.kind === 'entity' && item.data.type === 'channel';
 }
 
 /** Get timestamped item from combined entity */
 export function getEntityTimestampedItem<T extends CombinedEntity>(
   item: T
 ): TimestampedItem {
-  switch (item.kind) {
-    case 'item':
-      return {
-        updatedAt: item.data.updatedAt,
-      };
-    case 'channel':
-      return {
-        updatedAt: item.data.updated_at,
-      };
-    case 'user':
-      return {
-        lastInteraction: item.data.lastInteraction,
-      };
-    default:
-      return {};
+  if (item.kind === 'user') {
+    return {
+      lastInteraction: item.data.lastInteraction,
+    };
   }
+
+  const data = item.data;
+  return {
+    updatedAt: data.updatedAt,
+    viewedAt: data.viewedAt,
+  };
 }
 
 /**
- * Creates search config for entity searches with same-domain boost.
+ * Creates search config for entity searches with same-domain boost and self-boost.
  * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
+ * When currentUserId is provided, the current user will be boosted to the top of the list.
  */
 export function createEntitySearchConfig<T extends CombinedEntity>(
-  currentUserDomain: Accessor<string | undefined>
+  currentUserDomain: Accessor<string | undefined>,
+  currentUserId?: Accessor<string | undefined>
 ): FreshSortConfig<T> {
   const boostFn = (item: T): number => {
+    // Boost self to top of list (high boost value ensures it appears first)
+    if (currentUserId && item.kind === 'user') {
+      const userId = currentUserId();
+      if (userId && item.data.id === userId) {
+        return 10; // High boost to ensure self appears at top
+      }
+    }
+
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
 
-    // Check if this looks like a CombinedEntity with user data
+    // Check if this is a user entity with email
     if (item.kind === 'user' && item.data.email) {
       const email = item.data.email;
       const itemDomain = email.split('@')[1];
@@ -139,4 +216,29 @@ export function createEntitySearchConfig<T extends CombinedEntity>(
     brevityWeight: 0.1,
     boostFn,
   };
+}
+
+/**
+ * Sorts entities with the current user (self) at the top of the list.
+ * Use this when displaying entities without a search query to ensure
+ * the current user appears first in the assignees list.
+ */
+export function sortEntitiesWithSelfFirst<T extends CombinedEntity>(
+  entities: T[],
+  currentUserId: string | undefined
+): T[] {
+  if (!currentUserId) return entities;
+
+  const selfIndex = entities.findIndex(
+    (e) => e.kind === 'user' && e.data.id === currentUserId
+  );
+
+  // If self not found or already at top, return as-is
+  if (selfIndex <= 0) return entities;
+
+  // Move self to the front
+  const result = [...entities];
+  const [self] = result.splice(selfIndex, 1);
+  result.unshift(self);
+  return result;
 }

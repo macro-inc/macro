@@ -1,6 +1,6 @@
 use macro_env_var::env_var;
 
-use crate::service::{auth::Auth, db::Db};
+use crate::service::{auth::Auth, db::Db, s3::S3};
 
 env_var! {
     pub struct EnvVars {
@@ -18,6 +18,8 @@ env_var! {
         pub FusionauthClientSecretKey,
         /// Fusionauth oauth redirect uri
         pub FusionauthOauthRedirectUri,
+        /// The document storage bucket
+        pub DocumentStorageBucket,
     }
 }
 
@@ -27,4 +29,6 @@ pub struct SeedCliContext {
     pub db: Db,
     /// Fusionauth client
     pub fusionauth_client: Auth,
+    /// S3 client
+    pub s3: S3,
 }

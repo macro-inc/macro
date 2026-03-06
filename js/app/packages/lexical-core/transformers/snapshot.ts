@@ -18,6 +18,9 @@ export const I_SNAPSHOT_NODE: TextMatchTransformer = {
   export: (node) => {
     if (!$isSnapshotNode(node)) return null;
 
+    // Escape angle brackets as unicode escapes so that XML tags inside the
+    // content (e.g. <m-document-card>) don't get matched by element
+    // transformers during import. JSON.parse handles \u003c/\u003e natively.
     const data = JSON.stringify({
       documentId: node.getDocumentId(),
       documentName: node.getDocumentName(),
@@ -25,7 +28,9 @@ export const I_SNAPSHOT_NODE: TextMatchTransformer = {
       content: node.getContent(),
       snapshotDate: node.getSnapshotDate(),
       mentionUuid: node.getMentionUuid(),
-    });
+    })
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e');
 
     return `<m-snapshot>${data}</m-snapshot>`;
   },

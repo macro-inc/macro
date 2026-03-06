@@ -22,6 +22,11 @@ use frecency::{
         time::DefaultTime,
     },
 };
+use last_online_tracker::{
+    domain::services::LastOnlineService,
+    inbound::LastOnlineWorker,
+    outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
@@ -30,7 +35,7 @@ use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
-use stream::outbound::redis::{RedisStreamManager, RedisStreamRepo};
+use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
 use tower_http::cors::CorsLayer;
 
 env_var!(
@@ -86,11 +91,11 @@ async fn main() -> Result<()> {
 
     let connection_manager = create_dynamo_db_connection_manager(dynamodb_client.clone()).await?;
 
-    let stream_service = RedisStreamRepo::new((*redis_client).clone())
-        .await
-        .context("failed to create stream service")?;
-    let stream_manager = RedisStreamManager::new(stream_service.obj());
-
+    let last_online_redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let last_online_worker = Arc::new(LastOnlineWorker::new(LastOnlineService::new(
+        LastOnlineDefaultTime,
+        RedisLastOnlineRepo::new(last_online_redis_conn),
+    )));
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
@@ -104,11 +109,15 @@ async fn main() -> Result<()> {
         )
         .await?;
 
+    let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
+    let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
+
     let context = context::ApiContext {
         connection_manager,
         redis_client: Arc::clone(&redis_client),
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
         stream_manager,
+        last_online_worker,
     };
 
     tokio::spawn(poll_messages(context.clone()));

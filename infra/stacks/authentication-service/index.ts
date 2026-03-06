@@ -23,6 +23,24 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const GITHUB_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_client_id_key`),
+  })
+  .apply((secret) => secret.secretString);
+
+const GITHUB_CLIENT_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_client_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
+const GITHUB_IDP_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_idp_id_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_cache_secret_key`),
@@ -174,7 +192,7 @@ const service = new AuthenticationService('authentication-service', {
     { name: 'ENVIRONMENT', value: stack },
     {
       name: 'RUST_LOG',
-      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'}`,
+      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'},fusionauth=debug,warn`,
     },
     {
       name: 'DATABASE_URL',
@@ -282,6 +300,18 @@ const service = new AuthenticationService('authentication-service', {
       // from above. Will unify these in a separate PR.
       name: 'STRIPE_PREMIUM_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_ID',
+      value: pulumi.interpolate`${GITHUB_CLIENT_ID}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_SECRET',
+      value: pulumi.interpolate`${GITHUB_CLIENT_SECRET}`,
+    },
+    {
+      name: 'GITHUB_IDP_ID',
+      value: pulumi.interpolate`${GITHUB_IDP_ID}`,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

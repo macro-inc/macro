@@ -86,6 +86,7 @@ impl<'a> ChannelInviteEvent<'a> {
                 NotifEvent::ChannelInvite(ChannelInviteMetadata {
                     invited_by: self.invited_by_user_id.clone(),
                     common: self.common.clone(),
+                    sender_profile_picture_url: None,
                 }),
             ));
         }
@@ -111,6 +112,7 @@ impl ChannelMessageEvent<'_> {
                     message_id: self.message.id.to_string(),
                     thread_id: self.message.thread_id.map(|t| t.to_string()),
                     common: self.channel_metadata.clone(),
+                    sender_profile_picture_url: None,
                 }),
             ));
         }
@@ -130,6 +132,7 @@ impl ChannelMessageEvent<'_> {
                         document_name: mention.item_name.clone(),
                         owner: mention.item_owner.clone(),
                         file_type: mention.file_type.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }
@@ -164,6 +167,7 @@ impl ChannelMessageEvent<'_> {
                             message_content: self.message.content.clone(),
                             thread_parent_sender_id: self.thread_parent_sender_id.clone(),
                             common: self.channel_metadata.clone(),
+                            sender_profile_picture_url: None,
                         }),
                     ));
                 } else {
@@ -179,6 +183,7 @@ impl ChannelMessageEvent<'_> {
                     NotifEvent::ChannelInvite(ChannelInviteMetadata {
                         invited_by: self.message.sender_id.clone(),
                         common: self.channel_metadata.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }
@@ -193,6 +198,7 @@ impl ChannelMessageEvent<'_> {
                         sender: self.message.sender_id.clone(),
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
+                        sender_profile_picture_url: None,
                     }),
                 ));
             }
@@ -301,6 +307,9 @@ pub async fn dispatch_notifications_for_invite(
     recipient_user_ids: Vec<String>,
     common: CommonChannelMetadata,
 ) -> anyhow::Result<()> {
+    let sender_profile_picture_url =
+        get_sender_profile_picture_url(&api_context.db, invited_by_user_id).await;
+
     let event = ChannelInviteEvent {
         channel_id,
         invited_by_user_id,
@@ -308,7 +317,13 @@ pub async fn dispatch_notifications_for_invite(
         common: &common,
     };
 
-    let notifications = event.generate_notifications();
+    let mut notifications = event.generate_notifications();
+    for n in &mut notifications {
+        set_sender_profile_picture(
+            &mut n.notification_event,
+            sender_profile_picture_url.clone(),
+        );
+    }
 
     for notification in notifications {
         send_notification_queue_message(&*api_context.notification_ingress_service, notification)
@@ -381,7 +396,16 @@ pub async fn dispatch_notifications_for_message(
         thread_parent_sender_id,
     };
 
-    let notifications = channel_message_event.generate_notifications();
+    let sender_profile_picture_url =
+        get_sender_profile_picture_url(&api_context.db, &message.sender_id).await;
+
+    let mut notifications = channel_message_event.generate_notifications();
+    for n in &mut notifications {
+        set_sender_profile_picture(
+            &mut n.notification_event,
+            sender_profile_picture_url.clone(),
+        );
+    }
 
     for notification in notifications {
         send_notification_queue_message(&*api_context.notification_ingress_service, notification)
@@ -389,6 +413,30 @@ pub async fn dispatch_notifications_for_message(
     }
 
     Ok(())
+}
+
+async fn get_sender_profile_picture_url(
+    db: &sqlx::PgPool,
+    sender_id: &MacroUserIdStr<'_>,
+) -> Option<String> {
+    macro_db_client::user::update_profile_picture::get_profile_pictures(
+        db,
+        &vec![sender_id.as_ref().to_string()],
+    )
+    .await
+    .ok()
+    .and_then(|pics| pics.pictures.into_iter().next().map(|p| p.url))
+}
+
+fn set_sender_profile_picture(event: &mut NotifEvent, url: Option<String>) {
+    match event {
+        NotifEvent::ChannelInvite(m) => m.sender_profile_picture_url = url,
+        NotifEvent::ChannelMessageSend(m) => m.sender_profile_picture_url = url,
+        NotifEvent::ChannelMention(m) => m.sender_profile_picture_url = url,
+        NotifEvent::ChannelMessageReply(m) => m.sender_profile_picture_url = url,
+        NotifEvent::DocumentMention(m) => m.sender_profile_picture_url = url,
+        _ => {}
+    }
 }
 
 #[cfg(test)]

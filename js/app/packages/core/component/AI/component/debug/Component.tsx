@@ -1,10 +1,11 @@
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { ChatMessageStream, Model } from '@core/component/AI/types';
+import type { Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import { createEffect, createSignal } from 'solid-js';
 import {
@@ -13,22 +14,11 @@ import {
   useChatContext,
   useChatInputContext,
 } from '../../context';
-import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
 import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
-import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { ChatMessages } from '../message/ChatMessages';
 
-function toChat(stream: MessageStream): ChatMessageStream {
-  return {
-    data: stream.data,
-    isDone: stream.isDone,
-    model: DEFAULT_MODEL,
-    attachments: [],
-    streamId: stream.request.stream_id,
-  };
-}
 import {
   blockDone,
   createStream,
@@ -66,20 +56,11 @@ export default function Debug() {
 }
 
 function ChatMarkdownArea() {
-  const attachments = useAttachments();
-  const { MarkdownArea, ref } = useChatMarkdownArea({
-    addAttachment: attachments.addAttachment,
-  });
-  createEffect(() => {
-    const el = ref();
-    if (el) {
-      el.classList.add('bg-accent/10');
-    }
-  });
+  const editor = buildChatEditor();
 
   return (
     <Item label="chat markown area">
-      <MarkdownArea />
+      <MarkdownShell config={editor} />
     </Item>
   );
 }
@@ -110,9 +91,7 @@ function ChatInputBox() {
 
 function ChatInputBoxInner() {
   const input = useChatInputContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
 
   return (
     <Item label="Chat input - not connected to backend">
@@ -130,7 +109,7 @@ function ChatInputBoxInner() {
           />
         </div>
         <ChatInput
-          markdown={chatMarkdownArea}
+          editor={editor}
           onSend={(request) => console.log('request', request)}
         />
       </div>
@@ -147,10 +126,7 @@ function ChatInputBoxConnected() {
 }
 
 function ChatInputBoxConnectedInner() {
-  const input = useChatInputContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
 
   const [_gen, setGen] = createSignal(false);
   const onSend = async (input: ChatSendInput) => {
@@ -165,7 +141,6 @@ function ChatInputBoxConnectedInner() {
       return;
     }
     const [, { stream_id, chat_id }] = response;
-    console.log('created chat', chat_id);
     const connectionStream = subscribe('chat', chat_id, stream_id);
     if (!connectionStream) {
       console.log('no connection stream');
@@ -183,7 +158,7 @@ function ChatInputBoxConnectedInner() {
   return (
     <Item label="Chat input - connected (console)">
       <div class="w-full h-full">
-        <ChatInput markdown={chatMarkdownArea} onSend={onSend} />
+        <ChatInput editor={editor} onSend={onSend} />
       </div>
     </Item>
   );
@@ -201,7 +176,7 @@ function StreamMessages() {
 
 function StreamMessagesInner() {
   const chat = useChatContext();
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const makeStream = () => delayStream(poem(), slowFirst);
 
   return (
@@ -211,7 +186,7 @@ function StreamMessagesInner() {
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);
-          chat.setStream(toChat(poemStream));
+          chat.setStream(poemStream);
         }}
       >
         Stream
@@ -251,13 +226,10 @@ function FullChat() {
 }
 
 function FullChatInner() {
-  const input = useChatInputContext();
   const chat = useChatContext();
-  const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => input.attachments.addAttachment(a),
-  });
+  const editor = buildChatEditor();
   const [_isGen, setIsGen] = createSignal(false);
-  const [debugStream, _setDebugStream] = createSignal<MessageStream>();
+  const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
 
   const onSend = async (input: ChatSendInput) => {
     chat.addMessage({
@@ -286,9 +258,7 @@ function FullChatInner() {
     const chatStream: ChatMessageStream = {
       data: connectionStream.data,
       isDone: connectionStream.isDone,
-      model: input.model,
-      attachments: input.attachments,
-      streamId: stream_id,
+      id: () => ({ stream_id, entity_id: chat_id, entity_type: 'chat' }),
     };
     console.log('set stream');
     chat.setStream(chatStream);
@@ -313,7 +283,7 @@ function FullChatInner() {
         <StreamStatus stream={debugStream} />
         <ChatMessages />
         <ChatInput
-          markdown={chatMarkdownArea}
+          editor={editor}
           chatId={chat.chatId()}
           onSend={onSend}
           onStop={() => {}}
@@ -338,9 +308,9 @@ function ToolCallRender() {
   );
 }
 
-function ToolCallRenderInner(props: { stream: MessageStream }) {
+function ToolCallRenderInner(props: { stream: ChatMessageStream }) {
   const chat = useChatContext();
-  chat.setStream(toChat(props.stream));
+  chat.setStream(props.stream);
 
   return (
     <Item label="Tool call - static">
@@ -476,7 +446,7 @@ function TableStreamInner() {
   const [isPaused, setIsPaused] = createSignal(false);
   const [isSlow, setIsSlow] = createSignal(false);
   const [showRaw, setShowRaw] = createSignal(false);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const [rawText, setRawText] = createSignal('');
 
   const startStream = () => {
@@ -490,7 +460,7 @@ function TableStreamInner() {
       onChunk: (text) => setRawText((prev) => prev + text),
     });
     setStream(controlled);
-    chat.setStream(toChat(controlled));
+    chat.setStream(controlled);
   };
 
   return (

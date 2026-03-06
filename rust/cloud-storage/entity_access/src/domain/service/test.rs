@@ -1,8 +1,11 @@
 //! Unit tests for the EntityAccessService.
 
 use super::*;
-use crate::domain::models::ParticipantRole;
+use crate::domain::models::{
+    CommentAccessLevel, EditAccessLevel, EntityAccessAuth, ParticipantRole, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -275,12 +278,7 @@ async fn test_unsupported_entity_type_returns_none() {
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
-    // Email, Team, and User entity types don't have access checks implemented
-    let result = service
-        .get_access_level(Some(&user_id), "email-1", EntityType::Email)
-        .await;
-    assert_eq!(result.unwrap(), None);
-
+    // Team, and User entity types don't have access checks implemented
     let result = service
         .get_access_level(Some(&user_id), "team-1", EntityType::Team)
         .await;
@@ -406,7 +404,7 @@ async fn test_get_entity_permission_unsupported_type_returns_bad_request() {
     let user_id = test_user_id();
 
     let result = service
-        .get_entity_permission(Some(&user_id), "email-1", EntityType::Email, None)
+        .get_entity_permission(Some(&user_id), "team-1", EntityType::Team, None)
         .await;
 
     assert!(matches!(result, Err(AccessError::BadRequest(_))));
@@ -484,4 +482,286 @@ async fn test_check_access_with_none_user_id_and_no_access() {
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+// --- generate_entity_access_receipt tests ---
+
+#[tokio::test]
+async fn test_generate_receipt_document_with_access() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Authenticated(_)));
+    assert_eq!(receipt.entity().entity_id, "doc-1");
+    assert!(matches!(receipt.entity().entity_type, EntityType::Document));
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_document_no_access_returns_unauthorized() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+// --- minimum access level enforcement tests ---
+
+#[tokio::test]
+async fn test_generate_receipt_view_access_satisfies_view_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::View);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_edit_access_satisfies_view_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_owner_access_satisfies_owner_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_view_access_fails_comment_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::View);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<CommentAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_view_access_fails_edit_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::View);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<EditAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_edit_access_fails_owner_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_comment_access_fails_edit_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Comment);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<EditAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_comment_access_satisfies_comment_requirement() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Comment);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<CommentAccessLevel>(
+            &user_id,
+            None,
+            "doc-1",
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_with_role() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Authenticated(_)));
+    assert_eq!(
+        receipt.entity().entity_id,
+        "11111111-1111-1111-1111-111111111111"
+    );
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_not_found_returns_not_found() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NotFound);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_unsupported_type_returns_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            "team-1",
+            EntityType::Team,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
 }

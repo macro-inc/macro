@@ -43,7 +43,7 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
-import type { CreateDocumentHandler200 as CreateDocumentResponse } from './generated/schemas/createDocumentHandler200';
+import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
@@ -532,6 +532,19 @@ export const storageServiceClient = {
         }
       ),
       (result) => result.data
+    );
+  },
+
+  async getDocumentShortId({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<MaybeResult<FetchWithTokenErrorCode, string>> {
+    return mapOk(
+      await dssFetch<{ shortId: string }>(`/documents/${documentId}/short_id`, {
+        method: 'GET',
+      }),
+      (result) => result.shortId
     );
   },
 

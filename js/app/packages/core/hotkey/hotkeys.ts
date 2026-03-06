@@ -24,6 +24,7 @@ import {
 import {
   HOTKEY_PRIORITY_DEFAULT,
   type HotkeyCommand,
+  type HotkeyGroup,
   type HotkeyRegistrationOptions,
   isBaseKeyboardValue,
   type KeypressContext,
@@ -113,6 +114,7 @@ export function registerHotkey(
     keyDownHandler,
     keyUpHandler,
     activateCommandScope,
+    activateCommandScopeId: providedCommandScopeId,
     runWithInputFocused,
     hotkeyToken,
     displayPriority,
@@ -124,13 +126,20 @@ export function registerHotkey(
     shouldReturnFocusOnClose,
   } = args;
 
+  const noopDisposer: RegisterHotkeyReturn = {
+    dispose: () => {},
+    withGroup: (group) => {
+      group.add(noopDisposer);
+      return noopDisposer;
+    },
+  };
+
   if (!scopeId) {
     logger.error('Scope ID is required for hotkey registration.', {
       error: new Error('No scope ID provided'),
       scopeId,
     });
-    // Return a no-op disposer
-    return { dispose: () => {} };
+    return noopDisposer;
   }
   const scopeNode = hotkeyScopeTree.get(scopeId);
   if (!scopeNode) {
@@ -138,7 +147,7 @@ export function registerHotkey(
       error: new Error('Scope ID not found'),
       scopeId,
     });
-    return { dispose: () => {} };
+    return noopDisposer;
   }
 
   // Convert single hotkey to array for consistent handling
@@ -171,7 +180,26 @@ export function registerHotkey(
   }
 
   let commandScopeId: string | undefined;
-  if (activateCommandScope) {
+  // If a specific command scope ID is provided, use it instead of creating a new one
+  if (providedCommandScopeId) {
+    const existingScope = hotkeyScopeTree.get(providedCommandScopeId);
+    if (!existingScope) {
+      logger.error('Provided command scope ID not found.', {
+        error: new Error('Provided command scope ID not found'),
+        providedCommandScopeId,
+      });
+      return noopDisposer;
+    }
+    if (existingScope.type !== 'command') {
+      logger.error('Provided scope is not a command scope.', {
+        error: new Error('Provided scope is not a command scope'),
+        providedCommandScopeId,
+        scopeType: existingScope.type,
+      });
+      return noopDisposer;
+    }
+    commandScopeId = providedCommandScopeId;
+  } else if (activateCommandScope) {
     commandScopeId = getScopeId('command-scope-' + scopeId);
     // When a command scope is registered, its parent scope is set as the scopeId of the registered hotkey. It will be registered as a child of that scope. When the command scope is activated, its parent scope will get set to whatever scope is active where it was called, so that when the command scope is deactivated, it willl return to the correct scope.
     registerScope({
@@ -269,15 +297,80 @@ export function registerHotkey(
         });
       }
 
-      // Remove command scope if it was created
-      if (commandScopeId) {
+      // Remove command scope only if we created it (not if we're using a shared one)
+      if (commandScopeId && !providedCommandScopeId) {
         removeScope(commandScopeId);
       }
     },
     commandScopeId,
+    withGroup: (group) => {
+      group.add(disposer);
+      return disposer;
+    },
   };
 
   return disposer;
+}
+
+/**
+ * Creates a group for collecting hotkey registrations and disposing them all at once.
+ *
+ * @returns A group object with `add` and `dispose` methods
+ *
+ * @example
+ * ```tsx
+ * const group = createHotkeyGroup();
+ *
+ * // Add registrations using group.add()
+ * group.add(registerHotkey({
+ *   scopeId: 'my-scope',
+ *   description: 'Delete item',
+ *   hotkey: 'delete',
+ *   keyDownHandler: () => true,
+ * }));
+ *
+ * // Or use .withGroup() on the registration
+ * registerHotkey({
+ *   scopeId: 'my-scope',
+ *   description: 'Copy item',
+ *   hotkey: 'cmd+c',
+ *   keyDownHandler: () => true,
+ * }).withGroup(group);
+ *
+ * // Access commandScopeId naturally
+ * const { commandScopeId } = group.add(registerHotkey({
+ *   scopeId: 'my-scope',
+ *   description: 'Open menu',
+ *   hotkey: 'cmd+k',
+ *   activateCommandScope: true,
+ *   keyDownHandler: () => true,
+ * }));
+ *
+ * group.add(registerHotkey({
+ *   scopeId: commandScopeId,
+ *   description: 'Menu option',
+ *   hotkey: '1',
+ *   keyDownHandler: () => true,
+ * }));
+ *
+ * // Dispose all at once
+ * onCleanup(() => group.dispose());
+ * ```
+ */
+export function createHotkeyGroup(): HotkeyGroup {
+  const registrations: RegisterHotkeyReturn[] = [];
+
+  return {
+    add: <T extends RegisterHotkeyReturn>(registration: T): T => {
+      registrations.push(registration);
+      return registration;
+    },
+    dispose: () => {
+      for (const registration of registrations) {
+        registration.dispose();
+      }
+    },
+  };
 }
 
 // Variables for tracking event propagation

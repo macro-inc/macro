@@ -1,20 +1,16 @@
 import { withAnalytics } from '@coparse/analytics';
 import type { BlockName } from '@core/block';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { setRightbarChatId } from '@core/signal/rightbar';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { propsToHref } from '@core/util/url';
-import { cognitionApiServiceClient } from '@service-cognition/client';
 import { postNewHistoryItem } from '@queries/history/history';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 
 const { track, TrackingEvents } = withAnalytics();
 
 export function useOpenChatForAttachment() {
   const { showPaywall } = usePaywallState();
-  const isRightPanelCollapsed = () => !isRightPanelOpen();
-  const toggleRightPanel = useToggleRightPanel();
 
   return async function openChatForAttachment(args: {
     attachmentId: string;
@@ -75,12 +71,6 @@ export function useOpenChatForAttachment() {
       }
       const [, data] = res;
       recent_id = data?.id;
-    }
-
-    setRightbarChatId(recent_id);
-
-    if (isRightPanelCollapsed()) {
-      toggleRightPanel?.();
     }
   };
 }

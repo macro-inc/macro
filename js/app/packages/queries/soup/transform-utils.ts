@@ -5,7 +5,6 @@ import {
 import { useChannelsContext } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
-  truncateSearchMatch,
   mergeAdjacentMacroEmTags,
   extractSearchSnippet,
   extractSearchTerms,
@@ -21,7 +20,6 @@ import type {
   EmailEntity,
   ChannelEntity,
 } from '@entity';
-import { useHistoryQuery } from '@queries/history/history';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
   DocumentSearchResult,
@@ -36,8 +34,6 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
-
-const SEARCH_MATCH_LENGTH = 60;
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -66,10 +62,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         return contents.map((content) => ({
           type: 'channel' as const,
           id: r.message_id!,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           senderId: r.sender_id!,
           sentAt: r.created_at!,
           location: {
@@ -88,10 +81,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           const mergedContent = mergeAdjacentMacroEmTags(content);
           return {
             type: 'pdf' as const,
-            content: truncateSearchMatch(
-              mergeAdjacentMacroEmTags(content),
-              SEARCH_MATCH_LENGTH
-            ),
+            content: mergeAdjacentMacroEmTags(content),
             location: {
               type: 'pdf' as const,
               searchPage: Number(r.node_id),
@@ -112,10 +102,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'md' as const,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           location: { type: 'md' as const, nodeId: r.node_id! },
         }));
       });
@@ -126,10 +113,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'email' as const,
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           sender: r.pretty_sender!,
           senderId: emailToId(r.sender),
           sentAt: r.sent_at!,
@@ -145,10 +129,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
-          content: truncateSearchMatch(
-            mergeAdjacentMacroEmTags(content),
-            SEARCH_MATCH_LENGTH
-          ),
+          content: mergeAdjacentMacroEmTags(content),
           location: undefined,
         }));
       });
@@ -157,10 +138,23 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 
   const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
+  let senderHighlightTerms: string[] | null = null;
+  if (data.type === 'email') {
+    const terms = [
+      ...new Set(
+        data.results
+          .flatMap((r) => (r.highlight.sender ?? '').toLowerCase().split(/\s+/))
+          .filter(Boolean)
+      ),
+    ];
+    senderHighlightTerms = terms.length > 0 ? terms : null;
+  }
+
   return {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
+    senderHighlightTerms,
     contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
@@ -169,8 +163,6 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-
-  const historyQuery = useHistoryQuery();
 
   return (
     result: UnifiedSearchResponseItem,
@@ -238,6 +230,7 @@ export const useSearchResponseItemMapper = () => {
           done: !result.inbox_visible,
           participants,
           search,
+          snippet: result.snippet ?? undefined,
         };
       }
       case 'chat': {
@@ -245,19 +238,10 @@ export const useSearchResponseItemMapper = () => {
         const search = getSearchData({
           results: result.chat_search_results,
         });
-        let name = result.name;
-        if (!name || name === blockNameToDefaultFile('chat')) {
-          const chat = (historyQuery.data ?? []).find(
-            (item) => item.id === result.chat_id
-          );
-          if (chat) {
-            name = chat.name;
-          }
-        }
         return {
           type: 'chat',
           id: result.chat_id,
-          name,
+          name: result.name,
           ownerId: result.user_id,
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
@@ -390,6 +374,19 @@ export const mapSoupPageToEntityList: (
             name: p.name ?? '',
           }));
 
+          const hasIcsAttachment = item.data.attachments?.some(
+            (a) =>
+              a.mimeType === 'text/calendar' ||
+              a.filename?.toLowerCase().endsWith('.ics')
+          );
+
+          const attachments = item.data.attachments?.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+          }));
+
           return {
             ...item.data,
             createdAt: item.data.createdAt,
@@ -403,6 +400,8 @@ export const mapSoupPageToEntityList: (
             frecencyScore: item.frecency_score,
             viewedAt: item.data.viewedAt,
             participants,
+            hasIcsAttachment,
+            attachments,
           };
         }
 

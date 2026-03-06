@@ -19,6 +19,7 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import {
@@ -134,36 +135,38 @@ const Block: Component = () => {
           disabled: isSpecialProject,
         }}
       >
-        <Show when={isDragging() && !isSpecialProject}>
-          <FileDropOverlay>Upload to this folder</FileDropOverlay>
-        </Show>
-        <TopBar />
-        <Show
-          when={ENABLE_PROJECT_VIEW_PREVIEW}
-          fallback={
-            <ProjectEntityList
-              projectId={projectId}
-              soup={projectSoup}
-              scopeId={projectViewScope}
-            />
-          }
-        >
-          <div class="flex size-full">
-            <SplitPanelContext.Provider
-              value={{
-                ...splitPanelContext,
-                halfSplitState: () =>
-                  preview() ? { side: 'left', percentage: 30 } : undefined,
-              }}
-            >
+        <ModalsProvider>
+          <Show when={isDragging() && !isSpecialProject}>
+            <FileDropOverlay>Upload to this folder</FileDropOverlay>
+          </Show>
+          <TopBar />
+          <Show
+            when={ENABLE_PROJECT_VIEW_PREVIEW}
+            fallback={
               <ProjectEntityList
                 projectId={projectId}
                 soup={projectSoup}
                 scopeId={projectViewScope}
               />
-            </SplitPanelContext.Provider>
-          </div>
-        </Show>
+            }
+          >
+            <div class="flex size-full">
+              <SplitPanelContext.Provider
+                value={{
+                  ...splitPanelContext,
+                  halfSplitState: () =>
+                    preview() ? { side: 'left', percentage: 30 } : undefined,
+                }}
+              >
+                <ProjectEntityList
+                  projectId={projectId}
+                  soup={projectSoup}
+                  scopeId={projectViewScope}
+                />
+              </SplitPanelContext.Provider>
+            </div>
+          </Show>
+        </ModalsProvider>
       </div>
     </DocumentBlockContainer>
   );

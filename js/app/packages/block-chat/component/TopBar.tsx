@@ -1,27 +1,28 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
+import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { ReferencesModal } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { useGetPermissions } from '@core/signal/permissions';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
-import { onCleanup, onMount } from 'solid-js';
-import { useWaitChatRename } from '@macro-entity';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -29,24 +30,44 @@ export function TopBar() {
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
 
-  onMount(() => {
-    if (!name() || name() === DEFAULT_CHAT_NAME) {
-      const dispose = useWaitChatRename(blockId, true);
-
-      onCleanup(() => {
-        dispose();
-      });
-    }
-  });
-
-  const userPermissions = useGetPermissions();
   const openInstructions = useOpenInstructionsMd();
+
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
 
   const ops: FileOperation[] = [
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
     { op: 'delete', divideAbove: true },
+  ];
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Edit AI Instructions',
+      icon: Notepad,
+      action: openInstructions,
+    },
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={blockId}
+          documentName={chatName()}
+          buttonSize="sm"
+          entityType="chat"
+        />
+      ),
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger />,
+    },
   ];
 
   return (
@@ -57,42 +78,14 @@ export function TopBar() {
           lockRename={false}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="chat"
-            name={chatName()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1 h-full">
-          <DeprecatedIconButton
-            icon={Notepad}
-            size="sm"
-            theme="clear"
-            tooltip={{ label: 'Edit AI Instructions' }}
-            onClick={openInstructions}
-          />
-          <ReferencesModal
-            documentId={blockId}
-            documentName={chatName()}
-            buttonSize="sm"
-            entityType="chat"
-          />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={chatName()}
-              userPermissions={userPermissions()}
-              itemType="chat"
-            />
-          </div>
-        </div>
-      </SplitToolbarRight>
+      <ResponsivePermissionsBadge />
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={ops}
+        id={blockId}
+        itemType="chat"
+        name={chatName()}
+      />
     </>
   );
 }

@@ -1,8 +1,9 @@
 use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use utoipa::ToSchema;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct StreamId {
     pub entity_type: EntityType,
     pub entity_id: String,
@@ -11,7 +12,27 @@ pub struct StreamId {
 
 pub type Result<T> = std::result::Result<T, StreamServiceError>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Events published through the notification channel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[non_exhaustive]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum StreamEvent {
+    /// A new stream was created.
+    Created(StreamId),
+    /// A stream was closed.
+    Closed(StreamId),
+}
+
+impl StreamEvent {
+    pub fn id(&self) -> &StreamId {
+        match self {
+            Self::Created(id) => id,
+            Self::Closed(id) => id,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct StreamItem {
     pub id: StreamId,
     pub payload: serde_json::Value,
@@ -34,5 +55,11 @@ pub enum StreamServiceError {
 impl From<serde_json::error::Error> for StreamServiceError {
     fn from(value: serde_json::error::Error) -> Self {
         Self::SerdeError(value)
+    }
+}
+
+impl From<sqlx::Error> for StreamServiceError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::StorageError(value.to_string())
     }
 }

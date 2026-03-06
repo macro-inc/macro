@@ -1,5 +1,8 @@
+//! Android push notification models (FCM via SNS).
+
 use serde::Serialize;
 
+/// FCM push notification message for Android devices.
 #[derive(Debug, Serialize)]
 pub struct FCMMessage<T> {
     pub(crate) android: AndroidData,
@@ -21,13 +24,16 @@ impl<T> FCMMessage<T> {
     }
 }
 
+/// Android notification priority level.
 #[derive(Debug, Serialize)]
 pub enum AndroidNotifPrio {
+    /// Normal priority.
     Normal,
-    #[expect(dead_code)]
+    /// High priority.
     High,
 }
 
+/// Android FCM notification data.
 #[derive(Debug, Serialize)]
 pub struct AndroidData {
     pub(crate) notification: String,

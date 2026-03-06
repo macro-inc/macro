@@ -86,3 +86,12 @@ fn casing_ignored_for_email() {
 
     assert_eq!(id.email_part().local_part(), "###hello###+WEIRD");
 }
+
+#[test]
+fn debug_output_is_simple_string() {
+    let id = MacroUserId::parse_from_str("macro|hutch@macro.com").unwrap();
+    assert_eq!(format!("{:?}", id), "macro|hutch@macro.com");
+
+    let id_str = MacroUserIdStr::parse_from_str("macro|hutch@macro.com").unwrap();
+    assert_eq!(format!("{:?}", id_str), "macro|hutch@macro.com");
+}

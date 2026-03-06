@@ -53,9 +53,6 @@ pub struct Config {
     /// The document storage service url
     pub document_storage_service_url: String,
 
-    /// The notification service url
-    pub notification_service_url: String,
-
     /// The notification queue
     pub notification_queue: String,
 
@@ -64,6 +61,13 @@ pub struct Config {
 
     /// The stripe price id for the professional subscription
     pub stripe_price_id: String,
+
+    /// The github client id
+    pub github_client_id: String,
+    /// The github client secret
+    pub github_client_secret: String,
+    /// The github idp id
+    pub github_idp_id: String,
 }
 
 impl Config {
@@ -107,9 +111,6 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let notification_service_url = std::env::var("NOTIFICATION_SERVICE_URL")
-            .context("NOTIFICATION_SERVICE_URL must be provided")?;
-
         let notification_queue =
             std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
 
@@ -118,6 +119,13 @@ impl Config {
 
         let stripe_price_id =
             std::env::var("STRIPE_PRICE_ID").context("STRIPE_PRICE_ID must be provided")?;
+
+        let github_client_id =
+            std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
+        let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
+            .context("GITHUB_CLIENT_SECRET must be provided")?;
+        let github_idp_id =
+            std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
 
         Ok(Config {
             base_url,
@@ -135,11 +143,13 @@ impl Config {
             port,
             service_internal_auth_key,
             document_storage_service_url,
-            notification_service_url,
             notification_queue,
             search_event_queue,
             stripe_price_id,
             environment,
+            github_client_id,
+            github_client_secret,
+            github_idp_id,
         })
     }
 }

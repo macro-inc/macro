@@ -1,5 +1,8 @@
 //! Domain models for the documents crate.
 
+use macro_user_id::user_id::MacroUserIdStr;
+use model::document::FileType;
+
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -12,9 +15,39 @@ pub enum DocumentError {
     /// The document does not exist in storage (S3/sync service).
     #[error("document does not exist in storage")]
     Gone,
+    /// A conflict occurred (e.g. duplicate document ID).
+    #[error("conflict: {0}")]
+    Conflict(String),
+    /// A bad request was made.
+    #[error("bad request: {0}")]
+    BadRequest(String),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+}
+
+/// Arguments for creating a document in the repository.
+pub struct CreateDocumentRepoArgs {
+    /// Optional user-provided document ID.
+    pub id: Option<uuid::Uuid>,
+    /// SHA256 hash of the document content.
+    pub sha: String,
+    /// Document name without extension.
+    pub document_name: String,
+    /// The owner/creator of the document.
+    pub user_id: MacroUserIdStr<'static>,
+    /// File type of the document.
+    pub file_type: Option<FileType>,
+    /// Project to associate the document with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Email attachment to link (internal only).
+    pub email_attachment_id: Option<uuid::Uuid>,
+    /// Custom creation timestamp.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Whether the document is a task (MD files only).
+    pub is_task: bool,
+    /// Whether to skip adding to user history.
+    pub skip_history: bool,
 }
 
 /// Configuration for CloudFront presigned URL generation.

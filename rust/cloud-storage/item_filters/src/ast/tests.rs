@@ -30,6 +30,7 @@ fn it_expands_filters() {
             project_ids: vec![project_id.to_string()],
             owners: vec!["macro|hello@test.com".to_string()],
             importance: Some(true),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -99,7 +100,6 @@ fn it_expands_filters() {
 }
 
 #[test]
-#[ignore]
 fn it_expands_file_associations() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
@@ -107,7 +107,7 @@ fn it_expands_file_associations() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
-            importance: Some(true),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -169,7 +169,6 @@ fn it_expands_file_associations() {
 }
 
 #[test]
-#[ignore]
 fn it_expands_other_association() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
@@ -177,7 +176,7 @@ fn it_expands_other_association() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
-            importance: Some(true),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -329,4 +328,80 @@ fn it_expands_channel_type_with_channel_id() {
     let json = serde_json::to_value(ast).unwrap();
     // Should be AND of channel_id and channel_type
     assert!(json.get("&").is_some());
+}
+
+#[test]
+fn it_expands_document_notification_filters() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: crate::NotificationFilters {
+                done: Some(false),
+                seen: Some(false),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_string(&ast).unwrap();
+    assert!(json.contains(r#""nd":false"#));
+    assert!(json.contains(r#""ns":false"#));
+}
+
+#[test]
+fn it_expands_document_task_include_cbm_atm_nc_as_or() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            task_filters: crate::TaskFilters {
+                include_cbm_atm_nc: Some(true),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    assert!(
+        json.get("|").is_some(),
+        "include flag should OR with base filters"
+    );
+    let as_text = serde_json::to_string(&json).unwrap();
+    assert!(as_text.contains(r#""cbm":true"#));
+}
+
+#[test]
+fn task_include_cbm_atm_nc_false_is_noop() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            task_filters: crate::TaskFilters {
+                include_cbm_atm_nc: Some(false),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    assert!(
+        EntityFilterAst::new_from_filters(f).unwrap().is_none(),
+        "false should be equivalent to not setting the include flag"
+    );
 }

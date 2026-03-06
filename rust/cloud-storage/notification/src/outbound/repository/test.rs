@@ -13,14 +13,6 @@ struct TestNotification {
 
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
-
-    fn rate_limit_config() -> Option<crate::domain::models::RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<crate::domain::models::RateLimitKey> {
-        None
-    }
 }
 
 fn test_user(email: &str) -> MacroUserIdStr<'static> {
@@ -92,7 +84,10 @@ async fn test_get_unsubscribed_users_different_item(pool: Pool<Postgres>) {
 async fn test_get_device_endpoints(pool: Pool<Postgres>) {
     let user = test_user("user1@test.com");
 
-    let result = pool.get_device_endpoints(&[user.clone()]).await.unwrap();
+    let result = pool
+        .get_device_endpoints(std::slice::from_ref(&user))
+        .await
+        .unwrap();
 
     let endpoints = result.get(&user).expect("user should have endpoints");
     assert_eq!(endpoints.len(), 2);
@@ -132,11 +127,11 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     };
 
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request, notification_id, "test_service", None)
         .await
         .unwrap();
 
-    assert_eq!(result, Some(notification_id));
+    assert!(result.is_some());
 
     // Verify notification was inserted
     let row = sqlx::query!("SELECT id FROM notification WHERE id = $1", notification_id)
@@ -283,7 +278,11 @@ async fn test_get_basic_notifications_empty(pool: Pool<Postgres>) {
 )]
 async fn test_get_user_notifications(pool: Pool<Postgres>) {
     let result: Vec<UserNotificationRow<TestNotification>> = pool
-        .get_user_notifications("macro|user@test.com", 10, Query::Sort(CreatedAt, ()))
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
         .await
         .unwrap();
 
@@ -303,10 +302,71 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     assert_eq!(row.notification_metadata.message, "hello");
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications_with_invalid"))
+)]
+async fn test_get_user_notifications_skips_invalid_entity_type(pool: Pool<Postgres>) {
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
+        .await
+        .unwrap();
+
+    // 3 notifications inserted, but only the valid one (with entity_type "document"
+    // and correct metadata) should survive. The one with "bogus_entity" and the one
+    // with non-matching metadata are silently filtered out.
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0].notification_id,
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()
+    );
+    assert_eq!(result[0].entity.entity_type, EntityType::Document);
+    assert_eq!(result[0].notification_metadata.message, "hello");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications_with_invalid"))
+)]
+async fn test_get_user_notifications_by_event_item_ids_skips_invalid(pool: Pool<Postgres>) {
+    let valid_item = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+    let invalid_entity_item =
+        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000002").unwrap();
+    let invalid_metadata_item =
+        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000003").unwrap();
+
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications_by_event_item_ids(
+            MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            &[valid_item, invalid_entity_item, invalid_metadata_item],
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
+        .await
+        .unwrap();
+
+    // All three are requested, but only the valid one survives filtering.
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0].notification_id,
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()
+    );
+    assert_eq!(result[0].entity.entity_type, EntityType::Document);
+    assert_eq!(result[0].notification_metadata.message, "hello");
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
     let result: Vec<UserNotificationRow<TestNotification>> = pool
-        .get_user_notifications("macro|nobody@test.com", 10, Query::Sort(CreatedAt, ()))
+        .get_user_notifications(
+            MacroUserIdStr::parse_from_str("macro|nobody@test.com").unwrap(),
+            10,
+            Query::Sort(CreatedAt, ()),
+        )
         .await
         .unwrap();
 
@@ -328,18 +388,27 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     };
 
     // First creation should succeed
+    let request2 = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        notification: TestNotification {
+            message: "hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request, notification_id, "test_service", None)
         .await
         .unwrap();
-    assert_eq!(result, Some(notification_id));
+    assert!(result.is_some());
 
     // Second creation with same ID should return None
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request2, notification_id, "test_service", None)
         .await
         .unwrap();
-    assert_eq!(result, None);
+    assert!(result.is_none());
 
     // Verify only one notification exists
     let count: i64 = sqlx::query_scalar!(
@@ -362,4 +431,84 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     .unwrap()
     .unwrap();
     assert_eq!(user_count, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_delete_all_user_notifications(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    // Verify the notification exists before deletion
+    let count_before: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count_before, 1);
+
+    pool.delete_all_user_notifications(user.clone())
+        .await
+        .unwrap();
+
+    // Verify the user_notification row is hard-deleted
+    let count_after: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count_after, 0);
+
+    // Verify the parent notification record still exists
+    let notif_count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM notification WHERE id = $1",
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(notif_count, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_delete_all_user_notifications_does_not_affect_other_users(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+    let other_user = test_user("other@test.com");
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    // Add a user_notification for the other user
+    sqlx::query!(
+        "INSERT INTO user_notification (user_id, notification_id, created_at) VALUES ($1, $2, '2025-01-01 00:00:00')",
+        other_user.to_string(),
+        notification_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Delete all notifications for the first user only
+    pool.delete_all_user_notifications(user).await.unwrap();
+
+    // The other user's notification should still exist
+    let other_count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE user_id = $1",
+        other_user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(other_count, 1);
 }

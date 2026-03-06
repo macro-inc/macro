@@ -60,25 +60,40 @@ import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
-  highlight?: boolean;
+  highlightAbove?: boolean;
+  highlightBelow?: boolean;
 };
 
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2" />
         <div
-          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightAbove && 'border-accent'
+          )}
+        />
+        <div
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-7 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={cn(
+            'w-7 border-b border-edge-muted',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-6 mt ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={cn(
+          'text-xs text-panel uppercase font-mono p-1 my-6 mt bg-edge',
+          props.highlightBelow && 'bg-accent'
+        )}
       >
         {props.text}
       </div>
@@ -89,7 +104,7 @@ export function MessageFlag(props: MessageFlagProps) {
 function NewMessageIndicator(props: { onClick?: () => void }) {
   return (
     <button type="button" class="w-full text-left" onClick={props.onClick}>
-      <MessageFlag text="New" highlight />
+      <MessageFlag text="New" highlightBelow />
     </button>
   );
 }
@@ -185,15 +200,21 @@ export function MessageContainer(props: MessageProps) {
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
   };
 
-  // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
+  // We consider a message consecutive if it's from the same user, within 10 minutes, and has the same thread id.
   const isConsecutive = () => {
     const prevMessage_ = previousMessage();
     if (!prevMessage_) return false;
     const prevSenderId = prevMessage_?.sender_id;
+    const withinTimeWindow =
+      Math.abs(
+        new Date(message.created_at).getTime() -
+          new Date(prevMessage_.created_at).getTime()
+      ) <
+      10 * 60 * 1000;
     return (
       (prevMessage_.thread_id ?? '') === (message.thread_id ?? '') &&
       prevSenderId === message.sender_id &&
-      isSameDay(new Date(prevMessage_.created_at), new Date(message.created_at))
+      withinTimeWindow
     );
   };
 
@@ -495,6 +516,11 @@ export function MessageContainer(props: MessageProps) {
       }}
       data-message-id={message.id}
     >
+      {/* New message indicator */}
+      <Show when={props.listContext.isFirstNewMessage}>
+        <NewMessageIndicator onClick={props.onDismissNewMessages} />
+      </Show>
+
       {/* Date separator */}
       <Show
         when={
@@ -505,14 +531,14 @@ export function MessageContainer(props: MessageProps) {
               newDayPreviousNonThreadMessage()))
         }
       >
-        <MessageFlag text={formatRelativeDate(message.created_at)} />
+        <MessageFlag
+          text={formatRelativeDate(message.created_at)}
+          highlightAbove={isNewMessage()}
+          highlightBelow={isNewMessage()}
+        />
       </Show>
-      {/* New message indicator */}
-      <Show when={props.listContext.isFirstNewMessage}>
-        <NewMessageIndicator onClick={props.onDismissNewMessages} />
-      </Show>
-      {/* Message item */}
 
+      {/* Message item */}
       <ContextMenu
         onOpenChange={(isOpen) => {
           setContextMenuOpen(isOpen);

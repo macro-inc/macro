@@ -76,7 +76,6 @@ export function test() {
 
   createEffect(() => {
     if (stream.isDone()) console.log('Stream Done');
-    if (stream.isErr()) console.log('Stream Error');
   });
 }
 
@@ -97,11 +96,11 @@ export function toolCall(_delay: NetworkDelay = noDelay) {
       type: 'toolCall',
       tool: {
         data: {
-          contentType: 'document',
+          contentType: 'channel',
           ids: ['this-is-not-a-real-id'],
           messagesSince: null,
         },
-        name: 'Read',
+        name: 'ReadThread',
       },
     },
     {

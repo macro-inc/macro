@@ -1,20 +1,18 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
-
+use super::util::chat_message::ai_request::build_chat_completion_request;
+use super::util::chat_message::toolset::choose_toolset;
+use super::util::chat_message::{store_conversation_messages, store_incoming_message};
+use super::util::chat_permissions;
 use crate::api::context::ApiContext;
 use crate::api::utils::log;
-use crate::api::ws::chat_message::ai_request::build_chat_completion_request;
-use crate::api::ws::chat_message::toolset::choose_toolset;
-use crate::api::ws::chat_message::{store_conversation_messages, store_incoming_message};
-use crate::api::ws::chat_permissions;
-use crate::api::ws::connection::MESSAGE_ABORT_MAP;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::core::model::FALLBACK_MODEL;
-use crate::model::ws::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
-use crate::service::ai::name::maybe_rename_chat;
+use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::get_chat::get_chat;
+use crate::service::notification::notify;
 use ai::tool::ToolLoop;
 use ai::tool::types::StreamPart;
-use ai::types::{AssistantMessagePart, ChatMessage, Model};
+use ai::types::{AssistantMessagePart, Model};
 use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
 use async_stream::stream;
 use axum::Json;
@@ -33,8 +31,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
-use stream::domain::{PayloadStream, StreamId, StreamManagerExt};
-use tokio::sync::oneshot;
+use stream::domain::{StreamId, StreamRepoExt};
 use utoipa::ToSchema;
 
 /// Raw Bearer token extracted from the Authorization header.
@@ -198,7 +195,6 @@ pub async fn send_chat_message(
         }
     };
 
-    let is_first_message = chat.messages.is_empty();
     let model = if request.model == Model::Claude45Opus {
         Model::Claude45Opus
     } else {
@@ -254,11 +250,8 @@ pub async fn send_chat_message(
         stream_id: stream_id.clone(),
     };
 
-    // Create a channel to receive new_messages after streaming completes
-    let (messages_tx, messages_rx) = oneshot::channel::<Vec<ChatMessage>>();
-
-    // Create the payload stream
-    let payload_stream = create_chat_payload_stream(
+    // Stream the AI response, save messages when complete
+    stream_and_save_message(
         ctx.clone(),
         ai_request,
         toolset.toolset,
@@ -267,57 +260,13 @@ pub async fn send_chat_message(
         actual_chat_id.clone(),
         message_id.clone(),
         stream_id.clone(),
-        messages_tx,
         model,
         now,
         request.content.clone(),
         user_message_id,
         request.attachments.clone().unwrap_or_default(),
+        durable_stream_id,
     );
-
-    // Use the extension trait to handle spawning and stream management
-    let stream_handle =
-        ctx.stream_repo
-            .clone()
-            .from_async_stream(durable_stream_id, payload_stream, None);
-
-    // Spawn post-processing task
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_id.clone();
-    let chat_id = actual_chat_id.clone();
-    let message_id_for_store = message_id.clone();
-
-    tokio::spawn(async move {
-        // Wait for the stream to complete
-        let _ = stream_handle.await;
-
-        // Get the new messages from the channel
-        if let Ok(new_messages) = messages_rx.await {
-            // Store conversation messages, using the pre-generated message_id for the first assistant message
-            if let Err(err) = store_conversation_messages(
-                ctx_clone.clone(),
-                user_id_clone.0.as_ref(),
-                &chat_id,
-                new_messages,
-                model,
-                Some(message_id_for_store),
-            )
-            .await
-            {
-                tracing::error!(error=?err, "failed to store conversation messages");
-            }
-
-            // Maybe rename chat if first message
-            if is_first_message
-                && let Ok(new_name) =
-                    maybe_rename_chat(&chat_id, &ctx_clone, user_id_clone.0.as_ref())
-                        .await
-                        .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
-            {
-                tracing::info!(chat_id, new_name, "chat renamed after first message");
-            }
-        }
-    });
 
     Ok(Json(SendChatMessageResponse {
         stream_id,
@@ -368,10 +317,12 @@ async fn create_new_chat(
     Ok((chat, new_chat_id))
 }
 
-/// Creates the AI stream and returns a PayloadStream that yields JSON values.
-/// Returns Err if the stream should not be started (e.g., aborted).
+/// Streams the AI response and saves conversation messages when complete.
+///
+/// Creates a payload stream, publishes it via `from_async_stream`, and stores
+/// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
-fn create_chat_payload_stream(
+fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: ai::types::ChatCompletionRequest,
     toolset: AiToolSet,
@@ -380,20 +331,13 @@ fn create_chat_payload_stream(
     chat_id: String,
     message_id: String,
     stream_id: String,
-    messages_tx: oneshot::Sender<Vec<ChatMessage>>,
     model: Model,
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
     user_message_attachments: Vec<ChatAttachmentWithName>,
-) -> PayloadStream {
-    // Check for abort before starting
-    if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
-        MESSAGE_ABORT_MAP.remove(&stream_id);
-        let _ = messages_tx.send(vec![]);
-        return Box::pin(futures::stream::empty());
-    }
-
+    durable_stream_id: StreamId,
+) {
     tracing::trace!(request=?request, "streaming chat request");
 
     let tool_context = ToolServiceContext {
@@ -401,6 +345,7 @@ fn create_chat_payload_stream(
         search_service_client: ctx.search_service_client.clone(),
         scribe: ctx.scribe.clone(),
         soup_service: ctx.soup_service.clone(),
+        document_tool_context: ctx.document_tool_context.clone(),
     };
 
     #[expect(deprecated)]
@@ -408,6 +353,7 @@ fn create_chat_payload_stream(
         user_id: user_id.clone(),
         jwt: Arc::new(jwt_token),
     };
+    let ctx_outer = ctx.clone();
 
     let payload_stream = stream! {
         // Yield the user message as the first item so other clients can display it
@@ -443,13 +389,9 @@ fn create_chat_payload_stream(
                         stream_id: stream_id.clone(),
                     },
                 };
-                let error_msg = ChatStream::Error(
-                    crate::model::ws::WebSocketError::StreamError(stream_error),
-                );
-                if let Ok(json) = serde_json::to_value(&error_msg) {
+                if let Ok(json) = serde_json::to_value(&stream_error) {
                     yield json;
                 }
-                let _ = messages_tx.send(vec![]);
                 return;
             }
         };
@@ -463,13 +405,6 @@ fn create_chat_payload_stream(
             if !is_first_token {
                 is_first_token = true;
                 log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
-            }
-
-            // Check for abort during streaming
-            if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
-                MESSAGE_ABORT_MAP.remove(&stream_id);
-                let _ = messages_tx.send(vec![]);
-                return;
             }
 
             match response {
@@ -530,13 +465,9 @@ fn create_chat_payload_stream(
                             stream_id: stream_id.clone(),
                         },
                     };
-                    let error_msg = ChatStream::Error(
-                        crate::model::ws::WebSocketError::StreamError(stream_error),
-                    );
-                    if let Ok(json) = serde_json::to_value(&error_msg) {
+                    if let Ok(json) = serde_json::to_value(&stream_error) {
                         yield json;
                     }
-                    let _ = messages_tx.send(vec![]);
                     return;
                 }
             }
@@ -553,10 +484,45 @@ fn create_chat_payload_stream(
             yield json;
         }
 
-        // Get new messages and send through channel
+        // Save conversation messages
         let new_messages = chat.get_new_conversation_messages();
-        let _ = messages_tx.send(new_messages);
+
+        // Extract assistant response text before moving new_messages into store
+        let assistant_text = new_messages
+            .iter()
+            .find(|m| m.role == ai::types::Role::Assistant)
+            .and_then(|m| m.content.assistant_message_text());
+
+        if let Err(err) = store_conversation_messages(
+            ctx.clone(),
+            user_id.0.as_ref(),
+            &chat_id,
+            new_messages,
+            model,
+            Some(message_id.clone()),
+        )
+        .await
+        {
+            tracing::error!(error=?err, "failed to store conversation messages");
+        }
+
+        // Summarize and send notification in a background task
+        if let Some(text) = assistant_text {
+            notify(
+                ctx.connection_repo.clone(),
+                ctx.notification_ingress_service.clone(),
+                chat_id.clone(),
+                message_id.clone(),
+                text,
+                user_id.as_ref().clone(),
+            );
+        }
+
     };
 
-    Box::pin(payload_stream)
+    ctx_outer.stream_repo.clone().from_async_stream(
+        durable_stream_id,
+        Box::pin(payload_stream),
+        None,
+    );
 }

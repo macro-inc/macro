@@ -5,6 +5,7 @@ import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 export function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -46,7 +47,7 @@ export function SplitCreateButton() {
         context.manager.createNewSplit({
           content: {
             type: 'component',
-            id: 'unified-list',
+            id: LIST_VIEW_ID.inbox,
           },
           referredFrom: 'dock',
         });

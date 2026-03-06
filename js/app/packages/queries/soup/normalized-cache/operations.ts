@@ -19,6 +19,7 @@ import type {
   SoupEntityTag,
   SoupEntityPartial,
 } from './types';
+import type { SoupApiItemFilter } from '../items';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -106,7 +107,14 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   const previous = snapshotSoup();
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: soupKeys.items._def },
+    {
+      queryKey: soupKeys.items._def,
+      predicate: (query) => {
+        const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
+        if (!filter) return true;
+        return filter(item);
+      },
+    },
     (prev) => {
       if (!prev) return prev;
       return {
@@ -214,7 +222,13 @@ export async function refetchSoupEntity(
     body: filter,
   });
 
-  if (isErr(result)) return;
+  if (isErr(result)) {
+    console.error(
+      '[normalized-cache] operations: failed to fetch individual soup item',
+      result
+    );
+    return;
+  }
 
   const [, page] = result;
   if (!page.items.length) return;

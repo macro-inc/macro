@@ -4,10 +4,17 @@ import { createSignal } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { createConnectionWebsocketEffect } from './websocket';
+import type { EntityData } from '@entity';
 // entities that support streaming
 export type StreamType = {
   chat: ChatStream;
 };
+
+export function isStreamEntity(
+  entity_type: EntityData['type']
+): entity_type is keyof StreamType {
+  return entity_type === 'chat';
+}
 
 export type StreamId = {
   entity_type: keyof StreamType;
@@ -175,3 +182,5 @@ export function getEntityStreams<K extends keyof StreamType>(
       .map((s) => s.stream.stream as Stream<K>);
   };
 }
+
+export type ChatMessageStream = Stream<'chat'>;

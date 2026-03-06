@@ -1,61 +1,52 @@
-import { useMaybeBlockId } from '@core/block';
-import { useChannelsContext } from '@core/context/channels';
-import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import { Entity, type EntityData } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
-import { EntityDataTypeIcon } from '../../../utils/PropertyDataTypeIcon';
-import type { IUser } from '@core/user';
-import {
-  idToEmail,
-  tryMacroId,
-  useAugmentUserWithDmActivity,
-  useContacts,
-  useDisplayName,
-} from '@core/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { useEmail, useUserId } from '@core/context/user';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import {
+  For,
   createEffect,
   createMemo,
   createSignal,
-  For,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { usePropertiesContext } from '../../../context/PropertiesContext';
-import type { Property } from '../../../types';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  entityMapper,
-  getEntityName,
+  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
   threadMapper,
+  quickAccessItemToEntity,
+  userToEntity,
+  sortEntitiesWithSelfFirst,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import type { EntitySelectorConfig, PinnedOption } from './types';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 type EntityInputProps = {
-  property: Property;
+  config: EntitySelectorConfig;
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
     entityInfo?: { id: string; entity_type: string }[]
   ) => void;
-  setHasChanges: (hasChanges: boolean) => void;
   onClose?: () => void;
+  pinnedOptions?: PinnedOption[];
 };
 
 function getEntityTypePluralLabel(
@@ -84,47 +75,38 @@ function getEntityTypePluralLabel(
   }
 }
 
-function getEntityIcon(entity: CombinedEntity) {
-  switch (entity.kind) {
-    case 'user':
-      return (
-        <UserIcon
-          id={entity.data.id}
-          size="xs"
-          isDeleted={false}
-          suppressClick={true}
-        />
-      );
-    case 'channel':
-      return (
-        <EntityIcon
-          targetType={entity.data.channel_type || 'channel'}
-          size="xs"
-          class="text-ink-muted"
-        />
-      );
-    case 'item':
-      return (
-        <EntityIcon
-          targetType={getEntityIconType(entity.data)}
-          size="xs"
-          class="text-ink-muted"
-        />
-      );
-    case 'company':
-      return (
-        <EntityDataTypeIcon property={{ specificEntityType: 'COMPANY' }} />
-      );
-    case 'thread':
-      return <EntityIcon targetType="email" size="xs" class="text-ink-muted" />;
+/** Gets display name for a CombinedEntity */
+function getEntityName(entity: CombinedEntity): string {
+  if (entity.kind === 'user') {
+    const { name, email } = entity.data;
+    if (name === email) return email;
+    return `${name} | ${email}`;
   }
+  const data = entity.data;
+  if (data.type === 'email') {
+    return data.name ?? 'No Subject';
+  }
+  return data.name ?? '';
 }
+
+const ITEM_SIZE = 32;
 
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
+
+  // Pinned options filtered by search term
+  const visiblePinnedOptions = createMemo(() => {
+    const options = props.pinnedOptions ?? [];
+    const term = searchTerm();
+    if (!term) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(term));
+  });
+  const pinnedCount = () => visiblePinnedOptions().length;
+
+  let virtualizerHandle: VirtualizerHandle | undefined;
 
   // Debounce search term updates (60ms like MentionsMenu)
   const debouncedSetSearchTerm = debounce(
@@ -135,48 +117,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   let searchInputRef!: HTMLInputElement;
 
-  // Get current entity context for self-filtering
-  const blockId = useMaybeBlockId();
-  const { entityType: currentEntityType } = usePropertiesContext();
+  // Get self-filter context from config
+  const selfFilterEntityType = () => props.config.selfFilter?.entityType;
+  const selfFilterBlockId = () => props.config.selfFilter?.blockId;
 
-  const historyQuery = useHistoryQuery();
-  const contacts = useContacts();
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  // Get current user info for injection into contacts
+  // Get current user info for same-domain boost and self-boost in search
+  const currentUserEmail = useEmail();
   const currentUserId = useUserId();
-  const [currentUserDisplayName] = useDisplayName(
-    tryMacroId(currentUserId() ?? '')
-  );
-
-  // Contacts with current user injected at the beginning
-  const contactsWithCurrentUser = createMemo((): IUser[] => {
-    const userId = currentUserId();
-    if (!userId) return contacts();
-
-    const existingContacts = contacts();
-
-    // Check if current user is already in contacts
-    const isCurrentUserInContacts = existingContacts.some(
-      (contact) => contact.id === userId
-    );
-    if (isCurrentUserInContacts) return existingContacts;
-
-    // Inject current user at the beginning
-    const currentUser: IUser = {
-      id: userId,
-      email: idToEmail(userId),
-      name: currentUserDisplayName(),
-    };
-    return [currentUser, ...existingContacts];
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
   });
 
-  // Fetch emails for browsing (only when THREAD type)
-  // Email queries for THREAD type or generic ENTITY (no specific type)
+  // Get items from quickAccess based on entity type
+  const { items: quickAccessItems, isLoading: isQuickAccessLoading } =
+    useQuickAccessEntities(() => props.config.specificEntityType);
+
+  // Fetch emails for browsing (only when THREAD type or generic ENTITY)
   const needsEmailSearch = () =>
-    props.property.specificEntityType === 'THREAD' ||
-    !props.property.specificEntityType;
+    props.config.specificEntityType === 'THREAD' ||
+    !props.config.specificEntityType;
 
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => !needsEmailSearch(),
@@ -211,123 +173,96 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const isLoadingEntities = createMemo(() => {
     if (needsEmailSearch()) {
-      // Loading if initial emails query is loading OR search is fetching
       return (
         emailsQuery.isLoading ||
         emailsQuery.isPending ||
         emailSearchQuery.isFetching
       );
     }
-    return false;
+    return isQuickAccessLoading();
   });
 
-  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
-  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
-  const augmentUsersWithDmActivity = (users: IUser[]): CombinedEntity[] => {
-    return users.map((user) =>
-      entityMapper('user')(augmentUserWithDmActivity(user))
-    );
-  };
+  // Convert quickAccess items to CombinedEntity format
+  const entities = createMemo((): CombinedEntity[] => {
+    const specificEntityType = props.config.specificEntityType;
 
-  // Local entities (always available, used for instant results)
-  const entities = createMemo(() => {
-    const { specificEntityType } = props.property;
-
-    if (!specificEntityType) {
-      return [
-        ...augmentUsersWithDmActivity(contactsWithCurrentUser()),
-        ...(historyQuery.data ?? []).map(entityMapper('item')),
-        ...channels().map(entityMapper('channel')),
-        ...emails().map(threadMapper),
-      ];
-    }
-
-    if (specificEntityType === 'USER') {
-      return augmentUsersWithDmActivity(contactsWithCurrentUser());
-    }
-
-    if (specificEntityType === 'CHANNEL') {
-      return channels().map(entityMapper('channel'));
-    }
-
-    if (specificEntityType === 'COMPANY') {
-      // TODO: Implement company data source
-      return [];
-    }
-
+    // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
       return emails().map(threadMapper);
     }
 
-    if (specificEntityType === 'TASK') {
-      return (historyQuery.data ?? [])
-        .filter(
-          (item) =>
-            item.type === 'document' &&
-            item.subType !== null &&
-            item.subType !== undefined &&
-            item.subType.type === 'task'
-        )
-        .map(entityMapper('item'));
+    // For COMPANY type, return empty (not in quickAccess)
+    if (specificEntityType === 'COMPANY') {
+      return [];
     }
 
-    const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
-    if (itemTypes.includes(specificEntityType)) {
-      return (historyQuery.data ?? [])
-        .filter(
-          (item) =>
-            item.type.toUpperCase() === specificEntityType &&
-            !(
-              item.type === 'document' &&
-              item.subType !== null &&
-              item.subType !== undefined &&
-              item.subType.type === 'task'
-            )
-        )
-        .map(entityMapper('item'));
+    // Convert quickAccess items to CombinedEntity
+    const items = quickAccessItems();
+    const converted: CombinedEntity[] = [];
+
+    for (const item of items) {
+      // Augment users with DM activity
+      if (item.kind === 'user') {
+        const augmentedUser = augmentUserWithDmActivity(item.data);
+        converted.push(userToEntity(augmentedUser));
+      } else {
+        const entity = quickAccessItemToEntity(item);
+        // Filter by specific entity type if needed
+        if (specificEntityType) {
+          const entityType = getEntityType(entity);
+          if (entityType === specificEntityType) {
+            converted.push(entity);
+          }
+        } else {
+          converted.push(entity);
+        }
+      }
     }
 
-    return [];
+    // For generic entity type, also include emails
+    if (!specificEntityType) {
+      converted.push(...emails().map(threadMapper));
+    }
+
+    return converted;
   });
 
-  // Get current user domain for same-domain boost
-  const currentUserEmail = useEmail();
-  const currentUserDomain = createMemo(() => {
-    const email = currentUserEmail();
-    return email ? email.split('@')[1] : undefined;
+  const entitySearch = createFreshSearch<CombinedEntity>({
+    config: createEntitySearchConfig(currentUserDomain, currentUserId),
+    getName: getEntitySearchText,
+    isChannelItem: isChannelEntity,
+    getTimestamp: getEntityTimestampedItem,
   });
-
-  const entitySearch = createFreshSearch<CombinedEntity>(
-    createEntitySearchConfig(currentUserDomain),
-    getEntitySearchText,
-    isChannelEntity,
-    getEntityTimestampedItem
-  );
 
   const filteredEntities = createMemo(() => {
-    const term = searchTerm(); // Already lowercase from debounce
+    const term = searchTerm();
     const allEntities = entities();
+    const userId = currentUserId();
 
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
-    // Filter out the current entity when selecting same entity type (e.g., parent task on a task)
+    // Filter out the current entity when selecting same entity type
+    const blockId = selfFilterBlockId();
+    const currentEntityType = selfFilterEntityType();
     const excludeFilter = blockId
       ? (e: CombinedEntity) =>
           !(getEntityType(e) === currentEntityType && e.id === blockId)
       : () => true;
 
     // Get visible entities based on search
+    // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     const localResults = term
       ? entitySearch(allEntities, term)
           .slice(0, MAX_SEARCH_RESULTS)
           .map((result) => result.item)
           .filter(excludeFilter)
-      : allEntities
-          .filter(excludeFilter)
-          .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+      : sortEntitiesWithSelfFirst(
+          allEntities.filter(excludeFilter),
+          userId
+        ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
-    // For THREAD or generic entity: merge local + server results (local first, server appended, deduped)
+    // For THREAD or generic entity: merge local + server results
     if (needsEmailSearch() && term) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails()
@@ -339,11 +274,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return localResults;
   });
 
-  // Track searchTerm and filteredEntities, but NOT selectedOptions
-  // This keeps list order stable during selection while still reacting to data changes
+  // Sort entities with selected items first when not searching
   const sortedEntities = createMemo(
     on([searchTerm, filteredEntities], () => {
-      const term = searchTerm(); // Already lowercase from debounce
+      const term = searchTerm();
       const filteredResults = filteredEntities();
 
       // When there's a search term, return results as-is
@@ -351,7 +285,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         return filteredResults;
       }
 
-      // When browsing (no search), show selected entities first
+      // When browsing (no search), show selected entities first, then others
+      // (self is already sorted to top within filteredEntities)
       const selectedIds = props.selectedOptions();
       const entityIdsInResults = new Set(filteredResults.map((e) => e.id));
 
@@ -367,24 +302,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         }
       }
 
-      // Add missing selected entities from property value (handles pagination)
-      if (
-        props.property.valueType === 'ENTITY' &&
-        props.property.value != null
-      ) {
-        const allAvailableEntities = entities();
-
-        for (const ref of props.property.value) {
-          if (
-            selectedIds.has(ref.entity_id) &&
-            !entityIdsInResults.has(ref.entity_id)
-          ) {
-            const actualEntity = allAvailableEntities.find(
-              (e) => e.id === ref.entity_id
-            );
-            if (actualEntity) {
-              selected.push(actualEntity);
-            }
+      // Add missing selected entities that aren't in the visible results
+      const allAvailableEntities = entities();
+      for (const selectedId of selectedIds) {
+        if (!entityIdsInResults.has(selectedId)) {
+          const actualEntity = allAvailableEntities.find(
+            (e) => e.id === selectedId
+          );
+          if (actualEntity) {
+            selected.push(actualEntity);
           }
         }
       }
@@ -397,7 +323,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
 
-    if (props.property.isMultiSelect) {
+    if (props.config.isMultiSelect) {
       if (isCurrentlySelected) {
         newSelected.delete(entity.id);
       } else {
@@ -414,58 +340,69 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         entity_type: getEntityType(entity),
       },
     ]);
-    props.setHasChanges(true);
 
-    if (!props.property.isMultiSelect && props.onClose) {
+    if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
-    } else if (props.property.isMultiSelect && searchInputRef) {
+    } else if (props.config.isMultiSelect && searchInputRef) {
       // Keep input focused when multiselect is enabled
       setTimeout(() => searchInputRef.focus(), 0);
     }
   };
 
-  // Reset selected index when sortedEntities change
-  createEffect(() => {
-    const entities = sortedEntities();
-    if (entities.length === 0) {
-      setSelectedIndex(0);
+  const togglePinnedOption = (option: PinnedOption) => {
+    const newSelected = new Set(props.selectedOptions());
+    if (newSelected.has(option.id)) {
+      newSelected.delete(option.id);
     } else {
-      setSelectedIndex(Math.min(selectedIndex(), entities.length - 1));
+      if (!props.config.isMultiSelect) newSelected.clear();
+      newSelected.add(option.id);
     }
-  });
+    props.setSelectedOptions(newSelected);
 
-  const scrollSelectedIntoView = () => {
-    const entities = sortedEntities();
-    const currentIndex = selectedIndex();
-    if (currentIndex >= 0 && currentIndex < entities.length) {
-      const element = document.querySelector(
-        `[data-entity-index="${currentIndex}"]`
-      );
-      if (element) {
-        element.scrollIntoView({ block: 'nearest' });
-      }
+    if (!props.config.isMultiSelect && props.onClose) {
+      props.onClose();
+    } else if (props.config.isMultiSelect && searchInputRef) {
+      setTimeout(() => searchInputRef.focus(), 0);
     }
   };
 
+  const totalCount = () => pinnedCount() + sortedEntities().length;
+
+  // Reset selected index to top when search term or list changes
+  createEffect(() => {
+    searchTerm(); // track search term changes
+    totalCount(); // track list size changes
+    setSelectedIndex(0);
+  });
+
+  // Scroll VList to selected index (offset by pinned count)
+  createEffect(() => {
+    const index = selectedIndex();
+    const pCount = pinnedCount();
+    if (index >= pCount && virtualizerHandle) {
+      virtualizerHandle.scrollToIndex(index - pCount, { align: 'nearest' });
+    }
+  });
+
   const handleKeyDown = (e: KeyboardEvent) => {
-    const entities = sortedEntities();
-    if (entities.length === 0) return;
+    const total = totalCount();
+    if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % entities.length);
-      scrollSelectedIntoView();
+      setSelectedIndex((prev) => (prev + 1) % total);
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setSelectedIndex(
-        (prev) => (prev - 1 + entities.length) % entities.length
-      );
-      scrollSelectedIntoView();
+      setSelectedIndex((prev) => (prev - 1 + total) % total);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const selectedEntity = entities[selectedIndex()];
-      if (selectedEntity) {
-        toggleEntity(selectedEntity);
+      const idx = selectedIndex();
+      const pCount = pinnedCount();
+      if (idx < pCount) {
+        togglePinnedOption(visiblePinnedOptions()[idx]);
+      } else {
+        const entity = sortedEntities()[idx - pCount];
+        if (entity) toggleEntity(entity);
       }
     }
   };
@@ -500,18 +437,65 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 }
               }
             }}
-            placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
+            placeholder={props.config.placeholder}
           />
         </div>
       </div>
 
-      <Show when={sortedEntities().length > 0}>
+      <Show when={totalCount() > 0}>
         <div class="p-1">
-          <div class="max-h-48 overflow-y-auto overflow-x-hidden scrollbar-hidden">
-            <For each={sortedEntities()}>
+          <For each={visiblePinnedOptions()}>
+            {(option, i) => {
+              const isSelected = () => props.selectedOptions().has(option.id);
+              const isKeyboardSelected = () => i() === selectedIndex();
+
+              return (
+                <div
+                  class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                  classList={{
+                    'bg-hover': isKeyboardSelected(),
+                    'bg-accent/10': isSelected(),
+                  }}
+                  onClick={() => togglePinnedOption(option)}
+                  onMouseEnter={() => {
+                    if (!keyboardMode()) {
+                      setSelectedIndex(i());
+                    }
+                  }}
+                >
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="size-4 flex-shrink-0">{option.icon}</div>
+                    <span class="truncate min-w-0">{option.label}</span>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <OptionCheckBox
+                      checked={isSelected()}
+                      multiselect={props.config.isMultiSelect}
+                    />
+                  </div>
+                </div>
+              );
+            }}
+          </For>
+          <Show when={sortedEntities().length > 0}>
+            <VList
+              ref={(handle) => {
+                virtualizerHandle = handle;
+              }}
+              data={sortedEntities()}
+              itemSize={ITEM_SIZE}
+              bufferSize={5 * ITEM_SIZE}
+              style={{
+                height: `${Math.min(sortedEntities().length * ITEM_SIZE, 192)}px`,
+                contain: 'content',
+              }}
+              class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+            >
               {(entity, index) => {
+                const adjustedIndex = () => index() + pinnedCount();
                 const isSelected = () => props.selectedOptions().has(entity.id);
-                const isKeyboardSelected = () => index() === selectedIndex();
+                const isKeyboardSelected = () =>
+                  adjustedIndex() === selectedIndex();
 
                 return (
                   <div
@@ -525,35 +509,53 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
                     onMouseEnter={() => {
                       if (!keyboardMode()) {
-                        setSelectedIndex(index());
+                        setSelectedIndex(adjustedIndex());
                       }
                     }}
                   >
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <div class="flex-shrink-0">{getEntityIcon(entity)}</div>
+                      <div class="size-4 flex-shrink-0">
+                        <Show
+                          when={entity.kind === 'entity'}
+                          fallback={
+                            <UserIcon
+                              id={entity.id}
+                              size="xs"
+                              isDeleted={false}
+                              suppressClick={true}
+                            />
+                          }
+                        >
+                          <Entity.Icon entity={entity.data as EntityData} />
+                        </Show>
+                      </div>
                       <span class="truncate min-w-0">
-                        {getEntityName(entity)}
+                        <Show
+                          when={entity.kind === 'entity'}
+                          fallback={getEntityName(entity)}
+                        >
+                          <Entity.Title entity={entity.data as EntityData} />
+                        </Show>
                       </span>
                     </div>
                     <div class="flex-shrink-0">
                       <OptionCheckBox
                         checked={isSelected()}
-                        multiselect={props.property.isMultiSelect}
+                        multiselect={props.config.isMultiSelect}
                       />
                     </div>
                   </div>
                 );
               }}
-            </For>
-          </div>
+            </VList>
+          </Show>
         </div>
       </Show>
 
-      <Show when={sortedEntities().length === 0}>
+      <Show when={totalCount() === 0}>
         <div class="text-center py-4 text-ink-muted text-sm">
           <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
-            found
+            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
           </Show>
         </div>
       </Show>

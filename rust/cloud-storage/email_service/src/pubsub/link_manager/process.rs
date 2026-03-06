@@ -123,11 +123,11 @@ async fn handle_delete(
 
     // delete cached access token, in case user re-enables within cache window
     ctx.redis_client
-        .delete_gmail_access_token(&TokenCacheKey {
-            fusion_user_id: link.fusionauth_user_id.clone(),
-            macro_id: link.macro_id.to_string(),
-            provider: UserProvider::Gmail,
-        })
+        .delete_gmail_access_token(&TokenCacheKey::new(
+            link.fusionauth_user_id.clone(),
+            link.macro_id.to_string(),
+            UserProvider::Gmail.as_str(),
+        ))
         .await
         .inspect_err(|e| {
             tracing::warn!(error=?e, "Failed to delete Gmail access token");

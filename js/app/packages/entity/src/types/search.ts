@@ -80,6 +80,7 @@ export type ContentHitData =
 
 export type SearchData = {
   nameHighlight: string | null;
+  senderHighlightTerms: string[] | null;
   contentHitData: ContentHitData[] | null;
   source: 'local' | 'service';
 };

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Download LibreOffice/Collabora Online assets
 FROM debian:trixie-slim AS lok
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,9 +19,12 @@ WORKDIR /app
 FROM chef AS builder
 COPY . .
 
-RUN cargo build --release --bin convert_service \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
+    --mount=type=cache,target=/app/target,id=rust-target-dev-release,sharing=locked \
+    cargo build --release --bin convert_service \
     && cargo strip \
-    && mv /app/target/release/convert_service /app/svc
+    && cp /app/target/release/convert_service /app/svc
 
 # Runtime image with LibreOffice
 FROM ubuntu:noble AS convert_service

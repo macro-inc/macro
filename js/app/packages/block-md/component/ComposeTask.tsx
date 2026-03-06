@@ -1,10 +1,10 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -55,6 +55,8 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -215,6 +217,7 @@ export interface ComposeTaskProps {
 
 export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
+  const { popoverSplit } = useSplitLayout();
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
@@ -239,6 +242,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         return {
           title: draft.title,
           content: draft.content,
+          editorState: draft.editorState,
           propertyValues: draft.propertyValues,
           isDraftLoaded: true,
         };
@@ -247,6 +251,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     return {
       title: props.initialTitle ?? '',
       content: props.initialContent ?? '',
+      editorState: undefined,
       propertyValues: getDefaultPropertyValues(),
       isDraftLoaded: false,
     };
@@ -266,6 +271,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   );
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
+  const [isCreating, setIsCreating] = createSignal(false);
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -291,6 +297,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     debouncedSave({
       title: currentTitle,
       content: currentContent,
+      editorState: bodyEditor()?.getEditorState().toJSON(),
       propertyValues: currentProperties,
     });
   });
@@ -372,6 +379,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleCreateTask = async () => {
+    if (isCreating()) return;
+
     const taskTitle = title().trim();
     const taskContent = content().trim();
 
@@ -381,9 +390,45 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
     setErrorMessage('');
 
+    setIsCreating(true);
+
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    createTaskWithProperties(
+    if (!createMore()) {
+      // Snapshot the draft locally, then clear localStorage so a new dialog
+      // opened while this creation is in flight starts blank.
+      const draftSnapshot = {
+        title: taskTitle,
+        content: taskContent,
+        propertyValues: structuredClone(unwrap(propertyValues)),
+      };
+      clearTaskComposerDraft();
+      // Close the dialog immediately
+      splitPanel.handle.close();
+      props.onClose?.();
+
+      const documentId = await createTaskWithProperties(
+        taskTitle,
+        taskContent,
+        properties,
+        definitions(),
+        (params) => upsertToHistoryMutation.mutate(params)
+      );
+
+      setIsCreating(false);
+
+      if (!documentId) {
+        // Restore the draft and re-open so the user can retry
+        saveTaskComposerDraft(draftSnapshot);
+        popoverSplit({ type: 'component', id: 'task-compose' });
+        return;
+      }
+
+      props.onCreateTask?.(taskTitle, taskContent);
+      return;
+    }
+
+    const documentId = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -391,22 +436,24 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    // Clear draft and reset form
+    setIsCreating(false);
+
+    if (!documentId) {
+      return;
+    }
+
+    // Success: clear draft and notify
     clearTaskComposerDraft();
-    setTitle('');
-    setContent('');
-    setPropertyValues(reconcile(getDefaultPropertyValues()));
-    setIsDraftLoaded(false);
+    props.onCreateTask?.(taskTitle, taskContent);
 
-    const ed = bodyEditor();
-    ed && initializeEditorEmpty(ed);
-
-    if (!createMore()) {
-      splitPanel.handle.close();
-      props.onCreateTask?.(taskTitle, taskContent);
-      props.onClose?.();
-    } else {
-      props.onCreateTask?.(taskTitle, taskContent);
+    if (createMore()) {
+      // Reset form for next task
+      setTitle('');
+      setContent('');
+      setPropertyValues(reconcile(getDefaultPropertyValues()));
+      setIsDraftLoaded(false);
+      const ed = bodyEditor();
+      ed && initializeEditorEmpty(ed);
     }
   };
 
@@ -464,21 +511,36 @@ export function ComposeTask(props: ComposeTaskProps) {
     runWithInputFocused: true,
   });
 
+  const editorConfig = buildConfig('markdown')
+    .withMentions()
+    .withEmojis()
+    .withActions()
+    .withCode()
+    .withMedia({ fileDrop: true })
+    .onChange(setContent)
+    .onFocusLeave({
+      onStart: (e) => editorFocusChange(e, -1),
+      onEnd: (e) => editorFocusChange(e, +1),
+    })
+    .onEscape(() => {
+      containerRef()?.focus();
+      return true;
+    });
+
+  const editor = editorConfig.buildHandle().lexical;
+  setBodyEditor(editor);
+
   return (
     <div
-      class="flex flex-col relative bracket-never"
+      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
       tabIndex={-1}
       ref={setContainerRef}
     >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.handle.isPopover()}>
-          <DeprecatedIconButton
-            icon={XIcon}
-            onClick={handleClose}
-            size="sm"
-            tabIndex={-1}
-            theme="current"
-          />
+          <Button onMouseDown={handleClose} tabIndex={-1}>
+            <XIcon class="size-4" />
+          </Button>
         </Show>
         <div class="flex items-center gap-2 flex-1">
           <span class="text-sm font-medium text-ink-disabled/50">
@@ -486,19 +548,18 @@ export function ComposeTask(props: ComposeTaskProps) {
           </span>
         </div>
         <Show when={title() || content()}>
-          <DeprecatedIconButton
-            icon={TrashIcon}
-            onClick={handleClearDraft}
-            size="sm"
+          <Button
+            onMouseDown={handleClearDraft}
             tabIndex={-1}
-            theme="current"
-            title="Clear draft"
-          />
+            tooltip="Clear Draft"
+          >
+            <TrashIcon class="size-4" />
+          </Button>
         </Show>
       </div>
-      <div class="w-full border-b border-edge-muted/50" />
-      <div class="p-2">
-        <div class="flex-shrink-0 flex p-2 gap-2 items-center">
+      <div class="border-b border-edge-muted/50" />
+      <div class="p-2 flex-1 min-h-0 flex flex-col">
+        <div class="shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
           <input
             type="text"
@@ -510,7 +571,8 @@ export function ComposeTask(props: ComposeTaskProps) {
                 setErrorMessage('');
               }
             }}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
+            disabled={isCreating()}
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50 disabled:opacity-50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();
@@ -532,22 +594,13 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </div>
 
-        <div class="min-h-0 text-base m-2">
-          <MarkdownTextarea
-            editable={() => true}
-            onChange={(value) => setContent(value)}
-            initialValue={content()}
-            placeholder={props.placeholder ?? 'Add description...'}
-            captureEditor={setBodyEditor}
-            onEscape={() => {
-              containerRef()?.focus();
-              return true;
-            }}
-            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
-            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
-            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          />
-        </div>
+        <MarkdownShell
+          config={editorConfig}
+          initialState={initialState.editorState}
+          placeholder={props.placeholder ?? 'Add description...'}
+          portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
+          class="shrink-1 min-h-0 h-[unset] text-base m-2 overflow-y-auto"
+        />
 
         <Suspense>
           <PropertiesProvider
@@ -589,9 +642,14 @@ export function ComposeTask(props: ComposeTaskProps) {
         <Button
           onClick={handleCreateTask}
           class="border border-edge-muted pr-1"
-          disabled={title().trim().length === 0}
+          disabled={title().trim().length === 0 || isCreating()}
         >
-          <EntityIcon targetType="task" theme="monochrome" />
+          <Show
+            when={isCreating()}
+            fallback={<EntityIcon targetType="task" theme="monochrome" />}
+          >
+            <CircleSpinner width={16} height={16} />
+          </Show>
           Create Task
           <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
