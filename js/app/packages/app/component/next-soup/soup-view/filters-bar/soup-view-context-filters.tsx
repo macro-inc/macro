@@ -131,7 +131,9 @@ const TasksFilters = () => {
 };
 
 const ChannelsFilters = () => {
-  return <ChannelVisibilityFilter />;
+  // No channels filters for now
+  // TODO: Add channel filters
+  return;
 };
 
 const FilesFilters = () => {
