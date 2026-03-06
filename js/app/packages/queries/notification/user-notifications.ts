@@ -400,7 +400,7 @@ function notificationEntityTypeToSoupTag(
     .with('chat', () => 'chat' as const)
     .with('channel', () => 'channel' as const)
     .with('project', () => 'project' as const)
-    .with(P.union('email', 'email_thread'), () => 'emailThread' as const)
+    .with('email_thread', () => 'emailThread' as const)
     .with(P.union('user', 'team'), () => null)
     .exhaustive();
 }
