@@ -1,4 +1,7 @@
-import { createPersistenceKey, type PersistenceKey } from '@queries/persistence';
+import {
+  createPersistenceKey,
+  type PersistenceKey,
+} from '@queries/persistence';
 
 type PersistenceProps = {
   channelId: string;

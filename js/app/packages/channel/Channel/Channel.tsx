@@ -100,8 +100,8 @@ export function Channel(props: ChannelProps) {
   const attachmentTracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
       channelId: props.channelId,
-    })
-  })
+    }),
+  });
 
   const dragState = createChannelDragState({
     channelId: props.channelId,

@@ -5,7 +5,7 @@ import { createEntityDropZone } from './create-entity-drop-zone';
 
 type CreateChannelDragStateOptions = {
   channelId: string;
-  attachmentTracker:InputAttachmentTracker
+  attachmentTracker: InputAttachmentTracker;
 };
 
 export type ChannelDragState = {

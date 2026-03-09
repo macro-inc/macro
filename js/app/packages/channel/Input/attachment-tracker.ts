@@ -1,5 +1,5 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type {InputAttachmentData } from './types';
+import type { InputAttachmentData } from './types';
 import { makePersisted } from '@solid-primitives/storage';
 
 export type InputAttachmentTracker = {
@@ -13,7 +13,7 @@ export type InputAttachmentTracker = {
 };
 
 type CreateInputAttachmentTrackerOptions = {
-  persistenceKey?: string,
+  persistenceKey?: string;
   initialAttachments?: InputAttachmentData[];
   maxAttachments?: number;
 };

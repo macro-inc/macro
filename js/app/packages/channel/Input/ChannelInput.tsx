@@ -69,7 +69,7 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange: (markdown) => {
-      inputState.setValue(markdown)
+      inputState.setValue(markdown);
     },
     onEnter: () => {
       if (isMobile()) return false;
