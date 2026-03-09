@@ -114,7 +114,7 @@ where
                     entity_type: EntityType::EmailThread,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,

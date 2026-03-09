@@ -46,16 +46,24 @@ impl<E: EntityAccessService, Cgw: ConnectionGateway> ConnectionService
             .map_err(|e| ConnectionError::Internal(e.into()))?;
 
         // Filter out user who made the invalidation
-        let users = users
-            .into_iter()
-            .filter_map(|p| {
-                if p.as_ref() != invalidation_event.invalidated_by.as_ref() {
-                    Some(p.0)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<MacroUserId<Lowercase<'a>>>>();
+        let users = match &invalidation_event.invalidated_by {
+            entity_access::domain::models::EntityAccessAuth::Authenticated(macro_user_id_str) => {
+                users
+                    .into_iter()
+                    .filter_map(|p| {
+                        if p.as_ref() != macro_user_id_str.as_ref() {
+                            Some(p.0)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<MacroUserId<Lowercase<'a>>>>()
+            }
+            entity_access::domain::models::EntityAccessAuth::Unauthenticated
+            | entity_access::domain::models::EntityAccessAuth::Internal => {
+                users.into_iter().map(|s| s.0.to_owned()).collect()
+            }
+        };
 
         if users.is_empty() {
             tracing::trace!("no users to send invalidation to");

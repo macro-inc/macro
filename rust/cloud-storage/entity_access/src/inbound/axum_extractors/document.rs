@@ -99,7 +99,7 @@ where
                         entity_id: document_context.document_id.clone(),
                         entity_type: EntityType::Document,
                     },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone().0),
+                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
@@ -141,7 +141,7 @@ where
                     entity_type: EntityType::Document,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,

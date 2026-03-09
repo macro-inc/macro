@@ -3,11 +3,14 @@
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use connection::domain::models::{InvalidationEvent, InvalidationReason};
+use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -29,17 +32,23 @@ use super::models::{CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, Loc
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
 /// The concrete document service implementation.
-pub struct DocumentServiceImpl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> {
+pub struct DocumentServiceImpl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+> {
     repo: R,
     cloudfront_config: CloudFrontConfig,
     sync_service_client: sync_service_client::SyncServiceClient,
     upload_url_service: U,
     task_properties_service: T,
+    connection_service: C,
     db: PgPool,
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
-    DocumentServiceImpl<R, U, T>
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
+    DocumentServiceImpl<R, U, T, C>
 {
     /// Create a new document service.
     pub fn new(
@@ -49,6 +58,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
         upload_url_service: U,
         task_properties_service: T,
         db: PgPool,
+        connection_service: C,
     ) -> Self {
         Self {
             repo,
@@ -57,6 +67,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
             upload_url_service,
             task_properties_service,
             db,
+            connection_service,
         }
     }
 
@@ -269,8 +280,8 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
     }
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> DocumentService
-    for DocumentServiceImpl<R, U, T>
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
+    DocumentService for DocumentServiceImpl<R, U, T, C>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -408,6 +419,20 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
             }
             EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => (),
         }
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Deleted,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
 
         Ok(())
     }

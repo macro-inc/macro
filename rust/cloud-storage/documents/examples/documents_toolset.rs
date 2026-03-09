@@ -21,6 +21,7 @@
 use ai::tool::tool_loop::cli::Cli;
 use ai::tool::types::RequestContext;
 use ai::types::Model;
+use connection::domain::ports::ConnectionService;
 use documents::domain::models::CloudFrontConfig;
 use documents::domain::ports::TaskPropertiesPort;
 use documents::domain::service::DocumentServiceImpl;
@@ -34,6 +35,19 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+
+/// No-op connection service
+#[derive(Clone)]
+struct NoOpConnectionService;
+
+impl ConnectionService for NoOpConnectionService {
+    async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
+        &self,
+        _invalidation_event: connection::domain::models::InvalidationEvent<'a, T>,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
+}
 
 /// No-op task properties service (not needed for toolset example).
 #[derive(Clone)]
@@ -112,6 +126,7 @@ async fn main() {
         s3_upload_adapter,
         NoOpTaskProperties,
         pool,
+        NoOpConnectionService,
     );
 
     let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url);
