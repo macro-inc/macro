@@ -71,10 +71,7 @@ registerComponent('notification', () => <NotificationRoute />);
 registerComponent(
   'tutorial',
   lazy(
-    () =>
-      import(
-        '@app/component/interactive-onboarding/InteractiveOnboarding'
-      )
+    () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
   )
 );
 

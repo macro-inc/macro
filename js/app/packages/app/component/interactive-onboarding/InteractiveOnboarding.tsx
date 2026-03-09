@@ -11,8 +11,8 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { Transition } from 'solid-transition-group';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { resetSandbox } from './sandbox/sandbox-store';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { OnboardingProgress } from './OnboardingProgress';
@@ -24,6 +24,7 @@ import {
 import { SplitHeaderLeft } from '../split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '../split-layout/components/SplitLabel';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 
 export default function InteractiveOnboarding() {
   const splitPanel = useSplitPanel();
@@ -97,6 +98,7 @@ export default function InteractiveOnboarding() {
   });
 
   onCleanup(() => reg.dispose());
+  onCleanup(() => resetSandbox());
 
   createEffect(
     on(
@@ -136,7 +138,7 @@ export default function InteractiveOnboarding() {
       </SplitHeaderLeft>
       <div
         ref={shellRef}
-        class="flex items-center justify-center h-full w-full"
+        class="items-center justify-center h-full w-full p-8 grid place-items-center relative bg-panel"
         tabIndex={-1}
       >
         {/* Scoped keyframes */}
@@ -150,10 +152,23 @@ export default function InteractiveOnboarding() {
           to   { opacity: 1; transform: scale(1); }
         }
       `}</style>
+        <div class="inset-0 absolute text-edge bg-panel opacity-5">
+          <PcNoiseGrid
+            cellSize={30}
+            warp={0}
+            crunch={0.2}
+            freq={0.001}
+            size={[0, 0.3]}
+            rounding={0}
+            fill={0}
+            stroke={1}
+            speed={[0.017, 0.209]}
+          />
+        </div>
 
         {/* Centered card */}
-        <div class="w-[1200px] h-[70%] max-w-[95vw] max-h-[90vh]">
-          <ClippedPanel tl active>
+        <div class="inset-0 h-full w-full shadow-xl">
+          <ClippedPanel tl active class="size-full">
             <div class="size-full flex">
               <Show
                 when={state.currentLesson()}

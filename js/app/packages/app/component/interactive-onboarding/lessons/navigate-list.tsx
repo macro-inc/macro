@@ -5,14 +5,8 @@ import {
   registerHotkey,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import {
-  MOCK_DOCUMENT_BASIC,
-  MOCK_EMAIL_UNREAD,
-  MOCK_TASK_TODO,
-  MOCK_CHANNEL_PUBLIC,
-  MOCK_PROJECT_1,
-} from '../../../../entity/mocks/mockEntityData';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { sandboxEntities } from '../sandbox/sandbox-store';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
@@ -24,17 +18,16 @@ const [sharedSoup, setSharedSoup] = createSignal<SoupState | undefined>();
 
 function NavigateListContent(props: LessonContentProps) {
   const soup = createSoupState({
-    initialData: [
-      MOCK_DOCUMENT_BASIC,
-      MOCK_EMAIL_UNREAD,
-      MOCK_TASK_TODO,
-      MOCK_CHANNEL_PUBLIC,
-      MOCK_PROJECT_1,
-    ],
+    initialData: sandboxEntities(),
     wrapNavigation: true,
   });
 
   setSharedSoup(soup);
+
+  // Keep soup synced with sandbox store (entities created in earlier lesson)
+  createEffect(() => {
+    soup.setData(sandboxEntities());
+  });
 
   const [navCount, setNavCount] = createSignal(0);
   const [completed, setCompleted] = createSignal(false);
@@ -90,8 +83,11 @@ function NavigateListContent(props: LessonContentProps) {
       class="flex flex-col gap-3 outline-none"
     >
       <p class="text-sm text-ink/70">
-        Use <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">j</kbd> and{' '}
-        <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">k</kbd> (or arrow keys) to move through the list.
+        Use{' '}
+        <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">j</kbd>{' '}
+        and{' '}
+        <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">k</kbd>{' '}
+        (or arrow keys) to move through the list.
       </p>
       <p class="text-xs text-ink/50">
         <Show

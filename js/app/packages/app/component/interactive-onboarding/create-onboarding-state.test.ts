@@ -5,10 +5,7 @@ import { createOnboardingState } from './create-onboarding-state';
 
 const NoopContent = (_props: LessonContentProps) => null;
 
-const createTestLesson = (
-  id: string,
-  order?: number
-): LessonDefinition => ({
+const createTestLesson = (id: string, order?: number): LessonDefinition => ({
   id,
   title: `Lesson ${id}`,
   description: `Description for ${id}`,

@@ -9,7 +9,11 @@ import {
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
-import { type RouteSectionProps, useLocation, useNavigate } from '@solidjs/router';
+import {
+  type RouteSectionProps,
+  useLocation,
+  useNavigate,
+} from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';

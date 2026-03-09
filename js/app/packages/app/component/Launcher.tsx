@@ -125,7 +125,7 @@ const createComponent = async (spec: {
   );
 };
 
-type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
+export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
@@ -325,7 +325,7 @@ type LauncherMenuItemProps = {
   focused?: boolean;
 };
 
-const LauncherMenuItem = (props: LauncherMenuItemProps) => {
+export const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   let buttonRef!: HTMLButtonElement;
 
   createEffect(() => {
@@ -432,10 +432,13 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 };
 
 type LauncherInnerProps = {
-  onClose: (shouldReturnFocus?: boolean) => void;
+  blocks: CreatableBlock[];
+  onClose?: (shouldReturnFocus?: boolean) => void;
+  /** When false, skip c-to-close, escape, and enter-to-close hotkeys. Default true. */
+  modal?: boolean;
 };
 
-const LauncherInner = (props: LauncherInnerProps) => {
+export const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
@@ -477,7 +480,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  CREATABLE_BLOCKS.forEach((item) => {
+  props.blocks.forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
@@ -485,7 +488,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       description: item.description,
       keyDownHandler: () => {
         item.keyDownHandler();
-        props.onClose(false);
+        if (props.modal !== false) props.onClose?.(false);
         return true;
       },
     });
@@ -498,23 +501,26 @@ const LauncherInner = (props: LauncherInnerProps) => {
         description: `${item.description} in current split`,
         keyDownHandler: () => {
           item.keyDownHandler();
-          props.onClose();
+          if (props.modal !== false) props.onClose?.();
           return true;
         },
       });
     }
   });
 
-  registerHotkey({
-    hotkey: 'c',
-    scopeId: launcherScope,
-    description: 'Close Launcher',
-    condition: createMenuOpen,
-    keyDownHandler: () => {
-      setCreateMenuOpen(false);
-      return true;
-    },
-  });
+  if (props.modal !== false) {
+    registerHotkey({
+      hotkey: 'c',
+      scopeId: launcherScope,
+      description: 'Close Launcher',
+      condition: createMenuOpen,
+      keyDownHandler: () => {
+        setCreateMenuOpen(false);
+        return true;
+      },
+    });
+  }
+
   registerHotkey({
     hotkey: 'arrowleft',
     scopeId: launcherScope,
@@ -529,41 +535,54 @@ const LauncherInner = (props: LauncherInnerProps) => {
     keyDownHandler: () => moveFocus(1),
   });
 
-  registerHotkey({
-    hotkey: 'escape',
-    scopeId: launcherScope,
-    description: 'Exit',
-    keyDownHandler: () => {
-      props.onClose();
-      return true;
-    },
-  });
+  if (props.modal !== false) {
+    registerHotkey({
+      hotkey: 'escape',
+      scopeId: launcherScope,
+      description: 'Exit',
+      keyDownHandler: () => {
+        props.onClose?.();
+        return true;
+      },
+    });
 
-  registerHotkey({
-    hotkey: 'enter',
-    scopeId: launcherScope,
-    description: 'Open in new split',
-    keyDownHandler: () => {
-      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
-      props.onClose();
-      return true;
-    },
-    runWithInputFocused: true,
-    displayPriority: 7,
-  });
+    registerHotkey({
+      hotkey: 'enter',
+      scopeId: launcherScope,
+      description: 'Open in new split',
+      keyDownHandler: () => {
+        props.blocks[focusedIndex()]?.keyDownHandler();
+        props.onClose?.();
+        return true;
+      },
+      runWithInputFocused: true,
+      displayPriority: 7,
+    });
 
-  registerHotkey({
-    hotkey: 'enter' as ValidHotkey,
-    scopeId: launcherScope,
-    description: 'Open in current split',
-    keyDownHandler: () => {
-      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
-      props.onClose();
-      return true;
-    },
-    runWithInputFocused: true,
-    displayPriority: 8,
-  });
+    registerHotkey({
+      hotkey: 'enter' as ValidHotkey,
+      scopeId: launcherScope,
+      description: 'Open in current split',
+      keyDownHandler: () => {
+        props.blocks[focusedIndex()]?.keyDownHandler();
+        props.onClose?.();
+        return true;
+      },
+      runWithInputFocused: true,
+      displayPriority: 8,
+    });
+  } else {
+    registerHotkey({
+      hotkey: 'enter',
+      scopeId: launcherScope,
+      description: 'Select',
+      keyDownHandler: () => {
+        props.blocks[focusedIndex()]?.keyDownHandler();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+  }
 
   onMount(() => {
     if (!ref) return;
@@ -571,7 +590,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     attachHotkeys(ref);
 
     setTimeout(() => {
-      const firstItem = CREATABLE_BLOCKS[0];
+      const firstItem = props.blocks[0];
 
       if (firstItem) {
         focusMenuItem(firstItem.label);
@@ -581,7 +600,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
-    const length = CREATABLE_BLOCKS.length;
+    const length = props.blocks.length;
     if (length >= 8) return 'xl:grid-cols-8';
     if (length >= 7) return 'xl:grid-cols-7';
     if (length >= 6) return 'xl:grid-cols-6';
@@ -600,7 +619,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       >
         <div class="absolute pointer-events-none size-full inset-0"></div>
 
-        <For each={CREATABLE_BLOCKS}>
+        <For each={props.blocks}>
           {(item, index) => (
             <LauncherMenuItem
               creatableBlock={item}
@@ -611,9 +630,11 @@ const LauncherInner = (props: LauncherInnerProps) => {
           )}
         </For>
       </div>
-      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold shift to open in current split
-      </div>
+      <Show when={props.modal !== false}>
+        <div class="col-span-full text-sm text-ink-muted text-center pt-4">
+          Hold shift to open in current split
+        </div>
+      </Show>
     </div>
   );
 };
@@ -660,9 +681,11 @@ export const Launcher = (props: LauncherProps) => {
             }}
           >
             <LauncherInner
+              blocks={CREATABLE_BLOCKS}
               onClose={(shouldReturnFocus) =>
                 props.onOpenChange(false, shouldReturnFocus)
               }
+              modal
             />
           </div>
         </Dialog.Content>
