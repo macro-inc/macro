@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use ai_tools::NoOpTaskProperties;
 use anyhow::Context;
