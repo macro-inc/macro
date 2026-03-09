@@ -31,7 +31,6 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { debounce } from '@solid-primitives/scheduled';
 import { Hotkey } from '@core/component/Hotkey';
-import { cornerClip } from '@core/util/clipPath';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 
@@ -399,9 +398,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
               'text-xxs text-page absolute -bottom-1 -right-1',
             props.sidebarState !== 'slim' && 'ml-auto'
           )}
-          style={{
-            'clip-path': cornerClip('3px', 0, 0, 0),
-          }}
         >
           <Hotkey shortcut={props.hotkey} />
         </div>
