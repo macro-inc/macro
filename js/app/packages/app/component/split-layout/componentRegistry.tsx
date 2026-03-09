@@ -175,7 +175,7 @@ registerComponent(
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
 registerComponent(
-  'tutorial',
+  'welcome',
   lazy(
     () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
   )
