@@ -1,5 +1,4 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { cornerClip } from '@core/util/clipPath';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
@@ -82,10 +81,7 @@ export function Tooltip(props: TooltipProps) {
           }}
         >
           <Show when={!props.unstyled} fallback={props.tooltip}>
-            <div
-              class="flex items-center justify-center bg-ink p-1.5 text-panel text-xs wrap-break-word"
-              style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
-            >
+            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/5">
               {props.tooltip}
             </div>
           </Show>
@@ -121,7 +117,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
     >
       <div class="text-xs capitalize">{props.label}</div>
       <Show when={props.hotkeyToken || props.shortcut}>
-        <div class="text-[0.625rem] text-page ml-auto border border-edge-muted/30 px-1.5 py-0.25">
+        <div class="text-[0.625rem] rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
             : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}
