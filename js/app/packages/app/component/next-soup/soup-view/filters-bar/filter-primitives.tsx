@@ -7,6 +7,7 @@ import { cn } from '@ui/utils/classname';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
 export type Option = {
   value: string;
@@ -120,11 +121,79 @@ interface FilterComboboxProps {
   active: Option[];
   onChange: (options: Option[]) => void;
   placeholder?: string;
+  virtualized?: boolean;
+  estimatedItemHeight?: number;
 }
+
+const COMBOBOX_ITEM_HEIGHT = 36;
+
+const ComboboxItem = (itemProps: { item: CollectionNode<Option> }) => (
+  <Combobox.Item
+    item={itemProps.item}
+    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
+  >
+    <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+      <Combobox.ItemIndicator>
+        <CheckIcon class="size-2.5 text-page" />
+      </Combobox.ItemIndicator>
+    </span>
+
+    <Show when={itemProps.item.rawValue.icon}>
+      {(icon) => (
+        <span class="size-4 flex items-center justify-center shrink-0">
+          {icon()()}
+        </span>
+      )}
+    </Show>
+
+    <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
+      {itemProps.item.rawValue.label}
+    </Combobox.ItemLabel>
+  </Combobox.Item>
+);
+
+interface VirtualizedListboxProps {
+  options: Option[];
+  estimatedItemHeight: number;
+  setListboxRef: (el: HTMLElement | undefined) => void;
+}
+
+const VirtualizedListbox = (props: VirtualizedListboxProps) => {
+  let virtualizerHandle: VirtualizerHandle | undefined;
+
+  return (
+    <Combobox.Listbox<Option>
+      ref={props.setListboxRef}
+      scrollToItem={(key) => {
+        const index = props.options.findIndex((opt) => opt.value === key);
+        if (index !== -1) {
+          virtualizerHandle?.scrollToIndex(index);
+        }
+      }}
+      class="max-h-[200px] overflow-y-auto"
+    >
+      {(items) => (
+        <Virtualizer
+          ref={(handle) => {
+            virtualizerHandle = handle;
+          }}
+          data={[...items()]}
+          itemSize={props.estimatedItemHeight}
+        >
+          {(item) => <ComboboxItem item={item} />}
+        </Virtualizer>
+      )}
+    </Combobox.Listbox>
+  );
+};
 
 export const FilterCombobox = (props: FilterComboboxProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+
+  const virtualized = () => props.virtualized ?? false;
+  const estimatedItemHeight = () =>
+    props.estimatedItemHeight ?? COMBOBOX_ITEM_HEIGHT;
 
   const activeFilters = createMemo(() => props.active);
   const activeCount = createMemo(() => activeFilters().length);
@@ -189,30 +258,8 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
       allowsEmptyCollection
       placement="bottom-start"
       gutter={4}
-      itemComponent={(itemProps) => (
-        <Combobox.Item
-          item={itemProps.item}
-          class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
-        >
-          <span class="size-4 flex items-center justify-center shrink-0 rounded border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
-            <Combobox.ItemIndicator>
-              <CheckIcon class="size-2.5 text-page" />
-            </Combobox.ItemIndicator>
-          </span>
-
-          <Show when={itemProps.item.rawValue.icon}>
-            {(icon) => (
-              <span class="size-4 flex items-center justify-center shrink-0">
-                {icon()()}
-              </span>
-            )}
-          </Show>
-
-          <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
-            {itemProps.item.rawValue.label}
-          </Combobox.ItemLabel>
-        </Combobox.Item>
-      )}
+      virtualized={virtualized()}
+      itemComponent={virtualized() ? undefined : ComboboxItem}
     >
       <Combobox.Control class="flex">
         <Combobox.Trigger
@@ -260,10 +307,21 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
                 </div>
               }
             >
-              <Combobox.Listbox
-                ref={setListboxRef}
-                class="max-h-[200px] overflow-y-auto"
-              />
+              <Show
+                when={virtualized()}
+                fallback={
+                  <Combobox.Listbox
+                    ref={setListboxRef}
+                    class="max-h-[200px] overflow-y-auto"
+                  />
+                }
+              >
+                <VirtualizedListbox
+                  options={filteredOptions()}
+                  estimatedItemHeight={estimatedItemHeight()}
+                  setListboxRef={setListboxRef}
+                />
+              </Show>
             </Show>
           </div>
 
