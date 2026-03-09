@@ -110,7 +110,6 @@ export function Layout(props: RouteSectionProps) {
           </Suspense>
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
-          <ShortcutsHelper />
         </Show>
         <Show
           when={
