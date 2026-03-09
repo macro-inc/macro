@@ -19,7 +19,7 @@ import { useProjectsQuery } from '@queries/storage/projects';
 import {
   getFileAssociations,
   QUERY_FILTERS_BASE,
-} from '@app/component/next-soup/filters/filters';
+} from '@app/component/next-soup/filters/query-filters';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';

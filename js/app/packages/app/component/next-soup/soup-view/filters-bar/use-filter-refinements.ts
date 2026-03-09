@@ -2,7 +2,7 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID } from '@app/constants/list-views';

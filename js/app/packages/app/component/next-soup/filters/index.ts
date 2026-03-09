@@ -15,3 +15,10 @@ export {
   type FilterGroupConfig,
   type FilterPredicate,
 } from './create-filter-state';
+
+export {
+  createSoupFilters,
+  SOUP_FILTER_GROUPS,
+  ENTITY_TYPE_FILTER_CONFIGS,
+  type FilterID,
+} from './configs';

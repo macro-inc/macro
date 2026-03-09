@@ -80,7 +80,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import {
   SplitHeaderLeft,
