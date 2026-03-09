@@ -52,8 +52,13 @@ vi.mock('@core/component/VideoPreview', () => ({
 }));
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { placeholder?: string }) => (
-    <div data-testid="markdown-shell">{props.placeholder}</div>
+  MarkdownShell: (props: { placeholder?: string; initialValue?: string }) => (
+    <div
+      data-testid="markdown-shell"
+      data-initial-value={props.initialValue ?? ''}
+    >
+      {props.placeholder}
+    </div>
   ),
 }));
 
@@ -125,7 +130,7 @@ describe('Input slots', () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     const onToggleFormatRibbon = vi.fn();
-    const onCloseDraft = vi.fn();
+    const onClose = vi.fn();
 
     render(() =>
       (() => {
@@ -134,7 +139,7 @@ describe('Input slots', () => {
             input={{ ...baseInput, mode: 'reply' }}
             onSend={onSend}
             onToggleFormatRibbon={onToggleFormatRibbon}
-            onCloseDraft={onCloseDraft}
+            onClose={onClose}
           />
         );
       })()
@@ -150,7 +155,7 @@ describe('Input slots', () => {
     expect(clickSpy).toHaveBeenCalledOnce();
     clickSpy.mockRestore();
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
-    expect(onCloseDraft).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('');
   });
 

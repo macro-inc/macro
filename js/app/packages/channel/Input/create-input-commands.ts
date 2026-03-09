@@ -4,7 +4,6 @@ import type {
   InputCallbacks,
   InputCommands,
   InputData,
-  InputDraftAdapter,
   InputSnapshot,
 } from './types';
 
@@ -18,7 +17,6 @@ type CreateInputCommandsDeps = {
   removeTrackedAttachment: (id: string) => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
-  draft?: InputDraftAdapter;
 };
 
 export function createInputCommands(
@@ -28,7 +26,6 @@ export function createInputCommands(
     deps.removeTrackedAttachment(attachment.id);
     const current = deps.snapshot();
     void deps.callbacks?.onRemoveAttachment?.(attachment, current);
-    void deps.draft?.save?.(current);
   };
 
   return {
@@ -42,7 +39,6 @@ export function createInputCommands(
         await deps.callbacks.onSend(current);
         deps.reset();
         deps.clearComposer?.();
-        deps.draft?.clear?.();
         return true;
       } finally {
         deps.setIsSending(false);
@@ -59,12 +55,11 @@ export function createInputCommands(
         return next;
       });
     },
-    closeDraft: () => {
+    close: () => {
       const current = deps.snapshot();
       deps.reset();
       deps.clearComposer?.();
-      deps.callbacks?.onCloseDraft?.(current);
-      deps.draft?.clear?.();
+      deps.callbacks?.onClose?.(current);
     },
     removeAttachment,
   };

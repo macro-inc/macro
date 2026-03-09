@@ -4,13 +4,15 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
-import { type Component, type JSXElement, lazy, Show } from 'solid-js';
+import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { useUserContext } from '@core/context/user';
+import { useSplitPanelOrThrow } from './layoutUtils';
+import type { SplitContent } from './layoutManager';
 
 /**
  * Guard that delays rendering until user is authenticated.
@@ -61,6 +63,17 @@ export type ResolvedComponent = {
   initialMeta?: ComponentMeta;
 };
 
+// Similar to SolidRouter's `<Navigate />` but for splits
+export function RedirectSplit(props: { to: SplitContent }) {
+  const panel = useSplitPanelOrThrow();
+
+  onMount(() => {
+    panel.handle.replace({ next: props.to });
+  });
+
+  return null;
+}
+
 export function resolveComponent(
   name: string,
   params?: Record<string, any>
@@ -73,10 +86,9 @@ export function resolveComponent(
   };
 }
 
-registerComponent(
-  'unified-list',
-  withAuth(() => <SoupView viewName="Unified list" />)
-);
+registerComponent('unified-list', () => (
+  <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+));
 
 /** BEGIN - APP ROUTES */
 registerComponent(

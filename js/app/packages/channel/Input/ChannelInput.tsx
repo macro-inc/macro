@@ -12,15 +12,15 @@ import type {
   InputAttachmentTracker,
   InputCallbacks,
   InputData,
-  InputDraftAdapter,
   InputHandle,
+  InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
-  draft?: InputDraftAdapter;
+  persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
   onReady?: (handle: InputHandle) => void;
 };
@@ -50,14 +50,15 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       });
     },
+    clearInput: () => markdownEditor.controls.clear(),
     callbacks: {
       onChange: props.onChange,
       onSend: props.onSend,
       onToggleFormatRibbon: props.onToggleFormatRibbon,
-      onCloseDraft: props.onCloseDraft,
+      onClose: props.onClose,
       onRemoveAttachment: props.onRemoveAttachment,
     },
-    draft: props.draft,
+    persistenceKey: props.persistenceKey,
   });
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -115,7 +116,7 @@ export function ChannelInput(props: ChannelInputProps) {
               <MarkdownShell
                 config={markdownEditor}
                 placeholder={inputState.view().placeholder}
-                initialValue={props.input.value}
+                initialValue={inputState.view().value}
                 autofocus={!isMobile()}
                 class="text-sm mobile:text-base"
               />

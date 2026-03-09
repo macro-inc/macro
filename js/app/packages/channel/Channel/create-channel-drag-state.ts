@@ -5,10 +5,10 @@ import { createEntityDropZone } from './create-entity-drop-zone';
 
 type CreateChannelDragStateOptions = {
   channelId: string;
+  attachmentTracker: InputAttachmentTracker;
 };
 
 export type ChannelDragState = {
-  tracker: InputAttachmentTracker;
   entityDropZone: ReturnType<typeof createEntityDropZone>;
   isDraggingOverChannel: Accessor<boolean>;
   isValidChannelDrag: Accessor<boolean>;
@@ -33,7 +33,6 @@ export function createChannelDragState(
   let attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
 
   return {
-    tracker,
     entityDropZone,
     isDraggingOverChannel: () =>
       isDraggingOverChannel() || entityDropZone.isDraggingOver(),

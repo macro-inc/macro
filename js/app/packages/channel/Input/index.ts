@@ -30,9 +30,9 @@ export type {
   InputAttachmentKind,
   InputSnapshot,
   InputCallbacks,
-  InputDraftAdapter,
   InputCommands,
   InputHandle,
   InputActionEvent,
   InputAttachmentTracker,
+  InputPersistenceKey,
 } from './types';
