@@ -15,12 +15,16 @@ axum = [
   "model_user/axum",
   "models_pagination/axum",
 ]
+gmail_token = ["dep:authentication_service_client", "dep:gmail_client", "dep:redis", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
+entity_access = { path = "../entity_access" }
+futures = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
@@ -29,8 +33,10 @@ either = { workspace = true }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
+gmail_client = { path = "../gmail_client", optional = true }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
@@ -38,7 +44,10 @@ models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
+serde_json = { workspace = true }
 serde_with = { workspace = true }
+authentication_service_client = { path = "../authentication_service_client", optional = true }
+redis = { workspace = true, features = ["tokio-native-tls-comp"], optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

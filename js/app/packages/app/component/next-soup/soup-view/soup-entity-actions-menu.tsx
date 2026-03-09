@@ -5,6 +5,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
 import {
   makeCopyAction,
+  makeCopyBranchNameAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -43,6 +44,8 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const moveToProjectAction = makeMoveToProjectAction();
 
   const copyLinkAction = makeCopyLinkAction();
+
+  const copyBranchNameAction = makeCopyBranchNameAction();
 
   const shareAction = makeShareAction();
 
@@ -132,6 +135,15 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         text="Copy Link"
         disabled={props.entities.length !== 1}
         onClick={() => handleAction(copyLinkAction.executeWithSoup)}
+      />
+
+      <MenuItem
+        text="Copy Branch Name"
+        disabled={
+          props.entities.length !== 1 ||
+          !copyBranchNameAction.canExecute(props.entities[0])
+        }
+        onClick={() => handleAction(copyBranchNameAction.executeWithSoup)}
       />
 
       <MenuItem

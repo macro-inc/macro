@@ -57,6 +57,7 @@ where
         }
     }
 
+    #[tracing::instrument(skip(self, request_context), err)]
     pub async fn send_message(
         &mut self,
         request: ChatCompletionRequest,
@@ -82,6 +83,7 @@ where
         messages.0
     }
 
+    #[tracing::instrument(err, skip_all)]
     async fn make_chat_completion_stream(
         &mut self,
         request_context: RequestContext,
@@ -378,6 +380,7 @@ where
         Box::pin(stream)
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn make_openai_chat_completion_stream(
         &mut self,
     ) -> Result<ExtendedOpenAIStream<I::ResponseExtension>> {

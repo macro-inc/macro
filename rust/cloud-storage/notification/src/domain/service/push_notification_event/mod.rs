@@ -9,7 +9,7 @@ mod test;
 
 use crate::domain::models::email_notification_digest::BulkDigestFailureStateMachine;
 use crate::domain::models::push_notification_event::SnsPushNotificationEvent;
-use crate::domain::ports::{DeviceRegistrationDeleter, SnsEndpointDeleter};
+use crate::domain::ports::{NotificationRepository, SnsEndpointManager};
 use rootcause::Report;
 use std::future::Future;
 
@@ -28,34 +28,34 @@ pub trait PushNotificationEventHandler: Send + Sync + 'static {
 
 /// Service for handling SNS push notification platform events.
 ///
-/// Generic over three outbound ports: device registration deletion (DB),
-/// SNS endpoint deletion, and digest failure state machine.
-pub struct PushNotificationEventService<D, S, F> {
-    device_deleter: D,
-    sns_deleter: S,
+/// Generic over three outbound ports: notification repository (DB device deletion),
+/// SNS endpoint manager (endpoint deletion), and digest failure state machine.
+pub struct PushNotificationEventService<N, S, F> {
+    repository: N,
+    sns_manager: S,
     digest_failure_sm: F,
 }
 
-impl<D, S, F> PushNotificationEventService<D, S, F>
+impl<N, S, F> PushNotificationEventService<N, S, F>
 where
-    D: DeviceRegistrationDeleter,
-    S: SnsEndpointDeleter,
+    N: NotificationRepository,
+    S: SnsEndpointManager,
     F: BulkDigestFailureStateMachine,
 {
     /// Create a new push notification event service.
-    pub fn new(device_deleter: D, sns_deleter: S, digest_failure_sm: F) -> Self {
+    pub fn new(repository: N, sns_manager: S, digest_failure_sm: F) -> Self {
         Self {
-            device_deleter,
-            sns_deleter,
+            repository,
+            sns_manager,
             digest_failure_sm,
         }
     }
 }
 
-impl<D, S, F> PushNotificationEventHandler for PushNotificationEventService<D, S, F>
+impl<N, S, F> PushNotificationEventHandler for PushNotificationEventService<N, S, F>
 where
-    D: DeviceRegistrationDeleter,
-    S: SnsEndpointDeleter,
+    N: NotificationRepository,
+    S: SnsEndpointManager,
     F: BulkDigestFailureStateMachine,
 {
     #[tracing::instrument(err, skip(self))]
@@ -68,13 +68,13 @@ where
             "deleting endpoint"
         );
 
-        self.device_deleter
+        self.repository
             .delete_device_by_endpoint(&event.endpoint_arn)
             .await?;
 
         match event.event_type {
             EventType::DeliveryFailure => {
-                self.sns_deleter
+                self.sns_manager
                     .delete_endpoint(&event.endpoint_arn)
                     .await?;
 

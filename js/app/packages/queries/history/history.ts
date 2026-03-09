@@ -57,7 +57,7 @@ export function setHistoryItemName(itemId: string, name: string) {
   }));
 }
 
-const historyQueryOptions = queryOptions({
+export const historyQueryOptions = queryOptions({
   queryKey: historyKeys.list.queryKey,
   queryFn: async (): Promise<HistoryQueryFnResult> => {
     const result = await throwOnErr(

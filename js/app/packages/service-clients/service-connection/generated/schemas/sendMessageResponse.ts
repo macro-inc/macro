@@ -6,6 +6,10 @@
  */
 import type { MessageReceipt } from './messageReceipt';
 
+/**
+ * The response from sending a message.
+ */
 export interface SendMessageResponse {
+  /** the receipts for each message sent */
   receipts: MessageReceipt[];
 }

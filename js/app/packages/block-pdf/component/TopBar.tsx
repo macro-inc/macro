@@ -1,40 +1,49 @@
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitPermissionsBadge,
-} from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
-import { useBlockId } from '@core/block';
-import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import { useBlockId, useBlockName } from '@core/block';
+import {
+  DocumentPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesButton } from '@core/component/ReferencesModal';
+import {
+  ReferencesButton,
+  REFERENCES_DRAWER_ID,
+} from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
+import { isMobile } from '@core/mobile/isMobile';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import Printer from '@icon/regular/printer.svg';
-import { storageServiceClient } from '@service-storage/client';
+import Quotes from '@icon/regular/quotes.svg';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
+import {
+  blockNameToItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
@@ -43,17 +52,30 @@ import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
+  const blockName = useBlockName();
   const hasModificationData = useHasModificationData();
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
 
-  const fileType = blockMetadataSignal()?.fileType;
+  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
+
+  const itemType = blockNameToItemType(blockName);
+  if (!itemType) return null;
+
+  const fileType = blockMetadataSignal()?.fileType;
+
   const copyLink = () => {
     createShareUrl(LocationType.General);
     toast.success('Link copied to clipboard');
@@ -164,6 +186,35 @@ export function TopBar() {
     { op: 'delete', divideAbove: true },
   ];
 
+  const tools: BlockTool[] = [
+    {
+      label: 'References',
+      icon: Quotes,
+      action: referencesControl.toggle,
+      condition: () => ENABLE_REFERENCES_MODAL,
+      buttonComponent: () => (
+        <ReferencesButton
+          documentId={documentId}
+          documentName={fileName()}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -172,36 +223,26 @@ export function TopBar() {
       <SplitHeaderRight>
         <BlockLiveIndicators />
       </SplitHeaderRight>
+      <ResponsivePermissionsBadge />
       <SplitToolbarLeft>
         <Show when={pdfDocumentProxy()}>
           <div class="flex items-center p-1">
-            <SplitFileMenu
-              id={documentId}
-              itemType="document"
-              name={fileName()}
-              ops={ops}
-            />
-            <div class="w-5" />
+            <Show when={!isMobile()}>
+              <div class="w-5" />
+            </Show>
             <PageNumberInput />
             <div class="w-5" />
             {ENABLE_PDF_MARKUP && <MarkupToolbar />}
           </div>
         </Show>
       </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <Show when={ENABLE_REFERENCES_MODAL}>
-          <ReferencesButton
-            documentId={documentId}
-            documentName={fileName()}
-            buttonSize="sm"
-          />
-        </Show>
-        <DocumentPropertiesButton buttonSize="sm" />
-        <div class="flex items-center">
-          <SplitPermissionsBadge />
-          <ShareTrigger copyLink={copyLink} />
-        </div>
-      </SplitToolbarRight>
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={ops}
+        id={documentId}
+        itemType={itemType}
+        name={fileName()}
+      />
     </>
   );
 }

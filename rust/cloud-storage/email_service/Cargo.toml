@@ -67,7 +67,7 @@ sfs_delete = []
 ammonia = "4.1.0"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
-macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3", "sqs"] }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -77,11 +77,12 @@ base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
-connection_gateway = { path = "../connection_gateway" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 ego-tree = { workspace = true }
-email = { path = "../email", features = ["axum", "inbound", "outbound"] }
+email = { path = "../email", features = ["axum", "gmail_token", "inbound", "outbound"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 email_db_client = { path = "../email_db_client" }
 email_utils = { path = "../email_utils" }
 frecency = { path = "../frecency", features = ["postgres"] }

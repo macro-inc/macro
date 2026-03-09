@@ -66,10 +66,23 @@ export default defineConfig({
         },
       },
       {
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/channel/**/*.{test,spec}.{ts,tsx}'],
+          name: 'channel',
+        },
+      },
+      {
         extends: './packages/notifications/vitest.config.ts',
         test: {
           include: ['packages/notifications/**/*.{test,spec}.{ts,tsx}'],
           name: 'notifications',
+        },
+      },
+      {
+        test: {
+          include: ['packages/block-email/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-email',
         },
       },
     ],

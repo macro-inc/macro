@@ -5,5 +5,5 @@ pub mod models;
 #[cfg(feature = "ports")]
 pub mod ports;
 
-#[cfg(feature = "ports")]
+#[cfg(any(feature = "sync", feature = "link"))]
 pub mod service;

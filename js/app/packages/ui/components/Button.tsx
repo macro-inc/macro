@@ -61,7 +61,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
           'relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent',
           'font-mono font-medium uppercase leading-none',
           !local.suppressInteractionStyling &&
-            'hover:bg-surface-4 focus:[--focus-border-inset:-4px] active:border-accent active:bg-accent active:text-panel disabled:opacity-50 disabled:hover:bg-inherit',
+            'hover:bg-hover focus:[--focus-border-inset:-4px] active:border-accent active:bg-accent active:text-panel disabled:opacity-50 disabled:hover:bg-inherit',
           'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
 
           {

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use connection_gateway_client::service::connection::ConnectionRepo;
+use connection_gateway::service::connection::ConnectionRepo;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::AiResponseMetadata;

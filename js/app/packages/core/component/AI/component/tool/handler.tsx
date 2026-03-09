@@ -8,27 +8,28 @@ import {
   type ToolHandlerMap,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import { createStore } from 'solid-js/store';
-import { Dynamic, Show } from 'solid-js/web';
+import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import { createDocumentHandler } from './CreateDocument';
 import { listEntitiesHandler } from './ListEntities';
-import { readHandler } from './Read';
+import { readThreadHandler } from './ReadThread';
+import { readContentHandler } from './ReadContent';
+import { readMetadataHandler } from './ReadMetadata';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import type { RenderContext } from './ToolRenderer';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
-const [renderStore, setRenderStore] = createStore<
-  Record<string, 'call' | 'response'>
->({});
-
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
+  CreateDocument: createDocumentHandler,
   NameSearch: nameSearchHandler,
-  Read: readHandler,
+  ReadThread: readThreadHandler,
+  ReadContent: readContentHandler,
+  ReadMetadata: readMetadataHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
   web_fetch: webFetchHandler,
   web_search: webSearchHandler,
@@ -59,7 +60,6 @@ export function RenderTool(props: ToolProps) {
     });
     if (isErr(maybeTool)) return null;
     const tool = maybeTool[1];
-    setRenderStore(props.tool_id, 'call');
     handler = toolHandlers[tool.name].call;
     const ctx: ToolContext<NamedTool<ToolName, 'call'>> = {
       chat_id: props.chat_id,
@@ -75,7 +75,6 @@ export function RenderTool(props: ToolProps) {
       json: props.json,
       name: props.name as ToolName,
     });
-    setRenderStore(props.tool_id, 'response');
     if (isErr(maybeTool)) return null;
     const tool = maybeTool[1];
     handler = toolHandlers[tool.name].response;
@@ -92,15 +91,13 @@ export function RenderTool(props: ToolProps) {
   }
 
   return (
-    <Show when={props.type === renderStore[props.tool_id]}>
-      <Dynamic
-        component={handler.render}
-        {...context}
-        renderContext={{
-          isStreaming: props.renderContext.renderContext.isStreaming,
-        }}
-      />
-    </Show>
+    <Dynamic
+      component={handler.render}
+      {...context}
+      renderContext={{
+        isStreaming: props.renderContext.renderContext.isStreaming,
+      }}
+    />
   );
 }
 

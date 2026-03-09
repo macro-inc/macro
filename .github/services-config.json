@@ -51,7 +51,8 @@
     },
     "document-storage-service": {
       "source_paths": [
-        "rust/cloud-storage/document_storage_service/**"
+        "rust/cloud-storage/document_storage_service/**",
+        "rust/cloud-storage/github/**"
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**"
     },

@@ -15,6 +15,9 @@ local-dss:
 local-search:
     cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev
 
+local-email:
+    cd packages/app && VITE_LOCAL_SERVERS='email-service' bun run --bun dev
+
 build-dev:
     cd packages/app && MODE=development NODE_ENV=production bun run --bun build
 

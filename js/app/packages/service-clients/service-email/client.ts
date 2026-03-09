@@ -27,6 +27,7 @@ import type {
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
+  UpdateThreadLabelsResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
@@ -126,7 +127,7 @@ export const emailClient = {
   ) {
     const { thread_id, label_id, value } = args;
     return mapOk(
-      await emailFetch<UpdateLabelBatchResponse>(
+      await emailFetch<UpdateThreadLabelsResponse>(
         `/email/threads/${thread_id}/labels`,
         {
           method: 'PATCH',

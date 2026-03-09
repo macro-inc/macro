@@ -3,9 +3,9 @@ import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
-  MessageToSend,
+  ApiDraftInput,
   SendMessageResponse,
-  APIThread as Thread,
+  ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
@@ -261,7 +261,7 @@ export function useArchiveThreadMutation(
   }));
 }
 
-type SendMessageParams = { message: MessageToSend };
+type SendMessageParams = { message: ApiDraftInput };
 
 /**
  * Mutation to send an email message.
@@ -293,7 +293,11 @@ export function useSendMessageMutation(
   }));
 }
 
-type ScheduleMessageParams = { draftID: string; sendTime: Date };
+type ScheduleMessageParams = {
+  draftID: string;
+  sendTime: Date;
+  threadID?: string;
+};
 
 /**
  * Mutation to send an email message.
@@ -316,7 +320,12 @@ export function useScheduleMessageMutation(
       ),
     ...withCallbacks<UpsertScheduledResponse, Error, ScheduleMessageParams>(
       {
-        onSuccess: () => {
+        onSuccess: (_data, vars) => {
+          if (vars.threadID) {
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.threadMessages(vars.threadID).queryKey,
+            });
+          }
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });

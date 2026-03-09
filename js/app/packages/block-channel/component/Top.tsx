@@ -1,29 +1,37 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { NotificationsModal } from '@core/component/NotificationsModal';
+import {
+  NotificationsButton,
+  NOTIFICATIONS_DRAWER_ID,
+} from '@core/component/NotificationsModal';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import Bell from '@icon/regular/bell.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
+import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import UsersIcon from '@icon/regular/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { createMemo, Show } from 'solid-js';
-import { AttachmentsModal } from './AttachmentsModal';
-import { ParticipantManager } from './ParticipantManager';
+import { AttachmentsButton } from './AttachmentsModal';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
+import { useChannelModals } from './ModalsProvider';
+import { ParticipantManagerButton } from './ParticipantManager';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -58,10 +66,13 @@ type TopProps = {
 };
 
 export function Top(props: TopProps) {
-  const participantCount = () => props.participants.length;
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
   const channelContext = useChannelContext();
+
+  const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
+  const attachmentsControl = useDrawerControl('attachments');
+  const channelModals = useChannelModals();
 
   const isAdminOrOwner = createMemo(() => {
     const channelData = channelContext.channel();
@@ -85,6 +96,44 @@ export function Top(props: TopProps) {
     props.channelName ?? 'New Channel'
   );
 
+  const tools: BlockTool[] = [
+    {
+      label: 'Copy Link',
+      icon: LinkIcon,
+      action: handleCopyLink,
+      condition: () => props.channelType === ChannelTypeEnum.Public,
+    },
+    {
+      label: 'Notifications',
+      icon: Bell,
+      action: notificationsControl.toggle,
+      buttonComponent: () => (
+        <NotificationsButton
+          entity={{ id: blockId, type: 'channel' }}
+          notificationSource={notificationSource}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Attachments',
+      icon: PaperclipIcon,
+      action: attachmentsControl.toggle,
+      buttonComponent: () => (
+        <AttachmentsButton attachments={channelModals.attachments} />
+      ),
+    },
+    {
+      label: 'Participants',
+      icon: UsersIcon,
+      action: () => channelModals.openParticipants(),
+      condition: () => props.channelType !== ChannelTypeEnum.DirectMessage,
+      buttonComponent: () => (
+        <ParticipantManagerButton onClick={channelModals.openParticipants} />
+      ),
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -106,34 +155,18 @@ export function Top(props: TopProps) {
           </div>
         </div>
       </SplitHeaderLeft>
+
       <SplitHeaderRight>
         <BlockLiveIndicators />
       </SplitHeaderRight>
-      <SplitToolbarRight>
-        <Show when={props.channelType === ChannelTypeEnum.Public}>
-          <DeprecatedIconButton
-            theme="clear"
-            size="sm"
-            tooltip={{ label: 'Copy Link to Public Channel' }}
-            icon={LinkIcon}
-            onClick={handleCopyLink}
-          />
-        </Show>
-        <NotificationsModal
-          entity={{ id: blockId, type: 'channel' }}
-          notificationSource={notificationSource}
-          buttonSize="sm"
-        />
-        <AttachmentsModal />
-        <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
-          <ParticipantManager
-            channelId={props.channelId}
-            channelType={props.channelType}
-            participants={props.participants}
-            participantCount={participantCount()}
-          />
-        </Show>
-      </SplitToolbarRight>
+
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={[]}
+        id={blockId}
+        itemType="channel"
+        name={channelName() ?? 'New Channel'}
+      />
     </>
   );
 }

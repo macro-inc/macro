@@ -263,7 +263,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
-                ) && 'pt-4',
+                ) && 'pt-2',
                 props.isLastMessage && 'pb-4',
                 props.hasThreadChildren && 'pb-4'
               )}

@@ -13,7 +13,6 @@ import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
-import { Inbox } from './Inbox';
 import { Shortcuts } from './Shortcuts';
 import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -136,12 +135,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
     const tabs: {value: string; label: string }[] = [
       {value: 'Appearance', label: 'Appearance'},
       {value: 'Account', label: 'Account'},
-      {value: 'Shortcuts', label: 'Shortcuts'}
     ];
+
+    if (!isMobile()) {
+      tabs.push({value: 'Shortcuts', label: 'Shortcuts'})
+    }
 
     if(permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
-    if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
     return tabs;
   });
@@ -241,7 +242,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -364,11 +365,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Tabs.Content value="Shortcuts" class="absolute inset-0">
                   <Shortcuts />
                 </Tabs.Content>
-                <Show when={DEV_MODE_ENV}>
-                  <Tabs.Content value="Inbox" class="absolute inset-0">
-                    <Inbox />
-                  </Tabs.Content>
-                </Show>
               </div>
             </Tabs>
           </div>

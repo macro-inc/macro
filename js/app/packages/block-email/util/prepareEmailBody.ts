@@ -10,7 +10,7 @@ import {
   type ClassedBlockNode,
   type DocumentMentionInfo,
 } from '@lexical-core';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import {
   $createLineBreakNode,
   $createParagraphNode,
@@ -38,7 +38,7 @@ export function clearEmailBody(editor: LexicalEditor | undefined) {
 }
 
 export const TOGGLE_APPEND_EMAIL_THREAD_COMMAND = createCommand<{
-  replyingTo: MessageWithBodyReplyless | undefined;
+  replyingTo: ApiMessage | undefined;
   replyType?: ReplyType;
   visible: boolean;
 }>('TOGGLE_APPEND_EMAIL_THREAD_COMMAND');
@@ -48,7 +48,7 @@ type HeaderDescriptor =
   | { kind: 'reply'; text: string };
 
 function buildHeaderDescriptor(
-  replyingTo: MessageWithBodyReplyless,
+  replyingTo: ApiMessage,
   replyType: ReplyType | undefined
 ): HeaderDescriptor {
   const replyingToDate = replyingTo.internal_date_ts ?? replyingTo.created_at;
@@ -104,7 +104,7 @@ function buildHeaderDescriptor(
 }
 
 function $generateHeaderNodes(
-  replyingTo: MessageWithBodyReplyless,
+  replyingTo: ApiMessage,
   replyType: ReplyType | undefined
 ): LexicalNode[] {
   const descriptor = buildHeaderDescriptor(replyingTo, replyType);
@@ -133,7 +133,7 @@ const REPLYING_TO_ID_ATTRIBUTE = 'data-replying-to-id';
 
 const $appendPreviousEmail = (
   editor: LexicalEditor,
-  replyingTo: MessageWithBodyReplyless | undefined,
+  replyingTo: ApiMessage | undefined,
   replyType: ReplyType | undefined
 ) => {
   if (!replyingTo) return true;
@@ -292,7 +292,7 @@ export async function appendItemsAsMacroMentions(
 }
 
 function getAppendedReplyElement(
-  replyingTo: MessageWithBodyReplyless,
+  replyingTo: ApiMessage,
   replyType: ReplyType | undefined
 ) {
   const wrapper = document.createElement('div');
@@ -451,7 +451,7 @@ export function prepareEmailBody(
   // if this argument is provided, we append the message being replied to the html email body
   appendReply?: {
     replyType: ReplyType | undefined;
-    replyingTo: MessageWithBodyReplyless;
+    replyingTo: ApiMessage;
   }
 ): {
   bodyHtml: string;

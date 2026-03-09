@@ -72,6 +72,13 @@ export const getEntityProjectId = (e: EntityData): string | false => {
 
 export type EmailThreadParticipants = Array<{ email: string; name?: string }>;
 
+export type EmailAttachment = {
+  id: string;
+  filename?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+};
+
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
 export type EmailEntity = EntityBase & {
   type: 'email';
@@ -85,6 +92,7 @@ export type EmailEntity = EntityBase & {
   senderName?: string;
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
+  attachments?: EmailAttachment[];
 };
 
 export type ProjectEntity = EntityBase & {

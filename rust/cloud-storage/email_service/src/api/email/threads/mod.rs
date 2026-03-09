@@ -1,6 +1,5 @@
 pub(crate) mod archived;
 pub(crate) mod get;
-pub(crate) mod labels;
 pub(crate) mod seen;
 
 use axum::Router;
@@ -32,22 +31,21 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 ),
             )),
         )
-        .route(
-            "/:id/labels",
-            patch(labels::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                crate::api::middleware::gmail_token::attach_gmail_token,
-            )),
-        )
         .layer(axum::middleware::from_fn_with_state(
             state.email_service.clone(),
             crate::api::middleware::link::attach_link_context,
         ));
 
-    // user can still view threads shared with them if they don't have email enabled
-    let optional_link_routes = Router::new().route("/:id", get(get::get_thread_handler));
+    let hex_thread_routes = email::inbound::thread_router(state.email_thread_state.clone());
+
+    let hex_thread_labels_routes = email::inbound::thread_labels_router::<
+        ApiContext,
+        crate::api::context::EmailSvc,
+        email::outbound::GmailTokenProviderImpl,
+    >();
 
     Router::new()
         .merge(required_link_routes)
-        .merge(optional_link_routes)
+        .merge(hex_thread_routes)
+        .merge(hex_thread_labels_routes)
 }

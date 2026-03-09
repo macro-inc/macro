@@ -16,10 +16,7 @@ import { isErr } from '@core/util/maybeResult';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
-import type {
-  Attachment,
-  MessageWithBodyReplyless,
-} from '@service-email/generated/schemas';
+import type { Attachment, ApiMessage } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -27,7 +24,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isFocused: boolean;

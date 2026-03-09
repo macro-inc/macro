@@ -9,6 +9,7 @@ import { useSearchSoupQuery } from '@queries/soup/search';
 import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import {
+  For,
   createEffect,
   createMemo,
   createSignal,
@@ -34,7 +35,7 @@ import {
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import type { EntitySelectorConfig } from './types';
+import type { EntitySelectorConfig, PinnedOption } from './types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 type EntityInputProps = {
@@ -45,6 +46,7 @@ type EntityInputProps = {
     entityInfo?: { id: string; entity_type: string }[]
   ) => void;
   onClose?: () => void;
+  pinnedOptions?: PinnedOption[];
 };
 
 function getEntityTypePluralLabel(
@@ -94,6 +96,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
+
+  // Pinned options filtered by search term
+  const visiblePinnedOptions = createMemo(() => {
+    const options = props.pinnedOptions ?? [];
+    const term = searchTerm();
+    if (!term) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(term));
+  });
+  const pinnedCount = () => visiblePinnedOptions().length;
 
   let virtualizerHandle: VirtualizerHandle | undefined;
 
@@ -338,41 +349,60 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  // Reset selected index when sortedEntities change
-  createEffect(() => {
-    const entitiesList = sortedEntities();
-    if (entitiesList.length === 0) {
-      setSelectedIndex(0);
+  const togglePinnedOption = (option: PinnedOption) => {
+    const newSelected = new Set(props.selectedOptions());
+    if (newSelected.has(option.id)) {
+      newSelected.delete(option.id);
     } else {
-      setSelectedIndex(Math.min(selectedIndex(), entitiesList.length - 1));
+      if (!props.config.isMultiSelect) newSelected.clear();
+      newSelected.add(option.id);
     }
+    props.setSelectedOptions(newSelected);
+
+    if (!props.config.isMultiSelect && props.onClose) {
+      props.onClose();
+    } else if (props.config.isMultiSelect && searchInputRef) {
+      setTimeout(() => searchInputRef.focus(), 0);
+    }
+  };
+
+  const totalCount = () => pinnedCount() + sortedEntities().length;
+
+  // Reset selected index to top when search term or list changes
+  createEffect(() => {
+    searchTerm(); // track search term changes
+    totalCount(); // track list size changes
+    setSelectedIndex(0);
   });
 
-  // Scroll to selected index when it changes
+  // Scroll VList to selected index (offset by pinned count)
   createEffect(() => {
     const index = selectedIndex();
-    if (index >= 0 && virtualizerHandle) {
-      virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
+    const pCount = pinnedCount();
+    if (index >= pCount && virtualizerHandle) {
+      virtualizerHandle.scrollToIndex(index - pCount, { align: 'nearest' });
     }
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    const entitiesList = sortedEntities();
-    if (entitiesList.length === 0) return;
+    const total = totalCount();
+    if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % entitiesList.length);
+      setSelectedIndex((prev) => (prev + 1) % total);
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setSelectedIndex(
-        (prev) => (prev - 1 + entitiesList.length) % entitiesList.length
-      );
+      setSelectedIndex((prev) => (prev - 1 + total) % total);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const selectedEntity = entitiesList[selectedIndex()];
-      if (selectedEntity) {
-        toggleEntity(selectedEntity);
+      const idx = selectedIndex();
+      const pCount = pinnedCount();
+      if (idx < pCount) {
+        togglePinnedOption(visiblePinnedOptions()[idx]);
+      } else {
+        const entity = sortedEntities()[idx - pCount];
+        if (entity) toggleEntity(entity);
       }
     }
   };
@@ -412,62 +442,30 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </div>
 
-      <Show when={sortedEntities().length > 0}>
+      <Show when={totalCount() > 0}>
         <div class="p-1">
-          <VList
-            ref={(handle) => {
-              virtualizerHandle = handle;
-            }}
-            data={sortedEntities()}
-            itemSize={ITEM_SIZE}
-            bufferSize={5 * ITEM_SIZE}
-            style={{ height: '192px', contain: 'content' }}
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
-          >
-            {(entity, index) => {
-              const isSelected = () => props.selectedOptions().has(entity.id);
-              const isKeyboardSelected = () => index() === selectedIndex();
+          <For each={visiblePinnedOptions()}>
+            {(option, i) => {
+              const isSelected = () => props.selectedOptions().has(option.id);
+              const isKeyboardSelected = () => i() === selectedIndex();
 
               return (
                 <div
-                  data-entity-index={index()}
                   class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
                     'bg-accent/10': isSelected(),
                   }}
-                  onClick={() => toggleEntity(entity)}
-                  onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
+                  onClick={() => togglePinnedOption(option)}
                   onMouseEnter={() => {
                     if (!keyboardMode()) {
-                      setSelectedIndex(index());
+                      setSelectedIndex(i());
                     }
                   }}
                 >
                   <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 flex-shrink-0">
-                      <Show
-                        when={entity.kind === 'entity'}
-                        fallback={
-                          <UserIcon
-                            id={entity.id}
-                            size="xs"
-                            isDeleted={false}
-                            suppressClick={true}
-                          />
-                        }
-                      >
-                        <Entity.Icon entity={entity.data as EntityData} />
-                      </Show>
-                    </div>
-                    <span class="truncate min-w-0">
-                      <Show
-                        when={entity.kind === 'entity'}
-                        fallback={getEntityName(entity)}
-                      >
-                        <Entity.Title entity={entity.data as EntityData} />
-                      </Show>
-                    </span>
+                    <div class="size-4 flex-shrink-0">{option.icon}</div>
+                    <span class="truncate min-w-0">{option.label}</span>
                   </div>
                   <div class="flex-shrink-0">
                     <OptionCheckBox
@@ -478,11 +476,83 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 </div>
               );
             }}
-          </VList>
+          </For>
+          <Show when={sortedEntities().length > 0}>
+            <VList
+              ref={(handle) => {
+                virtualizerHandle = handle;
+              }}
+              data={sortedEntities()}
+              itemSize={ITEM_SIZE}
+              bufferSize={5 * ITEM_SIZE}
+              style={{
+                height: `${Math.min(sortedEntities().length * ITEM_SIZE, 192)}px`,
+                contain: 'content',
+              }}
+              class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+            >
+              {(entity, index) => {
+                const adjustedIndex = () => index() + pinnedCount();
+                const isSelected = () => props.selectedOptions().has(entity.id);
+                const isKeyboardSelected = () =>
+                  adjustedIndex() === selectedIndex();
+
+                return (
+                  <div
+                    data-entity-index={index()}
+                    class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                    classList={{
+                      'bg-hover': isKeyboardSelected(),
+                      'bg-accent/10': isSelected(),
+                    }}
+                    onClick={() => toggleEntity(entity)}
+                    onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
+                    onMouseEnter={() => {
+                      if (!keyboardMode()) {
+                        setSelectedIndex(adjustedIndex());
+                      }
+                    }}
+                  >
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <div class="size-4 flex-shrink-0">
+                        <Show
+                          when={entity.kind === 'entity'}
+                          fallback={
+                            <UserIcon
+                              id={entity.id}
+                              size="xs"
+                              isDeleted={false}
+                              suppressClick={true}
+                            />
+                          }
+                        >
+                          <Entity.Icon entity={entity.data as EntityData} />
+                        </Show>
+                      </div>
+                      <span class="truncate min-w-0">
+                        <Show
+                          when={entity.kind === 'entity'}
+                          fallback={getEntityName(entity)}
+                        >
+                          <Entity.Title entity={entity.data as EntityData} />
+                        </Show>
+                      </span>
+                    </div>
+                    <div class="flex-shrink-0">
+                      <OptionCheckBox
+                        checked={isSelected()}
+                        multiselect={props.config.isMultiSelect}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </VList>
+          </Show>
         </div>
       </Show>
 
-      <Show when={sortedEntities().length === 0}>
+      <Show when={totalCount() === 0}>
         <div class="text-center py-4 text-ink-muted text-sm">
           <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
             No {getEntityTypePluralLabel(props.config.specificEntityType)} found

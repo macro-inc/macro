@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "connection_gateway_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+connection_gateway_models = { path = "../connection_gateway_models" }
+model-entity = { path = "../model-entity" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true, features = ["attributes"] }

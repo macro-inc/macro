@@ -24,7 +24,7 @@ default = [
 ]
 document = []
 document_text_extractor = []
-email = ["uuid", "models_email"]
+email = ["uuid", "models_email", "dep:email"]
 gmail = ["model", "uuid"]
 organization_retention = []
 search = ["chrono", "model", "models_opensearch", "uuid", "futures"]
@@ -36,6 +36,7 @@ upload_extractor = []
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
+email = { path = "../email", features = ["ports"], optional = true }
 model = { path = "../model", optional = true }
 models_email = { path = "../models_email", optional = true }
 serde = { workspace = true }

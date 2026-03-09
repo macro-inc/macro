@@ -14,6 +14,21 @@ pub enum StatusOption {
     Canceled,
 }
 
+impl TryFrom<&str> for StatusOption {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s {
+            "Not Started" | "not_started" => Ok(Self::NotStarted),
+            "In Progress" | "in_progress" => Ok(Self::InProgress),
+            "In Review" | "in_review" => Ok(Self::InReview),
+            "Completed" | "completed" => Ok(Self::Completed),
+            "Canceled" | "canceled" => Ok(Self::Canceled),
+            _ => Err(format!("unknown status option: {s}")),
+        }
+    }
+}
+
 impl StatusOption {
     pub const NOT_STARTED_UUID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0002_000000000001);
     pub const IN_PROGRESS_UUID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0002_000000000002);

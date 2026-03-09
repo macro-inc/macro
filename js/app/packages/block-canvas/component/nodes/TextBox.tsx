@@ -1,30 +1,18 @@
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
 import { useBlockId } from '@core/block';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
+import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
-import {
-  codePlugin,
-  createAccessoryStore,
   DefaultShortcuts,
   keyboardShortcutsPlugin,
-  mentionsPlugin,
-  tabIndentationPlugin,
-  textPastePlugin,
 } from '@core/component/LexicalMarkdown/plugins';
-import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
-import {
-  initializeEditorEmpty,
-  setEditorStateFromMarkdown,
-} from '@core/component/LexicalMarkdown/utils';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
-import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter';
 import {
   $getRoot,
   $setSelection,
@@ -81,20 +69,34 @@ function TextBoxEditor(props: {
 
   const toolManager = useToolManager();
 
-  const lexicalWrapper = createLexicalWrapper({
-    type: 'markdown',
-    namespace: 'canvas-text-box',
-    isInteractable: createMemo(() => {
-      return canEdit() ?? false;
-    }),
-  });
+  const config = buildConfig('markdown')
+    .namespace('canvas-text-box')
+    .withHistory({ timeGap: 400 })
+    .withEmojis()
+    .withMentions({ sourceDocumentId: props.blockId })
+    .withCode()
+    .use((editor) => {
+      return editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        () => {
+          editor.getRootElement()?.blur();
+          return true;
+        },
+        COMMAND_PRIORITY_LOW
+      );
+    })
+    .use(
+      keyboardShortcutsPlugin({
+        shortcuts: DefaultShortcuts,
+      })
+    );
 
-  const { editor, plugins, cleanup } = lexicalWrapper;
+  const handle = config.buildHandle();
+  const { lexical: editor, plugins } = handle;
+  const state = handle._internal;
   props.setter(editor);
 
-  const [markdownState, setMarkdownState] = createSignal<string>(
-    props.node.text
-  );
+  createEffect(() => state.setIsInteractable(canEdit() ?? false));
 
   const resizeObserver = new ResizeObserver((entries) => {
     const height = entries[0].borderBoxSize[0].blockSize;
@@ -113,13 +115,13 @@ function TextBoxEditor(props: {
     registerEditor(props.node.id, editor);
   });
 
-  const text = createMemo(() => props.node.text);
+  const text = () => props.node.text;
 
   // TODO: trim text?
   if (text() && text() !== '') {
-    setEditorStateFromMarkdown(editor, text());
+    handle.controls.setMarkdown(text());
   } else {
-    initializeEditorEmpty(editor);
+    handle.controls.clear();
   }
 
   onCleanup(() => {
@@ -127,49 +129,15 @@ function TextBoxEditor(props: {
     unregisterEditor(props.node.id);
     editor.setRootElement(null);
     resizeObserver.disconnect();
-    cleanup();
+    state.cleanupLexical();
   });
 
-  const mentionsMenuOperations = createMenuOperations();
-
-  plugins
-    .richText()
-    .list()
-    .markdownShortcuts()
-    .delete()
-    .state<string>(setMarkdownState, 'markdown-internal')
-    .history(400)
-    .use(tabIndentationPlugin())
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        sourceDocumentId: props.blockId,
-      })
-    )
-    .use((editor) => {
-      return editor.registerCommand(
-        KEY_ESCAPE_COMMAND,
-        () => {
-          editor.getRootElement()?.blur();
-          return true;
-        },
-        COMMAND_PRIORITY_LOW
-      );
-    })
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
-      })
-    )
-    .use(textPastePlugin())
-    .use(normalizeEnterPlugin());
-
-  const textwrapStyles = createMemo(() => {
+  const textwrapStyles = () => {
     return {
       'white-space': props.node.followTextWidth ? 'pre' : 'pre-wrap',
       width: props.node.followTextWidth ? 'max-content' : '100%',
     };
-  });
+  };
 
   plugins.useReactive(
     () => props.focusOnMount,
@@ -186,7 +154,7 @@ function TextBoxEditor(props: {
   );
 
   createEffect(() => {
-    const val = markdownState();
+    const val = state.markdownState();
     if (props.editable()) {
       props.onTextChange?.(val);
     }
@@ -194,9 +162,8 @@ function TextBoxEditor(props: {
 
   createEffect(() => {
     const val = text();
-    if (val && val !== untrack(markdownState)) {
-      setEditorStateFromMarkdown(editor, val);
-      setMarkdownState(val);
+    if (val && val !== untrack(state.markdownState)) {
+      handle.controls.setMarkdown(val);
     }
   });
 
@@ -205,16 +172,8 @@ function TextBoxEditor(props: {
     mountRef.style.userSelect = props.editable() ? 'text' : 'none';
   });
 
-  const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  plugins.use(
-    codePlugin({
-      setAccessories: setAccessoryStore,
-      accessories: accessoryStore,
-    })
-  );
-
   return (
-    <LexicalWrapperContext.Provider value={lexicalWrapper}>
+    <LexicalWrapperContext.Provider value={state.lexicalWrapper}>
       <div
         class="w-full absolute m-0 top-0 left-0"
         classList={{
@@ -249,12 +208,17 @@ function TextBoxEditor(props: {
       <ScopedPortal>
         <MentionsMenu
           editor={editor}
-          menu={mentionsMenuOperations}
+          menu={state.mentionsMenuOps!}
+          useBlockBoundary={true}
+        />
+        <EmojiMenu
+          editor={editor}
+          menu={state.emojisMenuOps!}
           useBlockBoundary={true}
         />
       </ScopedPortal>
       <DecoratorRenderer editor={editor} />
-      <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
+      <NodeAccessoryRenderer editor={editor} store={state.accessoryStore!} />
     </LexicalWrapperContext.Provider>
   );
 }
@@ -426,7 +390,9 @@ export function TextBox(props: { node: TextNode; mode: RenderMode }) {
             }}
             onWidthChange={(width: number) => {
               if (props.node.followTextWidth) {
-                nodes.updateNode(props.node.id, { width: width + 2 });
+                nodes.updateNode(props.node.id, {
+                  width: Math.min(width + 2, 3000),
+                });
               }
             }}
           />

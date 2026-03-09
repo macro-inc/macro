@@ -1,7 +1,9 @@
+#![recursion_limit = "256"]
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        GithubSyncAppPemSecretKey, GithubWebhookSecretKey,
     },
     service::s3::S3,
 };
@@ -26,6 +28,9 @@ use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -96,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (50, 150),
-        Environment::Develop => (15, 50),
+        Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
 
@@ -200,8 +205,13 @@ async fn main() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service =
-        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let redis_multiplexed_conn = redis_client
@@ -303,13 +313,33 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
-    let document_service = DocumentServiceImpl::new(
+    let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
         s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
+    ));
+
+    let github_webhook_secret = secretsmanager_client
+        .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
+        .await?;
+
+    let github_sync_app_pem = secretsmanager_client
+        .get_maybe_secret_value(env, GithubSyncAppPemSecretKey::new()?)
+        .await?;
+
+    let github_sync_service_impl = GithubSyncServiceImpl::new(
+        GithubSyncConfig {
+            webhook_secret: github_webhook_secret.as_ref().to_string(),
+            github_sync_app_url: config.vars.github_sync_app_url.to_string(),
+            sync_app_pem: github_sync_app_pem.as_ref().to_string(),
+            sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
+        },
+        document_service.clone(),
+        PgGithubSyncRepo::new(db.clone()),
+        GithubSyncClientImpl::default(),
     );
 
     let api_context = ApiContext {
@@ -322,6 +352,7 @@ async fn main() -> anyhow::Result<()> {
             ),
             email_service,
         ),
+        github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: s3,
@@ -343,7 +374,7 @@ async fn main() -> anyhow::Result<()> {
         permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
-            service: Arc::new(document_service),
+            service: document_service,
             access_service: entity_access_service,
             pool: db.clone(),
         },

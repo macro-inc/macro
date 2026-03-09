@@ -5,6 +5,7 @@ import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,
+  makeCopyBranchNameAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -18,6 +19,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
+import { isListViewID } from '@app/constants/list-views';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -53,11 +55,18 @@ export const useEntityActionHotkeys = (
 
   const copyLinkAction = makeCopyLinkAction();
 
+  const copyBranchNameAction = makeCopyBranchNameAction();
+
   const shareAction = makeShareAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    const selected = soup.selection.selected();
-    if (selected.length > 0) return selected;
+    if (
+      splitHandle?.content().type === 'component' &&
+      isListViewID(splitHandle?.content().id)
+    ) {
+      const selected = soup.selection.selected();
+      if (selected.length > 0) return selected;
+    }
 
     const focused = soup.focus.item();
     return focused ? [focused] : [];
@@ -72,7 +81,7 @@ export const useEntityActionHotkeys = (
 
   const group = createHotkeyGroup();
 
-  // Mark Done - 'e'
+  // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
@@ -93,7 +102,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+  });
 
   // Delete - 'delete', 'backspace'
   registerHotkey({
@@ -216,6 +225,30 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Copy branch name - 'shift+cmd+b'
+  registerHotkey({
+    hotkey: ['shift+cmd+b'],
+    hotkeyToken: TOKENS.entity.action.copyBranchName,
+    scopeId,
+    description: 'Copy branch name',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!copyBranchNameAction.canExecute(entities[0])) return false;
+      copyBranchNameAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length === 1 && copyBranchNameAction.canExecute(entities[0])
+      );
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

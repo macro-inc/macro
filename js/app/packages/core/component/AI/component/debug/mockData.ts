@@ -96,11 +96,11 @@ export function toolCall(_delay: NetworkDelay = noDelay) {
       type: 'toolCall',
       tool: {
         data: {
-          contentType: 'document',
+          contentType: 'channel',
           ids: ['this-is-not-a-real-id'],
           messagesSince: null,
         },
-        name: 'Read',
+        name: 'ReadThread',
       },
     },
     {

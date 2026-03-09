@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [lib]
-name = "connection_gateway_client"
+name = "connection_gateway"
 path = "src/lib.rs"
 
 [[bin]]
@@ -26,6 +26,8 @@ aws-sdk-dynamodb = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client" }
+connection_gateway_models = { path = "../connection_gateway_models" }
 cowlike = { path = "../cowlike" }
 dashmap = { workspace = true }
 ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
@@ -54,7 +56,6 @@ redis = { workspace = true, features = [
   "tokio-comp",
   "tokio-native-tls-comp",
 ] }
-reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_dynamo = { workspace = true }

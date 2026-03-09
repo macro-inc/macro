@@ -9,14 +9,10 @@ import {
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
-import {
-  type RouteSectionProps,
-  useLocation,
-  useNavigate,
-} from '@solidjs/router';
+import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
@@ -29,8 +25,11 @@ import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
-import { ENABLE_INTERACTIVE_ONBOARDING } from '@core/constant/featureFlags';
-import { useTutorialCompleted } from '@core/context/user';
+import {
+  AppSidebar,
+  type SidebarState,
+} from '@app/component/app-sidebar/sidebar';
+import { isMobile } from '@core/mobile/isMobile';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -41,26 +40,16 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
 
+export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
+  !isMobile() ? 'expanded' : 'hidden'
+);
+
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
-  const navigate = useNavigate();
-  const tutorialCompleted = useTutorialCompleted();
 
   useAppSquishHandlers();
-
-  // Auto-redirect new users to the interactive tutorial
-  createEffect(() => {
-    if (
-      ENABLE_INTERACTIVE_ONBOARDING &&
-      isAuthenticated() &&
-      tutorialCompleted() === false &&
-      !location.pathname.includes('/component/tutorial')
-    ) {
-      navigate(`${ROUTER_BASE_CONCAT}component/tutorial`);
-    }
-  });
 
   // save last_path to cookie
   createEffect(() => {
@@ -132,10 +121,26 @@ export function Layout(props: RouteSectionProps) {
           <Banner />
         </Show>
       </Suspense>
+      {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
+        <Onboarding />
+      </Show> */}
+
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="grow-1">
+      <div class="max-h-full grow-1 flex">
+        <AppSidebar
+          sidebarState={sidebarState()}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSidebarState(isMobile() ? 'hidden' : 'slim');
+              return;
+            }
+
+            setSidebarState('expanded');
+          }}
+        />
+
         <Resize.Zone
           gutter={4}
           direction="horizontal"
@@ -143,10 +148,12 @@ export function Layout(props: RouteSectionProps) {
           id={'main-layout'}
         >
           <ItemDndProvider>
-            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-              {props.children}
-            </Resize.Panel>
-            <SettingsWrapper />
+            <Show when={isAuthenticated()}>
+              <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
+                {props.children}
+              </Resize.Panel>
+              <SettingsWrapper />
+            </Show>
           </ItemDndProvider>
         </Resize.Zone>
       </div>

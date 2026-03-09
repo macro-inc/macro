@@ -89,7 +89,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const blockId = useMaybeBlockId();
 
-  const { usersAndGroups } = useUsersMention({
+  const { usersAndGroups, groups } = useUsersMention({
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
@@ -191,7 +191,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const buckets: BucketConfig[] = [
       {
         id: 'users',
-        label: 'People & Groups',
+        label: groups().length > 0 ? 'People & Groups' : 'People',
         getData: () => usersAndGroups() ?? [],
         getFullCount: () => usersAndGroups()?.length ?? 0,
       },

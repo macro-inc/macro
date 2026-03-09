@@ -9,7 +9,8 @@ import TagIcon from '@icon/regular/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
 
-const DRAWER_ID = 'properties';
+export const PROPERTIES_DRAWER_ID = 'properties';
+const DRAWER_ID = PROPERTIES_DRAWER_ID;
 
 function DocumentPropertiesContent(props: {
   blockType: BlockName;

@@ -8,7 +8,10 @@ use comms_db_client::{
     participants::remove_participant::{RemoveParticipantOptions, remove_participant},
 };
 use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithMacroUserId};
+use notification::domain::ports::NotificationRepository;
+use notification::outbound::repository::DbNotificationRepository;
 use sqlx::{Pool, Postgres};
 use stripe::CustomerId;
 use tracing::Instrument;
@@ -187,20 +190,29 @@ async fn delete_user(
         .in_current_span(),
     );
 
-    // Send delete user call to notifications
+    // Delete user notifications directly from the database
+    // TODO: technically we should be calling into the notification service here
+    // but since the service method would just be a straight passthrough to the repo, this is simpler than plumbing the entire service down
     tokio::spawn(
         {
             let user_infos = user_infos.clone();
-            let notification_service_client = ctx.notification_service_client.clone();
+            let notification_repo = DbNotificationRepository::new(ctx.db.clone());
             async move {
                 for user_info in user_infos {
                     let user_id = user_info.id.clone();
                     tracing::trace!(user_id, "delete_user_notifications");
-                    if let Err(e) = notification_service_client
-                        .delete_user_notifications(&user_id)
-                        .await
-                    {
-                        tracing::error!(error=?e, user_id, "unable to delete user notifications");
+                    match MacroUserIdStr::parse_from_str(&user_id) {
+                        Ok(macro_user_id) => {
+                            if let Err(e) = notification_repo
+                                .delete_all_user_notifications(macro_user_id)
+                                .await
+                            {
+                                tracing::error!(error=?e, user_id, "unable to delete user notifications");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(error=?e, user_id, "unable to parse user id");
+                        }
                     }
                     tracing::trace!(user_id, "delete_user_notifications complete");
                 }

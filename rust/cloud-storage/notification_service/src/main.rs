@@ -68,13 +68,12 @@ pub async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "push_notification_event_handler")]
     {
-        let device_deleter =
-            ::notification::outbound::device_registration::DbDeviceRegistrationDeleter::new(
-                db.clone(),
+        let event_notif_repo =
+            ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+        let event_sns_manager =
+            ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+                aws_sdk_sns::Client::new(&aws_config),
             );
-        let sns_deleter = ::notification::outbound::sns_endpoint::SnsEndpointDeletionAdapter::new(
-            aws_sdk_sns::Client::new(&aws_config),
-        );
 
         let push_event_redis_conn = redis_client
             .get_multiplexed_async_connection()
@@ -96,8 +95,8 @@ pub async fn main() -> anyhow::Result<()> {
             };
 
         let event_service = ::notification::domain::service::PushNotificationEventService::new(
-            device_deleter,
-            sns_deleter,
+            event_notif_repo,
+            event_sns_manager,
             digest_failure_sm,
         );
         let event_queue =
@@ -128,9 +127,19 @@ pub async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&aws_config),
         vars.notification_queue.as_ref().to_string(),
     );
+    let sns_endpoint_manager =
+        ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+            aws_sdk_sns::Client::new(&aws_config),
+        );
+    let platform_config = ::notification::domain::service::PlatformArnConfig {
+        apns_platform_arn: config.sns_apns_platform_arn.clone(),
+        fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
+    };
     let reader_service = ::notification::domain::service::NotificationReaderService::new(
         notification_repository,
         notification_queue.clone(),
+        sns_endpoint_manager,
+        platform_config,
     );
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(reader_service);
 

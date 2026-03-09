@@ -81,7 +81,7 @@ pub async fn handler(
             // We only want to refresh the token if it's expired
             MacroAuthError::JwtExpired => {}
             _ => {
-                tracing::error!(error=?e, "unable to decode jwt");
+                tracing::error!(error=?e, token=?token_context.access_token, "unable to decode jwt");
                 return Err(RefreshError::Unauthorized);
             }
         },
@@ -113,6 +113,7 @@ pub async fn handler(
     //     return Err(RefreshError::RefreshInProgress);
     // }
 
+    let start_time = std::time::Instant::now();
     let (access_token, refresh_token) = auth_client
         .refresh_token(&token_context.access_token, &token_context.refresh_token)
         .await
@@ -123,6 +124,8 @@ pub async fn handler(
                 RefreshError::InternalServerError
             }
         })?;
+
+    tracing::info!(time_taken=?start_time.elapsed(), "refresh token time");
 
     // Add in cookies to response
     cookies.add(create_access_token_cookie(&access_token));

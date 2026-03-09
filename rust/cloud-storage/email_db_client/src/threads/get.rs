@@ -1,11 +1,9 @@
-use crate::messages::get::{convert_db_messages_to_service_concurrent, get_messages_by_thread_id};
 use crate::parse::db_to_service;
 use anyhow::anyhow;
-use models_email::email::db;
-use models_email::email::service::thread;
 use models_email::email::service::thread::{
     ThreadProviderMap, ThreadUserInfo, UserThreadIds, UserThreadsPage,
 };
+use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
@@ -33,45 +31,6 @@ pub async fn get_paginated_thread_ids_with_macro_user_id(
     .await?;
 
     Ok(result)
-}
-
-/// fetch thread with number of most recent messages specified by limit and offset
-#[tracing::instrument(skip(pool), err)]
-pub async fn fetch_thread_with_messages_paginated(
-    pool: &PgPool,
-    thread_db_id: Uuid,
-    offset: i64,
-    limit: i64,
-) -> anyhow::Result<Option<thread::Thread>> {
-    if offset < 0 || limit <= 0 {
-        anyhow::bail!("Offset must be non-negative and limit must be positive");
-    }
-
-    let db_thread = sqlx::query_as!(
-        db::thread::Thread,
-        r#"
-    SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
-           t.latest_inbound_message_ts, t.latest_outbound_message_ts,
-           t.latest_non_spam_message_ts, t.created_at, t.updated_at
-    FROM email_threads t
-    WHERE t.id = $1
-    "#,
-        thread_db_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(db_thread) = db_thread else {
-        return Ok(None);
-    };
-
-    let db_messages = get_messages_by_thread_id(pool, thread_db_id, offset, limit).await?;
-
-    let processed_messages = convert_db_messages_to_service_concurrent(pool, db_messages).await?;
-
-    let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
-
-    Ok(Some(full_thread))
 }
 
 /// get the ids of the latest-updated threads for the user.
@@ -295,7 +254,7 @@ pub async fn get_thread_by_id_and_link_id(
     pool: &PgPool,
     thread_id: Uuid,
     link_id: Uuid,
-) -> anyhow::Result<Option<thread::Thread>> {
+) -> anyhow::Result<Option<service::thread::Thread>> {
     // Fetch the thread record
     let db_thread = sqlx::query_as!(
         db::thread::Thread,
