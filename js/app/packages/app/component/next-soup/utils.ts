@@ -27,7 +27,6 @@ import {
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
-import { isListViewID } from '@app/constants/list-views';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
