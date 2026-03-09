@@ -296,15 +296,10 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
-  const activeSplitContentID = splitManager.activeSplit()?.content().id;
-
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom:
-        activeSplitContentID && isListViewID(activeSplitContentID)
-          ? activeSplitContentID
-          : undefined,
+      referredFrom: 'list-view',
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
