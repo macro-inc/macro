@@ -116,11 +116,10 @@ impl Config {
                 .and_then(|v| v.as_ref().parse::<u64>().ok())
                 .unwrap_or(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS);
 
-        let notification_queue_max_messages: i32 =
-            std::env::var("NOTIFICATION_QUEUE_MAX_MESSAGES")
-                .unwrap_or("9".to_string())
-                .parse::<i32>()
-                .unwrap();
+        let notification_queue_max_messages: i32 = std::env::var("NOTIFICATION_QUEUE_MAX_MESSAGES")
+            .unwrap_or("9".to_string())
+            .parse::<i32>()
+            .unwrap();
 
         let notification_queue_wait_time_seconds: i32 =
             std::env::var("NOTIFICATION_QUEUE_WAIT_TIME_SECONDS")

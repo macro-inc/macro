@@ -194,8 +194,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/user_notifications",
-            user_notification::router()
-                .with_state(state.notification_router_state.clone()),
+            user_notification::router().with_state(state.notification_router_state.clone()),
         )
         .layer(
             ServiceBuilder::new()

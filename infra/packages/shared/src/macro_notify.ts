@@ -12,15 +12,13 @@ export function getMacroNotify(): {
     }
   );
 
-  const notificationQueueArn: pulumi.Output<string> =
-    cloudStorageServiceStack
-      .getOutput('notificationQueueArn')
-      .apply((arn) => arn as string);
+  const notificationQueueArn: pulumi.Output<string> = cloudStorageServiceStack
+    .getOutput('notificationQueueArn')
+    .apply((arn) => arn as string);
 
-  const notificationQueueName: pulumi.Output<string> =
-    cloudStorageServiceStack
-      .getOutput('notificationQueueName')
-      .apply((arn) => arn as string);
+  const notificationQueueName: pulumi.Output<string> = cloudStorageServiceStack
+    .getOutput('notificationQueueName')
+    .apply((arn) => arn as string);
 
   return {
     notificationQueueName,
