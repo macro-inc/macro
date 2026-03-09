@@ -1,6 +1,5 @@
-//! Thread (email thread) access extractor.
+//! Channel access extractor.
 
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -10,30 +9,34 @@ use axum::{
     http::request::Parts,
 };
 
-use super::{ExtractorError, InternalUser, RequiredPermission};
+use super::{ExtractorError, InternalUser};
 use crate::domain::{
     models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        ParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
 };
 use model_user::axum_extractor::OptionalMacroUserExtractor;
 
-/// Validates that the user has at least the required access level to an email thread.
+#[derive(Debug, serde::Deserialize)]
+struct ChannelAccessParams {
+    channel_id: String,
+}
+
+/// Validates that the user satisfies the required permission for a channel.
 ///
-/// Type parameter `T` specifies the required access level.
+/// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.
-///
-/// Extracts the thread ID from the `thread_id` path parameter.
 #[derive(Debug)]
-pub struct ThreadAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct ChannelAccessLevelExtractor<T: RequiredPermission, Svc> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
 }
 
 #[async_trait]
-impl<T, S, Svc> FromRequestParts<S> for ThreadAccessLevelExtractor<T, Svc>
+impl<T, S, Svc> FromRequestParts<S> for ChannelAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
@@ -46,22 +49,19 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
+        let OptionalMacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        let Path(path_params): Path<HashMap<String, String>> = parts
-            .extract()
+        let Path(ChannelAccessParams { channel_id }) = parts
+            .extract::<Path<ChannelAccessParams>>()
             .await
-            .map_err(|_| ExtractorError::BadRequest("missing thread_id path parameter"))?;
-
-        let thread_id = path_params
-            .get("thread_id")
-            .ok_or(ExtractorError::BadRequest(
-                "missing thread_id path parameter",
-            ))?
-            .clone();
+            .map_err(|_| ExtractorError::BadRequest("missing channel_id path parameter"))?;
 
         let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
             parts
@@ -76,12 +76,12 @@ where
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
-                        entity_id: thread_id,
-                        entity_type: EntityType::EmailThread,
+                        entity_id: channel_id,
+                        entity_type: EntityType::Channel,
                     },
                     auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
+                    entity_permission: EntityPermission::ChannelRole {
+                        role: ParticipantRole::Owner,
                     },
                     _marker: PhantomData,
                 },
@@ -89,33 +89,33 @@ where
             });
         }
 
-        let access_level = match service
-            .get_access_level(
-                macro_user_id.as_deref(),
-                &thread_id,
-                EntityType::EmailThread,
-            )
-            .await
-            .map_err(ExtractorError::from)?
-        {
-            Some(access_level) => access_level,
-            None => return Err(ExtractorError::Unauthorized),
-        };
-
-        let permission = EntityPermission::AccessLevel { access_level };
-        if !permission.satisfies::<T>() {
+        let Some(macro_user_id) = macro_user_id else {
             return Err(ExtractorError::Unauthorized);
         };
+
+        let user_org_id = user_context.organization_id.map(i64::from);
+
+        let permission = service
+            .get_entity_permission(
+                Some(&macro_user_id),
+                &channel_id,
+                EntityType::Channel,
+                user_org_id,
+            )
+            .await
+            .map_err(ExtractorError::from)?;
+
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
+        }
 
         Ok(Self {
             entity_access_receipt: EntityAccessReceipt {
                 entity: Entity {
-                    entity_id: thread_id,
-                    entity_type: EntityType::EmailThread,
+                    entity_id: channel_id,
+                    entity_type: EntityType::Channel,
                 },
-                auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                auth: EntityAccessAuth::Authenticated(macro_user_id.0),
                 entity_permission: permission,
                 _marker: PhantomData,
             },
