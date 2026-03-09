@@ -75,6 +75,7 @@ export const AssigneeFilter = () => {
       active={activeAssignee()}
       onChange={handleAssigneeChange}
       placeholder="Search assignees..."
+      virtualized
     />
   );
 };
@@ -274,6 +275,7 @@ export const FolderFilter = (props: FolderFilterProps) => {
         active={activeProjectFilter()}
         onChange={handleProjectChange}
         placeholder="Search folders..."
+        virtualized
       />
     </Show>
   );
@@ -529,6 +531,7 @@ export const FromSenderFilter = () => {
         active={activeSenderFilter()}
         onChange={handleSenderChange}
         placeholder="Search contacts..."
+        virtualized
       />
     </Show>
   );
