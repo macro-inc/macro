@@ -21,7 +21,6 @@ import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
-import { BrightJoins } from '@ui/components/BrightJoins';
 
 const useApplyPreset = () => {
   const soup = useSoup();

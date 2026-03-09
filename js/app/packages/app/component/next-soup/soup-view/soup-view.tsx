@@ -1,5 +1,4 @@
 import PreviewIcon from '@macro-icons/wide/preview.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
