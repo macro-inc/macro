@@ -37,7 +37,9 @@ type CreateCloudStorageServiceServiceArgs = {
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
-  snsPlatformArns: Array<pulumi.Output<string> | string>;
+  snsPlatformArns:
+    | pulumi.Output<string[]>
+    | Array<pulumi.Output<string> | string>;
   tags: { [key: string]: string };
 };
 

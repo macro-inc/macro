@@ -1,9 +1,10 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket, Queue } from '../../packages/resources';
+import { createBucket } from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
+  getMacroNotify,
   getSearchEventQueue,
   stack,
 } from '../../packages/shared';
@@ -16,7 +17,6 @@ import {
   DocxUnzipHandlerLambda,
   type DocxUnzipLambdaEnvVars,
 } from './docx-unzip-handler-lambda';
-import { PushNotificationEventHandler } from './push';
 
 const tags = {
   environment: stack,
@@ -87,76 +87,6 @@ const documentStoragePermissionsKeyArn: pulumi.Output<string> =
   aws.secretsmanager
     .getSecretVersionOutput({ secretId: DOCUMENT_STORAGE_PERMISSIONS_KEY })
     .apply((secret) => secret.arn);
-
-// --- Notification / Push notification secrets ---
-const appleTeamId = config.require(`apple_team_id`);
-const APPLE_TEAM_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: appleTeamId })
-  .apply((secret) => secret.secretString);
-
-const appleBundleId = config.require(`apple_bundle_id`);
-const APPLE_BUNDLE_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: appleBundleId })
-  .apply((secret) => secret.secretString);
-
-const apnsKeyId = config.require(`apns_key_id`);
-const APNS_KEY_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: apnsKeyId })
-  .apply((secret) => secret.secretString);
-const APNS_PRIVATE_KEY = config.requireSecret(`apns_private_key`);
-
-const FCM_SECRET_KEY = config.require(`fcm_secret_key`);
-const fcmCredentials: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: FCM_SECRET_KEY })
-  .apply((secret) => secret.secretString);
-
-// --- Notification queue + push notification event handler ---
-const notificationQueue = new Queue('notification', { tags });
-
-const pushNotificationEventHandler = new PushNotificationEventHandler(
-  'push-notification-event-handler',
-  { tags }
-);
-
-export const pushNotificationEventHandlerQueueArn =
-  pushNotificationEventHandler.pushDeliveryQueue.arn;
-export const pushNotificationEventHandlerQueueName =
-  pushNotificationEventHandler.pushDeliveryQueue.name;
-export const pushNotificationEventHandlerTopicArn =
-  pushNotificationEventHandler.pushDeliveryTopic.arn;
-
-const notificationApnsPlatform = new aws.sns.PlatformApplication(
-  'notification-apns-platform',
-  {
-    name: `notification-apns-platform-${stack}`,
-    platform: stack === 'prod' ? 'APNS' : 'APNS_SANDBOX',
-    applePlatformTeamId: APPLE_TEAM_ID,
-    applePlatformBundleId: APPLE_BUNDLE_ID,
-    platformPrincipal: APNS_KEY_ID,
-    platformCredential: APNS_PRIVATE_KEY,
-    eventDeliveryFailureTopicArn: pushNotificationEventHandlerTopicArn,
-    eventEndpointDeletedTopicArn: pushNotificationEventHandlerTopicArn,
-  }
-);
-
-const notificationFcmPlatform = new aws.sns.PlatformApplication(
-  'notification-fcm-platform',
-  {
-    name: `notification-fcm-platform-${stack}`,
-    platform: 'GCM',
-    platformCredential: fcmCredentials,
-    eventDeliveryFailureTopicArn: pushNotificationEventHandlerTopicArn,
-    eventEndpointDeletedTopicArn: pushNotificationEventHandlerTopicArn,
-    successFeedbackSampleRate: '0',
-  }
-);
-
-export const notificationQueueArn = notificationQueue.queue.arn;
-export const notificationQueueName = notificationQueue.queue.name;
-export const notificationSnsPlatformArns = [
-  notificationApnsPlatform.arn,
-  notificationFcmPlatform.arn,
-];
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
@@ -244,6 +174,14 @@ const contactsQueueName: pulumi.Output<string> = contactsServiceStack
 const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
+
+const {
+  notificationQueueName,
+  notificationQueueArn,
+  notificationSnsPlatformArns,
+  pushNotificationEventHandlerQueueArn,
+  pushNotificationEventHandlerQueueName,
+} = getMacroNotify();
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
 // aws secretsmanager delete-secret --secret-id ${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME} --force-delete-without-recovery
@@ -525,11 +463,11 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'SNS_APNS_PLATFORM_ARN',
-        value: pulumi.interpolate`${notificationApnsPlatform.arn}`,
+        value: notificationSnsPlatformArns.apply((arns) => arns[0]),
       },
       {
         name: 'SNS_FCM_PLATFORM_ARN',
-        value: pulumi.interpolate`${notificationFcmPlatform.arn}`,
+        value: notificationSnsPlatformArns.apply((arns) => arns[1]),
       },
       {
         name: 'SENDER_BASE_ADDRESS',
@@ -537,7 +475,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'APPLE_BUNDLE_ID',
-        value: APPLE_BUNDLE_ID,
+        value: 'com.macro.app',
       },
       // OpenTelemetry / Datadog tracing configuration
       {

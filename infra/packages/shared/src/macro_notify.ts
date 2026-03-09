@@ -4,24 +4,45 @@ import { stack } from '../../shared';
 export function getMacroNotify(): {
   notificationQueueName: pulumi.Output<string>;
   notificationQueueArn: pulumi.Output<string>;
+  notificationSnsPlatformArns: pulumi.Output<string[]>;
+  pushNotificationEventHandlerQueueArn: pulumi.Output<string>;
+  pushNotificationEventHandlerQueueName: pulumi.Output<string>;
 } {
-  const cloudStorageServiceStack = new pulumi.StackReference(
-    'cloud-storage-service-notify-stack',
+  const notificationServiceStack = new pulumi.StackReference(
+    'notification-service-stack',
     {
-      name: `macro-inc/cloud-storage-service/${stack}`,
+      name: `macro-inc/notification-service/${stack}`,
     }
   );
 
-  const notificationQueueArn: pulumi.Output<string> = cloudStorageServiceStack
+  const notificationQueueArn: pulumi.Output<string> = notificationServiceStack
     .getOutput('notificationQueueArn')
     .apply((arn) => arn as string);
 
-  const notificationQueueName: pulumi.Output<string> = cloudStorageServiceStack
+  const notificationQueueName: pulumi.Output<string> = notificationServiceStack
     .getOutput('notificationQueueName')
     .apply((arn) => arn as string);
+
+  const notificationSnsPlatformArns: pulumi.Output<string[]> =
+    notificationServiceStack
+      .getOutput('notificationSnsPlatformArns')
+      .apply((arns) => arns as string[]);
+
+  const pushNotificationEventHandlerQueueArn: pulumi.Output<string> =
+    notificationServiceStack
+      .getOutput('pushNotificationEventHandlerQueueArn')
+      .apply((arn) => arn as string);
+
+  const pushNotificationEventHandlerQueueName: pulumi.Output<string> =
+    notificationServiceStack
+      .getOutput('pushNotificationEventHandlerQueueName')
+      .apply((arn) => arn as string);
 
   return {
     notificationQueueName,
     notificationQueueArn,
+    notificationSnsPlatformArns,
+    pushNotificationEventHandlerQueueArn,
+    pushNotificationEventHandlerQueueName,
   };
 }
