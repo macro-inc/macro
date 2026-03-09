@@ -1,11 +1,11 @@
 import './MobileDock.css';
-import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
-import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import ChevronUpIcon from '@icon/regular/caret-up.svg?component-solid';
-import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
-import MacroCreateIcon from '@macro-icons/macro-create-b.svg?component-solid';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { type Component, createSignal, For, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -18,6 +18,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { setCreateMenuOpen } from '../Launcher';
+import { useLocation } from '@solidjs/router';
 
 type MobileDockButtonProps = {
   icon: Component<
@@ -33,12 +34,16 @@ type MobileDockButtonProps = {
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
+  const [animating, setAnimating] = createSignal(false);
+
   return (
     <button
       type="button"
       ref={props.ref}
       onPointerDown={() => {
         impactFeedback('light');
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), 500);
         props.onClick();
       }}
       onTouchMove={props.onTouchMove}
@@ -49,7 +54,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
       )}
     >
       <div class={cn('w-6 h-6 [&_svg]:size-6', props.iconClass)}>
-        <Dynamic component={props.icon} />
+        <Dynamic component={props.icon} triggerAnimation={animating()} />
       </div>
       <span class="text-xs">{props.label}</span>
     </button>
@@ -64,6 +69,7 @@ const MORE_VIEWS = SIDEBAR_LINKS.filter(
 
 function MorePopover(props: {
   active: boolean;
+  isActive: (id: ListView) => boolean;
   onNavigate: (id: ListView) => void;
 }) {
   const { toggleSettings } = useSettingsState();
@@ -135,7 +141,7 @@ function MorePopover(props: {
             }}
           >
             <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-              <GearIcon />
+              <AnimatedSlidersHorizontalIcon triggerAnimation={hoveredId() === 'settings'} />
             </div>
             <span>Settings</span>
           </button>
@@ -153,7 +159,7 @@ function MorePopover(props: {
             }}
           >
             <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-              <MacroCreateIcon />
+              <AnimatedPlusIcon triggerAnimation={hoveredId() === 'create'} />
             </div>
             <span>Create</span>
           </button>
@@ -163,7 +169,8 @@ function MorePopover(props: {
                 type="button"
                 data-more-item={item.id}
                 class={cn(
-                  'flex items-center gap-2 px-3 h-11 text-sm text-ink',
+                  'flex items-center gap-2 px-3 h-11 text-sm',
+                  props.isActive(item.id as ListView) ? 'text-accent' : 'text-ink',
                   hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
                 )}
                 onClick={() => {
@@ -173,7 +180,10 @@ function MorePopover(props: {
                 }}
               >
                 <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-                  <Dynamic component={item.icon} />
+                  <Dynamic
+                    component={item.icon}
+                    triggerAnimation={hoveredId() === item.id}
+                  />
                 </div>
                 <span>{item.label}</span>
               </button>
@@ -189,9 +199,17 @@ export function MobileDock() {
   const { openWithSplit } = useSplitLayout();
   const layoutManager = globalSplitManager();
 
-  const activeId = () => layoutManager?.activeSplit()?.content()?.id;
-  const isActive = (id: ListView) => activeId() === id;
-  const isMoreActive = () => MORE_VIEWS.some((v) => v.id === activeId());
+  const location = useLocation();
+
+  const isActive = (id: ListView) => {
+    const activeContent = layoutManager?.activeSplit()?.content();
+    if (!activeContent) {
+      return location.pathname.split('/').filter(Boolean).includes(id);
+    }
+    return activeContent.id === id;
+  };
+
+  const isMoreActive = () => MORE_VIEWS.some((v) => isActive(v.id));
 
   const navigate = (id: ListView) => {
     openWithSplit({ type: 'component', id }, { mergeHistory: true });
@@ -201,7 +219,7 @@ export function MobileDock() {
     <div class="relative z-mobile-nav-bar flex flex-row justify-between">
       <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-page" />
       <MobileDockButton
-        icon={TrayIcon}
+        icon={AnimatedInboxIcon}
         label="Inbox"
         active={isActive('inbox')}
         onClick={() => navigate('inbox')}
@@ -218,9 +236,9 @@ export function MobileDock() {
         active={isActive('files')}
         onClick={() => navigate('files')}
       />
-      <MorePopover active={isMoreActive()} onNavigate={navigate} />
+      <MorePopover active={isMoreActive()} isActive={isActive} onNavigate={navigate} />
       <MobileDockButton
-        icon={SearchIcon}
+        icon={AnimatedSearchIcon}
         label="Search"
         onClick={() => {
           SearchState.maybeResetState();
