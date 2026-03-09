@@ -1,15 +1,29 @@
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
-import { type JSXElement, lazy } from 'solid-js';
+import { type JSXElement, lazy, type ParentComponent, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { useUserContext } from '@core/context/user';
+
+/**
+ * Wrapper that delays rendering children until user is authenticated.
+ * Use this for views that require user context (userId, email) for their default filters.
+ */
+const AuthRequiredView: ParentComponent = (props) => {
+  const isAuthenticated = useIsAuthenticated();
+  return (
+    <Show when={isAuthenticated()} fallback={<LoadingBlock />}>
+      {props.children}
+    </Show>
+  );
+};
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -77,11 +91,13 @@ registerComponent('agents', () => {
     email: user.email(),
   });
   return (
-    <SoupView
-      viewName="Agents"
-      queryFilters={preset.queryFilters}
-      initialClientFilters={preset.clientFilters}
-    />
+    <AuthRequiredView>
+      <SoupView
+        viewName="Agents"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    </AuthRequiredView>
   );
 });
 registerComponent('mail', () => {
@@ -101,11 +117,13 @@ registerComponent('documents', () => {
     email: user.email(),
   });
   return (
-    <SoupView
-      viewName="Documents"
-      queryFilters={preset.queryFilters}
-      initialClientFilters={preset.clientFilters}
-    />
+    <AuthRequiredView>
+      <SoupView
+        viewName="Documents"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    </AuthRequiredView>
   );
 });
 registerComponent('tasks', () => {
@@ -115,11 +133,13 @@ registerComponent('tasks', () => {
     email: user.email(),
   });
   return (
-    <SoupView
-      viewName="Tasks"
-      queryFilters={preset.queryFilters}
-      initialClientFilters={preset.clientFilters}
-    />
+    <AuthRequiredView>
+      <SoupView
+        viewName="Tasks"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    </AuthRequiredView>
   );
 });
 registerComponent('channels', () => {
@@ -139,11 +159,13 @@ registerComponent('files', () => {
     email: user.email(),
   });
   return (
-    <SoupView
-      viewName="Files"
-      queryFilters={preset.queryFilters}
-      initialClientFilters={preset.clientFilters}
-    />
+    <AuthRequiredView>
+      <SoupView
+        viewName="Files"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    </AuthRequiredView>
   );
 });
 registerComponent('search', () => {
@@ -153,11 +175,13 @@ registerComponent('search', () => {
     email: user.email(),
   });
   return (
-    <SoupView
-      viewName="Search"
-      queryFilters={preset.queryFilters}
-      initialClientFilters={preset.clientFilters}
-    />
+    <AuthRequiredView>
+      <SoupView
+        viewName="Search"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    </AuthRequiredView>
   );
 });
 /** END - APP ROUTES */
