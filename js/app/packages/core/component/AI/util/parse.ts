@@ -1,5 +1,6 @@
-import { ModelEnum } from '@service-cognition/generated/schemas';
-import type { Model } from '../types';
+import { Model } from '../types';
+
+const modelValues = new Set(Object.values(Model));
 
 /**
  * Parses a Model type from a string.
@@ -9,7 +10,6 @@ export const parseModel = (
   value: string | null | undefined
 ): Model | undefined => {
   if (!value) return undefined;
-  const result = ModelEnum.safeParse(value);
-  if (result.success) return result.data;
+  if (modelValues.has(value as Model)) return value as Model;
   return undefined;
 };

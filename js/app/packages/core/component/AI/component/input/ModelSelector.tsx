@@ -41,7 +41,7 @@ export function ModelSelector(props: ModelSelectorProps) {
       <DropdownMenu.Trigger>
         <DeprecatedTextButton
           theme="clear"
-          text={MODEL_PRETTYNAME[model()]}
+          text={MODEL_PRETTYNAME[model()] ?? model()}
           icon={MODEL_PROVIDER_ICON[model()]}
           showChevron
         />

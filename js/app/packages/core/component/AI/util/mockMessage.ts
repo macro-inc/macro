@@ -1,6 +1,6 @@
 import { uuid } from 'short-uuid';
 import { DEFAULT_MODEL } from '../constant';
-import { type ChatMessageWithAttachments, Model } from '../types';
+import type { ChatMessageWithAttachments } from '../types';
 
 // TODO mock attachments
 function user(text: string, _attachments: [] = []): ChatMessageWithAttachments {
@@ -9,7 +9,7 @@ function user(text: string, _attachments: [] = []): ChatMessageWithAttachments {
     content: text,
     id: uuid(),
     role: 'user',
-    model: Model[DEFAULT_MODEL],
+    model: DEFAULT_MODEL,
   };
 }
 

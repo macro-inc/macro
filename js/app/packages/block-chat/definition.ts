@@ -1,7 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { AllModels } from '@service-cognition/generated/schemas';
+import { Model as AllModels } from '@service-cognition/generated/schemas';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import BlockChat from './component/Block';

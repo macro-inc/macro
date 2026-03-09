@@ -1,4 +1,4 @@
-import { EntityType as BaseEntityType } from '@service-connection/generated/schemas';
+import { NotificationEntityType as BaseEntityType } from '@service-connection/generated/schemas';
 
 // NOTE: TEMP
 export const EntityType = {
