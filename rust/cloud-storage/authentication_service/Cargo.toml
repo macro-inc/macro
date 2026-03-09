@@ -45,6 +45,7 @@ fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [
   "axum",
+  "inbound",
   "link",
   "outbound",
 ] }

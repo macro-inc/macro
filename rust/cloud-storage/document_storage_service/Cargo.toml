@@ -31,7 +31,6 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
-cowlike = { path = "../cowlike" }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -42,25 +41,35 @@ bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
+channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
-channels = { path = "../channels", features = ["inbound", "outbound"] }
 comms = { path = "../comms", features = ["outbound"] }
+comms_db_client = { path = "../comms_db_client" }
+comms_service = { path = "../comms_service" }
 connection_gateway_client = { path = "../connection_gateway_client" }
+cowlike = { path = "../cowlike" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 dynamodb_client = { path = "../dynamodb_client" }
-entity_access = { path = "../entity_access", features = ["schema"] }
 email = { path = "../email", features = ["outbound", "ports"] }
+entity_access = { path = "../entity_access", features = ["schema"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
+github = { path = "../github", default-features = false, features = [
+  "axum",
+  "inbound",
+  "outbound",
+  "sync",
+] }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 lazy_static = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_aws_config = { path = "../macro_aws_config", features=["s3"] }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
@@ -72,8 +81,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
-last_online_tracker = { path = "../last_online_tracker" }
-notification = { path = "../notification" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_share_permissions = { path = "../macro_share_permissions" }
@@ -90,10 +97,10 @@ models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
+notification = { path = "../notification" }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
 properties_service = { path = "../properties_service" }
-search_service = { path = "../search_service" }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
   "aio",
@@ -104,33 +111,29 @@ regex = { workspace = true }
 reqwest = { workspace = true }
 saved_views = { path = "../saved_views" }
 schemars = { workspace = true }
+search_service = { path = "../search_service" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", features = ["axum", "inbound", "outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "contacts",
   "document",
   "search",
-  "contacts",
 ] }
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { workspace = true, features = [
-  "compression-gzip",
-] }
+tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
-comms_db_client = { path = "../comms_db_client" }
-comms_service = { path = "../comms_service" }
-github = { path = "../github", default-features= false, features = ["inbound", "axum", "sync"]}
 
 [dev-dependencies]
 cool_asserts = "2"
