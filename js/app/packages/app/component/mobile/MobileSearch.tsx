@@ -199,7 +199,7 @@ export function MobileSearchInner(props: {
           }
         >
           <button
-            class="pl-2 mobile:pl-0 text-ink-muted mobile:text-ink hover:text-ink transition-colors flex flex-col items-center justify-center mobile:w-[20%] mobile:pt-3"
+            class="text-ink-muted mobile:text-ink hover:text-ink transition-colors flex flex-col items-center justify-center pl-[6vw] mobile:pt-3"
             onClick={handleBack}
             title="Back (Esc)"
           >
@@ -208,12 +208,14 @@ export function MobileSearchInner(props: {
           </button>
         </Show>
         <input
+          ref={(el) => {
+            onMount(() => setTimeout(() => el.focus(), 50));
+          }}
           type="text"
           class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
           placeholder={'Search...'}
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
-          autofocus
         />
       </div>
     </div>

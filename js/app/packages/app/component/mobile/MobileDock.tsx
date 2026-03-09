@@ -65,7 +65,7 @@ const PRIMARY_IDS = ['inbox', 'channels', 'files'] as const;
 
 const MORE_VIEWS = SIDEBAR_LINKS.filter(
   (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
-);
+).reverse();
 
 function MorePopover(props: {
   active: boolean;
@@ -141,7 +141,9 @@ function MorePopover(props: {
             }}
           >
             <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-              <AnimatedSlidersHorizontalIcon triggerAnimation={hoveredId() === 'settings'} />
+              <AnimatedSlidersHorizontalIcon
+                triggerAnimation={hoveredId() === 'settings'}
+              />
             </div>
             <span>Settings</span>
           </button>
@@ -170,7 +172,9 @@ function MorePopover(props: {
                 data-more-item={item.id}
                 class={cn(
                   'flex items-center gap-2 px-3 h-11 text-sm',
-                  props.isActive(item.id as ListView) ? 'text-accent' : 'text-ink',
+                  props.isActive(item.id as ListView)
+                    ? 'text-accent'
+                    : 'text-ink',
                   hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
                 )}
                 onClick={() => {
@@ -236,7 +240,11 @@ export function MobileDock() {
         active={isActive('files')}
         onClick={() => navigate('files')}
       />
-      <MorePopover active={isMoreActive()} isActive={isActive} onNavigate={navigate} />
+      <MorePopover
+        active={isMoreActive()}
+        isActive={isActive}
+        onNavigate={navigate}
+      />
       <MobileDockButton
         icon={AnimatedSearchIcon}
         label="Search"
