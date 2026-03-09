@@ -3,6 +3,7 @@ import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import ChevronUpIcon from '@icon/regular/caret-up.svg?component-solid';
 import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg?component-solid';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
@@ -16,6 +17,7 @@ import { type ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { setCreateMenuOpen } from '../Launcher';
 
 type MobileDockButtonProps = {
   icon: Component<
@@ -84,7 +86,13 @@ function MorePopover(props: {
   const handleTouchEnd = () => {
     const id = hoveredId();
     setHoveredId(null);
-    if (id) {
+    if (id === 'settings') {
+      toggleSettings();
+      setOpen(false);
+    } else if (id === 'create') {
+      setCreateMenuOpen(true);
+      setOpen(false);
+    } else if (id) {
       props.onNavigate(id as ListView);
       setOpen(false);
     }
@@ -113,6 +121,42 @@ function MorePopover(props: {
         anchorRef={anchorRef}
       >
         <Popover.Content class="more-popover-content -z-2 bg-page border-t border-l border-r border-edge-muted rounded-t-sm flex flex-col gap-1 w-[calc(100vw-20px)] shadow-lg">
+          <button
+            type="button"
+            data-more-item="settings"
+            class={cn(
+              'flex items-center gap-2 px-3 h-11 text-sm text-ink',
+              hoveredId() === 'settings' ? 'bg-hover' : 'hover:bg-hover'
+            )}
+            onClick={() => {
+              impactFeedback('light');
+              toggleSettings();
+              setOpen(false);
+            }}
+          >
+            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+              <GearIcon />
+            </div>
+            <span>Settings</span>
+          </button>
+          <button
+            type="button"
+            data-more-item="create"
+            class={cn(
+              'flex items-center gap-2 px-3 h-11 text-sm text-ink border-b border-edge-muted',
+              hoveredId() === 'create' ? 'bg-hover' : 'hover:bg-hover'
+            )}
+            onClick={() => {
+              impactFeedback('light');
+              setCreateMenuOpen(true);
+              setOpen(false);
+            }}
+          >
+            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+              <MacroCreateIcon />
+            </div>
+            <span>Create</span>
+          </button>
           <For each={MORE_VIEWS}>
             {(item) => (
               <button
@@ -135,20 +179,6 @@ function MorePopover(props: {
               </button>
             )}
           </For>
-          <button
-            type="button"
-            class="flex items-center gap-2 px-3 h-11 text-sm text-ink hover:bg-hover"
-            onClick={() => {
-              impactFeedback('light');
-              toggleSettings();
-              setOpen(false);
-            }}
-          >
-            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-              <GearIcon />
-            </div>
-            <span>Settings</span>
-          </button>
         </Popover.Content>
       </Popover>
     </>
