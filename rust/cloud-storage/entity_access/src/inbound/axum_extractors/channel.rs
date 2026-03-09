@@ -105,12 +105,7 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        let role = match permission {
-            EntityPermission::ChannelRole { role } => role,
-            EntityPermission::AccessLevel { .. } => return Err(ExtractorError::Internal),
-        };
-
-        if !(EntityPermission::ChannelRole { role }).satisfies::<T>() {
+        if !permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }
 
@@ -121,7 +116,7 @@ where
                     entity_type: EntityType::Channel,
                 },
                 auth: EntityAccessAuth::Authenticated(macro_user_id.0),
-                entity_permission: EntityPermission::ChannelRole { role },
+                entity_permission: permission,
                 _marker: PhantomData,
             },
             _marker: PhantomData,

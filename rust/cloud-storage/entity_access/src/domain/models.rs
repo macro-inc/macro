@@ -87,7 +87,9 @@ impl EntityPermission {
                 },
                 ParticipantRole::Admin,
             ) | (
-                EntityPermission::ChannelRole { .. },
+                EntityPermission::ChannelRole {
+                    role: ParticipantRole::Owner | ParticipantRole::Admin | ParticipantRole::Member,
+                },
                 ParticipantRole::Member
             )
         )
