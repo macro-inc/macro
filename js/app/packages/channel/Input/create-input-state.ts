@@ -15,6 +15,7 @@ type CreateInputStateOptions = {
   initialInput: InputData;
   mentions: Accessor<ItemMention[]>;
   attachmentTracker: InputAttachmentTracker;
+  clearComposer?: () => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
   draft?: InputDraftAdapter;
@@ -44,6 +45,7 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     setIsSending: view.setIsSending,
     setShowFormatRibbon: view.setShowFormatRibbon,
     reset: view.reset,
+    clearComposer: options.clearComposer,
     removeTrackedAttachment: (id) =>
       options.attachmentTracker.removeAttachment(id),
     attachFiles: options.attachFiles,

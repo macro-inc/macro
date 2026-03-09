@@ -25,6 +25,7 @@ import { useUserId } from '@core/context/user';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
+  useSendMessageMutation,
 } from '@queries/channel/message';
 import {
   useAddReactionMutation,
@@ -40,6 +41,7 @@ import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
 import { createChannelDragState } from './create-channel-drag-state';
 import { ChannelDropZone } from './ChannelDropZone';
+import { buildPostMessageRequest } from '@channel/Input/message-payload';
 
 type ChannelProps = {
   channelId: string;
@@ -49,6 +51,7 @@ type ChannelProps = {
 
 export function Channel(props: ChannelProps) {
   const userId = useUserId();
+  const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
@@ -81,6 +84,9 @@ export function Channel(props: ChannelProps) {
     messagesQuery.data
       ? flattenMessages(messagesQuery.data as ChannelMessagesData)
       : [];
+  const messageById = createMemo(() => {
+    return new Map(messages().map((message) => [message.id, message]));
+  });
 
   const shift = () => threadPaginator.isShifting();
 
@@ -126,10 +132,11 @@ export function Channel(props: ChannelProps) {
                 onScrollStateChange={setThreadListScrollState}
               >
                 {(item) => {
+                  const message = () => messageById().get(item.id) ?? item;
                   const state = threadManager.getOrCreateThreadState(item.id);
                   return (
                     <ChannelThread
-                      data={() => item}
+                      data={message}
                       channelId={() => props.channelId}
                       getMessageActions={getMessageActions}
                       isExpanded={state.isExpanded}
@@ -166,6 +173,17 @@ export function Channel(props: ChannelProps) {
                 attachmentTracker={dragState.tracker}
                 onReady={(handle) => {
                   dragState.setAttachFilesToChannel(handle.attachFiles);
+                }}
+                onSend={(snapshot) => {
+                  const senderId = userId();
+                  if (!senderId) return;
+
+                  sendMessageMutation.mutate({
+                    channelID: props.channelId,
+                    senderId,
+                    optimisticId: crypto.randomUUID(),
+                    message: buildPostMessageRequest(snapshot),
+                  });
                 }}
               />
             </div>

@@ -1,11 +1,15 @@
+import { useUserId } from '@core/context/user';
+import { useSendMessageMutation } from '@queries/channel/message';
 import type { Accessor, Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
+import { buildPostMessageRequest } from '../Input/message-payload';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import { replyInputOffsetX } from './utils/thread-rail-geometry';
 import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
 
 type ThreadReplyInputProps = {
+  channelId: string;
   messageId: string;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
@@ -13,6 +17,8 @@ type ThreadReplyInputProps = {
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
+  const userId = useUserId();
+  const sendMessageMutation = useSendMessageMutation();
   const tracker = createInputAttachmentTracker({
     initialAttachments: props.replyInputState()?.attachments,
   });
@@ -46,9 +52,18 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 props.setReplyInputState(undefined);
                 props.setIsReplying(false);
               }}
-              onSend={async () => {
+              onSend={(snapshot) => {
+                const senderId = userId();
+                if (!senderId) return;
+
+                sendMessageMutation.mutate({
+                  channelID: props.channelId,
+                  senderId,
+                  optimisticId: crypto.randomUUID(),
+                  message: buildPostMessageRequest(snapshot, props.messageId),
+                });
+
                 props.setReplyInputState(undefined);
-                props.setIsReplying(false);
               }}
             />
           </div>

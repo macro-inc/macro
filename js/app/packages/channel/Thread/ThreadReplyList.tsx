@@ -7,17 +7,25 @@ import {
 import type { ApiThreadReply } from '@service-comms/client';
 
 export function ThreadReplyList(props: {
+  threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
 }) {
   return (
     <For each={props.replies}>
-      {(reply) => (
-        <ChannelMessage
-          message={reply}
-          actions={props.getMessageActions?.(reply)}
-        />
-      )}
+      {(reply) => {
+        const replyMessage = {
+          ...reply,
+          thread_id: props.threadId,
+        } as MessageData & { thread_id: string };
+
+        return (
+          <ChannelMessage
+            message={reply}
+            actions={props.getMessageActions?.(replyMessage)}
+          />
+        );
+      }}
     </For>
   );
 }

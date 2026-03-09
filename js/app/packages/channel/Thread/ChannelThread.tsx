@@ -87,6 +87,7 @@ export function ChannelThread(props: ThreadProps) {
                   }
                   fallback={
                     <Thread.ReplyList
+                      threadId={props.data().id}
                       replies={previewReplies()}
                       getMessageActions={props.getMessageActions}
                     />
@@ -94,6 +95,7 @@ export function ChannelThread(props: ThreadProps) {
                 >
                   <Suspense>
                     <Thread.ReplyList
+                      threadId={props.data().id}
                       replies={fetchedReplies()}
                       getMessageActions={props.getMessageActions}
                     />
@@ -108,6 +110,7 @@ export function ChannelThread(props: ThreadProps) {
                     />
                   </Show>
                   <Thread.ReplyInput
+                    channelId={props.channelId()}
                     messageId={props.data().id}
                     replyInputState={props.replyInputState}
                     setReplyInputState={props.setReplyInputState}

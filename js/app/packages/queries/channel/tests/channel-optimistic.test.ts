@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { CountedReaction } from '@service-comms/generated/models';
 import type { Attachment, GetChannelResponse, Message } from '../types';
 import { QueryClient } from '@tanstack/solid-query';
@@ -54,6 +55,7 @@ import {
   rollbackAddReaction,
   rollbackRemoveReaction,
 } from '../reaction';
+import type { ChannelMessagesData } from '../channel-messages';
 
 function createMockMessage(overrides: Partial<Message> = {}): Message {
   return {
@@ -122,6 +124,94 @@ function getChannelFromCache(
   return testQueryClient.getQueryData<GetChannelResponse>(queryKey);
 }
 
+function createPaginatedMessage(
+  id: string,
+  createdAt: string,
+  overrides: Partial<ApiChannelMessage> = {}
+): ApiChannelMessage {
+  return {
+    id,
+    channel_id: 'channel-1',
+    sender_id: 'user-1',
+    content: `Message ${id}`,
+    created_at: createdAt,
+    updated_at: createdAt,
+    deleted_at: undefined,
+    edited_at: undefined,
+    attachments: [],
+    reactions: [],
+    thread: {
+      preview: [],
+      reply_count: 0,
+      latest_reply_at: null,
+    },
+    ...overrides,
+  };
+}
+
+function createThreadReply(
+  id: string,
+  createdAt: string,
+  overrides: Partial<ApiThreadReply> = {}
+): ApiThreadReply {
+  return {
+    id,
+    sender_id: 'user-1',
+    content: `Reply ${id}`,
+    created_at: createdAt,
+    updated_at: createdAt,
+    edited_at: undefined,
+    attachments: [],
+    reactions: [],
+    ...overrides,
+  };
+}
+
+function createChannelMessagesData(
+  pages: Array<Array<ApiChannelMessage>>
+): ChannelMessagesData {
+  return {
+    pages: pages.map((items, index) => ({
+      items,
+      next_cursor: index === pages.length - 1 ? null : `next-${index}`,
+      previous_cursor: index === 0 ? null : `prev-${index}`,
+    })),
+    pageParams: pages.map(() => null),
+  };
+}
+
+function seedChannelMessagesCache(
+  channelId: string,
+  data: ChannelMessagesData
+) {
+  testQueryClient.setQueryData(channelKeys.messages(channelId).queryKey, data);
+}
+
+function getChannelMessagesFromCache(
+  channelId: string
+): ChannelMessagesData | undefined {
+  return testQueryClient.getQueryData<ChannelMessagesData>(
+    channelKeys.messages(channelId).queryKey
+  );
+}
+
+function seedThreadRepliesCache(
+  channelId: string,
+  messageId: string,
+  replies: Array<ApiThreadReply>
+) {
+  testQueryClient.setQueryData(
+    channelKeys.threadReplies(channelId, messageId).queryKey,
+    replies
+  );
+}
+
+function getThreadRepliesFromCache(channelId: string, messageId: string) {
+  return testQueryClient.getQueryData<Array<ApiThreadReply>>(
+    channelKeys.threadReplies(channelId, messageId).queryKey
+  );
+}
+
 describe('optimisticInsertChannelMessage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -180,6 +270,81 @@ describe('optimisticInsertChannelMessage', () => {
     expect(cached?.messages[0].thread_id).toBe('parent-msg-id');
   });
 
+  it('should insert a top-level optimistic message into the newest paginated page', () => {
+    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('newest-existing', '2024-01-03T00:00:00.000Z')],
+        [createPaginatedMessage('oldest-existing', '2024-01-02T00:00:00.000Z')],
+      ])
+    );
+
+    optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-top-level',
+      senderId: 'user-2',
+      content: 'Top level optimistic message',
+      attachments: [],
+      mentions: [],
+    });
+
+    const paginated = getChannelMessagesFromCache('channel-1');
+    expect(paginated?.pages[0].items[0].id).toBe('optimistic-top-level');
+    expect(paginated?.pages[0].items[1].id).toBe('newest-existing');
+    expect(paginated?.pages[1].items[0].id).toBe('oldest-existing');
+  });
+
+  it('should insert a thread reply into the thread cache and parent preview', () => {
+    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('existing-reply', '2024-01-03T01:00:00.000Z'),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-msg-id', [
+      createThreadReply('existing-reply', '2024-01-03T01:00:00.000Z'),
+    ]);
+
+    const context = optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-reply',
+      senderId: 'user-2',
+      content: 'Thread optimistic reply',
+      attachments: [],
+      mentions: [],
+      thread_id: 'parent-msg-id',
+    });
+
+    expect(context?.target).toEqual({
+      kind: 'thread_reply',
+      messageId: 'optimistic-reply',
+      threadId: 'parent-msg-id',
+    });
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'optimistic-reply' }),
+      ])
+    );
+
+    const paginated = getChannelMessagesFromCache('channel-1');
+    expect(paginated?.pages[0].items[0].thread.reply_count).toBe(2);
+    expect(paginated?.pages[0].items[0].thread.preview.at(-1)?.id).toBe(
+      'optimistic-reply'
+    );
+  });
+
   it('should return undefined when cache is empty', () => {
     const context = optimisticInsertChannelMessage({
       channelId: 'nonexistent-channel',
@@ -221,6 +386,36 @@ describe('optimisticInsertChannelMessage', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.messages).toHaveLength(1);
     expect(cached?.messages[0].id).toBe('existing-msg');
+  });
+
+  it('should rollback optimistic thread replies from both thread caches', () => {
+    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-msg-id', []);
+
+    const context = optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-reply',
+      senderId: 'user-2',
+      content: 'Reply to rollback',
+      attachments: [],
+      mentions: [],
+      thread_id: 'parent-msg-id',
+    });
+
+    if (context) {
+      rollbackInsertChannelMessage('channel-1', context);
+    }
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([]);
+    const paginated = getChannelMessagesFromCache('channel-1');
+    expect(paginated?.pages[0].items[0].thread.reply_count).toBe(0);
+    expect(paginated?.pages[0].items[0].thread.preview).toEqual([]);
   });
 });
 
@@ -272,6 +467,69 @@ describe('replaceOptimisticMessage', () => {
 
     const cached = getChannelFromCache('channel-1');
     expect(cached?.messages[0].id).toBe('msg-1');
+  });
+
+  it('should replace optimistic ids in paginated top-level messages', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage(
+            'optimistic-msg-1',
+            '2024-01-03T00:00:00.000Z'
+          ),
+        ],
+      ])
+    );
+
+    replaceOptimisticMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-msg-1',
+      realId: 'real-msg-id',
+    });
+
+    const paginated = getChannelMessagesFromCache('channel-1');
+    expect(paginated?.pages[0].items[0].id).toBe('real-msg-id');
+  });
+
+  it('should replace optimistic ids in thread replies and previews', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply(
+                  'optimistic-reply',
+                  '2024-01-03T01:00:00.000Z'
+                ),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-msg-id', [
+      createThreadReply('optimistic-reply', '2024-01-03T01:00:00.000Z'),
+    ]);
+
+    replaceOptimisticMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-reply',
+      realId: 'real-reply-id',
+      threadId: 'parent-msg-id',
+    });
+
+    expect(
+      getThreadRepliesFromCache('channel-1', 'parent-msg-id')?.[0].id
+    ).toBe('real-reply-id');
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0].id
+    ).toBe('real-reply-id');
   });
 });
 
@@ -604,6 +862,72 @@ describe('optimisticAddReaction', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.reactions['msg-1']).toBeUndefined();
   });
+
+  it('should update top-level paginated message reactions', () => {
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({
+        messages: [createMockMessage({ id: 'msg-1' })],
+      })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('msg-1', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+
+    optimisticAddReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'msg-1',
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions)
+      .toEqual([{ emoji: '👍', users: ['user-1'] }]);
+  });
+
+  it('should update thread reply reactions in both reply caches', () => {
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({
+        messages: [createMockMessage({ id: 'reply-1', thread_id: 'parent-1' })],
+      })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+    ]);
+
+    optimisticAddReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'reply-1',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions).toEqual([
+      { emoji: '👍', users: ['user-1'] },
+    ]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview[0]
+        .reactions
+    ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+  });
 });
 
 describe('optimisticRemoveReaction', () => {
@@ -725,6 +1049,84 @@ describe('optimisticRemoveReaction', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.reactions['msg-1']).toHaveLength(1);
     expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
+  });
+
+  it('should update top-level paginated message reactions on removal', () => {
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({
+        messages: [createMockMessage({ id: 'msg-1' })],
+        reactions: { 'msg-1': [{ emoji: '👍', users: ['user-1'] }] },
+      })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('msg-1', '2024-01-03T00:00:00.000Z', {
+            reactions: [{ emoji: '👍', users: ['user-1'] }],
+          }),
+        ],
+      ])
+    );
+
+    optimisticRemoveReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'msg-1',
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions)
+      .toEqual([]);
+  });
+
+  it('should update thread reply reactions on removal in both caches', () => {
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({
+        messages: [createMockMessage({ id: 'reply-1', thread_id: 'parent-1' })],
+        reactions: { 'reply-1': [{ emoji: '👍', users: ['user-1'] }] },
+      })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+                  reactions: [{ emoji: '👍', users: ['user-1'] }],
+                }),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+        reactions: [{ emoji: '👍', users: ['user-1'] }],
+      }),
+    ]);
+
+    optimisticRemoveReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'reply-1',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions).toEqual(
+      []
+    );
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview[0]
+        .reactions
+    ).toEqual([]);
   });
 });
 

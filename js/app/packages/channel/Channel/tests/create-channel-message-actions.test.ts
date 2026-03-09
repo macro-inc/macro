@@ -109,6 +109,8 @@ describe('createChannelMessageActions', () => {
       messageId: 'message-1',
       emoji: '👍',
       userId: 'user-1',
+      threadId: undefined,
+      currentReactions: [{ emoji: '👍', users: ['user-1'] }],
     });
 
     actions.onReact?.({ message, emoji: '😂' });
@@ -118,7 +120,23 @@ describe('createChannelMessageActions', () => {
       messageId: 'message-1',
       emoji: '😂',
       userId: 'user-1',
+      threadId: undefined,
+      currentReactions: [{ emoji: '👍', users: ['user-1'] }],
     });
+  });
+
+  it('uses the live message from the reaction context when toggling', () => {
+    const harness = buildHarness({ userId: 'user-1' });
+    const staleMessage = buildMessage({ reactions: [] });
+    const liveMessage = buildMessage({
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    const actions = harness.getMessageActions(staleMessage);
+
+    actions.onReact?.({ message: liveMessage, emoji: '👍' });
+
+    expect(harness.removeReaction).toHaveBeenCalledTimes(1);
+    expect(harness.addReaction).not.toHaveBeenCalled();
   });
 
   it('keeps react action available without a user id and no-ops on click', () => {

@@ -1,7 +1,9 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
+import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
 export function threadRepliesQueryOptions(
@@ -32,4 +34,68 @@ export function useThreadRepliesQuery(
     ...threadRepliesQueryOptions(channelId(), messageId()),
     enabled: enabled(),
   }));
+}
+
+export function insertThreadReply(
+  data: Array<ApiThreadReply> | undefined,
+  reply: ApiThreadReply
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+  if (data.some((existingReply) => existingReply.id === reply.id)) {
+    return data;
+  }
+  return [...data, reply];
+}
+
+export function removeThreadReply(
+  data: Array<ApiThreadReply> | undefined,
+  replyId: string
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+  const nextReplies = data.filter((reply) => reply.id !== replyId);
+  return nextReplies.length === data.length ? data : nextReplies;
+}
+
+export function replaceThreadReplyId(
+  data: Array<ApiThreadReply> | undefined,
+  optimisticId: string,
+  realId: string
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (reply.id !== optimisticId) return reply;
+    didChange = true;
+    return { ...reply, id: realId };
+  });
+
+  return didChange ? nextReplies : data;
+}
+
+export function replaceThreadReplyReactions(
+  data: Array<ApiThreadReply> | undefined,
+  replyId: string,
+  reactions: ApiCountedReaction[]
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (reply.id !== replyId) return reply;
+    didChange = true;
+    return { ...reply, reactions };
+  });
+
+  return didChange ? nextReplies : data;
+}
+
+export function softInvalidateThreadReplies(
+  channelId: string,
+  messageId: string
+) {
+  queryClient.invalidateQueries({
+    queryKey: channelKeys.threadReplies(channelId, messageId).queryKey,
+    refetchType: 'inactive',
+  });
 }

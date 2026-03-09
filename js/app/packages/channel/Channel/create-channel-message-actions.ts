@@ -19,6 +19,8 @@ type AddReactionInput = {
   messageId: string;
   emoji: string;
   userId: string;
+  threadId?: string;
+  currentReactions: MessageData['reactions'];
 };
 
 type RemoveReactionInput = {
@@ -26,6 +28,8 @@ type RemoveReactionInput = {
   messageId: string;
   emoji: string;
   userId: string;
+  threadId?: string;
+  currentReactions: MessageData['reactions'];
 };
 
 type PatchMessageInput = {
@@ -106,23 +110,35 @@ export function createChannelMessageActions(
 
             const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
             const channelId = options.channelId();
-            const hasReaction = hasReactionFromUser(message, emoji, userId);
+            const targetMessage = ctx.message;
+            const threadId =
+              (targetMessage as MessageData & { thread_id?: string | null })
+                .thread_id ?? undefined;
+            const hasReaction = hasReactionFromUser(
+              targetMessage,
+              emoji,
+              userId
+            );
 
             if (hasReaction) {
               options.removeReaction({
                 channelId,
-                messageId: message.id,
+                messageId: targetMessage.id,
                 emoji,
                 userId,
+                threadId,
+                currentReactions: targetMessage.reactions,
               });
               return;
             }
 
             options.addReaction({
               channelId,
-              messageId: message.id,
+              messageId: targetMessage.id,
               emoji,
               userId,
+              threadId,
+              currentReactions: targetMessage.reactions,
             });
           }
         : undefined,

@@ -1,11 +1,14 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
 import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
+  type ApiChannelMessage,
+  type ApiThreadReply,
   type IdResponse,
   type MessageResponse,
 } from '@service-comms/client';
@@ -19,6 +22,13 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
+import {
+  createMessageTarget,
+  insertTargetMessage,
+  removeTargetMessage,
+  replaceTargetMessageId,
+  softInvalidateTarget,
+} from './reconcile';
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -40,6 +50,7 @@ type WithSenderId<T> = T & { senderId: string };
 
 export type InsertMessageContext = {
   optimisticId: string;
+  target: ReturnType<typeof createMessageTarget>;
 };
 
 export type DeleteMessageContext = {
@@ -55,6 +66,76 @@ export type UpdateMessageContext = {
   previousUpdatedAt: DateValue;
 };
 
+function createOptimisticAttachments(
+  channelId: string,
+  optimisticId: string,
+  attachments: PostMessageRequest['attachments'],
+  now: string
+): Attachment[] {
+  return attachments.map((attachment) => ({
+    id: crypto.randomUUID(),
+    channel_id: channelId,
+    created_at: now,
+    message_id: optimisticId,
+    ...attachment,
+  }));
+}
+
+function createOptimisticTopLevelMessage(
+  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
+  attachments: Attachment[],
+  now: string
+): ApiChannelMessage {
+  return {
+    id: vars.optimisticId,
+    channel_id: vars.channelId,
+    sender_id: vars.senderId,
+    content: vars.content,
+    created_at: now,
+    updated_at: now,
+    deleted_at: undefined,
+    edited_at: undefined,
+    attachments: attachments.map(
+      ({ id, entity_id, entity_type, created_at }) => ({
+        id,
+        entity_id,
+        entity_type,
+        created_at,
+      })
+    ),
+    reactions: [],
+    thread: {
+      preview: [],
+      reply_count: 0,
+      latest_reply_at: null,
+    },
+  };
+}
+
+function createOptimisticThreadReply(
+  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
+  attachments: Attachment[],
+  now: string
+): ApiThreadReply {
+  return {
+    id: vars.optimisticId,
+    sender_id: vars.senderId,
+    content: vars.content,
+    created_at: now,
+    updated_at: now,
+    edited_at: undefined,
+    attachments: attachments.map(
+      ({ id, entity_id, entity_type, created_at }) => ({
+        id,
+        entity_id,
+        entity_type,
+        created_at,
+      })
+    ),
+    reactions: [],
+  };
+}
+
 /**
  * Optimistically insert a new message into the channel cache.
  * Returns minimal context for rollback (just the optimistic ID).
@@ -66,14 +147,25 @@ export function optimisticInsertChannelMessage(
   queryClient.cancelQueries({ queryKey });
 
   let context: InsertMessageContext | undefined;
+  const now = new Date().toISOString();
+  const newAttachments = createOptimisticAttachments(
+    vars.channelId,
+    vars.optimisticId,
+    vars.attachments,
+    now
+  );
+  const threadId = vars.thread_id ?? undefined;
+  const target = createMessageTarget({
+    messageId: vars.optimisticId,
+    threadId,
+  });
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
 
-      context = { optimisticId: vars.optimisticId };
-      const now = new Date().toISOString();
+      context = { optimisticId: vars.optimisticId, target };
 
       const newMessage: Message = {
         id: vars.optimisticId,
@@ -87,14 +179,6 @@ export function optimisticInsertChannelMessage(
         edited_at: undefined,
       };
 
-      const newAttachments: Attachment[] = vars.attachments.map((a) => ({
-        id: crypto.randomUUID(),
-        channel_id: vars.channelId,
-        created_at: new Date().toISOString(),
-        message_id: vars.optimisticId,
-        ...a,
-      }));
-
       return {
         ...prev,
         messages: [...prev.messages, newMessage],
@@ -102,6 +186,24 @@ export function optimisticInsertChannelMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    if (target.kind === 'thread_reply') {
+      const optimisticReply = createOptimisticThreadReply(
+        vars,
+        newAttachments,
+        now
+      );
+      insertTargetMessage(vars.channelId, target, optimisticReply);
+    } else {
+      const optimisticMessage = createOptimisticTopLevelMessage(
+        vars,
+        newAttachments,
+        now
+      );
+      insertTargetMessage(vars.channelId, target, optimisticMessage);
+    }
+  }
 
   return context;
 }
@@ -129,6 +231,10 @@ export function rollbackInsertChannelMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    removeTargetMessage(channelId, context.target);
+  }
 }
 
 /**
@@ -136,7 +242,11 @@ export function rollbackInsertChannelMessage(
  * Called in mutation onSuccess after server returns the real message.
  */
 export function replaceOptimisticMessage(
-  vars: WithChannelId<{ optimisticId: string; realId: string }>
+  vars: WithChannelId<{
+    optimisticId: string;
+    realId: string;
+    threadId?: string;
+  }>
 ): void {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
 
@@ -168,6 +278,17 @@ export function replaceOptimisticMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    replaceTargetMessageId(
+      vars.channelId,
+      createMessageTarget({
+        messageId: vars.optimisticId,
+        threadId: vars.threadId,
+      }),
+      vars.realId
+    );
+  }
 }
 
 /**
@@ -383,6 +504,7 @@ export function useSendMessageMutation(
             channelId: variables.channelID,
             optimisticId: variables.optimisticId,
             realId: data.id,
+            threadId: variables.message.thread_id ?? undefined,
           });
           track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
             channelId: variables.channelID,
@@ -400,6 +522,15 @@ export function useSendMessageMutation(
         },
         onSettled: (_data, _error, variables) => {
           softInvalidateChannelWithID(variables.channelID);
+          if (ENABLE_NEW_CHANNELS) {
+            softInvalidateTarget(
+              variables.channelID,
+              createMessageTarget({
+                messageId: variables.optimisticId,
+                threadId: variables.message.thread_id ?? undefined,
+              })
+            );
+          }
         },
       },
       callbacks
