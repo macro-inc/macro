@@ -1,5 +1,8 @@
 #![deny(missing_docs)]
 //! This crate provides small reusable tower-http utilities which are useful across macro's http services
+
+#[cfg(test)]
+mod test;
 use std::{
     cmp,
     sync::{
@@ -10,6 +13,7 @@ use std::{
 };
 
 use http::{HeaderValue, Request, Response};
+use tokio::time::MissedTickBehavior;
 use tower::{
     ServiceBuilder,
     layer::util::{Identity, Stack},
@@ -145,6 +149,33 @@ type ServiceBuilderAlias = ServiceBuilder<
     >,
 >;
 
+/// Spawns a background task that detects tokio runtime starvation.
+///
+/// Ticks on `interval` and warns if the actual time between ticks exceeds it.
+/// A large gap indicates the tokio runtime is not polling tasks promptly, typically caused
+/// by blocking work (e.g. synchronous DNS resolution) on the runtime threads.
+pub fn spawn_starvation_detector(interval: Duration) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(interval);
+        tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        // consume the immediate first tick
+        tick.tick().await;
+        loop {
+            let before = tokio::time::Instant::now();
+            tick.tick().await;
+            let elapsed = before.elapsed();
+            if elapsed > interval + Duration::from_millis(5) {
+                tracing::warn!(
+                    expected_ms = interval.as_millis() as u64,
+                    actual_ms = elapsed.as_millis() as u64,
+                    delay_ms = elapsed.saturating_sub(interval).as_millis() as u64,
+                    "tokio runtime starvation detected"
+                );
+            }
+        }
+    });
+}
+
 /// A wrapper over a [ServiceBuilder] which handles both request id and tracing.
 /// See [CustomOnResponse] and [RequestIdBuilder] for more info.
 pub struct MacroRequestIdAndTracingLayer {
@@ -153,7 +184,12 @@ pub struct MacroRequestIdAndTracingLayer {
 
 impl MacroRequestIdAndTracingLayer {
     /// contruct a new instance of self with the input warning threshold
+    ///
+    /// Also spawns a background [starvation detector](spawn_starvation_detector) that
+    /// warns when the tokio runtime is not polling tasks promptly.
     pub fn new(warning_threshold: Duration) -> Self {
+        spawn_starvation_detector(Duration::from_millis(250));
+
         let svc_builder = ServiceBuilder::new()
             .set_x_request_id(RequestIdBuilder::default())
             .layer(

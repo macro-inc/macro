@@ -317,7 +317,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: 'info',
+        value: 'info,github=trace',
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',

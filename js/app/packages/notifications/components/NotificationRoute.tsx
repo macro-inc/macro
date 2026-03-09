@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
@@ -23,7 +24,7 @@ export default function NotificationRoute() {
     logger.error('Failed to open notification.', { cause });
     toast.failure('Failed to open notification.');
     split.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
+      next: { type: 'component', id: LIST_VIEW_ID.inbox },
       mergeHistory: true,
     });
   };

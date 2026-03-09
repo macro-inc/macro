@@ -9,7 +9,7 @@ inbound = ["ports"]
 mock = ["dep:mockall"]
 outbound = ["ports"]
 ports = ["dep:tokio", "dep:tracing"]
-postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx"]
+postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx", "outbound"]
 
 
 [dependencies]
@@ -26,9 +26,9 @@ num-traits = { version = "0.2" }
 ordered-float = { workspace = true }
 recursion = { workspace = true, optional = true }
 serde = { workspace = true }
-strum = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 tower = { workspace = true, optional = true }
@@ -36,8 +36,8 @@ tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 cool_asserts = "2"
-serde_json = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rand = { workspace = true }
+serde_json = { workspace = true }
 uuid = { workspace = true }

@@ -101,12 +101,8 @@ pub fn to_typed_row(
 ///
 /// Instantiates the notification crate's generic router, then overwrites the
 /// GET `/` route with a wrapper that deserializes each row into [`NotifEvent`].
-pub fn router<
-    S: ::notification::domain::service::NotificationReader,
-    O: Clone + Send + Sync + 'static,
->(
-    state: ::notification::inbound::http::NotificationRouterState<S>,
-) -> axum::Router<O> {
+pub fn router<S: ::notification::domain::service::NotificationReader>()
+-> axum::Router<NotificationRouterState<S>> {
     ::notification::inbound::http::router::<S, serde_json::Value>()
         .route("/", axum::routing::get(list_typed_notifications::<S>))
         .route(
@@ -122,11 +118,6 @@ pub fn router<
             axum::routing::get(get_typed_notification_by_id::<S>)
                 .delete(::notification::inbound::http::delete_notification::<S>),
         )
-        .route(
-            "/bulk",
-            axum::routing::delete(::notification::inbound::http::bulk_delete_notifications::<S>),
-        )
-        .with_state(state)
 }
 
 /// Wrapper handler that calls the inner generic list handler with `serde_json::Value`,

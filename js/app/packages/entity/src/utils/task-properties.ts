@@ -97,6 +97,29 @@ export const getTaskStatusOptionId = (
 };
 
 /**
+ * Gets the priority option id from task properties.
+ */
+export const getTaskPriorityOptionId = (
+  entity: TaskEntityWithProperties
+): string | undefined => {
+  const priorityProperty = getTaskPropertyByDefinitionId(
+    entity,
+    SYSTEM_PROPERTY_IDS.PRIORITY
+  );
+
+  if (!priorityProperty?.value) {
+    return undefined;
+  }
+
+  const value = priorityProperty.value;
+  if (value.type !== 'SelectOption' || !isStringArray(value.value)) {
+    return undefined;
+  }
+
+  return value.value[0];
+};
+
+/**
  * Checks if a task is in a closed state.
  */
 export const isTaskClosed = (entity: TaskEntityWithProperties): boolean => {

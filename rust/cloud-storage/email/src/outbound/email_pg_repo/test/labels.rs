@@ -1,4 +1,92 @@
 use super::*;
+use crate::domain::models::{LabelListVisibility, LabelType, MessageListVisibility};
+
+// ── list_labels_by_link_id ──────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+async fn test_list_labels_by_link_id_returns_all_labels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+
+    let labels = repo.list_labels_by_link_id(link_id).await?;
+
+    // Fixture has 4 labels for this link: INBOX, UNREAD, STARRED, MyCustomLabel
+    assert_eq!(labels.len(), 4);
+
+    // Verify ordering by name
+    let names: Vec<&str> = labels.iter().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, vec!["INBOX", "MyCustomLabel", "STARRED", "UNREAD"]);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+async fn test_list_labels_by_link_id_field_mapping(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+
+    let labels = repo.list_labels_by_link_id(link_id).await?;
+    let inbox = labels.iter().find(|l| l.name == "INBOX").unwrap();
+
+    assert_eq!(
+        inbox.id,
+        Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?
+    );
+    assert_eq!(inbox.link_id, link_id);
+    assert_eq!(inbox.provider_label_id, "INBOX");
+    assert_eq!(inbox.message_list_visibility, MessageListVisibility::Show);
+    assert_eq!(inbox.label_list_visibility, LabelListVisibility::LabelShow);
+    assert_eq!(inbox.type_, LabelType::System);
+
+    let custom = labels.iter().find(|l| l.name == "MyCustomLabel").unwrap();
+    assert_eq!(custom.provider_label_id, "Label_123");
+    assert_eq!(custom.type_, LabelType::User);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+async fn test_list_labels_by_link_id_isolates_by_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let other_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
+
+    let labels = repo.list_labels_by_link_id(other_link_id).await?;
+
+    // The other link has only 1 label in the fixture
+    assert_eq!(labels.len(), 1);
+    assert_eq!(labels[0].name, "INBOX");
+    assert_eq!(labels[0].link_id, other_link_id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
+)]
+async fn test_list_labels_by_link_id_nonexistent_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let fake_link_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
+
+    let labels = repo.list_labels_by_link_id(fake_link_id).await?;
+
+    assert!(labels.is_empty());
+
+    Ok(())
+}
+
+// ── labels_by_thread_ids ────────────────────────────────────────────
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

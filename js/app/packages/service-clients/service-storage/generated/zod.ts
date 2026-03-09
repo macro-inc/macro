@@ -2306,6 +2306,14 @@ export const revertDeleteDocumentResponse = zod.object({
 });
 
 /**
+ * Returns the short UUID for a document.
+ * @summary Handler for `GET /documents/:document_id/short_id`.
+ */
+export const getDocumentShortIdParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+/**
  * @summary For any file that isn't PDF or DOCX, use this endpoint for saving.
 This endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.
 simple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).

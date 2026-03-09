@@ -12,7 +12,7 @@ import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
@@ -25,6 +25,11 @@ import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+import {
+  AppSidebar,
+  type SidebarState,
+} from '@app/component/app-sidebar/sidebar';
+import { isMobile } from '@core/mobile/isMobile';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -34,6 +39,10 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
+
+export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
+  !isMobile() ? 'expanded' : 'hidden'
+);
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -119,7 +128,19 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="grow-1">
+      <div class="max-h-full grow-1 flex">
+        <AppSidebar
+          sidebarState={sidebarState()}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSidebarState(isMobile() ? 'hidden' : 'slim');
+              return;
+            }
+
+            setSidebarState('expanded');
+          }}
+        />
+
         <Resize.Zone
           gutter={4}
           direction="horizontal"
@@ -127,10 +148,12 @@ export function Layout(props: RouteSectionProps) {
           id={'main-layout'}
         >
           <ItemDndProvider>
-            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-              {props.children}
-            </Resize.Panel>
-            <SettingsWrapper />
+            <Show when={isAuthenticated()}>
+              <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
+                {props.children}
+              </Resize.Panel>
+              <SettingsWrapper />
+            </Show>
           </ItemDndProvider>
         </Resize.Zone>
       </div>

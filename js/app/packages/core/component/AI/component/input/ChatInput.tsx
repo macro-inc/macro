@@ -34,6 +34,7 @@ export type ChatInputProps = {
   showActiveTabs?: boolean;
   autoFocusOnMount?: boolean;
   chatId?: string;
+  extraRightControls?: () => import('solid-js').JSX.Element;
 };
 
 export type ChatInputComponentProps = {
@@ -83,23 +84,26 @@ export function ChatInput(props: ChatInputComponentProps) {
     return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
   };
 
-  const sendMessage = createCallback(async (modelOverride?: Model) => {
-    if (!canSendMessage()) return;
+  const sendMessage = createCallback(
+    async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
+      if (!canSendMessage()) return;
 
-    if (isNativeMobilePlatform() && !hasConsent()) {
-      requestConsent(() => sendMessage(modelOverride));
-      return;
+      if (isNativeMobilePlatform() && !hasConsent()) {
+        requestConsent(() => sendMessage(opts));
+        return;
+      }
+
+      const sendInput: ChatSendInput = {
+        content: markdownText(),
+        model: opts?.modelOverride ?? model(),
+        attachments: attachments.attached(),
+        toolset: toolsetSignal[0](),
+        metaKey: opts?.metaKey,
+      };
+      props.editor.controls.clear();
+      props.onSend(sendInput);
     }
-
-    const sendInput: ChatSendInput = {
-      content: markdownText(),
-      model: modelOverride ?? model(),
-      attachments: attachments.attached(),
-      toolset: toolsetSignal[0](),
-    };
-    props.editor.controls.clear();
-    props.onSend(sendInput);
-  });
+  );
 
   props.editor
     .withFilePaste({
@@ -113,9 +117,9 @@ export function ChatInput(props: ChatInputComponentProps) {
         });
       },
     })
-    .onEnter(() => {
+    .onEnter((e) => {
       if (canSendMessage()) {
-        sendMessage();
+        sendMessage({ metaKey: e?.metaKey });
       }
       return true;
     })
@@ -142,6 +146,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Switch>
       <Match when={!isTouchDevice()}>
         <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
+          {props.extraRightControls?.()}
           <Tooltip tooltip="Enter to send with Opus" placement="top">
             <div class="flex items-center gap-1">
               <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
@@ -155,7 +160,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       <Match when={isTouchDevice()}>
         <div class="flex flex-row gap-1 items-center shrink-0">
           <Show when={!generating()}>
-            <Button onClick={() => sendMessage('claude-opus-4-6')}>
+            <Button
+              onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
+            >
               <div class="group hover:bg-accent transition ease-in-out size-6 p-[2px] border border-accent rounded-full flex items-center justify-center">
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
               </div>

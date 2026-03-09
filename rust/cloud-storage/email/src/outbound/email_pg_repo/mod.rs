@@ -225,4 +225,8 @@ impl EmailRepo for EmailPgRepo {
         label::update_message_starred_status_batch(&self.pool, message_ids, link_id, is_starred)
             .await
     }
+
+    async fn list_labels_by_link_id(&self, link_id: Uuid) -> Result<Vec<LinkLabel>, Self::Err> {
+        label::list_labels_by_link_id(&self.pool, link_id).await
+    }
 }

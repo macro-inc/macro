@@ -5,6 +5,7 @@ import type {
 } from '@service-email/generated/schemas';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
+import { plainTextToHtml } from '../util/plainTextToHtml';
 import { BaseInput } from './BaseInput';
 
 interface EmailInputProps {
@@ -19,7 +20,11 @@ export function EmailInput(props: EmailInputProps) {
 
   const draftHTML = createMemo(() => {
     const encoded = props.draft?.body_html_sanitized;
-    if (!encoded) return '';
+    if (!encoded) {
+      const plainText = props.draft?.body_text;
+      if (!plainText) return '';
+      return plainTextToHtml(plainText);
+    }
     const decodedHtml = decodeBase64Utf8(encoded);
     return decodedHtml;
   });

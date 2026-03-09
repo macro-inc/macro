@@ -28,13 +28,21 @@ vi.mock('@service-notification/client', () => ({
   documentMentionMetadata: {},
 }));
 
+vi.mock('@queries/soup/normalized-cache', () => ({
+  optimisticUpdateSoupItemUpdatedAt: vi.fn(),
+}));
+
 import { notificationServiceClient } from '@service-notification/client';
+import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
 
 const mockBulkMarkNotificationAsSeen = vi.mocked(
   notificationServiceClient.bulkMarkNotificationAsSeen
 );
 const mockBulkMarkNotificationAsDone = vi.mocked(
   notificationServiceClient.bulkMarkNotificationAsDone
+);
+const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
+  optimisticUpdateSoupItemUpdatedAt
 );
 
 let testQueryClient: QueryClient;
@@ -353,6 +361,11 @@ describe('optimisticInsertNotification', () => {
     expect(notifications[0].id).toBe('new-notification');
     expect(notifications[1].id).toBe('n1');
     expect(notifications[2].id).toBe('n2');
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      newNotification.entity_id,
+      'document',
+      newNotification.created_at
+    );
   });
 
   it('should not insert duplicate notifications', () => {
@@ -367,5 +380,48 @@ describe('optimisticInsertNotification', () => {
     expect(notifications).toHaveLength(2);
     expect(notifications[0].id).toBe('n1');
     expect(notifications[1].id).toBe('n2');
+  });
+
+  it('should map email notifications to emailThread soup tag', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const emailNotification = createMockNotification({
+      entity_type: 'email_thread',
+      entity_id: 'thread-1',
+      created_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    optimisticInsertNotification(emailNotification);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      'thread-1',
+      'emailThread',
+      '2024-01-01T00:00:00.000Z'
+    );
+  });
+
+  it('should skip soup update when notification has no created_at', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const notificationWithoutCreatedAt = createMockNotification({
+      created_at: null,
+    });
+
+    optimisticInsertNotification(notificationWithoutCreatedAt);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+  });
+
+  it('should skip soup update for unsupported entity types', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const userNotification = createMockNotification({
+      entity_type: 'user',
+      created_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    optimisticInsertNotification(userNotification);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
   });
 });

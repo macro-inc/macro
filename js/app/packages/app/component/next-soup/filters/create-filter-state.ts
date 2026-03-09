@@ -1,9 +1,9 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-export type FilterPredicate<T> = (entity: T, ...args: any[]) => boolean;
+export type FilterPredicate<T> = (entity: T) => boolean;
 
-export type FilterConfig<T> = {
-  readonly id: string;
+export type FilterConfig<T, TId extends string = string> = {
+  readonly id: TId;
   readonly predicate: FilterPredicate<T>;
   readonly group?: string;
 };
@@ -13,174 +13,251 @@ export type FilterGroupConfig = {
   readonly allowMultiple?: boolean;
 };
 
-export type CreateFilterStateOptions<T, TFilter extends FilterConfig<T>> = {
-  /** All available filter configurations */
-  readonly filters: readonly TFilter[];
-  /** Filter group configurations */
-  readonly groups?: readonly FilterGroupConfig[];
-  /** Initial active filter IDs */
-  readonly initialFilters?: readonly string[];
-  /** Callback when filters change */
-  readonly onChange?: (filters: TFilter[]) => void;
+type FilterIdInput<TId extends string> = TId | (string & {});
+
+export type SetFiltersInput<
+  TFilter extends FilterConfig<unknown>,
+  TId extends string = TFilter['id'],
+> = {
+  /** Filters that must ALL pass (AND logic) */
+  readonly and?: readonly (TFilter | FilterIdInput<TId>)[];
+  /** Filters where ANY must pass (OR logic) */
+  readonly or?: readonly (TFilter | FilterIdInput<TId>)[];
 };
 
-/** Filter state return type */
-export type FilterState<T, TFilter extends FilterConfig<T>> = {
-  /** Currently active filter configs */
-  readonly active: Accessor<TFilter[]>;
-  /** IDs of currently active filters */
-  readonly activeIds: Accessor<string[]>;
-  /** Check if a filter is active by ID */
-  readonly isActive: (id: string) => boolean;
-  /** Toggle a filter on/off */
-  readonly toggle: (id: string) => void;
-  /** Set a filter as active (respecting group exclusivity) */
-  readonly activate: (id: string) => void;
-  /** Remove a filter from active filters */
-  readonly deactivate: (id: string) => void;
-  /** Clear all active filters */
-  readonly clear: () => void;
-  /** Set filters directly */
-  readonly set: (filters: TFilter[]) => void;
-  /** Get a filter config by ID */
-  readonly getFilter: (id: string) => TFilter | undefined;
-  /** All available filter configs */
-  readonly available: readonly TFilter[];
+export type CurrentFilterState<TId extends string> = {
+  readonly andIds: readonly TId[];
+  readonly orIds: readonly TId[];
 };
 
 /**
- * Creates reactive filter state.
- *
- * Handles filter toggling with group-based mutual exclusivity:
- * - Filters without a group can be combined freely
- * - Filters with a group replace other filters in the same group
- *
- * @example
- * ```ts
- * const filters = createFilterState({
- *   filters: SOUP_FILTERS,
- *   initialFilters: ['signal'],
- *   onChange: (filters) => console.log('Filters changed:', filters),
- * });
- *
- * // Toggle a filter
- * filters.toggle('email');
- *
- * // Check active state
- * const isEmailActive = filters.isActive('email');
- *
- * // Get active filter configs for predicates
- * const activeFilters = filters.active();
- * ```
+ * Callback function for updating filters based on current state.
  */
-export function createFilterState<T, TFilter extends FilterConfig<T>>(
-  options: CreateFilterStateOptions<T, TFilter>
-): FilterState<T, TFilter> {
+export type SetFiltersCallback<
+  TFilter extends FilterConfig<unknown>,
+  TId extends string,
+> = (current: CurrentFilterState<TId>) => SetFiltersInput<TFilter, TId>;
+
+/** Internal representation of active filters */
+type ActiveFiltersState<TFilter> = {
+  readonly andFilters: readonly TFilter[];
+  readonly orFilters: readonly TFilter[];
+};
+
+export type FilterStateOptions<T, TFilter extends FilterConfig<T, string>> = {
+  /** All available filter configurations */
+  readonly filters: readonly TFilter[];
+  /** Filter group configurations for controlling mutual exclusivity */
+  readonly groups?: readonly FilterGroupConfig[];
+  /** Initial active filter IDs (applied as AND filters) */
+  readonly initialFilters?: readonly string[];
+};
+
+export type FilterState<
+  T,
+  TFilter extends FilterConfig<T, string>,
+  TId extends string = TFilter['id'],
+> = {
+  /** Currently active AND filter configs */
+  readonly andFilters: Accessor<readonly TFilter[]>;
+  /** Currently active OR filter configs */
+  readonly orFilters: Accessor<readonly TFilter[]>;
+  /** All currently active filter configs (both AND and OR) */
+  readonly active: Accessor<readonly TFilter[]>;
+  /** IDs of currently active filters */
+  readonly activeIds: Accessor<readonly TId[]>;
+  /** Check if a filter is active by ID */
+  readonly isActive: (id: FilterIdInput<TId>) => boolean;
+  /** Clear all active filters */
+  readonly clear: () => void;
+  /** Toggle filters on/off. Respects group exclusivity. */
+  readonly toggle: (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => void;
+  /** Set filters with explicit AND/OR grouping. Replaces all current filters. */
+  readonly set: (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => void;
+  /** Get a filter config by ID */
+  readonly getFilter: (id: FilterIdInput<TId>) => TFilter | undefined;
+  /** All available filter configs */
+  readonly available: readonly TFilter[];
+  /** Test if an entity passes the active filters. */
+  readonly test: (entity: T) => boolean;
+};
+
+export function createFilterState<
+  T,
+  TFilter extends FilterConfig<T>,
+  TId extends string = TFilter['id'],
+>(options: FilterStateOptions<T, TFilter>): FilterState<T, TFilter, TId> {
   const {
     filters: availableFilters,
     groups = [],
     initialFilters = [],
-    onChange,
   } = options;
 
   const filterMap = new Map<string, TFilter>(
     availableFilters.map((f) => [f.id, f])
   );
+
   const groupMap = new Map<string, FilterGroupConfig>(
     groups.map((g) => [g.id, g])
   );
 
-  // Initialize with initial filters
-  const initialActiveFilters = initialFilters
+  // Initialize with initial filters (as AND filters)
+  const initialAndFilters = initialFilters
     .map((id) => filterMap.get(id))
     .filter((f): f is TFilter => f !== undefined);
 
-  const [activeFilters, setActiveFilters] =
-    createSignal<TFilter[]>(initialActiveFilters);
+  const [state, setState] = createSignal<ActiveFiltersState<TFilter>>({
+    andFilters: initialAndFilters,
+    orFilters: [],
+  });
 
-  // Computed: active filter IDs
-  const activeIds = createMemo(() => activeFilters().map((f) => f.id));
+  const andFilters = createMemo(() => state().andFilters);
+  const orFilters = createMemo(() => state().orFilters);
 
-  // Helper: get filter by ID
-  const getFilter = (id: string): TFilter | undefined => filterMap.get(id);
+  const active = createMemo(() => [
+    ...state().andFilters,
+    ...state().orFilters,
+  ]);
+  const activeIds = createMemo(() => active().map((f) => f.id) as TId[]);
 
-  // Helper: check if filter is active
-  const isActive = (id: string): boolean => activeIds().includes(id);
+  const getFilter = (id: FilterIdInput<TId>): TFilter | undefined =>
+    filterMap.get(id);
 
-  // Helper: update filters with onChange callback
-  const updateFilters = (next: TFilter[]) => {
-    setActiveFilters(next);
-    onChange?.(next);
-  };
+  const isActive = (id: FilterIdInput<TId>): boolean =>
+    activeIds().includes(id as TId);
 
-  // Activate a filter (respecting group exclusivity based on allowMultiple)
-  const activate = (id: string) => {
-    const config = getFilter(id);
-    if (!config) {
-      console.warn(`Filter not found: ${id}`);
-      return;
-    }
+  const resolveFilters = (
+    input: readonly (TFilter | FilterIdInput<TId>)[] | undefined
+  ): TFilter[] => {
+    if (!input) return [];
 
-    // Already active, nothing to do
-    if (isActive(id)) return;
-
-    const current = activeFilters();
-
-    if (config.group) {
-      const groupConfig = groupMap.get(config.group);
-      const allowMultiple = groupConfig?.allowMultiple ?? false;
-
-      if (allowMultiple) {
-        // Allow multiple selections in this group
-        updateFilters([...current, config]);
+    const resolved: TFilter[] = [];
+    for (const item of input) {
+      if (typeof item === 'string') {
+        const filter = getFilter(item);
+        if (filter) resolved.push(filter);
       } else {
-        // Mutual exclusivity: remove other filters in same group
-        const withoutSameGroup = current.filter(
-          (f) => f.group !== config.group
-        );
-        updateFilters([...withoutSameGroup, config]);
+        resolved.push(item);
       }
-    } else {
-      // No group, just add
-      updateFilters([...current, config]);
     }
+    return resolved;
   };
 
-  // Deactivate a filter
-  const deactivate = (id: string) => {
-    if (!isActive(id)) return;
-    updateFilters(activeFilters().filter((f) => f.id !== id));
+  const set = (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => {
+    const resolved =
+      typeof input === 'function'
+        ? input({
+            andIds: state().andFilters.map((f) => f.id) as TId[],
+            orIds: state().orFilters.map((f) => f.id) as TId[],
+          })
+        : input;
+
+    const newState: ActiveFiltersState<TFilter> = {
+      andFilters: resolveFilters(resolved.and),
+      orFilters: resolveFilters(resolved.or),
+    };
+    setState(newState);
   };
 
-  // Toggle a filter on/off
-  const toggle = (id: string) => {
-    if (isActive(id)) {
-      deactivate(id);
-    } else {
-      activate(id);
+  const toggleFilters = (
+    currentFilters: readonly TFilter[],
+    toToggle: readonly TFilter[]
+  ): TFilter[] => {
+    let result = [...currentFilters];
+
+    for (const filter of toToggle) {
+      const isCurrentlyActive = result.some((f) => f.id === filter.id);
+
+      if (isCurrentlyActive) {
+        // Deactivate
+        result = result.filter((f) => f.id !== filter.id);
+      } else {
+        // Activate - handle group exclusivity based on allowMultiple
+        if (filter.group) {
+          const groupConfig = groupMap.get(filter.group);
+          const allowMultiple = groupConfig?.allowMultiple ?? false;
+
+          if (!allowMultiple) {
+            // Remove other filters in the same group
+            result = result.filter((f) => f.group !== filter.group);
+          }
+        }
+        result.push(filter);
+      }
     }
+
+    return result;
   };
 
-  // Clear all filters
+  const toggle = (
+    input: SetFiltersInput<TFilter, TId> | SetFiltersCallback<TFilter, TId>
+  ) => {
+    const resolved =
+      typeof input === 'function'
+        ? input({
+            andIds: state().andFilters.map((f) => f.id) as TId[],
+            orIds: state().orFilters.map((f) => f.id) as TId[],
+          })
+        : input;
+
+    const andToToggle = resolveFilters(resolved.and);
+    const orToToggle = resolveFilters(resolved.or);
+
+    const current = state();
+
+    setState({
+      andFilters: toggleFilters(current.andFilters, andToToggle),
+      orFilters: toggleFilters(current.orFilters, orToToggle),
+    });
+  };
+
   const clear = () => {
-    updateFilters([]);
+    setState({
+      andFilters: [],
+      orFilters: [],
+    });
   };
 
-  // Set filters directly
-  const set = (filters: TFilter[]) => {
-    updateFilters(filters);
+  const test = (entity: T): boolean => {
+    const { andFilters: andList, orFilters: orList } = state();
+
+    // If no filters are active, everything passes
+    if (andList.length === 0 && orList.length === 0) {
+      return true;
+    }
+
+    // All AND filters must pass
+    if (andList.length > 0) {
+      const passesAnd = andList.every((f) => f.predicate(entity));
+      if (!passesAnd) return false;
+    }
+
+    // At least one OR filter must pass (if any OR filters are active)
+    if (orList.length > 0) {
+      const passesOr = orList.some((f) => f.predicate(entity));
+      if (!passesOr) return false;
+    }
+
+    return true;
   };
 
   return {
-    active: activeFilters,
+    andFilters,
+    orFilters,
+    active,
     activeIds,
     isActive,
     toggle,
-    activate,
-    deactivate,
     clear,
     set,
     getFilter,
     available: availableFilters,
+    test,
   };
 }

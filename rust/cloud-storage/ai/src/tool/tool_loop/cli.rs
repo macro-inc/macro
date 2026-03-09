@@ -44,7 +44,7 @@
 //! }
 //! ```
 
-use crate::prompts::BASE_PROMPT;
+use crate::prompts::CLI_PROMPT;
 use crate::tool::ToolLoop;
 use crate::tool::types::{AsyncToolSet, RequestContext, StreamPart, ToolResponse};
 use crate::types::{ChatMessage, MessageBuilder, Model, RequestBuilder, Role};
@@ -74,7 +74,7 @@ impl Default for Cli<(), fn() -> RequestContext> {
         Self {
             toolset: AsyncToolSet::new(),
             service_context: (),
-            system_prompt: BASE_PROMPT.to_string(),
+            system_prompt: CLI_PROMPT.to_string(),
             model: Model::Claude45Opus,
             #[allow(deprecated)]
             request_context_fn: || RequestContext {

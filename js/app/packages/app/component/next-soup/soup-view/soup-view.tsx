@@ -1,3 +1,5 @@
+import PreviewIcon from '@macro-icons/wide/preview.svg';
+import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -42,6 +44,7 @@ import {
   type ProjectEntity,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -55,6 +58,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -62,11 +66,10 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
-import { SoupToolbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
@@ -77,10 +80,20 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { FilterID } from '@app/component/next-soup/filters/filters';
+import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
+import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -103,6 +116,10 @@ const useSoupNotificationInvalidators = () => {
     (notification) => {
       refetchSoupEntity(notification.entity_id, 'emailThread');
       invalidateSoupEntity(notification.entity_id);
+      // invalidate thread cache so thread gets fetched (with new message) on next load
+      entityQueryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
+      });
     }
   );
 
@@ -125,21 +142,58 @@ const stateCache = new Map<
   {
     soup: {
       focus: string | undefined;
-      filters: string[];
+      filters: { and: string[]; or: string[] };
       queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
       searchText: string;
+      activeTab: string | undefined;
     };
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
   }
 >();
 
-export const SoupView = () => {
+interface SoupViewProps {
+  viewName: string;
+  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
+  queryFilters?: SoupItemsQueryFilters;
+}
+
+export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   useSoupNotificationInvalidators();
+
+  onMount(() => {
+    if (!props.initialClientFilters) return;
+
+    soup.filters.set(props.initialClientFilters);
+  });
+
+  const togglePreview = () => {
+    const currentPreview = soup.previewEntity();
+    if (currentPreview) {
+      soup.setPreviewEntity(undefined);
+      return;
+    }
+
+    const focused = soup.focus.id();
+
+    if (!focused) return;
+
+    soup.setPreviewEntity(focused);
+  };
+
+  registerHotkey({
+    hotkey: 'space',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Toggle preview',
+    keyDownHandler: () => {
+      togglePreview();
+      return true;
+    },
+  });
 
   return (
     <SplitPanelContext.Provider
@@ -149,14 +203,43 @@ export const SoupView = () => {
           soup.previewEntity() ? { side: 'left', percentage: 30 } : undefined,
       }}
     >
-      <SoupViewContextProvider soup={soup}>
-        <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
-          <Suspense>
-            <SoupToolbar />
-          </Suspense>
-          <SoupViewFileDropzone>
-            <SoupViewList />
-          </SoupViewFileDropzone>
+      <SoupViewContextProvider soup={soup} queryFilters={props.queryFilters}>
+        <div class="size-full flex flex-col">
+          <div class="flex flex-col w-full">
+            <SplitHeaderLeft>
+              <div class="h-full flex gap-2 items-center">
+                <Show when={!isMobile()}>
+                  <h1 class="font-medium text-ink-muted select-none text-sm">
+                    {props.viewName}
+                  </h1>
+                  <ChevronRightIcon class="size-4 text-ink-muted select-none" />
+                </Show>
+
+                <SoupViewTabs />
+              </div>
+            </SplitHeaderLeft>
+            <SplitHeaderRight>
+              <Tooltip
+                tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
+              >
+                <Button
+                  variant={soup.previewEntity() ? 'tertiary' : 'ghost'}
+                  size="icon-sm"
+                  onClick={togglePreview}
+                >
+                  <PreviewIcon />
+                </Button>
+              </Tooltip>
+            </SplitHeaderRight>
+            <SoupFiltersBar />
+          </div>
+          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+            <Suspense>
+              <SoupViewFileDropzone>
+                <SoupViewList />
+              </SoupViewFileDropzone>
+            </Suspense>
+          </div>
         </div>
         <Suspense>
           <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
@@ -186,8 +269,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
+    activeTab,
+    setActiveTab,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
+  const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -460,13 +546,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const isProjectList = panel.handle.content().type === 'project';
 
+  let key = `soup-view-${panel.handle.id}-${panel.handle.content().id}`;
+
+  if (previewPanel) {
+    key += '-preview';
+  }
+
   const getCacheKey = () => {
-    let key = `soup-view-${panel.handle.id}`;
-
-    if (previewPanel) {
-      key += '-preview';
-    }
-
     return key;
   };
 
@@ -478,10 +564,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
     stateCache.set(getCacheKey(), {
       soup: {
         focus: soup.focus.id(),
-        filters: soup.filters.activeIds(),
+        filters: {
+          and: [...soup.filters.andFilters().map((f) => f.id)],
+          or: [...soup.filters.orFilters().map((f) => f.id)],
+        },
         queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
         searchText: searchText(),
+        activeTab: activeTab(),
       },
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
@@ -502,14 +592,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     soup.focus.set(cached.soup.focus);
-    for (const id of cached.soup.filters) {
-      soup.filters.activate(id);
-    }
+
+    soup.filters.set(cached.soup.filters);
 
     setQueryFilters(cached.soup.queryFilters);
     setSearchText(cached.soup.searchText);
 
     soup.sort.setAll(cached.soup.sort);
+
+    setActiveTab(cached.soup.activeTab);
 
     virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);
@@ -563,7 +654,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </div>
             </Match>
             <Match when={!rows().length}>
-              <EmptyState search={!!searchText()} />
+              <EmptyState
+                search={!!searchText()}
+                hasRefinementsFromBase={hasActiveRefinements()}
+                onClearFilters={resetToTabDefaults}
+              />
             </Match>
             <Match when={rows().length}>
               <ListLayoutProvider ref={localEntityListRef}>
@@ -603,6 +698,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             return row.original.createdAt;
                           case 'updated_at':
                             return row.original.updatedAt;
+                          default:
+                            return row.original.createdAt;
                         }
                       };
 

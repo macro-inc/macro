@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use macro_env::Environment;
@@ -194,6 +196,8 @@ fn validate_macro_access_token_inner(
     Ok(decoded_jwt)
 }
 
+static DECODING_KEY: OnceLock<Result<DecodingKey, MacroAuthError>> = OnceLock::new();
+
 #[tracing::instrument(skip_all)]
 fn validate_macro_api_token(
     macro_api_token: &str,
@@ -205,12 +209,18 @@ fn validate_macro_api_token(
 
     validation.set_issuer(&[issuer.as_ref()]);
 
-    let decoding_key = DecodingKey::from_rsa_pem(public_key.as_ref().as_bytes())
-        .context("unable to decode key")?;
+    let init = move || {
+        Ok(DecodingKey::from_rsa_pem(public_key.as_ref().as_bytes())
+            .context("unable to decode key")?)
+    };
+    let decoding_key = DECODING_KEY
+        .get_or_init(init)
+        .as_ref()
+        .context("cached key failed to decode")?;
 
     // Attempt to decode the token.
     let decoded_jwt: MacroApiToken =
-        match decode::<MacroApiToken>(macro_api_token, &decoding_key, &validation) {
+        match decode::<MacroApiToken>(macro_api_token, decoding_key, &validation) {
             Ok(decoded) => decoded.claims,
             Err(e) => match e.kind() {
                 jsonwebtoken::errors::ErrorKind::ExpiredSignature => {

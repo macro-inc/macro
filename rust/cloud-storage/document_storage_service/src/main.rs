@@ -29,6 +29,7 @@ use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -99,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (50, 150),
-        Environment::Develop => (15, 50),
+        Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
 
@@ -336,6 +337,7 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
+        PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
     );
 

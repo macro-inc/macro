@@ -6,6 +6,9 @@
  */
 import type { Entity } from './entity';
 
+/**
+ * The body of a batch send message request.
+ */
 export interface BatchSendMessageBody {
   /** all entities to send the message to */
   entities: Entity[];

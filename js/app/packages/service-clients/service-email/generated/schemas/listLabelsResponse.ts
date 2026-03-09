@@ -4,8 +4,11 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Label } from './label';
+import type { ApiLabel } from './apiLabel';
 
+/**
+ * Response body for listing labels.
+ */
 export interface ListLabelsResponse {
-  labels: Label[];
+  labels: ApiLabel[];
 }

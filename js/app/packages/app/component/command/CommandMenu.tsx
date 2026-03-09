@@ -34,7 +34,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { Hotkey } from '@core/component/Hotkey';
 import { InlineEntity, type EntityData } from '@entity';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { createIsActiveSplitContentMemo } from '../split-layout/layoutUtils';
+import { isListViewID } from '@app/constants/list-views';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -65,11 +65,7 @@ export function CommandMenu() {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
   const splitManager = globalSplitManager();
   const isListMode = splitManager
-    ? createIsActiveSplitContentMemo(
-        splitManager.activeSplit,
-        'component',
-        'unified-list'
-      )
+    ? () => isListViewID(splitManager.activeSplit()?.content().id)
     : () => true; // assume list mode
 
   createEffect(() => {

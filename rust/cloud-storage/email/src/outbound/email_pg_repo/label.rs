@@ -103,6 +103,35 @@ impl From<SimpleMessageDbRow> for SimpleMessage {
 }
 
 #[tracing::instrument(skip(pool), err)]
+pub(crate) async fn list_labels_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> Result<Vec<LinkLabel>, sqlx::Error> {
+    let rows: Vec<LinkLabelDbRow> = sqlx::query_as!(
+        LinkLabelDbRow,
+        r#"
+        SELECT
+            id,
+            link_id,
+            provider_label_id,
+            name,
+            created_at,
+            message_list_visibility as "message_list_visibility: _",
+            label_list_visibility as "label_list_visibility: _",
+            type as "type_: _"
+        FROM email_labels
+        WHERE link_id = $1
+        ORDER BY name
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
+#[tracing::instrument(skip(pool), err)]
 pub(crate) async fn get_label_by_id(
     pool: &PgPool,
     label_id: Uuid,

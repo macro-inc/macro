@@ -112,6 +112,10 @@ where
             "/:document_id/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
+        .route(
+            "/:document_id/short_id",
+            axum::routing::get(get_short_id_handler::<T, Svc>),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             ensure_document_exists,
@@ -255,6 +259,46 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
     header_map.append("Cache-Control", "max-age-300".parse().unwrap());
 
     Ok((header_map, Json(response_data)))
+}
+
+/// Short ID response
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortIdResponse {
+    /// The short id of the document
+    short_id: String,
+}
+
+/// Handler for `GET /documents/:document_id/short_id`.
+///
+/// Returns the short UUID for a document.
+#[utoipa::path(
+    tag = "document",
+    get,
+    path = "/documents/{document_id}/short_id",
+    operation_id = "get_document_short_id",
+    params(
+        ("document_id" = String, Path, description = "Document ID")
+    ),
+    responses(
+        (status = 200, body = String),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(state, access), err)]
+pub async fn get_short_id_handler<T: DocumentService, Svc: EntityAccessService>(
+    State(state): State<DocumentRouterState<T, Svc>>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
+    Path(Params { document_id }): Path<Params>,
+) -> Result<Json<ShortIdResponse>, DocumentError> {
+    let short_id = state
+        .service
+        .get_short_id(access.entity_access_receipt)
+        .await?;
+
+    Ok(Json(ShortIdResponse { short_id }))
 }
 
 /// Handler for `DELETE /documents/:document_id`.

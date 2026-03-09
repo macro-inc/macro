@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Attachment, Contact, EmailThreadPreview, EnrichedEmailThreadPreview, Label,
+    Attachment, Contact, EmailThreadPreview, EnrichedEmailThreadPreview, Label, LinkLabel,
 };
 
 use super::label::{ApiLabelListVisibility, ApiLabelType, ApiMessageListVisibility};
@@ -101,6 +101,21 @@ pub struct ApiLabel {
     message_list_visibility: ApiMessageListVisibility,
     label_list_visibility: ApiLabelListVisibility,
     type_: ApiLabelType,
+}
+
+impl From<LinkLabel> for ApiLabel {
+    fn from(l: LinkLabel) -> Self {
+        Self {
+            id: l.id,
+            link_id: l.link_id,
+            provider_label_id: l.provider_label_id,
+            name: l.name,
+            created_at: l.created_at,
+            message_list_visibility: l.message_list_visibility.into(),
+            label_list_visibility: l.label_list_visibility.into(),
+            type_: l.type_.into(),
+        }
+    }
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]

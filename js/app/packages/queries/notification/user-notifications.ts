@@ -10,9 +10,14 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import { P, match } from 'ts-pattern';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 import type { UnifiedNotification } from '@notifications/types';
+import {
+  type SoupEntityTag,
+  optimisticUpdateSoupItemUpdatedAt,
+} from '@queries/soup/normalized-cache';
 
 function stripOwnerId({
   owner_id: _,
@@ -387,10 +392,24 @@ export async function getNotificationById(
   return stripOwnerId(res as NotificationItem);
 }
 
+function notificationEntityTypeToSoupTag(
+  entityType: UnifiedNotification['entity_type']
+): SoupEntityTag | null {
+  return match(entityType)
+    .with('document', () => 'document' as const)
+    .with('chat', () => 'chat' as const)
+    .with('channel', () => 'channel' as const)
+    .with('project', () => 'project' as const)
+    .with('email_thread', () => 'emailThread' as const)
+    .with(P.union('user', 'team'), () => null)
+    .exhaustive();
+}
+
 export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
+  const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
 
   queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
     { queryKey: notificationKeys.user._def },
@@ -410,6 +429,14 @@ export function optimisticInsertNotification(
       };
     }
   );
+
+  if (soupTag && notification.created_at) {
+    optimisticUpdateSoupItemUpdatedAt(
+      notification.entity_id,
+      soupTag,
+      notification.created_at
+    );
+  }
 
   invalidateUserNotifications();
 }

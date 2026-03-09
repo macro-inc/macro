@@ -3,7 +3,13 @@ use comms::{
     domain::service::ChannelServiceImpl,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
+use documents::{
+    domain::ports::TaskPropertiesPort,
+    inbound::toolset::DocumentToolContext,
+    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
+};
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
@@ -34,6 +40,33 @@ pub type ToolEmailService = EmailServiceImpl<
 /// Type alias for the comms/channels service implementation
 pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
 
+/// No-op task properties service (not needed for AI tools)
+#[derive(Clone)]
+pub struct NoOpTaskProperties;
+
+impl TaskPropertiesPort for NoOpTaskProperties {
+    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// Type alias for the document service implementation used by AI tools
+pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
+    PgDocumentRepo,
+    S3UploadUrlAdapter,
+    NoOpTaskProperties,
+>;
+
+/// Type alias for the entity access service implementation
+pub type ToolEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+
+/// Type alias for the document tool context
+pub type ToolDocumentToolContext =
+    DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
+
 /// Type alias for the soup service implementation
 pub type ToolSoupService =
     SoupImpl<PgSoupRepo, ToolFrecencyService, ToolEmailService, ToolCommsService>;
@@ -46,6 +79,7 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
+    pub document_tool_context: ToolDocumentToolContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

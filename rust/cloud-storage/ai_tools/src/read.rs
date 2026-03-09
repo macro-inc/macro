@@ -24,9 +24,6 @@ pub struct ReadResponse {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum ReadContent {
-    Documents {
-        documents: Vec<DocumentItem>,
-    },
     Channel {
         channel_id: String,
         channel_name: Option<String>,
@@ -54,12 +51,6 @@ pub struct DocumentMetadata {
     pub file_type: Option<String>,
     pub project_id: Option<String>,
     pub deleted: bool,
-}
-
-#[derive(Debug, JsonSchema, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DocumentItem {
-    pub formatted_document: String,
 }
 
 #[derive(Debug, JsonSchema, Serialize)]
@@ -99,17 +90,17 @@ impl From<ParsedMessage> for EmailMessage {
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
+    description = "Read threaded content by ID(s). Supports reading channels, chats, emails, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.",
-    title = "Read"
+    title = "ReadThread"
 )]
-pub struct Read {
+pub struct ReadThread {
     #[schemars(
         description = "The type of content to read. Choose based on the type of content you want to retrieve."
     )]
     pub content_type: ContentType,
     #[schemars(
-        description = "ID(s) of the content to read. IMPORTANT: document, channel-message, chat-message, and email-message content types support MULTIPLE ids! For all other content types (channel, chat-thread, email-thread) provide a single id."
+        description = "ID(s) of the content to read. IMPORTANT: channel-message, chat-message, and email-message content types support MULTIPLE ids! For all other content types (channel, chat-thread, email-thread) provide a single id."
     )]
     pub ids: Vec<String>,
     #[schemars(
@@ -122,7 +113,6 @@ pub struct Read {
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum ContentType {
-    Document,
     Channel,
     ChannelMessage,
     ChatThread,
@@ -133,7 +123,7 @@ pub enum ContentType {
 }
 
 #[async_trait]
-impl AsyncTool<Arc<ToolScribe>> for Read {
+impl AsyncTool<Arc<ToolScribe>> for ReadThread {
     type Output = ReadResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
@@ -142,7 +132,7 @@ impl AsyncTool<Arc<ToolScribe>> for Read {
         scribe: ServiceContext<Arc<ToolScribe>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(self=?self, "Read tool params");
+        tracing::info!(self=?self, "ReadThread tool params");
 
         if self.ids.is_empty() {
             return Err(ToolCallError {
@@ -152,7 +142,6 @@ impl AsyncTool<Arc<ToolScribe>> for Read {
         }
 
         let content = match self.content_type {
-            ContentType::Document => self.read_document(&scribe, &request_context).await?,
             ContentType::Channel => self.read_channel(&scribe, &request_context).await?,
             ContentType::ChannelMessage => {
                 self.read_channel_message(&scribe, &request_context).await?
@@ -170,7 +159,7 @@ impl AsyncTool<Arc<ToolScribe>> for Read {
     }
 }
 
-impl Read {
+impl ReadThread {
     fn provide_single_id(&self) -> Result<String, ToolCallError> {
         if self.ids.len() > 1 {
             return Err(ToolCallError {
@@ -209,46 +198,6 @@ impl Read {
             .map(|s| ReadContent::ItemPreviews {
                 formatted_preview: s.to_string(),
             })
-    }
-
-    #[allow(deprecated)]
-    async fn read_document(
-        &self,
-        scribe: &ToolScribe,
-        request_context: &RequestContext,
-    ) -> Result<ReadContent, ToolCallError> {
-        let mut documents = Vec::new();
-
-        for id in &self.ids {
-            let document_fetcher = scribe
-                .document
-                .fetch_with_auth(id, (*request_context.jwt).clone());
-
-            let document_with_content = match document_fetcher.document_content().await {
-                Ok(doc) => doc,
-                Err(e) => {
-                    tracing::warn!("failed to fetch document {}: {}", id, e);
-                    continue; // Skip failed documents instead of failing the entire request
-                }
-            };
-
-            if let Some(doc) = document_with_content.text_attachment() {
-                documents.push(DocumentItem {
-                    formatted_document: doc.to_string(),
-                });
-            } else {
-                tracing::warn!("Unexpected document type for fetch");
-            }
-        }
-
-        if documents.is_empty() {
-            return Err(ToolCallError {
-                description: "failed to fetch any documents".to_string(),
-                internal_error: anyhow::anyhow!("all document fetches failed"),
-            });
-        }
-
-        Ok(ReadContent::Documents { documents })
     }
 
     #[allow(deprecated)]
@@ -476,7 +425,7 @@ mod tests {
     #[test]
     #[ignore = "prints the input schema"]
     fn print_input_schema() {
-        let schema = generate_tool_input_schema!(Read);
+        let schema = generate_tool_input_schema!(ReadThread);
         println!("{}", serde_json::to_string_pretty(&schema).unwrap());
     }
 
@@ -490,15 +439,18 @@ mod tests {
 
     #[test]
     fn test_read_schema_validation() {
-        let schema = generate_tool_input_schema!(Read);
+        let schema = generate_tool_input_schema!(ReadThread);
 
         let result = validate_tool_schema(&schema);
         assert!(result.is_ok(), "{:?}", result);
 
         let (name, description) = result.unwrap();
-        assert_eq!(name, "Read", "Tool name should match the schemars title");
+        assert_eq!(
+            name, "ReadThread",
+            "Tool name should match the schemars title"
+        );
         assert!(
-            description.contains("Read content by ID"),
+            description.contains("Read threaded content by ID"),
             "Description should contain expected text"
         );
     }

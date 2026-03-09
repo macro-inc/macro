@@ -100,6 +100,15 @@ impl EmailService for MockEmail {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
@@ -113,6 +122,13 @@ impl EmailService for MockEmail {
         _link: &email::domain::models::Link,
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -199,6 +215,15 @@ impl EmailService for MockEmailLinkResult {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
@@ -212,6 +237,13 @@ impl EmailService for MockEmailLinkResult {
         _link: &email::domain::models::Link,
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

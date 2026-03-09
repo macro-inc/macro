@@ -1,21 +1,17 @@
-use crate::model::message::UniqueMessage;
-use crate::{
-    context::AppState,
-    model::{message::Message, sender::MessageReceipt},
-    service::sender::send_message_to_entity,
-};
-use anyhow::Result;
+use crate::{context::AppState, model::message::Message, service::sender::send_message_to_entity};
 use axum::{
     Json as JsonResponse, Router,
     extract::{Json, Path, State},
     http::StatusCode,
     routing::post,
 };
+use connection_gateway_models::{
+    BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
+};
 use futures::future::try_join_all;
 use macro_middleware::auth;
 use model_entity::Entity;
 use std::time::Instant;
-use utoipa::ToSchema;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where
@@ -33,17 +29,6 @@ where
             auth::internal_access::handler,
         ))
         .with_state(state)
-}
-
-#[derive(serde::Serialize, Debug, ToSchema)]
-pub struct SendMessageResponse {
-    pub receipts: Vec<MessageReceipt>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct SendMessageBody {
-    pub message: serde_json::Value,
-    pub message_type: String,
 }
 
 #[utoipa::path(
@@ -90,16 +75,6 @@ pub async fn send_message_handler(
     ))
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct BatchSendMessageBody<'a> {
-    /// the message to send
-    pub message: serde_json::Value,
-    /// all entities to send the message to
-    pub entities: Vec<Entity<'a>>,
-    /// the type of the message we are sending
-    pub message_type: String,
-}
-
 #[utoipa::path(
     post,
     path = "/batch_send",
@@ -143,11 +118,6 @@ pub async fn batch_send_message_handler(
             receipts: all_receipts.into_iter().flatten().collect(),
         }),
     ))
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct BatchSendUniqueMessagesBody {
-    pub messages: Vec<UniqueMessage>,
 }
 
 // Send unique (different) messages to multiple entities

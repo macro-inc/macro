@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::models::device::DeviceType;
+
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationIdAndCollapseKey,
@@ -102,7 +104,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// Mark notifications as seen for a user.
     fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
@@ -169,6 +171,39 @@ pub trait NotificationRepository: Send + Sync + 'static {
     fn delete_all_user_notifications(
         &self,
         user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Look up an existing device endpoint ARN by its device token.
+    ///
+    /// Returns `None` if no registration exists for this token.
+    fn get_device_endpoint(
+        &self,
+        device_token: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    /// Upsert a device registration: create a new one or update the existing
+    /// record if the endpoint already exists.
+    fn upsert_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_endpoint: &str,
+        device_type: &DeviceType,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Delete the device registration matching the given token and type.
+    ///
+    /// Returns the endpoint ARN that was removed.
+    fn delete_device_by_token(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
+    /// Delete a device registration by its endpoint ARN.
+    fn delete_device_by_endpoint(
+        &self,
+        endpoint_arn: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -238,17 +273,30 @@ pub trait NotificationEgress: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send;
 }
 
-/// Port for deleting a device registration from the database by its SNS endpoint ARN.
-pub trait DeviceRegistrationDeleter: Send + Sync + 'static {
-    /// Delete a device registration by its endpoint ARN.
-    fn delete_device_by_endpoint(
+/// Port for SNS platform endpoint management (create, get/set attributes).
+pub trait SnsEndpointManager: Send + Sync + 'static {
+    /// Create a new SNS platform endpoint for the given platform ARN and device token.
+    ///
+    /// Returns the new endpoint ARN.
+    fn create_platform_endpoint(
+        &self,
+        platform_arn: &str,
+        token: &str,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
+    /// Get the attributes of an existing SNS endpoint.
+    fn get_endpoint_attributes(
         &self,
         endpoint_arn: &str,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
-}
+    ) -> impl Future<Output = Result<HashMap<String, String>, Report>> + Send;
 
-/// Port for deleting an SNS platform endpoint.
-pub trait SnsEndpointDeleter: Send + Sync + 'static {
+    /// Set/update attributes on an existing SNS endpoint.
+    fn set_endpoint_attributes(
+        &self,
+        endpoint_arn: &str,
+        attributes: HashMap<String, String>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Delete an SNS platform endpoint by its ARN.
     fn delete_endpoint(
         &self,

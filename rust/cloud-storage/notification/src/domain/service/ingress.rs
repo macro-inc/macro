@@ -4,6 +4,7 @@
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
 use crate::domain::models::apple::{APNSPushNotification, Aps};
+use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
@@ -16,7 +17,7 @@ use crate::domain::models::request::{
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
 };
-use crate::domain::ports::{NotificationQueue, NotificationRepository};
+use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
@@ -26,7 +27,7 @@ use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Trait for sending notifications through the ingress service.
@@ -90,6 +91,27 @@ pub trait NotificationReader: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Register a device for push notifications.
+    ///
+    /// Resolves the SNS platform endpoint (creating or re-enabling as needed),
+    /// then upserts the device registration in the database.
+    fn register_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Unregister a device from push notifications.
+    ///
+    /// Deletes the device registration from the database (by token + type),
+    /// then deletes the SNS endpoint.
+    fn unregister_device(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -317,23 +339,44 @@ where
     }
 }
 
+/// Configuration for SNS platform ARNs.
+pub struct PlatformArnConfig {
+    /// SNS platform ARN for iOS (APNS).
+    pub apns_platform_arn: String,
+    /// SNS platform ARN for Android (FCM).
+    pub fcm_platform_arn: String,
+}
+
 /// Service for reading and updating notifications.
 ///
 /// Handles notification queries, status updates, and deletion.
 /// Does not require a bulk-digest state machine.
-pub struct NotificationReaderService<N, Q> {
-    repository: N,
-    queue: Q,
+pub struct NotificationReaderService<N, Q, S> {
+    pub(crate) repository: N,
+    pub(crate) queue: Q,
+    pub(crate) sns_endpoint: S,
+    pub(crate) platform_config: PlatformArnConfig,
 }
 
-impl<N, Q> NotificationReaderService<N, Q>
+impl<N, Q, S> NotificationReaderService<N, Q, S>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
+    S: SnsEndpointManager,
 {
     /// Create a new reader service.
-    pub fn new(repository: N, queue: Q) -> Self {
-        Self { repository, queue }
+    pub fn new(
+        repository: N,
+        queue: Q,
+        sns_endpoint: S,
+        platform_config: PlatformArnConfig,
+    ) -> Self {
+        Self {
+            repository,
+            queue,
+            sns_endpoint,
+            platform_config,
+        }
     }
 
     /// Update notification status for a user and optionally enqueue push notification clearing.
@@ -352,7 +395,7 @@ where
         match &req.status {
             NotificationStatus::Seen => {
                 self.repository
-                    .mark_notifications_seen(&req.user_id, req.notification_ids)
+                    .mark_notifications_seen(req.user_id.copied(), req.notification_ids)
                     .await?;
             }
             NotificationStatus::Done(done) => {
@@ -439,10 +482,11 @@ where
     }
 }
 
-impl<N, Q> NotificationReader for NotificationReaderService<N, Q>
+impl<N, Q, S> NotificationReader for NotificationReaderService<N, Q, S>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
+    S: SnsEndpointManager,
 {
     fn update_notifications(
         &self,
@@ -531,5 +575,77 @@ where
         self.repository
             .bulk_delete_user_notifications(user_id, notification_ids)
             .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn register_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        let platform_arn = match device_type {
+            DeviceType::Ios => &self.platform_config.apns_platform_arn,
+            DeviceType::Android => &self.platform_config.fcm_platform_arn,
+        };
+
+        // Get endpoint if exists, otherwise create new one
+        let endpoint = match self.repository.get_device_endpoint(device_token).await {
+            Ok(Some(endpoint)) => endpoint,
+            _ => {
+                self.sns_endpoint
+                    .create_platform_endpoint(platform_arn, device_token)
+                    .await?
+            }
+        };
+
+        // Verify endpoint validity, update or create new endpoint if needed
+        let endpoint = match self.sns_endpoint.get_endpoint_attributes(&endpoint).await {
+            Err(_) => {
+                self.sns_endpoint
+                    .create_platform_endpoint(platform_arn, device_token)
+                    .await?
+            }
+            Ok(attributes) => match (attributes.get("Enabled"), attributes.get("Token")) {
+                (Some(endpoint_enabled), Some(endpoint_token))
+                    if endpoint_enabled == "false" || endpoint_token != device_token =>
+                {
+                    self.sns_endpoint
+                        .set_endpoint_attributes(
+                            &endpoint,
+                            HashMap::from([
+                                ("Enabled".to_string(), "true".to_string()),
+                                ("Token".to_string(), device_token.to_string()),
+                            ]),
+                        )
+                        .await?;
+
+                    endpoint
+                }
+                _ => endpoint,
+            },
+        };
+
+        self.repository
+            .upsert_device(user_id, device_token, &endpoint, device_type)
+            .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn unregister_device(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        let endpoint = self
+            .repository
+            .delete_device_by_token(device_token, device_type)
+            .await?;
+
+        self.sns_endpoint.delete_endpoint(&endpoint).await?;
+
+        Ok(())
     }
 }

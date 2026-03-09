@@ -9,7 +9,6 @@ anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 email_utils = { path = "../email_utils" }
-html2text = "0.15.1"
 macro_user_id = { path = "../macro_user_id" }
 models_pagination = { path = "../models_pagination" }
 schemars = { workspace = true }

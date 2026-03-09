@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 ego-tree = { workspace = true }
+html2text = "0.15.1"
 lazy_static = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true }

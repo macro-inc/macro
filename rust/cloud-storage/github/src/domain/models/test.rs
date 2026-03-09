@@ -1,5 +1,12 @@
 use super::*;
 
+#[test]
+fn test_github_key() {
+    let key = GithubKey::new("rust-lang", "rust", 12345);
+    assert_eq!(key.as_ref(), "rust-lang/rust/pull/12345");
+    assert_eq!(key.to_string(), "rust-lang/rust/pull/12345");
+}
+
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid
 // ---------------------------------------------------------------------------

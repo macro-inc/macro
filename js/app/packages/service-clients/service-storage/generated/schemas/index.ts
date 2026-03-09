@@ -500,6 +500,7 @@ export * from './setPropertyValueOneOfType';
 export * from './sharePermissionV2';
 export * from './sharePermissionV2ChannelSharePermissions';
 export * from './sharePermissionV2PublicAccessLevel';
+export * from './shortIdResponse';
 export * from './soupApiItem';
 export * from './soupApiItemAllOf';
 export * from './soupApiSort';

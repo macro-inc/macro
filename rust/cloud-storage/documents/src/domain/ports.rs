@@ -186,6 +186,12 @@ pub trait DocumentService: Send + Sync + 'static {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
+    /// Convert a document's entity_id to a short UUID.
+    fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
     /// Updates the tasks status to what is provided
     fn update_task_status(
         &self,

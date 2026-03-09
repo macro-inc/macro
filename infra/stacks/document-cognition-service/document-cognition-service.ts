@@ -38,6 +38,7 @@ type CreateDocumentCognitionServiceArgs = {
   tags: { [key: string]: string };
   secretKeyArns: pulumi.Output<string>[] | string[];
   queueArns: pulumi.Output<string>[] | string[];
+  bucketArns: (pulumi.Output<string> | string)[];
   connectionTablePolicyArn: pulumi.Output<string> | string;
 };
 
@@ -67,6 +68,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
+      bucketArns,
       connectionTablePolicyArn,
       tags,
     }: CreateDocumentCognitionServiceArgs,
@@ -163,6 +165,33 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const s3Policy = new aws.iam.Policy(
+      `${BASE_NAME}-s3-bucket-policy`,
+      {
+        name: `${BASE_NAME}-s3-bucket-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                's3:ListBucket',
+                's3:GetObject',
+                's3:PutObject',
+                's3:DeleteObject',
+              ],
+              Resource: bucketArns.flatMap((arn) => [
+                arn,
+                pulumi.interpolate`${arn}/*`,
+              ]),
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -183,6 +212,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
         managedPolicyArns: [
           sqsPolicy.arn,
           secretsManagerPolicy.arn,
+          s3Policy.arn,
           connectionTablePolicyArn,
         ],
         tags: this.tags,

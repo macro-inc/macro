@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * A receipt for a message that was sent to a user.
+ */
 export interface MessageReceipt {
   /** If one of those connections was active for the entity */
   active: boolean;

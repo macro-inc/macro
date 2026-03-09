@@ -298,7 +298,7 @@ export const openEntityInSplitFromUnifiedList = async (
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom: 'unified-list',
+      referredFrom: 'list-view',
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
@@ -372,7 +372,7 @@ async function navigateToLocation(
 
 export async function archiveEmail(
   id: string,
-  options: { isDone: boolean; optimisticallyExclude?: boolean }
+  options: { archive: boolean; optimisticallyExclude?: boolean }
 ) {
   await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
@@ -415,7 +415,7 @@ export async function archiveEmail(
   }
 
   try {
-    await emailClient.flagArchived({ value: !options.isDone, id });
+    await emailClient.flagArchived({ value: options.archive, id });
   } catch (_err) {
     soupTxn.rollback();
     for (const [key, data] of previousEmail) {
@@ -485,7 +485,7 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
         staleTime: 5 * 60 * 1000,
       });
       const trashLabel = labelsData?.labels.find(
-        (l) => l.provider_label_id === 'TRASH'
+        (l) => l.providerLabelId === 'TRASH'
       );
       const labelId = trashLabel?.id;
       if (!labelId) {

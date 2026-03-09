@@ -7,8 +7,8 @@ import type { TaskEntityWithProperties } from '@entity/types/entity';
 export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 
 type TaskSubFilters = {
-  statusFilter?: string;
-  assigneeFilter?: string;
+  statusFilter?: string[];
+  assigneeFilter?: string[];
 };
 
 export const matchesTaskSubFilters = (
@@ -17,7 +17,10 @@ export const matchesTaskSubFilters = (
 ): boolean => {
   const { statusFilter, assigneeFilter } = filters;
 
-  if (!statusFilter && !assigneeFilter) {
+  const hasStatusFilter = statusFilter && statusFilter.length > 0;
+  const hasAssigneeFilter = assigneeFilter && assigneeFilter.length > 0;
+
+  if (!hasStatusFilter && !hasAssigneeFilter) {
     return true;
   }
 
@@ -27,15 +30,25 @@ export const matchesTaskSubFilters = (
     return true;
   }
 
-  if (statusFilter && getTaskStatusOptionId(taskEntity) !== statusFilter) {
-    return false;
+  if (hasStatusFilter) {
+    const taskStatus = getTaskStatusOptionId(taskEntity);
+    if (!taskStatus || !statusFilter.includes(taskStatus)) {
+      return false;
+    }
   }
 
-  if (assigneeFilter) {
-    const assigneeIds = getTaskAssigneeIds(taskEntity);
-    if (assigneeFilter === NO_ASSIGNEE) {
-      if (assigneeIds.length > 0) return false;
-    } else if (!assigneeIds.includes(assigneeFilter)) {
+  if (hasAssigneeFilter) {
+    const taskAssignees = getTaskAssigneeIds(taskEntity);
+    const includesNoAssignee = assigneeFilter.includes(NO_ASSIGNEE);
+    const hasNoAssignees = taskAssignees.length === 0;
+
+    // Match if task has no assignees and NO_ASSIGNEE filter is active
+    if (includesNoAssignee && hasNoAssignees) {
+      return true;
+    }
+
+    // Match if any of the task's assignees are in the filter
+    if (!taskAssignees.some((id) => assigneeFilter.includes(id))) {
       return false;
     }
   }

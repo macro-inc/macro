@@ -1,6 +1,7 @@
 //! Unit tests for the notification services.
 
 use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::email_notification_digest::ports::DigestBatch;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatcher};
@@ -17,11 +18,11 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    RateLimitPort, WebSocketSender,
+    RateLimitPort, SnsEndpointManager, WebSocketSender,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
-    NotificationReaderService,
+    NotificationReaderService, PlatformArnConfig,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -231,7 +232,7 @@ impl NotificationRepository for MockRepository {
 
     async fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         self.mark_seen_calls
@@ -311,6 +312,32 @@ impl NotificationRepository for MockRepository {
     ) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn get_device_endpoint(&self, _device_token: &str) -> Result<Option<String>, Report> {
+        Ok(None)
+    }
+
+    async fn upsert_device(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _device_token: &str,
+        _device_endpoint: &str,
+        _device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn delete_device_by_token(
+        &self,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<String, Report> {
+        Ok(String::new())
+    }
+
+    async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -358,7 +385,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn mark_notifications_seen(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> Result<(), Report> {
         (**self)
@@ -443,6 +470,36 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<(), Report> {
         (**self).delete_all_user_notifications(user_id).await
     }
+
+    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
+        (**self).get_device_endpoint(device_token).await
+    }
+
+    async fn upsert_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_endpoint: &str,
+        device_type: &DeviceType,
+    ) -> Result<(), Report> {
+        (**self)
+            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .await
+    }
+
+    async fn delete_device_by_token(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<String, Report> {
+        (**self)
+            .delete_device_by_token(device_token, device_type)
+            .await
+    }
+
+    async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
+        (**self).delete_device_by_endpoint(endpoint_arn).await
+    }
 }
 
 /// Mock queue that tracks published messages.
@@ -499,6 +556,45 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
 
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         (**self).delete_message(_receipt_handle).await
+    }
+}
+
+/// No-op mock for SNS endpoint management used in reader service tests.
+struct MockSnsEndpoint;
+
+impl SnsEndpointManager for MockSnsEndpoint {
+    async fn create_platform_endpoint(
+        &self,
+        _platform_arn: &str,
+        _token: &str,
+    ) -> Result<String, Report> {
+        Ok(String::new())
+    }
+
+    async fn get_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+    ) -> Result<HashMap<String, String>, Report> {
+        Ok(HashMap::new())
+    }
+
+    async fn set_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+        _attributes: HashMap<String, String>,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn delete_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+fn test_platform_config() -> PlatformArnConfig {
+    PlatformArnConfig {
+        apns_platform_arn: "arn:aws:sns:us-east-1:000:app/APNS/test".to_string(),
+        fcm_platform_arn: "arn:aws:sns:us-east-1:000:app/GCM/test".to_string(),
     }
 }
 
@@ -1171,7 +1267,12 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(repo.clone(), queue.clone());
+    let service = NotificationReaderService::new(
+        repo.clone(),
+        queue.clone(),
+        MockSnsEndpoint,
+        test_platform_config(),
+    );
 
     let notification_ids = [notif_id];
     service
@@ -1244,7 +1345,12 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(repo.clone(), queue.clone());
+    let service = NotificationReaderService::new(
+        repo.clone(),
+        queue.clone(),
+        MockSnsEndpoint,
+        test_platform_config(),
+    );
 
     let notification_ids = [notif_id];
     service
@@ -1280,7 +1386,12 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(repo.clone(), queue.clone());
+    let service = NotificationReaderService::new(
+        repo.clone(),
+        queue.clone(),
+        MockSnsEndpoint,
+        test_platform_config(),
+    );
 
     let notification_ids = [notif_id];
     service
@@ -1322,7 +1433,12 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(repo.clone(), queue.clone());
+    let service = NotificationReaderService::new(
+        repo.clone(),
+        queue.clone(),
+        MockSnsEndpoint,
+        test_platform_config(),
+    );
 
     let notification_ids = [notif_id];
     service
@@ -1367,7 +1483,12 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationReaderService::new(repo.clone(), queue.clone());
+    let service = NotificationReaderService::new(
+        repo.clone(),
+        queue.clone(),
+        MockSnsEndpoint,
+        test_platform_config(),
+    );
 
     let notification_ids = [notif_id];
     service
