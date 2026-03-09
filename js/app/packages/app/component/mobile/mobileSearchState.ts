@@ -31,6 +31,11 @@ export interface ICommandState {
   clearCommandScopeCommands: () => void;
   isInCommandScope: Accessor<boolean>;
 
+  /** full text search mode */
+  isFullTextMode: Accessor<boolean>;
+  enableFullTextMode: () => void;
+  disableFullTextMode: () => void;
+
   /** lifecycle */
   maybeResetState: () => void;
   forceReset: () => void;
@@ -49,6 +54,7 @@ function createSearchState(): ICommandState {
   const [commandScopeCommands, setCommandScopeCommands] = createSignal<
     CommandWithInfo[]
   >([]);
+  const [isFullTextMode, setIsFullTextMode] = createSignal(false);
 
   function toggle() {
     setIsOpen((prev) => !prev);
@@ -74,6 +80,14 @@ function createSearchState(): ICommandState {
     setCommandScopeCommands([]);
   }
 
+  function enableFullTextMode() {
+    setIsFullTextMode(true);
+  }
+
+  function disableFullTextMode() {
+    setIsFullTextMode(false);
+  }
+
   function isInCommandScope() {
     return commandScopeCommands().length > 0;
   }
@@ -89,11 +103,13 @@ function createSearchState(): ICommandState {
     clearQuery();
     resetCategoryFilter();
     clearCommandScopeCommands();
+    disableFullTextMode();
   }
 
   function onMenuClose() {
     setLastClosedTime(Date.now());
     clearCommandScopeCommands();
+    disableFullTextMode();
   }
 
   function onMenuOpen() {
@@ -119,6 +135,10 @@ function createSearchState(): ICommandState {
     setCommandScopeCommands,
     clearCommandScopeCommands,
     isInCommandScope,
+
+    isFullTextMode,
+    enableFullTextMode,
+    disableFullTextMode,
 
     maybeResetState,
     forceReset,

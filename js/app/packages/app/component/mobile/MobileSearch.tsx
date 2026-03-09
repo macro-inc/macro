@@ -3,15 +3,11 @@ import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
 import { Tabs } from '@kobalte/core/tabs';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import type { BlockName, BlockAlias } from '@core/block';
 import {
-  createEffect,
   createMemo,
-  createSelector,
   createSignal,
   For,
-  on,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -20,11 +16,10 @@ import { useSplitLayout } from '../split-layout/layout';
 import { cn } from '@ui/utils/classname';
 import Macro from '@macro-icons/macro-logo.svg';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
+import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';
 import { Hotkey } from '@core/component/Hotkey';
-import { InlineEntity, type EntityData } from '@entity';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { isListViewID } from '@app/constants/list-views';
+import { WithSearch, type EntityData } from '@entity';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { CategoryFilter } from '../command/types';
@@ -37,6 +32,31 @@ import {
 import { SearchState } from './mobileSearchState';
 import { CommandItem } from '../command/CommandItem';
 import { getBlockNameForEntity } from '../command/CommandMenu';
+import { useFullTextSearch } from '../next-soup/soup-view/useFullTextSearch';
+
+function entityToBucket(entity: EntityData) {
+  if (entity.type === 'channel' && entity.channelType === 'direct_message') {
+    return 'dm' as const;
+  }
+  return entity.type as
+    | Exclude<typeof entity.type, 'channel'>
+    | 'channel'
+    | 'dm';
+}
+
+function withSearchToCommandMenuItem(entity: WithSearch<EntityData>):
+  CommandMenuItem {
+    return {
+      id: entity.id,
+      kind: 'entity',
+      bucket: entityToBucket(entity),
+      data: entity, 
+      searchText: entity.name,
+      sortTimestamp: 0,
+      timestamps: { viewedAt: entity.viewedAt, updatedAt: entity.updatedAt
+  },
+    };
+  }
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -81,6 +101,15 @@ export function MobileSearchInner(props: {
   const query = debouncedDependent(SearchState.query, 60);
 
   const filteredItems = useCommandItems(query, SearchState.categoryFilter);
+  const { results: fullTextResults, isLoading: isFullTextLoading } =
+    useFullTextSearch(SearchState.query);
+
+  const displayItems = createMemo(() => {
+    if (SearchState.isFullTextMode()) {
+      return fullTextResults().map(withSearchToCommandMenuItem);
+    }
+    return filteredItems();
+  });
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
@@ -145,7 +174,9 @@ export function MobileSearchInner(props: {
   const showBackButton = () => isInCommandScope() || isMobile();
 
   const handleBack = () => {
-    if (isInCommandScope()) {
+    if (SearchState.isFullTextMode()) {
+      SearchState.disableFullTextMode();
+    } else if (isInCommandScope()) {
       handleBackFromCommandScope();
     } else {
       SearchState.close();
@@ -154,8 +185,21 @@ export function MobileSearchInner(props: {
 
   return (
     <div class="flex flex-col mobile:h-full bg-panel">
+      <Show when={!isInCommandScope() && !SearchState.isFullTextMode()}>
+        <CategoryFilterTabs />
+      </Show>
+
+      <ResultsContainer
+        items={displayItems()}
+        onSelect={(item, openInNewSplit) =>
+          handleItemAction(item, openInNewSplit)
+        }
+        isLoading={() => SearchState.isFullTextMode() && isFullTextLoading()}
+        onFullTextSearch={() => SearchState.enableFullTextMode()}
+        query={SearchState.query}
+      />
       {/* Search Input */}
-      <div class="mobile:order-last flex items-center gap-2 bg-panel mobile:bg-page px-2 mobile:px-0 h-10 mobile:h-auto border-b mobile:border-b-0 mobile:border-t border-edge-muted/50 mobile:border-edge-muted">
+      <div class="flex items-center gap-2 bg-panel mobile:bg-page px-2 mobile:px-0 h-10 mobile:h-auto border-b mobile:border-b-0 mobile:border-t border-edge-muted/50 mobile:border-edge-muted">
         <Show
           when={showBackButton()}
           fallback={
@@ -171,7 +215,7 @@ export function MobileSearchInner(props: {
           >
             <ArrowLeft class="mobile:size-6 size-3" />
             <Show when={isMobile()}>
-              <div class="text-xs">Back</div>
+              <div class="text-xs text-transparent">Back</div>
             </Show>
           </button>
         </Show>
@@ -184,17 +228,6 @@ export function MobileSearchInner(props: {
           autofocus
         />
       </div>
-
-      <Show when={!isInCommandScope()}>
-        <CategoryFilterTabs />
-      </Show>
-
-      <ResultsContainer
-        items={filteredItems()}
-        onSelect={(item, openInNewSplit) =>
-          handleItemAction(item, openInNewSplit)
-        }
-      />
     </div>
   );
 }
@@ -202,28 +235,72 @@ export function MobileSearchInner(props: {
 function ResultsContainer(props: {
   items: CommandMenuItem[];
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
+  isLoading?: () => boolean;
+  onFullTextSearch: () => void;
+  query: () => string;
 }) {
-  const containerHeight = () => {
-    const count = props.items.length;
-    if (count === 0) return EMPTY_STATE_HEIGHT;
-    const totalHeight = count * VIRTUAL_ITEM_HEIGHT;
-    return Math.min(MAX_LIST_HEIGHT, totalHeight);
+  const showFullTextButton = () => !SearchState.isFullTextMode();
+  let ref: HTMLDivElement | undefined;
+  const [availableHeight, setAvailableHeight] = createSignal(0);
+
+  onMount(() => {
+    if (!ref) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setAvailableHeight(entry.contentRect.height);
+    });
+    observer.observe(ref);
+    onCleanup(() => observer.disconnect());
+  });
+
+  const listHeight = () => {
+    const maxFit =
+      Math.floor((availableHeight()) / VIRTUAL_ITEM_HEIGHT) *
+      VIRTUAL_ITEM_HEIGHT;
+    if (props.isLoading?.()) return maxFit;
+    return Math.min(props.items.length * VIRTUAL_ITEM_HEIGHT, maxFit);
   };
 
   return (
     <div
-      class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
-      style={{ height: isMobile() ? '100%' : `${containerHeight()}px` }}
+      class="flex-1 min-h-0 bg-panel flex flex-col overflow-hidden"
+      ref={ref}
     >
       <Show
-        when={props.items.length > 0}
+        when={props.isLoading?.()}
         fallback={
-          <div class="px-4 py-4 text-center text-ink-muted">
-            No results found
-          </div>
+          <Show
+            when={props.items.length > 0}
+            fallback={
+              <div class="flex items-center text-ink-extra-muted">
+                No matches
+              </div>
+            }
+          >
+            <div
+              class="overflow-hidden shrink-0"
+              style={{ height: `${listHeight()}px` }}
+            >
+              <VirtualizedCommandList
+                items={props.items}
+                onSelect={props.onSelect}
+              />
+            </div>
+          </Show>
         }
       >
-        <VirtualizedCommandList items={props.items} onSelect={props.onSelect} />
+        <div class="flex-1 flex items-center justify-center text-ink-muted">
+          Searching...
+        </div>
+      </Show>
+      <Show when={showFullTextButton()}>
+        <button
+          onClick={props.onFullTextSearch}
+          class="flex items-center h-10 px-2 text-sm gap-2"
+        >
+          <SearchIcon class="size-5 p-0.5" />
+          {`Search${props.query() ? ` "${props.query()}"` : ''}`}
+        </button>
       </Show>
     </div>
   );
