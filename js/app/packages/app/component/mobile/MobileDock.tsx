@@ -1,6 +1,8 @@
+import './MobileDock.css';
 import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import DotsThreeIcon from '@phosphor-icons/core/regular/dots-three.svg?component-solid';
+import ChevronUpIcon from '@icon/regular/caret-up.svg?component-solid';
+import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
@@ -13,6 +15,7 @@ import { SIDEBAR_LINKS } from '../app-sidebar/sidebar';
 import { type ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
+import { useSettingsState } from '@core/constant/SettingsState';
 
 type MobileDockButtonProps = {
   icon: Component<
@@ -21,22 +24,29 @@ type MobileDockButtonProps = {
   label: string;
   onClick: () => void;
   active?: boolean;
+  ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
+  onTouchMove?: (e: TouchEvent) => void;
+  onTouchEnd?: (e: TouchEvent) => void;
+  iconClass?: string;
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
   return (
     <button
       type="button"
+      ref={props.ref}
       onPointerDown={() => {
         impactFeedback('light');
         props.onClick();
       }}
+      onTouchMove={props.onTouchMove}
+      onTouchEnd={props.onTouchEnd}
       class={cn(
-        'flex flex-col items-center justify-center w-[20%] pt-3',
+        'flex flex-col items-center justify-center w-[20%] pt-3 bg-page border-t border-edge-muted',
         props.active && 'text-accent'
       )}
     >
-      <div class="w-6 h-6 [&_svg]:size-6">
+      <div class={cn('w-6 h-6 [&_svg]:size-6', props.iconClass)}>
         <Dynamic component={props.icon} />
       </div>
       <span class="text-xs">{props.label}</span>
@@ -54,53 +64,92 @@ function MorePopover(props: {
   active: boolean;
   onNavigate: (id: ListView) => void;
 }) {
+  const { toggleSettings } = useSettingsState();
   const [open, setOpen] = createSignal(false);
   const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
+  const [hoveredId, setHoveredId] = createSignal<string | null>(null);
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!open()) return;
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const button = el?.closest('[data-more-item]') as HTMLElement | null;
+    const id = button?.dataset.moreItem ?? null;
+    if (id !== hoveredId()) {
+      setHoveredId(id);
+      if (id) impactFeedback('light');
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const id = hoveredId();
+    setHoveredId(null);
+    if (id) {
+      props.onNavigate(id as ListView);
+      setOpen(false);
+    }
+  };
 
   return (
     <>
-      <button
-        onPointerDown={() => {
-          impactFeedback('light');
-          setOpen((prev) => !prev);
-        }}
-        class={cn(
-          'flex flex-col items-center justify-center w-[20%] pt-3',
-          props.active && 'text-accent'
-        )}
+      <MobileDockButton
+        icon={ChevronUpIcon}
+        label="More"
+        active={props.active}
+        onClick={() => setOpen((prev) => !prev)}
         ref={setAnchorRef}
-      >
-        <DotsThreeIcon class="w-6 h-6" />
-        <span class="text-xs">More</span>
-      </button>
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        iconClass={cn(
+          'transition-transform duration-200 [perspective:200px]',
+          open() && '[transform:rotateX(180deg)]'
+        )}
+      />
       <Popover
         open={open()}
         onOpenChange={setOpen}
         placement="top"
+        overflowPadding={10}
         anchorRef={anchorRef}
       >
-        <Popover.Portal>
-          <Popover.Content class="z-popover bg-panel border border-edge-muted rounded-md shadow-lg p-1 flex flex-col gap-1">
-            <For each={MORE_VIEWS}>
-              {(item) => (
-                <button
-                  type="button"
-                  class="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-hover text-ink"
-                  onClick={() => {
-                    impactFeedback('light');
-                    props.onNavigate(item.id);
-                    setOpen(false);
-                  }}
-                >
-                  <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-                    <Dynamic component={item.icon} />
-                  </div>
-                  <span>{item.label}</span>
-                </button>
-              )}
-            </For>
-          </Popover.Content>
-        </Popover.Portal>
+        <Popover.Content class="more-popover-content -z-2 bg-page border-t border-l border-r border-edge-muted rounded-t-sm flex flex-col gap-1 w-[calc(100vw-20px)] shadow-lg">
+          <For each={MORE_VIEWS}>
+            {(item) => (
+              <button
+                type="button"
+                data-more-item={item.id}
+                class={cn(
+                  'flex items-center gap-2 px-3 h-11 text-sm text-ink',
+                  hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
+                )}
+                onClick={() => {
+                  impactFeedback('light');
+                  props.onNavigate(item.id);
+                  setOpen(false);
+                }}
+              >
+                <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+                  <Dynamic component={item.icon} />
+                </div>
+                <span>{item.label}</span>
+              </button>
+            )}
+          </For>
+          <button
+            type="button"
+            class="flex items-center gap-2 px-3 h-11 text-sm text-ink hover:bg-hover"
+            onClick={() => {
+              impactFeedback('light');
+              toggleSettings();
+              setOpen(false);
+            }}
+          >
+            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+              <GearIcon />
+            </div>
+            <span>Settings</span>
+          </button>
+        </Popover.Content>
       </Popover>
     </>
   );
@@ -119,7 +168,8 @@ export function MobileDock() {
   };
 
   return (
-    <div class="flex flex-row justify-between bg-page border-t border-edge-muted">
+    <div class="relative z-mobile-nav-bar flex flex-row justify-between">
+      <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-page" />
       <MobileDockButton
         icon={TrayIcon}
         label="Inbox"
