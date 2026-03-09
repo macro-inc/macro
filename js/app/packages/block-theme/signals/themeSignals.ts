@@ -74,12 +74,11 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   {name: 'enable-monochrome-icons'}
 );
 
-// export const [beveledCorners, setBeveledCorners] = makePersisted(
-//   createSignal<boolean>(BEVELED_CORNERS),
-//   {name: 'macro-beveled-corners'}
-// );
 
-export const [beveledCorners, setBeveledCorners] =  createSignal<boolean>(BEVELED_CORNERS);
+export const [beveledCorners, setBeveledCorners] = makePersisted(
+  createSignal<boolean>(BEVELED_CORNERS),
+  {name: 'macro-beveled-corners'}
+);
 
 export const [blackBezels, setBlackBezels] = makePersisted(
   createSignal<boolean>(BLACK_BEZELS),
