@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "connection"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports"]
+outbound = ["dep:connection_gateway_client", "dep:model-entity", "ports"]
+ports = ["entity_access/ports"]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Outbound
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+model-entity = { path = "../model-entity", optional = true }
