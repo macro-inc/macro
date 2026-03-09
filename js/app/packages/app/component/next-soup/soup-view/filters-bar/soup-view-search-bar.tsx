@@ -17,9 +17,9 @@ interface SoupSearchbarProps {
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
-    'bg-ink/8 text-ink-muted hover:bg-ink/12 hover:text-ink border-transparent focus-within:bg-ink/12 focus-within:text-ink',
+    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-transparent focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
-    'bg-transparent text-ink-muted border-edge hover:bg-ink/8 hover:text-ink focus-within:bg-ink/8 focus-within:text-ink',
+    'bg-transparent text-ink-muted border-edge-muted hover:bg-ink/5 hover:text-ink focus-within:bg-ink/5 focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
@@ -120,7 +120,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             </span>
           </Show>
           <Show when={!searchText()}>
-            <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge text-xs rounded-md items-center px-1 py-px peer-focus:hidden">
+            <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px peer-focus:hidden">
               <Hotkey shortcut="cmd+f" />
             </div>
           </Show>
