@@ -31,33 +31,28 @@ describe('DateDivider', () => {
     expect(screen.getByText('Today')).toBeTruthy();
   });
 
-  it('does not render for replies', () => {
+  it('does not render when the message is a reply or there is no day boundary', () => {
     const { container } = render(() => (
-      <DateDivider
-        createdAt="2026-02-22T10:00:00.000Z"
-        isReply
-        listMeta={{
-          index: 0,
-          isNewMessage: false,
-          isFirstNewMessage: false,
-        }}
-      />
-    ));
-
-    expect(container.textContent).toBe('');
-  });
-
-  it('does not render when there is no day boundary', () => {
-    const { container } = render(() => (
-      <DateDivider
-        createdAt="2026-02-22T10:00:00.000Z"
-        listMeta={{
-          index: 1,
-          isNewMessage: false,
-          isFirstNewMessage: false,
-          previousTopLevelCreatedAt: '2026-02-22T09:00:00.000Z',
-        }}
-      />
+      <>
+        <DateDivider
+          createdAt="2026-02-22T10:00:00.000Z"
+          isReply
+          listMeta={{
+            index: 0,
+            isNewMessage: false,
+            isFirstNewMessage: false,
+          }}
+        />
+        <DateDivider
+          createdAt="2026-02-22T10:00:00.000Z"
+          listMeta={{
+            index: 1,
+            isNewMessage: false,
+            isFirstNewMessage: false,
+            previousTopLevelCreatedAt: '2026-02-22T09:00:00.000Z',
+          }}
+        />
+      </>
     ));
 
     expect(container.textContent).toBe('');
@@ -84,21 +79,5 @@ describe('NewDivider', () => {
     const button = screen.getByRole('button', { name: 'New' });
     await user.click(button);
     expect(onDismiss).toHaveBeenCalledOnce();
-  });
-
-  it('does not render for replies', () => {
-    render(() => (
-      <NewDivider
-        isReply
-        listMeta={{
-          index: 2,
-          isNewMessage: true,
-          isFirstNewMessage: true,
-          previousTopLevelCreatedAt: '2026-02-21T09:00:00.000Z',
-        }}
-      />
-    ));
-
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
   });
 });

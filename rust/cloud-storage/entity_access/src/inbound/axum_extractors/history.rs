@@ -9,7 +9,7 @@ use axum::{
     http::request::Parts,
 };
 
-use super::{ExtractorError, InternalUser, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -31,7 +31,7 @@ pub struct HistoryParams {
 ///
 /// Extracts both item_id and item_type from the path parameters.
 #[derive(Debug)]
-pub struct HistoryAccessExtractor<T: RequiredAccessLevel, Svc> {
+pub struct HistoryAccessExtractor<T: RequiredPermission, Svc> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
@@ -40,7 +40,7 @@ pub struct HistoryAccessExtractor<T: RequiredAccessLevel, Svc> {
 #[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for HistoryAccessExtractor<T, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -92,17 +92,18 @@ where
             });
         }
 
-        let required_level = T::required_level();
-        // Check access based on auth state
-        let access_level: AccessLevel = match macro_user_id.as_ref() {
-            Some(macro_user_id) => service
-                .check_access(Some(macro_user_id), &item_id, entity_type, required_level)
-                .await
-                .map_err(ExtractorError::from)?,
-            None => service
-                .check_public_access(&item_id, entity_type, required_level)
-                .await
-                .map_err(ExtractorError::from)?,
+        let access_level = match service
+            .get_access_level(macro_user_id.as_deref(), &item_id, entity_type)
+            .await
+            .map_err(ExtractorError::from)?
+        {
+            Some(access_level) => access_level,
+            None => return Err(ExtractorError::Unauthorized),
+        };
+
+        let permission = EntityPermission::AccessLevel { access_level };
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
         };
 
         Ok(Self {
@@ -114,7 +115,7 @@ where
                 auth: macro_user_id
                     .map(|m| EntityAccessAuth::Authenticated(m.0))
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: EntityPermission::AccessLevel { access_level },
+                entity_permission: permission,
                 _marker: PhantomData,
             },
             _marker: PhantomData,

@@ -11,7 +11,7 @@ import {
   splitProps,
   type JSX,
 } from 'solid-js';
-import { getThreadReplyCountLabel } from './thread-reply-indicator-helpers';
+import { getThreadReplyCountLabel } from './utils/thread-reply-indicator-helpers';
 
 type ThreadCollapsedIndicatorProps =
   JSX.ButtonHTMLAttributes<HTMLButtonElement> & {

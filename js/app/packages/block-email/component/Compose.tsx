@@ -646,6 +646,7 @@ export function EmailCompose(props: EmailComposeProps) {
       scheduleMessageMutation.mutate({
         draftID,
         sendTime,
+        threadID: saveDraftMutation.data?.draft.thread_db_id ?? undefined,
       });
 
       cleanupWatermark();

@@ -66,7 +66,12 @@ export const createSearchState = ({
       const includeArray: UnifiedSearchIndex[] = [];
       for (const type of types) {
         match(type)
-          .with('document', 'file', 'task', () => {
+          .with('file-folder', () => {
+            // TODO: distinguish between document and project requests
+            includeArray.push('documents');
+            includeArray.push('projects');
+          })
+          .with('document', 'task', () => {
             includeArray.push('documents');
           })
           .with('agent', () => {
@@ -101,28 +106,17 @@ export const createSearchState = ({
 
     let fileTypes = document_filters?.file_types;
 
-    if (soup.filters.isActive('file')) {
+    if (soup.filters.isActive('file-folder')) {
       fileTypes = getFileAssociations('search');
     }
 
+    // NOTE: the garbage UUID filters are excluded by the include array anyways so they no-op
     return {
-      channel:
-        channel_filters?.channel_ids?.length ||
-        channel_filters?.channel_types?.length
-          ? channel_filters
-          : null,
-      chat:
-        chat_filters?.chat_ids?.length || chat_filters?.project_ids?.length
-          ? chat_filters
-          : null,
-      document:
-        document_filters?.document_ids?.length ||
-        document_filters?.project_ids?.length ||
-        document_filters?.file_types?.length
-          ? { ...document_filters, file_types: fileTypes }
-          : null,
-      email: email_filters?.recipients?.length ? email_filters : null,
-      project: project_filters?.project_ids?.length ? project_filters : null,
+      channel: channel_filters,
+      chat: chat_filters,
+      document: { ...document_filters, file_types: fileTypes },
+      email: email_filters,
+      project: project_filters,
     };
   });
 

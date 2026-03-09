@@ -44,6 +44,14 @@ pub struct Config {
     pub authentication_service_secret_key: String,
     /// Redis host for stream service
     pub redis_host: RedisHost,
+    /// The S3 bucket for DOCX document uploads
+    pub docx_document_upload_bucket: String,
+    /// CloudFront distribution URL for document storage
+    pub cloudfront_distribution_url: String,
+    /// CloudFront signer public key ID
+    pub cloudfront_signer_public_key_id: String,
+    /// CloudFront signer private key (secret name or value)
+    pub cloudfront_signer_private_key: String,
 }
 
 env_var!(
@@ -109,6 +117,25 @@ impl Config {
         let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
             .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
+        let docx_document_upload_bucket = std::env::var("DOCX_DOCUMENT_UPLOAD_BUCKET")
+            .context("DOCX_DOCUMENT_UPLOAD_BUCKET must be provided")?;
+
+        let cloudfront_distribution_url =
+            std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")
+                .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL must be provided")?;
+
+        let cloudfront_signer_public_key_id = std::env::var(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        )
+        .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
+
+        let cloudfront_signer_private_key = std::env::var(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME",
+        )
+        .context(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME must be provided",
+        )?;
+
         let EnvVars { redis_host } = env_vars;
 
         Ok(Config {
@@ -131,6 +158,10 @@ impl Config {
             authentication_service_url,
             authentication_service_secret_key,
             redis_host,
+            docx_document_upload_bucket,
+            cloudfront_distribution_url,
+            cloudfront_signer_public_key_id,
+            cloudfront_signer_private_key,
         })
     }
 
@@ -156,6 +187,10 @@ impl Config {
             authentication_service_url: Default::default(),
             authentication_service_secret_key: Default::default(),
             redis_host: RedisHost::Comptime("redis://localhost:6379"),
+            docx_document_upload_bucket: Default::default(),
+            cloudfront_distribution_url: Default::default(),
+            cloudfront_signer_public_key_id: Default::default(),
+            cloudfront_signer_private_key: Default::default(),
         }
     }
 }

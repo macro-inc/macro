@@ -13,6 +13,7 @@ pub mod web_fetch;
 use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
+use documents::inbound::toolset::document_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
@@ -43,8 +44,10 @@ pub fn all_tools() -> ToolSetWithPrompt {
         // .expect("failed to add list toolset")
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
         .expect("failed to add list entities tool")
-        .add_tool::<read::Read, Arc<ToolScribe>>()
-        .expect("read tool");
+        .add_tool::<read::ReadThread, Arc<ToolScribe>>()
+        .expect("read thread tool")
+        .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .expect("failed to add document toolset");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
 }

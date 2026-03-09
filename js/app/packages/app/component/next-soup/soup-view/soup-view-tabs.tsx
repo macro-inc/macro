@@ -253,14 +253,13 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm border border-edge rounded-md p-0.5"
+      class="size-full text-sm bg-ink/5 rounded-sm overflow-clip border border-edge-muted"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
       disabled={props.disabled}
     >
       <div class="relative" role="presentation">
-        <KSegmentedControl.Indicator class="absolute rounded bg-accent/15 border border-accent/30 transition-all ease-out" />
         <div class="flex" role="presentation">
           <For each={props.list}>
             {(item) => {
@@ -272,9 +271,10 @@ export const SegmentedControl: ParentComponent<
                 <KSegmentedControl.Item
                   value={itemValue()}
                   disabled={props.disabled}
+                  class="border-r-1 border-edge-muted last:border-r-0"
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-3 py-1 text-xs font-medium data-[checked]:text-accent transition-colors block">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-3 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/8 transition-colors duration-50 block hover:bg-ink/8 hover:text-ink">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>

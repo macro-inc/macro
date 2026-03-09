@@ -148,6 +148,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             {
               preferNewSplit: e?.shiftKey,
               mergeHistory: true,
+              allowDuplicate: true,
             }
           );
           return true;
@@ -337,6 +338,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           {
             preferNewSplit: e.shiftKey,
             mergeHistory: true,
+            allowDuplicate: true,
           }
         );
       }}

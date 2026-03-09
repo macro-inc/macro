@@ -123,16 +123,6 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send;
 }
 
-/// Access check for channel membership. Separated from the business logic service.
-pub trait ChannelAccessCheck: Send + Sync + 'static {
-    /// Check whether a user is an active participant in a channel.
-    fn is_channel_member(
-        &self,
-        channel_id: Uuid,
-        user_id: &str,
-    ) -> impl Future<Output = Result<bool, anyhow::Error>> + Send;
-}
-
 /// A paginated page of channel messages.
 pub type ChannelMessagesPage =
     models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
