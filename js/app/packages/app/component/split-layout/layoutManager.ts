@@ -684,7 +684,7 @@ export function createSplitLayout(
     const s = () => state.splits.find((x) => x.id === id);
     const currentSplit = s();
     if (!currentSplit) return;
-    const content = () => s()!.content;
+    const content = () => currentSplit.content;
 
     return {
       id: currentSplit.id,

@@ -1,5 +1,6 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { InputAttachmentData } from './types';
+import { makePersisted } from '@solid-primitives/storage';
 
 export type InputAttachmentTracker = {
   attachments: Accessor<InputAttachmentData[]>;
@@ -12,6 +13,7 @@ export type InputAttachmentTracker = {
 };
 
 type CreateInputAttachmentTrackerOptions = {
+  persistenceKey?: string;
   initialAttachments?: InputAttachmentData[];
   maxAttachments?: number;
 };
@@ -19,9 +21,14 @@ type CreateInputAttachmentTrackerOptions = {
 export function createInputAttachmentTracker(
   options: CreateInputAttachmentTrackerOptions = {}
 ): InputAttachmentTracker {
-  const [attachments, setAttachments] = createSignal<InputAttachmentData[]>(
+  const raw = createSignal<InputAttachmentData[]>(
     options.initialAttachments ?? []
   );
+
+  const [attachments, setAttachments] = options.persistenceKey
+    ? makePersisted(raw, { name: options.persistenceKey })
+    : raw;
+
   const maxAttachments = options.maxAttachments ?? 10;
 
   const hasPending = createMemo(() =>

@@ -18,6 +18,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
@@ -66,6 +67,14 @@ impl TestAccessService {
 }
 
 impl EntityAccessService for TestAccessService {
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        unimplemented!()
+    }
+
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,

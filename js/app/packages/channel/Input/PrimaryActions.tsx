@@ -86,7 +86,7 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
             <Show when={isReplyInput(input())}>
               <InputActionButton
                 label="Delete reply"
-                onClick={() => commands.closeDraft()}
+                onClick={() => commands.close()}
               >
                 {renderIcon(TrashIcon, 'size-5')}
               </InputActionButton>
