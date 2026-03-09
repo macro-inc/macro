@@ -2,13 +2,13 @@ import { Show } from 'solid-js';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   searchContentHitMarkdownTheme,
-  unifiedListMarkdownTheme,
+  searchContentHitTwoLineClampMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import type { ContentHitData } from '../types/search';
 
 interface SearchContentProps {
   hit?: ContentHitData;
-  singleLine?: boolean;
+  twoLineClamp?: boolean;
 }
 
 /**
@@ -16,6 +16,13 @@ interface SearchContentProps {
  */
 export function SearchContent(props: SearchContentProps) {
   const content = () => props.hit?.content ?? '';
+  const theme = () => {
+    if (props.twoLineClamp) {
+      return searchContentHitTwoLineClampMarkdownTheme;
+    } else {
+      return searchContentHitMarkdownTheme;
+    }
+  };
 
   return (
     <Show when={content()}>
@@ -25,15 +32,7 @@ export function SearchContent(props: SearchContentProps) {
           fallback={<span class="italic text-ink-disabled">No content</span>}
         >
           {(trimmedContent) => (
-            <StaticMarkdown
-              markdown={trimmedContent()}
-              theme={
-                props.singleLine
-                  ? unifiedListMarkdownTheme
-                  : searchContentHitMarkdownTheme
-              }
-              singleLine={props.singleLine}
-            />
+            <StaticMarkdown markdown={trimmedContent()} theme={theme()} />
           )}
         </Show>
       )}

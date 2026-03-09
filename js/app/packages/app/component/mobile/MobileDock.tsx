@@ -27,7 +27,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
   return (
     <button
       type="button"
-      onClick={() => {
+      onPointerDown={() => {
         impactFeedback('light');
         props.onClick();
       }}
@@ -55,44 +55,54 @@ function MorePopover(props: {
   onNavigate: (id: ListView) => void;
 }) {
   const [open, setOpen] = createSignal(false);
+  const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
 
   return (
-    <Popover open={open()} onOpenChange={setOpen} placement="top">
-      <Popover.Trigger
-        as="button"
-        type="button"
-        onClick={() => impactFeedback('light')}
+    <>
+      <button
+        onPointerDown={() => {
+          impactFeedback('light');
+          setOpen((prev) => !prev);
+        }}
         class={cn(
           'flex flex-col items-center justify-center w-[20%] pt-3',
           props.active && 'text-accent'
         )}
+        ref={setAnchorRef}
       >
         <DotsThreeIcon class="w-6 h-6" />
         <span class="text-xs">More</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-popover bg-panel border border-edge-muted rounded-md shadow-lg p-1 flex flex-col gap-1">
-          <For each={MORE_VIEWS}>
-            {(item) => (
-              <button
-                type="button"
-                class="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-hover text-ink"
-                onClick={() => {
-                  impactFeedback('light');
-                  props.onNavigate(item.id);
-                  setOpen(false);
-                }}
-              >
-                <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
-                  <Dynamic component={item.icon} />
-                </div>
-                <span>{item.label}</span>
-              </button>
-            )}
-          </For>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover>
+      </button>
+      <Popover
+        open={open()}
+        onOpenChange={setOpen}
+        placement="top"
+        anchorRef={anchorRef}
+      >
+        <Popover.Portal>
+          <Popover.Content class="z-popover bg-panel border border-edge-muted rounded-md shadow-lg p-1 flex flex-col gap-1">
+            <For each={MORE_VIEWS}>
+              {(item) => (
+                <button
+                  type="button"
+                  class="flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-hover text-ink"
+                  onClick={() => {
+                    impactFeedback('light');
+                    props.onNavigate(item.id);
+                    setOpen(false);
+                  }}
+                >
+                  <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+                    <Dynamic component={item.icon} />
+                  </div>
+                  <span>{item.label}</span>
+                </button>
+              )}
+            </For>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover>
+    </>
   );
 }
 
@@ -132,7 +142,10 @@ export function MobileDock() {
       <MobileDockButton
         icon={SearchIcon}
         label="Search"
-        onClick={() => SearchState.open()}
+        onClick={() => {
+          SearchState.maybeResetState();
+          SearchState.open();
+        }}
       />
     </div>
   );

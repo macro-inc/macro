@@ -104,6 +104,7 @@ function createSearchState(): ICommandState {
     resetCategoryFilter();
     clearCommandScopeCommands();
     disableFullTextMode();
+    setIsFullTextMode(false);
   }
 
   function onMenuClose() {
@@ -114,6 +115,7 @@ function createSearchState(): ICommandState {
 
   function onMenuOpen() {
     clearQuery();
+    setIsFullTextMode(false);
   }
 
   return {

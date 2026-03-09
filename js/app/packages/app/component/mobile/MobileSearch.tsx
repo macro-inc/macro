@@ -7,9 +7,11 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
@@ -19,7 +21,9 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';
 import { Hotkey } from '@core/component/Hotkey';
-import { WithSearch, type EntityData } from '@entity';
+import { Entity, WithSearch, type EntityData } from '@entity';
+import { SearchContent } from '@entity/extractors-search/search-content';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { CategoryFilter } from '../command/types';
@@ -33,30 +37,7 @@ import { SearchState } from './mobileSearchState';
 import { CommandItem } from '../command/CommandItem';
 import { getBlockNameForEntity } from '../command/CommandMenu';
 import { useFullTextSearch } from '../next-soup/soup-view/useFullTextSearch';
-
-function entityToBucket(entity: EntityData) {
-  if (entity.type === 'channel' && entity.channelType === 'direct_message') {
-    return 'dm' as const;
-  }
-  return entity.type as
-    | Exclude<typeof entity.type, 'channel'>
-    | 'channel'
-    | 'dm';
-}
-
-function withSearchToCommandMenuItem(entity: WithSearch<EntityData>):
-  CommandMenuItem {
-    return {
-      id: entity.id,
-      kind: 'entity',
-      bucket: entityToBucket(entity),
-      data: entity, 
-      searchText: entity.name,
-      sortTimestamp: 0,
-      timestamps: { viewedAt: entity.viewedAt, updatedAt: entity.updatedAt
-  },
-    };
-  }
+import { windowSearchMatch } from '@core/util/searchHighlight';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -71,7 +52,6 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
 export function MobileSearchOuter() {
@@ -103,13 +83,6 @@ export function MobileSearchInner(props: {
   const filteredItems = useCommandItems(query, SearchState.categoryFilter);
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
-
-  const displayItems = createMemo(() => {
-    if (SearchState.isFullTextMode()) {
-      return fullTextResults().map(withSearchToCommandMenuItem);
-    }
-    return filteredItems();
-  });
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
@@ -162,6 +135,21 @@ export function MobileSearchInner(props: {
     SearchState.setQuery('');
   }
 
+  function handleFullTextItemAction(
+    entity: WithSearch<EntityData>,
+    openInNewSplit = false
+  ) {
+    const blockName = itemToBlockName(entity);
+    if (blockName) {
+      openWithSplit(
+        { type: blockName, id: entity.id },
+        { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+      );
+    }
+    SearchState.onClose();
+    SearchState.close();
+  }
+
   const isInCommandScope = createMemo(
     () => SearchState.commandScopeCommands().length > 0
   );
@@ -174,9 +162,7 @@ export function MobileSearchInner(props: {
   const showBackButton = () => isInCommandScope() || isMobile();
 
   const handleBack = () => {
-    if (SearchState.isFullTextMode()) {
-      SearchState.disableFullTextMode();
-    } else if (isInCommandScope()) {
+    if (isInCommandScope()) {
       handleBackFromCommandScope();
     } else {
       SearchState.close();
@@ -190,9 +176,13 @@ export function MobileSearchInner(props: {
       </Show>
 
       <ResultsContainer
-        items={displayItems()}
-        onSelect={(item, openInNewSplit) =>
+        nameMatchItems={filteredItems()}
+        fullTextItems={fullTextResults()}
+        onSelectNameMatch={(item, openInNewSplit) =>
           handleItemAction(item, openInNewSplit)
+        }
+        onSelectFullText={(entity, openInNewSplit) =>
+          handleFullTextItemAction(entity, openInNewSplit)
         }
         isLoading={() => SearchState.isFullTextMode() && isFullTextLoading()}
         onFullTextSearch={() => SearchState.enableFullTextMode()}
@@ -213,10 +203,8 @@ export function MobileSearchInner(props: {
             onClick={handleBack}
             title="Back (Esc)"
           >
-            <ArrowLeft class="mobile:size-6 size-3" />
-            <Show when={isMobile()}>
-              <div class="text-xs text-transparent">Back</div>
-            </Show>
+            <ArrowLeft class="size-6" />
+            <div class="text-xs text-transparent">Back</div>
           </button>
         </Show>
         <input
@@ -233,8 +221,13 @@ export function MobileSearchInner(props: {
 }
 
 function ResultsContainer(props: {
-  items: CommandMenuItem[];
-  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
+  nameMatchItems: CommandMenuItem[];
+  fullTextItems: WithSearch<EntityData>[];
+  onSelectNameMatch: (item: CommandMenuItem, openInNewSplit: boolean) => void;
+  onSelectFullText: (
+    entity: WithSearch<EntityData>,
+    openInNewSplit: boolean
+  ) => void;
   isLoading?: () => boolean;
   onFullTextSearch: () => void;
   query: () => string;
@@ -253,12 +246,13 @@ function ResultsContainer(props: {
     onCleanup(() => observer.disconnect());
   });
 
-  const listHeight = () => {
+  // Height for the name-match list: capped to whole-item multiples of available space
+  const nameMatchListHeight = () => {
+    const buttonHeight = VIRTUAL_ITEM_HEIGHT; // "Full text search" button
     const maxFit =
-      Math.floor((availableHeight()) / VIRTUAL_ITEM_HEIGHT) *
-      VIRTUAL_ITEM_HEIGHT;
-    if (props.isLoading?.()) return maxFit;
-    return Math.min(props.items.length * VIRTUAL_ITEM_HEIGHT, maxFit);
+      Math.floor(availableHeight() / VIRTUAL_ITEM_HEIGHT) * VIRTUAL_ITEM_HEIGHT;
+    if (props.nameMatchItems.length === 0) return EMPTY_STATE_HEIGHT;
+    return Math.min(props.nameMatchItems.length * VIRTUAL_ITEM_HEIGHT, maxFit);
   };
 
   return (
@@ -266,37 +260,46 @@ function ResultsContainer(props: {
       class="flex-1 min-h-0 bg-panel flex flex-col overflow-hidden"
       ref={ref}
     >
-      <Show
-        when={props.isLoading?.()}
-        fallback={
-          <Show
-            when={props.items.length > 0}
-            fallback={
-              <div class="flex items-center text-ink-extra-muted">
-                No matches
-              </div>
-            }
+      <Switch>
+        <Match when={props.isLoading?.()}>
+          <div class="flex-1 flex items-center justify-center text-ink-muted">
+            Searching...
+          </div>
+        </Match>
+        <Match
+          when={SearchState.isFullTextMode() && props.fullTextItems.length > 0}
+        >
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <FullTextResultList
+              items={props.fullTextItems}
+              onSelect={props.onSelectFullText}
+            />
+          </div>
+        </Match>
+        <Match
+          when={
+            !SearchState.isFullTextMode() && props.nameMatchItems.length > 0
+          }
+        >
+          <div
+            class="overflow-hidden shrink-0"
+            style={{ height: `${nameMatchListHeight()}px` }}
           >
-            <div
-              class="overflow-hidden shrink-0"
-              style={{ height: `${listHeight()}px` }}
-            >
-              <VirtualizedCommandList
-                items={props.items}
-                onSelect={props.onSelect}
-              />
-            </div>
-          </Show>
-        }
-      >
-        <div class="flex-1 flex items-center justify-center text-ink-muted">
-          Searching...
-        </div>
-      </Show>
+            <VirtualizedCommandList
+              items={props.nameMatchItems}
+              onSelect={props.onSelectNameMatch}
+            />
+          </div>
+        </Match>
+        <Match when={true}>
+          <div class="flex items-center text-ink-extra-muted">No matches</div>
+        </Match>
+      </Switch>
+
       <Show when={showFullTextButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center h-10 px-2 text-sm gap-2"
+          class="flex items-center h-10 px-2 text-sm gap-2 shrink-0"
         >
           <SearchIcon class="size-5 p-0.5" />
           {`Search${props.query() ? ` "${props.query()}"` : ''}`}
@@ -306,7 +309,7 @@ function ResultsContainer(props: {
   );
 }
 
-/** Virtualized command list component */
+/** Virtualized command list for name-match results */
 function VirtualizedCommandList(props: {
   items: CommandMenuItem[];
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
@@ -331,6 +334,59 @@ function VirtualizedCommandList(props: {
         />
       )}
     </VList>
+  );
+}
+
+/** Virtualized list for full-text search results */
+function FullTextResultList(props: {
+  items: WithSearch<EntityData>[];
+  onSelect: (entity: WithSearch<EntityData>, openInNewSplit: boolean) => void;
+}) {
+  return (
+    <VList
+      data={props.items}
+      style={{ height: '100%' }}
+      class="scrollbar-hidden"
+    >
+      {(entity) => (
+        <FullTextResultItem entity={entity} onSelect={props.onSelect} />
+      )}
+    </VList>
+  );
+}
+
+/** Single full-text search result: entity header + first content snippet */
+function FullTextResultItem(props: {
+  entity: WithSearch<EntityData>;
+  onSelect: (entity: WithSearch<EntityData>, openInNewSplit: boolean) => void;
+}) {
+  const hit = () => {
+    const hitData = props.entity.search.contentHitData?.[0];
+    return hitData
+      ? // The char length for windowSearchMatch below is a magic number to keep the highlighted result in approximately the first two lines of the search content snippet. In the future it would be nice to handle this more robustly.
+        { ...hitData, content: windowSearchMatch(hitData.content, 50) }
+      : null;
+  };
+
+  return (
+    <div
+      class="px-2 py-2 text-sm font-semibold hover:bg-hover/30 cursor-pointer"
+      onClick={(e) => props.onSelect(props.entity, e.shiftKey)}
+    >
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
+          <Entity.Icon entity={props.entity} />
+        </div>
+        <Entity.Title entity={props.entity} />
+      </div>
+      <Show when={hit()}>
+        {(h) => (
+          <div class="ml-7 mt-1 border-l-2 border-edge-muted pl-2 text-xs font-normal text-ink-muted">
+            <SearchContent twoLineClamp hit={h()} />
+          </div>
+        )}
+      </Show>
+    </div>
   );
 }
 

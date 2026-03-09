@@ -227,3 +227,8 @@ export const searchContentHitMarkdownTheme = createTheme({
   ...unifiedListMarkdownTheme,
   root: `${theme.root} pr-[2px] cursor-default overflow-x-auto`,
 });
+
+export const searchContentHitTwoLineClampMarkdownTheme = createTheme({
+  ...unifiedListMarkdownTheme,
+  root: `${theme.root} line-clamp-2 pr-[2px] cursor-default overflow-x-auto`,
+});
