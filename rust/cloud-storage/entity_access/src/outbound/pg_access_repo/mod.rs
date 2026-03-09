@@ -6,9 +6,19 @@ use crate::domain::{
     models::{AccessError, AccessLevel, ChannelRoleResult},
     ports::AccessRepository,
 };
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+/// Convert a list of user ID strings from the database into typed [`MacroUserIdStr`] values.
+///
+/// Invalid user IDs are silently filtered out to avoid failing the entire query
+/// due to a single malformed row.
+fn parse_user_ids(raw: Vec<String>) -> Vec<MacroUserIdStr<'static>> {
+    raw.into_iter()
+        .filter_map(|s| MacroUserIdStr::try_from(s).ok())
+        .collect()
+}
 
 /// PostgreSQL-backed implementation of [`AccessRepository`].
 ///
@@ -90,5 +100,41 @@ impl AccessRepository for PgAccessRepository {
             user_org_id,
         )
         .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_users(
+        &self,
+        document_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let raw = queries::document_users::get_document_users(&self.pool, document_id).await?;
+        Ok(parse_user_ids(raw))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_chat_users(
+        &self,
+        chat_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let raw = queries::chat_users::get_chat_users(&self.pool, chat_id).await?;
+        Ok(parse_user_ids(raw))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_users(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let raw = queries::project_users::get_project_users(&self.pool, project_id).await?;
+        Ok(parse_user_ids(raw))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_users(
+        &self,
+        thread_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let raw = queries::thread_users::get_thread_users(&self.pool, thread_id).await?;
+        Ok(parse_user_ids(raw))
     }
 }

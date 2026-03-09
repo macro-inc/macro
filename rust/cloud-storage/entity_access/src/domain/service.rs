@@ -10,7 +10,9 @@ use crate::domain::{
     },
     ports::{AccessRepository, EntityAccessService},
 };
-use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
+};
 use uuid::Uuid;
 
 /// Implementation of the [`EntityAccessService`].
@@ -198,6 +200,23 @@ where
                 }
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_users_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match entity_type {
+            EntityType::Document => self.repo.get_document_users(entity_id).await,
+            EntityType::Chat => self.repo.get_chat_users(entity_id).await,
+            EntityType::Project => self.repo.get_project_users(entity_id).await,
+            EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            _ => Err(AccessError::BadRequest(
+                "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
+            )),
         }
     }
 }
