@@ -51,8 +51,6 @@ import {
   isEmailEntity,
   isDocumentEntity,
   getEntityProjectId,
-  isChannelEntity,
-  isChatEntity,
 } from '@entity';
 import type { NotificationSource } from '@notifications';
 
@@ -202,33 +200,7 @@ export const TASK_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   ...TASK_ASSIGNEE_FILTERS,
 ];
 
-export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
-  {
-    id: 'doc-recent',
-    label: 'Recently Edited',
-    predicate: (entity) => {
-      if (!isDocumentEntity(entity)) return false;
-      const updatedAt = entity.updatedAt
-        ? new Date(entity.updatedAt)
-        : undefined;
-      if (!updatedAt) return false;
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return updatedAt > dayAgo;
-    },
-  },
-  {
-    id: 'doc-edited-this-week',
-    label: 'Edited This Week',
-    predicate: (entity) => {
-      if (!isDocumentEntity(entity)) return false;
-      const updatedAt = entity.updatedAt
-        ? new Date(entity.updatedAt)
-        : undefined;
-      if (!updatedAt) return false;
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      return updatedAt > weekAgo;
-    },
-  },
+const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
   {
     id: 'in-folder',
     label: 'In Folder',
@@ -244,106 +216,6 @@ export const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
     label: 'Canvas',
     predicate: (entity) =>
       isDocumentEntity(entity) && entity.fileType === 'canvas',
-  },
-];
-
-export const CHANNEL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
-  {
-    id: 'channel-recent-activity',
-    label: 'Recent Activity',
-    predicate: (entity) => {
-      if (!isChannelEntity(entity)) return false;
-      const interactedAt = entity.interactedAt
-        ? new Date(entity.interactedAt)
-        : undefined;
-      if (!interactedAt) return false;
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return interactedAt > dayAgo;
-    },
-  },
-  {
-    id: 'channel-public',
-    label: 'Public',
-    predicate: (entity) =>
-      isChannelEntity(entity) && entity.channelType === 'public',
-  },
-  {
-    id: 'channel-private',
-    label: 'Private',
-    predicate: (entity) =>
-      isChannelEntity(entity) && entity.channelType === 'private',
-  },
-];
-
-export const CHAT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
-  {
-    id: 'chat-recent',
-    label: 'Recent',
-    predicate: (entity) => {
-      if (!isChatEntity(entity)) return false;
-      const updatedAt = entity.updatedAt
-        ? new Date(entity.updatedAt)
-        : undefined;
-      if (!updatedAt) return false;
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return updatedAt > dayAgo;
-    },
-  },
-];
-
-/**
- * Agent ownership filter options for the filter bar.
- * Note: The actual predicates are registered in createSoupFilters with getUserID closure.
- * These are just the IDs and labels for building filter UI options.
- */
-export const AGENT_OWNERSHIP_FILTERS: readonly { id: string; label: string }[] =
-  [
-    { id: 'owned-agent', label: 'Owned by me' },
-    { id: 'shared-agent', label: 'Shared with me' },
-  ] as const;
-
-export const GENERAL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
-  {
-    id: 'recently-viewed',
-    label: 'Recently Viewed',
-    predicate: (entity) => {
-      const viewedAt = entity.viewedAt ? new Date(entity.viewedAt) : undefined;
-      if (!viewedAt) return false;
-      const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      return viewedAt > hourAgo;
-    },
-  },
-  {
-    id: 'recently-created',
-    label: 'Recently Created',
-    predicate: (entity) => {
-      const createdAt = entity.createdAt
-        ? new Date(entity.createdAt)
-        : undefined;
-      if (!createdAt) return false;
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      return createdAt > weekAgo;
-    },
-  },
-  {
-    id: 'recently-updated',
-    label: 'Recently Updated',
-    predicate: (entity) => {
-      const updatedAt = entity.updatedAt
-        ? new Date(entity.updatedAt)
-        : undefined;
-      if (!updatedAt) return false;
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return updatedAt > dayAgo;
-    },
-  },
-  {
-    id: 'high-frecency',
-    label: 'Frequently Used',
-    predicate: (entity) => {
-      const score = entity.frecencyScore ?? 0;
-      return score > 100; // High frecency threshold
-    },
   },
 ];
 
@@ -520,8 +392,6 @@ export const createSoupFilters = (
     },
     ...TASK_PRIORITY_FILTERS,
     ...DOCUMENT_CONTEXTUAL_FILTERS,
-    ...CHANNEL_CONTEXTUAL_FILTERS,
-    ...CHAT_CONTEXTUAL_FILTERS,
     ...FILE_TYPE_FILTERS,
   ] as const satisfies EntityFilterConfig[];
 

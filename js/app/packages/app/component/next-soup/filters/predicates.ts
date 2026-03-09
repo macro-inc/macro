@@ -20,7 +20,7 @@ import type { SoupProperty } from '@service-storage/generated/schemas';
  * - Everything else: Has at least one notification with viewedAt === null
  */
 export function unreadFilter(notificationSource: NotificationSource) {
-  return function (entity: EnhancedEntity): boolean {
+  return function (entity: EntityData): boolean {
     if (entity.type === 'email') {
       return !entity.isRead;
     }
@@ -50,8 +50,6 @@ export function notDoneFilter(notificationSource: NotificationSource) {
     return notifications?.some(({ done }) => !done);
   };
 }
-
-type EnhancedEntity = WithNotification<EntityData>;
 
 /** Document filter (markdown, canvas) - excludes tasks */
 export function documentFilter(entity: EntityData): boolean {
