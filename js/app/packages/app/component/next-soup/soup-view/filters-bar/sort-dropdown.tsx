@@ -39,7 +39,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         as={Button}
         variant="secondary"
         size="sm"
-        class="whitespace-nowrap"
+        class="whitespace-nowrap rounded-xs"
       >
         <Show when={currentOption()?.icon}>
           {(icon) => (
@@ -52,7 +52,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         <ChevronDownIcon class="size-3" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[140px] p-1">
+        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
           <For each={options()}>
             {(option) => (
               <DropdownMenu.Item

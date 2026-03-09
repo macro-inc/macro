@@ -207,12 +207,12 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
-              <div class="h-full flex gap-2 items-center">
+              <div class="h-full flex gap-3 items-center">
                 <Show when={!isMobile()}>
                   <h1 class="font-medium text-ink-muted select-none text-sm">
                     {props.viewName}
                   </h1>
-                  <ChevronRightIcon class="size-4 text-ink-muted select-none" />
+                  {/*<ChevronRightIcon class="size-4 text-ink-muted select-none" />*/}
                 </Show>
 
                 <SoupViewTabs />
@@ -223,11 +223,12 @@ export const SoupView = (props: SoupViewProps) => {
                 tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
               >
                 <Button
-                  variant={soup.previewEntity() ? 'tertiary' : 'ghost'}
+                  variant={soup.previewEntity() ? 'primary' : 'ghost'}
                   size="icon-sm"
+                  class="rounded-xs"
                   onClick={togglePreview}
                 >
-                  <PreviewIcon />
+                  <PreviewIcon class="size=6" />
                 </Button>
               </Tooltip>
             </SplitHeaderRight>
