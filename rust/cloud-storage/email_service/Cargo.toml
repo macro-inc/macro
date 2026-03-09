@@ -77,7 +77,7 @@ base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
-connection_gateway = { path = "../connection_gateway" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 ego-tree = { workspace = true }

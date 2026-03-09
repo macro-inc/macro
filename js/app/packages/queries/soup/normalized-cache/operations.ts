@@ -20,6 +20,7 @@ import type {
   SoupEntityPartial,
 } from './types';
 import type { SoupApiItemFilter } from '../items';
+import { isAfter } from 'date-fns';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -303,6 +304,54 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       frecency_score: current.frecency_score,
     });
   }
+}
+
+/**
+ * Optimistically update the updatedAt/updated_at timestamp for a soup item.
+ * Updates the item across all soup queries if it exists and matches the expected tag.
+ */
+export function optimisticUpdateSoupItemUpdatedAt(
+  itemId: string,
+  tag: SoupEntityTag,
+  updatedAt: string
+) {
+  const current = getSoupEntityById(itemId);
+  if (!current || current.tag !== tag) return;
+
+  if (current.tag === 'channel') {
+    if (
+      !shouldUpdateOptimisticTimestamp(
+        current.data.channel.updated_at,
+        updatedAt
+      )
+    )
+      return;
+
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: itemId, updated_at: updatedAt } },
+      frecency_score: current.frecency_score,
+    });
+  } else {
+    if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))
+      return;
+
+    optimisticUpdateSoupEntity({
+      tag: current.tag,
+      data: { id: itemId, updatedAt },
+      frecency_score: current.frecency_score,
+    });
+  }
+}
+
+/** @private */
+function shouldUpdateOptimisticTimestamp(
+  currentUpdatedAt: string | undefined,
+  incomingUpdatedAt: string
+): boolean {
+  return currentUpdatedAt
+    ? isAfter(Date.parse(incomingUpdatedAt), Date.parse(currentUpdatedAt))
+    : true;
 }
 
 /** @private */

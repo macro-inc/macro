@@ -1,4 +1,6 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
+use ai_tools::NoOpTaskProperties;
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -7,9 +9,15 @@ use comms_service_client::CommsServiceClient;
 use config::{Config, EnvVars, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
+use documents::{
+    domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
+    inbound::toolset::DocumentToolContext,
+    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
+};
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -190,11 +198,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized stream repo");
 
     let connection_manager =
-        connection_gateway_client::service::dynamodb::create_dynamo_db_connection_manager(
-            dynamodb_client,
-        )
-        .await
-        .context("failed to create connection manager")?;
+        connection_gateway::service::dynamodb::create_dynamo_db_connection_manager(dynamodb_client)
+            .await
+            .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
 
@@ -235,6 +241,47 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized notification ingress service");
 
+    // Build document tool context for AI tools
+    let s3_client = macro_aws_config::s3_client().await;
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        s3_client,
+        config.document_storage_bucket.clone(),
+        config.docx_document_upload_bucket.clone(),
+    );
+    let document_repo = PgDocumentRepo::new(db.clone());
+    let cloudfront_private_key = match config.environment {
+        Environment::Local => config.cloudfront_signer_private_key.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.cloudfront_signer_private_key)
+            .await
+            .context("failed to get CloudFront signer private key from secrets manager")?
+            .to_string(),
+    };
+    let cloudfront_config = CloudFrontConfig {
+        distribution_url: config.cloudfront_distribution_url.clone(),
+        signer_public_key_id: config.cloudfront_signer_public_key_id.clone(),
+        signer_private_key: cloudfront_private_key,
+        presigned_url_expiry_seconds: 3600,
+        browser_cache_expiry_seconds: 86400,
+    };
+    let document_service = DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.clone(),
+        s3_upload_adapter,
+        NoOpTaskProperties,
+        db.clone(),
+    );
+    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+    let lexical_client_for_tools = (*lexical_client).clone();
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        entity_access_service,
+        lexical_client_for_tools,
+    );
+
+    tracing::info!("initialized document tool context");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -266,6 +313,7 @@ async fn main() -> anyhow::Result<()> {
         connection_repo: connection_manager.persistence,
         soup_service,
         stream_repo,
+        document_tool_context,
     })
     .await
     .context("failed to setup and serve api")?;

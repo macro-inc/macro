@@ -5,7 +5,7 @@ import {
   getThreadLatestReplyAt,
   getThreadReplyCountLabel,
   getUniqueReplyUserIds,
-} from '../thread-reply-indicator-helpers';
+} from '../utils/thread-reply-indicator-helpers';
 
 describe('thread-reply-indicator-helpers', () => {
   it('computes the number of collapsed replies', () => {

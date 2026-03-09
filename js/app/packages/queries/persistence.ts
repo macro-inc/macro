@@ -12,7 +12,7 @@ import {
   parsedDurationToMilliseconds,
 } from '@core/util/dateSearch/dateParser';
 
-type PersistenceKey = `${string}-persist-v${number}`;
+export type PersistenceKey = `${string}-persist-v${number}`;
 
 /** Builds a versioned persistence key for IDB database naming. */
 export function createPersistenceKey(

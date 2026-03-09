@@ -1,3 +1,4 @@
+import PreviewIcon from '@macro-icons/wide/preview.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
@@ -68,7 +69,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
@@ -81,13 +82,18 @@ import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hoo
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters/filters';
 import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -165,6 +171,30 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
+  const togglePreview = () => {
+    const currentPreview = soup.previewEntity();
+    if (currentPreview) {
+      soup.setPreviewEntity(undefined);
+      return;
+    }
+
+    const focused = soup.focus.id();
+
+    if (!focused) return;
+
+    soup.setPreviewEntity(focused);
+  };
+
+  registerHotkey({
+    hotkey: 'space',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Toggle preview',
+    keyDownHandler: () => {
+      togglePreview();
+      return true;
+    },
+  });
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -188,6 +218,19 @@ export const SoupView = (props: SoupViewProps) => {
                 <SoupViewTabs />
               </div>
             </SplitHeaderLeft>
+            <SplitHeaderRight>
+              <Tooltip
+                tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
+              >
+                <Button
+                  variant={soup.previewEntity() ? 'tertiary' : 'ghost'}
+                  size="icon-sm"
+                  onClick={togglePreview}
+                >
+                  <PreviewIcon />
+                </Button>
+              </Tooltip>
+            </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
           <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">

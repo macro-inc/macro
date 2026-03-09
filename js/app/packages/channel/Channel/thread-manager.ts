@@ -1,6 +1,7 @@
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
 import { createSignal } from 'solid-js';
+import type { InputSnapshot } from '@channel/Input';
 
 type ThreadStore = Record<string, ThreadState>;
 export function createThreadManager() {
@@ -8,9 +9,18 @@ export function createThreadManager() {
 
   function initThreadState(threadId: string): ThreadState {
     const [isExpanded, setIsExpanded] = createSignal<boolean>(false);
-    const state = {
+    const [isReplying, setIsReplying] = createSignal<boolean>(false);
+    const [replyInputState, setReplyInputState] = createSignal<
+      InputSnapshot | undefined
+    >();
+
+    const state: ThreadState = {
       isExpanded,
       setIsExpanded,
+      isReplying,
+      setIsReplying,
+      replyInputState,
+      setReplyInputState,
     };
 
     setThreadStore(threadId, state);

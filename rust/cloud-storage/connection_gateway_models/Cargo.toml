@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "connection_gateway_models"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+model-entity = { path = "../model-entity" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }

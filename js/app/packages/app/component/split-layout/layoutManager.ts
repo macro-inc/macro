@@ -25,7 +25,7 @@ import {
   resolveComponent,
 } from './componentRegistry';
 import { createHistory, type History } from './history';
-import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
 
@@ -97,7 +97,7 @@ export type PopoverSplitHandle = {
 };
 
 export type ReferredFrom =
-  | ListView
+  | 'list-view'
   | 'kommand-menu'
   | 'mention'
   | 'attachment'

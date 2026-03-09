@@ -7,10 +7,10 @@ import {
   applyOtherQueryFilters,
 } from '@app/component/next-soup/filters/inbox-query-filters';
 import type { ListView } from '@app/constants/list-views';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupBody } from '@queries/soup/items';
 
 export type SoupFiltersPreset = {
-  queryFilters: SoupItemsQueryFilters;
+  queryFilters: SoupBody;
   clientFilters: {
     and?: FilterID[];
     or?: FilterID[];
@@ -39,15 +39,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'signal',
     tabs: {
       signal: () => ({
-        queryFilters: applyInboxQueryFilters({}),
+        queryFilters: {
+          ...applyInboxQueryFilters({}),
+          emailView: 'all',
+        },
         clientFilters: { and: ['signal', 'not-done'] },
+        emailView: 'all',
       }),
       noise: () => ({
-        queryFilters: applyOtherQueryFilters({}),
+        queryFilters: {
+          ...applyOtherQueryFilters({}),
+          emailView: 'all',
+        },
         clientFilters: { and: ['noise', 'not-done'] },
       }),
       all: () => ({
-        queryFilters: {},
+        queryFilters: {
+          emailView: 'all',
+        },
         clientFilters: { and: ['explicit-noise'] },
       }),
     },
@@ -93,7 +102,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({
-        queryFilters: QUERY_FILTERS.email,
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          emailView: 'drafts',
+        },
         clientFilters: { and: ['email-drafts'] },
       }),
       sent: (ctx) => {
@@ -102,6 +114,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           queryFilters: {
             ...QUERY_FILTERS.email,
             email_filters: { senders: [ctx.email] },
+            emailView: 'sent',
           },
           clientFilters: { and: ['email', 'no-drafts'] },
         };

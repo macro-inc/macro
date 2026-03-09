@@ -18,7 +18,6 @@ import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupParams,
   useSoupItemsQuery,
-  type SoupItemsQueryFilters,
   type SoupBody,
 } from '@queries/soup/items';
 import {
@@ -73,8 +72,8 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
-  queryFilters: Accessor<SoupItemsQueryFilters>;
-  setQueryFilters: Setter<SoupItemsQueryFilters>;
+  queryFilters: Accessor<SoupBody>;
+  setQueryFilters: Setter<SoupBody>;
   statusFilter: Accessor<string[]>;
   setStatusFilter: Setter<string[]>;
   assigneeFilter: Accessor<string[]>;
@@ -101,7 +100,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 
 interface SoupViewContextProviderProps {
   soup?: SoupState;
-  queryFilters?: SoupItemsQueryFilters;
+  queryFilters?: SoupBody;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -135,7 +134,7 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const [internalQueryFilters, setInternalQueryFilters] =
-    createSignal<SoupItemsQueryFilters>({ ...(props.queryFilters ?? {}) });
+    createSignal<SoupBody>({ ...(props.queryFilters ?? {}) });
 
   const [statusFilter, setStatusFilter] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
@@ -149,7 +148,7 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  const queryFilters = createMemo((): SoupItemsQueryFilters => {
+  const queryFilters = createMemo(() => {
     const base = internalQueryFilters();
 
     return {
@@ -157,16 +156,9 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  // Signal/noise only show emails in the user's inbox (aka not-done emails). All shows all emails.
-  const emailView = () =>
-    soup.filters.isActive('signal') || soup.filters.isActive('noise')
-      ? 'inbox'
-      : 'all';
-
   const soupBody = createMemo(
     (): SoupBody => ({
       ...queryFilters(),
-      emailView: emailView(),
     })
   );
 
@@ -217,7 +209,7 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
-  const setQueryFilters: Setter<SoupItemsQueryFilters> = (next) => {
+  const setQueryFilters: Setter<SoupBody> = (next) => {
     // To avoid fetching all pages again when coming back to the current query filters,
     // we set the query cache to only contain the first page of data which is the only
     // one to be refetched

@@ -97,8 +97,10 @@ dependencies = [
  "chrono",
  "comms",
  "cool_asserts",
+ "documents",
  "email",
  "email_service_client",
+ "entity_access",
  "frecency",
  "item_filters",
  "lazy_static",
@@ -1760,8 +1762,10 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "entity_access",
  "http-body-util",
  "macro_db_migrator",
+ "macro_user_id",
  "mockall",
  "model-error-response",
  "model_user",
@@ -1976,7 +1980,7 @@ dependencies = [
  "chrono",
  "comms",
  "comms_db_client",
- "connection_gateway",
+ "connection_gateway_client",
  "doppleganger",
  "frecency",
  "futures",
@@ -2045,6 +2049,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connection"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "connection_gateway_client",
+ "entity_access",
+ "macro_user_id",
+ "model-entity",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
@@ -2053,6 +2074,8 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
+ "connection_gateway_client",
+ "connection_gateway_models",
  "cool_asserts",
  "cowlike",
  "dashmap",
@@ -2074,7 +2097,6 @@ dependencies = [
  "model-entity",
  "models_bulk_upload",
  "redis",
- "reqwest",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
@@ -2092,6 +2114,29 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+]
+
+[[package]]
+name = "connection_gateway_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "connection_gateway_models",
+ "model-entity",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "connection_gateway_models"
+version = "0.1.0"
+dependencies = [
+ "model-entity",
+ "serde",
+ "serde_json",
+ "utoipa",
 ]
 
 [[package]]
@@ -2166,7 +2211,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
- "connection_gateway",
+ "connection_gateway_client",
  "contacts_db_client",
  "http-body-util",
  "macro_auth",
@@ -2774,6 +2819,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "aws-sdk-dynamodb",
+ "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -2786,9 +2832,11 @@ dependencies = [
  "dashmap",
  "document_cognition_service_client",
  "document_storage_service_client",
+ "documents",
  "doppleganger",
  "email",
  "email_service_client",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -2881,7 +2929,7 @@ dependencies = [
  "comms",
  "comms_db_client",
  "comms_service",
- "connection_gateway",
+ "connection_gateway_client",
  "cool_asserts",
  "cowlike",
  "document_sub_type",
@@ -3020,6 +3068,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "cloudfront_sign",
+ "connection",
  "document_sub_type",
  "dotenvy",
  "entity_access",
@@ -3447,7 +3496,7 @@ dependencies = [
  "bytes",
  "chrono",
  "cloudfront_sign",
- "connection_gateway",
+ "connection_gateway_client",
  "document_storage_service_client",
  "doppleganger",
  "ego-tree",
@@ -10385,7 +10434,7 @@ dependencies = [
  "aws-sdk-sqs",
  "aws_lambda_events",
  "chrono",
- "connection_gateway",
+ "connection_gateway_client",
  "document_storage_service_client",
  "dynamodb_client",
  "futures",

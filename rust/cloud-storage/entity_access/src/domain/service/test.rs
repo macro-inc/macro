@@ -2,7 +2,8 @@
 
 use super::*;
 use crate::domain::models::{
-    CommentAccessLevel, EditAccessLevel, EntityAccessAuth, ParticipantRole, ViewAccessLevel,
+    AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
+    MemberParticipantRole, OwnerParticipantRole, ParticipantRole, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
@@ -18,6 +19,10 @@ struct MockRepo {
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
     channel_role: Arc<Mutex<ChannelRoleResult>>,
+    document_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
 }
 
 impl MockRepo {
@@ -29,6 +34,10 @@ impl MockRepo {
             thread_access: Arc::new(Mutex::new(None)),
             channel_membership: Arc::new(Mutex::new(vec![])),
             channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
+            document_users: Arc::new(Mutex::new(vec![])),
+            chat_users: Arc::new(Mutex::new(vec![])),
+            project_users: Arc::new(Mutex::new(vec![])),
+            thread_users: Arc::new(Mutex::new(vec![])),
         }
     }
 
@@ -59,6 +68,26 @@ impl MockRepo {
 
     fn with_channel_role(mut self, result: ChannelRoleResult) -> Self {
         self.channel_role = Arc::new(Mutex::new(result));
+        self
+    }
+
+    fn with_document_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.document_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_chat_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.chat_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_project_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.project_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_thread_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.thread_users = Arc::new(Mutex::new(users));
         self
     }
 }
@@ -112,10 +141,42 @@ impl AccessRepository for MockRepo {
     ) -> Result<ChannelRoleResult, AccessError> {
         Ok(*self.channel_role.lock().await)
     }
+
+    async fn get_document_users(
+        &self,
+        _document_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.document_users.lock().await.clone())
+    }
+
+    async fn get_chat_users(
+        &self,
+        _chat_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.chat_users.lock().await.clone())
+    }
+
+    async fn get_project_users(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.project_users.lock().await.clone())
+    }
+
+    async fn get_thread_users(
+        &self,
+        _thread_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.thread_users.lock().await.clone())
+    }
 }
 
 fn test_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|test@test.com".to_string()).unwrap()
+}
+
+fn user_id(s: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(s.to_string()).unwrap()
 }
 
 #[tokio::test]
@@ -708,7 +769,7 @@ async fn test_generate_receipt_channel_with_role() {
     let user_id = test_user_id();
 
     let receipt = service
-        .generate_entity_access_receipt::<ViewAccessLevel>(
+        .generate_entity_access_receipt::<MemberParticipantRole>(
             &user_id,
             None,
             "11111111-1111-1111-1111-111111111111",
@@ -731,13 +792,73 @@ async fn test_generate_receipt_channel_with_role() {
 }
 
 #[tokio::test]
+async fn test_generate_receipt_channel_member_fails_edit_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<AdminParticipantRole>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_admin_satisfies_edit_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt::<AdminParticipantRole>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_admin_fails_owner_requirement() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt::<OwnerParticipantRole>(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
 async fn test_generate_receipt_channel_not_found_returns_not_found() {
     let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NotFound);
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
     let result = service
-        .generate_entity_access_receipt::<ViewAccessLevel>(
+        .generate_entity_access_receipt::<MemberParticipantRole>(
             &user_id,
             None,
             "11111111-1111-1111-1111-111111111111",
@@ -764,4 +885,202 @@ async fn test_generate_receipt_unsupported_type_returns_bad_request() {
         .await;
 
     assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
+// --- get_users_by_entity tests ---
+
+#[tokio::test]
+async fn test_get_users_by_entity_document_returns_users() {
+    let users = vec![
+        user_id("macro|alice@test.com"),
+        user_id("macro|bob@test.com"),
+    ];
+    let repo = MockRepo::new().with_document_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("doc-1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].to_string(), "macro|alice@test.com");
+    assert_eq!(result[1].to_string(), "macro|bob@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_document_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("doc-1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_chat_returns_users() {
+    let users = vec![user_id("macro|charlie@test.com")];
+    let repo = MockRepo::new().with_chat_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("chat-1", EntityType::Chat)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].to_string(), "macro|charlie@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_chat_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("chat-1", EntityType::Chat)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_project_returns_users() {
+    let users = vec![
+        user_id("macro|alice@test.com"),
+        user_id("macro|bob@test.com"),
+        user_id("macro|charlie@test.com"),
+    ];
+    let repo = MockRepo::new().with_project_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("proj-1", EntityType::Project)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0].to_string(), "macro|alice@test.com");
+    assert_eq!(result[1].to_string(), "macro|bob@test.com");
+    assert_eq!(result[2].to_string(), "macro|charlie@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_project_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("proj-1", EntityType::Project)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_thread_returns_users() {
+    let users = vec![
+        user_id("macro|dave@test.com"),
+        user_id("macro|eve@test.com"),
+    ];
+    let repo = MockRepo::new().with_thread_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("thread-1", EntityType::EmailThread)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].to_string(), "macro|dave@test.com");
+    assert_eq!(result[1].to_string(), "macro|eve@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("thread-1", EntityType::EmailThread)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_channel_returns_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("11111111-1111-1111-1111-111111111111", EntityType::Channel)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_team_returns_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("team-1", EntityType::Team)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_user_returns_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("user-1", EntityType::User)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_document_with_single_user() {
+    let users = vec![user_id("macro|solo@test.com")];
+    let repo = MockRepo::new().with_document_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("doc-1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].to_string(), "macro|solo@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_project_with_many_users() {
+    let users: Vec<MacroUserIdStr<'static>> = (0..50)
+        .map(|i| user_id(&format!("macro|user{}@test.com", i)))
+        .collect();
+    let repo = MockRepo::new().with_project_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("proj-1", EntityType::Project)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 50);
+    for (i, u) in result.iter().enumerate() {
+        assert_eq!(u.to_string(), format!("macro|user{}@test.com", i));
+    }
 }

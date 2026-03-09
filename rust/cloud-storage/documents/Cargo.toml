@@ -5,29 +5,34 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "inbound", "outbound", "axum", "ai_tools"]
-ports = ["dep:tokio"]
-inbound = ["axum", "ports"]
-outbound = ["ports", "dep:aws-sdk-s3", "dep:base64", "dep:hex"]
 ai_tools = [
-    "dep:ai",
-    "dep:async-trait",
-    "dep:schemars",
-    "dep:lexical_client",
-    "dep:model_file_type",
-    "dep:reqwest",
-    "dep:sha2",
-    "ports",
-    "outbound"
+  "dep:ai",
+  "dep:async-trait",
+  "dep:lexical_client",
+  "dep:model_file_type",
+  "dep:reqwest",
+  "dep:schemars",
+  "dep:sha2",
+  "outbound",
+  "ports",
 ]
 axum = [
-    "dep:axum",
-    "dep:axum-extra",
-    "dep:model_user",
-    "dep:model-error-response",
-    "dep:utoipa",
-    "entity_access/axum",
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "entity_access/axum",
 ]
+default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "ports"]
+outbound = [
+  "dep:aws-sdk-s3",
+  "dep:base64",
+  "dep:hex",
+  "ports",
+]
+ports = ["dep:tokio"]
 
 [dependencies]
 # Core
@@ -40,13 +45,16 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
+connection = { path = "../connection", default-features = false, features = [
+  "ports",
+] }
 document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
-macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -54,8 +62,8 @@ tokio = { workspace = true, optional = true }
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
@@ -72,17 +80,17 @@ urlencoding = { workspace = true }
 # AI Tool dependencies
 ai = { path = "../ai", optional = true }
 async-trait = { workspace = true, optional = true }
-schemars = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
+dotenvy = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
-dotenvy = { workspace = true }
