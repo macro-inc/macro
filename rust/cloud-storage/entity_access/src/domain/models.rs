@@ -11,39 +11,6 @@ pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
 };
 
-/// Trait to convert a unit struct marker into an [`AccessLevel`].
-///
-/// This allows extractors and receipts to be parameterized by required access level.
-/// Implement this for marker types like `ViewAccessLevel`, `EditAccessLevel`, etc.
-pub trait RequiredAccessLevel: std::fmt::Debug + Send + Sync + 'static {
-    /// Returns the access level this marker represents.
-    fn required_level() -> AccessLevel;
-}
-
-impl RequiredAccessLevel for ViewAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::View
-    }
-}
-
-impl RequiredAccessLevel for CommentAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::Comment
-    }
-}
-
-impl RequiredAccessLevel for EditAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::Edit
-    }
-}
-
-impl RequiredAccessLevel for OwnerAccessLevel {
-    fn required_level() -> AccessLevel {
-        AccessLevel::Owner
-    }
-}
-
 /// The role a user has within a channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -56,6 +23,24 @@ pub enum ParticipantRole {
     /// Regular channel member.
     #[default]
     Member,
+}
+
+/// Channel owner role with full control
+#[derive(Debug)]
+pub struct OwnerParticipantRole;
+
+/// Channel Administrator
+#[derive(Debug)]
+pub struct AdminParticipantRole;
+
+/// Regular channel member.
+#[derive(Debug)]
+pub struct MemberParticipantRole;
+
+/// Trait implemented by marker types that encode a permission requirement.
+pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
+    /// Returns whether the provided permission satisfies this requirement.
+    fn is_satisfied_by(permission: &EntityPermission) -> bool;
 }
 
 /// A user's permission for an entity, discriminated by entity kind.
@@ -76,6 +61,86 @@ pub enum EntityPermission {
         /// The role the user has in the channel.
         role: ParticipantRole,
     },
+}
+
+impl EntityPermission {
+    /// Returns whether this permission grants at least the requested access level.
+    pub fn allows_access_level(&self, required: AccessLevel) -> bool {
+        matches!(
+            self,
+            EntityPermission::AccessLevel { access_level } if *access_level >= required
+        )
+    }
+
+    /// Returns whether this permission grants at least the requested channel role.
+    pub fn allows_participant_role(&self, required: ParticipantRole) -> bool {
+        matches!(
+            (self, required),
+            (
+                EntityPermission::ChannelRole {
+                    role: ParticipantRole::Owner,
+                },
+                ParticipantRole::Owner,
+            ) | (
+                EntityPermission::ChannelRole {
+                    role: ParticipantRole::Owner | ParticipantRole::Admin,
+                },
+                ParticipantRole::Admin,
+            ) | (
+                EntityPermission::ChannelRole {
+                    role: ParticipantRole::Owner | ParticipantRole::Admin | ParticipantRole::Member,
+                },
+                ParticipantRole::Member
+            )
+        )
+    }
+
+    /// Returns whether this permission satisfies the provided marker type.
+    pub fn satisfies<T: RequiredPermission>(&self) -> bool {
+        T::is_satisfied_by(self)
+    }
+}
+
+impl RequiredPermission for ViewAccessLevel {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_access_level(AccessLevel::View)
+    }
+}
+
+impl RequiredPermission for CommentAccessLevel {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_access_level(AccessLevel::Comment)
+    }
+}
+
+impl RequiredPermission for EditAccessLevel {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_access_level(AccessLevel::Edit)
+    }
+}
+
+impl RequiredPermission for OwnerAccessLevel {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_access_level(AccessLevel::Owner)
+    }
+}
+
+impl RequiredPermission for OwnerParticipantRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_participant_role(ParticipantRole::Owner)
+    }
+}
+
+impl RequiredPermission for AdminParticipantRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_participant_role(ParticipantRole::Admin)
+    }
+}
+
+impl RequiredPermission for MemberParticipantRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_participant_role(ParticipantRole::Member)
+    }
 }
 
 /// Result of resolving a user's role in a channel.
@@ -114,10 +179,10 @@ pub enum EntityAccessAuth {
 
 /// Represents that a given user has a given permission for the provided id.
 ///
-/// The type parameter `T` encodes the minimum access level that was verified
+/// The type parameter `T` encodes the minimum permission that was verified
 /// when this receipt was created.
 #[derive(Debug)]
-pub struct EntityAccessReceipt<T: RequiredAccessLevel> {
+pub struct EntityAccessReceipt<T: RequiredPermission> {
     /// The entity access authentication method
     pub(crate) auth: EntityAccessAuth,
     /// The entity that was requested access
@@ -128,7 +193,7 @@ pub struct EntityAccessReceipt<T: RequiredAccessLevel> {
     pub(crate) _marker: PhantomData<T>,
 }
 
-impl<T: RequiredAccessLevel> EntityAccessReceipt<T> {
+impl<T: RequiredPermission> EntityAccessReceipt<T> {
     /// Getter for auth
     pub fn auth(&self) -> &EntityAccessAuth {
         &self.auth

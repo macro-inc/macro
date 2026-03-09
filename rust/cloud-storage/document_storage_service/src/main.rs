@@ -9,9 +9,8 @@ use crate::{
 };
 use anyhow::Context;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl,
-    inbound::axum_router::ChannelsRouterState,
-    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -375,12 +374,12 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service,
-            access_service: entity_access_service,
+            access_service: entity_access_service.clone(),
             pool: db.clone(),
         },
         channels_state: ChannelsRouterState::new(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
-            PgChannelAccessCheck::new(db.clone()),
+            (*entity_access_service).clone(),
         ),
     };
 
