@@ -20,14 +20,14 @@ import Macro from '@macro-icons/macro-logo.svg';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';
-import { Entity, WithSearch, type EntityData } from '@entity';
+import { Entity, type WithSearch, type EntityData } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { CategoryFilter } from '../command/types';
+import type { CategoryFilter } from '../command/types';
 import {
-  CommandMenuItem,
+  type CommandMenuItem,
   isCommandItem,
   isEntityItem,
   useCommandItems,
@@ -71,9 +71,7 @@ export function MobileSearchOuter() {
   );
 }
 
-export function MobileSearchInner(props: {
-  commandMenuRef?: () => HTMLDivElement | undefined;
-}) {
+export function MobileSearchInner() {
   const { openWithSplit } = useSplitLayout();
 
   const query = debouncedDependent(SearchState.query, 60);

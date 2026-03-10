@@ -7,7 +7,6 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import HamburgerIcon from '@phosphor-icons/core/bold/list-bold.svg?component-solid';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -29,7 +28,6 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
 import { isListViewID } from '@app/constants/list-views';
-import { setSidebarState } from '@app/component/Layout';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);

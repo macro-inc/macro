@@ -15,12 +15,12 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
-import { ClippedPanel, ClippedPanelProps } from '@core/component/ClippedPanel';
+import {
+  ClippedPanel,
+  type ClippedPanelProps,
+} from '@core/component/ClippedPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { MobileDock } from '@app/component/mobile/MobileDock';
-import { MobileSearchOuter } from '@app/component/mobile/MobileSearch';
 
 export function SplitContainer(
   props: ParentProps<{
