@@ -443,12 +443,12 @@ const DateSelectorItem: Component<
     <Combobox.Item
       item={props.item}
       class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 pr-2 pl-6 relative data-[highlighted]:bg-hover',
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 relative data-[highlighted]:bg-hover',
         props.item.rawValue.type === 'select-custom' &&
-          'border-t border-edge-muted pl-2'
+          'border-t border-edge-muted'
       )}
     >
-      <Combobox.ItemIndicator class="absolute left-2 top-1/2 -translate-y-1/2 size-2 bg-accent aspect-square" />
+      <Combobox.ItemIndicator class="hidden" />
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <Combobox.ItemLabel class="text-sm font-medium truncate">
           {label()}
