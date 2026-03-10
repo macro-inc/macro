@@ -1,105 +1,91 @@
 import type { AllTrackingEventValues } from '@app/lib/analytics/app-events';
+import {
+  initializeGoogleAnalytics,
+  initializeMetaPixel,
+} from '@app/lib/analytics/providers';
 
-type EventNames = AllTrackingEventValues | (string & {});
+type AnalyticsProvider = 'ga' | 'meta-pixel' | 'mixpanel';
 
-type TrackFn = (event: EventNames, data?: Record<string, unknown>) => void;
+const DEFAULT_ANALYTICS_PROVIDERS = [
+  'mixpanel',
+] as const satisfies AnalyticsProvider[];
+
+type EventName = AllTrackingEventValues | (string & {});
+
+type TrackFn = (event: EventName, data?: Record<string, unknown>) => void;
 
 interface UserIdentifyInfo {
   email: string;
   os: string;
 }
 
-export interface Provider {
-  id: string;
-  track: TrackFn;
-  initialize: () => void;
-  identify?: (userID: string, info: Partial<UserIdentifyInfo>) => void;
-}
-
-export const createAnalyticsProvider = (provider: Provider): Provider => {
-  let initialized = false;
-
-  return {
-    ...provider,
-    initialize() {
-      if (initialized) return;
-
-      provider.initialize();
-
-      initialized = true;
-    },
-  };
-};
-
 interface CreateAnalyticsOptions {
-  providers: Provider[];
   initializeOnCreate?: boolean;
   disabled?: boolean;
 }
 
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
-  const providers: Provider[] = [...options.providers];
-
   const initializeProviders = () => {
-    for (const provider of providers) {
-      provider.initialize();
-    }
+    initializeGoogleAnalytics();
+    initializeMetaPixel();
   };
 
   if (options.initializeOnCreate !== false && !options.disabled) {
     initializeProviders();
   }
 
-  const registerProvider = (provider: Provider) => {
-    providers.push(provider);
-  };
-
-  const track = (event: EventNames, data?: Record<string, unknown>) => {
-    if (options.disabled) return;
-
-    for (const provider of providers) {
-      provider.track(event, data);
-    }
-  };
-
-  const trackProvider = (
-    providerID: string,
-    event: EventNames,
+  const sendEvent = (
+    provider: AnalyticsProvider,
+    event: EventName,
     data?: Record<string, unknown>
   ) => {
     if (options.disabled) return;
 
-    for (const provider of providers) {
-      if (provider.id !== providerID) continue;
+    switch (provider) {
+      case 'ga': {
+        gtag('event', event, data);
+        break;
+      }
+      case 'meta-pixel': {
+        fbq('track', event, data ?? {});
+        break;
+      }
+      case 'mixpanel': {
+        break;
+      }
+    }
+  };
 
-      provider.track(event, data);
+  const track = (
+    event: EventName,
+    data?: Record<string, unknown>,
+    providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
+  ) => {
+    if (options.disabled) return;
+
+    for (const provider of providersToSendTo) {
+      sendEvent(provider, event, data);
     }
   };
 
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (options.disabled) return;
 
-    for (const provider of providers) {
-      provider.identify?.(userID, info);
-    }
+    gtag('config', 'G-52HPEL3FTV', {
+      ...info,
+      user_id: userID,
+    });
   };
 
   return {
     initializeProviders,
-    registerProvider,
 
     track,
-    trackProvider,
     identify,
   };
 };
 
 export type AnalyticsInterface = {
   track: TrackFn;
-  trackProvider: (
-    providerID: string,
-    event: EventNames,
-    data?: Record<string, unknown>
-  ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
 };

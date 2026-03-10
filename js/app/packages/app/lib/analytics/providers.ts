@@ -1,53 +1,38 @@
-import { createAnalyticsProvider } from './analytics';
+export const initializeGoogleAnalytics = () => {
+  const G_ID = 'G-52HPEL3FTV';
 
-export const AppAnalyticsProviders = {
-  google: 'google-analytics',
-  meta: 'meta-pixel',
-} as const;
+  // Google Analytics
+  const gaScript = document.createElement('script');
+  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${G_ID}`;
+  gaScript.async = true;
+  document.head.appendChild(gaScript);
 
-export const googleAnalyticsProvider = createAnalyticsProvider({
-  id: AppAnalyticsProviders.google,
-  initialize() {
-    const G_ID = 'G-52HPEL3FTV';
-
-    // Google Analytics
-    const gaScript = document.createElement('script');
-    gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${G_ID}`;
-    gaScript.async = true;
-    document.head.appendChild(gaScript);
-
-    const gaInit = document.createElement('script');
-    gaInit.innerHTML = `
+  const gaInit = document.createElement('script');
+  gaInit.innerHTML = `
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', '${G_ID}');
   `;
-    document.head.appendChild(gaInit);
+  document.head.appendChild(gaInit);
 
-    // Google Tag Manager
-    const gtmScript = document.createElement('script');
-    gtmScript.innerHTML = `
+  // Google Tag Manager
+  const gtmScript = document.createElement('script');
+  gtmScript.innerHTML = `
     (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-M58X7PJ8');
   `;
-    document.head.appendChild(gtmScript);
-  },
-  track(event, data) {
-    gtag('event', event, data);
-  },
-});
+  document.head.appendChild(gtmScript);
+};
 
-export const metaPixelProvider = createAnalyticsProvider({
-  id: AppAnalyticsProviders.meta,
-  initialize() {
-    const PIXEL_ID = '639142540393286';
+export const initializeMetaPixel = () => {
+  const PIXEL_ID = '639142540393286';
 
-    const fbqInit = document.createElement('script');
-    fbqInit.innerHTML = `
+  const fbqInit = document.createElement('script');
+  fbqInit.innerHTML = `
      !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -60,21 +45,17 @@ export const metaPixelProvider = createAnalyticsProvider({
       fbq('track', 'PageView');
     `;
 
-    document.head.appendChild(fbqInit);
+  document.head.appendChild(fbqInit);
 
-    const pixelImage = document.createElement('img');
+  const pixelImage = document.createElement('img');
 
-    pixelImage.width = 1;
-    pixelImage.height = 1;
-    pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`;
-    pixelImage.style.display = 'none';
+  pixelImage.width = 1;
+  pixelImage.height = 1;
+  pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`;
+  pixelImage.style.display = 'none';
 
-    const pixelImageInit = document.createElement('noscript');
-    pixelImageInit.append(pixelImage);
+  const pixelImageInit = document.createElement('noscript');
+  pixelImageInit.append(pixelImage);
 
-    document.head.appendChild(pixelImageInit);
-  },
-  track(event, data) {
-    fbq('track', event, data ?? {});
-  },
-});
+  document.head.appendChild(pixelImageInit);
+};
