@@ -16,6 +16,7 @@ use super::unsubscribe_item::UnsubscribeItemPathParams;
         delete,
         operation_id = "remove_unsubscribe_item",
         path = "/unsubscribe/item/{item_type}/{item_id}",
+        params(UnsubscribeItemPathParams),
         responses(
             (status = 200, body=EmptyResponse),
             (status = 401, body=ErrorResponse),

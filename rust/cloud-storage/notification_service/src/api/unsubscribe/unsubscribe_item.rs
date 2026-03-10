@@ -6,13 +6,13 @@ use axum::{
 };
 use model::response::{EmptyResponse, ErrorResponse};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::api::context::ApiContext;
 
 use model::user::UserContext;
 
-#[derive(Deserialize, Serialize, ToSchema)]
+#[derive(Deserialize, Serialize, ToSchema, IntoParams)]
 pub struct UnsubscribeItemPathParams {
     pub item_type: String,
     pub item_id: String,
@@ -23,6 +23,7 @@ pub struct UnsubscribeItemPathParams {
         post,
         operation_id = "unsubscribe_item",
         path = "/unsubscribe/item/{item_type}/{item_id}",
+        params(UnsubscribeItemPathParams),
         responses(
             (status = 200, body=EmptyResponse),
             (status = 401, body=ErrorResponse),
