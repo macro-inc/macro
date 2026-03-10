@@ -75,8 +75,8 @@ export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
           {/* Vertical divider */}
           <rect x="6" y="0.75" width="1.5" height="10.5" />
           {/* Content lines */}
-          <rect x="2.5" y="3" width="2.5" height="1" />
-          <rect x="2.5" y="5.5" width="2.5" height="1" />
+          <rect x="2.5" y="2.5" width="2.5" height="1" />
+          <rect x="2.5" y="4.5" width="2.5" height="1" />
         </g>
       </g>
     </svg>
