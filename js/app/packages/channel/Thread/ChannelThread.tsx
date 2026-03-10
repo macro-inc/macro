@@ -1,5 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { Show, Suspense, type Accessor } from 'solid-js';
+import { createEffect, Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -36,7 +36,7 @@ export function ChannelThread(props: ThreadProps) {
     fetchRepliesEnabled
   );
 
-  const sliceIfNotExpanded =
+ const sliceIfNotExpanded =
     <T,>(val: Accessor<Array<T>>) =>
     () =>
       sliceIf(val(), 0, DEFAULT_VISIBLE_REPLY_COUNT, !props.isExpanded());
@@ -81,7 +81,6 @@ export function ChannelThread(props: ThreadProps) {
               <Thread.RepliesContainer>
                 <Show
                   when={
-                    fetchRepliesEnabled() &&
                     !repliesQuery.isLoading &&
                     hasFetchedReplies()
                   }
