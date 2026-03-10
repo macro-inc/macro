@@ -591,27 +591,23 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         document_context: DocumentBasic,
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
-        let access_level = match entity_access_receipt.entity_permission() {
-            entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
-                *access_level
+        // Check owner-only restrictions for authenticated users
+        if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
+            entity_access_receipt.entity_permission()
+        {
+            if args.project_id.is_some()
+                && *access_level
+                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
             }
-            _ => unreachable!(),
-        };
 
-        // Only owners can move documents to a different project
-        if args.project_id.is_some()
-            && access_level
-                != models_permissions::share_permission::access_level::AccessLevel::Owner
-        {
-            return Err(DocumentError::Unauthorized);
-        }
-
-        // Only owners can modify share permissions
-        if args.share_permission.is_some()
-            && access_level
-                != models_permissions::share_permission::access_level::AccessLevel::Owner
-        {
-            return Err(DocumentError::Unauthorized);
+            if args.share_permission.is_some()
+                && *access_level
+                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
+            }
         }
 
         // Clean the document name (remove file extension if present)
@@ -620,10 +616,10 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
         let user_id = match entity_access_receipt.auth() {
-            EntityAccessAuth::Authenticated(macro_user_id) => macro_user_id.as_ref().to_string(),
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
-                return Err(DocumentError::Unauthorized);
+            EntityAccessAuth::Authenticated(macro_user_id) => {
+                Some(macro_user_id.as_ref().to_string())
             }
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
         };
 
         self.repo
@@ -637,16 +633,18 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        // Update project modified timestamp
-        macro_project_utils::update_project_modified(
-            &self.db,
-            macro_project_utils::ProjectModifiedArgs {
-                project_id: args.project_id,
-                old_project_id: document_context.project_id,
-                user_id,
-            },
-        )
-        .await;
+        // Update project modified timestamp (only when we have a user)
+        if let Some(user_id) = &user_id {
+            macro_project_utils::update_project_modified(
+                &self.db,
+                macro_project_utils::ProjectModifiedArgs {
+                    project_id: args.project_id,
+                    old_project_id: document_context.project_id,
+                    user_id: user_id.clone(),
+                },
+            )
+            .await;
+        }
 
         // Send invalidation event
         let _ = self

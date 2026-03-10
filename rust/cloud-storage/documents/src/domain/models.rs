@@ -76,7 +76,8 @@ pub struct EditDocumentRepoArgs {
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     /// The user performing the edit (used for user item access updates).
-    pub user_id: String,
+    /// `None` for internal/unauthenticated callers.
+    pub user_id: Option<String>,
 }
 
 /// Arguments for the edit_document service call.
