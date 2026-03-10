@@ -345,6 +345,45 @@ describe('optimisticInsertChannelMessage', () => {
     );
   });
 
+  it('should initialize thread replies cache when inserting the first optimistic reply', () => {
+    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [],
+              reply_count: 0,
+              latest_reply_at: null,
+            },
+          }),
+        ],
+      ])
+    );
+
+    optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-reply',
+      senderId: 'user-2',
+      content: 'First thread optimistic reply',
+      attachments: [],
+      mentions: [],
+      thread_id: 'parent-msg-id',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([
+      expect.objectContaining({ id: 'optimistic-reply' }),
+    ]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
+    ).toEqual([expect.objectContaining({ id: 'optimistic-reply' })]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .reply_count
+    ).toBe(1);
+  });
+
   it('should return undefined when cache is empty', () => {
     const context = optimisticInsertChannelMessage({
       channelId: 'nonexistent-channel',

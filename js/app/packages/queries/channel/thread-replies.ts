@@ -45,7 +45,7 @@ export function insertThreadReply(
   data: Array<ApiThreadReply> | undefined,
   reply: ApiThreadReply
 ): Array<ApiThreadReply> | undefined {
-  if (!data) return data;
+  if (!data) return [reply];
   if (data.some((existingReply) => existingReply.id === reply.id)) {
     return data;
   }
@@ -114,7 +114,7 @@ export function restoreThreadReply(
   data: Array<ApiThreadReply> | undefined,
   snapshot: ThreadReplySnapshot
 ): Array<ApiThreadReply> | undefined {
-  if (!data) return data;
+  if (!data) return [snapshot.reply];
   if (data.some((reply) => reply.id === snapshot.reply.id)) {
     return data;
   }
