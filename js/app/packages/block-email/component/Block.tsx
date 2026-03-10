@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
@@ -12,6 +13,7 @@ const { track, TrackingEvents } = withAnalytics();
 export default function BlockEmail() {
   const blockData = blockDataSignal.get;
   const notificationSource = useGlobalNotificationSource();
+  const isPreview = !!useMaybePreviewPanel();
 
   const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
 
@@ -42,6 +44,7 @@ export default function BlockEmail() {
                   <EmailDebouncedReadMarker
                     notificationSource={notificationSource}
                     threadId={id()}
+                    debounceTime={isPreview ? 1_500 : 100}
                   />
                   <Suspense>
                     <EmailView title={title()} threadId={id} />

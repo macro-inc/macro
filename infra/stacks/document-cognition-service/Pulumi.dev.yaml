@@ -15,3 +15,4 @@ config:
   document-cognition:sync_service_auth_key: sync-service-key-dev
   document-cognition:perplexity-api-key: perplexity-api-key
   document-cognition:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
+  datadog:validate: "false"

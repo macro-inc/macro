@@ -2,19 +2,18 @@
 
 use crate::domain::{
     models::{GithubError, MacroTaskId, ValidatedGithubWebhookEvent},
-    ports::GithubSyncClient,
+    ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
-use std::collections::HashSet;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
+impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
     /// Handle `issue_comment`, `pull_request_review`, and
     /// `pull_request_review_comment` events.
     ///
     /// Extracts task IDs from the new comment/review text and deduplicates
-    /// against PR context text and all existing PR comments.
+    /// against tasks already tracked in the repo for this PR.
     #[tracing::instrument(skip(self, event), err)]
     pub(crate) async fn handle_comment_event(
         &self,
@@ -23,57 +22,63 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
         // Extract task IDs from the new comment/review text only
         let searchable_texts = event.extract_searchable_text();
         let combined = searchable_texts.join(" ");
-        let new_task_ids: HashSet<MacroTaskId> = MacroTaskId::extract_from_text(&combined)
-            .into_iter()
-            .collect();
+        let comment_task_ids: Vec<MacroTaskId> = MacroTaskId::extract_from_text(&combined);
 
         tracing::trace!(
-            new_task_id_count = new_task_ids.len(),
-            task_ids = ?new_task_ids.iter().map(|t| t.to_task_id_string()).collect::<Vec<_>>(),
+            new_task_id_count = comment_task_ids.len(),
+            task_ids = ?comment_task_ids.iter().map(|t| t.to_task_id_string()).collect::<Vec<_>>(),
             "extracted task IDs from comment/review text"
         );
 
-        if new_task_ids.is_empty() {
+        if comment_task_ids.is_empty() {
             tracing::debug!("no task IDs found in comment/review text");
             return Ok(());
         }
 
-        let pr_meta = self.acquire_pr_meta(event).await;
+        let github_key = Self::github_key(event);
 
-        // Build the set of pre-existing task IDs from PR context text + all
-        // existing comment bodies
-        let pr_context = event.extract_pr_context_text().join(" ");
-        let mut existing_task_ids: HashSet<MacroTaskId> =
-            MacroTaskId::extract_from_text(&pr_context)
-                .into_iter()
-                .collect();
+        // Validate comment task IDs against the document service
+        let resolved = self.resolve_tasks(&comment_task_ids).await;
 
-        tracing::trace!(
-            pr_context_task_ids = existing_task_ids.len(),
-            existing_task_ids = ?existing_task_ids.iter().map(|t| t.to_task_id_string()).collect::<Vec<_>>(),
-            "extracted pre-existing task IDs from PR context"
-        );
+        if resolved.validated_task_ids.is_empty() {
+            tracing::debug!("no valid task documents found for extracted IDs");
+            return Ok(());
+        }
 
-        let existing_comments = if let Some(ref meta) = pr_meta {
-            let comments = self.fetch_pr_comments(meta).await;
-            let comment_combined = comments.join(" ");
-            let comment_task_ids = MacroTaskId::extract_from_text(&comment_combined);
-            tracing::trace!(
-                comment_task_id_count = comment_task_ids.len(),
-                comment_task_ids = ?comment_task_ids.iter().map(|t| t.to_task_id_string()).collect::<Vec<_>>(),
-                "extracted task IDs from existing PR comments"
-            );
-            existing_task_ids.extend(comment_task_ids);
-            comments
+        // Ensure PR context task IDs are tracked in the repo (handles PRs
+        // that existed before the tracking table was introduced).
+        if let Some(ref key) = github_key {
+            let pr_context_tasks = {
+                let pr_context = event.extract_pr_context_text().join(" ");
+                let extracted = MacroTaskId::extract_from_text(&pr_context);
+                // Validate PR context task IDs too
+                self.resolve_tasks(&extracted).await.validated_task_ids
+            };
+            if !pr_context_tasks.is_empty() {
+                tracing::trace!(
+                    pr_context_task_count = pr_context_tasks.len(),
+                    "upserting PR context task IDs"
+                );
+                self.repo
+                    .upsert_task_ids(key.clone(), &pr_context_tasks)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "failed to upsert PR context task IDs"),
+                    )
+                    .ok();
+            }
+        }
+
+        // Filter to only truly new validated task IDs using the repo
+        let truly_new = if let Some(ref key) = github_key {
+            self.repo
+                .filter_duplicate_tasks(key.clone(), &resolved.validated_task_ids)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to filter duplicate tasks"))
+                .unwrap_or_else(|_| resolved.validated_task_ids.clone())
         } else {
-            Vec::new()
+            resolved.validated_task_ids.clone()
         };
-
-        // Filter to only task IDs that are truly new
-        let truly_new: Vec<_> = new_task_ids
-            .into_iter()
-            .filter(|id| !existing_task_ids.contains(id))
-            .collect();
 
         tracing::trace!(
             truly_new_count = truly_new.len(),
@@ -81,17 +86,30 @@ impl<D: DocumentService, C: GithubSyncClient> GithubSyncServiceImpl<D, C> {
             "filtered to truly new task IDs"
         );
 
-        if truly_new.is_empty() {
-            tracing::debug!(
-                "all task IDs already present in PR context or prior comments, skipping"
-            );
-            return Ok(());
+        if !truly_new.is_empty() {
+            let new_task_id_set: std::collections::HashSet<&MacroTaskId> =
+                truly_new.iter().collect();
+            let new_task_links: Vec<_> = resolved
+                .validated_task_ids
+                .iter()
+                .zip(resolved.task_links.iter())
+                .filter(|(id, _)| new_task_id_set.contains(id))
+                .map(|(_, link)| link.clone())
+                .collect();
+
+            let pr_meta = self.acquire_pr_meta(event).await;
+            if let Some(ref meta) = pr_meta {
+                self.post_task_comment(meta, &new_task_links).await;
+            }
         }
 
-        let resolved = self.resolve_tasks(&truly_new, &existing_comments).await;
-
-        if let Some(ref meta) = pr_meta {
-            self.post_task_comment(meta, &resolved.new_task_links).await;
+        // Track only validated task IDs in the repo
+        if let Some(ref key) = github_key {
+            self.repo
+                .upsert_task_ids(key.clone(), &resolved.validated_task_ids)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to upsert comment task IDs"))
+                .ok();
         }
 
         // Only update status if the PR is open

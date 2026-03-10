@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;

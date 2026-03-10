@@ -16,7 +16,7 @@ const EntityNavigationIndicator = () => {
   return (
     <Show
       when={
-        panel.handle.referredFrom() === 'unified-list' &&
+        panel.handle.referredFrom() === 'list-view' &&
         soup.data()?.length &&
         selectedEntity() &&
         panel.handle.content().type !== 'component' &&

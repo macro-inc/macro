@@ -14,13 +14,14 @@ members = [
   "comms_service",
   "comms_service_client",
   "connection_gateway",
+  "connection_gateway_client",
+  "connection_gateway_models",
   "contacts_db_client",
   "contacts_service",
   "convert_service",
   "cowlike",
   "dataloss_prevention_handler",
   "delete_chat_handler",
-  "delete_document_worker",
   "deleted_item_poller",
   "document_cognition_service",
   "document_cognition_service_client",
@@ -161,7 +162,9 @@ http = "1"
 http-body-util = "0.1.2"
 inquire = "0.7"
 itertools = "0.14"
-jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
+jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
+  "rust_crypto",
+] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
@@ -179,7 +182,7 @@ rand = "0.9.0"
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
-reqwest = { version = "0.12.12", features = ["json"] }
+reqwest = { version = "0.12.12", features = ["hickory-dns", "json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
 rootcause = "0.11"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }

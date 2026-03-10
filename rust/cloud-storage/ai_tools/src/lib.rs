@@ -13,6 +13,7 @@ pub mod web_fetch;
 use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
+use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{
     CreateDraft, EmailToolContext, GetThread, ListLabels, UpdateThreadLabels,
 };
@@ -46,6 +47,10 @@ pub fn all_tools() -> ToolSetWithPrompt {
         // .expect("failed to add list toolset")
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
         .expect("failed to add list entities tool")
+        .add_tool::<read::ReadThread, Arc<ToolScribe>>()
+        .expect("read thread tool")
+        .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .expect("failed to add document toolset")
         .add_tool::<ListLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
         .expect("failed to add list labels tool")
         .add_tool::<UpdateThreadLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()

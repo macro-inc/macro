@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::worker::NotificationWorker;

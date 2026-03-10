@@ -34,7 +34,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
           )}
           style={{ width: width }}
         >
-          <ClippedPanel tl active>
+          <ClippedPanel active cornerRadius={'4px'}>
             <div
               class={cn('[&>*]:max-h-[75vh]', props.class)}
               ref={props.contentRef}

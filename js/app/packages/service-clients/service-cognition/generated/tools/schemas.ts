@@ -321,6 +321,18 @@ export const SearchToolResponse = z.object({
   ),
 });
 
+export const CreateDocument = z
+  .object({
+    documentName: z.string(),
+    fileContentBytes: z.array(z.number().int().gte(0).lte(255)),
+    fileExtension: z.string(),
+  })
+  .strict();
+
+export const CreateDocumentResponse = z.object({
+  documentId: z.string().uuid(),
+});
+
 export const ListEntities = z
   .object({
     includeTypes: z.union([
@@ -390,10 +402,77 @@ export const NameSearch = z
   })
   .strict();
 
-export const Read = z
+export const ReadContent = z.object({ documentId: z.string().uuid() }).strict();
+
+export const ReadContentResponse = z.any().superRefine((x, ctx) => {
+  const schemas = [
+    z.object({ text: z.string() }).strict(),
+    z
+      .object({
+        markdown: z.array(
+          z.object({
+            content: z.string(),
+            nodeId: z.string(),
+            rawContent: z.string(),
+            type: z.string(),
+          })
+        ),
+      })
+      .strict(),
+  ];
+  const errors = schemas.reduce<z.ZodError[]>(
+    (errors, schema) =>
+      ((result) => (result.error ? [...errors, result.error] : errors))(
+        schema.safeParse(x)
+      ),
+    []
+  );
+  if (schemas.length - errors.length !== 1) {
+    ctx.addIssue({
+      path: ctx.path,
+      code: 'invalid_union',
+      unionErrors: errors,
+      message: 'Invalid input: Should pass single schema',
+    });
+  }
+});
+
+export const ReadMetadata = z
+  .object({ documentId: z.string().uuid() })
+  .strict();
+
+export const ReadMetadataResponse = z.object({
+  documentMetadata: z.object({
+    branchedFromId: z.union([z.string(), z.null()]).optional(),
+    branchedFromVersionId: z.union([z.number().int(), z.null()]).optional(),
+    createdAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    deletedAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    documentBom: z.any().optional(),
+    documentFamilyId: z.union([z.number().int(), z.null()]).optional(),
+    documentId: z.string(),
+    documentName: z.string(),
+    documentVersionId: z.number().int(),
+    fileType: z.union([z.string(), z.null()]).optional(),
+    modificationData: z.any().optional(),
+    owner: z.string(),
+    projectId: z.union([z.string(), z.null()]).optional(),
+    projectName: z.union([z.string(), z.null()]).optional(),
+    sha: z.union([z.string(), z.null()]).optional(),
+    subType: z.union([z.literal('task'), z.null()]).optional(),
+    updatedAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+  }),
+  userAccessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
+});
+
+export const ReadThread = z
   .object({
     contentType: z.enum([
-      'document',
       'channel',
       'channel-message',
       'chat-thread',
@@ -410,10 +489,6 @@ export const Read = z
 export const ReadResponse = z.object({
   content: z.any().superRefine((x, ctx) => {
     const schemas = [
-      z.object({
-        documents: z.array(z.object({ formattedDocument: z.string() })),
-        type: z.literal('documents'),
-      }),
       z.object({
         channel_id: z.string(),
         channel_name: z.union([z.string(), z.null()]).optional(),

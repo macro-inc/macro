@@ -1,9 +1,9 @@
 use crate::config::Config;
 use ai_tools::{
-    ToolEmailService, ToolEntityAccessService, ToolGmailTokenProvider, ToolSoupService,
+    ToolDocumentToolContext, ToolEmailService, ToolEntityAccessService, ToolGmailTokenProvider, ToolSoupService,
 };
 use axum::extract::FromRef;
-use connection_gateway_client::service::connection::ConnectionRepo;
+use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -66,6 +66,7 @@ pub struct ApiContext {
     pub entity_access_service: Arc<ToolEntityAccessService>,
     pub soup_service: Arc<ToolSoupService>,
     pub stream_repo: Arc<dyn StreamRepo>,
+    pub document_tool_context: ToolDocumentToolContext,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

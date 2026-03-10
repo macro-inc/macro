@@ -45,6 +45,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import ShowComments from '@icon/regular/chat-circle-dots.svg';
 import HideComments from '@icon/regular/chat-circle-slash.svg';
 import Download from '@icon/regular/download.svg';
+import GitBranch from '@icon/regular/git-branch.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@icon/regular/share.svg';
@@ -52,7 +53,11 @@ import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { For, Show, type JSX } from 'solid-js';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { TOKENS } from '@core/hotkey/tokens';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
@@ -60,6 +65,7 @@ export function TopBar() {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
+  const scopeId = blockHotkeyScopeSignal.get;
   const name = useBlockDocumentName();
   const notificationSource = useGlobalNotificationSource();
   const itemType = blockNameToItemType(blockName);
@@ -74,6 +80,7 @@ export function TopBar() {
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
+  const isTask = blockAliasedName === 'task';
 
   const copyLink = () => {
     const url = buildSimpleEntityUrl(
@@ -87,10 +94,42 @@ export function TopBar() {
     );
   };
 
+  const copyBranchName = () => copyBranchNameToClipboard(blockId, name());
+
+  if (isTask) {
+    let cleanupKbShortcut = () => {};
+
+    createEffect(
+      on(scopeId, (id) => {
+        cleanupKbShortcut();
+        registerHotkey({
+          hotkey: 'shift+cmd+b',
+          scopeId: id,
+          hotkeyToken: TOKENS.entity.action.copyBranchName,
+          description: 'Copy branch name',
+          keyDownHandler: () => {
+            copyBranchName();
+            return true;
+          },
+          runWithInputFocused: true,
+        });
+      })
+    );
+  }
+
   const ops: FileOperation[] = [
     { op: 'copy' },
     { op: 'rename' },
     { op: 'moveToProject' },
+    ...(isTask
+      ? ([
+          {
+            label: 'Copy Branch Name',
+            icon: GitBranch,
+            action: copyBranchName,
+          },
+        ] satisfies FileOperation[])
+      : []),
     {
       label: 'Download',
       icon: Download,
@@ -147,6 +186,13 @@ export function TopBar() {
         </Show>
       ),
       action: () => setShowCommentsPreference(!showCommentsPreference()),
+    },
+    {
+      label: 'Copy Branch Name',
+      icon: GitBranch,
+      action: copyBranchName,
+      condition: () => isTask,
+      hotkeyToken: TOKENS.entity.action.copyBranchName,
     },
     {
       label: 'Properties',

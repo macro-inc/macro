@@ -6,125 +6,68 @@ use crate::domain::models::{
     MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
 use crate::domain::ports::{
-    ChannelAccessCheck, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
-    ChannelMessagesService,
+    ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult, ChannelMessagesService,
 };
 use axum::{
     Json, Router,
-    extract::{FromRequestParts, Path, Query, State},
-    http::{StatusCode, request::Parts},
+    extract::{FromRef, Path, Query, State},
+    http::StatusCode,
     response::IntoResponse,
     routing::get,
 };
 use chrono::{DateTime, Utc};
+use entity_access::{
+    domain::{
+        models::{EntityAccessReceipt, MemberParticipantRole, RequiredPermission},
+        ports::EntityAccessService,
+    },
+    inbound::axum_extractors::ChannelAccessLevelExtractor,
+};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     Base64Str, BidirectionalCursor, BidirectionalCursorExtractor, CreatedAt, Cursor,
     CursorExtractor, CursorVal, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// State for the channels router.
-pub struct ChannelsRouterState<S, A> {
+pub struct ChannelsRouterState<S, Svc> {
     service: Arc<S>,
-    access: Arc<A>,
+    access_service: Arc<Svc>,
 }
 
-impl<S, A> Clone for ChannelsRouterState<S, A> {
+impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
-            access: self.access.clone(),
+            access_service: self.access_service.clone(),
         }
     }
 }
 
-impl<S: ChannelMessagesService, A: ChannelAccessCheck> ChannelsRouterState<S, A> {
-    /// Create a new router state wrapping the service and access checker.
-    pub fn new(service: S, access: A) -> Self {
+impl<S: ChannelMessagesService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
+    /// Create a new router state wrapping the service and entity access service.
+    pub fn new(service: S, access_service: Svc) -> Self {
         Self {
             service: Arc::new(service),
-            access: Arc::new(access),
+            access_service: Arc::new(access_service),
         }
     }
 }
 
-/// Verified channel member. Rejects the request if the authenticated user is not an active
-/// participant in the channel identified by the `:channel_id` path parameter.
-pub struct ChannelMember {
-    /// The channel id from the path.
-    pub channel_id: Uuid,
-}
-
-/// Rejection returned by the [`ChannelMember`] extractor.
-#[derive(Debug)]
-pub enum ChannelMemberRejection {
-    /// The user is not authenticated.
-    Unauthenticated,
-    /// The `:channel_id` path parameter is missing or invalid.
-    InvalidPath,
-    /// The user is not a member of the channel.
-    Forbidden,
-    /// A database or internal error occurred.
-    Internal,
-}
-
-impl IntoResponse for ChannelMemberRejection {
-    fn into_response(self) -> axum::response::Response {
-        let (status, message) = match self {
-            Self::Unauthenticated => (StatusCode::UNAUTHORIZED, "Unauthorized"),
-            Self::InvalidPath => (StatusCode::BAD_REQUEST, "Invalid channel_id"),
-            Self::Forbidden => (StatusCode::FORBIDDEN, "Not a channel member"),
-            Self::Internal => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "An internal server error occurred",
-            ),
-        };
-        (status, Json(ErrorResponse { message })).into_response()
+impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for Arc<Svc> {
+    fn from_ref(state: &ChannelsRouterState<S, Svc>) -> Self {
+        state.access_service.clone()
     }
 }
 
-#[axum::async_trait]
-impl<S, A> FromRequestParts<ChannelsRouterState<S, A>> for ChannelMember
-where
-    S: ChannelMessagesService,
-    A: ChannelAccessCheck,
-{
-    type Rejection = ChannelMemberRejection;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &ChannelsRouterState<S, A>,
-    ) -> Result<Self, Self::Rejection> {
-        let user = MacroUserExtractor::from_request_parts(parts, state)
-            .await
-            .map_err(|_| ChannelMemberRejection::Unauthenticated)?;
-
-        let Path(path_params) = Path::<HashMap<String, String>>::from_request_parts(parts, state)
-            .await
-            .map_err(|_| ChannelMemberRejection::InvalidPath)?;
-        let channel_id = path_params
-            .get("channel_id")
-            .ok_or(ChannelMemberRejection::InvalidPath)
-            .and_then(|raw| {
-                Uuid::parse_str(raw.as_str()).map_err(|_| ChannelMemberRejection::InvalidPath)
-            })?;
-
-        let is_member = state
-            .access
-            .is_channel_member(channel_id, &user.user_context.user_id)
-            .await
-            .map_err(|_| ChannelMemberRejection::Internal)?;
-
-        if !is_member {
-            return Err(ChannelMemberRejection::Forbidden);
-        }
-
-        Ok(ChannelMember { channel_id })
-    }
+fn channel_id_from_receipt<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<Uuid, ChannelsHandlerErr> {
+    Uuid::parse_str(&receipt.entity().entity_id)
+        .map_err(|_| ChannelsHandlerErr::BadRequest("Invalid channel_id"))
 }
 
 /// Query parameters for the messages endpoint.
@@ -190,28 +133,28 @@ fn cursor_from_first_message(
 }
 
 /// Create the channels router.
-pub fn channels_router<S, A, T>(state: ChannelsRouterState<S, A>) -> Router<T>
+pub fn channels_router<S, Svc, T>(state: ChannelsRouterState<S, Svc>) -> Router<T>
 where
     S: ChannelMessagesService,
-    A: ChannelAccessCheck,
+    Svc: EntityAccessService,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/:channel_id/messages",
-            get(get_channel_messages_handler::<S, A>),
+            get(get_channel_messages_handler::<S, Svc>),
         )
         .route(
             "/:channel_id/messages/:message_id/replies",
-            get(get_thread_replies_handler::<S, A>),
+            get(get_thread_replies_handler::<S, Svc>),
         )
         .route(
             "/:channel_id/attachments",
-            get(get_channel_attachments_handler::<S, A>),
+            get(get_channel_attachments_handler::<S, Svc>),
         )
         .route(
             "/:channel_id/participants",
-            get(get_channel_participants_handler::<S, A>),
+            get(get_channel_participants_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -230,26 +173,28 @@ where
     ),
     responses(
         (status = 200, body = ApiChannelMessagesPage),
+        (status = 401, body = ErrorResponse),
         (status = 400, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
-    State(state): State<ChannelsRouterState<S, A>>,
-    member: ChannelMember,
+pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
     cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
 
     let (page, has_more_newer) = match params.load_around_message_id {
         Some(message_id) => {
             let page = state
                 .service
-                .get_channel_messages_around(member.channel_id, message_id, limit)
+                .get_channel_messages_around(channel_id, message_id, limit)
                 .await?;
             (page, false)
         }
@@ -259,7 +204,7 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
                 has_more_newer,
             } = state
                 .service
-                .get_channel_messages(member.channel_id, query, direction, limit)
+                .get_channel_messages(channel_id, query, direction, limit)
                 .await?;
             (page, has_more_newer)
         }
@@ -301,14 +246,15 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
     ),
     responses(
         (status = 200, body = Vec<ApiThreadReply>),
+        (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_thread_replies_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
-    State(state): State<ChannelsRouterState<S, A>>,
-    _member: ChannelMember,
+pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Path(path): Path<ThreadRepliesPath>,
 ) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
     let channel_id = path.channel_id;
@@ -336,22 +282,28 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, A: ChannelAcc
     ),
     responses(
         (status = 200, body = ApiChannelAttachmentsPage),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_attachments_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
-    State(state): State<ChannelsRouterState<S, A>>,
-    member: ChannelMember,
+pub async fn get_channel_attachments_handler<
+    S: ChannelMessagesService,
+    Svc: EntityAccessService,
+>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
     Query(params): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50);
     let query = cursor.into_query(CreatedAt, ());
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
 
     let page = state
         .service
-        .get_channel_attachments(member.channel_id, query, limit)
+        .get_channel_attachments(channel_id, query, limit)
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
@@ -367,18 +319,21 @@ pub async fn get_channel_attachments_handler<S: ChannelMessagesService, A: Chann
     ),
     responses(
         (status = 200, body = Vec<ApiChannelParticipant>),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_participants_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
-    State(state): State<ChannelsRouterState<S, A>>,
-    member: ChannelMember,
+pub async fn get_channel_participants_handler<
+    S: ChannelMessagesService,
+    Svc: EntityAccessService,
+>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
-    let participants = state
-        .service
-        .get_channel_participants(member.channel_id)
-        .await?;
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let participants = state.service.get_channel_participants(channel_id).await?;
 
     Ok(Json(
         participants

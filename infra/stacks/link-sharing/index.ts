@@ -50,13 +50,6 @@ const bulkUploadStack = new pulumi.StackReference('bulk-upload-stack', {
   name: `macro-inc/bulk-upload/${stack}`,
 });
 
-const deleteDocumentWorkerStack = new pulumi.StackReference(
-  'delete-document-worker-stack',
-  {
-    name: `macro-inc/delete-document-worker/${stack}`,
-  }
-);
-
 export const searchProcessingServiceRoleArn: pulumi.Output<string> =
   searchProcessingStack
     .getOutput('searchProcessingServiceRoleArn')
@@ -93,11 +86,6 @@ const docxUnzipRoleArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUnzipHandlerRoleArn')
   .apply((arn) => arn as string);
 
-const deleteDocumentWorkerRoleArn: pulumi.Output<string> =
-  deleteDocumentWorkerStack
-    .getOutput('deleteDocumentWorkerRoleArn')
-    .apply((arn) => arn as string);
-
 const shaCleanupWorkerArn: pulumi.Output<string> = shaCleanupStack
   .getOutput('shaCleanupWorkerRoleArn')
   .apply((shaCleanupWorkerArn) => shaCleanupWorkerArn as string);
@@ -130,8 +118,19 @@ const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
   name: `macro-inc/convert-service/${stack}`,
 });
 
+const documentCognitionStack = new pulumi.StackReference(
+  'document-cognition-stack',
+  {
+    name: `macro-inc/document-cognition/${stack}`,
+  }
+);
+
 const convertServiceRoleArn: pulumi.Output<string> = convertServiceStack
   .getOutput('convertServiceRoleArn')
+  .apply((arn) => arn as string);
+
+const documentCognitionRoleArn: pulumi.Output<string> = documentCognitionStack
+  .getOutput('documentCognitionServiceRoleArn')
   .apply((arn) => arn as string);
 
 export const bucketPolicy = attachPolicyToBucket({
@@ -143,9 +142,9 @@ export const bucketPolicy = attachPolicyToBucket({
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
   documentStorageBucketReplicationRoleArn,
-  deleteDocumentWorkerRoleArn,
   documentTextExtractorArn,
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
+  documentCognitionRoleArn,
 });

@@ -9,6 +9,7 @@ import ListChecks from '@icon/regular/list-checks.svg';
 import ListNumbers from '@icon/regular/list-numbers.svg';
 import TextItalic from '@icon/regular/text-italic.svg';
 import TextStriketrough from '@icon/regular/text-strikethrough.svg';
+import TextQuote from '@icon/regular/quotes.svg';
 import type { TextFormatType } from 'lexical';
 import { ActionButton } from './ActionButton';
 
@@ -20,6 +21,11 @@ export type FormatRibbonProps = {
 };
 
 export function FormatRibbon(props: FormatRibbonProps) {
+  const dispatchFormat = (transform: NodeTransformType) => {
+    const hasFormat = props.state.elementsInRange.has(transform);
+    props.nodeFormat(hasFormat ? 'paragraph' : transform);
+  };
+
   return (
     <div
       class="flex flex-row w-full gap-2 items-center p-2"
@@ -82,7 +88,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-bullet')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-bullet');
+          dispatchFormat('list-bullet');
         }}
       >
         <ListBullets width={20} height={20} />
@@ -93,7 +99,7 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-number')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-number');
+          dispatchFormat('list-number');
         }}
       >
         <ListNumbers width={20} height={20} />
@@ -104,10 +110,21 @@ export function FormatRibbon(props: FormatRibbonProps) {
         clicked={props.state.elementsInRange.has('list-check')}
         onClick={(e) => {
           e.preventDefault();
-          props.nodeFormat('list-check');
+          dispatchFormat('list-check');
         }}
       >
         <ListChecks width={20} height={20} />
+      </ActionButton>
+      <ActionButton
+        tooltip="Blockquote"
+        darker
+        clicked={props.state.elementsInRange.has('quote')}
+        onClick={(e) => {
+          e.preventDefault();
+          dispatchFormat('quote');
+        }}
+      >
+        <TextQuote width={20} height={20} />
       </ActionButton>
     </div>
   );

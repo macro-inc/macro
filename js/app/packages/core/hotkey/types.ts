@@ -105,6 +105,14 @@ export interface HotkeyRegistrationOptions {
   activateCommandScope?: boolean;
 
   /**
+   * If provided, pressing the hotkey will activate the specified command scope
+   * instead of creating a new one. Use this to share a command scope across
+   * multiple components. The specified scope must already exist (created via `registerScope`).
+   * Takes precedence over `activateCommandScope` if both are provided.
+   */
+  activateCommandScopeId?: string;
+
+  /**
    * If true, the keyDownHandler will be run even if the input is focused.
    */
   runWithInputFocused?: boolean;

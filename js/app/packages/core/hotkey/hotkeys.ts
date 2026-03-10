@@ -114,6 +114,7 @@ export function registerHotkey(
     keyDownHandler,
     keyUpHandler,
     activateCommandScope,
+    activateCommandScopeId: providedCommandScopeId,
     runWithInputFocused,
     hotkeyToken,
     displayPriority,
@@ -179,7 +180,26 @@ export function registerHotkey(
   }
 
   let commandScopeId: string | undefined;
-  if (activateCommandScope) {
+  // If a specific command scope ID is provided, use it instead of creating a new one
+  if (providedCommandScopeId) {
+    const existingScope = hotkeyScopeTree.get(providedCommandScopeId);
+    if (!existingScope) {
+      logger.error('Provided command scope ID not found.', {
+        error: new Error('Provided command scope ID not found'),
+        providedCommandScopeId,
+      });
+      return noopDisposer;
+    }
+    if (existingScope.type !== 'command') {
+      logger.error('Provided scope is not a command scope.', {
+        error: new Error('Provided scope is not a command scope'),
+        providedCommandScopeId,
+        scopeType: existingScope.type,
+      });
+      return noopDisposer;
+    }
+    commandScopeId = providedCommandScopeId;
+  } else if (activateCommandScope) {
     commandScopeId = getScopeId('command-scope-' + scopeId);
     // When a command scope is registered, its parent scope is set as the scopeId of the registered hotkey. It will be registered as a child of that scope. When the command scope is activated, its parent scope will get set to whatever scope is active where it was called, so that when the command scope is deactivated, it willl return to the correct scope.
     registerScope({
@@ -277,8 +297,8 @@ export function registerHotkey(
         });
       }
 
-      // Remove command scope if it was created
-      if (commandScopeId) {
+      // Remove command scope only if we created it (not if we're using a shared one)
+      if (commandScopeId && !providedCommandScopeId) {
         removeScope(commandScopeId);
       }
     },

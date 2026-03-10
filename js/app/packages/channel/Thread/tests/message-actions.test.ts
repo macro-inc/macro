@@ -5,7 +5,7 @@ import {
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
-} from '../message-actions';
+} from '../utils/message-actions';
 
 describe('message-actions helpers', () => {
   it('allows edit/delete only for own non-deleted messages', () => {

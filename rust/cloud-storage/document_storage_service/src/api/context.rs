@@ -1,9 +1,8 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl,
-    inbound::axum_router::ChannelsRouterState,
-    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -11,6 +10,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use comms_service::CommsHandlerState;
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::ports::TaskPropertiesPort;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -23,6 +26,7 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
@@ -121,11 +125,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     }
 }
 
-/// Type alias for the documents router state.
-pub(crate) type DocumentsState = DocumentRouterState<
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
-    EntityAccessService,
+pub(crate) type DocumentService = DocumentServiceImpl<
+    PgDocumentRepo,
+    S3UploadUrlAdapter,
+    TaskPropertiesAdapter,
+    ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
 >;
+
+/// Type alias for the documents router state.
+pub(crate) type DocumentsState = DocumentRouterState<DocumentService, EntityAccessService>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -136,15 +144,11 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
-    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
-
-/// Type alias for the document service used by the github sync service.
-pub(crate) type GithubDocumentService =
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>;
+    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
-    GithubSyncServiceImpl<GithubDocumentService, GithubSyncClientImpl>;
+    GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

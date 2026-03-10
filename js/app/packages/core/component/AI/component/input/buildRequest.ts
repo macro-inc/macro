@@ -12,6 +12,7 @@ export type ChatSendInput = {
   model: Model;
   attachments: Attachment[];
   toolset: ToolSet;
+  metaKey?: boolean;
 };
 
 export type SendChatMessageResult =

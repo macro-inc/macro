@@ -1,15 +1,16 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   createFilterState,
+  createSoupFilters,
+  SOUP_FILTER_GROUPS,
   type FilterConfig,
+  type FilterGroupConfig,
+  type FilterID,
 } from '@app/component/next-soup/filters';
-import {
-  FILTER_GROUPS,
-  type FilterGroup,
-  SOUP_FILTERS,
-} from '@app/component/next-soup/filters/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
+import { useUserContext } from '@core/context/user';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
@@ -29,36 +30,36 @@ export type SortConfig<T> = {
   fn: (a: T, b: T) => number;
 };
 
-interface SoupContextOptions<
-  TFilter extends Readonly<FilterConfig<SoupEntity>>,
-> {
+interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: TFilter['id'][];
-  filterConfigs?: TFilter[];
-  filterGroups?: FilterGroup[];
+  initialFilters?: TId[];
+  filterConfigs?: FilterConfig<SoupEntity>[];
+  filterGroups?: FilterGroupConfig[];
   wrapNavigation?: boolean;
 }
 
-export const createSoupState = <
-  TFilter extends Readonly<FilterConfig<SoupEntity>>,
->(
-  {
+export const createSoupState = <TId extends string = FilterID>(
+  options: SoupContextOptions<TId> = { wrapNavigation: false }
+) => {
+  const {
     wrapNavigation,
     initialData,
     initialFilters,
     filterConfigs,
     filterGroups,
-  }: SoupContextOptions<TFilter> = {
-    wrapNavigation: false,
-  }
-) => {
+  } = options;
+
   const selection = createSelectionState<SoupEntity>({
     getItemId: (i) => i.id,
   });
 
-  const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
-    filters: filterConfigs ?? SOUP_FILTERS,
-    groups: filterGroups ?? FILTER_GROUPS,
+  const notificationSource = useGlobalNotificationSource();
+  const user = useUserContext();
+
+  const filters = createFilterState({
+    filters:
+      filterConfigs ?? createSoupFilters(notificationSource, user.userId),
+    groups: filterGroups ?? SOUP_FILTER_GROUPS,
     initialFilters,
   });
 

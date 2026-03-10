@@ -17,6 +17,8 @@ import {
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
 import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 
 export type BlockTool = {
   label: string | (() => string);
@@ -26,16 +28,27 @@ export type BlockTool = {
   isActive?: () => boolean;
   buttonComponent?: () => JSX.Element;
   divideAbove?: boolean;
+  hotkeyToken?: HotkeyToken;
 };
 
 export function ToolButton(props: { tool: BlockTool }) {
+  const label = () =>
+    typeof props.tool.label === 'function'
+      ? props.tool.label()
+      : props.tool.label;
+
   return (
     <Button
       onClick={props.tool.action}
       tooltip={
-        typeof props.tool.label === 'function'
-          ? props.tool.label()
-          : props.tool.label
+        props.tool.hotkeyToken ? (
+          <LabelAndHotKey
+            label={label()}
+            hotkeyToken={props.tool.hotkeyToken}
+          />
+        ) : (
+          label()
+        )
       }
       class={cn(
         'px-1',

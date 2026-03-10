@@ -5,6 +5,7 @@ import { fireMacroJump } from '../MacroJump';
 import type { ReferredFrom, SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 export function registerSplitHotkeys(args: {
   splitHotkeyScope: string;
@@ -47,7 +48,7 @@ export function registerSplitHotkeys(args: {
         closeSplit();
       } else {
         replaceSplit({
-          content: { type: 'component', id: 'unified-list' },
+          content: { type: 'component', id: LIST_VIEW_ID.inbox },
           referredFrom: 'hotkey',
         });
       }

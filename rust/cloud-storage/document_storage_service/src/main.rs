@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
@@ -8,9 +9,8 @@ use crate::{
 };
 use anyhow::Context;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl,
-    inbound::axum_router::ChannelsRouterState,
-    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -18,6 +18,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -29,6 +33,7 @@ use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
+use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -311,6 +316,12 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
+
+    let connection_service = ConnectionServiceImpl::new(
+        entity_access_service.clone(),
+        Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone())),
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -318,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
         s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
+        connection_service,
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -336,7 +348,16 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
+        PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    // Create the SQS worker for delete document processing before config is moved
+    let delete_document_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.document_delete_queue.as_ref().to_string(),
+        config.queue_max_messages,
+        config.queue_wait_time_seconds,
     );
 
     let api_context = ApiContext {
@@ -372,14 +393,27 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service,
-            access_service: entity_access_service,
+            access_service: entity_access_service.clone(),
             pool: db.clone(),
         },
         channels_state: ChannelsRouterState::new(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
-            PgChannelAccessCheck::new(db.clone()),
+            (*entity_access_service).clone(),
         ),
     };
+
+    // Spawn the delete document worker
+    let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
+        worker: Arc::new(delete_document_worker),
+        db: db.clone(),
+        s3_client: api_context.s3_client.clone(),
+        redis_client: api_context.redis_client.clone(),
+        sync_service_client: api_context.sync_service_client.clone(),
+    };
+
+    tokio::spawn(async move {
+        service::delete_document_worker::run_worker(delete_worker_ctx).await;
+    });
 
     api::setup_and_serve(api_context).await?;
 

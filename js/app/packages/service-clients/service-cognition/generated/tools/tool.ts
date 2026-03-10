@@ -17,12 +17,21 @@ type ToolParserMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateDocument: {
+    call: types.CreateDocument;
+    response: types.CreateDocumentResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
-  Read: { call: types.Read; response: types.ReadResponse };
+  ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadMetadata: {
+    call: types.ReadMetadata;
+    response: types.ReadMetadataResponse;
+  };
+  ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
@@ -43,6 +52,10 @@ const toolParserMap = {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
   },
+  CreateDocument: {
+    call: schemas.CreateDocument,
+    response: schemas.CreateDocumentResponse,
+  },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
@@ -51,7 +64,15 @@ const toolParserMap = {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
   },
-  Read: { call: schemas.Read, response: schemas.ReadResponse },
+  ReadContent: {
+    call: schemas.ReadContent,
+    response: schemas.ReadContentResponse,
+  },
+  ReadMetadata: {
+    call: schemas.ReadMetadata,
+    response: schemas.ReadMetadataResponse,
+  },
+  ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   text_editor_code_execution: {
     call: schemas.TextEditorCodeExecutionToolCall,
     response: schemas.TextEditorCodeExecutionResponse,
@@ -83,12 +104,21 @@ type ToolDataMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateDocument: {
+    call: types.CreateDocument;
+    response: types.CreateDocumentResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
-  Read: { call: types.Read; response: types.ReadResponse };
+  ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadMetadata: {
+    call: types.ReadMetadata;
+    response: types.ReadMetadataResponse;
+  };
+  ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
