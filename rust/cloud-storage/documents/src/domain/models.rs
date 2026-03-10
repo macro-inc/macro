@@ -81,6 +81,7 @@ pub struct EditDocumentRepoArgs {
 
 /// Arguments for the edit_document service call.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EditDocumentServiceArgs {
     /// The name of the document.

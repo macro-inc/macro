@@ -12,6 +12,7 @@ mod tests;
 
 mod create_document;
 mod delete_document;
+mod edit_document;
 mod get_document;
 mod get_location;
 mod get_short_id;
@@ -37,6 +38,7 @@ use crate::domain::ports::DocumentService;
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use create_document::*;
 pub use delete_document::*;
+pub use edit_document::*;
 pub use get_document::*;
 pub use get_location::*;
 pub use get_short_id::*;
@@ -106,6 +108,7 @@ where
         .route(
             "/:document_id",
             axum::routing::get(get_document_handler::<T, Svc>)
+                .patch(edit_document_handler::<T, Svc>)
                 .delete(delete_document_handler::<T, Svc>),
         )
         .route(
