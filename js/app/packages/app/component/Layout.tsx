@@ -131,17 +131,19 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <AppSidebar
-          sidebarState={sidebarState()}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSidebarState(isMobile() ? 'hidden' : 'slim');
-              return;
-            }
+        <Show when={isAuthenticated()}>
+          <AppSidebar
+            sidebarState={sidebarState()}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSidebarState(isMobile() ? 'hidden' : 'slim');
+                return;
+              }
 
-            setSidebarState('expanded');
-          }}
-        />
+              setSidebarState('expanded');
+            }}
+          />
+        </Show>
 
         <Resize.Zone
           gutter={4}
