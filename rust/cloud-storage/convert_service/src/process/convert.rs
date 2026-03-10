@@ -158,13 +158,8 @@ pub async fn convert(
         .await
         .context("unable to get object from S3")?;
 
-    std::fs::create_dir(&directory).map_err(|e| {
-        anyhow::anyhow!(
-            "unable to create directory {}: {}",
-            directory,
-            e.to_string()
-        )
-    })?;
+    std::fs::create_dir(&directory)
+        .map_err(|e| anyhow::anyhow!("unable to create directory {}: {}", directory, e))?;
 
     let mut file = File::create(&in_file_path).context("unable to create input file")?;
 
