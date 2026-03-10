@@ -31,6 +31,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
+import { makePersisted } from '@solid-primitives/storage';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -41,8 +42,11 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
 
-export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
-  !isMobile() ? 'expanded' : 'hidden'
+export const [sidebarState, setSidebarState] = makePersisted(
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  {
+    name: 'sidebar-state',
+  }
 );
 
 export function Layout(props: RouteSectionProps) {
