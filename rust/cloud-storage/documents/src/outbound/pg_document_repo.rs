@@ -6,13 +6,14 @@
 mod tests;
 
 mod create;
+mod edit;
 
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
-use crate::domain::models::CreateDocumentRepoArgs;
+use crate::domain::models::{CreateDocumentRepoArgs, EditDocumentRepoArgs};
 use crate::domain::ports::DocumentRepo;
 
 /// PostgreSQL-backed document repository.
@@ -477,6 +478,27 @@ impl DocumentRepo for PgDocumentRepo {
             document_version.updated_at,
             sub_type,
         ))
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+
+        edit::update_document_metadata(
+            &mut transaction,
+            &args.document_id,
+            args.document_name.as_deref(),
+            args.project_id.as_deref(),
+        )
+        .await?;
+
+        if let Some(ref share_permission) = args.share_permission {
+            edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
+                .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]

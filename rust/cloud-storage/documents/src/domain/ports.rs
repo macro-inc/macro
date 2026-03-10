@@ -13,7 +13,9 @@ use model::document::response::{
 };
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
-use super::models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
+use super::models::{
+    CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs, LocationQueryParams,
+};
 
 /// Repository for accessing document data from the database.
 ///
@@ -96,6 +98,14 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
         job_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Edit a document's metadata and share permissions in a single transaction.
+    ///
+    /// Updates: Document name, project ID, share permissions, and user item access.
+    fn edit_document(
+        &self,
+        args: EditDocumentRepoArgs,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete a document by ID (used for error cleanup).
