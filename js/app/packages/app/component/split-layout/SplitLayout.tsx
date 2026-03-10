@@ -305,7 +305,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       <div class="size-full p-2 pl-0 mobile:p-0">
         <Resize.Zone
           direction="horizontal"
-          gutter={0}
+          gutter={4}
           captureResizeCtx={splitManager.setResizeContext}
         >
           <For each={ids()}>

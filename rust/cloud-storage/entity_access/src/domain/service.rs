@@ -97,7 +97,7 @@ where
         }
 
         Ok(EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(user_id.clone().into_owned()),
+            auth: EntityAccessAuth::Authenticated(MacroUserIdStr(user_id.clone().into_owned())),
             entity: Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,

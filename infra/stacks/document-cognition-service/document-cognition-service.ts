@@ -276,7 +276,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
             }`,
           },
         },
-        desiredCount: stack === 'prod' ? 6 : 1,
+        desiredCount: stack === 'prod' ? 4 : 1,
       },
       { parent: this }
     );
@@ -424,8 +424,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     const serviceScalableTarget = new aws.appautoscaling.Target(
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
-        maxCapacity: stack === 'prod' ? 15 : 3,
-        minCapacity: stack === 'prod' ? 6 : 1,
+        maxCapacity: stack === 'prod' ? 10 : 3,
+        minCapacity: stack === 'prod' ? 4 : 1,
         resourceId: pulumi.interpolate`service/${this.cloudStorageClusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',

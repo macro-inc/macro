@@ -78,7 +78,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1"
+        class="p-1 rounded-xs"
         tooltip={
           <LabelAndHotKey
             label={

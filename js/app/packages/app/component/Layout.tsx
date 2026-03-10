@@ -23,7 +23,6 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
-import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 import {
   AppSidebar,
@@ -110,7 +109,6 @@ export function Layout(props: RouteSectionProps) {
           </Suspense>
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
-          <ShortcutsHelper />
         </Show>
         <Show
           when={

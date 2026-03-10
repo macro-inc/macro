@@ -26,12 +26,7 @@ axum = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = [
-  "dep:aws-sdk-s3",
-  "dep:base64",
-  "dep:hex",
-  "ports",
-]
+outbound = ["dep:aws-sdk-s3", "dep:base64", "dep:hex", "ports"]
 ports = ["dep:tokio"]
 
 [dependencies]

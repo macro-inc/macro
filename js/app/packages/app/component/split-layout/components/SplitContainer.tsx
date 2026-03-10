@@ -96,16 +96,18 @@ export function SplitContainer(
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }
-            tl={props.tl}
-            bl={props.bl}
-            tr={props.tr}
-            br={props.br}
-            edgeColor="transparent"
+            // TODO (seamus) temporary disabling split corners
+            // tl={props.tl}
+            // bl={props.bl}
+            // tr={props.tr}
+            // br={props.br}
+            // edgeColor="color-accent"
+            cornerRadius={'4px'}
           >
-            <div class="flex flex-col min-h-0 size-full bg-panel">
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
-              <div class="@container/split size-full overflow-hidden">
+              <div class="@container/split size-full overflow-hidden relative">
                 {props.children}
               </div>
               <Show when={panel.handle.isSpotLight()}>

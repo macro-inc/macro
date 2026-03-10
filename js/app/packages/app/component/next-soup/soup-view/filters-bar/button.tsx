@@ -26,7 +26,7 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80',
   // Medium emphasis - secondary actions (cancel, back)
   secondary:
-    'bg-transparent text-ink border border-edge not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12',
+    'bg-transparent text-ink border border-edge-muted not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12',
   // Low emphasis - minimal actions (less important options)
   tertiary:
     'bg-ink/10 text-ink-muted not-disabled:hover:bg-ink/20 not-disabled:hover:text-ink not-disabled:active:bg-ink/15',
@@ -41,7 +41,7 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-2 py-1.5 text-xs gap-1',
+  sm: 'px-2 py-1 text-xs gap-1',
   md: 'px-3 py-2 text-sm gap-1.5',
   lg: 'px-4 py-2.5 text-base gap-2',
   // Icon sizes - square buttons for icon-only use
