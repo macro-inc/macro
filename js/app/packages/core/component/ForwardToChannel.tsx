@@ -30,7 +30,7 @@ import {
 import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
-import { VerticalScrollIndicators } from './VerticalScrollIndicators';
+import { ScrollIndicators } from './VerticalScrollIndicators';
 
 interface ForwardToChannelProps {
   submitPermissionInfo?: {
@@ -292,7 +292,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       </div>
       <div class="grow-1 shrink-1 min-h-0 flex flex-col w-full border-t-1 border-edge-muted/50">
         <div class="relative grow-1 shrink-1 min-h-0 flex flex-col">
-          <VerticalScrollIndicators scrollRef={mdScrollRef} noBorderTop />
+          <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
           <div
             class="grow-1 shrink-1 min-h-20 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
             onClick={() => focusMarkdownArea()}

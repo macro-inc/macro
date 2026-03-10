@@ -1727,6 +1727,85 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["document"],
+        "summary": "Handler for `PATCH /documents/:document_id`.",
+        "description": "Edits document metadata such as name or project, and modifies\nthe document's share permissions. Requires edit access to the document,\nand edit access to the target project if moving the document.",
+        "operationId": "edit_document",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditDocumentServiceArgs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditDocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/documents/{document_id}/copy": {
@@ -4507,76 +4586,6 @@
         }
       }
     },
-    "/v2/documents/{document_id}": {
-      "patch": {
-        "tags": ["document"],
-        "summary": "Edit document v2\nEdits traits of a document such as owner, or name as well as modify the documents share\npermissions.",
-        "operationId": "edit_document_v2",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditDocumentRequestV2"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v2/documents/{document_id}/permissions": {
       "get": {
         "tags": ["document"],
@@ -6776,16 +6785,32 @@
           }
         ]
       },
-      "EditDocumentRequestV2": {
+      "EditDocumentResponse": {
         "type": "object",
+        "description": "Edit document response.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GenericSuccessResponse",
+            "description": "The response data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Whether an error occurred."
+          }
+        }
+      },
+      "EditDocumentServiceArgs": {
+        "type": "object",
+        "description": "Arguments for the edit_document service call.",
         "properties": {
           "documentName": {
             "type": ["string", "null"],
-            "description": "The name of the document"
+            "description": "The name of the document."
           },
           "projectId": {
             "type": ["string", "null"],
-            "description": "The new project id of the document.\nThis will also update the documents permissions to match the project it is going into"
+            "description": "The new project id of the document."
           },
           "sharePermission": {
             "oneOf": [
@@ -9576,12 +9601,12 @@
       },
       "ShortIdResponse": {
         "type": "object",
-        "description": "Short ID response",
+        "description": "Short ID response.",
         "required": ["shortId"],
         "properties": {
           "shortId": {
             "type": "string",
-            "description": "The short id of the document"
+            "description": "The short id of the document."
           }
         }
       },

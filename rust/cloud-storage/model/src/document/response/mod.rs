@@ -162,9 +162,7 @@ impl DocumentResponseMetadata {
             let document_bom: Vec<BomPart> = match serde_json::from_value(document_bom.clone()) {
                 Ok(document_bom) => document_bom,
                 Err(e) => {
-                    return Err(anyhow::anyhow!(format!(
-                        "document bom could not be serialized {e}",
-                    )));
+                    anyhow::bail!("document bom could not be serialized {e}");
                 }
             };
             document_response_metadata.document_bom = Some(document_bom);

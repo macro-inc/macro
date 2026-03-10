@@ -6,6 +6,6 @@
  */
 
 /**
- * The name of the document
+ * The name of the document.
  */
-export type EditDocumentRequestV2DocumentName = string | null;
+export type EditDocumentServiceArgsDocumentName = string | null;

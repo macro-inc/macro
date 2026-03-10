@@ -29,9 +29,9 @@ where
         }
         Err(e) => {
             tracing::error!("API call failed with error: {:?}", e);
-            return Err(anyhow::anyhow!("API call failed: {}", e));
+            anyhow::bail!("API call failed: {}", e);
         }
     }
 
-    Err(anyhow::anyhow!("Expected structured response"))
+    anyhow::bail!("Expected structured response")
 }

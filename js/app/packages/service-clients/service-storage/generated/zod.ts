@@ -2025,6 +2025,77 @@ export const deleteDocumentResponse = zod.object({
 });
 
 /**
+ * Edits document metadata such as name or project, and modifies
+the document's share permissions. Requires edit access to the document,
+and edit access to the target project if moving the document.
+ * @summary Handler for `PATCH /documents/:document_id`.
+ */
+export const editDocumentParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const editDocumentBody = zod
+  .object({
+    documentName: zod.string().nullish().describe('The name of the document.'),
+    projectId: zod
+      .string()
+      .nullish()
+      .describe('The new project id of the document.'),
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created/updated/removed'
+            ),
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe('Arguments for the edit_document service call.');
+
+export const editDocumentResponse = zod
+  .object({
+    data: zod.object({
+      success: zod
+        .boolean()
+        .describe('Indicates if the request was successful'),
+    }),
+    error: zod.boolean().describe('Whether an error occurred.'),
+  })
+  .describe('Edit document response.');
+
+/**
  * @summary Handles copying a given document. This is the similar to
 create_document_handler where you provide the branched_from_id,
 branched_from_version_id and document_family_id in the request body. Except
@@ -7544,72 +7615,6 @@ export const deleteUserDocumentViewLocationResponse = zod
   .describe(
     'Empty response is required due to custom fetch forcing `response.json()`'
   );
-
-/**
- * @summary Edit document v2
-Edits traits of a document such as owner, or name as well as modify the documents share
-permissions.
- */
-export const editDocumentV2Params = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const editDocumentV2Body = zod.object({
-  documentName: zod.string().nullish().describe('The name of the document'),
-  projectId: zod
-    .string()
-    .nullish()
-    .describe(
-      'The new project id of the document.\nThis will also update the documents permissions to match the project it is going into'
-    ),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
-
-export const editDocumentV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
 
 /**
  * @summary Gets the current documents share permissions

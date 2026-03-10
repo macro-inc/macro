@@ -17,7 +17,7 @@ use super::AnchorTableName;
 fn _validate_thread_ids(thread_id: i64, anchor_thread_id: Option<i64>) -> Result<()> {
     let incompatible_thread_ids = anchor_thread_id.is_some_and(|id| id != thread_id);
     if incompatible_thread_ids {
-        return Err(anyhow::anyhow!("provided thread ids do not match"));
+        anyhow::bail!("provided thread ids do not match");
     }
     Ok(())
 }

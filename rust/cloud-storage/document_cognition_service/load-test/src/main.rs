@@ -267,7 +267,7 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
 
     if std::env::var("TOKEN").is_err() {
-        return Err(anyhow!("please set `TOKEN` env var with your macro-token"));
+        anyhow::bail!("please set `TOKEN` env var with your macro-token");
     }
 
     let config = Arc::new(config::read(&config_path)?);

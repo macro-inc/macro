@@ -66,3 +66,17 @@ INSERT INTO
             'test_project_name',
             'macro|user@user.com'
     );
+
+-- Share permissions for document-one
+INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-one', true, 'read', NOW(), NOW());
+
+INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
+    (SELECT 'document-one', 'sp-doc-one');
+
+-- Share permissions for document-two
+INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-two', false, NOW(), NOW());
+
+INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
+    (SELECT 'document-two', 'sp-doc-two');

@@ -1,5 +1,5 @@
 use super::StaticFileServiceClient;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
@@ -69,7 +69,7 @@ impl StaticFileServiceClient {
                 status=%status_code,
                 "unexpected response from document storage service"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         let res = res.json().await?;
@@ -87,7 +87,7 @@ impl StaticFileServiceClient {
             .await?;
 
         if !upload_response.status().is_success() {
-            return Err(anyhow!("Upload failed: {}", upload_response.status()));
+            anyhow::bail!("Upload failed: {}", upload_response.status());
         }
 
         Ok(put_file_data)
