@@ -48,6 +48,9 @@ cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
 comms_service = { path = "../comms_service" }
+connection = { path = "../connection", default-features = false, features = [
+  "outbound",
+] }
 connection_gateway_client = { path = "../connection_gateway_client" }
 cowlike = { path = "../cowlike" }
 document_sub_type = { path = "../document_sub_type" }

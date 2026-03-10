@@ -18,6 +18,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -312,6 +316,12 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
+
+    let connection_service = ConnectionServiceImpl::new(
+        entity_access_service.clone(),
+        Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone())),
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -319,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
         s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
+        connection_service,
     ));
 
     let github_webhook_secret = secretsmanager_client
