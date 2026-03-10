@@ -38,6 +38,7 @@ import { getBlockNameForEntity } from '../command/CommandMenu';
 import { useFullTextSearch } from '../next-soup/soup-view/useFullTextSearch';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -413,6 +414,8 @@ function FullTextResultItem(props: {
 }
 
 function CategoryFilterTabs() {
+  const [listRef, setListRef] = createSignal<HTMLElement>();
+
   return (
     <Tabs
       value={SearchState.categoryFilter()}
@@ -423,24 +426,35 @@ function CategoryFilterTabs() {
       }}
       class="border-b border-edge-muted/50"
     >
-      <Tabs.List class="flex items-center px-2 py-1.5">
-        <For each={CATEGORIES}>
-          {(category) => (
-            <Tabs.Trigger
-              value={category.id}
-              class={cn(
-                'px-2 py-1 text-xs border first:border-l-1 border-l-0 border-edge-muted/50 font-semibold',
-                SearchState.categoryFilter() === category.id
-                  ? 'text-ink pattern bg-edge-muted'
-                  : 'text-ink-muted/70 hover:text-ink hover:bg-hover'
-              )}
-              tabIndex={-1}
-            >
-              {category.label}
-            </Tabs.Trigger>
-          )}
-        </For>
-      </Tabs.List>
+      <div class="relative">
+        <ScrollIndicators
+          scrollRef={listRef}
+          direction="horizontal"
+          noBorderStart
+          noBorderEnd
+        />
+        <Tabs.List
+          ref={setListRef}
+          class="flex items-center px-2 py-1.5 overflow-x-auto scrollbar-hidden"
+        >
+          <For each={CATEGORIES}>
+            {(category) => (
+              <Tabs.Trigger
+                value={category.id}
+                class={cn(
+                  'px-2 py-1 text-xs border first:border-l-1 border-l-0 border-edge-muted/50 font-semibold',
+                  SearchState.categoryFilter() === category.id
+                    ? 'text-ink pattern bg-edge-muted'
+                    : 'text-ink-muted/70 hover:text-ink hover:bg-hover'
+                )}
+                tabIndex={-1}
+              >
+                {category.label}
+              </Tabs.Trigger>
+            )}
+          </For>
+        </Tabs.List>
+      </div>
     </Tabs>
   );
 }
