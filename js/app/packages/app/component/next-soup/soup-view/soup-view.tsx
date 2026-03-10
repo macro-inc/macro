@@ -1,4 +1,4 @@
-import PreviewIcon from '@macro-icons/wide/preview.svg';
+import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -170,6 +170,8 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
+  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
+
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
     if (currentPreview) {
@@ -224,10 +226,14 @@ export const SoupView = (props: SoupViewProps) => {
                 <Button
                   variant={soup.previewEntity() ? 'primary' : 'ghost'}
                   size="icon-sm"
-                  class="rounded-xs"
+                  class="rounded-xs [&_svg]:size-4"
                   onClick={togglePreview}
+                  onMouseEnter={() => setPreviewBtnHovering(true)}
+                  onMouseLeave={() => setPreviewBtnHovering(false)}
                 >
-                  <PreviewIcon class="size=6" />
+                  <AnimatedPreviewIcon
+                    triggerAnimation={previewBtnHovering()}
+                  />
                 </Button>
               </Tooltip>
             </SplitHeaderRight>

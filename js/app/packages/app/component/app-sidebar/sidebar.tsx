@@ -2,18 +2,18 @@ import KeyboardIcon from '@icon/regular/keyboard.svg';
 import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import SidebarIcon from '@phosphor-icons/core/fill/sidebar-simple-fill.svg?component-solid';
-import TrayIcon from '@phosphor-icons/core/bold/tray-bold.svg?component-solid';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import PlusIcon from '@phosphor-icons/core/bold/plus-bold.svg?component-solid';
-import SearchIcon from '@phosphor-icons/core/bold/magnifying-glass-bold.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
@@ -49,14 +49,14 @@ export const SIDEBAR_LINKS = [
     id: 'inbox',
     label: 'Inbox',
     href: LIST_VIEW_PATHS.inbox,
-    icon: TrayIcon,
+    icon: AnimatedInboxIcon,
     hotkey: 'i',
   },
   {
     id: 'search',
     label: 'Search',
     href: LIST_VIEW_PATHS.search,
-    icon: SearchIcon,
+    icon: AnimatedSearchIcon,
     hotkey: '/',
     standaloneHotkey: true,
   },
@@ -176,6 +176,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+  const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   return (
     <>
@@ -243,10 +244,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 <Button
                   variant="secondary"
                   size="icon-sm"
-                  class="rounded-xs"
+                  class="rounded-xs [&_svg]:size-4"
                   onClick={() => props.onOpenChange(isSlim())}
+                  onMouseEnter={() => setSidebarBtnHovering(true)}
+                  onMouseLeave={() => setSidebarBtnHovering(false)}
                 >
-                  <SidebarIcon />
+                  <AnimatedSidebarIcon
+                    triggerAnimation={sidebarBtnHovering()}
+                  />
                 </Button>
               </Tooltip>
             </Show>
