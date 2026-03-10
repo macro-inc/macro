@@ -33,11 +33,16 @@ export const SoupFiltersBar = () => {
         </div>
       </Match>
       <Match when={true}>
-        <div class="@container w-full overflow-hidden flex gap-2 flex-wrap py-2 pl-2 pr-1">
+        <div class="@container w-full h-full overflow-hidden flex gap-1 flex-wrap p-2 border-b border-edge-muted/50">
           <SoupViewContextFilters />
           <Show when={hasActiveRefinements()}>
-            <Button variant="ghost" size="sm" onClick={resetToTabDefaults}>
-              <XIcon class="size-3" />
+            <Button
+              variant="secondary"
+              size="sm"
+              class="rounded-xs"
+              onClick={resetToTabDefaults}
+            >
+              <XIcon class="size-4 text-failure" />
               <span>Clear all</span>
             </Button>
           </Show>

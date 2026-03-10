@@ -96,6 +96,7 @@ dependencies = [
  "axum",
  "chrono",
  "comms",
+ "connection",
  "cool_asserts",
  "documents",
  "email",
@@ -2049,6 +2050,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "connection"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "connection_gateway_client",
+ "entity_access",
+ "macro_user_id",
+ "model-entity",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
@@ -2912,6 +2930,7 @@ dependencies = [
  "comms",
  "comms_db_client",
  "comms_service",
+ "connection",
  "connection_gateway_client",
  "cool_asserts",
  "cowlike",
@@ -3051,6 +3070,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "cloudfront_sign",
+ "connection",
  "document_sub_type",
  "dotenvy",
  "entity_access",

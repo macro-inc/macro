@@ -34,12 +34,16 @@ import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { ChannelThread } from '../Thread';
-import { ChannelInput } from '../Input';
+import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
 import { createChannelDragState } from './create-channel-drag-state';
 import { ChannelDropZone } from './ChannelDropZone';
+import {
+  makeAttachmentTrackerPersistenceKey,
+  makeInputValuePersistenceKey,
+} from '@channel/Input/utils/persistence';
 
 type ChannelProps = {
   channelId: string;
@@ -93,8 +97,15 @@ export function Channel(props: ChannelProps) {
     buildChannelMessageListMeta(messages(), activityTracker.isNewMessage)
   );
 
+  const attachmentTracker = createInputAttachmentTracker({
+    persistenceKey: makeAttachmentTrackerPersistenceKey({
+      channelId: props.channelId,
+    }),
+  });
+
   const dragState = createChannelDragState({
     channelId: props.channelId,
+    attachmentTracker,
   });
 
   const getMessageActions = createChannelMessageActions({
@@ -163,7 +174,10 @@ export function Channel(props: ChannelProps) {
                   isDraggingOverChannel: dragState.isDraggingOverChannel(),
                   isValidChannelDrag: dragState.isValidChannelDrag(),
                 }}
-                attachmentTracker={dragState.tracker}
+                attachmentTracker={attachmentTracker}
+                persistenceKey={makeInputValuePersistenceKey({
+                  channelId: props.channelId,
+                })}
                 onReady={(handle) => {
                   dragState.setAttachFilesToChannel(handle.attachFiles);
                 }}

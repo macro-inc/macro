@@ -935,7 +935,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <div class="border-1 border-edge-muted flex ml-1 items-stretch">
+    <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
       <Tooltip
         tooltip={
           <div>
