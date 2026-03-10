@@ -36,6 +36,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
 
   const dateOptions = useDateSearch({
     query: searchQuery,
+    showTimeInResults: false,
   });
 
   const totalOptions = createMemo(() => dateOptions().length + 1); // +1 for calendar button
