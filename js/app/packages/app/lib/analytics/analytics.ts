@@ -1,3 +1,9 @@
+import type { AllTrackingEventValues } from '@app/lib/analytics/app-events';
+
+type EventNames = AllTrackingEventValues | (string & {});
+
+type TrackFn = (event: EventNames, data?: Record<string, unknown>) => void;
+
 interface UserIdentifyInfo {
   email: string;
   os: string;
@@ -5,7 +11,7 @@ interface UserIdentifyInfo {
 
 export interface Provider {
   id: string;
-  track: (event: string, data?: Record<string, unknown>) => void;
+  track: TrackFn;
   initialize: () => void;
   identify?: (userID: string, info: Partial<UserIdentifyInfo>) => void;
 }
@@ -47,7 +53,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     providers.push(provider);
   };
 
-  const track = (event: string, data?: Record<string, unknown>) => {
+  const track = (event: EventNames, data?: Record<string, unknown>) => {
     for (const provider of providers) {
       provider.track(event, data);
     }
@@ -55,7 +61,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
 
   const trackProvider = (
     providerID: string,
-    event: string,
+    event: EventNames,
     data?: Record<string, unknown>
   ) => {
     for (const provider of providers) {
@@ -82,10 +88,10 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
 };
 
 export type AnalyticsInterface = {
-  track: (event: string, data?: Record<string, unknown>) => void;
+  track: TrackFn;
   trackProvider: (
     providerID: string,
-    event: string,
+    event: EventNames,
     data?: Record<string, unknown>
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;

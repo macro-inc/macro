@@ -1,7 +1,12 @@
 import { createAnalyticsProvider } from './analytics';
 
+export const AppAnalyticsProviders = {
+  google: 'google-analytics',
+  meta: 'meta-pixel',
+} as const;
+
 export const googleAnalyticsProvider = createAnalyticsProvider({
-  id: 'google-analytics',
+  id: AppAnalyticsProviders.google,
   initialize() {
     // Google Analytics
     const gaScript = document.createElement('script');
@@ -35,7 +40,7 @@ export const googleAnalyticsProvider = createAnalyticsProvider({
 });
 
 export const metaPixelProvider = createAnalyticsProvider({
-  id: 'meta-pixel',
+  id: AppAnalyticsProviders.meta,
   initialize() {},
   track(event, data) {},
 });
