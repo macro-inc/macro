@@ -34,6 +34,7 @@ export const createAnalyticsProvider = (provider: Provider): Provider => {
 interface CreateAnalyticsOptions {
   providers: Provider[];
   initializeOnCreate?: boolean;
+  disabled?: boolean;
 }
 
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
@@ -45,7 +46,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     }
   };
 
-  if (options.initializeOnCreate !== false) {
+  if (options.initializeOnCreate !== false && !options.disabled) {
     initializeProviders();
   }
 
@@ -54,6 +55,8 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   };
 
   const track = (event: EventNames, data?: Record<string, unknown>) => {
+    if (options.disabled) return;
+
     for (const provider of providers) {
       provider.track(event, data);
     }
@@ -64,6 +67,8 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     event: EventNames,
     data?: Record<string, unknown>
   ) => {
+    if (options.disabled) return;
+
     for (const provider of providers) {
       if (provider.id !== providerID) continue;
 
@@ -72,6 +77,8 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   };
 
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
+    if (options.disabled) return;
+
     for (const provider of providers) {
       provider.identify?.(userID, info);
     }

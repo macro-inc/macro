@@ -10,6 +10,7 @@ export const [AnalyticsContextProvider, useAnalytics] =
   createAssertedContextProvider<AnalyticsInterface>('analytics', () => {
     const analytics = createAnalytics({
       providers: [googleAnalyticsProvider, metaPixelProvider],
+      disabled: import.meta.hot != null,
     });
 
     return analytics;
