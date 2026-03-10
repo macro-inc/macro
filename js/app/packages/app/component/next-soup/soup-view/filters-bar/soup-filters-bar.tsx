@@ -37,7 +37,7 @@ export const SoupFiltersBar = () => {
           <SoupViewContextFilters />
           <Show when={hasActiveRefinements()}>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               class="rounded-xs"
               onClick={resetToTabDefaults}

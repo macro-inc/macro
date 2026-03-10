@@ -379,7 +379,7 @@ export const FilterChipGroup = (props: FilterChipGroupProps) => {
           <button
             type="button"
             class={cn(
-              'flex items-center gap-1.5 px-2 py-1 text-xs rounded-xs border',
+              'flex items-center gap-1.5 px-3 py-1 text-xs rounded-xs h-full border',
               isActive(option.value)
                 ? 'bg-accent/6 text-accent border-accent/30 hover:bg-accent/25'
                 : 'bg-ink/3 text-ink border-edge-muted/50 hover:bg-ink/12 hover:text-ink'
