@@ -1,4 +1,3 @@
-use super::context::TaskPropertiesAdapter;
 use super::{
     context::{ApiContext, EntityAccessService},
     documents::{export_document, get_document_version},
@@ -15,6 +14,7 @@ use super::{
     },
     user::populate_items,
 };
+use crate::api::context::DocumentService;
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
@@ -22,9 +22,6 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use documents_hex::domain::service::DocumentServiceImpl;
-use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
-use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use macro_middleware::{
     auth::ensure_user_exists,
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
@@ -53,7 +50,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents/:document_id",
             get(documents_hex::inbound::axum_router::get_document_handler::<
-                DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                DocumentService,
                 EntityAccessService,
             >)
             .layer(ensure_document_exists_middleware.clone()),
@@ -84,7 +81,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/documents/:document_id/location_v3",
             get(
                 documents_hex::inbound::axum_router::get_location_v3_handler::<
-                    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                    DocumentService,
                     EntityAccessService,
                 >,
             )
@@ -102,7 +99,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/documents",
             post(
                 documents_hex::inbound::axum_router::create_document_handler::<
-                    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                    DocumentService,
                     EntityAccessService,
                 >,
             ),
