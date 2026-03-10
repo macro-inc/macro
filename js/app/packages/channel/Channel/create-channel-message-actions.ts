@@ -41,6 +41,7 @@ type PatchMessageInput = {
 type DeleteMessageInput = {
   channelID: string;
   messageID: string;
+  threadID?: string;
 };
 
 type ChannelMessageActionEffects = {
@@ -175,6 +176,9 @@ export function createChannelMessageActions(
             options.deleteMessage({
               channelID: options.channelId(),
               messageID: message.id,
+              threadID:
+                (message as MessageData & { thread_id?: string | null })
+                  .thread_id ?? undefined,
             });
           }
         : undefined,

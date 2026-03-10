@@ -16,6 +16,17 @@ export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPageParam | null
 >;
 
+export type TopLevelMessageSnapshot = {
+  itemIndex: number;
+  message: ApiChannelMessage;
+  pageIndex: number;
+};
+
+export type ThreadPreviewReplySnapshot = {
+  previewIndex: number;
+  reply: ApiThreadReply;
+};
+
 type ChannelMessagesPageParam = {
   next_cursor: string | null;
   previous_cursor: string | null;
@@ -183,6 +194,54 @@ export function replaceTopLevelMessageReactionsInChannelMessages(
   );
 }
 
+export function getTopLevelMessageSnapshot(
+  data: ChannelMessagesData | undefined,
+  messageId: string
+): TopLevelMessageSnapshot | undefined {
+  if (!data) return;
+
+  for (const [pageIndex, page] of data.pages.entries()) {
+    const itemIndex = page.items.findIndex((message) => message.id === messageId);
+    if (itemIndex === -1) continue;
+    return {
+      pageIndex,
+      itemIndex,
+      message: page.items[itemIndex],
+    };
+  }
+}
+
+export function restoreTopLevelMessageInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  snapshot: TopLevelMessageSnapshot
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+  if (
+    data.pages.some((page) =>
+      page.items.some((message) => message.id === snapshot.message.id)
+    )
+  ) {
+    return data;
+  }
+
+  const page = data.pages[snapshot.pageIndex];
+  if (!page) return data;
+
+  const items = [...page.items];
+  items.splice(snapshot.itemIndex, 0, snapshot.message);
+
+  const pages = [...data.pages];
+  pages[snapshot.pageIndex] = {
+    ...page,
+    items,
+  };
+
+  return {
+    ...data,
+    pages,
+  };
+}
+
 export function insertThreadReplyIntoChannelMessages(
   data: ChannelMessagesData | undefined,
   threadId: string,
@@ -220,7 +279,8 @@ export function removeThreadReplyFromChannelMessages(
     const nextPreview = message.thread.preview.filter(
       (reply) => reply.id !== replyId
     );
-    if (nextPreview.length === message.thread.preview.length) {
+    const didRemovePreview = nextPreview.length !== message.thread.preview.length;
+    if (!didRemovePreview && message.thread.reply_count === 0) {
       return message;
     }
 
@@ -228,7 +288,9 @@ export function removeThreadReplyFromChannelMessages(
       ...message,
       thread: {
         ...message.thread,
-        latest_reply_at: nextPreview.at(-1)?.created_at ?? null,
+        latest_reply_at: didRemovePreview
+          ? nextPreview.at(-1)?.created_at ?? null
+          : message.thread.latest_reply_at,
         reply_count: Math.max(message.thread.reply_count - 1, 0),
         preview: nextPreview,
       },
@@ -291,6 +353,62 @@ export function replaceThreadReplyReactionsInChannelMessages(
       thread: {
         ...message.thread,
         preview,
+      },
+    };
+  });
+}
+
+export function getThreadPreviewReplySnapshot(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  replyId: string
+): ThreadPreviewReplySnapshot | undefined {
+  if (!data) return;
+
+  for (const page of data.pages) {
+    const thread = page.items.find((message) => message.id === threadId)?.thread;
+    if (!thread) continue;
+    const previewIndex = thread.preview.findIndex((reply) => reply.id === replyId);
+    if (previewIndex === -1) continue;
+    return {
+      previewIndex,
+      reply: thread.preview[previewIndex],
+    };
+  }
+}
+
+export function restoreThreadPreviewReplyInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  snapshot?: ThreadPreviewReplySnapshot,
+  replyCreatedAt?: string
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) => {
+    if (message.id !== threadId) return message;
+    if (
+      snapshot &&
+      message.thread.preview.some((reply) => reply.id === snapshot.reply.id)
+    ) {
+      return message;
+    }
+
+    const preview = [...message.thread.preview];
+    if (snapshot) {
+      preview.splice(snapshot.previewIndex, 0, snapshot.reply);
+    }
+
+    return {
+      ...message,
+      thread: {
+        ...message.thread,
+        preview,
+        reply_count: message.thread.reply_count + 1,
+        latest_reply_at: [message.thread.latest_reply_at, replyCreatedAt]
+          .filter((value): value is string => !!value)
+          .sort()
+          .at(-1) ?? preview.at(-1)?.created_at ?? null,
       },
     };
   });

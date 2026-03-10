@@ -6,6 +6,11 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
+export type ThreadReplySnapshot = {
+  replyIndex: number;
+  reply: ApiThreadReply;
+};
+
 export function threadRepliesQueryOptions(
   channelId: string,
   messageId: string
@@ -88,6 +93,35 @@ export function replaceThreadReplyReactions(
   });
 
   return didChange ? nextReplies : data;
+}
+
+export function getThreadReplySnapshot(
+  data: Array<ApiThreadReply> | undefined,
+  replyId: string
+): ThreadReplySnapshot | undefined {
+  if (!data) return;
+
+  const replyIndex = data.findIndex((reply) => reply.id === replyId);
+  if (replyIndex === -1) return;
+
+  return {
+    replyIndex,
+    reply: data[replyIndex],
+  };
+}
+
+export function restoreThreadReply(
+  data: Array<ApiThreadReply> | undefined,
+  snapshot: ThreadReplySnapshot
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+  if (data.some((reply) => reply.id === snapshot.reply.id)) {
+    return data;
+  }
+
+  const nextReplies = [...data];
+  nextReplies.splice(snapshot.replyIndex, 0, snapshot.reply);
+  return nextReplies;
 }
 
 export function softInvalidateThreadReplies(

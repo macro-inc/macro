@@ -565,7 +565,7 @@ describe('optimisticDeleteChannelMessage', () => {
     expect(cached?.messages).toHaveLength(1);
     expect(cached?.messages[0].id).toBe('msg-2');
     // Context should contain the deleted message for rollback
-    expect(context?.deletedMessage.id).toBe('msg-1');
+    expect(context?.deletedMessage?.id).toBe('msg-1');
   });
 
   it('should remove associated reactions', () => {
@@ -626,6 +626,131 @@ describe('optimisticDeleteChannelMessage', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.messages).toHaveLength(1);
     expect(cached?.messages[0].id).toBe('msg-1');
+  });
+
+  it('should remove top-level messages from paginated channel data and restore them in place', () => {
+    const topLevelMessage = createMockMessage({
+      id: 'top-level-msg',
+      content: 'Top level',
+    });
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({ messages: [topLevelMessage] })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('top-level-msg', '2024-01-03T00:00:00.000Z')],
+        [createPaginatedMessage('older-msg', '2024-01-02T00:00:00.000Z')],
+      ])
+    );
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'top-level-msg',
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([]);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    const paginated = getChannelMessagesFromCache('channel-1');
+    expect(paginated?.pages[0].items[0].id).toBe('top-level-msg');
+    expect(paginated?.pages[1].items[0].id).toBe('older-msg');
+  });
+
+  it('should remove top-level messages from paginated channel data without relying on the legacy cache', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('top-level-msg', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'top-level-msg',
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([]);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].id).toBe(
+      'top-level-msg'
+    );
+  });
+
+  it('should remove thread replies from replies and preview caches and restore them in place', () => {
+    const replyMessage = createMockMessage({
+      id: 'reply-msg',
+      thread_id: 'parent-msg-id',
+      content: 'Reply message',
+    });
+    seedQueryCache(
+      'channel-1',
+      createMockChannelResponse({ messages: [replyMessage] })
+    );
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+                createThreadReply('reply-msg', '2024-01-03T02:00:00.000Z'),
+              ],
+              reply_count: 2,
+              latest_reply_at: '2024-01-03T02:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-msg-id', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+      createThreadReply('reply-msg', '2024-01-03T02:00:00.000Z'),
+    ]);
+
+    const context = optimisticDeleteChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'reply-msg',
+      threadId: 'parent-msg-id',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([
+      expect.objectContaining({ id: 'reply-1' }),
+    ]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview
+    ).toEqual([expect.objectContaining({ id: 'reply-1' })]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .reply_count
+    ).toBe(1);
+
+    if (context) {
+      rollbackDeleteChannelMessage('channel-1', context);
+    }
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([
+      expect.objectContaining({ id: 'reply-1' }),
+      expect.objectContaining({ id: 'reply-msg' }),
+    ]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[1].id
+    ).toBe('reply-msg');
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .reply_count
+    ).toBe(2);
   });
 
   it('should rollback correctly using returned context', () => {

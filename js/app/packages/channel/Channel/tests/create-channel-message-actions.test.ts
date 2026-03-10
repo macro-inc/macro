@@ -210,4 +210,20 @@ describe('createChannelMessageActions', () => {
     expect(notifyEmptyEdit).toHaveBeenCalledTimes(1);
     expect(emptyHarness.patchMessage).not.toHaveBeenCalled();
   });
+
+  it('passes thread context to delete actions for replies', () => {
+    const harness = buildHarness({ userId: 'user-1' });
+    const message = buildMessage({
+      sender_id: 'user-1',
+      thread_id: 'parent-message',
+    });
+
+    harness.getMessageActions(message).onDelete?.({ message });
+
+    expect(harness.deleteMessage).toHaveBeenCalledWith({
+      channelID: 'channel-1',
+      messageID: 'message-1',
+      threadID: 'parent-message',
+    });
+  });
 });

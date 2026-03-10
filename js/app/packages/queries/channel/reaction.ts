@@ -14,7 +14,7 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce } from '../nonce';
 import {
-  createMessageTarget,
+  makeMessageTarget,
   replaceTargetReactions,
   softInvalidateTarget,
   type MessageTarget,
@@ -127,7 +127,7 @@ export function optimisticAddReaction(
     fallbackChannelData?.messages.find((message) => message.id === vars.message_id)
       ?.thread_id ??
     undefined;
-  const target = createMessageTarget({
+  const target = makeMessageTarget({
     messageId: vars.message_id,
     threadId,
   });
@@ -237,7 +237,7 @@ export function optimisticRemoveReaction(
     fallbackChannelData?.messages.find((message) => message.id === vars.message_id)
       ?.thread_id ??
     undefined;
-  const target = createMessageTarget({
+  const target = makeMessageTarget({
     messageId: vars.message_id,
     threadId,
   });
@@ -410,7 +410,7 @@ export function useAddReactionMutation(
           if (ENABLE_NEW_CHANNELS) {
             softInvalidateTarget(
               vars.channelId,
-              createMessageTarget({
+              makeMessageTarget({
                 messageId: vars.messageId,
                 threadId: vars.threadId,
               })
@@ -479,7 +479,7 @@ export function useRemoveReactionMutation(
           if (ENABLE_NEW_CHANNELS) {
             softInvalidateTarget(
               vars.channelId,
-              createMessageTarget({
+              makeMessageTarget({
                 messageId: vars.messageId,
                 threadId: vars.threadId,
               })

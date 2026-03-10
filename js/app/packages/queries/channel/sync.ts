@@ -11,7 +11,7 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 import {
-  createMessageTarget,
+  makeMessageTarget,
   insertTargetMessage,
   replaceTargetReactions,
   softInvalidateTarget,
@@ -85,13 +85,13 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
           };
           insertTargetMessage(
             payload.channel_id,
-            createMessageTarget({ messageId: payload.id, threadId }),
+            makeMessageTarget({ messageId: payload.id, threadId }),
             reply
           );
         } else {
           insertTargetMessage(
             payload.channel_id,
-            createMessageTarget({ messageId: payload.id }),
+            makeMessageTarget({ messageId: payload.id }),
             {
               id: payload.id,
               channel_id: payload.channel_id,
@@ -121,7 +121,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
   if (ENABLE_NEW_CHANNELS) {
     softInvalidateTarget(
       payload.channel_id,
-      createMessageTarget({
+      makeMessageTarget({
         messageId: payload.id,
         threadId: payload.thread_id ?? undefined,
       })
@@ -162,7 +162,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
       if (ENABLE_NEW_CHANNELS) {
         replaceTargetReactions(
           payload.channel_id,
-          createMessageTarget({
+          makeMessageTarget({
             messageId: payload.message_id,
             threadId,
           }),
@@ -185,7 +185,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
         ?.thread_id ?? undefined;
     softInvalidateTarget(
       payload.channel_id,
-      createMessageTarget({
+      makeMessageTarget({
         messageId: payload.message_id,
         threadId,
       })

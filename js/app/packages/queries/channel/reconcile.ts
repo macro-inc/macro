@@ -1,21 +1,30 @@
 import {
+  getThreadPreviewReplySnapshot,
+  getTopLevelMessageSnapshot,
   insertThreadReplyIntoChannelMessages,
   insertTopLevelMessageIntoChannelMessages,
   removeThreadReplyFromChannelMessages,
   removeTopLevelMessageFromChannelMessages,
+  restoreThreadPreviewReplyInChannelMessages,
+  restoreTopLevelMessageInChannelMessages,
   replaceThreadReplyIdInChannelMessages,
   replaceThreadReplyReactionsInChannelMessages,
   replaceTopLevelMessageIdInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessages,
   softInvalidateChannelMessages,
   type ChannelMessagesData,
+  type ThreadPreviewReplySnapshot,
+  type TopLevelMessageSnapshot,
 } from './channel-messages';
 import {
+  getThreadReplySnapshot,
   insertThreadReply,
   removeThreadReply,
+  restoreThreadReply,
   replaceThreadReplyId,
   replaceThreadReplyReactions,
   softInvalidateThreadReplies,
+  type ThreadReplySnapshot,
 } from './thread-replies';
 import type {
   ApiChannelMessage,
@@ -36,7 +45,18 @@ export type MessageTarget =
       threadId: string;
     };
 
-export function createMessageTarget(args: {
+export type DeleteTargetSnapshot =
+  | {
+      kind: 'top_level';
+      message?: TopLevelMessageSnapshot;
+    }
+  | {
+      kind: 'thread_reply';
+      reply?: ThreadReplySnapshot;
+      preview?: ThreadPreviewReplySnapshot;
+    };
+
+export function makeMessageTarget(args: {
   messageId: string;
   threadId?: string;
 }): MessageTarget {
@@ -104,6 +124,77 @@ export function removeTargetMessage(channelId: string, target: MessageTarget) {
   queryClient.setQueryData<ChannelMessagesData>(
     channelKeys.messages(channelId).queryKey,
     (prev) => removeTopLevelMessageFromChannelMessages(prev, target.messageId)
+  );
+}
+
+export function captureDeleteTargetSnapshot(
+  channelId: string,
+  target: MessageTarget
+): DeleteTargetSnapshot {
+  if (target.kind === 'thread_reply') {
+    return {
+      kind: 'thread_reply',
+      reply: getThreadReplySnapshot(
+        queryClient.getQueryData<Array<ApiThreadReply>>(
+          channelKeys.threadReplies(channelId, target.threadId).queryKey
+        ),
+        target.messageId
+      ),
+      preview: getThreadPreviewReplySnapshot(
+        queryClient.getQueryData<ChannelMessagesData>(
+          channelKeys.messages(channelId).queryKey
+        ),
+        target.threadId,
+        target.messageId
+      ),
+    };
+  }
+
+  return {
+    kind: 'top_level',
+    message: getTopLevelMessageSnapshot(
+      queryClient.getQueryData<ChannelMessagesData>(
+        channelKeys.messages(channelId).queryKey
+      ),
+      target.messageId
+    ),
+  };
+}
+
+export function restoreTargetMessage(
+  channelId: string,
+  target: MessageTarget,
+  snapshot: DeleteTargetSnapshot
+) {
+  if (target.kind === 'thread_reply') {
+    queryClient.setQueryData<Array<ApiThreadReply>>(
+      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      (prev) =>
+        snapshot.kind === 'thread_reply' && snapshot.reply
+          ? restoreThreadReply(prev, snapshot.reply)
+          : prev
+    );
+    queryClient.setQueryData<ChannelMessagesData>(
+      channelKeys.messages(channelId).queryKey,
+      (prev) =>
+        snapshot.kind === 'thread_reply'
+          ? restoreThreadPreviewReplyInChannelMessages(
+              prev,
+              target.threadId,
+              snapshot.preview,
+              snapshot.reply?.reply.created_at ?? snapshot.preview?.reply.created_at
+            )
+          : prev
+    );
+    return;
+  }
+
+  queryClient.setQueryData<ChannelMessagesData>(
+    channelKeys.messages(channelId).queryKey,
+    (prev) =>
+      snapshot.kind === 'top_level' && snapshot.message
+        ? restoreTopLevelMessageInChannelMessages(prev, snapshot.message)
+        : prev
   );
 }
 
