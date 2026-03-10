@@ -7,7 +7,7 @@ import {
 type AnalyticsProvider = 'ga' | 'meta-pixel' | 'mixpanel';
 
 const DEFAULT_ANALYTICS_PROVIDERS = [
-  'mixpanel',
+  // 'mixpanel',
 ] as const satisfies AnalyticsProvider[];
 
 type EventName = AllTrackingEventValues | (string & {});
