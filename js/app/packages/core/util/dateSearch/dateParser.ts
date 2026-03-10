@@ -19,8 +19,36 @@ export interface ParsedDuration {
 
 const UNITS = new Set<TimeUnit>(['h', 'd', 'w', 'm', 'y', 'min', 's', 'ms']);
 
+const UNIT_ALIASES: Record<string, TimeUnit> = {
+  hours: 'h',
+  hour: 'h',
+  hr: 'h',
+  hrs: 'h',
+  days: 'd',
+  day: 'd',
+  weeks: 'w',
+  week: 'w',
+  wk: 'w',
+  wks: 'w',
+  months: 'm',
+  month: 'm',
+  mo: 'm',
+  mos: 'm',
+  years: 'y',
+  year: 'y',
+  yr: 'y',
+  yrs: 'y',
+  minutes: 'min',
+  minute: 'min',
+  mins: 'min',
+  seconds: 's',
+  second: 's',
+  sec: 's',
+  secs: 's',
+};
+
 /**
- * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min"
+ * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min", "3 days"
  * Returns null if the input doesn't match the expected format
  */
 export function parseDurationString(input: string): ParsedDuration | null {
@@ -31,7 +59,12 @@ export function parseDurationString(input: string): ParsedDuration | null {
   if (firstLetter <= 0) return null;
 
   const numPart = s.slice(0, firstLetter).trim();
-  const unitPart = s.slice(firstLetter).trim() as TimeUnit;
+  let unitPart = s.slice(firstLetter).trim() as TimeUnit;
+
+  // Resolve word aliases to short units
+  if (!UNITS.has(unitPart) && unitPart in UNIT_ALIASES) {
+    unitPart = UNIT_ALIASES[unitPart];
+  }
 
   if (!UNITS.has(unitPart)) return null;
 

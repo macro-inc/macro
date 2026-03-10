@@ -270,7 +270,6 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client.clone(),
         s3_upload_adapter,
         NoOpTaskProperties,
-        db.clone(),
         NoOpConnectionService,
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));

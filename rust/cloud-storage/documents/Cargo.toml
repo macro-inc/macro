@@ -26,7 +26,7 @@ axum = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:aws-sdk-s3", "dep:base64", "dep:hex", "ports"]
+outbound = ["dep:aws-sdk-s3", "dep:base64", "dep:hex", "dep:sqlx", "ports"]
 ports = ["dep:tokio"]
 
 [dependencies]
@@ -67,8 +67,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true, optional = true }
-macro_project_utils = { path = "../macro_project_utils" }
-sqlx = { workspace = true }
+sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
 urlencoding = { workspace = true }
 

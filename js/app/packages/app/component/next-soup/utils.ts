@@ -259,7 +259,7 @@ export const restoreSoupFocus = async (
 export interface OpenEntityOptions {
   openInNewSplit?: boolean;
   location?: SearchLocation;
-  splitHandle: SplitHandle;
+  splitHandle?: SplitHandle;
 }
 
 /**

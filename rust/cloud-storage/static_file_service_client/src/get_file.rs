@@ -14,7 +14,7 @@ impl StaticFileServiceClient {
         let status_code = response.status();
 
         if status_code == reqwest::StatusCode::NOT_FOUND {
-            return Err(anyhow::anyhow!("File not found: {}", file_id));
+            anyhow::bail!("File not found: {}", file_id);
         }
 
         if !status_code.is_success() {
@@ -24,7 +24,7 @@ impl StaticFileServiceClient {
                 status=%status_code,
                 "unexpected response from static file service"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let file_bytes = response.bytes().await?;
@@ -51,7 +51,7 @@ impl StaticFileServiceClient {
                 status=%status_code,
                 "unexpected response from static file service"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let metadata: FileMetadata = response.json().await?;
@@ -68,7 +68,7 @@ impl StaticFileServiceClient {
         let status_code = response.status();
 
         if status_code == reqwest::StatusCode::NOT_FOUND {
-            return Err(anyhow::anyhow!("File not found: {}", file_id));
+            anyhow::bail!("File not found: {}", file_id);
         }
 
         if !status_code.is_success() {
@@ -78,7 +78,7 @@ impl StaticFileServiceClient {
                 status=%status_code,
                 "unexpected response from static file service"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let presigned_url = response.text().await?;

@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use doppleganger::Mirror;
 use models_email::email::service::link;
 use models_email::service;
@@ -15,7 +14,7 @@ pub async fn fetch_link_by_email(
     provider: service::link::UserProvider,
 ) -> anyhow::Result<Option<link::Link>> {
     if email_address.is_empty() {
-        return Err(anyhow!("Email address cannot be empty"));
+        anyhow::bail!("Email address cannot be empty");
     }
 
     let db_link = sqlx::query_as!(
@@ -43,7 +42,7 @@ pub async fn fetch_link_by_macro_id(
     macro_id: &str,
 ) -> anyhow::Result<Option<link::Link>> {
     if macro_id.is_empty() {
-        return Err(anyhow!("Macro ID cannot be empty"));
+        anyhow::bail!("Macro ID cannot be empty");
     }
 
     let db_link = sqlx::query_as!(
@@ -72,7 +71,7 @@ pub async fn fetch_links_by_fusionauth_user_id(
     fusionauth_user_id: &str,
 ) -> anyhow::Result<Vec<link::Link>> {
     if fusionauth_user_id.is_empty() {
-        return Err(anyhow!("fusionauth_user_id cannot be empty"));
+        anyhow::bail!("fusionauth_user_id cannot be empty");
     }
 
     let db_links = sqlx::query_as!(

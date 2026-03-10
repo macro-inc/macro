@@ -22,7 +22,6 @@ members = [
   "cowlike",
   "dataloss_prevention_handler",
   "delete_chat_handler",
-  "delete_document_worker",
   "deleted_item_poller",
   "document_cognition_service",
   "document_cognition_service_client",

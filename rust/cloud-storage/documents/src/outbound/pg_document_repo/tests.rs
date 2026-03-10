@@ -1,6 +1,9 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
+use crate::domain::models::EditDocumentRepoArgs;
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
 
@@ -100,4 +103,193 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
         .await
         .unwrap();
     assert!(location.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_name(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: Some("new-name".to_string()),
+        project_id: None,
+        share_permission: None,
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.document_name, "new-name");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_project(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: Some("new-project".to_string()),
+        share_permission: None,
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.project_id, Some("new-project".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // First set a project
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: Some("new-project".to_string()),
+        share_permission: None,
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.project_id, Some("new-project".to_string()));
+
+    // Then remove it by passing empty string
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: Some("".to_string()),
+        share_permission: None,
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.project_id, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_share_permission(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            is_public: Some(false),
+            public_access_level: None,
+            channel_share_permissions: None,
+        }),
+    })
+    .await
+    .unwrap();
+
+    // Verify the share permission was updated
+    let result = sqlx::query!(
+        r#"
+        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
+        FROM "SharePermission" sp
+        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+        WHERE dp."documentId" = $1
+        "#,
+        "document-one"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(!result.is_public);
+    assert!(result.public_access_level.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            is_public: None,
+            public_access_level: Some(AccessLevel::Edit),
+            channel_share_permissions: None,
+        }),
+    })
+    .await
+    .unwrap();
+
+    let result = sqlx::query!(
+        r#"
+        SELECT sp."publicAccessLevel" as "public_access_level?"
+        FROM "SharePermission" sp
+        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+        WHERE dp."documentId" = $1
+        "#,
+        "document-one"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(result.public_access_level, Some("edit".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: Some("renamed".to_string()),
+        project_id: Some("new-project".to_string()),
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            is_public: Some(true),
+            public_access_level: Some(AccessLevel::Edit),
+            channel_share_permissions: None,
+        }),
+    })
+    .await
+    .unwrap();
+
+    let doc = repo.get_basic_document("document-one").await.unwrap();
+    assert_eq!(doc.document_name, "renamed");
+    assert_eq!(doc.project_id, Some("new-project".to_string()));
+
+    let result = sqlx::query!(
+        r#"
+        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
+        FROM "SharePermission" sp
+        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+        WHERE dp."documentId" = $1
+        "#,
+        "document-one"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(result.is_public);
+    assert_eq!(result.public_access_level, Some("edit".to_string()));
 }

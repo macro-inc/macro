@@ -3,6 +3,8 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
+use std::time::Duration;
+
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
@@ -21,8 +23,12 @@ use crate::domain::ports::{
     RateLimitPort, WebSocketSender,
 };
 use either::Either;
+use futures::stream::{FuturesUnordered, StreamExt};
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+
+/// Maximum time to wait for a single notification delivery before timing out.
+pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Wraps a single iOS push notification send for the bulk-digest state machine.
 ///
@@ -107,7 +113,7 @@ where
                 self.deliver_ios(&apns)
                     .await
                     .into_iter()
-                    .map(|r| r.context(DeliveryFailure::Other)),
+                    .map(|r| r.context(DeliveryFailure::Ios)),
             ),
         };
 
@@ -235,23 +241,44 @@ where
 
         let mut results = Vec::new();
 
-        for message in messages {
-            let receipt_handle = message.receipt_handle.clone();
+        // Deliver all messages concurrently
+        let delivery_futures: FuturesUnordered<_> = messages
+            .into_iter()
+            .map(async |message| {
+                let receipt_handle = message.receipt_handle;
+                let delivery_results = match tokio::time::timeout(
+                    DELIVERY_TIMEOUT,
+                    self.deliver_notification(message.body),
+                )
+                .await
+                {
+                    Ok(x) => x,
+                    Err(_) => {
+                        tracing::warn!("Notification egress task timed out");
+                        vec![Err(report!(DeliveryFailure::Timeout))]
+                    }
+                };
+                (receipt_handle, delivery_results)
+            })
+            .collect();
 
-            // Deliver the notification (body is already parsed as QueueMessage)
-            let delivery_results = self.deliver_notification(message.body).await;
+        let outcomes: Vec<_> = delivery_futures.collect().await;
 
-            // Check if any deliveries succeeded
+        for (receipt_handle, delivery_results) in outcomes {
             let any_succeeded = delivery_results.iter().any(Result::is_ok);
+            let all_ios_failed = delivery_results.iter().all(
+                |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Ios )),
+            );
 
-            // Add results (stripping the DeliveryFailure context for the trait return type)
             for result in delivery_results {
                 results.push(result.map_err(Report::from));
             }
 
             // Delete from queue if any deliveries succeeded
-            if any_succeeded && let Err(e) = self.queue.delete_message(&receipt_handle).await {
-                // if delete queue fails push it into the results
+            // or all the failed notifs were ios
+            if (any_succeeded || all_ios_failed)
+                && let Err(e) = self.queue.delete_message(&receipt_handle).await
+            {
                 results.push(Err(e))
             }
         }

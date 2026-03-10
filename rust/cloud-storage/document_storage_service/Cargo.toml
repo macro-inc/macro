@@ -103,6 +103,7 @@ models_soup = { path = "../models_soup", features = ["schema"] }
 notification = { path = "../notification" }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
+properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
@@ -125,6 +126,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",
   "search",
 ] }
+sqs_worker = { path = "../sqs_worker" }
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }

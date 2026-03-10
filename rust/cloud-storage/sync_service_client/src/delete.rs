@@ -15,7 +15,7 @@ impl SyncServiceClient {
                 status=%status_code,
                 "could not delete document from sync service"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         Ok(())

@@ -18,7 +18,7 @@ impl SyncServiceClient {
                 status=%status_code,
                 "unexpected response from sync service"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         let metadata: DocumentMetadata = res.json().await?;

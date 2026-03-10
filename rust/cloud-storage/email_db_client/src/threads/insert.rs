@@ -78,11 +78,11 @@ pub async fn insert_thread_and_messages(
 
     if let Err(err) = result {
         if let Err(rollback_err) = tx.rollback().await {
-            return Err(anyhow::anyhow!(
+            anyhow::bail!(
                 "Transaction failed: {} AND rollback also failed: {}",
                 err,
                 rollback_err
-            ));
+            );
         }
         return Err(err);
     }

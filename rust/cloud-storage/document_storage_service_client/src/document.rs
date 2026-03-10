@@ -63,7 +63,7 @@ impl DocumentStorageServiceClient {
                 status=%status_code,
                 "unexpected response from document storage service"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let doc_data: DocumentBasic = res.json().await?;
@@ -188,7 +188,7 @@ impl DocumentStorageServiceClient {
                 status=%status_code,
                 "unexpected response from document storage service"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let doc_data: DocumentBasic = res.json().await?;
@@ -221,7 +221,7 @@ impl DocumentStorageServiceClient {
                 document_id=%document_id,
                 "external API error when fetching document location"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let location_data = res.json::<LocationResponseV3>().await?;
@@ -254,7 +254,7 @@ impl DocumentStorageServiceClient {
                 document_id=%document_id,
                 "external API error when fetching document text"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let response_data = res.json::<GetDocumentTextResponse>().await?;
@@ -280,11 +280,7 @@ impl DocumentStorageServiceClient {
                 .await
                 .unwrap_or_else(|_| "<failed to read body>".into());
 
-            return Err(anyhow::anyhow!(
-                "get documents metadata failed: {} - {}",
-                status,
-                text
-            ));
+            anyhow::bail!("get documents metadata failed: {} - {}", status, text);
         }
 
         let data = response
@@ -351,7 +347,7 @@ impl DocumentStorageServiceClient {
                 user_id=%user_id,
                 "error when listing documents with access"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let response_data = res.json::<ListDocumentsWithAccessResponse>().await?;

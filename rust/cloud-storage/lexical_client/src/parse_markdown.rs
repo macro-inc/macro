@@ -41,7 +41,7 @@ impl LexicalClient {
                 status=%status_code,
                 "unexpected response from sync service while getting raw document"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         let data: LexicalResponse = response.json().await?;
@@ -65,7 +65,7 @@ impl LexicalClient {
                 status=%status_code,
                 "unexpected response from sync service while getting raw document"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         response

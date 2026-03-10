@@ -2,6 +2,7 @@ import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import { DateSelector } from '@block-email/component/date-selector';
 import { Tooltip } from '@core/component/Tooltip';
 import { cn } from '@ui/utils/classname';
+import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
 import IconX from '@icon/regular/x.svg';
@@ -9,6 +10,8 @@ import IconX from '@icon/regular/x.svg';
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
+  /** Only show the clock icon, no date text or clear button */
+  compact?: boolean;
 }
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
@@ -18,6 +21,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
       selectedDate={props.sendTime}
       onSelectDate={props.onSendTimeChange}
       disablePriorToDate={new Date()}
+      disableAfterDate={addYears(new Date(), 1)}
       trigger={(state) => {
         const formattedDate = () => {
           if (!state.selectedDate) return;
@@ -39,7 +43,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               )}
             >
               <ClockIcon class="size-5" />
-              <Show when={formattedDate()}>
+              <Show when={!props.compact && formattedDate()}>
                 <span class="text-sm">{formattedDate()}</span>
                 <Tooltip tooltip="Clear">
                   <div

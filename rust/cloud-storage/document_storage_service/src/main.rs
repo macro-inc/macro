@@ -328,7 +328,6 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client.clone(),
         s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
-        db.clone(),
         connection_service,
     ));
 
@@ -350,6 +349,14 @@ async fn main() -> anyhow::Result<()> {
         document_service.clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    // Create the SQS worker for delete document processing before config is moved
+    let delete_document_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.document_delete_queue.as_ref().to_string(),
+        config.queue_max_messages,
+        config.queue_wait_time_seconds,
     );
 
     let api_context = ApiContext {
@@ -393,6 +400,19 @@ async fn main() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
         ),
     };
+
+    // Spawn the delete document worker
+    let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
+        worker: Arc::new(delete_document_worker),
+        db: db.clone(),
+        s3_client: api_context.s3_client.clone(),
+        redis_client: api_context.redis_client.clone(),
+        sync_service_client: api_context.sync_service_client.clone(),
+    };
+
+    tokio::spawn(async move {
+        service::delete_document_worker::run_worker(delete_worker_ctx).await;
+    });
 
     api::setup_and_serve(api_context).await?;
 

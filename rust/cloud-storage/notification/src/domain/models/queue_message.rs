@@ -364,6 +364,12 @@ pub enum DeliveryFailure {
     /// The rate limit for this notification type was exceeded.
     #[error("The rate limit was exceeded")]
     RateLimit,
+    /// a timeout limit was reached trying to deliver the notif
+    #[error("A timeout was reached")]
+    Timeout,
+    /// a delivery error occurred with apns
+    #[error("An apns delivery error occurred")]
+    Ios,
     /// A delivery error occurred.
     #[error("A delivery error occured")]
     Other,

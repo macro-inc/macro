@@ -11,7 +11,7 @@ export function proxyEmailImages(html: string): string {
 
   const images = container.querySelectorAll('img[src]');
   for (const img of images) {
-    const src = img.getAttribute('src');
+    const src = img.getAttribute('src')?.replace(/\s/g, '');
     if (!src) continue;
     if (!src.startsWith('http://') && !src.startsWith('https://')) continue;
 

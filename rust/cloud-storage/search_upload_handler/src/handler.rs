@@ -26,13 +26,13 @@ impl TryFrom<String> for DocumentKeyParts {
         let parts: Vec<&str> = value.split('/').collect();
 
         if parts.len() != 3 {
-            return Err(anyhow::anyhow!("expected 3 parts, got {}", parts.len()));
+            anyhow::bail!("expected 3 parts, got {}", parts.len());
         }
 
         let file: Vec<&str> = parts[2].split('.').collect::<Vec<&str>>();
 
         if file.len() != 2 {
-            return Err(anyhow::anyhow!("expected 2 file parts, got {}", file.len()));
+            anyhow::bail!("expected 2 file parts, got {}", file.len());
         }
 
         Ok(Self {
