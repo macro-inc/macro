@@ -222,23 +222,23 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
         Err(e) => {
             let error_chain = build_error_chain(&e);
             if e.is_timeout() {
-                return Err(anyhow::anyhow!(
+                anyhow::bail!(
                     "Timeout fetching URL: {} - Full error: {}",
                     original_url_str,
                     error_chain
-                ));
+                );
             } else if e.is_connect() {
-                return Err(anyhow::anyhow!(
+                anyhow::bail!(
                     "Connection error for URL: {} - Full error: {}",
                     original_url_str,
                     error_chain
-                ));
+                );
             }
-            return Err(anyhow::anyhow!(
+            anyhow::bail!(
                 "Network error fetching URL: {} - Full error: {}",
                 original_url_str,
                 error_chain
-            ));
+            );
         }
     };
 

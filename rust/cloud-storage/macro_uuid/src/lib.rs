@@ -61,7 +61,7 @@ impl ShortUuidConverter {
     /// converts short uuid to uuid
     pub fn to_uuid(&self, short_uuid: &str) -> Result<Uuid> {
         if !self.is_short_uuid(short_uuid) {
-            return Err(anyhow!("Invalid short UUID format"));
+            anyhow::bail!("Invalid short UUID format");
         }
 
         // Convert from base58 to number

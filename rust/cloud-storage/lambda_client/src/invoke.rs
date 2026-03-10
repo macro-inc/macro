@@ -29,10 +29,10 @@ where
             "lambda invocation failed with status code {}",
             response.status_code()
         );
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "lambda invocation failed with status code {}",
             response.status_code()
-        ));
+        );
     }
 
     Ok(())

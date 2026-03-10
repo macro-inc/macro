@@ -31,11 +31,11 @@ pub async fn get_attachment_data(
         .await
         .context("Failed to get response body")?;
     if !status.is_success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "Gmail API returned an error status: {} (get attachment): {}",
             status,
             body_text
-        ));
+        );
     }
 
     let attachment_response: AttachmentGetResponse = serde_json::from_str(&body_text)

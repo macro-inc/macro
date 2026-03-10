@@ -206,7 +206,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .collect();
 
         if shas.len() != presigned_urls.len() {
-            return Err(anyhow!("unable to generate presigned urls"));
+            anyhow::bail!("unable to generate presigned urls");
         }
 
         Ok(LocationResponseData::PresignedUrls(presigned_urls))

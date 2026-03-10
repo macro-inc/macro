@@ -216,11 +216,11 @@ pub(crate) async fn send_message(
         .await
         .context("Failed to get response body")?;
     if !status.is_success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "Gmail API returned an error status: {} (send message): {}",
             status,
             body_text
-        ));
+        );
     }
 
     let message_response: SentMessageResource = serde_json::from_str(&body_text)
