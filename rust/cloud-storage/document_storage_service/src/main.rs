@@ -328,7 +328,6 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client.clone(),
         s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
-        db.clone(),
         connection_service,
     ));
 

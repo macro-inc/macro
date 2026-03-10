@@ -9,6 +9,7 @@ use crate::service::redis::MessageWithConnection;
 use anyhow::Result;
 use futures::future::try_join_all;
 use model_entity::Entity;
+use redis::aio::MultiplexedConnection;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -17,18 +18,18 @@ pub struct Delivery {
     pub active: bool,
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, redis_connection))]
 pub async fn send_message_to_entity<Ctx>(
     ctx: Ctx,
     entity: &Entity<'_>,
     message: Message,
+    redis_connection: MultiplexedConnection,
 ) -> Result<Vec<MessageReceipt>>
 where
     Ctx: AsRef<ApiContext> + AsRef<Config> + Copy,
 {
     tracing::trace!("sending message to entity");
     let api_context: &ApiContext = ctx.as_ref();
-    let redis_connection = api_context.get_multiplexed_async_connection().await?;
 
     let instant = Instant::now();
     let connections = api_context

@@ -7,6 +7,5 @@
 
 /**
  * The new project id of the document.
-This will also update the documents permissions to match the project it is going into
  */
-export type EditDocumentRequestV2ProjectId = string | null;
+export type EditDocumentServiceArgsProjectId = string | null;

@@ -323,12 +323,12 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('editDocument', {
-    description: schemas.editDocumentV2Params.description!,
+    description: schemas.editDocumentParams.description!,
     args: {
-      documentId: schemas.editDocumentV2Params.shape.document_id,
-      ...schemas.editDocumentV2Body.shape,
+      documentId: schemas.editDocumentParams.shape.document_id,
+      ...schemas.editDocumentBody.shape,
     },
-    result: schemas.editDocumentV2Response.shape.data.shape,
+    result: schemas.editDocumentResponse.shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })

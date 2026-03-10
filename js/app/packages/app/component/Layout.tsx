@@ -29,6 +29,8 @@ import {
   type SidebarState,
 } from '@app/component/app-sidebar/sidebar';
 import { isMobile } from '@core/mobile/isMobile';
+import { MobileDock } from './mobile/MobileDock';
+import { MobileSearchOuter } from './mobile/MobileSearch';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -101,9 +103,11 @@ export function Layout(props: RouteSectionProps) {
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
-          <Suspense>
-            <CommandMenu />
-          </Suspense>
+          <Show when={!isMobile()}>
+            <Suspense>
+              <CommandMenu />
+            </Suspense>
+          </Show>
           <Suspense>
             <PropertyEditorModal />
           </Suspense>
@@ -153,6 +157,12 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
+      <Show when={isMobile() && !virtualKeyboardVisible()}>
+        <MobileDock />
+      </Show>
+      <Show when={isMobile()}>
+        <MobileSearchOuter />
+      </Show>
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}

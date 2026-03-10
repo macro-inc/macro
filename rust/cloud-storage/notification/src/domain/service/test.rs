@@ -1752,6 +1752,205 @@ async fn test_poll_email_digests_noop_when_empty() {
     service.poll_email_digests(digest_to_notif).await.unwrap();
 }
 
+// ============================================================================
+// Poll-and-deliver tests (timeout + iOS delete)
+// ============================================================================
+
+/// Mock queue for poll_and_deliver tests that returns preset messages and tracks deletes.
+struct EgressTestQueue {
+    messages: Mutex<Vec<RawQueueMessage>>,
+    deleted_handles: Mutex<Vec<String>>,
+}
+
+impl EgressTestQueue {
+    fn new(messages: Vec<RawQueueMessage>) -> Self {
+        Self {
+            messages: Mutex::new(messages),
+            deleted_handles: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn deleted_handles(&self) -> Vec<String> {
+        self.deleted_handles.lock().unwrap().clone()
+    }
+}
+
+impl NotificationQueue for EgressTestQueue {
+    async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+        &self,
+        _messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {
+        Ok(self.messages.lock().unwrap().drain(..).collect())
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        self.deleted_handles
+            .lock()
+            .unwrap()
+            .push(receipt_handle.to_string());
+        Ok(())
+    }
+}
+
+/// WebSocket sender that hangs indefinitely (simulates a stuck connection).
+struct HangingWebSocketSender;
+
+impl WebSocketSender for HangingWebSocketSender {
+    async fn send_notifications<'a, T: Serialize + Send + Sync>(
+        &self,
+        _recipients: &[MacroUserIdStr<'a>],
+        _notification: &T,
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        // Sleep longer than DELIVERY_TIMEOUT to guarantee the timeout fires.
+        tokio::time::sleep(super::egress::DELIVERY_TIMEOUT + Duration::from_secs(1)).await;
+        Ok(HashSet::new())
+    }
+}
+
+/// Mobile sender that always fails.
+struct FailingMobileSender;
+
+impl NotificationSender for FailingMobileSender {
+    async fn send_ios_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        _endpoint_arn: &str,
+        _notification: &crate::domain::models::apple::APNSPushNotification<T>,
+        _attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<String, Report> {
+        rootcause::bail!("Simulated APNS failure")
+    }
+
+    async fn send_android_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        _endpoint_arn: &str,
+        _notification: &crate::domain::models::android::FCMMessage<T>,
+        _attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<String, Report> {
+        rootcause::bail!("Simulated FCM failure")
+    }
+}
+
+#[tokio::test]
+async fn test_poll_and_deliver_times_out_slow_delivery() {
+    tokio::time::pause();
+
+    let recipient = test_user_id("user@example.com");
+    let message = QueueMessage::new_test(
+        "test_notification".to_string(),
+        NotificationChannel::ConnGateway(
+            ConnGatewayNotification {
+                notif: create_mock_notif(TestNotification {
+                    message: "Hello".to_string(),
+                }),
+                recipients: vec![recipient],
+            }
+            .testing_to_value(),
+        ),
+    );
+
+    let queue = EgressTestQueue::new(vec![RawQueueMessage {
+        body: message,
+        receipt_handle: "receipt-timeout".to_string(),
+    }]);
+
+    let service = NotificationEgressService {
+        queue,
+        repository: MockRepository::new(),
+        websocket: HangingWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: MockRateLimiter::allowing(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: MockDigestBatcher,
+    };
+
+    let results = service.poll_and_deliver().await;
+
+    assert_eq!(results.len(), 1);
+    assert!(results[0].is_err());
+
+    let err = results[0].as_ref().unwrap_err();
+    assert!(
+        err.to_string().contains("timeout"),
+        "Expected timeout error, got: {}",
+        err
+    );
+
+    // Timed out messages should NOT be deleted (not an iOS failure)
+    let deleted = service.queue.deleted_handles();
+    assert!(
+        deleted.is_empty(),
+        "Timed out message should not be deleted from queue"
+    );
+}
+
+#[tokio::test]
+async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
+    use crate::domain::models::apple::{APNSPushNotification, Aps};
+    use crate::domain::models::mobile::{MessageAttributes, PushType};
+    use crate::domain::models::queue_message::{APNSTargets, UserApnsEndpoints};
+
+    let user = test_user_id("alice@example.com");
+
+    let message = QueueMessage::new_test(
+        "test_notification".to_string(),
+        NotificationChannel::Ios(Box::new(APNSTargets {
+            notif: APNSPushNotification {
+                aps: Aps::default(),
+                push_notification_data: json!({"message": "Hello"}),
+            },
+            attributes: MessageAttributes {
+                push_type: PushType::Alert,
+                collapse_key: "test_collapse".to_string(),
+            },
+            ios_device_endpoints: HashMap::from([(
+                user,
+                UserApnsEndpoints {
+                    endpoints: vec![
+                        "arn:endpoint/device1".to_string(),
+                        "arn:endpoint/device2".to_string(),
+                    ],
+                    digest_state: None,
+                },
+            )]),
+        })),
+    );
+
+    let queue = EgressTestQueue::new(vec![RawQueueMessage {
+        body: message,
+        receipt_handle: "receipt-ios".to_string(),
+    }]);
+
+    let service = NotificationEgressService {
+        queue,
+        repository: MockRepository::new(),
+        websocket: MockWebSocketSender,
+        mobile: FailingMobileSender,
+        email: MockEmailSender,
+        rate_limiter: MockRateLimiter::allowing(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: MockDigestBatcher,
+    };
+
+    let results = service.poll_and_deliver().await;
+
+    // All results should be failures
+    assert!(!results.is_empty());
+    assert!(results.iter().all(|r| r.is_err()));
+
+    // Message should be deleted because all failures are iOS
+    let deleted = service.queue.deleted_handles();
+    assert_eq!(
+        deleted,
+        vec!["receipt-ios"],
+        "Message should be deleted when all failures are iOS"
+    );
+}
+
 impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,

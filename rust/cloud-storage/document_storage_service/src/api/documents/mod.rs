@@ -1,7 +1,7 @@
 use super::{context::ApiContext, middleware};
 use axum::{
     Router,
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, post, put},
 };
 use tower::ServiceBuilder;
 
@@ -9,7 +9,6 @@ use tower::ServiceBuilder;
 pub(in crate::api) mod copy_document;
 pub(in crate::api) mod create_task;
 pub(in crate::api) mod delete_document;
-pub(in crate::api) mod edit_document;
 pub(in crate::api) mod export_document;
 pub(in crate::api) mod get_batch_preview;
 pub(in crate::api) mod get_document;
@@ -142,11 +141,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/:document_id/:document_version_id",
             get(get_document_version::handler).layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/:document_id",
-            patch(edit_document::edit_document_handler)
-                .layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: PATCH /:document_id (edit_document) is now served by the documents hex crate router
         .route(
             "/:document_id",
             put(save_document::save_document_handler)

@@ -33,7 +33,7 @@ impl CommsServiceClient {
             .map_err(|e| {
                 ClientError::Generic(anyhow::anyhow!(
                     "unable to parse response from get_message_with_context: {}",
-                    e.to_string()
+                    e
                 ))
             })?;
 

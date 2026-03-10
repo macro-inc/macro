@@ -15,8 +15,12 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import {
+  ClippedPanel,
+  type ClippedPanelProps,
+} from '@core/component/ClippedPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -57,6 +61,14 @@ export function SplitContainer(
     return Boolean(splits && splits.length > 1);
   }
 
+  function MaybeClippedPanel(props: ClippedPanelProps) {
+    return (
+      <Show when={!isMobile()} fallback={props.children}>
+        <ClippedPanel {...props} />
+      </Show>
+    );
+  }
+
   return (
     <SplitModalProvider>
       <SplitDrawerGroup
@@ -90,7 +102,7 @@ export function SplitContainer(
           data-modal={panel.handle.isSpotLight()}
           tabindex={-1}
         >
-          <ClippedPanel
+          <MaybeClippedPanel
             active={
               panel.handle.isActive() &&
               multipleSplits() &&
@@ -113,11 +125,8 @@ export function SplitContainer(
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
               </Show>
-              {/* <Show when={isMobile() && !virtualKeyboardVisible()}> */}
-              {/*   <MobileDock /> */}
-              {/* </Show> */}
             </div>
-          </ClippedPanel>
+          </MaybeClippedPanel>
         </div>
       </SplitDrawerGroup>
     </SplitModalProvider>

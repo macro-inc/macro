@@ -33,7 +33,6 @@ use crate::{
         request::{
             documents::{
                 copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                edit::EditDocumentRequestV2,
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
@@ -146,7 +145,7 @@ use utoipa::OpenApi;
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
-        documents::edit_document::edit_document_handler_v2,
+        documents_hex::inbound::axum_router::edit_document_handler,
         documents_hex::inbound::axum_router::delete_document_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
@@ -263,7 +262,8 @@ use utoipa::OpenApi;
             GetDocumentSearchResponse, // Search document
             CopyDocumentRequest,
             CopyDocumentQueryParams, // Copy document
-            EditDocumentRequestV2, // Edit document
+            documents_hex::domain::models::EditDocumentServiceArgs,
+            documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
             GetDocumentProcessingResult,
