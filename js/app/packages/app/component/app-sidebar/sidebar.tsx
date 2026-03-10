@@ -112,7 +112,7 @@ type AppSidebarProps = {
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
-  const { toggleSettings, openSettings } = useSettingsState();
+  const { toggleSettings } = useSettingsState();
 
   const handleCommandPaletteClick = () => {
     CommandState.toggle();
