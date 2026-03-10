@@ -202,10 +202,9 @@ fn apply_size_limit<S: futures::Stream<Item = Result<bytes::Bytes, reqwest::Erro
                 url = url,
                 "image exceeded max size during streaming"
             );
-            return Err(axum::Error::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("image exceeded max size of {MAX_IMAGE_SIZE} bytes during streaming"),
-            )));
+            return Err(axum::Error::new(std::io::Error::other(format!(
+                "image exceeded max size of {MAX_IMAGE_SIZE} bytes during streaming"
+            ))));
         }
         Ok(chunk)
     })
