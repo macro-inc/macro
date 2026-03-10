@@ -188,7 +188,7 @@ export const ChannelsUnreadWidget = () => {
 
   return (
     <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-      <header class="text-xs font-medium text-ink-muted tracking-wide">
+      <header class="text-xs font-medium text-ink-muted ml-3">
         <h1>Unread</h1>
       </header>
 

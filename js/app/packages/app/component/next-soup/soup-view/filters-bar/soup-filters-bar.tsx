@@ -28,7 +28,7 @@ export const SoupFiltersBar = () => {
   return (
     <Switch>
       <Match when={isComponentListView('search')}>
-        <div class="w-full flex flex-col gap-2 p-2">
+        <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted/50">
           <SoupSearchbar autoFocus />
         </div>
       </Match>

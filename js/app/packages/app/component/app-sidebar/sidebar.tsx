@@ -30,6 +30,8 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { TOKENS } from '@core/hotkey/tokens';
+import { Hotkey } from '@core/component/Hotkey';
 
 interface SidebarItem {
   id: ListView;
@@ -133,6 +135,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
       registrationType: 'add',
     });
 
+    registerHotkey({
+      hotkey: 'cmd+b',
+      scopeId: 'global',
+      hotkeyToken: TOKENS.global.toggleSidebar,
+      description: 'Toggle sidebar',
+      keyDownHandler: (e) => {
+        e?.preventDefault();
+        props.onOpenChange(isSlim());
+        return true;
+      },
+    });
+
     // Register navigation shortcuts in the global GO_TO command scope
     for (const link of SIDEBAR_LINKS) {
       registerHotkey({
@@ -167,13 +181,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
     <>
       <Show when={isMobile() && isExpanded()}>
         <div
-          class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 bg-edge-muted mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
+          class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
           onClick={() => props.onOpenChange(false)}
         />
       </Show>
       <div
         class={cn(
-          'group/sidebar h-full bg-page py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-150 ease-in-out',
+          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content ease-in-out',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
@@ -184,6 +198,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
         )}
         data-expanded={isExpanded()}
         data-slim={isSlim()}
+        style={{
+          'transition-property': 'transform, max-width, opacity',
+          'transition-duration': '100ms',
+        }}
       >
         <div
           class={cn(
@@ -196,12 +214,16 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <Show when={isExpanded()}>
               <Tooltip
                 tooltip={
-                  <LabelAndHotKey label="Command palette" shortcut="⌘K" />
+                  <LabelAndHotKey
+                    label="Command palette"
+                    hotkeyToken={TOKENS.global.commandMenu}
+                  />
                 }
               >
                 <Button
-                  variant="tertiary"
+                  variant="secondary"
                   size="icon-sm"
+                  class="rounded-xs"
                   onClick={handleCommandPaletteClick}
                 >
                   <CommandIcon />
@@ -209,10 +231,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
               </Tooltip>
             </Show>
             <Show when={!isMobile()}>
-              <Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>
+              {/*<Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>*/}
+              <Tooltip
+                tooltip={
+                  <LabelAndHotKey
+                    label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
+                    hotkeyToken={TOKENS.global.toggleSidebar}
+                  />
+                }
+              >
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="icon-sm"
+                  class="rounded-xs"
                   onClick={() => props.onOpenChange(isSlim())}
                 >
                   <SidebarIcon />
@@ -230,14 +261,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
         >
           <Button
             class={
-              'justify-center group-data-[slim=true]/sidebar:aspect-square group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full'
+              'rounded-xs justify-center group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2'
             }
-            variant="tertiary"
+            variant="ghost"
+            size="sm"
             onClick={handleCreateClick}
           >
             <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
+            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 grow text-left">
               Create
+            </span>
+            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 rounded-sm px-2 py-0.5 text-xs border border-edge-muted">
+              <Hotkey shortcut="C" />
             </span>
           </Button>
         </Tooltip>
@@ -340,8 +375,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default',
-        isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
+        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
+        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
         props.sidebarState !== 'slim' && 'w-full'
       )}
