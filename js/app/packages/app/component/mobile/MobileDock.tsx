@@ -123,7 +123,10 @@ function MorePopover(props: {
       />
       <Popover
         open={open()}
-        onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) setHoveredId(null); }}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen);
+          if (!isOpen) setHoveredId(null);
+        }}
         placement="top"
         overflowPadding={10}
         anchorRef={anchorRef}
@@ -174,9 +177,7 @@ function MorePopover(props: {
                 data-more-item={item.id}
                 class={cn(
                   'flex items-center gap-2 px-3 h-11 text-sm',
-                  props.isActive(item.id)
-                    ? 'text-accent'
-                    : 'text-ink',
+                  props.isActive(item.id) ? 'text-accent' : 'text-ink',
                   hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
                 )}
                 onClick={() => {

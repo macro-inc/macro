@@ -9,6 +9,7 @@ import {
   For,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
@@ -36,6 +37,7 @@ import { CommandItem } from '../command/CommandItem';
 import { getBlockNameForEntity } from '../command/CommandMenu';
 import { useFullTextSearch } from '../next-soup/soup-view/useFullTextSearch';
 import { windowSearchMatch } from '@core/util/searchHighlight';
+import { TailSpinner } from '@core/component/TailSpinner';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -243,26 +245,36 @@ function ResultsContainer(props: {
   const [rowHeight, setRowHeight] = createSignal(0);
   const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
   const showFullTextSearchButton = () => {
+    if (SearchState.isFullTextMode()) return false;
+    // Always show when there are no name matches (rowHeight stays 0 since list isn't rendered)
+    if (props.nameMatchItems.length === 0) return true;
     const rh = rowHeight();
-    return (
-      rh > 0 &&
-      !SearchState.isFullTextMode() &&
-      availableHeight() - heightOfNameMatchList() > rh
-    );
+    return rh > 0 && availableHeight() - heightOfNameMatchList() > rh;
   };
 
   return (
     <div class="flex-1 min-h-0 bg-panel" ref={ref}>
       <Switch>
         <Match when={props.isLoading?.()}>
-          <div class="flex-1 flex items-center justify-center text-ink-muted">
+          <div class="flex items-center gap-2 text-ink-muted h-10 px-2">
+            <TailSpinner width={16} height={16} />
             Searching...
+          </div>
+        </Match>
+        <Match
+          when={
+            SearchState.isFullTextMode() &&
+            SearchState.query().trim().length < 3
+          }
+        >
+          <div class="flex items-center gap-2 text-ink-muted h-10 px-2">
+            At least 3 characters required for search.
           </div>
         </Match>
         <Match
           when={SearchState.isFullTextMode() && props.fullTextItems.length > 0}
         >
-          <div class="flex-1 min-h-0 overflow-hidden">
+          <div class="h-full overflow-hidden">
             <FullTextResultList
               items={props.fullTextItems}
               onSelect={props.onSelectFullText}
@@ -291,14 +303,16 @@ function ResultsContainer(props: {
           </div>
         </Match>
         <Match when={true}>
-          <div class="flex items-center text-ink-extra-muted">No matches</div>
+          <div class="flex items-center text-ink-extra-muted text-sm h-10 px-2">
+            No matches
+          </div>
         </Match>
       </Switch>
 
       <Show when={showFullTextSearchButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center px-2 text-sm gap-2"
+          class="flex items-center px-2 text-sm gap-2 h-10"
         >
           <SearchIcon class="size-5 p-0.5" />
           {`Search${props.query() ? ` "${props.query()}"` : ''}`}
@@ -397,7 +411,6 @@ function FullTextResultItem(props: {
     </div>
   );
 }
-
 
 function CategoryFilterTabs() {
   return (
