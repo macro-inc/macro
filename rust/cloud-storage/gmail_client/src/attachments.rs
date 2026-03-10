@@ -47,7 +47,7 @@ pub async fn get_attachment_data(
 
     let decoded_bytes = URL_SAFE
         .decode(base64_data)
-        .map_err(|e| anyhow::bail!("Failed to decode base64 body data: {}", e))?;
+        .map_err(|e| anyhow!("Failed to decode base64 body data: {}", e))?;
 
     Ok(decoded_bytes)
 }
