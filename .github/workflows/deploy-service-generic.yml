@@ -12,7 +12,6 @@ on:
           - connection-gateway
           - contacts-service
           - convert-service
-          - delete-document-worker
           - deleted-item-poller
           - dlp-handler
           - document-cognition-service
