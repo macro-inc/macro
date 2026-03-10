@@ -58,9 +58,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_tool::<CreateDraft, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
         .expect("failed to add create draft tool")
         .add_tool::<GetThread, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
-        .expect("failed to add get thread tool")
-        .add_tool::<read::Read, Arc<ToolScribe>>()
-        .expect("read tool");
+        .expect("failed to add get thread tool");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
 }

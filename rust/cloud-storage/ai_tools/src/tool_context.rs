@@ -9,8 +9,8 @@ use documents::{
     inbound::toolset::DocumentToolContext,
     outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
 };
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use email::inbound::toolset::EmailToolContext;
+use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use scribe::{
@@ -33,11 +33,6 @@ pub type ToolFrecencyService = FrecencyQueryServiceImpl<FrecencyPgStorage>;
 
 /// Type alias for the Gmail token provider implementation
 pub type ToolGmailTokenProvider = email::outbound::GmailTokenProviderImpl;
-
-/// Type alias for the entity access service implementation
-pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
-    entity_access::outbound::PgAccessRepository,
->;
 
 /// Type alias for the email service implementation
 pub type ToolEmailService = EmailServiceImpl<

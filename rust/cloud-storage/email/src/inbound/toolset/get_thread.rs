@@ -135,7 +135,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        let limit = self.limit.unwrap_or(DEFAULT_LIMIT).min(100).max(1);
+        let limit = self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, 100);
 
         let thread = service_context
             .service

@@ -1,6 +1,7 @@
 use crate::config::Config;
 use ai_tools::{
-    ToolDocumentToolContext, ToolEmailService, ToolEntityAccessService, ToolGmailTokenProvider, ToolSoupService,
+    ToolDocumentToolContext, ToolEmailService, ToolEntityAccessService, ToolGmailTokenProvider,
+    ToolSoupService,
 };
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
