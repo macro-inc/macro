@@ -275,6 +275,12 @@ export const DateSelector = (props: DateSelectorProps) => {
           <Combobox.Trigger
             class="flex group/date-selector-trigger"
             tabIndex={0}
+            onKeyDown={(e: KeyboardEvent) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                setInternalOpen(true);
+              }
+            }}
           >
             {typeof props.trigger === 'function'
               ? props.trigger({ selectedDate: selectedDate() })
