@@ -2639,41 +2639,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "delete_document_worker"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-sdk-s3",
- "aws-sdk-secretsmanager",
- "aws-sdk-sqs",
- "axum",
- "chrono",
- "comms_db_client",
- "futures",
- "macro_aws_config",
- "macro_cors",
- "macro_db_client",
- "macro_entrypoint",
- "macro_env",
- "macro_sha_count_client",
- "model",
- "models_properties",
- "openssl",
- "properties_db_client",
- "redis",
- "s3_client",
- "secretsmanager_client",
- "serde",
- "sqlx",
- "sqs_worker",
- "sync_service_client",
- "tokio",
- "tower 0.5.2",
- "tower-http",
- "tracing",
-]
-
-[[package]]
 name = "deleted_item_poller"
 version = "0.1.0"
 dependencies = [
@@ -2976,6 +2941,7 @@ dependencies = [
  "opensearch_client",
  "ordered-float",
  "properties",
+ "properties_db_client",
  "properties_service",
  "rayon",
  "redis",
@@ -2990,6 +2956,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "sqs_worker",
  "sync_service_client",
  "system_properties",
  "thiserror 2.0.17",

@@ -18,6 +18,11 @@ pub struct Config {
     /// The environment we are in
     pub environment: Environment,
 
+    /// Maximum number of SQS messages to receive per poll for the delete document worker
+    pub queue_max_messages: i32,
+    /// SQS long-poll wait time in seconds for the delete document worker
+    pub queue_wait_time_seconds: i32,
+
     /// The document limit for free users
     pub document_limit: u64,
 
@@ -106,12 +111,24 @@ impl Config {
                 .and_then(|v| v.as_ref().parse::<u64>().ok())
                 .unwrap_or(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS);
 
+        let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
+            .unwrap_or("10".to_string())
+            .parse()
+            .unwrap_or(10);
+
+        let queue_wait_time_seconds: i32 = std::env::var("QUEUE_WAIT_TIME_SECONDS")
+            .unwrap_or("4".to_string())
+            .parse()
+            .unwrap_or(4);
+
         let vars = EnvVars::new()?;
 
         Ok(Config {
             vars,
             port,
             environment,
+            queue_max_messages,
+            queue_wait_time_seconds,
             document_limit,
             document_storage_service_presigned_url_expiry_seconds,
             document_storage_service_presigned_url_browser_cache_expiry_seconds,
