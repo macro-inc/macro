@@ -9,18 +9,16 @@ import {
   For,
   Match,
   onCleanup,
-  onMount,
   Show,
   Switch,
 } from 'solid-js';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
 import { cn } from '@ui/utils/classname';
 import Macro from '@macro-icons/macro-logo.svg';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';
-import { Hotkey } from '@core/component/Hotkey';
 import { Entity, WithSearch, type EntityData } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -50,8 +48,6 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'projects', label: 'Projects' },
   { id: 'commands', label: 'Commands' },
 ];
-
-const EMPTY_STATE_HEIGHT = 60;
 
 export function MobileSearchOuter() {
   return (
@@ -207,9 +203,7 @@ export function MobileSearchInner(props: {
           </button>
         </Show>
         <input
-          ref={(el) => {
-            onMount(() => setTimeout(() => el.focus(), 50));
-          }}
+          ref={(el) => setTimeout(() => el.focus(), 50)} // setTimeout needed: iOS only allows focus() within the user gesture window
           type="text"
           class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
           placeholder={'Search...'}
@@ -320,13 +314,8 @@ function VirtualizedCommandList(props: {
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onRowHeightMeasured?: (height: number) => void;
 }) {
-  let virtualizerHandle: VirtualizerHandle | undefined;
-
   return (
     <VList
-      ref={(handle) => {
-        virtualizerHandle = handle;
-      }}
       data={props.items}
       style={{ height: '100%' }}
       class="scrollbar-hidden overscroll-none"
@@ -334,9 +323,11 @@ function VirtualizedCommandList(props: {
       {(item, index) => (
         <div
           ref={(el) => {
-            if (index() !== 0 || !props.onRowHeightMeasured) return;
+            if (index() !== 0) return;
+            const onMeasured = props.onRowHeightMeasured;
+            if (!onMeasured) return;
             const ro = new ResizeObserver(([entry]) => {
-              if (entry) props.onRowHeightMeasured!(entry.contentRect.height);
+              if (entry) onMeasured(entry.contentRect.height);
             });
             ro.observe(el);
             onCleanup(() => ro.disconnect());
@@ -407,16 +398,6 @@ function FullTextResultItem(props: {
   );
 }
 
-function HotkeyHint(props: { shortcut: string; label: string }) {
-  return (
-    <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-        <Hotkey shortcut={props.shortcut} class="space-x-1" />
-      </div>
-      {props.label}
-    </span>
-  );
-}
 
 function CategoryFilterTabs() {
   return (

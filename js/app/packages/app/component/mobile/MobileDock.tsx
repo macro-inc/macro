@@ -13,12 +13,14 @@ import { Popover } from '@kobalte/core/popover';
 import { cn } from '@ui/utils/classname';
 import { useSplitLayout } from '../split-layout/layout';
 import { SIDEBAR_LINKS } from '../app-sidebar/sidebar';
-import { type ListView } from '@app/constants/list-views';
+import { type ListView, isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { setCreateMenuOpen } from '../Launcher';
 import { useLocation } from '@solidjs/router';
+
+const ICON_ANIMATION_DURATION_MS = 500;
 
 type MobileDockButtonProps = {
   icon: Component<
@@ -43,7 +45,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
       onPointerDown={() => {
         impactFeedback('light');
         setAnimating(true);
-        setTimeout(() => setAnimating(false), 500);
+        setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
         props.onClick();
       }}
       onTouchMove={props.onTouchMove}
@@ -98,8 +100,8 @@ function MorePopover(props: {
     } else if (id === 'create') {
       setCreateMenuOpen(true);
       setOpen(false);
-    } else if (id) {
-      props.onNavigate(id as ListView);
+    } else if (isListViewID(id)) {
+      props.onNavigate(id);
       setOpen(false);
     }
   };
@@ -121,7 +123,7 @@ function MorePopover(props: {
       />
       <Popover
         open={open()}
-        onOpenChange={setOpen}
+        onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) setHoveredId(null); }}
         placement="top"
         overflowPadding={10}
         anchorRef={anchorRef}
@@ -172,7 +174,7 @@ function MorePopover(props: {
                 data-more-item={item.id}
                 class={cn(
                   'flex items-center gap-2 px-3 h-11 text-sm',
-                  props.isActive(item.id as ListView)
+                  props.isActive(item.id)
                     ? 'text-accent'
                     : 'text-ink',
                   hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
@@ -210,7 +212,7 @@ export function MobileDock() {
     if (!activeContent) {
       return location.pathname.split('/').filter(Boolean).includes(id);
     }
-    return activeContent.id === id;
+    return activeContent?.id === id;
   };
 
   const isMoreActive = () => MORE_VIEWS.some((v) => isActive(v.id));
