@@ -63,7 +63,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-const PRIMARY_IDS = ['inbox', 'channels', 'files'] as const;
+const PRIMARY_IDS = ['inbox', 'channels', 'files', 'search'] as const;
 
 const MORE_VIEWS = SIDEBAR_LINKS.filter(
   (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
@@ -204,16 +204,15 @@ function MorePopover(props: {
 
 export function MobileDock() {
   const { openWithSplit } = useSplitLayout();
-  const layoutManager = globalSplitManager();
-
   const location = useLocation();
 
   const isActive = (id: ListView) => {
-    const activeContent = layoutManager?.activeSplit()?.content();
+    const activeContent = globalSplitManager()?.activeSplit()?.content();
     if (!activeContent) {
-      return location.pathname.split('/').filter(Boolean).includes(id);
+      const segments = location.pathname.split('/').filter(Boolean);
+      return segments[segments.length - 1] === id;
     }
-    return activeContent?.id === id;
+    return activeContent.id === id;
   };
 
   const isMoreActive = () => MORE_VIEWS.some((v) => isActive(v.id));
