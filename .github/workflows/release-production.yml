@@ -12,21 +12,21 @@ env:
   WEB_APP_VERSION: ${{ github.ref_name }}
 
 jobs:
-  migrate-db:
-    name: Run Database Migrations
-    runs-on: db-migrator
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: .github/
-      - name: Run migrations
-        uses: ./.github/actions/migrate-cloud-storage-db
-        with:
-          environment: prod
+  # migrate-db:
+  #   name: Run Database Migrations
+  #   runs-on: db-migrator
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         sparse-checkout: .github/
+  #     - name: Run migrations
+  #       uses: ./.github/actions/migrate-cloud-storage-db
+  #       with:
+  #         environment: prod
 
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
-    needs: [migrate-db]
+    # needs: [migrate-db]
     uses: ./.github/workflows/deploy-all-services.yml
     with:
       environment: prod
