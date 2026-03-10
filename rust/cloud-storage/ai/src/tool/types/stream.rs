@@ -39,12 +39,7 @@ pub enum ToolResponse {
 impl TryFrom<PartialToolCall> for ToolCall {
     type Error = serde_json::Error;
     fn try_from(value: PartialToolCall) -> Result<Self, Self::Error> {
-        let json_str = if value.json.is_empty() {
-            "{}"
-        } else {
-            &value.json
-        };
-        serde_json::from_str(json_str).map(|json| Self {
+        serde_json::from_str(&value.json).map(|json| Self {
             id: value.id,
             name: value.name,
             json,
