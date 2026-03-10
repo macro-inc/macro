@@ -1,5 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { createEffect, Show, Suspense, type Accessor } from 'solid-js';
+import { createEffect, onMount, Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';

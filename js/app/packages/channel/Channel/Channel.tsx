@@ -84,10 +84,10 @@ export function Channel(props: ChannelProps) {
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
     defaultThreadListTargetFromMessage(targetMessageId());
 
-  const messages = () =>
+  const messages = createMemo(() =>
     messagesQuery.data
       ? flattenMessages(messagesQuery.data as ChannelMessagesData)
-      : [];
+      : []);
   const messageById = createMemo(() => {
     return new Map(messages().map((message) => [message.id, message]));
   });
@@ -127,6 +127,7 @@ export function Channel(props: ChannelProps) {
     },
   });
 
+
   return (
     <Suspense>
       <StaticMarkdownContext>
@@ -143,25 +144,30 @@ export function Channel(props: ChannelProps) {
                 onScrollStateChange={setThreadListScrollState}
               >
                 {(item) => {
-                  const message = () => messageById().get(item.id) ?? item;
+                  const message = () => messageById().get(item.id);
                   const state = threadManager.getOrCreateThreadState(item.id);
                   return (
-                    <ChannelThread
-                      data={message}
-                      channelId={() => props.channelId}
-                      getMessageActions={getMessageActions}
-                      isExpanded={state.isExpanded}
-                      setIsExpanded={state.setIsExpanded}
-                      isReplying={state.isReplying}
-                      setIsReplying={state.setIsReplying}
-                      replyInputState={state.replyInputState}
-                      setReplyInputState={state.setReplyInputState}
-                      listMeta={listMetaByMessageId()[item.id]}
-                      threadActions={{
-                        onDismissNewMessages:
-                          activityTracker.dismissNewMessages,
-                      }}
-                    />
+                    <Show when={message()}>
+                      {(m) =>
+                        <ChannelThread
+                          data={m}
+                          channelId={() => props.channelId}
+                          getMessageActions={getMessageActions}
+                          isExpanded={state.isExpanded}
+                          setIsExpanded={state.setIsExpanded}
+                          isReplying={state.isReplying}
+                          setIsReplying={state.setIsReplying}
+                          replyInputState={state.replyInputState}
+                          setReplyInputState={state.setReplyInputState}
+                          listMeta={listMetaByMessageId()[item.id]}
+                          threadActions={{
+                            onDismissNewMessages:
+                              activityTracker.dismissNewMessages,
+                          }}
+                        />
+
+                      }
+                    </Show>
                   );
                 }}
               </ThreadList>

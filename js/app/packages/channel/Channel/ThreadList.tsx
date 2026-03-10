@@ -4,6 +4,7 @@ import {
   createSignal,
   createEffect,
   on,
+  createMemo,
 } from 'solid-js';
 import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
@@ -51,7 +52,7 @@ export type ThreadListScrollState = {
 
 type ThreadListProps<T extends { id: string }> = {
   data: Accessor<T[]>;
-  children: (item: T) => JSX.Element;
+  children: (item: {id: string}) => JSX.Element;
   initialScrollTarget?: ThreadListScrollTarget;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
@@ -314,6 +315,8 @@ export function ThreadList<T extends { id: string }>(
     }
   };
 
+  const idKeys = createMemo(() => props.data().map((m) => m.id));
+
   return (
     <div
       ref={scrollRef}
@@ -359,11 +362,16 @@ export function ThreadList<T extends { id: string }>(
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
-        data={props.data()}
+        data={idKeys()}
         onScroll={handleScroll}
         shift={props.shift?.() ?? false}
       >
-        {(item) => props.children(item)}
+        {(item) => {
+          return <>
+          {props.children({id: item})}
+          </>
+          }
+        }
       </Virtualizer>
     </div>
   );
