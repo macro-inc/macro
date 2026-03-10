@@ -51,8 +51,7 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'commands', label: 'Commands' },
 ];
 
-const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
+const EMPTY_STATE_HEIGHT = 60;
 
 export function MobileSearchOuter() {
   return (
@@ -146,7 +145,7 @@ export function MobileSearchInner(props: {
         { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
       );
     }
-    SearchState.onClose();
+    SearchState.onMenuClose();
     SearchState.close();
   }
 
@@ -170,7 +169,7 @@ export function MobileSearchInner(props: {
   };
 
   return (
-    <div class="flex flex-col mobile:h-full bg-panel">
+    <div class="flex flex-col h-full bg-panel">
       <Show when={!isInCommandScope() && !SearchState.isFullTextMode()}>
         <CategoryFilterTabs />
       </Show>
@@ -189,7 +188,7 @@ export function MobileSearchInner(props: {
         query={SearchState.query}
       />
       {/* Search Input */}
-      <div class="flex items-center gap-2 bg-panel mobile:bg-page px-2 mobile:px-0 h-10 mobile:h-auto border-b mobile:border-b-0 mobile:border-t border-edge-muted/50 mobile:border-edge-muted">
+      <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
         <Show
           when={showBackButton()}
           fallback={
@@ -199,7 +198,7 @@ export function MobileSearchInner(props: {
           }
         >
           <button
-            class="text-ink-muted mobile:text-ink hover:text-ink transition-colors flex flex-col items-center justify-center pl-[6vw] mobile:pt-3"
+            class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3"
             onClick={handleBack}
             title="Back (Esc)"
           >
@@ -234,7 +233,6 @@ function ResultsContainer(props: {
   onFullTextSearch: () => void;
   query: () => string;
 }) {
-  const showFullTextButton = () => !SearchState.isFullTextMode();
   let ref: HTMLDivElement | undefined;
   const [availableHeight, setAvailableHeight] = createSignal(0);
 
@@ -248,20 +246,19 @@ function ResultsContainer(props: {
     onCleanup(() => observer.disconnect());
   });
 
-  // Height for the name-match list: capped to whole-item multiples of available space
-  const nameMatchListHeight = () => {
-    const buttonHeight = VIRTUAL_ITEM_HEIGHT; // "Full text search" button
-    const maxFit =
-      Math.floor(availableHeight() / VIRTUAL_ITEM_HEIGHT) * VIRTUAL_ITEM_HEIGHT;
-    if (props.nameMatchItems.length === 0) return EMPTY_STATE_HEIGHT;
-    return Math.min(props.nameMatchItems.length * VIRTUAL_ITEM_HEIGHT, maxFit);
+  const [rowHeight, setRowHeight] = createSignal(0);
+  const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
+  const showFullTextSearchButton = () => {
+    const rh = rowHeight();
+    return (
+      rh > 0 &&
+      !SearchState.isFullTextMode() &&
+      availableHeight() - heightOfNameMatchList() > rh
+    );
   };
 
   return (
-    <div
-      class="flex-1 min-h-0 bg-panel flex flex-col overflow-hidden"
-      ref={ref}
-    >
+    <div class="flex-1 min-h-0 bg-panel" ref={ref}>
       <Switch>
         <Match when={props.isLoading?.()}>
           <div class="flex-1 flex items-center justify-center text-ink-muted">
@@ -285,11 +282,17 @@ function ResultsContainer(props: {
         >
           <div
             class="overflow-hidden shrink-0"
-            style={{ height: `${nameMatchListHeight()}px` }}
+            style={{
+              height:
+                heightOfNameMatchList() < availableHeight()
+                  ? `${heightOfNameMatchList()}px`
+                  : `100%`,
+            }}
           >
             <VirtualizedCommandList
               items={props.nameMatchItems}
               onSelect={props.onSelectNameMatch}
+              onRowHeightMeasured={setRowHeight}
             />
           </div>
         </Match>
@@ -298,10 +301,10 @@ function ResultsContainer(props: {
         </Match>
       </Switch>
 
-      <Show when={showFullTextButton()}>
+      <Show when={showFullTextSearchButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center h-10 px-2 text-sm gap-2 shrink-0"
+          class="flex items-center px-2 text-sm gap-2"
         >
           <SearchIcon class="size-5 p-0.5" />
           {`Search${props.query() ? ` "${props.query()}"` : ''}`}
@@ -315,6 +318,7 @@ function ResultsContainer(props: {
 function VirtualizedCommandList(props: {
   items: CommandMenuItem[];
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
+  onRowHeightMeasured?: (height: number) => void;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
 
@@ -325,15 +329,26 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden"
+      class="scrollbar-hidden overscroll-none"
     >
       {(item, index) => (
-        <CommandItem
-          item={item}
-          index={index()}
-          selected={false}
-          onSelect={props.onSelect}
-        />
+        <div
+          ref={(el) => {
+            if (index() !== 0 || !props.onRowHeightMeasured) return;
+            const ro = new ResizeObserver(([entry]) => {
+              if (entry) props.onRowHeightMeasured!(entry.contentRect.height);
+            });
+            ro.observe(el);
+            onCleanup(() => ro.disconnect());
+          }}
+        >
+          <CommandItem
+            item={item}
+            index={index()}
+            selected={false}
+            onSelect={props.onSelect}
+          />
+        </div>
       )}
     </VList>
   );
