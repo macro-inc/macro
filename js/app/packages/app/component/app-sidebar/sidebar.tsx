@@ -207,17 +207,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   <CommandIcon />
                 </Button>
               </Tooltip>
-              <Tooltip
-                tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-              >
-                <Button
-                  variant="tertiary"
-                  size="icon-sm"
-                  onClick={handleCreateClick}
-                >
-                  <PlusIcon />
-                </Button>
-              </Tooltip>
             </Show>
             <Show when={!isMobile()}>
               <Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>
