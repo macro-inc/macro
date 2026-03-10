@@ -22,7 +22,7 @@ import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?compon
 import { debouncedDependent } from '@core/util/debounce';
 import { Entity, type WithSearch, type EntityData } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
-import { itemToBlockName } from '@core/constant/allBlocks';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import type { CategoryFilter } from '../command/types';
@@ -135,13 +135,10 @@ export function MobileSearchInner() {
     entity: WithSearch<EntityData>,
     openInNewSplit = false
   ) {
-    const blockName = itemToBlockName(entity);
-    if (blockName) {
-      openWithSplit(
-        { type: blockName, id: entity.id },
-        { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
-      );
-    }
+    const hitData = entity.search.contentHitData?.[0];
+    const location =
+      hitData && 'location' in hitData ? hitData.location : undefined;
+    openEntityInSplitFromUnifiedList(entity, { location });
     SearchState.onMenuClose();
     SearchState.close();
   }
@@ -403,7 +400,6 @@ function FullTextResultItem(props: {
       <Show when={hit()}>
         {(h) => (
           <div class="ml-7 mt-1 border-l-2 border-edge-muted pl-2 text-xs font-normal text-ink-muted">
-            {/*<p class="line-clamp-3">{h()}</p>*/}
             <SearchContent twoLineClamp hit={h()} />
           </div>
         )}
