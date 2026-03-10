@@ -131,9 +131,7 @@ export function MobileSearchInner() {
     SearchState.setQuery('');
   }
 
-  function handleFullTextItemAction(
-    entity: WithSearch<EntityData>,
-  ) {
+  function handleFullTextItemAction(entity: WithSearch<EntityData>) {
     const hitData = entity.search.contentHitData?.[0];
     const location =
       hitData && 'location' in hitData ? hitData.location : undefined;
@@ -173,8 +171,8 @@ export function MobileSearchInner() {
         onSelectNameMatch={(item, openInNewSplit) =>
           handleItemAction(item, openInNewSplit)
         }
-        onSelectFullText={(entity, openInNewSplit) =>
-          handleFullTextItemAction(entity, openInNewSplit)
+        onSelectFullText={(entity) =>
+          handleFullTextItemAction(entity)
         }
         isLoading={() => SearchState.isFullTextMode() && isFullTextLoading()}
         onFullTextSearch={() => SearchState.enableFullTextMode()}
@@ -218,7 +216,6 @@ function ResultsContainer(props: {
   onSelectNameMatch: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onSelectFullText: (
     entity: WithSearch<EntityData>,
-    openInNewSplit: boolean
   ) => void;
   isLoading?: () => boolean;
   onFullTextSearch: () => void;
