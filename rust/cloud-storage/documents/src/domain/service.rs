@@ -590,6 +590,22 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         self.task_properties_service
             .update_task_status(&entity_access_receipt.entity().entity_id, status)
             .await
-            .map_err(DocumentError::Internal)
+            .map_err(DocumentError::Internal)?;
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Metadata,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(())
     }
 }
