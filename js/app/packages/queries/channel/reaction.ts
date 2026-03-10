@@ -51,7 +51,9 @@ function addUserReaction(
   userId: string
 ) {
   const messageReactions = reactions ?? [];
-  const existing = messageReactions.find((reaction) => reaction.emoji === emoji);
+  const existing = messageReactions.find(
+    (reaction) => reaction.emoji === emoji
+  );
 
   if (existing?.users.includes(userId)) {
     return {
@@ -80,7 +82,9 @@ function removeUserReaction(
   userId: string
 ) {
   const messageReactions = reactions ?? [];
-  const existing = messageReactions.find((reaction) => reaction.emoji === emoji);
+  const existing = messageReactions.find(
+    (reaction) => reaction.emoji === emoji
+  );
 
   if (!existing?.users.includes(userId)) {
     return {
@@ -96,7 +100,9 @@ function removeUserReaction(
         reaction.emoji === emoji
           ? {
               ...reaction,
-              users: reaction.users.filter((existingUserId) => existingUserId !== userId),
+              users: reaction.users.filter(
+                (existingUserId) => existingUserId !== userId
+              ),
             }
           : reaction
       )
@@ -119,13 +125,15 @@ export function optimisticAddReaction(
 ): AddReactionContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
-  const fallbackChannelData = queryClient.getQueryData<GetChannelResponse>(queryKey);
+  const fallbackChannelData =
+    queryClient.getQueryData<GetChannelResponse>(queryKey);
   const currentReactions =
     vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
   const threadId =
     vars.threadId ??
-    fallbackChannelData?.messages.find((message) => message.id === vars.message_id)
-      ?.thread_id ??
+    fallbackChannelData?.messages.find(
+      (message) => message.id === vars.message_id
+    )?.thread_id ??
     undefined;
   const target = makeMessageTarget({
     messageId: vars.message_id,
@@ -229,24 +237,22 @@ export function optimisticRemoveReaction(
 ): RemoveReactionContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
-  const fallbackChannelData = queryClient.getQueryData<GetChannelResponse>(queryKey);
+  const fallbackChannelData =
+    queryClient.getQueryData<GetChannelResponse>(queryKey);
   const currentReactions =
     vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
   const threadId =
     vars.threadId ??
-    fallbackChannelData?.messages.find((message) => message.id === vars.message_id)
-      ?.thread_id ??
+    fallbackChannelData?.messages.find(
+      (message) => message.id === vars.message_id
+    )?.thread_id ??
     undefined;
   const target = makeMessageTarget({
     messageId: vars.message_id,
     threadId,
   });
 
-  const result = removeUserReaction(
-    currentReactions,
-    vars.emoji,
-    vars.userId
-  );
+  const result = removeUserReaction(currentReactions, vars.emoji, vars.userId);
   if (!result.didChange) return;
 
   const context: RemoveReactionContext = {

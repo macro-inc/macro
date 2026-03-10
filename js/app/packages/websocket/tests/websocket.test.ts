@@ -31,7 +31,7 @@ import {
 import { platformWebSocketFactory } from '@websocket/platform/factory';
 
 const OPTIONS = {
-  factory: platformWebSocketFactory
+  factory: platformWebSocketFactory,
 };
 
 describe('Testsuite for Websocket', () => {

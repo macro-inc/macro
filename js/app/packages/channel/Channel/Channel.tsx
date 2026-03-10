@@ -1,7 +1,7 @@
 import {
-  flattenMessages,
-  useChannelMessagesQuery,
+  makeMessageIndex,
   type ChannelMessagesData,
+  useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import {
   createMemo,
@@ -84,13 +84,11 @@ export function Channel(props: ChannelProps) {
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
     defaultThreadListTargetFromMessage(targetMessageId());
 
-  const messages = createMemo(() =>
-    messagesQuery.data
-      ? flattenMessages(messagesQuery.data as ChannelMessagesData)
-      : []);
-  const messageById = createMemo(() => {
-    return new Map(messages().map((message) => [message.id, message]));
-  });
+  const messageIndex = createMemo(() =>
+    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
+  );
+  const messages = createMemo(() => messageIndex().items);
+  const messageById = createMemo(() => messageIndex().byId);
 
   const shift = () => threadPaginator.isShifting();
 
@@ -127,7 +125,6 @@ export function Channel(props: ChannelProps) {
     },
   });
 
-
   return (
     <Suspense>
       <StaticMarkdownContext>
@@ -135,7 +132,7 @@ export function Channel(props: ChannelProps) {
           <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
               <ThreadList
-                data={messages}
+                keys={() => messageIndex().keys}
                 initialScrollTarget={threadListInitialScrollTarget()}
                 shift={shift}
                 onScrollNearTop={threadPaginator.shiftPaginate}
@@ -148,7 +145,7 @@ export function Channel(props: ChannelProps) {
                   const state = threadManager.getOrCreateThreadState(item.id);
                   return (
                     <Show when={message()}>
-                      {(m) =>
+                      {(m) => (
                         <ChannelThread
                           data={m}
                           channelId={() => props.channelId}
@@ -165,8 +162,7 @@ export function Channel(props: ChannelProps) {
                               activityTracker.dismissNewMessages,
                           }}
                         />
-
-                      }
+                      )}
                     </Show>
                   );
                 }}

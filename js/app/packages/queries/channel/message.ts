@@ -301,7 +301,9 @@ export function replaceOptimisticMessage(
  * Returns minimal context: only the deleted message, reactions, and attachments.
  */
 export function optimisticDeleteChannelMessage(
-  vars: WithChannelId<Pick<ChannelMessage, 'message_id'> & { threadId?: string }>
+  vars: WithChannelId<
+    Pick<ChannelMessage, 'message_id'> & { threadId?: string }
+  >
 ): DeleteMessageContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
@@ -355,7 +357,10 @@ export function optimisticDeleteChannelMessage(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    context.targetSnapshot = captureDeleteTargetSnapshot(vars.channelId, target);
+    context.targetSnapshot = captureDeleteTargetSnapshot(
+      vars.channelId,
+      target
+    );
     removeTargetMessage(vars.channelId, target);
   }
 

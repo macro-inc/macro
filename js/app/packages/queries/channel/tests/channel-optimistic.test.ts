@@ -689,7 +689,9 @@ describe('optimisticDeleteChannelMessage', () => {
       message_id: 'top-level-msg',
     });
 
-    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([]);
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual(
+      []
+    );
 
     if (context) {
       rollbackDeleteChannelMessage('channel-1', context);
@@ -713,7 +715,9 @@ describe('optimisticDeleteChannelMessage', () => {
       message_id: 'top-level-msg',
     });
 
-    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([]);
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual(
+      []
+    );
 
     if (context) {
       rollbackDeleteChannelMessage('channel-1', context);
@@ -766,8 +770,7 @@ describe('optimisticDeleteChannelMessage', () => {
       expect.objectContaining({ id: 'reply-1' }),
     ]);
     expect(
-      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
-        .preview
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
     ).toEqual([expect.objectContaining({ id: 'reply-1' })]);
     expect(
       getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
@@ -1048,8 +1051,9 @@ describe('optimisticAddReaction', () => {
       message_id: 'msg-1',
     });
 
-    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions)
-      .toEqual([{ emoji: '👍', users: ['user-1'] }]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions
+    ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
   });
 
   it('should update thread reply reactions in both reply caches', () => {
@@ -1065,7 +1069,9 @@ describe('optimisticAddReaction', () => {
         [
           createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
             thread: {
-              preview: [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')],
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+              ],
               reply_count: 1,
               latest_reply_at: '2024-01-03T01:00:00.000Z',
             },
@@ -1084,12 +1090,12 @@ describe('optimisticAddReaction', () => {
       message_id: 'reply-1',
     });
 
-    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions).toEqual([
-      { emoji: '👍', users: ['user-1'] },
-    ]);
     expect(
-      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview[0]
-        .reactions
+      getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
+    ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0].reactions
     ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
   });
 });
@@ -1241,8 +1247,9 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'msg-1',
     });
 
-    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions)
-      .toEqual([]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].reactions
+    ).toEqual([]);
   });
 
   it('should update thread reply reactions on removal in both caches', () => {
@@ -1284,12 +1291,12 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'reply-1',
     });
 
-    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions).toEqual(
-      []
-    );
     expect(
-      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview[0]
-        .reactions
+      getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
+    ).toEqual([]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0].reactions
     ).toEqual([]);
   });
 });

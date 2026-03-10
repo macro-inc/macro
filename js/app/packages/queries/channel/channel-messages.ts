@@ -16,6 +16,12 @@ export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPageParam | null
 >;
 
+export type IndexedChannelMessages = {
+  items: ApiChannelMessage[];
+  keys: string[];
+  byId: Map<string, ApiChannelMessage>;
+};
+
 export type TopLevelMessageSnapshot = {
   itemIndex: number;
   message: ApiChannelMessage;
@@ -84,11 +90,14 @@ export function useChannelMessagesQuery(
 
 export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
   const query = useChannelMessagesQuery(channelId, () => undefined);
-  const byId = createMemo(() => {
-    const flat = flattenMessages(query.data as ChannelMessagesData | undefined);
-    return new Map(flat.map((m) => [m.id, m]));
-  });
-  return { query, byId };
+  const index = createMemo(() =>
+    makeMessageIndex(query.data as ChannelMessagesData | undefined)
+  );
+  return {
+    query,
+    index,
+    byId: createMemo(() => index().byId),
+  };
 }
 
 function mapChannelMessagesItems(
@@ -201,7 +210,9 @@ export function getTopLevelMessageSnapshot(
   if (!data) return;
 
   for (const [pageIndex, page] of data.pages.entries()) {
-    const itemIndex = page.items.findIndex((message) => message.id === messageId);
+    const itemIndex = page.items.findIndex(
+      (message) => message.id === messageId
+    );
     if (itemIndex === -1) continue;
     return {
       pageIndex,
@@ -279,7 +290,8 @@ export function removeThreadReplyFromChannelMessages(
     const nextPreview = message.thread.preview.filter(
       (reply) => reply.id !== replyId
     );
-    const didRemovePreview = nextPreview.length !== message.thread.preview.length;
+    const didRemovePreview =
+      nextPreview.length !== message.thread.preview.length;
     if (!didRemovePreview && message.thread.reply_count === 0) {
       return message;
     }
@@ -289,7 +301,7 @@ export function removeThreadReplyFromChannelMessages(
       thread: {
         ...message.thread,
         latest_reply_at: didRemovePreview
-          ? nextPreview.at(-1)?.created_at ?? null
+          ? (nextPreview.at(-1)?.created_at ?? null)
           : message.thread.latest_reply_at,
         reply_count: Math.max(message.thread.reply_count - 1, 0),
         preview: nextPreview,
@@ -366,9 +378,13 @@ export function getThreadPreviewReplySnapshot(
   if (!data) return;
 
   for (const page of data.pages) {
-    const thread = page.items.find((message) => message.id === threadId)?.thread;
+    const thread = page.items.find(
+      (message) => message.id === threadId
+    )?.thread;
     if (!thread) continue;
-    const previewIndex = thread.preview.findIndex((reply) => reply.id === replyId);
+    const previewIndex = thread.preview.findIndex(
+      (reply) => reply.id === replyId
+    );
     if (previewIndex === -1) continue;
     return {
       previewIndex,
@@ -405,10 +421,13 @@ export function restoreThreadPreviewReplyInChannelMessages(
         ...message.thread,
         preview,
         reply_count: message.thread.reply_count + 1,
-        latest_reply_at: [message.thread.latest_reply_at, replyCreatedAt]
-          .filter((value): value is string => !!value)
-          .sort()
-          .at(-1) ?? preview.at(-1)?.created_at ?? null,
+        latest_reply_at:
+          [message.thread.latest_reply_at, replyCreatedAt]
+            .filter((value): value is string => !!value)
+            .sort()
+            .at(-1) ??
+          preview.at(-1)?.created_at ??
+          null,
       },
     };
   });
@@ -425,20 +444,28 @@ export function softInvalidateChannelMessages(channelId: string) {
 }
 
 /**
- * Flatten all pages into a single oldest-first array for display.
+ * Build a single oldest-first message index for display and lookup.
  * Pages arrive newest-first, items within each page are newest-first,
- * so we reverse both layers.
+ * so we reverse both layers in one pass.
  */
-export function flattenMessages(
+export function makeMessageIndex(
   data: ChannelMessagesData | undefined
-): ApiChannelMessage[] {
-  if (!data?.pages?.length) return [];
-  const all: ApiChannelMessage[] = [];
+): IndexedChannelMessages {
+  const items: ApiChannelMessage[] = [];
+  const keys: string[] = [];
+  const byId = new Map<string, ApiChannelMessage>();
+
+  if (!data?.pages?.length) return { items, keys, byId };
+
   for (let i = data.pages.length - 1; i >= 0; i--) {
-    const items = data.pages[i].items;
-    for (let j = items.length - 1; j >= 0; j--) {
-      all.push(items[j]);
+    const pageItems = data.pages[i].items;
+    for (let j = pageItems.length - 1; j >= 0; j--) {
+      const message = pageItems[j];
+      items.push(message);
+      keys.push(message.id);
+      byId.set(message.id, message);
     }
   }
-  return all;
+
+  return { items, keys, byId };
 }

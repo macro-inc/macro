@@ -17,11 +17,12 @@ export function createThreadManager() {
     /** If you set replying from false -> true this means it must be expanded **/
     const setIsReplying: Setter<boolean> = (val) => {
       batch(() => {
-        const next: boolean = typeof val === 'function' ? val(isReplying()) : val;
+        const next: boolean =
+          typeof val === 'function' ? val(isReplying()) : val;
         if (next) setIsExpanded(true);
         setIsReplyingRaw(next);
-      })
-    }
+      });
+    };
 
     const state: ThreadState = {
       isExpanded,
