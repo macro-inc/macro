@@ -8,7 +8,7 @@ import { createMemo, Show } from 'solid-js';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { useContacts } from '@queries/contacts/contacts';
+import { filterMap } from '@core/util/list';
 import { useUserId } from '@core/context/user';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
@@ -30,32 +30,54 @@ import {
   type Option,
 } from './filter-primitives';
 import { useFilterOptions } from './use-filter-options';
+import { useQuickAccess } from '@core/context/quickAccess';
 
 export const AssigneeFilter = () => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
-  const contacts = useContacts();
+  const { useList } = useQuickAccess();
+  const contacts = useList('person');
   const userId = useUserId();
 
   const assigneeOptions = createMemo((): Option[] => {
     const currentUserId = userId();
+
     const noAssigneeOption: Option = {
       value: NO_ASSIGNEE,
       label: 'No Assignee',
       icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
     };
-    const contactOptions = contacts().map((contact) => ({
-      value: contact.id,
-      label:
-        contact.id === currentUserId
-          ? contact.name
-            ? `${contact.name} (me)`
-            : 'Me'
-          : contact.name || contact.id,
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
-    return [noAssigneeOption, ...contactOptions];
+
+    let me: Option | undefined;
+
+    const otherContactOptions = filterMap(
+      contacts(),
+      (contact): Option | undefined => {
+        const opt: Option = {
+          value: contact.id,
+          label:
+            contact.id === currentUserId
+              ? `${contact.data.name || 'Me'} (me)`
+              : contact.data.name || contact.id,
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="xs"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        };
+
+        if (contact.id === currentUserId) {
+          me = opt;
+          return undefined;
+        }
+
+        return opt;
+      }
+    );
+
+    return [noAssigneeOption, ...(me ? [me] : []), ...otherContactOptions];
   });
 
   const activeAssignee = createMemo((): Option[] => {
@@ -490,16 +512,27 @@ export const FoldersFilter = () => {
 
 export const FromSenderFilter = () => {
   const { setQueryFilters, queryFilters } = useSoupView();
-  const contacts = useContacts();
+  const { useList } = useQuickAccess();
+  const contacts = useList('person');
 
   const senderOptions = createMemo((): Option[] => {
-    return contacts().map((contact) => ({
-      value: contact.email ?? contact.id,
-      label: contact.name || contact.email || contact.id,
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
+    return filterMap(contacts(), (contact): Option | undefined => {
+      const value = contact.data.email ?? contact.id;
+      if (!value) return undefined;
+
+      return {
+        value,
+        label: contact.data.name || contact.data.email || contact.id,
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="xs"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+    });
   });
 
   const activeSenderFilter = createMemo((): Option[] => {

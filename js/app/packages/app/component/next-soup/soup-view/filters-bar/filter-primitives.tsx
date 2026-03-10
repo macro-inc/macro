@@ -33,9 +33,9 @@ export const FilterSelect = (props: FilterSelectProps) => {
   const renderItem = (itemProps: { item: CollectionNode<Option> }) => (
     <KSelect.Item
       item={itemProps.item}
-      class="w-full flex items-center gap-2.5 p-2 rounded-xs text-left text-xs transition-colors hover:bg-ink/5 group"
+      class="w-full flex items-center gap-2.5 p-2 rounded-xs text-left text-xs hover:bg-ink/5 group"
     >
-      <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge-muted transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+      <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge-muted group-data-[selected]:bg-accent group-data-[selected]:border-accent">
         <KSelect.ItemIndicator>
           <CheckIcon class="size-2.5 text-page" />
         </KSelect.ItemIndicator>
@@ -130,9 +130,9 @@ const COMBOBOX_ITEM_HEIGHT = 36;
 const ComboboxItem = (itemProps: { item: CollectionNode<Option> }) => (
   <Combobox.Item
     item={itemProps.item}
-    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-ink/5 data-[highlighted]:bg-ink/5 group"
+    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs data-[highlighted]:bg-ink/5 group"
   >
-    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge transition-colors group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-[selected]:bg-accent group-data-[selected]:border-accent">
       <Combobox.ItemIndicator>
         <CheckIcon class="size-2.5 text-page" />
       </Combobox.ItemIndicator>
@@ -167,7 +167,7 @@ const VirtualizedListbox = (props: VirtualizedListboxProps) => {
       scrollToItem={(key) => {
         const index = props.options.findIndex((opt) => opt.value === key);
         if (index !== -1) {
-          virtualizerHandle?.scrollToIndex(index);
+          virtualizerHandle?.scrollToIndex(index, { align: 'nearest' });
         }
       }}
       class="max-h-[200px] overflow-y-auto"
@@ -330,7 +330,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
               <Button
                 variant="ghost"
                 size="sm"
-                class="ml-auto rounded-xs"
+                class="ml-auto rounded-xs w-full"
                 onClick={() => props.onChange([])}
               >
                 Clear
