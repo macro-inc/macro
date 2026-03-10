@@ -27,7 +27,10 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "tracking",
 ] }
 model = { path = "../model" }
+bytes = { workspace = true }
+futures = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+url = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

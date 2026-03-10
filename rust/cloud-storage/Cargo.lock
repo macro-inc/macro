@@ -5005,6 +5005,8 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "bytes",
+ "futures",
  "http-body-util",
  "macro_auth",
  "macro_aws_config",
@@ -5021,6 +5023,7 @@ dependencies = [
  "tower 0.5.2",
  "tower-http",
  "tracing",
+ "url",
  "utoipa",
  "utoipa-swagger-ui",
 ]
