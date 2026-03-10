@@ -23,9 +23,7 @@ fn test_validate_url_accepts_http() {
 #[test]
 fn test_validate_url_rejects_ftp() {
     let result = validate_url("ftp://example.com/image.png");
-    assert!(result.is_err());
-    let (status, _) = result.unwrap_err();
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(matches!(result, Err(ProxyError::InvalidScheme)));
 }
 
 #[test]
@@ -37,9 +35,7 @@ fn test_validate_url_rejects_data_uri() {
 #[test]
 fn test_validate_url_rejects_invalid() {
     let result = validate_url("not a url");
-    assert!(result.is_err());
-    let (status, _) = result.unwrap_err();
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(matches!(result, Err(ProxyError::InvalidUrl(_))));
 }
 
 #[test]
@@ -98,18 +94,14 @@ fn test_is_private_ip_public() {
 async fn test_assert_not_internal_blocks_loopback() {
     let url = Url::parse("http://127.0.0.1/secret").unwrap();
     let result = assert_not_internal(&url).await;
-    assert!(result.is_err());
-    let (status, _) = result.unwrap_err();
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(matches!(result, Err(ProxyError::PrivateIp)));
 }
 
 #[tokio::test]
 async fn test_assert_not_internal_blocks_metadata_endpoint() {
     let url = Url::parse("http://169.254.169.254/latest/meta-data/").unwrap();
     let result = assert_not_internal(&url).await;
-    assert!(result.is_err());
-    let (status, _) = result.unwrap_err();
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(matches!(result, Err(ProxyError::PrivateIp)));
 }
 
 #[tokio::test]
