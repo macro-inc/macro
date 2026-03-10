@@ -10,6 +10,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use comms_service::CommsHandlerState;
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::ports::TaskPropertiesPort;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -121,11 +125,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     }
 }
 
-/// Type alias for the documents router state.
-pub(crate) type DocumentsState = DocumentRouterState<
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
-    EntityAccessService,
+pub(crate) type DocumentService = DocumentServiceImpl<
+    PgDocumentRepo,
+    S3UploadUrlAdapter,
+    TaskPropertiesAdapter,
+    ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
 >;
+
+/// Type alias for the documents router state.
+pub(crate) type DocumentsState = DocumentRouterState<DocumentService, EntityAccessService>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -138,13 +146,9 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 pub(crate) type DssChannelsState =
     ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
-/// Type alias for the document service used by the github sync service.
-pub(crate) type GithubDocumentService =
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>;
-
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
-    GithubSyncServiceImpl<GithubDocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
+    GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

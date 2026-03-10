@@ -2,18 +2,23 @@ use anyhow::Context;
 use models_properties::{EntityReference, EntityType};
 use properties_db_client::entity_properties::delete as entity_properties_delete;
 
-#[tracing::instrument(skip(ctx, message), fields(message_id=message.message_id))]
+use super::DeleteDocumentWorkerContext;
+
+#[tracing::instrument(skip(ctx, message), fields(message_id=message.message_id), err)]
 pub async fn handle(
-    ctx: &crate::context::QueueWorkerContext,
+    ctx: &DeleteDocumentWorkerContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
-    tracing::debug!("processing message");
+    tracing::debug!("processing delete document message");
 
     let (document_id, mut user_id) = if let Some(attributes) = message.message_attributes.as_ref() {
-        let document_id = attributes.get("document_id").map(|document_id| {
-            tracing::trace!(document_id=?document_id, "found document_id in message attributes");
-            document_id.string_value().unwrap_or_default()
-            }).context("document_id should be a message attribute")?;
+        let document_id = attributes
+            .get("document_id")
+            .map(|document_id| {
+                tracing::trace!(document_id=?document_id, "found document_id in message attributes");
+                document_id.string_value().unwrap_or_default()
+            })
+            .context("document_id should be a message attribute")?;
 
         let user_id = attributes.get("user_id").map(|user_id| {
             tracing::trace!(user_id=?user_id, "found user_id in message attributes");
@@ -77,15 +82,13 @@ pub async fn handle(
 
     let user_id = user_id.context("user_id should be some")?;
 
-    let folder = format!("{user_id}/{document_id}");
-
     // Delete files from s3
-    tracing::trace!(folder=%folder, "deleting files from s3");
+    tracing::trace!(user_id=%user_id, document_id=%document_id, "deleting files from s3");
     ctx.s3_client
-        .delete_folder(&ctx.config.document_storage_bucket, &folder)
+        .delete_document(&user_id, document_id)
         .await
         .context("failed to delete files from s3")?;
-    tracing::trace!(folder=%folder, "deleted files from s3");
+    tracing::trace!(document_id=%document_id, "deleted files from s3");
 
     // Delete files from sync service
     let _ = ctx
@@ -112,47 +115,17 @@ pub async fn handle(
     Ok(())
 }
 
-pub fn count_occurrences(strings: Vec<String>) -> Vec<(String, i64)> {
+pub(crate) fn count_occurrences(strings: Vec<String>) -> Vec<(String, i64)> {
     use std::collections::HashMap;
 
     let mut counts = HashMap::new();
 
-    // Count each SHA's occurrences
     for string in strings {
         *counts.entry(string).or_insert(0) += 1;
     }
 
-    // Convert the HashMap into a Vec of tuples
     counts
         .into_iter()
         .map(|(string, count)| (string, count as i64))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_count_occurences() {
-        let shas = vec![
-            "a1b2c3".to_string(),
-            "d4e5f6".to_string(),
-            "a1b2c3".to_string(),
-            "g7h8i9".to_string(),
-            "a1b2c3".to_string(),
-            "d4e5f6".to_string(),
-        ];
-
-        let mut result = count_occurrences(shas);
-        result.sort();
-        assert_eq!(
-            result,
-            vec![
-                ("a1b2c3".to_string(), 3),
-                ("d4e5f6".to_string(), 2),
-                ("g7h8i9".to_string(), 1),
-            ]
-        );
-    }
 }

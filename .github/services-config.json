@@ -31,12 +31,6 @@
       ],
       "stack_path": "infra/stacks/convert-service/**"
     },
-    "delete-document-worker": {
-      "source_paths": [
-        "rust/cloud-storage/delete_document_worker/**"
-      ],
-      "stack_path": "infra/stacks/delete-document-worker/**"
-    },
     "deleted-item-poller": {
       "source_paths": [
         "rust/cloud-storage/deleted_item_poller/**"

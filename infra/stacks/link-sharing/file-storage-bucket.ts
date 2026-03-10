@@ -41,7 +41,6 @@ export const attachPolicyToBucket = ({
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
   documentStorageBucketReplicationRoleArn,
-  deleteDocumentWorkerRoleArn,
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
@@ -56,7 +55,6 @@ export const attachPolicyToBucket = ({
   documentProcessingServiceRoleArn: pulumi.Output<string>;
   pdfPreprocessLambdaRoleArn: pulumi.Output<string>;
   documentStorageBucketReplicationRoleArn: pulumi.Output<string>;
-  deleteDocumentWorkerRoleArn: pulumi.Output<string>;
   searchProcessingServiceRoleArn: pulumi.Output<string>;
   bulkUploadLambdaRoleArn: pulumi.Output<string>;
   convertServiceRoleArn: pulumi.Output<string>;
@@ -85,7 +83,6 @@ export const attachPolicyToBucket = ({
         documentProcessingServiceRoleArn,
         pdfPreprocessLambdaRoleArn,
         documentStorageBucketReplicationRoleArn,
-        deleteDocumentWorkerRoleArn,
         documentTextExtractorArn,
         searchProcessingServiceRoleArn,
         bulkUploadLambdaRoleArn,
@@ -176,15 +173,6 @@ export const attachPolicyToBucket = ({
           AWS: bulkUploadLambdaRoleArn,
         },
         Action: ['s3:PutObject'],
-        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
-      },
-      {
-        Sid: 'AllowAccessForDeleteDocumentWorker',
-        Effect: 'Allow',
-        Principal: {
-          AWS: deleteDocumentWorkerRoleArn,
-        },
-        Action: ['s3:ListBucket', 's3:GetObject', 's3:DeleteObject'],
         Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
       },
       {

@@ -6,16 +6,21 @@ version = "0.1.0"
 
 [dependencies]
 ai = { path = "../ai" }
+ai_format = { path = "../ai_format" }
 ai_toolset = { path = "../ai_toolset" }
+anthropic = { path = "../anthropic" }
 anyhow.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 chrono.workspace = true
 comms = { path = "../comms", features = ["outbound"] }
+connection = { path = "../connection", default-features = false, features = [
+  "ports",
+] }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "axum", "outbound"] }
-entity_access = { path = "../entity_access" }
 email_service_client = { path = "../email_service_client" }
+entity_access = { path = "../entity_access" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
@@ -45,8 +50,6 @@ tokio.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
-ai_format= { path = "../ai_format" }
-anthropic = { path = "../anthropic"}
 
 [dev-dependencies]
 cool_asserts = "2"

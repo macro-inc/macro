@@ -21,7 +21,7 @@ import {
 
 const FilterDivider = () => (
   <div class="flex items-center self-stretch mx-1">
-    <div class="w-px h-4 bg-edge-muted" />
+    <div class="w-px h-full bg-edge-muted/50" />
   </div>
 );
 

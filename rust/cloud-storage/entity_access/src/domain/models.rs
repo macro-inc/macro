@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
 pub use model_entity::EntityType;
@@ -158,7 +158,7 @@ pub enum ChannelRoleResult {
 }
 
 /// A given entity
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     /// The id of the entity
     pub entity_id: String,
@@ -167,10 +167,11 @@ pub struct Entity {
 }
 
 /// The entity access auth type
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(untagged)]
 pub enum EntityAccessAuth {
     /// The user is authenticated
-    Authenticated(MacroUserId<Lowercase<'static>>),
+    Authenticated(MacroUserIdStr<'static>),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
@@ -181,7 +182,7 @@ pub enum EntityAccessAuth {
 ///
 /// The type parameter `T` encodes the minimum permission that was verified
 /// when this receipt was created.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EntityAccessReceipt<T: RequiredPermission> {
     /// The entity access authentication method
     pub(crate) auth: EntityAccessAuth,

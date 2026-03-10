@@ -2,8 +2,7 @@
 
 use std::borrow::Cow;
 
-use entity_access::domain::models::EntityType;
-use macro_user_id::user_id::MacroUserIdStr;
+use entity_access::domain::models::{EntityAccessAuth, EntityType};
 
 /// The invalidation message type
 pub const INVALIDATION_MESSAGE_TYPE: &str = "invalidation";
@@ -18,6 +17,7 @@ pub enum ConnectionError {
 
 /// Reason for an entity to be invalidated
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum InvalidationReason {
     /// The entity was deleted
     Deleted,
@@ -29,6 +29,7 @@ pub enum InvalidationReason {
 
 /// An invalidation event
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub struct InvalidationEvent<'a, T: std::fmt::Debug + serde::Serialize> {
     /// The id of the entity to invalidate
     pub entity_id: Cow<'a, str>,
@@ -36,8 +37,9 @@ pub struct InvalidationEvent<'a, T: std::fmt::Debug + serde::Serialize> {
     pub entity_type: EntityType,
     /// The reason for invalidation
     pub invalidation_reason: InvalidationReason,
-    /// The user who created the invalidation
-    pub invalidated_by: MacroUserIdStr<'a>,
+    /// The creator of the invalidation
+    pub invalidated_by: EntityAccessAuth,
     /// Any additional metadata
-    pub metadata: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<T>,
 }

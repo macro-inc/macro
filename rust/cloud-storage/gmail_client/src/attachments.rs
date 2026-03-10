@@ -45,15 +45,9 @@ pub async fn get_attachment_data(
         .data
         .ok_or_else(|| anyhow!("Gmail API response for attachment did not contain data field"))?;
 
-    let decoded_bytes = match URL_SAFE.decode(base64_data) {
-        Ok(decoded_bytes) => decoded_bytes,
-        Err(e) => {
-            return Err(anyhow!(
-                "Failed to decode base64 body data: {}",
-                e.to_string()
-            ));
-        }
-    };
+    let decoded_bytes = URL_SAFE
+        .decode(base64_data)
+        .map_err(|e| anyhow!("Failed to decode base64 body data: {}", e))?;
 
     Ok(decoded_bytes)
 }

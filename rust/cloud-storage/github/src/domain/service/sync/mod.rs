@@ -288,6 +288,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
         let expected = mac.finalize().into_bytes();
 
         // constant-time comparison
+        #[allow(deprecated)]
         if expected.as_slice().ct_eq(&sig_bytes).into() {
             Ok(ValidatedGithubWebhookEvent::new(
                 event_type.to_string(),
