@@ -79,6 +79,19 @@ pub struct EditDocumentRepoArgs {
     pub user_id: String,
 }
 
+/// Arguments for the edit_document service call.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EditDocumentServiceArgs {
+    /// The name of the document.
+    pub document_name: Option<String>,
+    /// The new project id of the document.
+    pub project_id: Option<String>,
+    /// Updated share permissions for the document.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
 /// Query parameters for the location_v3 endpoint.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct LocationQueryParams {

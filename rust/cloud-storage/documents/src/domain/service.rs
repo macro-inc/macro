@@ -13,7 +13,7 @@ use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
@@ -28,7 +28,10 @@ use model::response::PresignedUrl;
 use sqlx::PgPool;
 use tracing;
 
-use super::models::{CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
+use super::models::{
+    CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, LocationQueryParams,
+};
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
 /// The concrete document service implementation.
@@ -579,6 +582,88 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             content_type: mime_type,
             file_type: file_type.map(|f| f.to_string()),
         })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context, args))]
+    async fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        let access_level = match entity_access_receipt.entity_permission() {
+            entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
+                *access_level
+            }
+            _ => unreachable!(),
+        };
+
+        // Only owners can move documents to a different project
+        if args.project_id.is_some()
+            && access_level
+                != models_permissions::share_permission::access_level::AccessLevel::Owner
+        {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        // Only owners can modify share permissions
+        if args.share_permission.is_some()
+            && access_level
+                != models_permissions::share_permission::access_level::AccessLevel::Owner
+        {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        // Clean the document name (remove file extension if present)
+        let document_name = args
+            .document_name
+            .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
+
+        let user_id = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(macro_user_id) => macro_user_id.as_ref().to_string(),
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+                return Err(DocumentError::Unauthorized);
+            }
+        };
+
+        self.repo
+            .edit_document(EditDocumentRepoArgs {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                document_name,
+                project_id: args.project_id.clone(),
+                share_permission: args.share_permission,
+                user_id: user_id.clone(),
+            })
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        // Update project modified timestamp
+        macro_project_utils::update_project_modified(
+            &self.db,
+            macro_project_utils::ProjectModifiedArgs {
+                project_id: args.project_id,
+                old_project_id: document_context.project_id,
+                user_id,
+            },
+        )
+        .await;
+
+        // Send invalidation event
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Content,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]

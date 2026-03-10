@@ -14,7 +14,8 @@ use model::document::response::{
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
 use super::models::{
-    CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs, LocationQueryParams,
+    CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -201,6 +202,17 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Edit a document's metadata and share permissions.
+    ///
+    /// Validates permissions, updates the document, sends invalidation event,
+    /// and updates project modified timestamp.
+    fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Updates the tasks status to what is provided
     fn update_task_status(
