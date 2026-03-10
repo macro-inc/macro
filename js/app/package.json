@@ -144,6 +144,7 @@
 		"@solidjs/testing-library": "^0.8.10",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/user-event": "^14.6.1",
+		"@types/gtag.js": "^0.0.20",
 		"@types/linkify-it": "^5.0.0",
 		"@types/lodash": "^4.17.20",
 		"@types/node": "^24.8.0",
