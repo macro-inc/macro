@@ -14,9 +14,7 @@ use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
 use documents::inbound::toolset::document_toolset;
-use email::inbound::toolset::{
-    CreateDraft, EmailToolContext, GetThread, ListLabels, UpdateThreadLabels,
-};
+use email::inbound::toolset::email_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
@@ -51,14 +49,8 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .expect("read thread tool")
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .expect("failed to add document toolset")
-        .add_tool::<ListLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
-        .expect("failed to add list labels tool")
-        .add_tool::<UpdateThreadLabels, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
-        .expect("failed to add update thread labels tool")
-        .add_tool::<CreateDraft, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
-        .expect("failed to add create draft tool")
-        .add_tool::<GetThread, EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>>()
-        .expect("failed to add get thread tool");
+        .add_subtoolset::<ToolEmailToolContext>(email_toolset())
+        .expect("failed to add email toolset");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
 }

@@ -86,6 +86,10 @@ pub type ToolEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub type ToolDocumentToolContext =
     DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
 
+/// Type alias for the email tool context
+pub type ToolEmailToolContext =
+    EmailToolContext<ToolEmailService, ToolGmailTokenProvider, ToolEntityAccessService>;
+
 /// Type alias for the soup service implementation
 pub type ToolSoupService =
     SoupImpl<PgSoupRepo, ToolFrecencyService, ToolEmailService, ToolCommsService>;
