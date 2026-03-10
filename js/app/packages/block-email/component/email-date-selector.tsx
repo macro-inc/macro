@@ -10,6 +10,8 @@ import IconX from '@icon/regular/x.svg';
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
+  /** Only show the clock icon, no date text or clear button */
+  compact?: boolean;
 }
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
@@ -41,7 +43,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               )}
             >
               <ClockIcon class="size-5" />
-              <Show when={formattedDate()}>
+              <Show when={!props.compact && formattedDate()}>
                 <span class="text-sm">{formattedDate()}</span>
                 <Tooltip tooltip="Clear">
                   <div
