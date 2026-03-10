@@ -144,7 +144,7 @@ export function Layout(props: RouteSectionProps) {
         />
 
         <Resize.Zone
-          gutter={4}
+          gutter={2}
           direction="horizontal"
           class="flex-1 w-full min-h-0 font-sans text-ink caret-accent"
           id={'main-layout'}
