@@ -8,9 +8,11 @@ export const AppAnalyticsProviders = {
 export const googleAnalyticsProvider = createAnalyticsProvider({
   id: AppAnalyticsProviders.google,
   initialize() {
+    const G_ID = 'G-52HPEL3FTV';
+
     // Google Analytics
     const gaScript = document.createElement('script');
-    gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-52HPEL3FTV';
+    gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${G_ID}`;
     gaScript.async = true;
     document.head.appendChild(gaScript);
 
@@ -19,7 +21,7 @@ export const googleAnalyticsProvider = createAnalyticsProvider({
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-52HPEL3FTV');
+    gtag('config', '${G_ID}');
   `;
     document.head.appendChild(gaInit);
 
@@ -41,6 +43,36 @@ export const googleAnalyticsProvider = createAnalyticsProvider({
 
 export const metaPixelProvider = createAnalyticsProvider({
   id: AppAnalyticsProviders.meta,
-  initialize() {},
+  initialize() {
+    const PIXEL_ID = '639142540393286';
+
+    const fbqInit = document.createElement('script');
+    fbqInit.innerHTML = `
+     !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '${PIXEL_ID}');
+      fbq('track', 'PageView');
+    `;
+
+    document.head.appendChild(fbqInit);
+
+    const pixelImage = document.createElement('img');
+
+    pixelImage.width = 1;
+    pixelImage.height = 1;
+    pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`;
+    pixelImage.style.display = 'none';
+
+    const pixelImageInit = document.createElement('noscript');
+    pixelImageInit.append(pixelImage);
+
+    document.head.appendChild(pixelImageInit);
+  },
   track(event, data) {},
 });
