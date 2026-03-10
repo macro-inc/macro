@@ -54,9 +54,7 @@ document_storage_service_client = { path = "../document_storage_service_client" 
 documents = { path = "../documents", features = ["ai_tools"] }
 entity_access = { path = "../entity_access" }
 doppleganger = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client" }
-email = { path = "../email", features = ["outbound", "gmail_token"] }
-gmail_client = { path = "../gmail_client" }
+email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures = { workspace = true }

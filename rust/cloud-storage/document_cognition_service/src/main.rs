@@ -155,6 +155,30 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized static file service client");
 
+    // Build soup service
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
+    let channels_service = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        PgUserRepo::new(db.clone()),
+        frecency_storage,
+    );
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(db.clone()),
+        frecency_service,
+        email_service,
+        channels_service,
+    ));
+
+    tracing::info!("initialized soup service");
+
     // Initialize Redis client for stream service
     let redis_client = Arc::new(
         redis::Client::open(config.redis_host.as_ref())
@@ -184,43 +208,6 @@ async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for notification state machine")?;
-
-    // Build Gmail integration
-    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        config.authentication_service_secret_key.clone(),
-        config.authentication_service_url.clone(),
-    ));
-    let gmail_token_provider = Arc::new(email::outbound::GmailTokenProviderImpl::new(
-        redis_multiplexed_conn.clone(),
-        auth_service_client,
-    ));
-    let gmail_client = Arc::new(gmail_client::GmailClient::new("unused".to_string()));
-    let gmail_label_modifier = email::outbound::GmailClientLabelModifier::new(gmail_client);
-
-    // Build soup service
-    let frecency_storage = FrecencyPgStorage::new(db.clone());
-    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
-        frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
-        gmail_label_modifier,
-        0,
-    );
-    let email_service = Arc::new(email_service);
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
-        PgUserRepo::new(db.clone()),
-        frecency_storage,
-    );
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(db.clone()),
-        frecency_service,
-        (*email_service).clone(),
-        channels_service,
-    ));
-
-    tracing::info!("initialized soup service");
 
     let notification_ingress_service = Arc::new({
         let notification_repository = DbNotificationRepository::new(db.clone());
@@ -325,13 +312,6 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
-        email_service,
-        gmail_token_provider,
-        entity_access_service: Arc::new(
-            entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(db.clone()),
-            ),
-        ),
         soup_service,
         stream_repo,
         document_tool_context,

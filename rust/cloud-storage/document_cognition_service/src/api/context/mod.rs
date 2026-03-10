@@ -1,8 +1,5 @@
 use crate::config::Config;
-use ai_tools::{
-    ToolDocumentToolContext, ToolEmailService, ToolEntityAccessService, ToolGmailTokenProvider,
-    ToolSoupService,
-};
+use ai_tools::{ToolDocumentToolContext, ToolSoupService};
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -62,9 +59,6 @@ pub struct ApiContext {
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub connection_repo: Arc<dyn ConnectionRepo>,
-    pub email_service: Arc<ToolEmailService>,
-    pub gmail_token_provider: Arc<ToolGmailTokenProvider>,
-    pub entity_access_service: Arc<ToolEntityAccessService>,
     pub soup_service: Arc<ToolSoupService>,
     pub stream_repo: Arc<dyn StreamRepo>,
     pub document_tool_context: ToolDocumentToolContext,

@@ -342,9 +342,6 @@ fn stream_and_save_message(
 
     let tool_context = ToolServiceContext {
         email_service_client: ctx.email_service_client_external.clone(),
-        email_service: ctx.email_service.clone(),
-        gmail_token_provider: ctx.gmail_token_provider.clone(),
-        entity_access_service: ctx.entity_access_service.clone(),
         search_service_client: ctx.search_service_client.clone(),
         scribe: ctx.scribe.clone(),
         soup_service: ctx.soup_service.clone(),

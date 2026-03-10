@@ -192,16 +192,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build soup service dependencies
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let gmail_client = Arc::new(gmail_client::GmailClient::new("unused".to_string()));
-    let gmail_label_modifier = email::outbound::GmailClientLabelModifier::new(gmail_client);
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(pool.clone()),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
-        gmail_label_modifier,
+        email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
-    let email_service = Arc::new(email_service);
     let user_repo = PgUserRepo::new(pool.clone());
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: pool.clone() },
@@ -211,7 +208,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(pool.clone()),
         frecency_service,
-        (*email_service).clone(),
+        email_service,
         channels_service,
     ));
 
@@ -220,15 +217,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .get_multiplexed_async_connection()
         .await
         .unwrap();
-
-    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        "dummy_key".into(),
-        "http://localhost".into(),
-    ));
-    let gmail_token_provider = Arc::new(email::outbound::GmailTokenProviderImpl::new(
-        redis_multiplexed_conn.clone(),
-        auth_service_client,
-    ));
 
     let notification_ingress_service = Arc::new({
         let notification_repository = DbNotificationRepository::new(pool.clone());
@@ -310,13 +298,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
-        email_service,
-        gmail_token_provider,
-        entity_access_service: Arc::new(
-            entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
-            ),
-        ),
         soup_service,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
