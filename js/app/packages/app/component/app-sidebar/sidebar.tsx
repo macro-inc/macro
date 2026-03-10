@@ -1,4 +1,3 @@
-import KeyboardIcon from '@icon/regular/keyboard.svg';
 import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
