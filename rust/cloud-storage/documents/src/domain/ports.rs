@@ -109,6 +109,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         args: EditDocumentRepoArgs,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Update a project's `updatedAt` timestamp.
+    fn update_project_modified(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete a document by ID (used for error cleanup).
     fn delete_document_by_id(
         &self,

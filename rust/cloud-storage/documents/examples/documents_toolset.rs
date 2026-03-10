@@ -125,7 +125,6 @@ async fn main() {
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url),
         s3_upload_adapter,
         NoOpTaskProperties,
-        pool,
         NoOpConnectionService,
     );
 

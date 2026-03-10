@@ -117,7 +117,6 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
         document_name: Some("new-name".to_string()),
         project_id: None,
         share_permission: None,
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -138,7 +137,6 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("new-project".to_string()),
         share_permission: None,
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -160,7 +158,6 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("new-project".to_string()),
         share_permission: None,
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -174,7 +171,6 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("".to_string()),
         share_permission: None,
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -199,7 +195,6 @@ async fn test_edit_document_share_permission(pool: Pool<Postgres>) {
             public_access_level: None,
             channel_share_permissions: None,
         }),
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -238,7 +233,6 @@ async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
             public_access_level: Some(AccessLevel::Edit),
             channel_share_permissions: None,
         }),
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();
@@ -275,7 +269,6 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
             public_access_level: Some(AccessLevel::Edit),
             channel_share_permissions: None,
         }),
-        user_id: Some("macro|user@user.com".to_string()),
     })
     .await
     .unwrap();

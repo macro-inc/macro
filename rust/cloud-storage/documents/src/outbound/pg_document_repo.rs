@@ -521,6 +521,18 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn update_project_modified(&self, project_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE "Project" SET "updatedAt" = NOW() WHERE id = $1"#,
+            project_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
         sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
             .execute(&self.pool)

@@ -3080,7 +3080,6 @@ dependencies = [
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
- "macro_project_utils",
  "macro_user_id",
  "macro_uuid",
  "mockall",
