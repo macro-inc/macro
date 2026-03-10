@@ -111,12 +111,13 @@ export function createChannelMessageActions(
 
             const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
             const channelId = options.channelId();
-            const targetMessage = ctx.message;
+            const targetMessage = message;
+            const liveMessage = ctx.message;
             const threadId =
               (targetMessage as MessageData & { thread_id?: string | null })
                 .thread_id ?? undefined;
             const hasReaction = hasReactionFromUser(
-              targetMessage,
+              liveMessage,
               emoji,
               userId
             );
@@ -128,7 +129,7 @@ export function createChannelMessageActions(
                 emoji,
                 userId,
                 threadId,
-                currentReactions: targetMessage.reactions,
+                currentReactions: liveMessage.reactions,
               });
               return;
             }
@@ -139,7 +140,7 @@ export function createChannelMessageActions(
               emoji,
               userId,
               threadId,
-              currentReactions: targetMessage.reactions,
+              currentReactions: liveMessage.reactions,
             });
           }
         : undefined,

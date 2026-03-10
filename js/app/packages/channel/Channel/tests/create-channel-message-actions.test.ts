@@ -139,6 +139,33 @@ describe('createChannelMessageActions', () => {
     expect(harness.addReaction).not.toHaveBeenCalled();
   });
 
+  it('preserves bound thread context when reacting to a thread reply', () => {
+    const harness = buildHarness({ userId: 'user-1' });
+    const boundReply = buildMessage({
+      id: 'reply-1',
+      thread_id: 'parent-1',
+      reactions: [],
+    });
+    const liveReply = buildMessage({
+      id: 'reply-1',
+      thread_id: undefined,
+      reactions: [],
+    });
+    const actions = harness.getMessageActions(boundReply);
+
+    actions.onReact?.({ message: liveReply, emoji: '👍' });
+
+    expect(harness.addReaction).toHaveBeenCalledTimes(1);
+    expect(harness.addReaction).toHaveBeenCalledWith({
+      channelId: 'channel-1',
+      messageId: 'reply-1',
+      emoji: '👍',
+      userId: 'user-1',
+      threadId: 'parent-1',
+      currentReactions: [],
+    });
+  });
+
   it('keeps react action available without a user id and no-ops on click', () => {
     const harness = buildHarness({ userId: undefined });
     const message = buildMessage();

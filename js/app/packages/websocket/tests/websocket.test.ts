@@ -28,11 +28,6 @@ import {
   stopServer,
   waitForClientToConnectToServer,
 } from './websocket-test-utils';
-import { platformWebSocketFactory } from '@websocket/platform/factory';
-
-const OPTIONS = {
-  factory: platformWebSocketFactory,
-};
 
 describe('Testsuite for Websocket', () => {
   const port: number = process.env.PORT ? parseInt(process.env.PORT) : 41337;
