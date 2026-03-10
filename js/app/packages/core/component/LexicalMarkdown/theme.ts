@@ -230,5 +230,11 @@ export const searchContentHitMarkdownTheme = createTheme({
 
 export const searchContentHitTwoLineClampMarkdownTheme = createTheme({
   ...unifiedListMarkdownTheme,
-  root: `${theme.root} line-clamp-2 pr-[2px] cursor-default overflow-x-auto`,
+  root: `${theme.root} pr-[2px] cursor-default`,
+  paragraph: 'md-p text-[1em] line-clamp-2',
+  // .md .search-match sets display:inline-block, which iOS Safari treats as a
+  // box item inside -webkit-line-clamp, causing the clamp to count one fewer
+  // visual line (line-clamp-3 appears as 2 lines). Override to inline so the
+  // span participates in normal inline text flow and clamping is counted correctly.
+  searchMatch: 'search-match !inline',
 });

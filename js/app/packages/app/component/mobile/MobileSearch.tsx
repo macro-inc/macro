@@ -391,7 +391,7 @@ function FullTextResultItem(props: {
 
   return (
     <div
-      class="px-2 py-2 text-sm font-semibold hover:bg-hover/30 cursor-pointer"
+      class="px-2 py-2 text-sm font-semibold cursor-pointer"
       onClick={(e) => props.onSelect(props.entity, e.shiftKey)}
     >
       <div class="flex items-center gap-2 min-w-0">
@@ -403,6 +403,7 @@ function FullTextResultItem(props: {
       <Show when={hit()}>
         {(h) => (
           <div class="ml-7 mt-1 border-l-2 border-edge-muted pl-2 text-xs font-normal text-ink-muted">
+            {/*<p class="line-clamp-3">{h()}</p>*/}
             <SearchContent twoLineClamp hit={h()} />
           </div>
         )}
