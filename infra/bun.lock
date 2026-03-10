@@ -71,10 +71,6 @@
       "name": "convert-service-stack",
       "version": "0.0.0",
     },
-    "stacks/delete-document-worker": {
-      "name": "delete-document-worker-stack",
-      "version": "0.0.0",
-    },
     "stacks/deleted-item-poller": {
       "name": "deleted-item-poller-stack",
       "version": "0.0.0",
@@ -591,8 +587,6 @@
     "decompress-response": ["decompress-response@6.0.0", "", { "dependencies": { "mimic-response": "^3.1.0" } }, "sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ=="],
 
     "defer-to-connect": ["defer-to-connect@2.0.1", "", {}, "sha512-4tvttepXG1VaYGrRibk5EwJd1t4udunSOVMdLSAL6mId1ix438oPwPZMALY41FCijukO1L0twNcGsdzS7dHgDg=="],
-
-    "delete-document-worker-stack": ["delete-document-worker-stack@workspace:stacks/delete-document-worker"],
 
     "deleted-item-poller-stack": ["deleted-item-poller-stack@workspace:stacks/deleted-item-poller"],
 
