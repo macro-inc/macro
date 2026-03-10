@@ -303,6 +303,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </Show>
 
         <div class="mt-auto w-full px-2">
+          {/*<Button
+            class={cn(
+              'flex items-center justify-start text-sm gap-2 cursor-default',
+              isSlim() ? 'justify-center aspect-square' : 'w-full'
+            )}
+            variant="ghost"
+            size={isSlim() ? 'icon-sm' : 'sm'}
+            onClick={() => openSettings('Shortcuts')}
+          >
+            <KeyboardIcon class="size-4 shrink-0" />
+            <span class={cn(isSlim() ? 'sr-only' : 'block')}>Shortcuts</span>
+          </Button>*/}
+
           <Tooltip
             class="w-full"
             tooltip={
@@ -325,19 +338,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               <span class={cn(isSlim() ? 'sr-only' : 'block')}>Settings</span>
             </Button>
           </Tooltip>
-
-          <Button
-            class={cn(
-              'flex items-center justify-start text-sm gap-2 cursor-default',
-              isSlim() ? 'justify-center aspect-square' : 'w-full'
-            )}
-            variant="ghost"
-            size={isSlim() ? 'icon-sm' : 'sm'}
-            onClick={() => openSettings('Shortcuts')}
-          >
-            <KeyboardIcon class="size-4 shrink-0" />
-            <span class={cn(isSlim() ? 'sr-only' : 'block')}>Shortcuts</span>
-          </Button>
         </div>
       </div>
     </>
