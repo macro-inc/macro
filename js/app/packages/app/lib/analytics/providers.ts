@@ -74,5 +74,7 @@ export const metaPixelProvider = createAnalyticsProvider({
 
     document.head.appendChild(pixelImageInit);
   },
-  track(event, data) {},
+  track(event, data) {
+    fbq('track', event, data ?? {});
+  },
 });
