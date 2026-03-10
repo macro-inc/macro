@@ -42,7 +42,7 @@ pub(super) async fn link_by_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,
 ) -> Result<Option<Link>, sqlx::Error> {
-    let db_link = sqlx::query_as!(
+    let db_link: Option<DbLink> = sqlx::query_as!(
         DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
@@ -57,7 +57,7 @@ pub(super) async fn link_by_macro_id(
     .await?;
 
     db_link
-        .map(|v| v.try_into_model())
+        .map(|v: DbLink| v.try_into_model())
         .transpose()
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
