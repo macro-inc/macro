@@ -133,7 +133,6 @@ export function MobileSearchInner() {
 
   function handleFullTextItemAction(
     entity: WithSearch<EntityData>,
-    openInNewSplit = false
   ) {
     const hitData = entity.search.contentHitData?.[0];
     const location =
