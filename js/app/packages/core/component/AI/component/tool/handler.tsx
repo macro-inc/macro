@@ -10,8 +10,11 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import { createDocumentHandler } from './CreateDocument';
 import { listEntitiesHandler } from './ListEntities';
-import { readHandler } from './Read';
+import { readThreadHandler } from './ReadThread';
+import { readContentHandler } from './ReadContent';
+import { readMetadataHandler } from './ReadMetadata';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import type { RenderContext } from './ToolRenderer';
@@ -22,8 +25,11 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
+  CreateDocument: createDocumentHandler,
   NameSearch: nameSearchHandler,
-  Read: readHandler,
+  ReadThread: readThreadHandler,
+  ReadContent: readContentHandler,
+  ReadMetadata: readMetadataHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
   web_fetch: webFetchHandler,
   web_search: webSearchHandler,

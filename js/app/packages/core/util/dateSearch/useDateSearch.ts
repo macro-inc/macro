@@ -1,5 +1,13 @@
 import { createMemo, type Accessor } from 'solid-js';
-import { format, parse, isValid, setYear, getYear, addYears } from 'date-fns';
+import {
+  addDays,
+  format,
+  parse,
+  isValid,
+  setYear,
+  getYear,
+  addYears,
+} from 'date-fns';
 import {
   formatDuration,
   parseDateFromDuration,
@@ -37,6 +45,98 @@ const possibleDateFormats = [
   'yyyy-MM-dd', // "2024-01-15"
   'dd-MM-yyyy', // "15-01-2024"
 ];
+
+interface ParsedTime {
+  hours: number; // 0-23
+  minutes: number; // 0-59
+}
+
+/**
+ * Parse time strings like "9am", "9 AM", "3:30pm", "14:00", "noon", "midnight"
+ * Returns the parsed time and the remaining input with the time portion removed.
+ */
+function parseTime(input: string): { time: ParsedTime; rest: string } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // "noon"
+  if (/^noon$/i.test(trimmed)) {
+    return { time: { hours: 12, minutes: 0 }, rest: '' };
+  }
+  // "midnight"
+  if (/^midnight$/i.test(trimmed)) {
+    return { time: { hours: 0, minutes: 0 }, rest: '' };
+  }
+
+  // Try matching time at end of string: "tomorrow 9am", "feb 17 3:30 PM"
+  // Also matches standalone: "9am", "3:30pm", "14:00"
+  const timeAtEnd = /^(.*?)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*$/i;
+  const time24AtEnd = /^(.*?)\s*(\d{1,2}):(\d{2})\s*$/;
+
+  let match = trimmed.match(timeAtEnd);
+  if (match) {
+    let hours = parseInt(match[2]);
+    const minutes = parseInt(match[3] || '0');
+    const meridiem = match[4].toLowerCase();
+
+    if (hours < 1 || hours > 12 || minutes > 59) return null;
+
+    if (meridiem === 'pm' && hours !== 12) hours += 12;
+    if (meridiem === 'am' && hours === 12) hours = 0;
+
+    return { time: { hours, minutes }, rest: match[1].trim() };
+  }
+
+  // 24-hour format: "14:00", "tomorrow 14:00"
+  match = trimmed.match(time24AtEnd);
+  if (match) {
+    const hours = parseInt(match[2]);
+    const minutes = parseInt(match[3]);
+
+    if (hours > 23 || minutes > 59) return null;
+
+    return { time: { hours, minutes }, rest: match[1].trim() };
+  }
+
+  // Time at start: "9am tomorrow", "3:30 PM feb 17"
+  const timeAtStart = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s+(.+)$/i;
+  match = trimmed.match(timeAtStart);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2] || '0');
+    const meridiem = match[3].toLowerCase();
+
+    if (hours < 1 || hours > 12 || minutes > 59) return null;
+
+    if (meridiem === 'pm' && hours !== 12) hours += 12;
+    if (meridiem === 'am' && hours === 12) hours = 0;
+
+    return { time: { hours, minutes }, rest: match[4].trim() };
+  }
+
+  return null;
+}
+
+/**
+ * Format a parsed time for display, e.g. "9 AM", "3:30 PM"
+ */
+function formatParsedTime(time: ParsedTime): string {
+  const h = time.hours % 12 || 12;
+  const meridiem = time.hours >= 12 ? 'PM' : 'AM';
+  if (time.minutes === 0) {
+    return `${h} ${meridiem}`;
+  }
+  return `${h}:${time.minutes.toString().padStart(2, '0')} ${meridiem}`;
+}
+
+/**
+ * Apply a parsed time to a date, returning a new Date with the time set.
+ */
+function applyTime(date: Date, time: ParsedTime): Date {
+  const result = new Date(date);
+  result.setHours(time.hours, time.minutes, 0, 0);
+  return result;
+}
 
 /**
  * Parse natural date strings like "feb 17", "march 3", "jan 1 2025", etc.
@@ -133,7 +233,8 @@ function scoreMatch(option: DateOption, query: string): number {
  */
 function formatDateWithContext(
   date: Date,
-  baseDate: Date = new Date()
+  baseDate: Date = new Date(),
+  showTime = true
 ): string {
   const now = new Date(baseDate);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -148,24 +249,31 @@ function formatDateWithContext(
   );
 
   if (diffDays === 0) {
-    return `Today, ${format(date, 'h:mm a')}`;
+    return showTime ? `Today, ${format(date, 'h:mm a')}` : 'Today';
   } else if (diffDays === 1) {
-    return `Tomorrow, ${format(date, 'h:mm a')}`;
+    return showTime ? `Tomorrow, ${format(date, 'h:mm a')}` : 'Tomorrow';
   } else if (diffDays === -1) {
-    return `Yesterday, ${format(date, 'h:mm a')}`;
+    return showTime ? `Yesterday, ${format(date, 'h:mm a')}` : 'Yesterday';
   } else if (diffDays > 0 && diffDays <= 7) {
-    return format(date, "EEEE, MMM d 'at' h:mm a");
+    return showTime
+      ? format(date, "EEEE, MMM d 'at' h:mm a")
+      : format(date, 'EEEE, MMM d');
   } else {
     const sameYear = date.getFullYear() === now.getFullYear();
-    return sameYear
-      ? format(date, "MMM d 'at' h:mm a")
-      : format(date, "MMM d, yyyy 'at' h:mm a");
+    if (showTime) {
+      return sameYear
+        ? format(date, "MMM d 'at' h:mm a")
+        : format(date, "MMM d, yyyy 'at' h:mm a");
+    }
+    return sameYear ? format(date, 'MMM d') : format(date, 'MMM d, yyyy');
   }
 }
 
 export function useDateSearch(params: {
   query: Accessor<string>;
   baseDate?: Date;
+  defaultTime?: ParsedTime;
+  showTimeInResults?: boolean;
   maxItems?: number;
 }) {
   const baseDate = params.baseDate || new Date();
@@ -176,27 +284,53 @@ export function useDateSearch(params: {
 
     if (!query) {
       const presets = searchPresets('');
-      return presets.slice(0, PRESET_COUNT).map(
-        (preset): DateOption => ({
-          id: preset.id,
-          displayText: preset.label,
-          secondaryText: format(preset.getDate(baseDate), 'MMM d, yyyy'),
-          date: preset.getDate(baseDate),
-          type: 'preset',
-          score: 0,
+      return presets
+        .map((preset): DateOption => {
+          let date = preset.getDate(baseDate);
+          if (params.defaultTime) {
+            date = applyTime(date, params.defaultTime);
+          }
+          return {
+            id: preset.id,
+            displayText: preset.label,
+            secondaryText: formatDateWithContext(
+              date,
+              baseDate,
+              params.showTimeInResults ?? true
+            ),
+            date,
+            type: 'preset',
+            score: 0,
+          };
         })
-      );
+        .filter((option) => option.date > new Date())
+        .slice(0, PRESET_COUNT);
     }
 
+    // Extract time component if present (e.g., "9am", "tomorrow 3:30pm")
+    const parsedTime = parseTime(query);
+    const dateQuery = parsedTime ? parsedTime.rest : query;
+
     // 1. Try parsing as duration DSL (3d, 1w, etc.)
-    const parsedDuration = parseDurationString(query);
+    // Only parse the date portion; if time was extracted and nothing remains, skip duration parsing
+    const durationInput = parsedTime ? dateQuery : query;
+    const parsedDuration = durationInput
+      ? parseDurationString(durationInput)
+      : null;
     if (parsedDuration) {
-      const durationDate = parseDateFromDuration(query, baseDate);
+      let durationDate = parseDateFromDuration(durationInput, new Date());
       if (durationDate) {
+        if (parsedTime) {
+          durationDate = applyTime(durationDate, parsedTime.time);
+        }
         options.push({
           id: `duration-${query}`,
           displayText: `${query} (${formatDuration(parsedDuration)} from now)`,
-          secondaryText: formatDateWithContext(durationDate, baseDate),
+          secondaryText: formatDateWithContext(
+            durationDate,
+            baseDate,
+            params.showTimeInResults ?? true
+          ),
           date: durationDate,
           type: 'duration',
           score: 100,
@@ -204,32 +338,77 @@ export function useDateSearch(params: {
       }
     }
 
-    // 2. Try parsing as natural date (feb 17, march 3, etc.)
-    const naturalDate = parseNaturalDate(query, baseDate);
+    // 2. Standalone time with no date part (e.g., "9am", "3:30pm") → today, or tomorrow if past
+    if (parsedTime && !dateQuery) {
+      const now = new Date();
+      let todayWithTime = applyTime(now, parsedTime.time);
+      if (todayWithTime <= now) {
+        todayWithTime = addDays(todayWithTime, 1);
+      }
+      options.push({
+        id: `time-${query}`,
+        displayText: query,
+        secondaryText: formatDateWithContext(
+          todayWithTime,
+          baseDate,
+          params.showTimeInResults ?? true
+        ),
+        date: todayWithTime,
+        type: 'natural',
+        score: 98,
+      });
+    }
+
+    // 3. Try parsing as natural date (feb 17, march 3, thursday, etc.)
+    const naturalQuery = dateQuery || query;
+    let naturalDate = parseNaturalDate(naturalQuery, baseDate);
     if (naturalDate) {
+      const naturalTime = parsedTime?.time ?? params.defaultTime;
+      if (naturalTime) {
+        naturalDate = applyTime(naturalDate, naturalTime);
+      }
+      const displayText = parsedTime
+        ? `${naturalQuery} at ${formatParsedTime(parsedTime.time)}`
+        : query;
       options.push({
         id: `natural-${query}`,
-        displayText: query,
-        secondaryText: formatDateWithContext(naturalDate, baseDate),
+        displayText,
+        secondaryText: formatDateWithContext(
+          naturalDate,
+          baseDate,
+          params.showTimeInResults ?? true
+        ),
         date: naturalDate,
         type: 'natural',
         score: 95,
       });
     }
 
-    const matchingPresets = searchPresets(query);
+    // Search presets using both the full query and the date-only part (time stripped)
+    const presetQuery = parsedTime && dateQuery ? dateQuery : query;
+    const matchingPresets = searchPresets(presetQuery);
+    const effectiveTime = parsedTime?.time ?? params.defaultTime;
     matchingPresets.forEach((preset) => {
-      const date = preset.getDate(baseDate);
+      let date = preset.getDate(baseDate);
+      if (effectiveTime) {
+        date = applyTime(date, effectiveTime);
+      }
       const option: DateOption = {
         id: `preset-${preset.id}`,
-        displayText: preset.label,
-        secondaryText: formatDateWithContext(date, baseDate),
+        displayText: parsedTime
+          ? `${preset.label} at ${formatParsedTime(parsedTime.time)}`
+          : preset.label,
+        secondaryText: formatDateWithContext(
+          date,
+          baseDate,
+          params.showTimeInResults ?? true
+        ),
         date,
         type: 'preset',
         score: 0,
       };
 
-      option.score = scoreMatch(option, query);
+      option.score = scoreMatch(option, presetQuery);
 
       if (option.score > 0) {
         options.push(option);
@@ -249,4 +428,4 @@ export function useDateSearch(params: {
 }
 
 // Export helper functions for testing
-export { parseNaturalDate, formatDateWithContext };
+export { parseNaturalDate, formatDateWithContext, parseTime };

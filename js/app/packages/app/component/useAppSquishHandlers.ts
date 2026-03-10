@@ -11,7 +11,37 @@ import { onCleanup, onMount } from 'solid-js';
  * Functionality for responding to virtual keyboard appearance in web app and native mobile app.
  */
 export function useAppSquishHandlers() {
-  if (isIOS) {
+  if (isNativeMobilePlatform()) {
+    type VirtualKeyboardEvent = CustomEventInit<{
+      height: number;
+      duration: number;
+    }>;
+
+    const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
+      setVirtualKeyboardVisible(true);
+      setVirtualKeyboardHeight(event.detail?.height ?? 0);
+      const newViewportHeight =
+        (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
+      const vh = newViewportHeight * 0.01;
+      document.documentElement.style.setProperty('--dvh', `${vh}px`);
+    };
+
+    const handleKeyboardWillHide = () => {
+      setVirtualKeyboardVisible(false);
+      setVirtualKeyboardHeight(0);
+      document.documentElement.style.setProperty('--dvh', '1dvh');
+    };
+
+    onMount(() => {
+      window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
+      window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
+
+      onCleanup(() => {
+        window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
+        window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
+      });
+    });
+  } else if (isIOS) {
     // We are tracking viewport height, and using that to set a CSS variable,
     // so that we can properly constrain the viewport-height for mobile in response to changes such as
     // the virtual keyboard appearing.
@@ -61,38 +91,6 @@ export function useAppSquishHandlers() {
           window.visualViewport.removeEventListener('scroll', handleResize);
         }
         document.removeEventListener('focusout', handleFocusOut);
-      });
-    });
-  }
-
-  if (isNativeMobilePlatform()) {
-    type VirtualKeyboardEvent = CustomEventInit<{
-      height: number;
-      duration: number;
-    }>;
-
-    const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
-      setVirtualKeyboardVisible(true);
-      setVirtualKeyboardHeight(event.detail?.height ?? 0);
-      const newViewportHeight =
-        (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
-      const vh = newViewportHeight * 0.01;
-      document.documentElement.style.setProperty('--dvh', `${vh}px`);
-    };
-
-    const handleKeyboardWillHide = () => {
-      setVirtualKeyboardVisible(false);
-      setVirtualKeyboardHeight(0);
-      document.documentElement.style.setProperty('--dvh', '1dvh');
-    };
-
-    onMount(() => {
-      window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
-      window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
-
-      onCleanup(() => {
-        window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
-        window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
       });
     });
   }

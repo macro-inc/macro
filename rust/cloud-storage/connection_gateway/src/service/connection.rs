@@ -202,12 +202,12 @@ impl ConnectionManager {
     pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
-            None => return Err(anyhow::anyhow!("connection not found")),
+            None => anyhow::bail!("connection not found"),
         };
 
         if let Err(err) = sender.send(OutgoingMessage::Message(message)).await {
             self.remove_connection(id).await?;
-            return Err(anyhow::anyhow!("failed to send message: {}", err));
+            anyhow::bail!("failed to send message: {}", err);
         }
 
         Ok(())

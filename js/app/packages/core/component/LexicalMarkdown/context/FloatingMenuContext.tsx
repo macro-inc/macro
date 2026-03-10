@@ -93,7 +93,7 @@ export function createMenuOpenSignal(
 ): Signal<boolean> {
   const context = useContext(FloatingMenuContext);
   if (!context) {
-    console.warn(
+    console.info(
       'createMenuOpenSignal called outside of <FloatingMenuGroup>. Falling back to plain signal. This may not be what you want.'
     );
     return createSignal(initial ?? false);

@@ -137,7 +137,7 @@ pub async fn create_blank_docx(
             document_id=?document.id,
             "transaction error",
         );
-        return Err(anyhow::Error::msg("unable to create blank docx document"));
+        anyhow::bail!("unable to create blank docx document");
     }
 
     let parts_json: serde_json::Value = serde_json::to_value(document_bom_parts)?;

@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use doppleganger::Mirror;
 use models_email::gmail::history::{GmailHistory, GmailHistoryDb};
 use sqlx::PgPool;
@@ -13,7 +12,7 @@ pub async fn fetch_history_id_for_link(
     provider: models_email::service::link::UserProvider,
 ) -> anyhow::Result<Option<String>> {
     if email_address.is_empty() {
-        return Err(anyhow!("Email address cannot be empty"));
+        anyhow::bail!("Email address cannot be empty");
     }
 
     let normalized_email = email_address.to_lowercase();

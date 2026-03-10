@@ -1,6 +1,5 @@
 use crate::api::context::ApiContext;
 use crate::api::email::messages::BATCH_UPDATE_MESSAGE_LIMIT;
-use anyhow::anyhow;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -226,7 +225,7 @@ pub async fn add_label_to_messages(
     }
 
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     // First clone for the Gmail API operations
@@ -334,7 +333,7 @@ pub async fn remove_label_from_messages(
     }
 
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     // First clone for the Gmail API operations

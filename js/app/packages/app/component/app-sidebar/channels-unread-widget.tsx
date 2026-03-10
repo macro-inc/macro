@@ -112,7 +112,7 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     <Button
       as={'a'}
       href={`/channel/${props.group.entityId}`}
-      class="flex items-center justify-start gap-3 w-full"
+      class="flex items-center justify-start gap-3 w-full cursor-default"
       variant="ghost"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
@@ -188,7 +188,7 @@ export const ChannelsUnreadWidget = () => {
 
   return (
     <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-      <header class="text-xs font-medium text-ink-muted tracking-wide">
+      <header class="text-xs font-medium text-ink-muted ml-3">
         <h1>Unread</h1>
       </header>
 

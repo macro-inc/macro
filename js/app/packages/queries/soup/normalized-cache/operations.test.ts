@@ -45,6 +45,7 @@ import {
   insertSoupEntity,
   removeSoupEntities,
   removeSearchEntities,
+  optimisticUpdateSoupItemUpdatedAt,
   optimisticUpdateSoupEntity,
 } from './operations';
 import { soupKeys } from '../keys';
@@ -59,10 +60,32 @@ function mockDocumentItem(id: string): SoupApiItem {
   } as unknown as SoupApiItem;
 }
 
+function mockDocumentItemWithUpdatedAt(
+  id: string,
+  updatedAt: string
+): SoupApiItem {
+  return {
+    tag: 'document',
+    data: { id, title: 'doc', updatedAt },
+    frecency_score: 1,
+  } as unknown as SoupApiItem;
+}
+
 function mockChannelItem(id: string): SoupApiItem {
   return {
     tag: 'channel',
     data: { channel: { id, name: 'ch' } },
+    frecency_score: 1,
+  } as unknown as SoupApiItem;
+}
+
+function mockChannelItemWithUpdatedAt(
+  id: string,
+  updatedAt: string
+): SoupApiItem {
+  return {
+    tag: 'channel',
+    data: { channel: { id, name: 'ch', updated_at: updatedAt } },
     frecency_score: 1,
   } as unknown as SoupApiItem;
 }
@@ -338,5 +361,94 @@ describe('optimisticUpdateSoupEntity', () => {
         dependentKey
       );
     expect(restored).toEqual(originalData);
+  });
+});
+
+describe('optimisticUpdateSoupItemUpdatedAt', () => {
+  it('updates updatedAt for non-channel entities', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockDocumentItem('doc-1'));
+
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'document',
+      data: { id: 'doc-1', updatedAt: '2024-01-01T00:00:00.000Z' },
+      frecency_score: 1,
+    });
+  });
+
+  it('updates updated_at for channel entities', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockChannelItem('ch-1'));
+
+    optimisticUpdateSoupItemUpdatedAt(
+      'ch-1',
+      'channel',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'channel',
+      data: {
+        channel: { id: 'ch-1', updated_at: '2024-01-01T00:00:00.000Z' },
+      },
+      frecency_score: 1,
+    });
+  });
+
+  it('does not update when incoming updatedAt is older or equal (non-channel)', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(
+      mockDocumentItemWithUpdatedAt('doc-1', '2024-01-02T00:00:00.000Z')
+    );
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    mockNormalizer.getObjectById.mockReturnValueOnce(
+      mockDocumentItemWithUpdatedAt('doc-1', '2024-01-02T00:00:00.000Z')
+    );
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-02T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
+  });
+
+  it('does not update when incoming updated_at is older (channel)', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(
+      mockChannelItemWithUpdatedAt('ch-1', '2024-01-02T00:00:00.000Z')
+    );
+
+    optimisticUpdateSoupItemUpdatedAt(
+      'ch-1',
+      'channel',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when cache entity is missing or tag mismatches', () => {
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockDocumentItem('doc-1'));
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'chat',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use models_email::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
@@ -11,7 +10,7 @@ pub async fn insert_message_label(
     link_id: Uuid,
 ) -> anyhow::Result<()> {
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let result = sqlx::query!(
@@ -43,11 +42,11 @@ pub async fn insert_message_label(
                 link_id = %link_id,
                 "No message label found to create relation for"
             );
-            Err(anyhow!(
+            anyhow::bail!(
                 "No label found for link_id {} with provider_label_id {}",
                 link_id,
                 provider_label_id
-            ))
+            )
         }
     }
 }
@@ -68,7 +67,7 @@ where
     }
 
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let result = sqlx::query!(
@@ -291,11 +290,11 @@ pub async fn insert_message_labels(
     .await?;
 
     if label_mappings.len() != provider_label_ids.len() {
-        return Err(anyhow!(
+        anyhow::bail!(
             "Could not find all expected labels in database after upsert. link_id: {}, provider_label_ids: {:?}",
             link_id,
             provider_label_ids
-        ));
+        );
     }
 
     // insert into junction table

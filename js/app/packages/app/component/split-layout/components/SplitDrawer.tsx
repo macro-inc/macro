@@ -63,7 +63,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-menu border-edge/50 z-2 flex flex-col`;
+    const baseClasses = `absolute bg-panel border-edge-muted/50 z-2 flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':
@@ -73,10 +73,10 @@ export function SplitDrawer(
         positionClasses = 'top-unset left-px right-px bottom-px border-t';
         break;
       case 'left':
-        positionClasses = 'bottom-px left-px border-r';
+        positionClasses = 'bottom-px left-px border-r border-t';
         break;
       case 'right':
-        positionClasses = 'bottom-px right-px border-l';
+        positionClasses = 'bottom-px right-px border-l border-t';
         break;
       default:
         break;
@@ -121,9 +121,9 @@ export function SplitDrawer(
         />
         <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
           <div class={getGradientMaskClasses()} />
-          <div class="flex items-center justify-start gap-2 shrink-0">
+          <div class="flex items-center justify-start gap-2 shrink-0 px-2">
             <Show when={props.title}>
-              <h3 class="text-md font-medium text-content-secondary shrink truncate m-3">
+              <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
                 {props.title}
               </h3>
             </Show>

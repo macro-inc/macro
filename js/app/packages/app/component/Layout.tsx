@@ -23,13 +23,14 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
-import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 import {
   AppSidebar,
   type SidebarState,
 } from '@app/component/app-sidebar/sidebar';
 import { isMobile } from '@core/mobile/isMobile';
+import { MobileDock } from './mobile/MobileDock';
+import { MobileSearchOuter } from './mobile/MobileSearch';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -102,15 +103,16 @@ export function Layout(props: RouteSectionProps) {
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
-          <Suspense>
-            <CommandMenu />
-          </Suspense>
+          <Show when={!isMobile()}>
+            <Suspense>
+              <CommandMenu />
+            </Suspense>
+          </Show>
           <Suspense>
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
-          <ShortcutsHelper />
         </Show>
         <Show
           when={
@@ -129,17 +131,19 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <AppSidebar
-          sidebarState={sidebarState()}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSidebarState(isMobile() ? 'hidden' : 'slim');
-              return;
-            }
+        <Show when={isAuthenticated()}>
+          <AppSidebar
+            sidebarState={sidebarState()}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSidebarState(isMobile() ? 'hidden' : 'slim');
+                return;
+              }
 
-            setSidebarState('expanded');
-          }}
-        />
+              setSidebarState('expanded');
+            }}
+          />
+        </Show>
 
         <Resize.Zone
           gutter={4}
@@ -148,15 +152,19 @@ export function Layout(props: RouteSectionProps) {
           id={'main-layout'}
         >
           <ItemDndProvider>
-            <Show when={isAuthenticated()}>
-              <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-                {props.children}
-              </Resize.Panel>
-              <SettingsWrapper />
-            </Show>
+            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
+              {props.children}
+            </Resize.Panel>
+            <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
+      <Show when={isMobile() && !virtualKeyboardVisible()}>
+        <MobileDock />
+      </Show>
+      <Show when={isMobile()}>
+        <MobileSearchOuter />
+      </Show>
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}

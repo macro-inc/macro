@@ -47,7 +47,6 @@ import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
-import { DateSelector } from '@block-email/component/date-selector';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { isMobile } from '@core/mobile/isMobile';
@@ -82,8 +81,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [isDragging, setIsDragging] = createSignal<boolean>();
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-
-  const [scheduleSendOpen, setScheduleSendOpen] = createSignal(false);
 
   const panel = useSplitPanel();
 
@@ -336,6 +333,13 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     <PaperclipHorizontalIcon class="h-5" />
                   </Button>
                 </div>
+                <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+                  <EmailDateSelector
+                    sendTime={props.sendTime}
+                    onSendTimeChange={props.onSendTimeChange}
+                    compact
+                  />
+                </Show>
                 <Button
                   disabled={props.isSubmitting || props.disabled}
                   onClick={() => {
@@ -350,12 +354,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenuContent>
-                      <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
-                        <MenuItem
-                          text="Schedule Send"
-                          onClick={() => setScheduleSendOpen(true)}
-                        />
-                      </Show>
                       <MenuItem
                         text="Delete Draft"
                         disabled={!props.hasDraft}
@@ -364,16 +362,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     </DropdownMenuContent>
                   </DropdownMenu.Portal>
                 </DropdownMenu>
-                <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
-                  <DateSelector
-                    open={scheduleSendOpen()}
-                    onClose={() => setScheduleSendOpen(false)}
-                    selectedDate={props.sendTime}
-                    onSelectDate={props.onSendTimeChange}
-                    disablePriorToDate={new Date()}
-                    trigger={<span class="w-0 h-0 overflow-hidden" />}
-                  />
-                </Show>
               </div>
             </SplitHeaderRight>
           }
@@ -417,25 +405,24 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <Trash />
               </Button>
             </Show>
-            <Button
-              disabled={props.isSubmitting || props.disabled}
-              onClick={() => {
-                handleSend();
-              }}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-            >
-              <Show
-                when={!props.isSubmitting}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
-                }
-              >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                </div>
-              </Show>
-            </Button>
           </div>
+
+          <Button
+            disabled={props.isSubmitting || props.disabled}
+            onClick={() => {
+              handleSend();
+            }}
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+          >
+            <Show
+              when={!props.isSubmitting}
+              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+            >
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Show>
+          </Button>
         </Show>
       </div>
     </div>

@@ -81,7 +81,7 @@ impl FileSystemNode {
     pub fn get_root_folder(&self, root_folder_name: &str) -> anyhow::Result<&FileSystemNode> {
         let item = match self {
             FileSystemNode::File(_) => {
-                return Err(anyhow::anyhow!("Expected a folder node, found a file"));
+                anyhow::bail!("Expected a folder node, found a file");
             }
             FileSystemNode::Folder(folder) => folder,
         };
@@ -130,7 +130,7 @@ impl FileSystemNode {
     fn as_folder_mut(&mut self) -> anyhow::Result<&mut HashMap<String, FileSystemNode>> {
         match self {
             FileSystemNode::Folder(folder) => Ok(folder),
-            _ => Err(anyhow::anyhow!("Expected a folder node, found a file")),
+            _ => anyhow::bail!("Expected a folder node, found a file"),
         }
     }
 }

@@ -592,7 +592,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu ring-1 ring-edge-muted rounded-sm suppress-css-brackets"
         classList={{
           [gridColsClass()]: true,
         }}

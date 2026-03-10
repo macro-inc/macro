@@ -78,7 +78,7 @@ import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
-import { VerticalScrollIndicators } from '../VerticalScrollIndicators';
+import { ScrollIndicators } from '../VerticalScrollIndicators';
 
 false && clickOutside;
 
@@ -567,10 +567,10 @@ export function ShareModal(props: ShareModalProps) {
 
             <Show when={(recipients()?.length ?? 0) > 0}>
               <div class="grow-2 shrink-1 min-h-[118px] flex flex-col border-t-1 border-edge-muted relative">
-                <VerticalScrollIndicators
+                <ScrollIndicators
                   scrollRef={recipientScrollRef}
-                  noBorderBottom
-                  noBorderTop
+                  noBorderStart
+                  noBorderEnd
                 />
                 <div
                   class="overflow-y-auto scrollbar-hidden"
@@ -935,7 +935,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <div class="border-1 border-edge-muted flex ml-1 items-stretch">
+    <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
       <Tooltip
         tooltip={
           <div>

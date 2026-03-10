@@ -81,9 +81,7 @@ pub async fn get_share_permission_id(
             .id
         }
         _ => {
-            return Err(anyhow::anyhow!(format!(
-                "unsupported item type {item_type}"
-            )));
+            anyhow::bail!("unsupported item type {item_type}");
         }
     };
 

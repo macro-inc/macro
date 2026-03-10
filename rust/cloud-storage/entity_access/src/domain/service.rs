@@ -6,11 +6,13 @@ use std::str::FromStr;
 use crate::domain::{
     models::{
         AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredAccessLevel,
+        EntityPermission, EntityType, RequiredPermission,
     },
     ports::{AccessRepository, EntityAccessService},
 };
-use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
+};
 use uuid::Uuid;
 
 /// Implementation of the [`EntityAccessService`].
@@ -79,7 +81,7 @@ where
     R: AccessRepository,
 {
     #[tracing::instrument(err, skip(self))]
-    async fn generate_entity_access_receipt<T: RequiredAccessLevel>(
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
         user_org_id: Option<i64>,
@@ -90,15 +92,12 @@ where
             .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
             .await?;
 
-        // Verify the user meets the minimum required access level
-        if let EntityPermission::AccessLevel { access_level } = &entity_permission
-            && *access_level < T::required_level()
-        {
+        if !entity_permission.satisfies::<T>() {
             return Err(AccessError::Unauthorized);
         }
 
         Ok(EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(user_id.clone().into_owned()),
+            auth: EntityAccessAuth::Authenticated(MacroUserIdStr(user_id.clone().into_owned())),
             entity: Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,
@@ -201,6 +200,23 @@ where
                 }
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_users_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match entity_type {
+            EntityType::Document => self.repo.get_document_users(entity_id).await,
+            EntityType::Chat => self.repo.get_chat_users(entity_id).await,
+            EntityType::Project => self.repo.get_project_users(entity_id).await,
+            EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            _ => Err(AccessError::BadRequest(
+                "get_users_by_entity only supports Document, Chat, Project, and EmailThread",
+            )),
         }
     }
 }

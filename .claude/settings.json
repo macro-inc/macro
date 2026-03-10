@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Edit",
+      "Write",
       "WebSearch",
       "WebFetch(domain:heyapi.dev)",
       "WebFetch(domain:tanstack.com)",

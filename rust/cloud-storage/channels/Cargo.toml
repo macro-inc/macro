@@ -7,6 +7,7 @@ version = "0.1.0"
 [features]
 inbound = [
   "dep:axum",
+  "dep:entity_access",
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
@@ -20,6 +21,7 @@ ports = ["dep:tokio"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["inbound"] }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
@@ -34,6 +36,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

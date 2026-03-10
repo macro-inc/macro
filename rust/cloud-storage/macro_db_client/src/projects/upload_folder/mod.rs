@@ -240,7 +240,7 @@ pub async fn mark_projects_uploaded(
     let project_ids = get_all_sub_project_ids(&mut transaction, root_project_id).await?;
 
     if project_ids.is_empty() {
-        return Err(anyhow::anyhow!("Project not found: {}", root_project_id));
+        anyhow::bail!("Project not found: {}", root_project_id);
     }
 
     // Update all projects to set uploadPending to false

@@ -1,8 +1,6 @@
 use anyhow::Result;
-use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use stream::domain::StreamEvent;
-use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
@@ -28,17 +26,6 @@ impl TryFrom<StreamEvent> for Message {
 pub enum OutgoingMessage {
     Pong,
     Message(Message),
-}
-
-// Represents a single unique message sent to a recipient
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct UniqueMessage {
-    /// the message to send
-    pub message_content: serde_json::Value,
-    /// all entity to send the message to
-    pub entity: Entity<'static>,
-    /// the type of the message we are sending
-    pub message_type: String,
 }
 
 impl TryFrom<Message> for axum::extract::ws::Message {
