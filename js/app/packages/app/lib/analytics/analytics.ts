@@ -80,3 +80,13 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     identify,
   };
 };
+
+export type AnalyticsInterface = {
+  track: (event: string, data?: Record<string, unknown>) => void;
+  trackProvider: (
+    providerID: string,
+    event: string,
+    data?: Record<string, unknown>
+  ) => void;
+  identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
+};
