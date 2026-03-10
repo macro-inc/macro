@@ -207,7 +207,7 @@ where
             &name_lookup,
         );
 
-        return Ok(ChannelName(channel_name, PhantomData));
+        Ok(ChannelName(channel_name, PhantomData))
     }
 }
 

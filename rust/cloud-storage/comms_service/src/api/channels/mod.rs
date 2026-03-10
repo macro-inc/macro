@@ -61,7 +61,10 @@ pub fn router() -> Router<AppState> {
             "/{channel_id}/leave",
             post(leave_channel::leave_channel_handler),
         )
-        .route("/{channel_id}/participants", post(add_participants::handler))
+        .route(
+            "/{channel_id}/participants",
+            post(add_participants::handler),
+        )
         .route(
             "/{channel_id}/participants",
             delete(remove_participants::handler),

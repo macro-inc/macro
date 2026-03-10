@@ -64,9 +64,11 @@ where
         parts: &mut Parts,
         state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        Ok(<Self as FromRequestParts<S>>::from_request_parts(parts, state)
-            .await
-            .ok())
+        Ok(
+            <Self as FromRequestParts<S>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 
