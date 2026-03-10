@@ -27,6 +27,9 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 
+/// Maximum time to wait for a single notification delivery before timing out.
+pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
+
 /// Wraps a single iOS push notification send for the bulk-digest state machine.
 ///
 /// The state machine calls [`NotificationSendChecker::send_notification`] to perform the actual
@@ -243,9 +246,14 @@ where
             .into_iter()
             .map(async |message| {
                 let receipt_handle = message.receipt_handle;
-                let delivery_results = tokio::select! {
-                    x = self.deliver_notification(message.body) => x,
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                let delivery_results = match tokio::time::timeout(
+                    DELIVERY_TIMEOUT,
+                    self.deliver_notification(message.body),
+                )
+                .await
+                {
+                    Ok(x) => x,
+                    Err(_) => {
                         tracing::warn!("Notification egress task timed out");
                         vec![Err(report!(DeliveryFailure::Timeout))]
                     }

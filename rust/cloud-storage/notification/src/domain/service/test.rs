@@ -1805,7 +1805,8 @@ impl WebSocketSender for HangingWebSocketSender {
         _recipients: &[MacroUserIdStr<'a>],
         _notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        // Sleep longer than DELIVERY_TIMEOUT to guarantee the timeout fires.
+        tokio::time::sleep(super::egress::DELIVERY_TIMEOUT + Duration::from_secs(1)).await;
         Ok(HashSet::new())
     }
 }
