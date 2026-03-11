@@ -80,7 +80,6 @@ use utoipa::OpenApi;
         email::contacts::block_sender::handler,
         email::contacts::unblock_sender::handler,
         email::contacts::list_blocked::handler,
-        email::sync::enable::enable_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
     ),
