@@ -606,14 +606,14 @@ function CategoryFilterTabs() {
       }}
     >
       <Tabs.List class="p-1.5">
-        <div class="text-sm border border-edge-muted rounded-xs inline-block p-0.5">
+        <div class="text-sm border border-edge-muted rounded-xs inline-block overflow-hidden">
           <div class="flex">
             <For each={CATEGORIES}>
               {(category) => (
                 <Tabs.Trigger
                   value={category.id}
                   class={cn(
-                    'relative text-ink-muted px-2 py-1 text-xs font-medium block hover:text-ink hover:bg-ink/10 transition-colors duration-150 rounded-[2px]',
+                    'relative text-ink-muted px-2 py-1 text-xs font-medium block hover:text-ink hover:bg-ink/10 transition-colors duration-150 border-r border-edge-muted last:border-r-0',
                     CommandState.categoryFilter() === category.id &&
                       'text-ink bg-ink/7'
                   )}

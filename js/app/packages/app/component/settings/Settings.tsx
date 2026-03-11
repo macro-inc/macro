@@ -238,7 +238,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         spotlight={spotlight}
         tr={!spotlight()}
       >
-        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden">
+        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden isolate">
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
@@ -251,7 +251,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center px-2">
+                <div class="flex items-center pl-2 pr-3 gap-2">
                   <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
@@ -262,73 +262,34 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     />
                   </Show>
 
-                  {/* Left clip boundary indicator */}
-                  <div
-                    class="absolute pointer-events-none left-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
-                    style={{ opacity: leftOpacity() }}
-                  />
-                  {/* Right clip boundary indicator */}
-                  <div
-                    class="absolute pointer-events-none right-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
-                    style={{ opacity: rightOpacity() }}
-                  />
-
                   <Tabs.List
-                    class="flex flex-row suppress-css-brackets h-[calc(2.5rem-1px)] bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                    class="flex flex-1 items-center justify-center py-2"
                     as="div"
-                    ref={(el) => {
-                      scrollRef = el;
-                      if (el) {
-                        scrollCleanup = setupScrollListeners(el);
-                      }
-                    }}
                   >
-                    {/* Sliding indicator line */}
-                    <div
-                      class="absolute bottom-0 h-px bg-accent z-10 pointer-events-none transition-all duration-150 ease-out"
-                      style={{
-                        transform: `translateX(${indicatorStyle().left}px)`,
-                        width: `${indicatorStyle().width}px`,
-                      }}
-                    />
-
-                    <For each={settingsTabs()}>
-                      {({ value, label }, i) => {
-                        const isActive = createMemo(() => value === activeTabId());
-
-                        let ref: HTMLDivElement | undefined;
-                        createEffect(() => {
-                          if (isActive() && ref) {
-                            ref.scrollIntoView({
-                              inline: 'end',
-                            });
-                            updateIndicatorPosition(ref);
-                            setTimeout(updateClipIndicators, 0);
-                          }
-                        });
-
-                        return (
-                          <Tabs.Trigger
-                            value={value}
-                            ref={ref}
-                            tabIndex={-1}
-                            data-value={value}
-                            class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
-                            classList={{
-                              'z-1 text-accent text-glow-sm': isActive(),
-                              'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
-                            }}
-                          >
-                            <span class="flex items-center gap-1 w-full">
-                              <span class="text-xs font-mono opacity-70 mr-0.5">
-                                {(i() + 1).toString()}
+                    <div class="border border-edge-muted rounded-xs inline-flex overflow-hidden">
+                      <For each={settingsTabs()}>
+                        {({ value, label }, i) => {
+                          const isActive = createMemo(() => value === activeTabId());
+                          return (
+                            <Tabs.Trigger
+                              value={value}
+                              tabIndex={-1}
+                              data-value={value}
+                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 hover:bg-ink/10 hover:text-ink"
+                              classList={{
+                                'text-ink bg-ink/7': isActive(),
+                                'text-ink-muted': !isActive(),
+                              }}
+                            >
+                              <span class="flex items-center gap-1.5">
+                                <span>{label}</span>
+                                <span class="font-mono text-[10px] opacity-50 border border-edge-muted rounded-[3px] px-1 py-px leading-none">{(i() + 1).toString()}</span>
                               </span>
-                              <span class="truncate">{label}</span>
-                            </span>
-                          </Tabs.Trigger>
-                        );
-                      }}
-                    </For>
+                            </Tabs.Trigger>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </Tabs.List>
 
                   <div class="flex-1" />
