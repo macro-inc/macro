@@ -19,8 +19,6 @@ export function useFilterRefinements() {
     soup,
     queryFilters,
     setQueryFilters,
-    statusFilter,
-    setStatusFilter,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,
@@ -72,8 +70,7 @@ export function useFilterRefinements() {
 
     const hasQueryFilterDiff = !deepEqual(queryFilters(), preset.queryFilters);
 
-    const hasSubFilters =
-      statusFilter().length > 0 || assigneeFilter().length > 0;
+    const hasSubFilters = assigneeFilter().length > 0;
 
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
@@ -85,7 +82,6 @@ export function useFilterRefinements() {
     batch(() => {
       soup.filters.set(preset.clientFilters);
       setQueryFilters(preset.queryFilters);
-      setStatusFilter([]);
       setAssigneeFilter([]);
     });
   };
