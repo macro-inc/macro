@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -19,8 +19,6 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
-
-const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -51,76 +49,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
 
-  let scrollRef!: HTMLDivElement;
-  let scrollCleanup: (() => void) | undefined;
-  const [leftOpacity, setLeftOpacity] = createSignal(0);
-  const [rightOpacity, setRightOpacity] = createSignal(0);
-  const [indicatorStyle, setIndicatorStyle] = createSignal({
-    left: 0,
-    width: 0,
-  });
-
-  const updateClipIndicators = () => {
-    if (!scrollRef) return;
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef;
-
-    const leftAmount = Math.min(scrollLeft, SCROLL_THRESHOLD);
-    setLeftOpacity(leftAmount / SCROLL_THRESHOLD);
-
-    const maxScroll = scrollWidth - clientWidth;
-    const remainingScroll = maxScroll - scrollLeft;
-    const rightAmount = Math.min(remainingScroll, SCROLL_THRESHOLD);
-    setRightOpacity(rightAmount / SCROLL_THRESHOLD);
-  };
-
-  const updateIndicatorPosition = (element: HTMLElement) => {
-    if (!scrollRef || !element) return;
-    const listRect = scrollRef.getBoundingClientRect();
-    const tabRect = element.getBoundingClientRect();
-    setIndicatorStyle({
-      left: tabRect.left - listRect.left + scrollRef.scrollLeft,
-      width: tabRect.width,
-    });
-  };
-
-  function setupScrollListeners(element: HTMLDivElement) {
-    function listener(e: WheelEvent) {
-      e.preventDefault();
-      const { deltaX, deltaY } = e;
-      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
-      element.scrollLeft += delta;
-      updateClipIndicators();
-    }
-    element.addEventListener('wheel', listener);
-    element.addEventListener('scroll', updateClipIndicators);
-    updateClipIndicators();
-    return () => {
-      element.removeEventListener('wheel', listener);
-      element.removeEventListener('scroll', updateClipIndicators);
-    };
-  }
-
-  onCleanup(() => {
-    if (scrollCleanup) {
-      scrollCleanup();
-    }
-  });
-
-  onMount(() => {
-    setTimeout(() => {
-      const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
-      if(activeTab){updateIndicatorPosition(activeTab)}
-    }, 0);
-  });
-
   createEffect(() => {
     if (settingsOpen()){
       setTimeout(() => {
-        const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
-        if(activeTab){
-          updateIndicatorPosition(activeTab);
-          updateClipIndicators();
-        }
         // Focus the settings container to activate the hotkey scope
         settingsContainerRef?.focus();
       }, 10);
