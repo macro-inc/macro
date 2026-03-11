@@ -24,8 +24,10 @@ use crate::domain::ports::{
 };
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
+use macro_user_id::email::ReadEmailParts;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.
 pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
@@ -95,6 +97,7 @@ where
     /// on failure. Returns a list of results for each delivery attempt.
     ///
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
+    #[tracing::instrument(ret, level = Level::INFO, skip(self))]
     pub async fn deliver_notification(
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
@@ -300,6 +303,12 @@ where
                 v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
             };
 
+        if batch.user_id.email_part().domain_part() != "macro.com" {
+            return Err(report!(
+                "Sending digest for non-macro user is currently disabled"
+            ));
+        }
+
         let recipient = batch.user_id.clone();
         let email_notif: T = f(batch)?;
         let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
@@ -307,12 +316,7 @@ where
         let message: QueueMessage<'_, T, ()> =
             QueueMessage::new(NotificationChannel::Email(email_content));
 
-        self.queue
-            .publish(std::iter::once(message))
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to queue digest email");
-            })?;
+        self.queue.publish(std::iter::once(message)).await?;
 
         Ok(ClaimResult::Ready(()))
     }

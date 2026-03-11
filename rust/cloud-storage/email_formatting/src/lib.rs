@@ -88,7 +88,7 @@ impl NotificationExtEmail for EmailDigestNotification {
 
     fn rate_limit_config() -> RateLimitConfig {
         RateLimitConfig {
-            max_count: 60,
+            max_count: 600,
             window: Duration::from_hours(1),
         }
     }
