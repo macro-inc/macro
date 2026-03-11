@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
