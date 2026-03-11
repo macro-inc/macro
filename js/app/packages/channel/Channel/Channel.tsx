@@ -20,7 +20,6 @@ import {
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
-import { createTargetMessageControlledSignal } from './target-message';
 import { useUserId } from '@core/context/user';
 import {
   useDeleteMessageMutation,
@@ -60,11 +59,10 @@ export function Channel(props: ChannelProps) {
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
-  const [targetMessageId, _setTargetMessageId] =
-    createTargetMessageControlledSignal(
-      () => props.channelId,
-      props.targetMessageId
-    );
+
+  const [targetMessageId, _setTargetMessageId] = createSignal<
+    string | undefined
+  >(props.targetMessageId);
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
