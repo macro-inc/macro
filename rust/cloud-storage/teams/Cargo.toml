@@ -14,11 +14,12 @@ async-stripe = { workspace = true, default-features = false, features = [
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }
+roles_and_permissions = { path = "../roles_and_permissions" }
+serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-roles_and_permissions = { path = "../roles_and_permissions" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

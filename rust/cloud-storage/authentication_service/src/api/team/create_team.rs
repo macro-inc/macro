@@ -4,7 +4,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_team::Team;
+use teams::domain::team_repo::TeamService;
 
 use crate::api::context::ApiContext;
 
@@ -37,19 +39,29 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     tracing::info!("create_team");
 
-    let team =
-        macro_db_client::team::create::create_team(&ctx.db, &user_context.user_id, &req.name)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "failed to create team");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to create team",
-                    }),
-                )
-                    .into_response()
-            })?;
+    let macro_user_id = MacroUserIdStr::parse_from_str(&user_context.user_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "invalid macro user id",
+            }),
+        )
+            .into_response()
+    })?;
+
+    let team = ctx
+        .teams_service
+        .create_team(&macro_user_id, &req.name)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to create team",
+                }),
+            )
+                .into_response()
+        })?;
 
     Ok((StatusCode::OK, Json(team)).into_response())
 }

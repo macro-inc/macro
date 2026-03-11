@@ -9699,6 +9699,7 @@ dependencies = [
  "macro_uuid",
  "non_empty",
  "roles_and_permissions",
+ "serde",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",

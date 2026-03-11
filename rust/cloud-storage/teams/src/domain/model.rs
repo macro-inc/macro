@@ -37,7 +37,7 @@ pub struct TeamMember<'a> {
 }
 
 /// The Team struct
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
