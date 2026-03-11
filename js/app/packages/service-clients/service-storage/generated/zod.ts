@@ -2028,7 +2028,7 @@ export const deleteDocumentResponse = zod.object({
  * Edits document metadata such as name or project, and modifies
 the document's share permissions. Requires edit access to the document,
 and edit access to the target project if moving the document.
- * @summary Handler for `PATCH /documents/:document_id`.
+ * @summary Handler for `PATCH /documents/{document_id}`.
  */
 export const editDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),

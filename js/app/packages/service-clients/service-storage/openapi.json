@@ -1726,7 +1726,7 @@
       },
       "patch": {
         "tags": ["document"],
-        "summary": "Handler for `PATCH /documents/:document_id`.",
+        "summary": "Handler for `PATCH /documents/{document_id}`.",
         "description": "Edits document metadata such as name or project, and modifies\nthe document's share permissions. Requires edit access to the document,\nand edit access to the target project if moving the document.",
         "operationId": "edit_document",
         "parameters": [
