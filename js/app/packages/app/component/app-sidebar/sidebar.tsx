@@ -135,7 +135,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     });
 
     registerHotkey({
-      hotkey: 'cmd+b',
+      hotkey: 'cmd+.',
       scopeId: 'global',
       hotkeyToken: TOKENS.global.toggleSidebar,
       description: 'Toggle sidebar',
