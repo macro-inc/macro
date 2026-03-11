@@ -47,10 +47,7 @@ describe('insertItemIfMissing', () => {
 describe('removeItemById', () => {
   it('removes the matching item', () => {
     expect(
-      removeItemById(
-        [createItem('reply-1'), createItem('reply-2')],
-        'reply-1'
-      )
+      removeItemById([createItem('reply-1'), createItem('reply-2')], 'reply-1')
     ).toEqual([createItem('reply-2')]);
   });
 

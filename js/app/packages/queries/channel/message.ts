@@ -208,11 +208,7 @@ export function optimisticInsertChannelMessage(
         newAttachments,
         now
       );
-      insertMessageIntoTargetCaches(
-        vars.channelId,
-        target,
-        optimisticMessage
-      );
+      insertMessageIntoTargetCaches(vars.channelId, target, optimisticMessage);
     }
   }
 

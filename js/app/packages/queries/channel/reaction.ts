@@ -162,11 +162,7 @@ export function optimisticAddReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(
-      vars.channelId,
-      context.target,
-      result.reactions
-    );
+    replaceTargetReactions(vars.channelId, context.target, result.reactions);
   }
 
   return context;
@@ -201,7 +197,11 @@ export function rollbackAddReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(channelId, context.target, context.previousReactions);
+    replaceTargetReactions(
+      channelId,
+      context.target,
+      context.previousReactions
+    );
   }
 }
 
@@ -257,11 +257,7 @@ export function optimisticRemoveReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(
-      vars.channelId,
-      context.target,
-      result.reactions
-    );
+    replaceTargetReactions(vars.channelId, context.target, result.reactions);
   }
 
   return context;
@@ -298,7 +294,11 @@ export function rollbackRemoveReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(channelId, context.target, context.previousReactions);
+    replaceTargetReactions(
+      channelId,
+      context.target,
+      context.previousReactions
+    );
   }
 }
 

@@ -32,10 +32,7 @@ import {
   softInvalidateThreadReplies,
   type ThreadReplySnapshot,
 } from './thread-replies';
-import type {
-  ApiChannelMessage,
-  ApiThreadReply,
-} from '@service-comms/client';
+import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type {
   Attachment as ApiAttachment,
   CountedReaction,
@@ -103,8 +100,9 @@ export function findThreadIdForMessage(
   }
 
   return (
-    getCachedChannel(channelId)?.messages.find((message) => message.id === messageId)
-      ?.thread_id ?? undefined
+    getCachedChannel(channelId)?.messages.find(
+      (message) => message.id === messageId
+    )?.thread_id ?? undefined
   );
 }
 
@@ -140,7 +138,11 @@ export function insertMessageIntoTargetCaches(
 ) {
   if (target.kind === 'thread_reply') {
     setChannelMessagesData(channelId, (prev) =>
-      insertThreadReplyIntoChannelMessages(prev, target.threadId, payload as ApiThreadReply)
+      insertThreadReplyIntoChannelMessages(
+        prev,
+        target.threadId,
+        payload as ApiThreadReply
+      )
     );
     queryClient.setQueryData<Array<ApiThreadReply>>(
       getThreadRepliesQueryKey(channelId, target.threadId),
@@ -164,7 +166,11 @@ export function removeMessageFromTargetCaches(
       (prev) => removeThreadReply(prev, target.messageId)
     );
     setChannelMessagesData(channelId, (prev) =>
-      removeThreadReplyFromChannelMessages(prev, target.threadId, target.messageId)
+      removeThreadReplyFromChannelMessages(
+        prev,
+        target.threadId,
+        target.messageId
+      )
     );
     return;
   }
@@ -197,7 +203,10 @@ export function captureDeleteSnapshotForTarget(
 
   return {
     kind: 'top_level',
-    message: findTopLevelMessageSnapshotInChannelMessages(channelId, target.messageId),
+    message: findTopLevelMessageSnapshotInChannelMessages(
+      channelId,
+      target.messageId
+    ),
   };
 }
 
@@ -220,7 +229,8 @@ export function restoreMessageInTargetCaches(
             prev,
             target.threadId,
             snapshot.preview,
-            snapshot.reply?.reply.created_at ?? snapshot.preview?.reply.created_at
+            snapshot.reply?.reply.created_at ??
+              snapshot.preview?.reply.created_at
           )
         : prev
     );
@@ -298,7 +308,8 @@ export function replaceTargetAttachments(
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
       getThreadRepliesQueryKey(channelId, target.threadId),
-      (prev) => replaceThreadReplyAttachments(prev, target.messageId, attachments)
+      (prev) =>
+        replaceThreadReplyAttachments(prev, target.messageId, attachments)
     );
     setChannelMessagesData(channelId, (prev) =>
       replaceThreadReplyAttachmentsInChannelMessages(

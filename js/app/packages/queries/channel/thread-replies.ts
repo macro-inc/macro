@@ -1,8 +1,5 @@
 import { throwOnErr } from '@core/util/maybeResult';
-import {
-  type ApiThreadReply,
-  commsServiceClient,
-} from '@service-comms/client';
+import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
 import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';

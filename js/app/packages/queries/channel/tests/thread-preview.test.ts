@@ -130,7 +130,9 @@ describe('replaceReplyIdInThreadPreview', () => {
     expect(
       replaceReplyIdInThreadPreview(
         createThreadPreview({
-          preview: [createReply('optimistic-reply', '2024-01-03T01:00:00.000Z')],
+          preview: [
+            createReply('optimistic-reply', '2024-01-03T01:00:00.000Z'),
+          ],
           reply_count: 1,
           latest_reply_at: '2024-01-03T01:00:00.000Z',
         }),

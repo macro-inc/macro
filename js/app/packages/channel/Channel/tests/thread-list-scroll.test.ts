@@ -24,7 +24,11 @@ describe('shouldStickToBottomOnDataChange', () => {
 
   it('does not stick while prepending', () => {
     expect(
-      shouldStickToBottomOnDataChange(true, () => false, () => true)
+      shouldStickToBottomOnDataChange(
+        true,
+        () => false,
+        () => true
+      )
     ).toBe(false);
   });
 });

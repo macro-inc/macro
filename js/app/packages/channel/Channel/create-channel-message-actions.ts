@@ -116,11 +116,7 @@ export function createChannelMessageActions(
             const threadId =
               (targetMessage as MessageData & { thread_id?: string | null })
                 .thread_id ?? undefined;
-            const hasReaction = hasReactionFromUser(
-              liveMessage,
-              emoji,
-              userId
-            );
+            const hasReaction = hasReactionFromUser(liveMessage, emoji, userId);
 
             if (hasReaction) {
               options.removeReaction({

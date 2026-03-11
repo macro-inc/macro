@@ -82,7 +82,9 @@ export function captureThreadPreviewReplySnapshot(
   thread: ThreadPreviewState,
   replyId: string
 ): ThreadPreviewReplySnapshot | undefined {
-  const previewIndex = thread.preview.findIndex((reply) => reply.id === replyId);
+  const previewIndex = thread.preview.findIndex(
+    (reply) => reply.id === replyId
+  );
   if (previewIndex === -1) return undefined;
 
   return {

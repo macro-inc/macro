@@ -2,10 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import type {
-  ApiChannelMessage,
-  ApiThreadReply,
-} from '@service-comms/client';
+import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,10 +66,7 @@ function createThreadReply(
   };
 }
 
-function createAttachment(
-  id: string,
-  messageId: string
-): ApiAttachment {
+function createAttachment(id: string, messageId: string): ApiAttachment {
   return {
     id,
     channel_id: 'channel-1',
@@ -208,7 +202,9 @@ describe('channel sync', () => {
         [
           createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
             thread: {
-              preview: [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')],
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+              ],
               reply_count: 1,
               latest_reply_at: '2024-01-03T01:00:00.000Z',
             },
@@ -216,9 +212,10 @@ describe('channel sync', () => {
         ],
       ])
     );
-    testQueryClient.setQueryData(getThreadRepliesQueryKey('channel-1', 'parent-1'), [
-      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
-    ]);
+    testQueryClient.setQueryData(
+      getThreadRepliesQueryKey('channel-1', 'parent-1'),
+      [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')]
+    );
 
     handleCommsReaction({
       channel_id: 'channel-1',
@@ -230,7 +227,9 @@ describe('channel sync', () => {
     const replies = testQueryClient.getQueryData<Array<ApiThreadReply>>(
       getThreadRepliesQueryKey('channel-1', 'parent-1')
     );
-    expect(replies?.[0].reactions).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+    expect(replies?.[0].reactions).toEqual([
+      { emoji: '👍', users: ['user-1'] },
+    ]);
 
     const cached = testQueryClient.getQueryData<ChannelMessagesData>(
       getChannelMessagesQueryKey('channel-1')

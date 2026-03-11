@@ -169,11 +169,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
           channelId: payload.channel_id,
           messageId: payload.message_id,
         });
-        replaceTargetReactions(
-          payload.channel_id,
-          target,
-          payload.reactions
-        );
+        replaceTargetReactions(payload.channel_id, target, payload.reactions);
       }
     } catch (error) {
       console.error('Failed to update reaction cache from websocket:', error);
@@ -186,10 +182,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
       channelId: payload.channel_id,
       messageId: payload.message_id,
     });
-    softInvalidateTargetCaches(
-      payload.channel_id,
-      target
-    );
+    softInvalidateTargetCaches(payload.channel_id, target);
   }
 }
 
@@ -200,7 +193,10 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
-  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.ATTACHMENT, payload.nonce);
+  const isExternalUpdate = !consumeNonce(
+    ChannelNonceKeys.ATTACHMENT,
+    payload.nonce
+  );
   const target = ENABLE_NEW_CHANNELS
     ? resolveMessageTarget({
         channelId: payload.channel_id,
@@ -222,7 +218,8 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
             ...payload.attachments.filter(
               (attachment) =>
                 !remainingAttachments.some(
-                  (existingAttachment) => existingAttachment.id === attachment.id
+                  (existingAttachment) =>
+                    existingAttachment.id === attachment.id
                 )
             ),
           ]
