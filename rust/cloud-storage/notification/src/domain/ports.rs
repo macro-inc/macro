@@ -241,7 +241,7 @@ pub trait NotificationQueue: Send + Sync + 'static {
     fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
         messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send + 'a;
 
     /// Receive messages from the queue (for worker).
     fn receive_messages(&self)
@@ -267,10 +267,10 @@ pub trait NotificationEgress: Send + Sync + 'static {
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 
     /// Poll for ready digest batches, template them as emails, and send.
-    fn poll_email_digests<T: NotificationExtEmail>(
-        &self,
+    fn poll_email_digests<'a, T: NotificationExtEmail>(
+        &'a self,
         f: fn(DigestBatch) -> Result<T, Report>,
-    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send;
+    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send + 'a;
 }
 
 /// Port for SNS platform endpoint management (create, get/set attributes).

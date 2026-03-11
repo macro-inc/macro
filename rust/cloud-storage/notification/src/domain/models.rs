@@ -220,7 +220,7 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
 }
 
 /// Trait that all notification types must implement.
-pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
+pub trait Notification: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
 }

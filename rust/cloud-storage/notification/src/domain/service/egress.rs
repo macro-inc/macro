@@ -291,10 +291,14 @@ where
         &self,
         f: fn(DigestBatch) -> Result<T, Report>,
     ) -> Result<ClaimResult<()>, Report> {
-        let batch = match self.digest_batcher.claim_ready_digest().await? {
-            ClaimResult::Ready(batch) => batch,
-            v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
-        };
+        let batch =
+            match tokio::time::timeout(DELIVERY_TIMEOUT, self.digest_batcher.claim_ready_digest())
+                .await
+                .context("Dequeing redis batch exceeded timeout")??
+            {
+                ClaimResult::Ready(batch) => batch,
+                v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
+            };
 
         let recipient = batch.user_id.clone();
         let email_notif: T = f(batch)?;

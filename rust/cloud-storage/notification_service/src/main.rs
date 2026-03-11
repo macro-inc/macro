@@ -8,6 +8,7 @@ use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use anyhow::Context;
 use config::Config;
+use email_formatting::EmailDigestNotification;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
@@ -193,11 +194,18 @@ pub async fn main() -> anyhow::Result<()> {
         digest_batcher: egress_digest_batcher,
     };
 
-    let worker = NotificationWorker::new(egress_service);
+    let worker = Arc::new(NotificationWorker::new(egress_service));
 
+    let worker_clone = worker.clone();
     tokio::spawn(async move {
         tracing::info!("starting notification egress worker");
-        worker.run().await
+        worker_clone.run_notifications().await
+    });
+    tokio::spawn(async move {
+        tracing::info!("starting digest worker");
+        worker
+            .run_digests(EmailDigestNotification::new_from_digest_batch)
+            .await;
     });
 
     api::setup_and_serve(
