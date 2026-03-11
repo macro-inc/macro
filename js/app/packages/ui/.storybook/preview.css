@@ -2,7 +2,7 @@
 
 @layer base {
   body {
-    @apply overflow-y-auto overflow-x-hidden optical-auto;
+    @apply overflow-y-auto overflow-x-hidden;
   }
 
   * {
@@ -15,22 +15,24 @@
   }
 
   pre * {
-    @apply font-mono!;
-  } 
+    @apply font-mono !;
+  }
 }
 
 
 .sbdocs-wrapper {
-  @apply bg-page!;
+  @apply bg-page !;
 
   &::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
+
   &::-webkit-scrollbar-thumb {
     background: var(--color-edge);
     border-radius: 4px;
   }
+
   &::-webkit-scrollbar-track {
     background: var(--color-panel);
   }
@@ -40,11 +42,17 @@
     color: var(--color-page);
   }
 
-  ol { @apply list-decimal; }
-  ul { @apply list-disc; }
+  ol {
+    @apply list-decimal;
+  }
+
+  ul {
+    @apply list-disc;
+  }
 }
 
 .sbdocs {
+
   h1:not(.docs-story *),
   h2:not(.docs-story *),
   h3:not(.docs-story *),
@@ -73,7 +81,7 @@
     @apply border border-edge;
   }
 
-  :not(pre):not(.docs-story *) > code {
+  :not(pre):not(.docs-story *)>code {
     background-color: var(--color-hover) !important;
     padding: 0.125em 0.25em !important;
     border-radius: 3px !important;
@@ -108,10 +116,10 @@
     @apply bg-panel border-edge;
   }
 }
-  
+
 
 .docblock-argstable {
-  @apply bg-panel outline outline-edge-muted!;
+  @apply bg-panel outline outline-edge-muted !;
 
   textarea,
   input:not([type="range"]):not([type="checkbox"]),
@@ -124,43 +132,45 @@
     @apply font-mono;
   }
 
-  tbody > tr > td {
-    @apply bg-transparent!;
+  tbody>tr>td {
+    @apply bg-transparent !;
   }
 }
 
 .docblock-argstable-head {
   th {
-    @apply text-ink-muted bg-surface-3!;
+    @apply text-ink-muted bg-surface-3 !;
   }
 }
 
 .docblock-argstable-body {
+
   /* Value chips under descriptions  */
   td:nth-child(2) span[class] {
     @apply bg-surface-0 font-mono;
   }
 
   label:has(input[role="switch"]) {
-    @apply bg-page! focus:outline-accent!;
+    @apply bg-page ! focus:outline-accent !;
+
     span {
-      @apply text-accent!;
+      @apply text-accent !;
     }
 
-    input:checked ~ span:last-of-type, 
-    input:not(:checked) ~ span:first-of-type {
-      @apply bg-accent! text-page!;
+    input:checked~span:last-of-type,
+    input:not(:checked)~span:first-of-type {
+      @apply bg-accent ! text-page !;
     }
   }
 
   [type="range"] {
     &::-webkit-slider-thumb {
-      @apply bg-ink rounded-none border-none shadow-none! hover:shadow-none! origin-center!;
+      @apply bg-ink rounded-none border-none shadow-none ! hover:shadow-none ! origin-center !;
     }
 
     &::-webkit-slider-runnable-track,
     &::-moz-range-track {
-      @apply bg-[#f00]! accent-[#f00]!;
+      @apply bg-[#f00] ! accent-[#f00] !;
     }
   }
 
@@ -168,33 +178,33 @@
     @apply border-edge bg-panel hover:bg-hover;
 
     button {
-      @apply text-accent outline outline-current shadow-none bg-transparent hover:bg-accent/10 rounded-none! focus:shadow-none!;
+      @apply text-accent outline outline-current shadow-none bg-transparent hover:bg-accent/10 rounded-none ! focus:shadow-none !;
     }
   }
 }
 
 .docs-story,
 .sbdocs-preview {
-  @apply bg-page! outline outline-edge-muted!;
+  @apply bg-page ! outline outline-edge-muted !;
 
   [role="toolbar"] {
-    @apply bg-surface-0!;
+    @apply bg-surface-0 !;
 
-    & > :has(button) {
-      @apply bg-transparent!;
+    &> :has(button) {
+      @apply bg-transparent !;
     }
 
     .docblock-code-toggle {
-      @apply text-ink! border-none! hover:text-accent! hover:bg-accent/10! focus:shadow-none!;
+      @apply text-ink ! border-none ! hover:text-accent ! hover:bg-accent/10 ! focus:shadow-none !;
     }
   }
 }
 
 .docblock-source {
-  @apply bg-panel! border-none! m-0!;
+  @apply bg-panel ! border-none ! m-0 !;
 
-  & > :has(button) {
-    @apply bg-transparent!;
+  &> :has(button) {
+    @apply bg-transparent !;
   }
 
   button {
@@ -202,7 +212,7 @@
   }
 
   .prismjs {
-    @apply border-none!;
+    @apply border-none !;
 
     .token {
       @apply text-accent;
@@ -226,16 +236,16 @@
     .token.unit,
     .token.hexcode,
     .token.deleted {
-      @apply text-accent-1!;
+      @apply text-accent-1 !;
     }
 
     .token.property,
     .token.selector {
-      @apply text-accent-1!;
+      @apply text-accent-1 !;
     }
 
     .token.function-name {
-      @apply text-accent-2!;
+      @apply text-accent-2 !;
     }
 
     .token.boolean,
@@ -292,13 +302,13 @@
     }
 
     .token.inserted {
-      @apply text-success!;
+      @apply text-success !;
     }
   }
 }
 
 .docblock-code-toggle {
-  @apply bg-accent! text-page! rounded-tl-none! hover:opacity-80!;
+  @apply bg-accent ! text-page ! rounded-tl-none ! hover:opacity-80 !;
 }
 
 .docblock-icongallery,
@@ -318,4 +328,3 @@
 .os-content {
   @apply bg-page;
 }
-

@@ -280,7 +280,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     <div class="relative">
       <div
         contentEditable={canEdit() ?? false}
-        class="text-4xl font-semibold **:optical-24!"
+        class="text-4xl font-semibold"
         classList={{
           'select-auto': !canEdit(),
         }}
@@ -294,7 +294,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
         useBlockBoundary={true}
       />
       <Show when={showFallback()}>
-        <div class="text-4xl font-semibold optical-32 text-ink-placeholder absolute top-0 pointer-events-none">
+        <div class="text-4xl font-semibold text-ink-placeholder absolute top-0 pointer-events-none">
           {titlePlaceholder() ?? titlePlaceholderFallback}
         </div>
       </Show>
