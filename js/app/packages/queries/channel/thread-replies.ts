@@ -6,13 +6,6 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
-import {
-  captureItemSnapshotById,
-  insertItemIfMissing,
-  removeItemById,
-  replaceItemId,
-  restoreItemSnapshot,
-} from './list-ops';
 
 export type ThreadReplySnapshot = {
   replyIndex: number;
@@ -74,14 +67,20 @@ export function insertThreadReply(
   data: Array<ApiThreadReply> | undefined,
   reply: ApiThreadReply
 ): Array<ApiThreadReply> | undefined {
-  return insertItemIfMissing(data, reply);
+  if (!data) return [reply];
+  if (data.some((existingReply) => existingReply.id === reply.id)) {
+    return data;
+  }
+  return [...data, reply];
 }
 
 export function removeThreadReply(
   data: Array<ApiThreadReply> | undefined,
   replyId: string
 ): Array<ApiThreadReply> | undefined {
-  return removeItemById(data, replyId);
+  if (!data) return data;
+  const nextReplies = data.filter((reply) => reply.id !== replyId);
+  return nextReplies.length === data.length ? data : nextReplies;
 }
 
 export function replaceThreadReplyId(
@@ -89,7 +88,16 @@ export function replaceThreadReplyId(
   optimisticId: string,
   realId: string
 ): Array<ApiThreadReply> | undefined {
-  return replaceItemId(data, optimisticId, realId);
+  if (!data) return data;
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (reply.id !== optimisticId) return reply;
+    didChange = true;
+    return { ...reply, id: realId };
+  });
+
+  return didChange ? nextReplies : data;
 }
 
 export function replaceThreadReplyReactions(
@@ -130,12 +138,14 @@ export function getThreadReplySnapshot(
   data: Array<ApiThreadReply> | undefined,
   replyId: string
 ): ThreadReplySnapshot | undefined {
-  const snapshot = captureItemSnapshotById(data, replyId);
-  if (!snapshot) return undefined;
+  if (!data) return undefined;
+
+  const replyIndex = data.findIndex((reply) => reply.id === replyId);
+  if (replyIndex === -1) return undefined;
 
   return {
-    replyIndex: snapshot.index,
-    reply: snapshot.item,
+    replyIndex,
+    reply: data[replyIndex],
   };
 }
 
@@ -143,10 +153,14 @@ export function restoreThreadReply(
   data: Array<ApiThreadReply> | undefined,
   snapshot: ThreadReplySnapshot
 ): Array<ApiThreadReply> | undefined {
-  return restoreItemSnapshot(data, {
-    index: snapshot.replyIndex,
-    item: snapshot.reply,
-  });
+  if (!data) return [snapshot.reply];
+  if (data.some((reply) => reply.id === snapshot.reply.id)) {
+    return data;
+  }
+
+  const nextReplies = [...data];
+  nextReplies.splice(snapshot.replyIndex, 0, snapshot.reply);
+  return nextReplies;
 }
 
 export function softInvalidateThreadReplies(
