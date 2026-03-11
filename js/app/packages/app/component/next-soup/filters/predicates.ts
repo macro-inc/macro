@@ -59,37 +59,30 @@ export function documentFilter(entity: EntityData): boolean {
   return fileType === 'md' || fileType === 'canvas';
 }
 
-/** Task filter */
 export function taskFilter(entity: EntityData): boolean {
   return entity.type === 'document' && entity.subType?.type === 'task';
 }
 
-/** Email filter */
 export function emailFilter(entity: EntityData): boolean {
   return entity.type === 'email';
 }
 
-/** People filter (direct messages) */
 export function peopleFilter(entity: EntityData): boolean {
   return entity.type === 'channel' && entity.channelType === 'direct_message';
 }
 
-/** Teams filter (group channels) */
 export function teamsFilter(entity: EntityData): boolean {
   return entity.type === 'channel' && entity.channelType !== 'direct_message';
 }
 
-/** Chat/agent filter */
 export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat';
 }
 
-/** Project/folder filter */
 export function projectFilter(entity: EntityData): boolean {
   return entity.type === 'project';
 }
 
-/** File filter (non-markdown documents) */
 export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
@@ -198,7 +191,6 @@ export function sharedEntity(getUserID: () => string | undefined) {
   };
 }
 
-/** Filter for agents (chats) owned by the current user */
 export function ownedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;
@@ -209,7 +201,6 @@ export function ownedAgentFilter(getUserID: () => string | undefined) {
   };
 }
 
-/** Filter for agents (chats) shared with the current user (owned by someone else) */
 export function sharedAgentFilter(getUserID: () => string | undefined) {
   return function (entity: EntityData): boolean {
     if (entity.type !== 'chat') return false;

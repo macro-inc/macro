@@ -8,7 +8,7 @@ export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export const EXCLUDE: string[] = [NIL_UUID];
 
-/** Base filter that excludes all entity types by default */
+// Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
   channel_filters: { channel_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
@@ -22,7 +22,7 @@ function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
   return !ids.includes(value);
 }
 
-//  TODO: this only supports for item type and id filters, other filters to be added later
+// TODO: this only supports for item type and id filters, other filters to be added later
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
   body: SoupBody
@@ -75,7 +75,6 @@ export const getFileAssociations = (type: 'soup' | 'search') => {
 };
 
 export const QUERY_FILTERS = {
-  /** Docs filter - markdown and canvas documents (excludes tasks) */
   document: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
@@ -84,7 +83,6 @@ export const QUERY_FILTERS = {
     document_filters: { file_types: ['md', 'canvas'] },
   },
 
-  /** Tasks filter - markdown documents with task subType */
   task: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
@@ -93,7 +91,6 @@ export const QUERY_FILTERS = {
     document_filters: { file_types: ['md'] },
   },
 
-  /** Mail filter - emails */
   email: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
@@ -102,7 +99,6 @@ export const QUERY_FILTERS = {
     email_filters: {},
   },
 
-  /** People filter - direct message channels */
   people: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
@@ -111,7 +107,6 @@ export const QUERY_FILTERS = {
     channel_filters: { channel_types: [ChannelTypeEnum.DirectMessage] },
   },
 
-  /** Teams filter - group channels (non-DM) */
   teams: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
@@ -126,7 +121,6 @@ export const QUERY_FILTERS = {
     },
   },
 
-  /** Agents filter - chats */
   agent: {
     channel_filters: { channel_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
@@ -135,7 +129,6 @@ export const QUERY_FILTERS = {
     chat_filters: {},
   },
 
-  /** Files filter - non-markdown documents (code, images, pdfs, etc.) */
   file: {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
@@ -143,7 +136,6 @@ export const QUERY_FILTERS = {
     document_filters: { file_types: getFileAssociations('soup') },
   },
 
-  /** Channels filter - all channels (teams and people) */
   channels: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
@@ -152,8 +144,5 @@ export const QUERY_FILTERS = {
     channel_filters: {},
   },
 
-  /** Default - include all entity types (no filter active) */
   default: {},
 } satisfies Record<string, SoupItemsQueryFilters>;
-
-export type QueryFilterKey = keyof typeof QUERY_FILTERS;
