@@ -5,7 +5,7 @@ import {
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
-import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotificationsAsSeen';
+import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 
 export function ThreadReplyList(props: {
   threadId: string;

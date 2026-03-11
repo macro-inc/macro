@@ -1,7 +1,7 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
-import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotificationsAsSeen';
+import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
