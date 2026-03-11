@@ -40,7 +40,10 @@ import {
   getChannelMessagesQueryKey,
   type ChannelMessagesData,
 } from '../channel-messages';
-import { optimisticInsertChannelMessage, rollbackInsertChannelMessage } from '../message';
+import {
+  optimisticInsertChannelMessage,
+  rollbackInsertChannelMessage,
+} from '../message';
 import {
   optimisticAddReaction,
   optimisticRemoveReaction,
