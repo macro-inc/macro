@@ -1,16 +1,14 @@
-import {
-  SYSTEM_PROPERTY_IDS,
-  PROPERTY_OPTION_IDS,
-} from '@core/component/Properties/constants';
+import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import {
   type WithNotification,
   type EntityData,
   isTaskEntity,
   type TaskEntityWithProperties,
   getTaskAssigneeIds,
+  getTaskStatusOptionId,
 } from '@entity';
+import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { type NotificationSource, compositeEntity } from '@notifications';
-import type { SoupProperty } from '@service-storage/generated/schemas';
 
 /**
  * Unread filter - entity has unread content.
@@ -221,21 +219,6 @@ export function taskAssignedToUserFilter(getUserID: () => string | undefined) {
   };
 }
 
-export function hasProperties(
-  entity: EntityData
-): entity is EntityData & { properties: SoupProperty[] } {
-  return 'properties' in entity && Array.isArray(entity.properties);
-}
-
-export function getPropertyById(
-  entity: EntityData,
-  propertyId: string
-): SoupProperty | undefined {
-  if (!hasProperties(entity)) return undefined;
-
-  return entity.properties.find((p) => p.definition.id === propertyId);
-}
-
 export function hasAssignees(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
   return getTaskAssigneeIds(entity).length > 0;
@@ -255,31 +238,9 @@ export function isUnassigned(entity: EntityData): boolean {
   return getTaskAssigneeIds(entity).length === 0;
 }
 
-export function getStatusOptionId(entity: EntityData): string | undefined {
-  if (!isTaskEntity(entity)) return undefined;
-  const taskWithProps = entity as TaskEntityWithProperties;
-
-  const properties = taskWithProps.properties;
-
-  if (!properties) return undefined;
-
-  const statusProperty = properties.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.STATUS
-  );
-
-  if (!statusProperty?.value) return undefined;
-
-  const value = statusProperty.value;
-
-  if (value.type === 'SelectOption') {
-    return value.value[0];
-  }
-
-  return undefined;
-}
-
 export function hasStatus(entity: EntityData, statusOptionId: string): boolean {
-  return getStatusOptionId(entity) === statusOptionId;
+  if (!isTaskEntity(entity)) return false;
+  return getTaskStatusOptionId(entity) === statusOptionId;
 }
 
 export function isNotStarted(entity: EntityData): boolean {
@@ -314,34 +275,13 @@ export function isOpen(entity: EntityData): boolean {
   return !isClosed(entity);
 }
 
-export function getPriorityOptionId(entity: EntityData): string | undefined {
-  if (!isTaskEntity(entity)) return undefined;
-  const taskWithProps = entity as TaskEntityWithProperties;
-
-  const properties = taskWithProps.properties;
-
-  if (!properties) return undefined;
-
-  const priorityProperty = properties.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.PRIORITY
-  );
-
-  if (!priorityProperty?.value) return undefined;
-
-  const value = priorityProperty.value;
-
-  if (value.type === 'SelectOption') {
-    return value.value[0];
-  }
-
-  return undefined;
-}
-
 export function hasPriority(
   entity: EntityData,
   priorityOptionId: string
 ): boolean {
-  return getPriorityOptionId(entity) === priorityOptionId;
+  if (!isTaskEntity(entity)) return false;
+
+  return getTaskPriorityOptionId(entity) === priorityOptionId;
 }
 
 export function isUrgentPriority(entity: EntityData): boolean {
@@ -362,5 +302,6 @@ export function isLowPriority(entity: EntityData): boolean {
 
 export function hasNoPriority(entity: EntityData): boolean {
   if (!isTaskEntity(entity)) return false;
-  return getPriorityOptionId(entity) === undefined;
+
+  return getTaskPriorityOptionId(entity) === undefined;
 }
