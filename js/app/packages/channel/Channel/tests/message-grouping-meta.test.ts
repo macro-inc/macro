@@ -78,7 +78,10 @@ describe('message grouping meta', () => {
       )
     ).toBe(false);
     expect(
-      shouldGroupWithPreviousMessage(deletedCurrent, createMessage('m4', '2026-02-20T09:00:00.000Z'))
+      shouldGroupWithPreviousMessage(
+        deletedCurrent,
+        createMessage('m4', '2026-02-20T09:00:00.000Z')
+      )
     ).toBe(false);
   });
 

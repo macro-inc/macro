@@ -9,7 +9,9 @@ export type GroupableMessage = Pick<
 
 export const MESSAGE_GROUPING_WINDOW_MS = 5 * 60 * 1000;
 
-function hasAttachments(message: Pick<GroupableMessage, 'attachments'>): boolean {
+function hasAttachments(
+  message: Pick<GroupableMessage, 'attachments'>
+): boolean {
   return message.attachments.length > 0;
 }
 

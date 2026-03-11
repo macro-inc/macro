@@ -1,5 +1,9 @@
 import { For, createMemo } from 'solid-js';
-import { ChannelMessage, type MessageActions, type MessageData } from '../Message';
+import {
+  ChannelMessage,
+  type MessageActions,
+  type MessageData,
+} from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 

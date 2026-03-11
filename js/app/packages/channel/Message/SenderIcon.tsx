@@ -17,9 +17,7 @@ export function SenderIcon(props: SenderIconProps) {
       })}
       aria-hidden={props.hidden ? 'true' : undefined}
     >
-      {!props.hidden && (
-        <UserIcon id={message().sender_id} size="fill" />
-      )}
+      {!props.hidden && <UserIcon id={message().sender_id} size="fill" />}
     </div>
   );
 }
