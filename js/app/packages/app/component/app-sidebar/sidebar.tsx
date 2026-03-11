@@ -274,7 +274,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
             onMouseEnter={() => setCreateBtnHovering(true)}
             onMouseLeave={() => setCreateBtnHovering(false)}
           >
-            <div class="size-4 shrink-0">
+            <div
+              class={`size-4 shrink-0 transition-colors duration-300 ${createBtnHovering() ? 'text-accent' : ''}`}
+            >
               <AnimatedPlusIcon triggerAnimation={createBtnHovering()} />
             </div>
             <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 grow text-left">

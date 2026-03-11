@@ -25,7 +25,7 @@ export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
           .plus-h { transform-origin: 9px 6px; }
         }
         .animated-plus-icon.animating {
-          .bg-fill { opacity: 0.2; transition: opacity 0.4s ease; }
+          .bg-fill { opacity: 0.1; transition: opacity 0.4s ease; }
           .frame-a, .frame-b, .plus-v, .plus-h {
             transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
           }
