@@ -141,25 +141,25 @@ where
 {
     Router::new()
         .route(
-            "/:channel_id/messages",
+            "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc>),
         )
         .route(
-            "/:channel_id/messages/:message_id/replies",
+            "/{channel_id}/messages/{message_id}/replies",
             get(get_thread_replies_handler::<S, Svc>),
         )
         .route(
-            "/:channel_id/attachments",
+            "/{channel_id}/attachments",
             get(get_channel_attachments_handler::<S, Svc>),
         )
         .route(
-            "/:channel_id/participants",
+            "/{channel_id}/participants",
             get(get_channel_participants_handler::<S, Svc>),
         )
         .with_state(state)
 }
 
-/// Handler for `GET /channels/:channel_id/messages`.
+/// Handler for `GET /channels/{channel_id}/messages`.
 #[utoipa::path(
     get,
     operation_id = "get_channel_messages",
@@ -235,7 +235,7 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, Svc: Entity
     }))
 }
 
-/// Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+/// Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
 #[utoipa::path(
     get,
     operation_id = "get_thread_replies",
@@ -270,7 +270,7 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
     ))
 }
 
-/// Handler for `GET /channels/:channel_id/attachments`.
+/// Handler for `GET /channels/{channel_id}/attachments`.
 #[utoipa::path(
     get,
     operation_id = "get_channel_attachments",
@@ -309,7 +309,7 @@ pub async fn get_channel_attachments_handler<
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
 }
 
-/// Handler for `GET /channels/:channel_id/participants`.
+/// Handler for `GET /channels/{channel_id}/participants`.
 #[utoipa::path(
     get,
     operation_id = "get_channel_participants",

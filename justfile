@@ -20,8 +20,13 @@ get_environment *ARGS:
     AWS_KEY=$(awk -F'=' '/\[default\]/{found=1} found && /aws_access_key_id/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
     AWS_SECRET=$(awk -F'=' '/\[default\]/{found=1} found && /aws_secret_access_key/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
     if [ -n "$AWS_KEY" ] && [ -n "$AWS_SECRET" ]; then
-      sed -i '' "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
-      sed -i '' "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
+        sed -i '' "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
+      else
+        sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
+        sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
+      fi
       echo "Replaced AWS credentials from ~/.aws/credentials [default] profile"
     else
       echo "Warning: Could not read AWS credentials from ~/.aws/credentials [default] profile"

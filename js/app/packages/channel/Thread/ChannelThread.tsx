@@ -108,6 +108,7 @@ export function ChannelThread(props: ThreadProps) {
                     />
                   </Show>
                   <Thread.ReplyInput
+                    channelId={props.channelId()}
                     messageId={props.data().id}
                     replyInputState={props.replyInputState}
                     setReplyInputState={props.setReplyInputState}

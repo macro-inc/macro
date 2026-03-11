@@ -1,3 +1,0 @@
-name: delete-document-worker
-runtime: nodejs
-description: Macro Delete Document Worker

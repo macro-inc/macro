@@ -43,7 +43,7 @@ where
 
     // Check if any rows were affected
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("Message not found with id {}", message_id));
+        anyhow::bail!("Message not found with id {}", message_id);
     }
 
     Ok(())

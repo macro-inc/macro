@@ -1,6 +1,5 @@
 use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts, Request},
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request},
     http::{HeaderMap, StatusCode, request::Parts},
     middleware::Next,
     response::Response,
@@ -25,7 +24,6 @@ env_var!(
 #[derive(Debug)]
 pub struct ValidInternalKey(());
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ValidInternalKey
 where
     LocalOrRemoteSecret<InternalApiSecretKey>: FromRef<S>,
@@ -52,6 +50,25 @@ where
         (expected_key.as_ref() == auth_token)
             .then_some(ValidInternalKey(()))
             .ok_or((StatusCode::UNAUTHORIZED, Cow::Borrowed("Unauthorized")))
+    }
+}
+
+impl<S> OptionalFromRequestParts<S> for ValidInternalKey
+where
+    LocalOrRemoteSecret<InternalApiSecretKey>: FromRef<S>,
+    S: Send + Sync + 'static,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(
+            <Self as FromRequestParts<S>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 

@@ -12,7 +12,7 @@ export interface DatePreset {
 export const DATE_PRESETS: DatePreset[] = [
   {
     id: 'today',
-    label: 'Today (end of day)',
+    label: 'Today',
     shortLabel: 'Today',
     keywords: ['today', 'end', 'end of day', 'eod'],
     getDate: (baseDate = new Date()) => endOfDay(baseDate),
@@ -20,7 +20,7 @@ export const DATE_PRESETS: DatePreset[] = [
   },
   {
     id: 'tomorrow',
-    label: 'Tomorrow (end of day)',
+    label: 'Tomorrow',
     shortLabel: 'Tom',
     keywords: ['tomorrow', 'tmrw', 'tom'],
     getDate: (baseDate = new Date()) => addDays(endOfDay(baseDate), 1),

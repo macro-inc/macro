@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use unsynn::*;
 
 keyword! {
@@ -483,7 +484,7 @@ mod tests {
         "#;
 
         let mut token_iter = input.to_token_iter();
-        let result: Cons<Trait, EndOfStream> = token_iter.parse().unwrap();
+        let _: Cons<Trait, EndOfStream> = token_iter.parse().unwrap();
     }
 
     #[test]
@@ -518,6 +519,6 @@ pub trait LegacyGqlRpc: Send + Sync + 'static {
         "#;
 
         let mut token_iter = input.to_token_iter();
-        let result: Cons<Trait, EndOfStream> = token_iter.parse().unwrap();
+        let _: Cons<Trait, EndOfStream> = token_iter.parse().unwrap();
     }
 }

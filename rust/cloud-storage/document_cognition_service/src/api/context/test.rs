@@ -272,7 +272,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         s3_upload_adapter,
         ai_tools::NoOpTaskProperties,
-        pool.clone(),
+        ai_tools::NoOpConnectionService,
     );
     let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
         entity_access::outbound::PgAccessRepository::new(pool.clone()),

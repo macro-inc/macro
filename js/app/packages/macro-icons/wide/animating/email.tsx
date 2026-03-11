@@ -1,133 +1,120 @@
-import { createUniqueId } from 'solid-js';
+import { createEffect, createUniqueId } from 'solid-js';
+
+// All coordinates are stroke-centers: path is inset 0.75px from visual edges on all sides.
+// Body is two open L-shaped strokes; each stops 1.5px short of the missing corners.
+// stroke-linejoin="round" on each path provides r=0.75 rounding at the surviving corners.
+
+// ── Email (source) ───────────────────────────────────────────────────────────
+const BODY_A_D = 'M 1.5,0.75 L 17.25,0.75 L 17.25,10.5';
+//   Top edge + right edge. Upper-right join rounded by stroke-linejoin.
+const BODY_B_D = 'M 16.5,11.25 L 0.75,11.25 L 0.75,1.5';
+//   Bottom edge + left edge. Lower-left join rounded by stroke-linejoin.
+const FLAP_D = 'M 1.5,1.5 L 9,7.5 L 17.25,0.75';
+//   3-point V spanning the top of the envelope.
+
+// ── Paper plane (target) ─────────────────────────────────────────────────────
+// Right-pointing plane; nose at (17.25,6), fold crease at (0.75,7.5).
+const PLANE_A_D = 'M 1.5,0.75 L 17.25,0.75 L 4.5,11.25';
+//   Top wing: back-top → nose → left fold crease.
+const PLANE_B_D = 'M 17.25,0.75 L 4.5,11.25 L 0.75,1';
+//   Bottom wing: nose → back-bottom → left fold crease.
+const PLANE_C_D = 'M 0.75,1 L 4.5,11.25 L 17.25,0.75';
+//   Spine crease: back-top → center → back-bottom.
+
+// ── Cutout triangle (fades in over paper plane) ───────────────────────────────
+// Derived from the inner notch in paper-plane-cutout.svg, scaled 24→18 (×0.75).
+// Original vertices (24-space): (4.73,8.91), (9.78,5.65), (3.80,6.39)
+const CUTOUT_D = 'M 3.5,6.7 L 7.3,4.2 L 2.85,4.8 Z';
+
+// WAAPI keyframe values — CSS `d` property requires path() wrapper for cross-browser support
+const p = (d: string) => `path('${d}')`;
+
+const DURATION = 400;
+const EASING = 'ease-in-out';
 
 export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
-  const maskId = createUniqueId();
+  const clipId = createUniqueId();
+  let bodyAEl!: SVGPathElement;
+  let bodyBEl!: SVGPathElement;
+  let flapEl!: SVGPathElement;
+  let cutoutEl!: SVGPathElement;
+  let prevTrigger = false;
+
+  createEffect(() => {
+    const trigger = !!props.triggerAnimation;
+    if (trigger === prevTrigger) return;
+    prevTrigger = trigger;
+
+    const direction = (trigger ? 'normal' : 'reverse') as PlaybackDirection;
+    const opts = {
+      duration: DURATION,
+      easing: EASING,
+      fill: 'forwards' as FillMode,
+      direction,
+      delay: trigger ? 0 : DURATION,
+    };
+
+    // stroke-linejoin isn't interpolatable — switch it at the boundary where it looks best:
+    // going forward (→ plane): round immediately so the join softens as the shape morphs.
+    // going back (→ email): revert to miter only after the reverse animation completes.
+    if (trigger) flapEl.setAttribute('stroke-linejoin', 'round');
+
+    const cutoutAnim = cutoutEl.animate(
+      trigger
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ opacity: 1 }, { opacity: 0 }],
+      {
+        duration: DURATION,
+        easing: EASING,
+        fill: 'forwards' as FillMode,
+        delay: trigger ? DURATION : 0,
+      }
+    );
+
+    const anims = [
+      bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], opts),
+      bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], opts),
+      flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], opts),
+    ];
+
+    Promise.all([...anims, cutoutAnim].map((a) => a.finished)).then(() => {
+      [...anims, cutoutAnim].forEach((a) => {
+        try {
+          a.commitStyles();
+          a.cancel();
+        } catch (_) {}
+      });
+      if (!trigger) flapEl.setAttribute('stroke-linejoin', 'miter');
+    });
+  });
+
   return (
     <svg
       width="100%"
       height="100%"
       viewBox="0 -3 18 18"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="visible"
-      class={`animated-email-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
       <title>Animated email icon</title>
-      <style>{`
-        @keyframes disappear {
-          0% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes appear {
-          0% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        .animated-email-icon {
-          .triangle, .notch {
-            opacity: 0;
-          }
-          .notch {
-            translate: -.5px .5px;
-          }
-          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1 {
-            transition: transform 0.4s ease;
-          }
-          #${maskId} .moving-square {
-            transition: transform 0.4s ease;
-            transform-origin: -1 -1;
-          }
-          .left-line {
-            transform-origin: .75px .75px;
-          }
-          .right-line {
-            transform-origin: 17.25px .75px;
-          }
-          .bottom-line {
-            transform-origin: .75px 10.75px;
-          }
-          .left-flap {
-            transform-origin: 1.23px 0.17px;
-          }
-          .right-flap-1 {
-            transform-origin: 17.73px 1.33px;
-          }
-        }
-        .animated-email-icon.animating {
-          .triangle, .notch {
-            animation: appear 0.2s ease forwards .4s;
-          }
-          #${maskId} .moving-square {
-            transition: transform 0.4s ease;
-            transform: scaleX(1.2);
-          }
-          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1, .right-flap-2 {
-            animation: disappear 0.4s ease forwards .4s;
-          }
-          .left-line {
-            transform: rotate(-20deg);
-          }
-          .right-line {
-            transform: rotate(50.5deg);
-          }
-          .bottom-line {
-            transform: translate(3.5px, 0) rotate(-40deg);
-          }
-          .left-flap {
-            transform: rotate(30deg);
-          }
-          .right-flap-1 {
-            transform: translate(-4px, 3.1px);
-          }
-        }
-      `}</style>
-      <mask id={maskId}>
-        <rect x="0" y="0" width="18" height="18" fill="white" />
-        <rect
-          class="moving-square"
-          x="-1"
-          y="-1"
-          width="2.5"
-          height="2.5"
-          fill="black"
-        />
-      </mask>
-      <g mask={`url(#${maskId})`}>
+      <defs>
+        {/* Clips out the top-left 1.5×1.5 missing corner (visual coords 0,0 → 1.5,1.5) */}
+        <clipPath id={clipId}>
+          <path d="M 1.5,-3 L 18,-3 L 18,15 L 0,15 L 0,1.5 L 1.5,1.5 Z" />
+        </clipPath>
+      </defs>
+      <g clip-path={`url(#${clipId})`}>
+        <path ref={bodyAEl} d={BODY_A_D} stroke-linejoin="round" />
+        <path ref={bodyBEl} d={BODY_B_D} stroke-linejoin="round" />
+        <path ref={flapEl} d={FLAP_D} />
         <path
-          class="triangle"
-          d="M4.60001 12C4.53001 12 4.47001 12 4.40001 11.97C4.16001 11.91 3.98001 11.73 3.89001 11.5L0.0500093 1.01C-0.0399907 0.78 9.32813e-06 0.52 0.140009 0.32C0.280009 0.12 0.510009 0 0.750009 0H17.25C17.57 0 17.85 0.2 17.96 0.5C18.07 0.8 17.98 1.13 17.73 1.33L5.08001 11.83C4.94001 11.94 4.77001 12 4.60001 12ZM1.82001 1.5L4.93001 9.99L15.17 1.5H1.82001Z"
-        />
-        <path
-          class="notch"
-          d="M7.45815 4.23999L2.85815 4.81999L3.58815 6.78999L7.45815 4.23999Z"
-        />
-        <path
-          class="top-line"
-          d="M17.25 0H1.5V1.5H17.25C17.66 1.5 18 1.16 18 0.75C18 0.34 17.66 0 17.25 0Z"
-        />
-        <path
-          class="right-line"
-          d="M17.25 0C16.84 0 16.5 0.34 16.5 0.75V10.5H18V0.75C18 0.34 17.66 0 17.25 0Z"
-        />
-        <path
-          class="bottom-line"
-          d="M0.75 12H16.5V10.5H0.75C0.34 10.5 0 10.84 0 11.25C0 11.66 0.34 12 0.75 12Z"
-        />
-        <path
-          class="left-line"
-          d="M0.75 12C1.16 12 1.5 11.66 1.5 11.25V1.5H0V11.25C0 11.66 0.34 12 0.75 12Z"
-        />
-        <path
-          class="left-flap"
-          d="M9.00002 8.57004L0.27002 1.33004L1.23002 0.170044L9.00002 6.62004"
-        />
-        <path
-          class="right-flap-1"
-          d="M9 6.62004L16.77 0.170044L17.73 1.33004L9 8.57004"
-        />
-        <path
-          class="right-flap-2"
-          d="M9 6.62004L16.77 0.170044L17.73 1.33004L9 8.57004"
+          ref={cutoutEl}
+          d={CUTOUT_D}
+          fill="currentColor"
+          stroke="none"
+          style={{ opacity: 0 }}
         />
       </g>
     </svg>

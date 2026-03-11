@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -34,7 +34,6 @@ pub struct ChatAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ChatAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
@@ -94,7 +93,7 @@ where
                         entity_id: chat_context.id.clone(),
                         entity_type: EntityType::Chat,
                     },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone().0),
+                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
@@ -132,7 +131,7 @@ where
                     entity_type: EntityType::Chat,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,

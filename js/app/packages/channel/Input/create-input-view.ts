@@ -1,4 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { makePersisted } from '@solid-primitives/storage';
 import {
   createEffect,
   createMemo,
@@ -10,7 +11,7 @@ import type {
   InputAttachmentTracker,
   InputCallbacks,
   InputData,
-  InputDraftAdapter,
+  InputPersistenceKey,
   InputSnapshot,
 } from './types';
 
@@ -19,7 +20,7 @@ type CreateInputViewOptions = {
   mentions: Accessor<ItemMention[]>;
   attachmentTracker: InputAttachmentTracker;
   callbacks?: InputCallbacks;
-  draft?: InputDraftAdapter;
+  persistenceKey?: InputPersistenceKey;
 };
 
 export type InputView = {
@@ -36,9 +37,14 @@ export type InputView = {
 };
 
 export function createInputView(options: CreateInputViewOptions): InputView {
-  const [value, setValueSignal] = createSignal(
-    options.initialInput.value ?? ''
+  const rawValue = createSignal<string | undefined>(
+    options.initialInput.value || undefined
   );
+  const [persistedValue, setValueSignal] = options.persistenceKey
+    ? makePersisted(rawValue, { name: options.persistenceKey })
+    : rawValue;
+  const value = () => persistedValue() ?? '';
+
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(
     !!options.initialInput.showFormatRibbon
   );
@@ -65,19 +71,18 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     on(
       snapshot,
       (current) => {
-        void options.callbacks?.onChange?.(current);
-        void options.draft?.save?.(current);
+        options.callbacks?.onChange?.(current);
       },
       { defer: true }
     )
   );
 
   const setValue = (nextValue: string) => {
-    setValueSignal(nextValue);
+    setValueSignal(nextValue || undefined);
   };
 
   const reset = () => {
-    setValueSignal('');
+    setValue('');
     options.attachmentTracker.clearAttachments();
   };
 

@@ -133,7 +133,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
         let parsed_uuid_result = Uuid::try_parse(thread.head_id.as_str());
         if let Err(_e) = parsed_uuid_result {
             tracing::error!("head id is not a valid uuid");
-            return Err(anyhow::anyhow!("head id is not a valid uuid"));
+            anyhow::bail!("head id is not a valid uuid");
         }
 
         let _pdf_anchor_id = sqlx::query_scalar!(
@@ -271,7 +271,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
                 let highlight_anchor_uuid =
                     if let Some(highlight_uuid) = highlight.uuid.as_deref().map(Uuid::try_parse) {
                         if let Err(_e) = highlight_uuid {
-                            return Err(anyhow::anyhow!("invalid highlight uuid"));
+                            anyhow::bail!("invalid highlight uuid");
                         }
                         let highlight_uuid = highlight_uuid.unwrap();
 

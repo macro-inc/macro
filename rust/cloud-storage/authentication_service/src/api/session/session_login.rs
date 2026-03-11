@@ -35,6 +35,7 @@ pub struct Params {
         )
     )]
 #[tracing::instrument(skip(ctx))]
+#[axum::debug_handler]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Path(Params { session_code }): Path<Params>,

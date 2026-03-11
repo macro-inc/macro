@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
@@ -35,7 +35,6 @@ pub struct ChannelAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ChannelAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
@@ -115,7 +114,7 @@ where
                     entity_id: channel_id,
                     entity_type: EntityType::Channel,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id.0),
+                auth: EntityAccessAuth::Authenticated(macro_user_id),
                 entity_permission: permission,
                 _marker: PhantomData,
             },

@@ -12,5 +12,5 @@ pub(in crate::api) mod verify_merge_request;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", post(create_merge_request::handler))
-        .route("/verify/:code", get(verify_merge_request::handler))
+        .route("/verify/{code}", get(verify_merge_request::handler))
 }

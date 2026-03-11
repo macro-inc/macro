@@ -33,7 +33,7 @@ pub struct Params {
 /// If you need to create a threaded anchor, see the create comment handler
 #[utoipa::path(
         post,
-        path = "/annotations/anchors/document/:document_id",
+        path = "/annotations/anchors/document/{document_id}",
         params(
             ("document_id" = String, Path, description = "The document id")
         ),

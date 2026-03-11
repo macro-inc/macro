@@ -110,11 +110,11 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
             axum::routing::post(bulk_get_typed_notifications_by_event_item_ids::<S>),
         )
         .route(
-            "/item/:event_item_id",
+            "/item/{event_item_id}",
             axum::routing::get(get_typed_by_event_item_id::<S>),
         )
         .route(
-            "/:notification_id",
+            "/{notification_id}",
             axum::routing::get(get_typed_notification_by_id::<S>)
                 .delete(::notification::inbound::http::delete_notification::<S>),
         )

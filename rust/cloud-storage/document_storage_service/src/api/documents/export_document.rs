@@ -140,7 +140,7 @@ async fn export_basic_document(
     match result {
         LocationResponseData::PresignedUrl(presigned_url) => Ok(presigned_url),
         LocationResponseData::PresignedUrls(_) => {
-            Err(anyhow::anyhow!("expected presigned url type only"))
+            anyhow::bail!("expected presigned url type only")
         }
     }
 }
@@ -171,7 +171,7 @@ async fn export_docx_document(state: &ApiContext, document_id: &str) -> anyhow::
                 .await;
 
         if downloaded_bom_parts.iter().any(|r| r.is_err()) {
-            return Err(anyhow::anyhow!("unable to download bom parts"));
+            anyhow::bail!("unable to download bom parts");
         }
 
         let downloaded_bom_parts: Vec<(String, Vec<u8>)> = downloaded_bom_parts

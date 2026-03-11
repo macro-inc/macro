@@ -42,7 +42,7 @@ pub async fn process_message(
             .cleanup_message(message)
             .await
             .context("failed to cleanup message")?;
-        return Err(anyhow::anyhow!("required message attributes not found"));
+        anyhow::bail!("required message attributes not found");
     };
 
     tracing::info!(job_id=%job_id, "message attributes");
@@ -56,7 +56,7 @@ pub async fn process_message(
             .cleanup_message(message)
             .await
             .context("failed to cleanup message")?;
-        return Err(anyhow::anyhow!("message body not provided"));
+        anyhow::bail!("message body not provided");
     };
 
     tracing::info!(job_id=%job_id, message_body=?req, "message body");
@@ -158,13 +158,8 @@ pub async fn convert(
         .await
         .context("unable to get object from S3")?;
 
-    std::fs::create_dir(&directory).map_err(|e| {
-        anyhow::anyhow!(
-            "unable to create directory {}: {}",
-            directory,
-            e.to_string()
-        )
-    })?;
+    std::fs::create_dir(&directory)
+        .map_err(|e| anyhow::anyhow!("unable to create directory {}: {}", directory, e))?;
 
     let mut file = File::create(&in_file_path).context("unable to create input file")?;
 
@@ -215,7 +210,7 @@ pub async fn convert(
         },
         Err(err) => {
             tracing::error!(job_id=%job_id, error=?err, "fork failed");
-            return Err(anyhow::anyhow!("fork failed"));
+            anyhow::bail!("fork failed");
         }
     }
 
@@ -270,7 +265,7 @@ pub async fn convert(
         if let Err(e) = cleanup_folder(job_id) {
             tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
         }
-        return Err(anyhow::anyhow!("conversion failed"));
+        anyhow::bail!("conversion failed");
     }
 
     let file_content = std::fs::read(out_file_path).context("unable to read result file")?;

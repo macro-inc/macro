@@ -38,6 +38,7 @@ import {
 import { decodePairs } from './layoutUtils';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
 import { isListViewID } from '@app/constants/list-views';
+import { isMobile } from '@core/mobile/isMobile';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -305,7 +306,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       <div class="size-full p-2 pl-0 mobile:p-0">
         <Resize.Zone
           direction="horizontal"
-          gutter={0}
+          gutter={4}
           captureResizeCtx={splitManager.setResizeContext}
         >
           <For each={ids()}>
@@ -405,15 +406,17 @@ function SplitPanel(props: SplitPanelProps) {
             props.setPanelRef(ref);
             attachHotKeys(ref);
           }}
-          tl={props.index === 0}
-          bl={props.index === 0}
+          tl={props.index === 0 && !isMobile()}
+          bl={props.index === 0 && !isMobile()}
           tr={
             splitLayoutHelpers.getSplitCount() > 1 &&
-            props.index === splitLayoutHelpers.getSplitCount() - 1
+            props.index === splitLayoutHelpers.getSplitCount() - 1 &&
+            !isMobile()
           }
           br={
             splitLayoutHelpers.getSplitCount() > 1 &&
-            props.index === splitLayoutHelpers.getSplitCount() - 1
+            props.index === splitLayoutHelpers.getSplitCount() - 1 &&
+            !isMobile()
           }
         >
           <Suspense>

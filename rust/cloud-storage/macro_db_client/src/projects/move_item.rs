@@ -42,7 +42,7 @@ pub async fn move_item_to_project(
             .await?;
         }
         _ => {
-            return Err(anyhow::anyhow!("Invalid item type"));
+            anyhow::bail!("Invalid item type");
         }
     }
 

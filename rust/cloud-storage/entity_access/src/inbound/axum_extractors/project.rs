@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
@@ -35,7 +35,6 @@ pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
@@ -95,7 +94,7 @@ where
                         entity_id: project_context.id.clone(),
                         entity_type: EntityType::Project,
                     },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone().0),
+                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
@@ -137,7 +136,7 @@ where
                     entity_type: EntityType::Project,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,
@@ -228,7 +227,6 @@ impl<T: RequiredPermission, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     }
 }
 
-#[async_trait]
 impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
     T: RequiredPermission,
@@ -313,7 +311,7 @@ where
                     entity_type: EntityType::Project,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,

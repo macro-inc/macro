@@ -20,7 +20,7 @@ impl DocumentStorageServiceClient {
                 status=%status_code,
                 "unexpected response from document storage service"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         Ok(())

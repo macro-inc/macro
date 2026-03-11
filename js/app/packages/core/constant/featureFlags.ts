@@ -123,7 +123,7 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = true;
 // snapshot mention content inline for AI chat
 export const ENABLE_SNAPSHOT_NODE = true;
 
-export const ENABLE_EMAIL_SCHEDULED_SEND = false;
+export const ENABLE_EMAIL_SCHEDULED_SEND = true;
 
 export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = true;
 

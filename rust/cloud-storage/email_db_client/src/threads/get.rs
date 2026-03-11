@@ -1,5 +1,4 @@
 use crate::parse::db_to_service;
-use anyhow::anyhow;
 use models_email::email::service::thread::{
     ThreadProviderMap, ThreadUserInfo, UserThreadIds, UserThreadsPage,
 };
@@ -42,9 +41,7 @@ pub async fn get_latest_thread_ids_paginated(
     offset: i64,
 ) -> anyhow::Result<Vec<Uuid>> {
     if offset < 0 || limit <= 0 {
-        return Err(anyhow!(
-            "Offset must be non-negative and limit must be positive"
-        ));
+        anyhow::bail!("Offset must be non-negative and limit must be positive");
     }
 
     let thread_ids = sqlx::query_scalar!(

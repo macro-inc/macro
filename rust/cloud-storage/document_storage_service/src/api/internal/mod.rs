@@ -1,4 +1,3 @@
-use super::context::TaskPropertiesAdapter;
 use super::{
     context::{ApiContext, EntityAccessService},
     documents::{export_document, get_document_version},
@@ -15,6 +14,7 @@ use super::{
     },
     user::populate_items,
 };
+use crate::api::context::DocumentService;
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
@@ -22,9 +22,6 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use documents_hex::domain::service::DocumentServiceImpl;
-use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
-use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use macro_middleware::{
     auth::ensure_user_exists,
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
@@ -46,63 +43,63 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             post(permissions::update_user_channel_permissions::handler),
         )
         .route(
-            "/users/:user_id",
+            "/users/{user_id}",
             delete(delete_user_items::delete_user_items_handler),
         )
         // Document routes
         .route(
-            "/documents/:document_id",
+            "/documents/{document_id}",
             get(documents_hex::inbound::axum_router::get_document_handler::<
-                DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                DocumentService,
                 EntityAccessService,
             >)
             .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/basic",
+            "/documents/{document_id}/basic",
             get(get_document::get_document_basic_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/export",
+            "/documents/{document_id}/export",
             get(export_document::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/text",
+            "/documents/{document_id}/text",
             get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/full_pdf_modification_data",
+            "/documents/{document_id}/full_pdf_modification_data",
             get(get_full_pdf_modification_data::handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/location",
+            "/documents/{document_id}/location",
             get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/location_v3",
+            "/documents/{document_id}/location_v3",
             get(
                 documents_hex::inbound::axum_router::get_location_v3_handler::<
-                    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                    DocumentService,
                     EntityAccessService,
                 >,
             )
             .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/permissions",
+            "/documents/{document_id}/permissions",
             get(get_document_permissions::get_document_permissions_handler),
         )
         .route(
-            "/documents/:document_id/access_level",
+            "/documents/{document_id}/access_level",
             get(get_document_access_level::handler),
         )
         .route(
             "/documents",
             post(
                 documents_hex::inbound::axum_router::create_document_handler::<
-                    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+                    DocumentService,
                     EntityAccessService,
                 >,
             ),
@@ -112,37 +109,37 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             get(list_documents_with_access::list_documents_with_access_handler),
         )
         .route(
-            "/documents/:document_id",
+            "/documents/{document_id}",
             put(save_document::save_document_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/:document_version_id",
+            "/documents/{document_id}/{document_version_id}",
             get(get_document_version::handler),
         )
         .route(
-            "/documents/:document_id/:document_version_id/key",
+            "/documents/{document_id}/{document_version_id}/key",
             get(get_document_key::get_document_key_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/documents/:document_id/update",
+            "/documents/{document_id}/update",
             put(put_document_update::handler),
         )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
         .route(
-            "/history/:item_type/:item_id",
+            "/history/{item_type}/{item_id}",
             post(upsert_history::upsert_history_handler)
                 .layer(ensure_user_exists_middleware.clone()),
         )
         .route(
-            "/history/:item_type/:item_id",
+            "/history/{item_type}/{item_id}",
             delete(delete_history::delete_history_handler)
                 .layer(ensure_user_exists_middleware.clone()),
         )
         .route(
-            "/threads/:thread_id/access_level",
+            "/threads/{thread_id}/access_level",
             get(get_thread_access_level::handler).layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 ensure_thread_exists::handler,

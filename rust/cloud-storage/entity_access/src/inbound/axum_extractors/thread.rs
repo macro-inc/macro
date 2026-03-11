@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
@@ -32,7 +32,6 @@ pub struct ThreadAccessLevelExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ThreadAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
@@ -114,7 +113,7 @@ where
                     entity_type: EntityType::EmailThread,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,

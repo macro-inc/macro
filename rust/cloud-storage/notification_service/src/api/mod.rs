@@ -82,6 +82,6 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
         .nest("/unsubscribe", unsubscribe::router())
         .layer(middleware);
     Router::new()
-        .nest("/:version", internal_router.clone())
+        .nest("/{version}", internal_router.clone())
         .merge(internal_router)
 }

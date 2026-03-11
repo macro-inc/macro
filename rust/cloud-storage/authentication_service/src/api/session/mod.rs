@@ -17,7 +17,7 @@ pub(in crate::api) mod session_login;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route(
-            "/login/:session_code",
+            "/login/{session_code}",
             get(session_login::handler)
                 .layer(ServiceBuilder::new().layer(CookieManagerLayer::new())),
         )

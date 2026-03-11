@@ -146,10 +146,13 @@ pub async fn search_email_contacts<'a>(
                 UNION ALL
 
                 SELECT m.thread_id
-                FROM email_message_recipients mr
-                JOIN email_messages m ON m.id = mr.message_id
+                FROM email_messages m
                 JOIN link l ON m.link_id = l.link_id
-                WHERE mr.name ILIKE $2
+                WHERE EXISTS (
+                    SELECT 1 FROM email_message_recipients mr
+                    WHERE mr.message_id = m.id
+                    AND mr.name ILIKE $2
+                )
             ) all_matches
         ),
         paginated_threads AS (

@@ -12,7 +12,7 @@ pub fn email_from_user_id(user_id: &str) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow::anyhow!("invalid user id format"))?;
 
     if email.is_empty() {
-        return Err(anyhow::anyhow!("empty email in user id"));
+        anyhow::bail!("empty email in user id");
     }
 
     Ok(email)
