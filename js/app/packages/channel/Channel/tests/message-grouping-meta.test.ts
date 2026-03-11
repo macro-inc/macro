@@ -54,37 +54,6 @@ describe('message grouping meta', () => {
     expect(shouldGroupWithPreviousMessage(current, previous)).toBe(false);
   });
 
-  it('does not group when either message has attachments or is deleted', () => {
-    const previousWithAttachment = {
-      ...createMessage('m1', '2026-02-20T09:00:00.000Z'),
-      attachments: [
-        {
-          id: 'attachment-1',
-          entity_id: 'entity-1',
-          entity_type: 'document',
-          created_at: '2026-02-20T09:00:00.000Z',
-        },
-      ],
-    };
-    const deletedCurrent = {
-      ...createMessage('m2', '2026-02-20T09:01:00.000Z'),
-      deleted_at: '2026-02-20T09:02:00.000Z',
-    };
-
-    expect(
-      shouldGroupWithPreviousMessage(
-        createMessage('m3', '2026-02-20T09:01:00.000Z'),
-        previousWithAttachment
-      )
-    ).toBe(false);
-    expect(
-      shouldGroupWithPreviousMessage(
-        deletedCurrent,
-        createMessage('m4', '2026-02-20T09:00:00.000Z')
-      )
-    ).toBe(false);
-  });
-
   it('does not group when the previous message has thread replies', () => {
     const previous = {
       ...createMessage('m1', '2026-02-20T09:00:00.000Z'),

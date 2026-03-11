@@ -9,12 +9,6 @@ export type GroupableMessage = Pick<
 
 export const MESSAGE_GROUPING_WINDOW_MS = 5 * 60 * 1000;
 
-function hasAttachments(
-  message: Pick<GroupableMessage, 'attachments'>
-): boolean {
-  return message.attachments.length > 0;
-}
-
 function isDeleted(message: Pick<GroupableMessage, 'deleted_at'>): boolean {
   return message.deleted_at != null;
 }
@@ -29,7 +23,6 @@ export function shouldGroupWithPreviousMessage(
 ): boolean {
   if (!previous) return false;
   if (current.sender_id !== previous.sender_id) return false;
-  if (hasAttachments(current) || hasAttachments(previous)) return false;
   if (isDeleted(current) || isDeleted(previous)) return false;
   if (hasThreadReplies(previous)) return false;
 
