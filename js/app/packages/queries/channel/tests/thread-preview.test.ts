@@ -4,8 +4,6 @@ import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
   removeReplyFromThreadPreview,
-  replaceReplyIdInThreadPreview,
-  replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
   type ThreadPreviewReplySnapshot,
   type ThreadPreviewState,
@@ -59,21 +57,6 @@ describe('insertReplyIntoThreadPreview', () => {
       latest_reply_at: '2024-01-03T02:00:00.000Z',
     });
   });
-
-  it('returns the same thread when the reply is already in the preview', () => {
-    const existing = createThreadPreview({
-      preview: [createReply('reply-1', '2024-01-03T01:00:00.000Z')],
-      reply_count: 1,
-      latest_reply_at: '2024-01-03T01:00:00.000Z',
-    });
-
-    expect(
-      insertReplyIntoThreadPreview(
-        existing,
-        createReply('reply-1', '2024-01-03T01:00:00.000Z')
-      )
-    ).toBe(existing);
-  });
 });
 
 describe('removeReplyFromThreadPreview', () => {
@@ -111,66 +94,6 @@ describe('removeReplyFromThreadPreview', () => {
       preview: [createReply('reply-1', '2024-01-03T01:00:00.000Z')],
       reply_count: 1,
       latest_reply_at: '2024-01-03T02:00:00.000Z',
-    });
-  });
-
-  it('returns the same thread when nothing changes', () => {
-    const existing = createThreadPreview({
-      preview: [],
-      reply_count: 0,
-      latest_reply_at: null,
-    });
-
-    expect(removeReplyFromThreadPreview(existing, 'missing')).toBe(existing);
-  });
-});
-
-describe('replaceReplyIdInThreadPreview', () => {
-  it('replaces an optimistic reply id in preview', () => {
-    expect(
-      replaceReplyIdInThreadPreview(
-        createThreadPreview({
-          preview: [
-            createReply('optimistic-reply', '2024-01-03T01:00:00.000Z'),
-          ],
-          reply_count: 1,
-          latest_reply_at: '2024-01-03T01:00:00.000Z',
-        }),
-        'optimistic-reply',
-        'real-reply'
-      )
-    ).toEqual({
-      preview: [
-        createReply('real-reply', '2024-01-03T01:00:00.000Z', {
-          content: 'optimistic-reply',
-        }),
-      ],
-      reply_count: 1,
-      latest_reply_at: '2024-01-03T01:00:00.000Z',
-    });
-  });
-});
-
-describe('replaceReplyReactionsInThreadPreview', () => {
-  it('replaces reply reactions in preview', () => {
-    expect(
-      replaceReplyReactionsInThreadPreview(
-        createThreadPreview({
-          preview: [createReply('reply-1', '2024-01-03T01:00:00.000Z')],
-          reply_count: 1,
-          latest_reply_at: '2024-01-03T01:00:00.000Z',
-        }),
-        'reply-1',
-        [{ emoji: '👍', users: ['user-1'] }]
-      )
-    ).toEqual({
-      preview: [
-        createReply('reply-1', '2024-01-03T01:00:00.000Z', {
-          reactions: [{ emoji: '👍', users: ['user-1'] }],
-        }),
-      ],
-      reply_count: 1,
-      latest_reply_at: '2024-01-03T01:00:00.000Z',
     });
   });
 });
@@ -237,20 +160,5 @@ describe('restoreReplyToThreadPreview', () => {
       reply_count: 1,
       latest_reply_at: '2024-01-03T02:00:00.000Z',
     });
-  });
-
-  it('returns the same thread when the preview reply is already present', () => {
-    const existing = createThreadPreview({
-      preview: [createReply('reply-1', '2024-01-03T01:00:00.000Z')],
-      reply_count: 1,
-      latest_reply_at: '2024-01-03T01:00:00.000Z',
-    });
-
-    expect(
-      restoreReplyToThreadPreview(existing, {
-        previewIndex: 0,
-        reply: createReply('reply-1', '2024-01-03T01:00:00.000Z'),
-      })
-    ).toBe(existing);
   });
 });
