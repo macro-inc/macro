@@ -78,6 +78,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   onCleanup,
   onMount,
@@ -150,6 +151,57 @@ const buildRecipientText = (
 ): string => {
   return prefix + displayName + (showSeparator ? RECIPIENT_SEPARATOR : '');
 };
+
+type RecipientFieldId = 'to' | 'cc' | 'bcc';
+
+function RecipientDropRow(props: {
+  field: RecipientFieldId;
+  class?: string;
+  children: JSX.Element;
+  dragState: Accessor<{
+    recipient: EmailRecipient;
+    sourceField: RecipientFieldId;
+  } | null>;
+  onDrop: (
+    targetField: RecipientFieldId,
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => void;
+}) {
+  const [isDragOver, setIsDragOver] = createSignal(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    const drag = props.dragState();
+    if (!drag || drag.sourceField === props.field) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const drag = props.dragState();
+    if (!drag || drag.sourceField === props.field) return;
+    props.onDrop(props.field, drag.recipient, drag.sourceField);
+  };
+
+  return (
+    <div
+      class={`flex flex-row items-center ${props.class ?? ''}`}
+      classList={{ 'bg-accent/10': isDragOver() }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function TruncatedRecipientList(props: {
   toRecipients: EmailRecipient[];
@@ -386,6 +438,10 @@ export function BaseInput(props: {
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
+  const [recipientDragState, setRecipientDragState] = createSignal<{
+    recipient: EmailRecipient;
+    sourceField: 'to' | 'cc' | 'bcc';
+  } | null>(null);
   const [savedDraftId, setSavedDraftId] = createSignal<
     ApiDraftOutputDbId | undefined
   >(
@@ -701,6 +757,40 @@ export function BaseInput(props: {
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
+
+  const handleChipDragStart = (
+    field: 'to' | 'cc' | 'bcc',
+    recipient: EmailRecipient,
+    e: DragEvent
+  ) => {
+    if (!e.dataTransfer) return;
+    setRecipientDragState({ recipient, sourceField: field });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  };
+
+  const handleChipDragEnd = () => {
+    setRecipientDragState(null);
+  };
+
+  const handleRecipientDrop = (
+    targetField: 'to' | 'cc' | 'bcc',
+    recipient: EmailRecipient,
+    sourceField: 'to' | 'cc' | 'bcc'
+  ) => {
+    const sourceList = form().recipients()[sourceField];
+    form().setRecipients(
+      sourceField,
+      sourceList.filter((r) => r.id !== recipient.id)
+    );
+    const targetList = form().recipients()[targetField];
+    if (!targetList.some((r) => r.id === recipient.id)) {
+      form().setRecipients(targetField, [...targetList, recipient]);
+    }
+    if (targetField === 'cc') setShowCc(true);
+    if (targetField === 'bcc') setShowBcc(true);
+    scheduleDraftSave();
+  };
 
   // We are consuming the first change, because it is the initial value
   let firstChangeConsumed = false;
@@ -1216,7 +1306,12 @@ export function BaseInput(props: {
             </div>
             {/* Expanded TO */}
 
-            <div class="flex flex-row items-center -mt-0.5">
+            <RecipientDropRow
+              field="to"
+              class="-mt-0.5"
+              dragState={recipientDragState}
+              onDrop={handleRecipientDrop}
+            >
               <div class="min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
@@ -1225,11 +1320,20 @@ export function BaseInput(props: {
                 setSelectedOptions={(v) => form().setRecipients('to', v)}
                 triggerMode="input"
                 hideBorder
+                onChipDragStart={(option, e) =>
+                  handleChipDragStart('to', option, e)
+                }
+                onChipDragEnd={handleChipDragEnd}
               />
-            </div>
+            </RecipientDropRow>
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
-              <div class="flex flex-row items-center -mt-1.5">
+              <RecipientDropRow
+                field="cc"
+                class="-mt-1.5"
+                dragState={recipientDragState}
+                onDrop={handleRecipientDrop}
+              >
                 <div class="min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
@@ -1238,12 +1342,21 @@ export function BaseInput(props: {
                   setSelectedOptions={(v) => form().setRecipients('cc', v)}
                   triggerMode="input"
                   hideBorder
+                  onChipDragStart={(option, e) =>
+                    handleChipDragStart('cc', option, e)
+                  }
+                  onChipDragEnd={handleChipDragEnd}
                 />
-              </div>
+              </RecipientDropRow>
             </Show>
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
-              <div class="flex flex-row items-center -mt-1.5">
+              <RecipientDropRow
+                field="bcc"
+                class="-mt-1.5"
+                dragState={recipientDragState}
+                onDrop={handleRecipientDrop}
+              >
                 <div class="min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
@@ -1252,8 +1365,12 @@ export function BaseInput(props: {
                   setSelectedOptions={(v) => form().setRecipients('bcc', v)}
                   triggerMode="input"
                   hideBorder
+                  onChipDragStart={(option, e) =>
+                    handleChipDragStart('bcc', option, e)
+                  }
+                  onChipDragEnd={handleChipDragEnd}
                 />
-              </div>
+              </RecipientDropRow>
             </Show>
             {/* Show to, cc, bcc buttons */}
             <div class="flex flex-row justify-end space-x-2 pt-2">

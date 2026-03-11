@@ -29,6 +29,7 @@ import {
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import {
+  type Accessor,
   createMemo,
   createSignal,
   type JSX,
@@ -66,7 +67,10 @@ import {
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
-import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import {
+  type EmailRecipient,
+  useMaybeEmailContext,
+} from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import { stickyGate } from '@core/util/debounce';
@@ -119,10 +123,54 @@ type EmailComposeProps = {
   draftID?: string;
 };
 
-function ComposeFieldRow(props: { label: string; children: JSX.Element }) {
+type RecipientFieldId = 'to' | 'cc' | 'bcc';
+
+type DragState = {
+  recipient: EmailRecipient;
+  sourceField: RecipientFieldId;
+};
+
+function ComposeFieldRow(props: {
+  label: string;
+  children: JSX.Element;
+  fieldId?: RecipientFieldId;
+  dragState?: Accessor<DragState | null>;
+  onRecipientDrop?: (
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => void;
+}) {
+  const [isDragOver, setIsDragOver] = createSignal(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    const drag = props.dragState?.();
+    if (!drag || !props.fieldId || drag.sourceField === props.fieldId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const drag = props.dragState?.();
+    if (!drag || !props.fieldId || drag.sourceField === props.fieldId) return;
+    props.onRecipientDrop?.(drag.recipient, drag.sourceField);
+  };
+
   return (
-    <div class="flex items-baseline gap-2 border-b border-edge-muted focus-within:border-accent">
-      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+    <div
+      class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent"
+      classList={{ 'border-accent bg-accent/10': isDragOver() }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div class="text-sm w-7 shrink-0 text-ink-placeholder/70">
         {props.label}
       </div>
       <div class="flex-1">{props.children}</div>
@@ -746,6 +794,46 @@ export function EmailCompose(props: EmailComposeProps) {
     return fromDraft ?? destinationOptions();
   };
 
+  const [recipientDragState, setRecipientDragState] =
+    createSignal<DragState | null>(null);
+
+  const handleChipDragStart = (
+    field: RecipientFieldId,
+    recipient: EmailRecipient,
+    e: DragEvent
+  ) => {
+    if (!e.dataTransfer) return;
+    setRecipientDragState({ recipient, sourceField: field });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  };
+
+  const handleChipDragEnd = () => {
+    setRecipientDragState(null);
+  };
+
+  const handleRecipientDrop = (
+    targetField: RecipientFieldId,
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => {
+    // Remove from source
+    const sourceList = form.recipients()[sourceField];
+    form.setRecipients(
+      sourceField,
+      sourceList.filter((r) => r.id !== recipient.id)
+    );
+    // Add to target (avoid duplicates)
+    const targetList = form.recipients()[targetField];
+    if (!targetList.some((r) => r.id === recipient.id)) {
+      form.setRecipients(targetField, [...targetList, recipient]);
+    }
+    // Auto-show cc/bcc if dropping into them
+    if (targetField === 'cc') setShowCc(true);
+    if (targetField === 'bcc') setShowBcc(true);
+    scheduleDraftSave();
+  };
+
   const isDraftSaving = () => saveDraftMutation.isPending;
 
   // Used to keep displaying draft status for some time
@@ -888,7 +976,14 @@ export function EmailCompose(props: EmailComposeProps) {
                 </div>
 
                 <div class="flex flex-col gap-2">
-                  <ComposeFieldRow label="To">
+                  <ComposeFieldRow
+                    label="To"
+                    fieldId="to"
+                    dragState={recipientDragState}
+                    onRecipientDrop={(recipient, sourceField) =>
+                      handleRecipientDrop('to', recipient, sourceField)
+                    }
+                  >
                     <RecipientSelector
                       inputRef={registerRef('directRecipientsSelector')}
                       options={getRecipientOptions}
@@ -901,6 +996,10 @@ export function EmailCompose(props: EmailComposeProps) {
                       hideBorder
                       noBrackets
                       disabled={hasLinkError()}
+                      onChipDragStart={(option, e) =>
+                        handleChipDragStart('to', option, e)
+                      }
+                      onChipDragEnd={handleChipDragEnd}
                     />
                     <Show when={withValidationError('no_recipient')}>
                       {(err) => (
@@ -912,7 +1011,14 @@ export function EmailCompose(props: EmailComposeProps) {
                   </ComposeFieldRow>
 
                   <Show when={isCcVisible()}>
-                    <ComposeFieldRow label="Cc">
+                    <ComposeFieldRow
+                      label="Cc"
+                      fieldId="cc"
+                      dragState={recipientDragState}
+                      onRecipientDrop={(recipient, sourceField) =>
+                        handleRecipientDrop('cc', recipient, sourceField)
+                      }
+                    >
                       <RecipientSelector
                         inputRef={registerRef('ccRecipientsSelector')}
                         options={getRecipientOptions}
@@ -924,12 +1030,23 @@ export function EmailCompose(props: EmailComposeProps) {
                         hideBorder
                         noBrackets
                         disabled={hasLinkError()}
+                        onChipDragStart={(option, e) =>
+                          handleChipDragStart('cc', option, e)
+                        }
+                        onChipDragEnd={handleChipDragEnd}
                       />
                     </ComposeFieldRow>
                   </Show>
 
                   <Show when={isBccVisible()}>
-                    <ComposeFieldRow label="Bcc">
+                    <ComposeFieldRow
+                      label="Bcc"
+                      fieldId="bcc"
+                      dragState={recipientDragState}
+                      onRecipientDrop={(recipient, sourceField) =>
+                        handleRecipientDrop('bcc', recipient, sourceField)
+                      }
+                    >
                       <RecipientSelector
                         inputRef={registerRef('bccRecipientsSelector')}
                         options={getRecipientOptions}
@@ -941,6 +1058,10 @@ export function EmailCompose(props: EmailComposeProps) {
                         hideBorder
                         noBrackets
                         disabled={hasLinkError()}
+                        onChipDragStart={(option, e) =>
+                          handleChipDragStart('bcc', option, e)
+                        }
+                        onChipDragEnd={handleChipDragEnd}
                       />
                     </ComposeFieldRow>
                   </Show>

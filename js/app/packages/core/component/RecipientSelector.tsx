@@ -47,9 +47,18 @@ function RecipientChip(props: {
   icon?: JSX.Element;
   label: string;
   onRemove: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: DragEvent) => void;
+  onDragEnd?: (e: DragEvent) => void;
 }) {
   return (
-    <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+    <div
+      class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
+      draggable={props.draggable}
+      onDragStart={props.onDragStart}
+      onDragEnd={props.onDragEnd}
+    >
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm">{truncateString(props.label, 20)}</p>
       <XIcon
@@ -224,6 +233,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   noBrackets?: boolean;
   includeSelf?: boolean;
   disabled?: boolean;
+  onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
+  onChipDragEnd?: (e: DragEvent) => void;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -513,6 +524,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 }
                                 label={displayText() ?? ''}
                                 onRemove={() => state.remove(option)}
+                                draggable={!!props.onChipDragStart}
+                                onDragStart={(e) =>
+                                  props.onChipDragStart?.(
+                                    option as WithCustomUserInput<K>,
+                                    e
+                                  )
+                                }
+                                onDragEnd={props.onChipDragEnd}
                               />
                             </Tooltip>
                           );
@@ -562,6 +581,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 }
                                 label={email}
                                 onRemove={() => state.remove(option)}
+                                draggable={!!props.onChipDragStart}
+                                onDragStart={(e) =>
+                                  props.onChipDragStart?.(
+                                    option as WithCustomUserInput<K>,
+                                    e
+                                  )
+                                }
+                                onDragEnd={props.onChipDragEnd}
                               />
                             </Tooltip>
                           );
@@ -577,7 +604,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   setInputRef(el);
                   props.inputRef?.(el);
                 }}
-                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
+                class="flex-1 min-h-7 p-1 min-w-[100px] outline-none placeholder:text-ink-placeholder"
                 classList={{ 'ml-1': selectedLen() === 0 }}
                 onKeyDown={(e) => {
                   if (
