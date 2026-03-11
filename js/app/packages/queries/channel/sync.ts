@@ -11,10 +11,10 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 import {
-  makeMessageTarget,
-  insertTargetMessage,
+  insertMessageIntoTargetCaches,
   replaceTargetReactions,
-  softInvalidateTarget,
+  softInvalidateTargetCaches,
+  resolveMessageTarget,
 } from './reconcile';
 
 /**
@@ -83,15 +83,22 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
             attachments: [],
             reactions: [],
           };
-          insertTargetMessage(
+          insertMessageIntoTargetCaches(
             payload.channel_id,
-            makeMessageTarget({ messageId: payload.id, threadId }),
+            resolveMessageTarget({
+              channelId: payload.channel_id,
+              messageId: payload.id,
+              threadId,
+            }),
             reply
           );
         } else {
-          insertTargetMessage(
+          insertMessageIntoTargetCaches(
             payload.channel_id,
-            makeMessageTarget({ messageId: payload.id }),
+            resolveMessageTarget({
+              channelId: payload.channel_id,
+              messageId: payload.id,
+            }),
             {
               id: payload.id,
               channel_id: payload.channel_id,
@@ -119,9 +126,10 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 
   softInvalidateChannelWithID(payload.channel_id);
   if (ENABLE_NEW_CHANNELS) {
-    softInvalidateTarget(
+    softInvalidateTargetCaches(
       payload.channel_id,
-      makeMessageTarget({
+      resolveMessageTarget({
+        channelId: payload.channel_id,
         messageId: payload.id,
         threadId: payload.thread_id ?? undefined,
       })
@@ -162,7 +170,8 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
       if (ENABLE_NEW_CHANNELS) {
         replaceTargetReactions(
           payload.channel_id,
-          makeMessageTarget({
+          resolveMessageTarget({
+            channelId: payload.channel_id,
             messageId: payload.message_id,
             threadId,
           }),
@@ -176,18 +185,12 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
 
   softInvalidateChannelWithID(payload.channel_id);
   if (ENABLE_NEW_CHANNELS) {
-    const threadId =
-      queryClient
-        .getQueryData<GetChannelResponse>(
-          channelKeys.withID(payload.channel_id).queryKey
-        )
-        ?.messages.find((message) => message.id === payload.message_id)
-        ?.thread_id ?? undefined;
-    softInvalidateTarget(
+    softInvalidateTargetCaches(
       payload.channel_id,
-      makeMessageTarget({
+      resolveMessageTarget({
+        channelId: payload.channel_id,
         messageId: payload.message_id,
-        threadId,
+        threadId: undefined,
       })
     );
   }

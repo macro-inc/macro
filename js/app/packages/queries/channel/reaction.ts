@@ -14,9 +14,9 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce } from '../nonce';
 import {
-  makeMessageTarget,
   replaceTargetReactions,
-  softInvalidateTarget,
+  softInvalidateTargetCaches,
+  resolveMessageTarget,
   type MessageTarget,
 } from './reconcile';
 
@@ -129,15 +129,10 @@ export function optimisticAddReaction(
     queryClient.getQueryData<GetChannelResponse>(queryKey);
   const currentReactions =
     vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
-  const threadId =
-    vars.threadId ??
-    fallbackChannelData?.messages.find(
-      (message) => message.id === vars.message_id
-    )?.thread_id ??
-    undefined;
-  const target = makeMessageTarget({
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
     messageId: vars.message_id,
-    threadId,
+    threadId: vars.threadId,
   });
 
   const result = addUserReaction(currentReactions, vars.emoji, vars.userId);
@@ -167,7 +162,11 @@ export function optimisticAddReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(vars.channelId, context.target, result.reactions);
+    replaceTargetReactions(
+      vars.channelId,
+      context.target,
+      result.reactions
+    );
   }
 
   return context;
@@ -220,7 +219,11 @@ export function rollbackAddReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(channelId, context.target, nextReactions ?? []);
+    replaceTargetReactions(
+      channelId,
+      context.target,
+      nextReactions ?? []
+    );
   }
 }
 
@@ -241,15 +244,10 @@ export function optimisticRemoveReaction(
     queryClient.getQueryData<GetChannelResponse>(queryKey);
   const currentReactions =
     vars.currentReactions ?? fallbackChannelData?.reactions[vars.message_id];
-  const threadId =
-    vars.threadId ??
-    fallbackChannelData?.messages.find(
-      (message) => message.id === vars.message_id
-    )?.thread_id ??
-    undefined;
-  const target = makeMessageTarget({
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
     messageId: vars.message_id,
-    threadId,
+    threadId: vars.threadId,
   });
 
   const result = removeUserReaction(currentReactions, vars.emoji, vars.userId);
@@ -281,7 +279,11 @@ export function optimisticRemoveReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(vars.channelId, context.target, result.reactions);
+    replaceTargetReactions(
+      vars.channelId,
+      context.target,
+      result.reactions
+    );
   }
 
   return context;
@@ -334,7 +336,11 @@ export function rollbackRemoveReaction(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(channelId, context.target, nextReactions ?? []);
+    replaceTargetReactions(
+      channelId,
+      context.target,
+      nextReactions ?? []
+    );
   }
 }
 
@@ -414,9 +420,10 @@ export function useAddReactionMutation(
           addReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
           if (ENABLE_NEW_CHANNELS) {
-            softInvalidateTarget(
+            softInvalidateTargetCaches(
               vars.channelId,
-              makeMessageTarget({
+              resolveMessageTarget({
+                channelId: vars.channelId,
                 messageId: vars.messageId,
                 threadId: vars.threadId,
               })
@@ -483,9 +490,10 @@ export function useRemoveReactionMutation(
           removeReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
           if (ENABLE_NEW_CHANNELS) {
-            softInvalidateTarget(
+            softInvalidateTargetCaches(
               vars.channelId,
-              makeMessageTarget({
+              resolveMessageTarget({
+                channelId: vars.channelId,
                 messageId: vars.messageId,
                 threadId: vars.threadId,
               })

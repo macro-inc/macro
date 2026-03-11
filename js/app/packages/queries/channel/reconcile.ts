@@ -28,6 +28,7 @@ import {
 } from './thread-replies';
 import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import type { CountedReaction } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
@@ -71,12 +72,40 @@ export function makeMessageTarget(args: {
   };
 }
 
-export function insertTargetMessage(
+function getCachedChannel(channelId: string): GetChannelResponse | undefined {
+  return queryClient.getQueryData<GetChannelResponse>(
+    channelKeys.withID(channelId).queryKey
+  );
+}
+
+export function findThreadIdForMessage(
+  channelId: string,
+  messageId: string
+): string | undefined {
+  return (
+    getCachedChannel(channelId)?.messages.find(
+      (message) => message.id === messageId
+    )?.thread_id ?? undefined
+  );
+}
+
+export function resolveMessageTarget(args: {
+  channelId: string;
+  messageId: string;
+  threadId?: string;
+}): MessageTarget {
+  return makeMessageTarget({
+    messageId: args.messageId,
+    threadId:
+      args.threadId ?? findThreadIdForMessage(args.channelId, args.messageId),
+  });
+}
+
+export function insertMessageIntoTargetCaches(
   channelId: string,
   target: MessageTarget,
   payload: ApiChannelMessage | ApiThreadReply
 ) {
-  console.log('insert target message', channelId, target, payload);
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<ChannelMessagesData>(
       channelKeys.messages(channelId).queryKey,
@@ -91,19 +120,20 @@ export function insertTargetMessage(
       channelKeys.threadReplies(channelId, target.threadId).queryKey,
       (prev) => insertThreadReply(prev, payload as ApiThreadReply)
     );
-  } else {
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        insertTopLevelMessageIntoChannelMessages(
-          prev,
-          payload as ApiChannelMessage
-        )
-    );
+    return;
   }
+
+  queryClient.setQueryData<ChannelMessagesData>(
+    channelKeys.messages(channelId).queryKey,
+    (prev) =>
+      insertTopLevelMessageIntoChannelMessages(prev, payload as ApiChannelMessage)
+  );
 }
 
-export function removeTargetMessage(channelId: string, target: MessageTarget) {
+export function removeMessageFromTargetCaches(
+  channelId: string,
+  target: MessageTarget
+) {
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
       channelKeys.threadReplies(channelId, target.threadId).queryKey,
@@ -127,7 +157,7 @@ export function removeTargetMessage(channelId: string, target: MessageTarget) {
   );
 }
 
-export function captureDeleteTargetSnapshot(
+export function captureDeleteSnapshotForTarget(
   channelId: string,
   target: MessageTarget
 ): DeleteTargetSnapshot {
@@ -161,7 +191,7 @@ export function captureDeleteTargetSnapshot(
   };
 }
 
-export function restoreTargetMessage(
+export function restoreMessageInTargetCaches(
   channelId: string,
   target: MessageTarget,
   snapshot: DeleteTargetSnapshot
@@ -263,7 +293,7 @@ export function replaceTargetReactions(
   );
 }
 
-export function softInvalidateTarget(
+export function softInvalidateTargetCaches(
   channelId: string,
   target?: MessageTarget
 ) {

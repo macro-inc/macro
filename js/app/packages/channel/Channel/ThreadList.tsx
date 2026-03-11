@@ -4,24 +4,24 @@ import {
   createSignal,
   createEffect,
   on,
-} from 'solid-js';
-import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
-import type { ScrollToIndexOpts } from 'virtua/unstable_core';
+} from "solid-js";
+import { type VirtualizerHandle, Virtualizer } from "virtua/solid";
+import type { ScrollToIndexOpts } from "virtua/unstable_core";
 
-type ScrollAlignment = ScrollToIndexOpts['align'];
+type ScrollAlignment = ScrollToIndexOpts["align"];
 
 export type ThreadListScrollTarget =
-  | { tag: 'top'; align?: ScrollAlignment }
-  | { tag: 'bottom'; align?: ScrollAlignment }
-  | { tag: 'index'; index: number; align?: ScrollAlignment }
-  | { tag: 'id'; id: string; align?: ScrollAlignment };
+  | { tag: "top"; align?: ScrollAlignment }
+  | { tag: "bottom"; align?: ScrollAlignment }
+  | { tag: "index"; index: number; align?: ScrollAlignment }
+  | { tag: "id"; id: string; align?: ScrollAlignment };
 
 export function defaultThreadListTargetFromMessage(
-  targetMessageId: string | undefined
+  targetMessageId: string | undefined,
 ): ThreadListScrollTarget {
   if (targetMessageId) {
     return {
-      tag: 'id',
+      tag: "id",
       id: targetMessageId,
     };
   }
@@ -65,15 +65,15 @@ const NEAR_BOTTOM_THRESHOLD = 50;
 const EXPLICIT_SCROLL_INTENT_WINDOW_MS = 250;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
-type ScrollDirection = 'up' | 'down';
+type ScrollDirection = "up" | "down";
 type ExplicitScrollIntent = {
   direction: ScrollDirection;
   at: number;
 };
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
-  tag: 'bottom',
-  align: 'end',
+  tag: "bottom",
+  align: "end",
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -81,7 +81,7 @@ const clamp = (value: number, min: number, max: number) =>
 
 export function shouldStickToBottomOnDataChange(
   isNearBottom: boolean,
-  shift?: Accessor<boolean>
+  shift?: Accessor<boolean>,
 ): boolean {
   return isNearBottom && !(shift?.() ?? false);
 }
@@ -89,11 +89,11 @@ export function shouldStickToBottomOnDataChange(
 export function isExplicitScrollDown(
   delta: number,
   intent: ExplicitScrollIntent | undefined,
-  now = Date.now()
+  now = Date.now(),
 ): boolean {
   if (delta <= 0) return false;
   if (!intent) return false;
-  if (intent.direction !== 'down') return false;
+  if (intent.direction !== "down") return false;
   return now - intent.at <= EXPLICIT_SCROLL_INTENT_WINDOW_MS;
 }
 
@@ -101,7 +101,7 @@ export function accumulateExplicitScrollDownDistance(
   previousDistance: number,
   delta: number,
   intent: ExplicitScrollIntent | undefined,
-  now = Date.now()
+  now = Date.now(),
 ): number {
   if (!isExplicitScrollDown(delta, intent, now)) return 0;
   return previousDistance + delta;
@@ -114,13 +114,13 @@ export function hasExplicitScrollDownGesture(distance: number): boolean {
 function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
   if (target.align) return target.align;
   switch (target.tag) {
-    case 'top':
-      return 'start';
-    case 'bottom':
-      return 'end';
-    case 'index':
-    case 'id':
-      return 'nearest';
+    case "top":
+      return "start";
+    case "bottom":
+      return "end";
+    case "index":
+    case "id":
+      return "nearest";
   }
 }
 
@@ -150,13 +150,13 @@ export function ThreadList(props: ThreadListProps) {
     if (maxIndex < 0) return -1;
 
     switch (target.tag) {
-      case 'top':
+      case "top":
         return 0;
-      case 'bottom':
+      case "bottom":
         return maxIndex;
-      case 'index':
+      case "index":
         return clamp(target.index, 0, maxIndex);
-      case 'id': {
+      case "id": {
         const idx = keys.indexOf(target.id);
         return idx === -1 ? -1 : idx;
       }
@@ -165,7 +165,7 @@ export function ThreadList(props: ThreadListProps) {
 
   const scrollToTarget = (
     handle: VirtualizerHandle,
-    target: ThreadListScrollTarget
+    target: ThreadListScrollTarget,
   ): boolean => {
     const index = resolveTargetIndex(target);
     if (index < 0) return false;
@@ -181,7 +181,7 @@ export function ThreadList(props: ThreadListProps) {
 
   const emitScrollState = (
     handle: VirtualizerHandle,
-    isScrollingDown: boolean
+    isScrollingDown: boolean,
   ) => {
     if (!props.onScrollStateChange) return;
     const distanceFromTop = handle.scrollOffset;
@@ -198,42 +198,42 @@ export function ThreadList(props: ThreadListProps) {
   };
 
   const createNavigation = (
-    handle: VirtualizerHandle
+    handle: VirtualizerHandle,
   ): ThreadListNavigation => ({
     scrollTo: (target) => scrollToTarget(handle, target),
 
     scrollToIndex: (index, opts = {}) =>
-      scrollToTarget(handle, { tag: 'index', index, align: opts.align }),
+      scrollToTarget(handle, { tag: "index", index, align: opts.align }),
 
     scrollByDelta: (delta, opts = {}) => {
       const current = getCurrentIndex(handle);
       if (current < 0) return false;
       return scrollToTarget(handle, {
-        tag: 'index',
+        tag: "index",
         index: current + delta,
         align: opts.align,
       });
     },
 
-    scrollToTop: (align = 'start') =>
-      scrollToTarget(handle, { tag: 'top', align }),
+    scrollToTop: (align = "start") =>
+      scrollToTarget(handle, { tag: "top", align }),
 
-    scrollToBottom: (align = 'end') =>
-      scrollToTarget(handle, { tag: 'bottom', align }),
+    scrollToBottom: (align = "end") =>
+      scrollToTarget(handle, { tag: "bottom", align }),
 
     scrollToId: (id, opts = {}) =>
-      scrollToTarget(handle, { tag: 'id', id, align: opts.align }),
+      scrollToTarget(handle, { tag: "id", id, align: opts.align }),
 
     navigatePrevious: () => {
       const current = getCurrentIndex(handle);
       if (current <= 0) return false;
-      return scrollToTarget(handle, { tag: 'index', index: current - 1 });
+      return scrollToTarget(handle, { tag: "index", index: current - 1 });
     },
 
     navigateNext: () => {
       const current = getCurrentIndex(handle);
       if (current < 0) return false;
-      return scrollToTarget(handle, { tag: 'index', index: current + 1 });
+      return scrollToTarget(handle, { tag: "index", index: current + 1 });
     },
 
     isNearBottom,
@@ -260,11 +260,11 @@ export function ThreadList(props: ThreadListProps) {
         if (!handle || !didInitialScroll()) return;
         if (shouldStickToBottomOnDataChange(isNearBottom(), props.shift)) {
           requestAnimationFrame(() => {
-            scrollToTarget(handle, { tag: 'bottom', align: 'end' });
+            scrollToTarget(handle, { tag: "bottom", align: "end" });
           });
         }
-      }
-    )
+      },
+    ),
   );
 
   const handleScroll = () => {
@@ -286,10 +286,10 @@ export function ThreadList(props: ThreadListProps) {
       explicitScrollDownDistance = accumulateExplicitScrollDownDistance(
         explicitScrollDownDistance,
         delta,
-        explicitScrollIntent
+        explicitScrollIntent,
       );
       nextIsScrollingDown = hasExplicitScrollDownGesture(
-        explicitScrollDownDistance
+        explicitScrollDownDistance,
       );
     }
     previousScrollOffset = handle.scrollOffset;
@@ -317,7 +317,7 @@ export function ThreadList(props: ThreadListProps) {
       ref={scrollRef}
       onWheel={(event) => {
         if (event.deltaY === 0) return;
-        markExplicitScrollIntent(event.deltaY > 0 ? 'down' : 'up');
+        markExplicitScrollIntent(event.deltaY > 0 ? "down" : "up");
       }}
       onTouchStart={(event) => {
         previousTouchY = event.touches.item(0)?.clientY;
@@ -328,7 +328,7 @@ export function ThreadList(props: ThreadListProps) {
 
         const deltaY = previousTouchY - nextTouchY;
         if (deltaY !== 0) {
-          markExplicitScrollIntent(deltaY > 0 ? 'down' : 'up');
+          markExplicitScrollIntent(deltaY > 0 ? "down" : "up");
         }
         previousTouchY = nextTouchY;
       }}
@@ -339,12 +339,12 @@ export function ThreadList(props: ThreadListProps) {
         previousTouchY = undefined;
       }}
       style={{
-        width: '100%',
-        'overflow-y': 'auto',
-        'overflow-anchor': 'none',
-        height: '100%',
-        display: 'flex',
-        'flex-direction': 'column',
+        width: "100%",
+        "overflow-y": "auto",
+        "overflow-anchor": "none",
+        height: "100%",
+        display: "flex",
+        "flex-direction": "column",
       }}
     >
       <Virtualizer

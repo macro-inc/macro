@@ -4,7 +4,7 @@ import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 export type ThreadPreviewState = {
   preview: ApiThreadReply[];
   reply_count: number;
-  latest_reply_at: string | null;
+  latest_reply_at?: string | null;
 };
 
 export type ThreadPreviewReplySnapshot = {

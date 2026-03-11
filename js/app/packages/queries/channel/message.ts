@@ -23,13 +23,13 @@ import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
 import {
-  captureDeleteTargetSnapshot,
-  makeMessageTarget,
-  insertTargetMessage,
-  removeTargetMessage,
-  restoreTargetMessage,
+  captureDeleteSnapshotForTarget,
+  insertMessageIntoTargetCaches,
+  removeMessageFromTargetCaches,
+  restoreMessageInTargetCaches,
+  softInvalidateTargetCaches,
   replaceTargetMessageId,
-  softInvalidateTarget,
+  resolveMessageTarget,
   type DeleteTargetSnapshot,
 } from './reconcile';
 
@@ -53,14 +53,14 @@ type WithSenderId<T> = T & { senderId: string };
 
 export type InsertMessageContext = {
   optimisticId: string;
-  target: ReturnType<typeof makeMessageTarget>;
+  target: ReturnType<typeof resolveMessageTarget>;
 };
 
 export type DeleteMessageContext = {
   deletedMessage?: Message;
   deletedReactions: CountedReaction[];
   deletedAttachments: Attachment[];
-  target: ReturnType<typeof makeMessageTarget>;
+  target: ReturnType<typeof resolveMessageTarget>;
   targetSnapshot?: DeleteTargetSnapshot;
 };
 
@@ -160,7 +160,8 @@ export function optimisticInsertChannelMessage(
     now
   );
   const threadId = vars.thread_id ?? undefined;
-  const target = makeMessageTarget({
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
     messageId: vars.optimisticId,
     threadId,
   });
@@ -199,14 +200,18 @@ export function optimisticInsertChannelMessage(
         newAttachments,
         now
       );
-      insertTargetMessage(vars.channelId, target, optimisticReply);
+      insertMessageIntoTargetCaches(vars.channelId, target, optimisticReply);
     } else {
       const optimisticMessage = makeOptimisticTopLevelMessage(
         vars,
         newAttachments,
         now
       );
-      insertTargetMessage(vars.channelId, target, optimisticMessage);
+      insertMessageIntoTargetCaches(
+        vars.channelId,
+        target,
+        optimisticMessage
+      );
     }
   }
 
@@ -238,7 +243,7 @@ export function rollbackInsertChannelMessage(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    removeTargetMessage(channelId, context.target);
+    removeMessageFromTargetCaches(channelId, context.target);
   }
 }
 
@@ -287,7 +292,8 @@ export function replaceOptimisticMessage(
   if (ENABLE_NEW_CHANNELS) {
     replaceTargetMessageId(
       vars.channelId,
-      makeMessageTarget({
+      resolveMessageTarget({
+        channelId: vars.channelId,
         messageId: vars.optimisticId,
         threadId: vars.threadId,
       }),
@@ -308,7 +314,8 @@ export function optimisticDeleteChannelMessage(
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
-  const target = makeMessageTarget({
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
     messageId: vars.message_id,
     threadId: vars.threadId,
   });
@@ -357,11 +364,11 @@ export function optimisticDeleteChannelMessage(
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    context.targetSnapshot = captureDeleteTargetSnapshot(
+    context.targetSnapshot = captureDeleteSnapshotForTarget(
       vars.channelId,
       target
     );
-    removeTargetMessage(vars.channelId, target);
+    removeMessageFromTargetCaches(vars.channelId, target);
   }
 
   return context;
@@ -397,7 +404,11 @@ export function rollbackDeleteChannelMessage(
   );
 
   if (ENABLE_NEW_CHANNELS && context.targetSnapshot) {
-    restoreTargetMessage(channelId, context.target, context.targetSnapshot);
+    restoreMessageInTargetCaches(
+      channelId,
+      context.target,
+      context.targetSnapshot
+    );
   }
 }
 
@@ -549,9 +560,10 @@ export function useSendMessageMutation(
         onSettled: (_data, _error, variables) => {
           softInvalidateChannelWithID(variables.channelID);
           if (ENABLE_NEW_CHANNELS) {
-            softInvalidateTarget(
+            softInvalidateTargetCaches(
               variables.channelID,
-              makeMessageTarget({
+              resolveMessageTarget({
+                channelId: variables.channelID,
                 messageId: variables.optimisticId,
                 threadId: variables.message.thread_id ?? undefined,
               })
@@ -621,9 +633,10 @@ export function useDeleteMessageMutation(
           deleteNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
           if (ENABLE_NEW_CHANNELS) {
-            softInvalidateTarget(
+            softInvalidateTargetCaches(
               vars.channelID,
-              makeMessageTarget({
+              resolveMessageTarget({
+                channelId: vars.channelID,
                 messageId: vars.messageID,
                 threadId: vars.threadID,
               })
