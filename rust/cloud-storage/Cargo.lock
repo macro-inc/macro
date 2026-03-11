@@ -3409,6 +3409,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "macro_user_id",
  "model_notifications",
  "notification",
  "rootcause",
@@ -6158,6 +6159,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
