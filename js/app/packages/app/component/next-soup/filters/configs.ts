@@ -99,9 +99,9 @@ export const ENTITY_TYPE_FILTER_CONFIGS = [
     predicate: fileFilter,
     group: 'entity-type',
   },
-] as const;
+] as const satisfies EntityFilterConfig[];
 
-export const EMAIL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+export const EMAIL_CONTEXTUAL_FILTERS = [
   {
     id: 'email-unread',
     label: 'Unread',
@@ -122,9 +122,9 @@ export const EMAIL_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
     label: 'Not Done',
     predicate: (entity) => isEmailEntity(entity) && !entity.done,
   },
-];
+] as const satisfies EntityFilterConfig[];
 
-export const TASK_STATUS_FILTERS: EntityFilterConfig[] = [
+export const TASK_STATUS_FILTERS = [
   {
     id: 'task-not-started',
     label: 'Not Started',
@@ -150,9 +150,9 @@ export const TASK_STATUS_FILTERS: EntityFilterConfig[] = [
     label: 'Canceled',
     predicate: isCanceled,
   },
-];
+] as const satisfies EntityFilterConfig[];
 
-export const TASK_PRIORITY_FILTERS: EntityFilterConfig[] = [
+export const TASK_PRIORITY_FILTERS = [
   {
     id: 'task-critical',
     label: 'Critical',
@@ -178,9 +178,9 @@ export const TASK_PRIORITY_FILTERS: EntityFilterConfig[] = [
     label: 'No Priority',
     predicate: hasNoPriority,
   },
-];
+] as const satisfies EntityFilterConfig[];
 
-export const TASK_ASSIGNEE_FILTERS: EntityFilterConfig[] = [
+export const TASK_ASSIGNEE_FILTERS = [
   {
     id: 'task-has-assignee',
     label: 'Has Assignee',
@@ -191,15 +191,15 @@ export const TASK_ASSIGNEE_FILTERS: EntityFilterConfig[] = [
     label: 'Unassigned',
     predicate: isUnassigned,
   },
-];
+] as const satisfies EntityFilterConfig[];
 
-export const TASK_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+export const TASK_CONTEXTUAL_FILTERS = [
   ...TASK_STATUS_FILTERS,
   ...TASK_PRIORITY_FILTERS,
   ...TASK_ASSIGNEE_FILTERS,
-];
+] as const satisfies EntityFilterConfig[];
 
-const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
+const DOCUMENT_CONTEXTUAL_FILTERS = [
   {
     id: 'in-folder',
     label: 'In Folder',
@@ -216,11 +216,11 @@ const DOCUMENT_CONTEXTUAL_FILTERS: EntityFilterConfig[] = [
     predicate: (entity) =>
       isDocumentEntity(entity) && entity.fileType === 'canvas',
   },
-];
+] as const satisfies EntityFilterConfig[];
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'] as const;
 
-export const FILE_TYPE_FILTERS: EntityFilterConfig[] = [
+export const FILE_TYPE_FILTERS = [
   {
     id: 'file-code',
     label: 'Code',
@@ -263,7 +263,7 @@ export const FILE_TYPE_FILTERS: EntityFilterConfig[] = [
       return true;
     },
   },
-];
+] as const satisfies EntityFilterConfig[];
 
 export const createSoupFilters = (
   notificationSource: NotificationSource,
