@@ -21,7 +21,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         .route(
-            "/block/:email_address",
+            "/block/{email_address}",
             delete(unblock_sender::handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),

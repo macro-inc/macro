@@ -9,6 +9,7 @@ all = ["auth", "cloud_storage", "tracking", "user_permissions"]
 auth = ["dep:macro_auth", "dep:url"]
 cloud_storage = [
   "dep:macro_share_permissions",
+  "dep:macro_user_id",
   "dep:model_user",
   "dep:permission",
   "macro_db_client",

@@ -25,7 +25,6 @@ use models_email::email::service::thread::ThreadList as ServiceThreadList;
 use models_email::gmail::contacts::PersonResource;
 pub use models_email::gmail::error::GmailError;
 pub use models_email::gmail::filters::Filter;
-use models_email::gmail::history::InboxChanges;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };

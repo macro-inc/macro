@@ -99,7 +99,7 @@ macro_env = { path = "../macro_env" }
 mailparse = "0.16.1"
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
+  "auth", "cloud_storage"
 ] }
 last_online_tracker = { path = "../last_online_tracker" }
 notification = { path = "../notification" }
