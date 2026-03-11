@@ -51,6 +51,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
+import { cn } from '@ui/utils/classname';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -186,7 +188,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
-    hotkey: 'l',
+    hotkey: 'e',
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
@@ -244,7 +246,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
-    hotkey: 'n',
+    hotkey: 'c',
     keyDownHandler: () => {
       createBlock({
         blockName: 'canvas',
@@ -402,9 +404,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
-        <div class="text-sm font-bold font-stretch-condensed">
-          {props.creatableBlock.label}
-        </div>
+        <div class="text-sm font-bold">{props.creatableBlock.label}</div>
         <div class="size-3">
           <PixelArrowRight />
         </div>
@@ -454,7 +454,22 @@ const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  const moveFocus = (delta: -1 | 1) => {
+  // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
+  const getColumnCount = () => {
+    const width = window.innerWidth;
+    const length = CREATABLE_BLOCKS.length;
+    if (width >= 1280) {
+      if (length >= 8) return 8;
+      if (length >= 7) return 7;
+      if (length >= 6) return 6;
+      if (length >= 5) return 5;
+      return 4;
+    }
+    if (width >= 640) return 4;
+    return 2;
+  };
+
+  const moveFocus = (delta: number) => {
     const tabbableEls = tabbable(ref);
     const activeEl = document.activeElement as FocusableElement | null;
     const activeElIndex = activeEl
@@ -530,6 +545,26 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
+    hotkey: 'arrowup' as ValidHotkey,
+    scopeId: launcherScope,
+    description: 'Navigate Up',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      return moveFocus(-getColumnCount());
+    },
+  });
+
+  registerHotkey({
+    hotkey: 'arrowdown' as ValidHotkey,
+    scopeId: launcherScope,
+    description: 'Navigate Down',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      return moveFocus(getColumnCount());
+    },
+  });
+
+  registerHotkey({
     hotkey: 'escape',
     scopeId: launcherScope,
     description: 'Exit',
@@ -590,16 +625,24 @@ const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div>
+    <div class="bg-menu ring-1 ring-edge-muted rounded-sm">
+      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted/50">
+        <h1 class="font-bold text-ink-muted">Create New</h1>
+        <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
+          Hold{' '}
+          <span class="px-1 py-0.5 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
+            <Hotkey shortcut="shift" />
+          </span>
+          to launch in new split
+        </p>
+      </div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu ring-1 ring-edge-muted rounded-sm suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never"
         classList={{
           [gridColsClass()]: true,
         }}
         ref={ref}
       >
-        <div class="absolute pointer-events-none size-full inset-0"></div>
-
         <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
@@ -610,9 +653,6 @@ const LauncherInner = (props: LauncherInnerProps) => {
             />
           )}
         </For>
-      </div>
-      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold shift to open in current split
       </div>
     </div>
   );
