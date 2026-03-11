@@ -1,5 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { onMount, Show, Suspense, type Accessor } from 'solid-js';
+import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -62,10 +62,6 @@ export function ChannelThread(props: ThreadProps) {
   const expand = () => {
     props.setIsExpanded(true);
   };
-
-  onMount(() => {
-    console.log('mounting thread with id', props.data().id);
-  });
 
   return (
     <Suspense>

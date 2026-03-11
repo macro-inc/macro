@@ -14,15 +14,15 @@ export function ThreadReplyList(props: {
   return (
     <For each={props.replies}>
       {(reply) => {
-        const replyMessage = {
+        const replyMessage = () => ({
           ...reply,
           thread_id: props.threadId,
-        } as MessageData & { thread_id: string };
+        });
 
         return (
           <ChannelMessage
             message={reply}
-            actions={props.getMessageActions?.(replyMessage)}
+            actions={props.getMessageActions?.(replyMessage())}
           />
         );
       }}
