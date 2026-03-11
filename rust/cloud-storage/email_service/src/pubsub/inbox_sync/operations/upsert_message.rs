@@ -405,7 +405,7 @@ async fn fetch_and_insert_thread(
         })?;
 
     // process threads
-    process_threads_pre_insert(&ctx.db, &ctx.sfs_client, &mut threads).await;
+    process_threads_pre_insert(&mut threads).await;
 
     // insert threads into db
     for thread in threads.into_iter() {
@@ -430,7 +430,7 @@ async fn process_and_insert_message(
     thread_db_id: Uuid,
     mut message: Message,
 ) -> anyhow::Result<()> {
-    process_message_pre_insert(&ctx.db, &ctx.sfs_client, &mut message).await;
+    process_message_pre_insert(&mut message).await;
 
     email_db_client::messages::insert::insert_message(
         &ctx.db,
