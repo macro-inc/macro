@@ -50,13 +50,6 @@ const bulkUploadStack = new pulumi.StackReference('bulk-upload-stack', {
   name: `macro-inc/bulk-upload/${stack}`,
 });
 
-const deleteDocumentWorkerStack = new pulumi.StackReference(
-  'delete-document-worker-stack',
-  {
-    name: `macro-inc/delete-document-worker/${stack}`,
-  }
-);
-
 export const searchProcessingServiceRoleArn: pulumi.Output<string> =
   searchProcessingStack
     .getOutput('searchProcessingServiceRoleArn')
@@ -92,11 +85,6 @@ const docStorageRoleArn: pulumi.Output<string> = cloudStorageServiceStack
 const docxUnzipRoleArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUnzipHandlerRoleArn')
   .apply((arn) => arn as string);
-
-const deleteDocumentWorkerRoleArn: pulumi.Output<string> =
-  deleteDocumentWorkerStack
-    .getOutput('deleteDocumentWorkerRoleArn')
-    .apply((arn) => arn as string);
 
 const shaCleanupWorkerArn: pulumi.Output<string> = shaCleanupStack
   .getOutput('shaCleanupWorkerRoleArn')
@@ -154,7 +142,6 @@ export const bucketPolicy = attachPolicyToBucket({
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
   documentStorageBucketReplicationRoleArn,
-  deleteDocumentWorkerRoleArn,
   documentTextExtractorArn,
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,

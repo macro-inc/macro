@@ -26,7 +26,7 @@ where
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));
+        anyhow::bail!("No backfill job found with ID: {}", job_id);
     }
 
     Ok(())
@@ -72,7 +72,7 @@ pub async fn update_job_total_threads(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));
+        anyhow::bail!("No backfill job found with ID: {}", job_id);
     }
 
     Ok(())
@@ -97,7 +97,7 @@ pub async fn update_job_threads_retrieved_count(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("No backfill job found with ID: {}", job_id));
+        anyhow::bail!("No backfill job found with ID: {}", job_id);
     }
 
     Ok(())

@@ -5,9 +5,9 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, ChannelRoleResult, EntityAccessReceipt, EntityPermission,
-    RequiredAccessLevel,
+    RequiredPermission,
 };
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
 use uuid::Uuid;
 
@@ -77,6 +77,38 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
+
+    /// Get all user IDs with access to a document via `UserItemAccess`.
+    ///
+    /// Includes users with direct access and users with access through the project hierarchy.
+    fn get_document_users(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all user IDs with access to a chat via `UserItemAccess`.
+    ///
+    /// Includes users with direct access and users with access through the project hierarchy.
+    fn get_chat_users(
+        &self,
+        chat_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all user IDs with access to a project via `UserItemAccess`.
+    ///
+    /// Includes users with direct access and users with access through the project hierarchy.
+    fn get_project_users(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all user IDs with access to an email thread via `UserItemAccess`.
+    ///
+    /// Includes users with direct access and users with access through the project hierarchy.
+    fn get_thread_users(
+        &self,
+        thread_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
@@ -85,9 +117,9 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Generates an [`EntityAccessReceipt<T>`] for a given entity and user.
     ///
-    /// The type parameter `T` specifies the minimum access level required.
-    /// Returns an error if the user does not have at least that level.
-    fn generate_entity_access_receipt<T: RequiredAccessLevel>(
+    /// The type parameter `T` specifies the minimum permission required.
+    /// Returns an error if the user does not satisfy that requirement.
+    fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
         user_org_id: Option<i64>,
@@ -141,4 +173,18 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
+
+    /// Get all user IDs that have access to a given entity via `UserItemAccess`.
+    ///
+    /// Returns user IDs with direct access to the entity or inherited access
+    /// through the project hierarchy. Only considers `UserItemAccess` grants,
+    /// not public share permissions.
+    ///
+    /// Supported entity types: Document, Chat, Project, EmailThread.
+    /// Returns `AccessError::BadRequest` for unsupported types (Channel, Team, User).
+    fn get_users_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }

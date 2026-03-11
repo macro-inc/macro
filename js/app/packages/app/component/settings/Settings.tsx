@@ -226,7 +226,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <div
-      class="size-full outline-none"
+      class="size-full p-2 pl-0 outline-none bracket-never"
       classList={{
         invisible: props.hide,
       }}
@@ -238,7 +238,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         spotlight={spotlight}
         tr={!spotlight()}
       >
-        <div class="flex flex-col h-full bg-panel">
+        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden">
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {

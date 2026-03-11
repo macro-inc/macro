@@ -7,7 +7,7 @@ const NoopInputCommands: InputCommands = {
   send: async () => false,
   attachFiles: async () => {},
   toggleFormatRibbon: () => {},
-  closeDraft: () => {},
+  close: () => {},
   removeAttachment: () => {},
 };
 

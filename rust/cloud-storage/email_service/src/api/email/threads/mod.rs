@@ -15,15 +15,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             email::inbound::router(state.email_service.clone()),
         )
         .route(
-            "/:id/seen",
+            "/{id}/seen",
             post(seen::seen_handler).layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 crate::api::middleware::gmail_token::attach_gmail_token,
             )),
         )
-        .route("/:id/messages", get(get::get_thread_messages_handler))
+        .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route(
-            "/:id/archived",
+            "/{id}/archived",
             patch(archived::archived_handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),

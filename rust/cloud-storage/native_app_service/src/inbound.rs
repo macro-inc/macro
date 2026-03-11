@@ -31,11 +31,11 @@ impl<S> Clone for RouterState<S> {
 pub fn native_app_router<S: NativeAppService, T>(state: RouterState<S>) -> Router<T> {
     Router::new()
         .route(
-            "/update/desktop/:desktop_target/:arch/:current_version",
+            "/update/desktop/{desktop_target}/{arch}/{current_version}",
             get(desktop_update_handler),
         )
         .route(
-            "/update/bundle/:all_target/:arch/:current_version",
+            "/update/bundle/{all_target}/{arch}/{current_version}",
             get(bundle_update_handler),
         )
         .route(

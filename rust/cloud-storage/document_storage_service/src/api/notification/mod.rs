@@ -10,11 +10,11 @@ pub(in crate::api) mod get_project_notification_users;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route(
-            "/document/:document_id",
+            "/document/{document_id}",
             get(get_document_notification_users::handler),
         )
         .route(
-            "/project/:project_id",
+            "/project/{project_id}",
             get(get_project_notification_users::handler),
         )
 }

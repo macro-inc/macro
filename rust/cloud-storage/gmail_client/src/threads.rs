@@ -104,8 +104,7 @@ pub async fn get_threads_with_retry(
                         last_error = Some(RateLimitExceeded); // Store the error type
                         if attempt == MAX_RETRY_ATTEMPTS - 1 {
                             // Return the specific error wrapped in anyhow with additional context
-                            return Err(anyhow!(RateLimitExceeded)
-                                .context(format!("thread_ids: {:?}", thread_ids)));
+                            anyhow::bail!(RateLimitExceeded);
                         }
 
                         // Reduce batch size for next attempt
@@ -123,9 +122,7 @@ pub async fn get_threads_with_retry(
                         current_delay *= 2;
                     }
                     other_error => {
-                        return Err(
-                            anyhow!(other_error).context(format!("thread_ids: {:?}", thread_ids))
-                        );
+                        anyhow::bail!(other_error);
                     }
                 }
             }

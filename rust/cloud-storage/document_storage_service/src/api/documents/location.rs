@@ -1,5 +1,4 @@
 use crate::api::context::ApiContext;
-use anyhow::anyhow;
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use rayon::prelude::*;
@@ -148,7 +147,7 @@ async fn get_editable_url(
         tracing::trace!("checking if file exists in s3, key: {}", document_key);
         let exists = verify_file_exists(&state.s3_client, &document_key).await?;
         if !exists {
-            return Err(anyhow!(DOCUMENT_DOES_NOT_EXIST));
+            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
 
@@ -210,7 +209,7 @@ pub(in crate::api::documents) async fn get_static_url(
         tracing::trace!("checking if file exists in s3, key: {}", document_key);
         let exists = verify_file_exists(&state.s3_client, &document_key).await?;
         if !exists {
-            return Err(anyhow!(DOCUMENT_DOES_NOT_EXIST));
+            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
 
@@ -263,7 +262,7 @@ async fn get_converted_docx_url(
         tracing::trace!("checking if file exists in s3, key: {}", document_key);
         let exists = verify_file_exists(&state.s3_client, &document_key).await?;
         if !exists {
-            return Err(anyhow!(DOCUMENT_DOES_NOT_EXIST));
+            anyhow::bail!(DOCUMENT_DOES_NOT_EXIST);
         }
     }
 
@@ -354,7 +353,7 @@ async fn get_docx_urls(
         .collect();
 
     if shas.len() != presigned_urls.len() {
-        return Err(anyhow!("unable to generate presigned urls"));
+        anyhow::bail!("unable to generate presigned urls");
     }
     tracing::debug!(elapsed = ?start_presigned_urls.elapsed(), "got presigned urls");
 

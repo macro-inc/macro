@@ -142,7 +142,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Action: ['sqs:SendMessage'],
+              Action: ['sqs:*'],
               Resource: queueArns,
               Effect: 'Allow',
             },

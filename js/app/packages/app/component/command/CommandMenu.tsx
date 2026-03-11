@@ -23,7 +23,7 @@ import {
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
-import { CommandState, type ICommandState } from './state';
+import { CommandState } from './state';
 import { useCommandItems } from './useCommandItems';
 import type { CategoryFilter } from './types';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -52,7 +52,7 @@ const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
-function getBlockNameForEntity(
+export function getBlockNameForEntity(
   item: CommandMenuItem
 ): BlockName | BlockAlias | undefined {
   if (isEntityItem(item)) {
@@ -91,60 +91,39 @@ export function CommandMenu() {
   );
 }
 
-export interface CommandMenuInnerProps {
+function CommandMenuInner(props: {
   commandMenuRef: () => HTMLDivElement | undefined;
-  /** State object. Defaults to global CommandState singleton. */
-  state?: ICommandState;
-  /** Items to display. Defaults to useCommandItems(query, categoryFilter). */
-  items?: () => CommandMenuItem[];
-  /** Custom action handler. Defaults to open-in-split / run-command. */
-  onItemAction?: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  /** Show category filter tabs. Default true. */
-  showCategories?: boolean;
-}
-
-export function CommandMenuInner(props: CommandMenuInnerProps) {
-  const state = props.state ?? CommandState;
-
-  // Only call useSplitLayout when no custom onItemAction (avoids context requirement)
-  const splitLayout = props.onItemAction ? undefined : useSplitLayout();
+}) {
+  const { openWithSplit } = useSplitLayout();
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
-  const query = debouncedDependent(state.query, 60);
+  const query = debouncedDependent(CommandState.query, 60);
 
-  const defaultItems = props.items
-    ? undefined
-    : useCommandItems(query, state.categoryFilter);
-  const filteredItems = props.items ?? defaultItems!;
+  const filteredItems = useCommandItems(query, CommandState.categoryFilter);
 
   createEffect(() => {
     const items = filteredItems();
-    const current = state.selectedIndex();
+    const current = CommandState.selectedIndex();
     if (current >= items.length && items.length > 0) {
-      state.setSelectedIndex(items.length - 1);
+      CommandState.setSelectedIndex(items.length - 1);
     }
   });
 
   createEffect(
     on(query, () => {
-      state.setSelectedIndex(0);
+      CommandState.setSelectedIndex(0);
     })
   );
 
   const selectedItem = () => {
     const items = filteredItems();
-    const index = state.selectedIndex();
+    const index = CommandState.selectedIndex();
     return items[index];
   };
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
-
-    if (props.onItemAction) {
-      props.onItemAction(item, openInNewSplit);
-      return;
-    }
 
     if (isCommandItem(item)) {
       const command = item.data;
@@ -161,15 +140,15 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
             limitToCurrentScope: true,
           }
         );
-        state.setQuery('');
-        state.setCommandScopeCommands(nestedCommands);
-        state.setSelectedIndex(0);
+        CommandState.setQuery('');
+        CommandState.setCommandScopeCommands(nestedCommands);
+        CommandState.setSelectedIndex(0);
         return;
       }
 
       // Regular command - close and run
-      state.close();
-      state.setQuery('');
+      CommandState.close();
+      CommandState.setQuery('');
       runCommand(command);
       return;
     }
@@ -177,8 +156,8 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
       const blockName = getBlockNameForEntity(item);
-      if (blockName && splitLayout) {
-        splitLayout.openWithSplit(
+      if (blockName) {
+        openWithSplit(
           { type: blockName, id: item.id },
           {
             referredFrom: 'kommand-menu',
@@ -186,13 +165,13 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
           }
         );
       }
-      state.close();
-      state.setQuery('');
+      CommandState.close();
+      CommandState.setQuery('');
       return;
     }
 
-    state.close();
-    state.setQuery('');
+    CommandState.close();
+    CommandState.setQuery('');
   }
 
   registerHotkey({
@@ -202,7 +181,7 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      state.setSelectedIndex((prev: number) => (prev + 1) % items.length);
+      CommandState.setSelectedIndex((prev) => (prev + 1) % items.length);
       return true;
     },
     runWithInputFocused: true,
@@ -216,8 +195,8 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      state.setSelectedIndex(
-        (prev: number) => (prev - 1 + items.length) % items.length
+      CommandState.setSelectedIndex(
+        (prev) => (prev - 1 + items.length) % items.length
       );
       return true;
     },
@@ -261,13 +240,13 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     description: 'Close command menu',
     keyDownHandler: () => {
       // If in command scope, go back to main menu
-      if (state.commandScopeCommands().length > 0) {
-        state.clearCommandScopeCommands();
-        state.setSelectedIndex(0);
+      if (CommandState.commandScopeCommands().length > 0) {
+        CommandState.clearCommandScopeCommands();
+        CommandState.setSelectedIndex(0);
         return true;
       }
       // Entity action mode and normal mode both close the menu
-      state.close();
+      CommandState.close();
       return true;
     },
     runWithInputFocused: true,
@@ -281,13 +260,13 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     description: 'Go back',
     keyDownHandler: () => {
       // Only handle if query is empty
-      if (state.query() !== '') {
+      if (CommandState.query() !== '') {
         return false;
       }
       // If in command scope, go back
-      if (state.commandScopeCommands().length > 0) {
-        state.clearCommandScopeCommands();
-        state.setSelectedIndex(0);
+      if (CommandState.commandScopeCommands().length > 0) {
+        CommandState.clearCommandScopeCommands();
+        CommandState.setSelectedIndex(0);
         return true;
       }
       // Entity action mode doesn't have "back" - just close with escape
@@ -303,11 +282,11 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     description: 'Next category',
     keyDownHandler: () => {
       const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === state.categoryFilter()
+        (c) => c.id === CommandState.categoryFilter()
       );
       const nextIndex = (currentIndex + 1) % CATEGORIES.length;
-      state.setCategoryFilter(CATEGORIES[nextIndex].id);
-      state.setSelectedIndex(0);
+      CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
+      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -320,12 +299,12 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
     description: 'Previous category',
     keyDownHandler: () => {
       const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === state.categoryFilter()
+        (c) => c.id === CommandState.categoryFilter()
       );
       const prevIndex =
         (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
-      state.setCategoryFilter(CATEGORIES[prevIndex].id);
-      state.setSelectedIndex(0);
+      CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
+      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -343,7 +322,7 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
 
   function handleMouseEnter(index: number) {
     if (isKeyboardActive()) return;
-    state.setSelectedIndex(index);
+    CommandState.setSelectedIndex(index);
   }
 
   // Track keyboard activity to prevent mouse hover from interfering
@@ -361,14 +340,16 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
   });
 
   const isInCommandScope = createMemo(
-    () => state.commandScopeCommands().length > 0
+    () => CommandState.commandScopeCommands().length > 0
   );
 
-  const isEntityActionMode = createMemo(() => state.isEntityActionMode());
+  const isEntityActionMode = createMemo(() =>
+    CommandState.isEntityActionMode()
+  );
 
   const handleBackFromCommandScope = () => {
-    state.clearCommandScopeCommands();
-    state.setSelectedIndex(0);
+    CommandState.clearCommandScopeCommands();
+    CommandState.setSelectedIndex(0);
   };
 
   // Show back button only in command scope (entity action mode just closes)
@@ -404,30 +385,24 @@ export function CommandMenuInner(props: CommandMenuInnerProps) {
           type="text"
           class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
           placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
-          value={state.query()}
-          onInput={(e) => state.setQuery(e.currentTarget.value)}
+          value={CommandState.query()}
+          onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
       </div>
 
       {/* Entity Action Preview Row */}
       <Show when={isEntityActionMode()}>
-        <EntityActionPreview entities={state.entityActionEntities()} />
+        <EntityActionPreview entities={CommandState.entityActionEntities()} />
       </Show>
 
-      <Show
-        when={
-          props.showCategories !== false &&
-          !isInCommandScope() &&
-          !isEntityActionMode()
-        }
-      >
-        <CategoryFilterTabs state={state} />
+      <Show when={!isInCommandScope() && !isEntityActionMode()}>
+        <CategoryFilterTabs />
       </Show>
 
       <ResultsContainer
         items={filteredItems()}
-        selectedIndex={state.selectedIndex()}
+        selectedIndex={CommandState.selectedIndex()}
         onSelect={(item, openInNewSplit) =>
           handleItemAction(item, openInNewSplit)
         }
@@ -619,35 +594,38 @@ function CommandMenuFooter(props: {
   );
 }
 
-function CategoryFilterTabs(props: { state: ICommandState }) {
+function CategoryFilterTabs() {
   return (
     <Tabs
-      value={props.state.categoryFilter()}
+      value={CommandState.categoryFilter()}
       onChange={(value) => {
         if (value) {
-          props.state.setCategoryFilter(value as CategoryFilter);
-          props.state.setSelectedIndex(0);
+          CommandState.setCategoryFilter(value as CategoryFilter);
+          CommandState.setSelectedIndex(0);
         }
       }}
-      class="border-b border-edge-muted/50"
     >
-      <Tabs.List class="flex items-center px-2 py-1.5">
-        <For each={CATEGORIES}>
-          {(category) => (
-            <Tabs.Trigger
-              value={category.id}
-              class={cn(
-                'px-2 py-1 text-xs border first:border-l-1 border-l-0 border-edge-muted/50 font-semibold',
-                props.state.categoryFilter() === category.id
-                  ? 'text-ink pattern bg-edge-muted'
-                  : 'text-ink-muted/70 hover:text-ink hover:bg-hover'
+      <Tabs.List class="p-1.5">
+        <div class="text-sm bg-ink/5 rounded-sm overflow-clip border border-edge-muted inline-block">
+          <div class="flex">
+            <For each={CATEGORIES}>
+              {(category) => (
+                <Tabs.Trigger
+                  value={category.id}
+                  class={cn(
+                    'border-r-1 border-edge-muted last:border-r-0',
+                    'relative text-ink-muted/70 px-3 py-1 text-xs font-medium block hover:bg-ink/6 hover:text-ink',
+                    CommandState.categoryFilter() === category.id &&
+                      'text-ink bg-ink/7'
+                  )}
+                  tabIndex={-1}
+                >
+                  {category.label}
+                </Tabs.Trigger>
               )}
-              tabIndex={-1}
-            >
-              {category.label}
-            </Tabs.Trigger>
-          )}
-        </For>
+            </For>
+          </div>
+        </div>
       </Tabs.List>
     </Tabs>
   );

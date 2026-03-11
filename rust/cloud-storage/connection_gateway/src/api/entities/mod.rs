@@ -19,7 +19,7 @@ where
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/:entity_type/:entity_id", get(get_entity_handler))
+        .route("/{entity_type}/{entity_id}", get(get_entity_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::internal_access::handler,

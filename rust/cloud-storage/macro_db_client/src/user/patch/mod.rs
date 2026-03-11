@@ -65,7 +65,7 @@ pub async fn patch_user_group(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
     }
 
     Ok(())
@@ -90,7 +90,7 @@ pub async fn patch_user_tutorial(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
     }
 
     Ok(())
@@ -155,7 +155,7 @@ pub async fn patch_user_onboarding(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
     }
 
     Ok(())

@@ -226,7 +226,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <ClippedPanel active tl class="py-2">
+          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
             <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}

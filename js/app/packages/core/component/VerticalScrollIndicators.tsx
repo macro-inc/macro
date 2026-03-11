@@ -5,27 +5,40 @@ const SCROLL_THRESHOLD = 20;
 
 /**
  * Used to add decorative indications that content is scrollable, in scenarios where the scrollbar is hidden.
+ * Supports both vertical (default) and horizontal scroll directions.
  */
-export const VerticalScrollIndicators = (props: {
+export const ScrollIndicators = (props: {
   scrollRef: Accessor<HTMLElement | undefined>;
-  noBorderTop?: boolean;
-  noBorderBottom?: boolean;
+  direction?: 'vertical' | 'horizontal';
+  noBorderStart?: boolean;
+  noBorderEnd?: boolean;
 }) => {
-  const [topOpacity, setTopOpacity] = createSignal(0);
-  const [bottomOpacity, setBottomOpacity] = createSignal(0);
+  const [startOpacity, setStartOpacity] = createSignal(0);
+  const [endOpacity, setEndOpacity] = createSignal(0);
+
+  const isHorizontal = () => props.direction === 'horizontal';
 
   const updateIndicators = () => {
     const ref = props.scrollRef();
     if (!ref) return;
-    const { scrollTop, scrollHeight, clientHeight } = ref;
 
-    const topAmount = Math.min(scrollTop, SCROLL_THRESHOLD);
-    setTopOpacity(topAmount / SCROLL_THRESHOLD);
-
-    const maxScroll = scrollHeight - clientHeight;
-    const remainingScroll = maxScroll - scrollTop;
-    const bottomAmount = Math.min(remainingScroll, SCROLL_THRESHOLD);
-    setBottomOpacity(bottomAmount / SCROLL_THRESHOLD);
+    if (isHorizontal()) {
+      const { scrollLeft, scrollWidth, clientWidth } = ref;
+      setStartOpacity(
+        Math.min(scrollLeft, SCROLL_THRESHOLD) / SCROLL_THRESHOLD
+      );
+      setEndOpacity(
+        Math.min(scrollWidth - clientWidth - scrollLeft, SCROLL_THRESHOLD) /
+          SCROLL_THRESHOLD
+      );
+    } else {
+      const { scrollTop, scrollHeight, clientHeight } = ref;
+      setStartOpacity(Math.min(scrollTop, SCROLL_THRESHOLD) / SCROLL_THRESHOLD);
+      setEndOpacity(
+        Math.min(scrollHeight - clientHeight - scrollTop, SCROLL_THRESHOLD) /
+          SCROLL_THRESHOLD
+      );
+    }
   };
 
   createEffect(() => {
@@ -34,7 +47,6 @@ export const VerticalScrollIndicators = (props: {
 
     ref.addEventListener('scroll', updateIndicators);
 
-    // Watch for content size changes (e.g. recipients added/removed)
     const resizeObserver = new ResizeObserver(updateIndicators);
     resizeObserver.observe(ref);
 
@@ -43,27 +55,42 @@ export const VerticalScrollIndicators = (props: {
       resizeObserver.disconnect();
     });
 
-    // Initial calculation
     updateIndicators();
   });
 
   return (
     <>
-      {/* Top scroll boundary indicator */}
+      {/* Start scroll boundary indicator */}
       <div
         class={cn(
-          'absolute pointer-events-none left-px right-px top-0 h-3 z-2 pattern-diagonal-4 pattern-edge mask-b-from-0%',
-          !props.noBorderTop && 'border-t border-edge-muted'
+          'absolute pointer-events-none z-2 pattern-diagonal-4 pattern-edge',
+          isHorizontal()
+            ? cn(
+                'top-px bottom-px left-0 w-3 mask-r-from-0%',
+                !props.noBorderStart && 'border-l border-edge-muted'
+              )
+            : cn(
+                'left-px right-px top-0 h-3 mask-b-from-0%',
+                !props.noBorderStart && 'border-t border-edge-muted'
+              )
         )}
-        style={{ opacity: topOpacity() }}
+        style={{ opacity: startOpacity() }}
       />
-      {/* Bottom scroll boundary indicator */}
+      {/* End scroll boundary indicator */}
       <div
         class={cn(
-          'absolute pointer-events-none left-px right-px bottom-0 h-3 z-2 pattern-diagonal-4 pattern-edge mask-t-from-0% ',
-          !props.noBorderBottom && 'border-b border-edge-muted'
+          'absolute pointer-events-none z-2 pattern-diagonal-4 pattern-edge',
+          isHorizontal()
+            ? cn(
+                'top-px bottom-px right-0 w-3 mask-l-from-0%',
+                !props.noBorderEnd && 'border-r border-edge-muted'
+              )
+            : cn(
+                'left-px right-px bottom-0 h-3 mask-t-from-0%',
+                !props.noBorderEnd && 'border-b border-edge-muted'
+              )
         )}
-        style={{ opacity: bottomOpacity() }}
+        style={{ opacity: endOpacity() }}
       />
     </>
   );

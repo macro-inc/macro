@@ -6,9 +6,9 @@
  */
 
 /**
- * Short ID response
+ * Short ID response.
  */
 export interface ShortIdResponse {
-  /** The short id of the document */
+  /** The short id of the document. */
   shortId: string;
 }

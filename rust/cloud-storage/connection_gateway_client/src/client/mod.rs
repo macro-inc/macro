@@ -4,6 +4,7 @@ use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, MessageReceipt, SendMessageBody,
     UniqueMessage,
 };
+
 use model_entity::Entity;
 
 mod email;

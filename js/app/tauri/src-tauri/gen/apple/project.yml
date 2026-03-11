@@ -51,8 +51,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 0.1.0
-        CFBundleVersion: "0.1.0"
+        CFBundleShortVersionString: 2.0.1
+        CFBundleVersion: "127"
     entitlements:
       path: app_iOS/app_iOS.entitlements
     scheme:
@@ -96,8 +96,8 @@ targets:
     info:
       path: NotificationServiceExtension/Info.plist
       properties:
-        CFBundleShortVersionString: 0.1.0
-        CFBundleVersion: "0.1.0"
+        CFBundleShortVersionString: 2.0.1
+        CFBundleVersion: "127"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macro.dev.NotificationServiceExtension

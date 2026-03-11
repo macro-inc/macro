@@ -120,7 +120,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 pr-1 border-b border-edge-muted/50 bg-panel"
+        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-panel px-2 border-b border-edge-muted/50"
         classList={{
           // In spotlight/fullscreen, avoid hugging the screen edge
           'pl-2': splitPanelContext.handle.isSpotLight(),
@@ -131,7 +131,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
         <div
           // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
           // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
-          class="flex h-full items-start pt-1 flex-1"
+          class="flex h-full items-center"
           ref={(ref) => {
             scopedLayoutRefs.toolbarLeft = ref;
           }}

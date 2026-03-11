@@ -64,6 +64,33 @@ pub struct CloudFrontConfig {
     pub browser_cache_expiry_seconds: u64,
 }
 
+/// Arguments for editing a document in the repository.
+pub struct EditDocumentRepoArgs {
+    /// The document ID to edit.
+    pub document_id: String,
+    /// New document name (None = no change).
+    pub document_name: Option<String>,
+    /// New project ID (None = no change, Some("") = remove from project).
+    pub project_id: Option<String>,
+    /// Updated share permissions.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
+/// Arguments for the edit_document service call.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditDocumentServiceArgs {
+    /// The name of the document.
+    pub document_name: Option<String>,
+    /// The new project id of the document.
+    pub project_id: Option<String>,
+    /// Updated share permissions for the document.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
 /// Query parameters for the location_v3 endpoint.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct LocationQueryParams {
