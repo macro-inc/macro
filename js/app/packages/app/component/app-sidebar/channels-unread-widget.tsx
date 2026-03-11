@@ -11,14 +11,7 @@ import {
   useSenderName,
 } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
-import {
-  stackNotifications,
-  getMostRecentNotification,
-  openNotification,
-} from '@notifications';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -91,7 +84,7 @@ function groupByChannel(
 }
 
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
-  const layout = ENABLE_NEW_CHANNELS ? undefined : useSplitLayout();
+  const layout = useSplitLayout();
 
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
@@ -115,33 +108,6 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       : 'Unknown Channel';
   };
 
-  const handleClick = async (e: MouseEvent) => {
-    if (e.button === 1) return;
-    e.preventDefault();
-
-    if (ENABLE_NEW_CHANNELS) {
-      const splitManager = globalSplitManager();
-      if (!splitManager) return;
-
-      const stacks = stackNotifications(props.group.notifications);
-      const nextStack = stacks[0];
-      if (!nextStack) return;
-
-      const notification = getMostRecentNotification(nextStack);
-      await openNotification(notification, splitManager, e.shiftKey);
-    } else {
-      layout!.openWithSplit(
-        {
-          type: 'channel',
-          id: props.group.entityId,
-        },
-        {
-          preferNewSplit: e.shiftKey,
-        }
-      );
-    }
-  };
-
   return (
     <Button
       as={'a'}
@@ -152,7 +118,21 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
       }}
-      onClick={handleClick}
+      onClick={(e) => {
+        // Middle mouse handling
+        if (e.button === 1) return;
+
+        e.preventDefault();
+        layout.openWithSplit(
+          {
+            type: 'channel',
+            id: props.group.entityId,
+          },
+          {
+            preferNewSplit: e.shiftKey,
+          }
+        );
+      }}
     >
       <div class="flex-shrink-0">
         <Show
