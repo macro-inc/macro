@@ -3,11 +3,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
-import {
-  getSenderMacroId,
-  getSenderDisplayName,
-  isMessageFromCurrentUser,
-} from '../util/emailUser';
+import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
@@ -22,10 +18,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
   const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
-
-  const isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, currentUserEmail())
-  );
 
   const senderDisplay = createMemo(() =>
     getSenderDisplayName(props.message, currentUserEmail())
