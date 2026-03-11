@@ -1,10 +1,4 @@
-import {
-  type Accessor,
-  type JSX,
-  createSignal,
-  createEffect,
-  on,
-} from 'solid-js';
+import { type Accessor, type JSX, createSignal } from 'solid-js';
 import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 
@@ -79,14 +73,6 @@ export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
-
-export function shouldStickToBottomOnDataChange(
-  isNearBottom: boolean,
-  shift?: Accessor<boolean>,
-  prepend?: Accessor<boolean>
-): boolean {
-  return isNearBottom && !(shift?.() ?? false) && !(prepend?.() ?? false);
-}
 
 export function isExplicitScrollDown(
   delta: number,
@@ -253,27 +239,6 @@ export function ThreadList(props: ThreadListProps) {
       });
     });
   }
-
-  createEffect(
-    on(
-      () => props.keys().length,
-      () => {
-        const handle = virtualHandle();
-        if (!handle || !didInitialScroll()) return;
-        if (
-          shouldStickToBottomOnDataChange(
-            isNearBottom(),
-            props.shift,
-            props.prepend
-          )
-        ) {
-          requestAnimationFrame(() => {
-            scrollToTarget(handle, { tag: 'bottom', align: 'end' });
-          });
-        }
-      }
-    )
-  );
 
   const handleScroll = () => {
     const handle = virtualHandle();

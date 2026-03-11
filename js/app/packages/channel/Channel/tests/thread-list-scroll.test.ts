@@ -3,35 +3,7 @@ import {
   accumulateExplicitScrollDownDistance,
   hasExplicitScrollDownGesture,
   isExplicitScrollDown,
-  shouldStickToBottomOnDataChange,
 } from '../ThreadList';
-
-describe('shouldStickToBottomOnDataChange', () => {
-  it('sticks when near bottom and not shifting', () => {
-    expect(shouldStickToBottomOnDataChange(true)).toBe(true);
-    expect(shouldStickToBottomOnDataChange(true, () => false)).toBe(true);
-  });
-
-  it('does not stick when not near bottom', () => {
-    expect(shouldStickToBottomOnDataChange(false)).toBe(false);
-    expect(shouldStickToBottomOnDataChange(false, () => false)).toBe(false);
-    expect(shouldStickToBottomOnDataChange(false, () => true)).toBe(false);
-  });
-
-  it('does not stick while shifting', () => {
-    expect(shouldStickToBottomOnDataChange(true, () => true)).toBe(false);
-  });
-
-  it('does not stick while prepending', () => {
-    expect(
-      shouldStickToBottomOnDataChange(
-        true,
-        () => false,
-        () => true
-      )
-    ).toBe(false);
-  });
-});
 
 describe('isExplicitScrollDown', () => {
   it('returns true only for recent explicit down intent', () => {
