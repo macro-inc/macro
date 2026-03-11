@@ -135,6 +135,7 @@ export function Channel(props: ChannelProps) {
                 keys={() => messageIndex().keys}
                 initialScrollTarget={threadListInitialScrollTarget()}
                 shift={shift}
+                prepend={threadPaginator.isPrepending}
                 onScrollNearTop={threadPaginator.shiftPaginate}
                 onScrollNearBottom={threadPaginator.prependPaginate}
                 onNavigationReady={setThreadListNavigation}

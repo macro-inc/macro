@@ -1,5 +1,9 @@
 import { throwOnErr } from '@core/util/maybeResult';
-import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
+import {
+  type ApiThreadReply,
+  commsServiceClient,
+} from '@service-comms/client';
+import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -17,6 +21,10 @@ export type ThreadReplySnapshot = {
   replyIndex: number;
   reply: ApiThreadReply;
 };
+
+export type ThreadRepliesQueryKey = ReturnType<
+  typeof channelKeys.threadReplies
+>['queryKey'];
 
 export function threadRepliesQueryOptions(
   channelId: string,
@@ -46,6 +54,23 @@ export function useThreadRepliesQuery(
     ...threadRepliesQueryOptions(channelId(), messageId()),
     enabled: enabled(),
   }));
+}
+
+export function getThreadRepliesQueryKey(
+  channelId: string,
+  messageId: string
+): ThreadRepliesQueryKey {
+  return channelKeys.threadReplies(channelId, messageId).queryKey;
+}
+
+export function getThreadRepliesQueryKeyPrefix(channelId: string) {
+  return [...channelKeys.threadReplies._def, channelId];
+}
+
+export function getThreadRepliesEntries(channelId: string) {
+  return queryClient.getQueriesData<Array<ApiThreadReply>>({
+    queryKey: getThreadRepliesQueryKeyPrefix(channelId),
+  });
 }
 
 export function insertThreadReply(
@@ -87,6 +112,23 @@ export function replaceThreadReplyReactions(
   return didChange ? nextReplies : data;
 }
 
+export function replaceThreadReplyAttachments(
+  data: Array<ApiThreadReply> | undefined,
+  replyId: string,
+  attachments: ApiAttachment[]
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (reply.id !== replyId) return reply;
+    didChange = true;
+    return { ...reply, attachments };
+  });
+
+  return didChange ? nextReplies : data;
+}
+
 export function getThreadReplySnapshot(
   data: Array<ApiThreadReply> | undefined,
   replyId: string
@@ -115,7 +157,7 @@ export function softInvalidateThreadReplies(
   messageId: string
 ) {
   queryClient.invalidateQueries({
-    queryKey: channelKeys.threadReplies(channelId, messageId).queryKey,
+    queryKey: getThreadRepliesQueryKey(channelId, messageId),
     refetchType: 'inactive',
   });
 }

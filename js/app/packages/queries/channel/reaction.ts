@@ -33,7 +33,7 @@ export type AddReactionContext = {
   messageId: string;
   emoji: string;
   userId: string;
-  wasNewReaction: boolean;
+  previousReactions: ReactionList;
   target: MessageTarget;
 };
 
@@ -41,7 +41,7 @@ export type RemoveReactionContext = {
   messageId: string;
   emoji: string;
   userId: string;
-  wasLastUser: boolean;
+  previousReactions: ReactionList;
   target: MessageTarget;
 };
 
@@ -142,7 +142,7 @@ export function optimisticAddReaction(
     messageId: vars.message_id,
     emoji: vars.emoji,
     userId: vars.userId,
-    wasNewReaction: result.wasNewReaction,
+    previousReactions: currentReactions ?? [],
     target,
   };
 
@@ -180,50 +180,28 @@ export function rollbackAddReaction(
   context: AddReactionContext
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
-  let nextReactions: ReactionList | undefined;
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
-
-      const messageReactions = prev.reactions[context.messageId];
-      if (!messageReactions) return prev;
-
-      if (context.wasNewReaction) {
-        const updated = messageReactions.filter(
-          (r) => r.emoji !== context.emoji
-        );
-        nextReactions = updated;
-        if (updated.length === 0) {
-          const { [context.messageId]: _, ...rest } = prev.reactions;
-          return { ...prev, reactions: rest };
-        }
-        return {
-          ...prev,
-          reactions: { ...prev.reactions, [context.messageId]: updated },
-        };
-      } else {
-        const updated = messageReactions.map((r) =>
-          r.emoji === context.emoji
-            ? { ...r, users: r.users.filter((id) => id !== context.userId) }
-            : r
-        );
-        nextReactions = updated;
-        return {
-          ...prev,
-          reactions: { ...prev.reactions, [context.messageId]: updated },
-        };
+      if (context.previousReactions.length === 0) {
+        const { [context.messageId]: _, ...rest } = prev.reactions;
+        return { ...prev, reactions: rest };
       }
+
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [context.messageId]: context.previousReactions,
+        },
+      };
     }
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(
-      channelId,
-      context.target,
-      nextReactions ?? []
-    );
+    replaceTargetReactions(channelId, context.target, context.previousReactions);
   }
 }
 
@@ -257,7 +235,7 @@ export function optimisticRemoveReaction(
     messageId: vars.message_id,
     emoji: vars.emoji,
     userId: vars.userId,
-    wasLastUser: result.wasLastUser,
+    previousReactions: currentReactions ?? [],
     target,
   };
 
@@ -297,50 +275,30 @@ export function rollbackRemoveReaction(
   context: RemoveReactionContext
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
-  let nextReactions: ReactionList | undefined;
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
-
-      const messageReactions = prev.reactions[context.messageId] ?? [];
-
-      const existing = messageReactions.find((r) => r.emoji === context.emoji);
-
-      if (existing) {
-        const updated = messageReactions.map((r) =>
-          r.emoji === context.emoji
-            ? { ...r, users: [...r.users, context.userId] }
-            : r
-        );
-        nextReactions = updated;
-        return {
-          ...prev,
-          reactions: { ...prev.reactions, [context.messageId]: updated },
-        };
-      }
-
-      nextReactions = [
-        ...messageReactions,
-        { emoji: context.emoji, users: [context.userId] },
-      ];
       return {
         ...prev,
-        reactions: {
-          ...prev.reactions,
-          [context.messageId]: nextReactions,
-        },
+        reactions:
+          context.previousReactions.length === 0
+            ? Object.fromEntries(
+                Object.entries(prev.reactions).filter(
+                  ([messageId]) => messageId !== context.messageId
+                )
+              )
+            : {
+                ...prev.reactions,
+                [context.messageId]: context.previousReactions,
+              },
       };
     }
   );
 
   if (ENABLE_NEW_CHANNELS) {
-    replaceTargetReactions(
-      channelId,
-      context.target,
-      nextReactions ?? []
-    );
+    replaceTargetReactions(channelId, context.target, context.previousReactions);
   }
 }
 
@@ -398,7 +356,10 @@ export function useAddReactionMutation(
       AddReactionMutationContext
     >(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelId).queryKey,
+          });
           addReactionNonce.prepare(vars);
           return optimisticAddReaction({
             channelId: vars.channelId,
@@ -468,7 +429,10 @@ export function useRemoveReactionMutation(
       RemoveReactionMutationContext
     >(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelId).queryKey,
+          });
           removeReactionNonce.prepare(vars);
           return optimisticRemoveReaction({
             channelId: vars.channelId,

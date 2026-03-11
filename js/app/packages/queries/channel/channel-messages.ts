@@ -5,6 +5,7 @@ import {
   type ApiThreadReply,
   type ChannelMessagesPage,
 } from '@service-comms/client';
+import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
@@ -23,6 +24,10 @@ export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
   ChannelMessagesPageParam | null
 >;
+
+export type ChannelMessagesQueryKey = ReturnType<
+  typeof channelKeys.messages
+>['queryKey'];
 
 export type IndexedChannelMessages = {
   items: ApiChannelMessage[];
@@ -51,7 +56,7 @@ export function channelMessagesQueryOptions(
   loadAroundMessageId: string | null
 ) {
   return {
-    queryKey: channelKeys.messages(channelId).queryKey,
+    queryKey: channelKeys.messages(channelId, loadAroundMessageId).queryKey,
     queryFn: async ({
       pageParam,
     }: {
@@ -106,6 +111,35 @@ export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
     index,
     byId: createMemo(() => index().byId),
   };
+}
+
+export function getChannelMessagesQueryKey(
+  channelId: string,
+  loadAroundMessageId: string | null = null
+): ChannelMessagesQueryKey {
+  return channelKeys.messages(channelId, loadAroundMessageId).queryKey;
+}
+
+export function getChannelMessagesQueryKeyPrefix(channelId: string) {
+  return [...channelKeys.messages._def, channelId];
+}
+
+export function setChannelMessagesData(
+  channelId: string,
+  updater: (
+    data: ChannelMessagesData | undefined
+  ) => ChannelMessagesData | undefined
+) {
+  queryClient.setQueriesData<ChannelMessagesData>(
+    { queryKey: getChannelMessagesQueryKeyPrefix(channelId) },
+    updater
+  );
+}
+
+export function getChannelMessagesEntries(channelId: string) {
+  return queryClient.getQueriesData<ChannelMessagesData>({
+    queryKey: getChannelMessagesQueryKeyPrefix(channelId),
+  });
 }
 
 function mapChannelMessagesItems(
@@ -208,6 +242,18 @@ export function replaceTopLevelMessageReactionsInChannelMessages(
 
   return mapChannelMessagesItems(data, (message) =>
     message.id === messageId ? { ...message, reactions } : message
+  );
+}
+
+export function replaceTopLevelMessageAttachmentsInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageId: string,
+  attachments: ApiAttachment[]
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) =>
+    message.id === messageId ? { ...message, attachments } : message
   );
 }
 
@@ -327,6 +373,35 @@ export function replaceThreadReplyReactionsInChannelMessages(
   });
 }
 
+export function replaceThreadReplyAttachmentsInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  replyId: string,
+  attachments: ApiAttachment[]
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) => {
+    if (message.id !== threadId) return message;
+    let didChange = false;
+    const preview = message.thread.preview.map((reply) => {
+      if (reply.id !== replyId) return reply;
+      didChange = true;
+      return { ...reply, attachments };
+    });
+
+    if (!didChange) return message;
+
+    return {
+      ...message,
+      thread: {
+        ...message.thread,
+        preview,
+      },
+    };
+  });
+}
+
 export function getThreadPreviewReplySnapshot(
   data: ChannelMessagesData | undefined,
   threadId: string,
@@ -363,12 +438,62 @@ export function restoreThreadPreviewReplyInChannelMessages(
   });
 }
 
+export function findTopLevelMessageInChannelMessages(
+  channelId: string,
+  messageId: string
+): ApiChannelMessage | undefined {
+  for (const [, data] of getChannelMessagesEntries(channelId)) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      const message = page.items.find((item) => item.id === messageId);
+      if (message) return message;
+    }
+  }
+}
+
+export function findThreadIdInChannelMessages(
+  channelId: string,
+  replyId: string
+): string | undefined {
+  for (const [, data] of getChannelMessagesEntries(channelId)) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      for (const message of page.items) {
+        if (message.thread.preview.some((reply) => reply.id === replyId)) {
+          return message.id;
+        }
+      }
+    }
+  }
+}
+
+export function findTopLevelMessageSnapshotInChannelMessages(
+  channelId: string,
+  messageId: string
+): TopLevelMessageSnapshot | undefined {
+  for (const [, data] of getChannelMessagesEntries(channelId)) {
+    const snapshot = getTopLevelMessageSnapshot(data, messageId);
+    if (snapshot) return snapshot;
+  }
+}
+
+export function findThreadPreviewReplySnapshotInChannelMessages(
+  channelId: string,
+  threadId: string,
+  replyId: string
+): ThreadPreviewReplySnapshot | undefined {
+  for (const [, data] of getChannelMessagesEntries(channelId)) {
+    const snapshot = getThreadPreviewReplySnapshot(data, threadId, replyId);
+    if (snapshot) return snapshot;
+  }
+}
+
 /**
  * Marks the channel messages query as stale without triggering an immediate refetch.
  */
 export function softInvalidateChannelMessages(channelId: string) {
   queryClient.invalidateQueries({
-    queryKey: channelKeys.messages(channelId).queryKey,
+    queryKey: getChannelMessagesQueryKeyPrefix(channelId),
     refetchType: 'inactive',
   });
 }

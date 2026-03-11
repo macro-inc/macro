@@ -151,7 +151,6 @@ export function optimisticInsertChannelMessage(
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
-  let context: InsertMessageContext | undefined;
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
     vars.channelId,
@@ -165,13 +164,15 @@ export function optimisticInsertChannelMessage(
     messageId: vars.optimisticId,
     threadId,
   });
+  const context: InsertMessageContext = {
+    optimisticId: vars.optimisticId,
+    target,
+  };
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
-
-      context = { optimisticId: vars.optimisticId, target };
 
       const newMessage: Message = {
         id: vars.optimisticId,
@@ -523,7 +524,10 @@ export function useSendMessageMutation(
     },
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           // Register nonces for deduplication when WebSocket events arrive
           registerMessageNonces(
             vars.optimisticId,
@@ -614,7 +618,10 @@ export function useDeleteMessageMutation(
     },
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           deleteNonce.prepare(vars);
           return optimisticDeleteChannelMessage({
             channelId: vars.channelID,

@@ -55,7 +55,11 @@ import {
   rollbackAddReaction,
   rollbackRemoveReaction,
 } from '../reaction';
-import type { ChannelMessagesData } from '../channel-messages';
+import {
+  getChannelMessagesQueryKey,
+  type ChannelMessagesData,
+} from '../channel-messages';
+import { getThreadRepliesQueryKey } from '../thread-replies';
 
 function createMockMessage(overrides: Partial<Message> = {}): Message {
   return {
@@ -184,14 +188,14 @@ function seedChannelMessagesCache(
   channelId: string,
   data: ChannelMessagesData
 ) {
-  testQueryClient.setQueryData(channelKeys.messages(channelId).queryKey, data);
+  testQueryClient.setQueryData(getChannelMessagesQueryKey(channelId), data);
 }
 
 function getChannelMessagesFromCache(
   channelId: string
 ): ChannelMessagesData | undefined {
   return testQueryClient.getQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey
+    getChannelMessagesQueryKey(channelId)
   );
 }
 
@@ -201,14 +205,14 @@ function seedThreadRepliesCache(
   replies: Array<ApiThreadReply>
 ) {
   testQueryClient.setQueryData(
-    channelKeys.threadReplies(channelId, messageId).queryKey,
+    getThreadRepliesQueryKey(channelId, messageId),
     replies
   );
 }
 
 function getThreadRepliesFromCache(channelId: string, messageId: string) {
   return testQueryClient.getQueryData<Array<ApiThreadReply>>(
-    channelKeys.threadReplies(channelId, messageId).queryKey
+    getThreadRepliesQueryKey(channelId, messageId)
   );
 }
 
@@ -384,7 +388,7 @@ describe('optimisticInsertChannelMessage', () => {
     ).toBe(1);
   });
 
-  it('should return undefined when cache is empty', () => {
+  it('should still return rollback context when cache is empty', () => {
     const context = optimisticInsertChannelMessage({
       channelId: 'nonexistent-channel',
       optimisticId: 'optimistic-msg-1',
@@ -394,7 +398,13 @@ describe('optimisticInsertChannelMessage', () => {
       mentions: [],
     });
 
-    expect(context).toBeUndefined();
+    expect(context).toEqual({
+      optimisticId: 'optimistic-msg-1',
+      target: {
+        kind: 'top_level',
+        messageId: 'optimistic-msg-1',
+      },
+    });
   });
 
   it('should rollback correctly using returned context', () => {
@@ -455,6 +465,69 @@ describe('optimisticInsertChannelMessage', () => {
     const paginated = getChannelMessagesFromCache('channel-1');
     expect(paginated?.pages[0].items[0].thread.reply_count).toBe(0);
     expect(paginated?.pages[0].items[0].thread.preview).toEqual([]);
+  });
+
+  it('should rollback optimistic inserts when only the paginated cache is warm', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('existing-msg', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+
+    const context = optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-top-level',
+      senderId: 'user-2',
+      content: 'Top level optimistic message',
+      attachments: [],
+      mentions: [],
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0].id).toBe(
+      'optimistic-top-level'
+    );
+
+    if (context) {
+      rollbackInsertChannelMessage('channel-1', context);
+    }
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([
+      expect.objectContaining({ id: 'existing-msg' }),
+    ]);
+  });
+
+  it('should rollback optimistic thread replies when only the new caches are warm', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [createPaginatedMessage('parent-msg-id', '2024-01-03T00:00:00.000Z')],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-msg-id', []);
+
+    const context = optimisticInsertChannelMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-reply',
+      senderId: 'user-2',
+      content: 'Reply to rollback',
+      attachments: [],
+      mentions: [],
+      thread_id: 'parent-msg-id',
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([
+      expect.objectContaining({ id: 'optimistic-reply' }),
+    ]);
+
+    if (context) {
+      rollbackInsertChannelMessage('channel-1', context);
+    }
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-msg-id')).toEqual([]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread.preview
+    ).toEqual([]);
   });
 });
 
@@ -939,8 +1012,7 @@ describe('optimisticAddReaction', () => {
     expect(cached?.reactions['msg-1']).toHaveLength(1);
     expect(cached?.reactions['msg-1'][0].emoji).toBe('👍');
     expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
-    // Context should indicate this was a new reaction
-    expect(context?.wasNewReaction).toBe(true);
+    expect(context?.previousReactions).toEqual([]);
     expect(context?.emoji).toBe('👍');
   });
 
@@ -961,8 +1033,9 @@ describe('optimisticAddReaction', () => {
     expect(cached?.reactions['msg-1'][0].users).toHaveLength(2);
     expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
     expect(cached?.reactions['msg-1'][0].users).toContain('user-2');
-    // Context should indicate this was not a new reaction
-    expect(context?.wasNewReaction).toBe(false);
+    expect(context?.previousReactions).toEqual([
+      { emoji: '👍', users: ['user-1'] },
+    ]);
   });
 
   it('should not add duplicate user to reaction', () => {
@@ -1098,6 +1171,49 @@ describe('optimisticAddReaction', () => {
         .preview[0].reactions
     ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
   });
+
+  it('should rollback add reactions from the new caches without legacy data', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
+    ]);
+
+    const context = optimisticAddReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'reply-1',
+      currentReactions: [],
+      threadId: 'parent-1',
+    });
+
+    if (context) {
+      rollbackAddReaction('channel-1', context);
+    }
+
+    expect(
+      getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
+    ).toEqual([]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0].reactions
+    ).toEqual([]);
+  });
 });
 
 describe('optimisticRemoveReaction', () => {
@@ -1132,8 +1248,9 @@ describe('optimisticRemoveReaction', () => {
     expect(cached?.reactions['msg-1'][0].users).toHaveLength(1);
     expect(cached?.reactions['msg-1'][0].users).not.toContain('user-1');
     expect(cached?.reactions['msg-1'][0].users).toContain('user-2');
-    // Context should indicate this was not the last user
-    expect(context?.wasLastUser).toBe(false);
+    expect(context?.previousReactions).toEqual([
+      { emoji: '👍', users: ['user-1', 'user-2'] },
+    ]);
   });
 
   it('should remove reaction entirely when last user removes it', () => {
@@ -1155,8 +1272,10 @@ describe('optimisticRemoveReaction', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.reactions['msg-1']).toHaveLength(1);
     expect(cached?.reactions['msg-1'][0].emoji).toBe('❤️');
-    // Context should indicate this was the last user
-    expect(context?.wasLastUser).toBe(true);
+    expect(context?.previousReactions).toEqual([
+      { emoji: '👍', users: ['user-1'] },
+      { emoji: '❤️', users: ['user-2'] },
+    ]);
   });
 
   it('should remove message key from reactions map when no reactions left', () => {
@@ -1298,6 +1417,61 @@ describe('optimisticRemoveReaction', () => {
       getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
         .preview[0].reactions
     ).toEqual([]);
+  });
+
+  it('should rollback removals from the new caches without legacy data', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+                  reactions: [{ emoji: '👍', users: ['user-1'] }],
+                }),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+        reactions: [{ emoji: '👍', users: ['user-1'] }],
+      }),
+    ]);
+
+    const context = optimisticRemoveReaction({
+      channelId: 'channel-1',
+      userId: 'user-1',
+      emoji: '👍',
+      message_id: 'reply-1',
+      currentReactions: [{ emoji: '👍', users: ['user-1'] }],
+      threadId: 'parent-1',
+    });
+
+    if (context) {
+      rollbackRemoveReaction('channel-1', context);
+    }
+
+    expect(
+      getThreadRepliesFromCache('channel-1', 'parent-1')?.[0].reactions
+    ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0].reactions
+    ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+  });
+});
+
+describe('channelMessagesQueryOptions', () => {
+  it('uses distinct query keys for target-message loads', () => {
+    expect(getChannelMessagesQueryKey('channel-1')).not.toEqual(
+      getChannelMessagesQueryKey('channel-1', 'message-42')
+    );
   });
 });
 

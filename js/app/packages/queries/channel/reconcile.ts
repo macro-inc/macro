@@ -1,6 +1,7 @@
 import {
-  getThreadPreviewReplySnapshot,
-  getTopLevelMessageSnapshot,
+  findThreadIdInChannelMessages,
+  findThreadPreviewReplySnapshotInChannelMessages,
+  findTopLevelMessageSnapshotInChannelMessages,
   insertThreadReplyIntoChannelMessages,
   insertTopLevelMessageIntoChannelMessages,
   removeThreadReplyFromChannelMessages,
@@ -9,25 +10,36 @@ import {
   restoreTopLevelMessageInChannelMessages,
   replaceThreadReplyIdInChannelMessages,
   replaceThreadReplyReactionsInChannelMessages,
+  replaceThreadReplyAttachmentsInChannelMessages,
   replaceTopLevelMessageIdInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessages,
+  replaceTopLevelMessageAttachmentsInChannelMessages,
+  setChannelMessagesData,
   softInvalidateChannelMessages,
-  type ChannelMessagesData,
   type ThreadPreviewReplySnapshot,
   type TopLevelMessageSnapshot,
 } from './channel-messages';
 import {
+  getThreadRepliesEntries,
+  getThreadRepliesQueryKey,
   getThreadReplySnapshot,
   insertThreadReply,
   removeThreadReply,
   restoreThreadReply,
   replaceThreadReplyId,
   replaceThreadReplyReactions,
+  replaceThreadReplyAttachments,
   softInvalidateThreadReplies,
   type ThreadReplySnapshot,
 } from './thread-replies';
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
-import type { CountedReaction } from '@service-comms/generated/models';
+import type {
+  ApiChannelMessage,
+  ApiThreadReply,
+} from '@service-comms/client';
+import type {
+  Attachment as ApiAttachment,
+  CountedReaction,
+} from '@service-comms/generated/models';
 import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
@@ -82,10 +94,17 @@ export function findThreadIdForMessage(
   channelId: string,
   messageId: string
 ): string | undefined {
+  const directThreadId = findThreadIdInChannelMessages(channelId, messageId);
+  if (directThreadId) return directThreadId;
+
+  for (const [queryKey, replies] of getThreadRepliesEntries(channelId)) {
+    if (!replies?.some((reply) => reply.id === messageId)) continue;
+    return queryKey.at(-1) as string | undefined;
+  }
+
   return (
-    getCachedChannel(channelId)?.messages.find(
-      (message) => message.id === messageId
-    )?.thread_id ?? undefined
+    getCachedChannel(channelId)?.messages.find((message) => message.id === messageId)
+      ?.thread_id ?? undefined
   );
 }
 
@@ -94,10 +113,23 @@ export function resolveMessageTarget(args: {
   messageId: string;
   threadId?: string;
 }): MessageTarget {
+  if (args.threadId) {
+    return makeMessageTarget({
+      messageId: args.messageId,
+      threadId: args.threadId,
+    });
+  }
+
+  const threadId = findThreadIdForMessage(args.channelId, args.messageId);
+  if (threadId) {
+    return makeMessageTarget({
+      messageId: args.messageId,
+      threadId,
+    });
+  }
+
   return makeMessageTarget({
     messageId: args.messageId,
-    threadId:
-      args.threadId ?? findThreadIdForMessage(args.channelId, args.messageId),
   });
 }
 
@@ -107,26 +139,18 @@ export function insertMessageIntoTargetCaches(
   payload: ApiChannelMessage | ApiThreadReply
 ) {
   if (target.kind === 'thread_reply') {
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        insertThreadReplyIntoChannelMessages(
-          prev,
-          target.threadId,
-          payload as ApiThreadReply
-        )
+    setChannelMessagesData(channelId, (prev) =>
+      insertThreadReplyIntoChannelMessages(prev, target.threadId, payload as ApiThreadReply)
     );
     queryClient.setQueryData<Array<ApiThreadReply>>(
-      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      getThreadRepliesQueryKey(channelId, target.threadId),
       (prev) => insertThreadReply(prev, payload as ApiThreadReply)
     );
     return;
   }
 
-  queryClient.setQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey,
-    (prev) =>
-      insertTopLevelMessageIntoChannelMessages(prev, payload as ApiChannelMessage)
+  setChannelMessagesData(channelId, (prev) =>
+    insertTopLevelMessageIntoChannelMessages(prev, payload as ApiChannelMessage)
   );
 }
 
@@ -136,24 +160,17 @@ export function removeMessageFromTargetCaches(
 ) {
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
-      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      getThreadRepliesQueryKey(channelId, target.threadId),
       (prev) => removeThreadReply(prev, target.messageId)
     );
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        removeThreadReplyFromChannelMessages(
-          prev,
-          target.threadId,
-          target.messageId
-        )
+    setChannelMessagesData(channelId, (prev) =>
+      removeThreadReplyFromChannelMessages(prev, target.threadId, target.messageId)
     );
     return;
   }
 
-  queryClient.setQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey,
-    (prev) => removeTopLevelMessageFromChannelMessages(prev, target.messageId)
+  setChannelMessagesData(channelId, (prev) =>
+    removeTopLevelMessageFromChannelMessages(prev, target.messageId)
   );
 }
 
@@ -166,14 +183,12 @@ export function captureDeleteSnapshotForTarget(
       kind: 'thread_reply',
       reply: getThreadReplySnapshot(
         queryClient.getQueryData<Array<ApiThreadReply>>(
-          channelKeys.threadReplies(channelId, target.threadId).queryKey
+          getThreadRepliesQueryKey(channelId, target.threadId)
         ),
         target.messageId
       ),
-      preview: getThreadPreviewReplySnapshot(
-        queryClient.getQueryData<ChannelMessagesData>(
-          channelKeys.messages(channelId).queryKey
-        ),
+      preview: findThreadPreviewReplySnapshotInChannelMessages(
+        channelId,
         target.threadId,
         target.messageId
       ),
@@ -182,12 +197,7 @@ export function captureDeleteSnapshotForTarget(
 
   return {
     kind: 'top_level',
-    message: getTopLevelMessageSnapshot(
-      queryClient.getQueryData<ChannelMessagesData>(
-        channelKeys.messages(channelId).queryKey
-      ),
-      target.messageId
-    ),
+    message: findTopLevelMessageSnapshotInChannelMessages(channelId, target.messageId),
   };
 }
 
@@ -198,34 +208,29 @@ export function restoreMessageInTargetCaches(
 ) {
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
-      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      getThreadRepliesQueryKey(channelId, target.threadId),
       (prev) =>
         snapshot.kind === 'thread_reply' && snapshot.reply
           ? restoreThreadReply(prev, snapshot.reply)
           : prev
     );
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        snapshot.kind === 'thread_reply'
-          ? restoreThreadPreviewReplyInChannelMessages(
-              prev,
-              target.threadId,
-              snapshot.preview,
-              snapshot.reply?.reply.created_at ??
-                snapshot.preview?.reply.created_at
-            )
-          : prev
+    setChannelMessagesData(channelId, (prev) =>
+      snapshot.kind === 'thread_reply'
+        ? restoreThreadPreviewReplyInChannelMessages(
+            prev,
+            target.threadId,
+            snapshot.preview,
+            snapshot.reply?.reply.created_at ?? snapshot.preview?.reply.created_at
+          )
+        : prev
     );
     return;
   }
 
-  queryClient.setQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey,
-    (prev) =>
-      snapshot.kind === 'top_level' && snapshot.message
-        ? restoreTopLevelMessageInChannelMessages(prev, snapshot.message)
-        : prev
+  setChannelMessagesData(channelId, (prev) =>
+    snapshot.kind === 'top_level' && snapshot.message
+      ? restoreTopLevelMessageInChannelMessages(prev, snapshot.message)
+      : prev
   );
 }
 
@@ -236,26 +241,22 @@ export function replaceTargetMessageId(
 ) {
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
-      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      getThreadRepliesQueryKey(channelId, target.threadId),
       (prev) => replaceThreadReplyId(prev, target.messageId, realId)
     );
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        replaceThreadReplyIdInChannelMessages(
-          prev,
-          target.threadId,
-          target.messageId,
-          realId
-        )
+    setChannelMessagesData(channelId, (prev) =>
+      replaceThreadReplyIdInChannelMessages(
+        prev,
+        target.threadId,
+        target.messageId,
+        realId
+      )
     );
     return;
   }
 
-  queryClient.setQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey,
-    (prev) =>
-      replaceTopLevelMessageIdInChannelMessages(prev, target.messageId, realId)
+  setChannelMessagesData(channelId, (prev) =>
+    replaceTopLevelMessageIdInChannelMessages(prev, target.messageId, realId)
   );
 }
 
@@ -266,30 +267,56 @@ export function replaceTargetReactions(
 ) {
   if (target.kind === 'thread_reply') {
     queryClient.setQueryData<Array<ApiThreadReply>>(
-      channelKeys.threadReplies(channelId, target.threadId).queryKey,
+      getThreadRepliesQueryKey(channelId, target.threadId),
       (prev) => replaceThreadReplyReactions(prev, target.messageId, reactions)
     );
-    queryClient.setQueryData<ChannelMessagesData>(
-      channelKeys.messages(channelId).queryKey,
-      (prev) =>
-        replaceThreadReplyReactionsInChannelMessages(
-          prev,
-          target.threadId,
-          target.messageId,
-          reactions
-        )
+    setChannelMessagesData(channelId, (prev) =>
+      replaceThreadReplyReactionsInChannelMessages(
+        prev,
+        target.threadId,
+        target.messageId,
+        reactions
+      )
     );
     return;
   }
 
-  queryClient.setQueryData<ChannelMessagesData>(
-    channelKeys.messages(channelId).queryKey,
-    (prev) =>
-      replaceTopLevelMessageReactionsInChannelMessages(
+  setChannelMessagesData(channelId, (prev) =>
+    replaceTopLevelMessageReactionsInChannelMessages(
+      prev,
+      target.messageId,
+      reactions
+    )
+  );
+}
+
+export function replaceTargetAttachments(
+  channelId: string,
+  target: MessageTarget,
+  attachments: ApiAttachment[]
+) {
+  if (target.kind === 'thread_reply') {
+    queryClient.setQueryData<Array<ApiThreadReply>>(
+      getThreadRepliesQueryKey(channelId, target.threadId),
+      (prev) => replaceThreadReplyAttachments(prev, target.messageId, attachments)
+    );
+    setChannelMessagesData(channelId, (prev) =>
+      replaceThreadReplyAttachmentsInChannelMessages(
         prev,
+        target.threadId,
         target.messageId,
-        reactions
+        attachments
       )
+    );
+    return;
+  }
+
+  setChannelMessagesData(channelId, (prev) =>
+    replaceTopLevelMessageAttachmentsInChannelMessages(
+      prev,
+      target.messageId,
+      attachments
+    )
   );
 }
 

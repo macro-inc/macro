@@ -58,6 +58,7 @@ type ThreadListProps = {
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
   onScrollStateChange?: (state: ThreadListScrollState) => void;
   shift?: Accessor<boolean>;
+  prepend?: Accessor<boolean>;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -82,8 +83,9 @@ const clamp = (value: number, min: number, max: number) =>
 export function shouldStickToBottomOnDataChange(
   isNearBottom: boolean,
   shift?: Accessor<boolean>,
+  prepend?: Accessor<boolean>,
 ): boolean {
-  return isNearBottom && !(shift?.() ?? false);
+  return isNearBottom && !(shift?.() ?? false) && !(prepend?.() ?? false);
 }
 
 export function isExplicitScrollDown(
@@ -258,7 +260,13 @@ export function ThreadList(props: ThreadListProps) {
       () => {
         const handle = virtualHandle();
         if (!handle || !didInitialScroll()) return;
-        if (shouldStickToBottomOnDataChange(isNearBottom(), props.shift)) {
+        if (
+          shouldStickToBottomOnDataChange(
+            isNearBottom(),
+            props.shift,
+            props.prepend,
+          )
+        ) {
           requestAnimationFrame(() => {
             scrollToTarget(handle, { tag: "bottom", align: "end" });
           });

@@ -21,6 +21,12 @@ describe('shouldStickToBottomOnDataChange', () => {
   it('does not stick while shifting', () => {
     expect(shouldStickToBottomOnDataChange(true, () => true)).toBe(false);
   });
+
+  it('does not stick while prepending', () => {
+    expect(
+      shouldStickToBottomOnDataChange(true, () => false, () => true)
+    ).toBe(false);
+  });
 });
 
 describe('isExplicitScrollDown', () => {

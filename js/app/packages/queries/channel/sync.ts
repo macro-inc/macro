@@ -12,6 +12,7 @@ import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 import {
   insertMessageIntoTargetCaches,
+  replaceTargetAttachments,
   replaceTargetReactions,
   softInvalidateTargetCaches,
   resolveMessageTarget,
@@ -152,12 +153,8 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
   if (isExternalUpdate) {
     try {
       const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-      let threadId: string | undefined;
       queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
         if (!prev) return prev;
-        threadId =
-          prev.messages.find((message) => message.id === payload.message_id)
-            ?.thread_id ?? undefined;
         return {
           ...prev,
           reactions: {
@@ -168,13 +165,13 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
       });
 
       if (ENABLE_NEW_CHANNELS) {
+        const target = resolveMessageTarget({
+          channelId: payload.channel_id,
+          messageId: payload.message_id,
+        });
         replaceTargetReactions(
           payload.channel_id,
-          resolveMessageTarget({
-            channelId: payload.channel_id,
-            messageId: payload.message_id,
-            threadId,
-          }),
+          target,
           payload.reactions
         );
       }
@@ -185,13 +182,13 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
 
   softInvalidateChannelWithID(payload.channel_id);
   if (ENABLE_NEW_CHANNELS) {
+    const target = resolveMessageTarget({
+      channelId: payload.channel_id,
+      messageId: payload.message_id,
+    });
     softInvalidateTargetCaches(
       payload.channel_id,
-      resolveMessageTarget({
-        channelId: payload.channel_id,
-        messageId: payload.message_id,
-        threadId: undefined,
-      })
+      target
     );
   }
 }
@@ -203,31 +200,49 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
-  const isExternalUpdate = !consumeNonce(
-    ChannelNonceKeys.ATTACHMENT,
-    payload.nonce
-  );
+  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.ATTACHMENT, payload.nonce);
+  const target = ENABLE_NEW_CHANNELS
+    ? resolveMessageTarget({
+        channelId: payload.channel_id,
+        messageId: payload.message_id,
+      })
+    : undefined;
 
-  if (isExternalUpdate) {
-    try {
-      const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-      queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-        if (!prev) return prev;
+  try {
+    const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+      if (!prev) return prev;
 
-        const existingIds = new Set(prev.attachments.map((a) => a.id));
-        const newAttachments = payload.attachments.filter(
-          (a) => !existingIds.has(a.id)
-        );
+      const remainingAttachments = prev.attachments.filter(
+        (attachment) => attachment.message_id !== payload.message_id
+      );
+      const nextAttachments = isExternalUpdate
+        ? [
+            ...remainingAttachments,
+            ...payload.attachments.filter(
+              (attachment) =>
+                !remainingAttachments.some(
+                  (existingAttachment) => existingAttachment.id === attachment.id
+                )
+            ),
+          ]
+        : [...remainingAttachments, ...payload.attachments];
 
-        return {
-          ...prev,
-          attachments: [...prev.attachments, ...newAttachments],
-        };
-      });
-    } catch (error) {
-      console.error('Failed to update attachment cache from websocket:', error);
+      return {
+        ...prev,
+        attachments: nextAttachments,
+      };
+    });
+
+    if (ENABLE_NEW_CHANNELS && target) {
+      replaceTargetAttachments(payload.channel_id, target, payload.attachments);
     }
+  } catch (error) {
+    console.error('Failed to update attachment cache from websocket:', error);
   }
 
   softInvalidateChannelWithID(payload.channel_id);
+  if (ENABLE_NEW_CHANNELS) {
+    softInvalidateTargetCaches(payload.channel_id, target);
+  }
 }
