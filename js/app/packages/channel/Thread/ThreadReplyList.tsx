@@ -8,23 +8,31 @@ import type { ApiThreadReply } from '@service-comms/client';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotificationsAsSeen';
 
 export function ThreadReplyList(props: {
+  threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   channelId: string;
 }) {
   return (
     <For each={props.replies}>
-      {(reply) => (
-        <MarkMessaageNotifications
-          messageId={reply.id}
-          channelId={props.channelId}
-        >
-          <ChannelMessage
-            message={reply}
-            actions={props.getMessageActions?.(reply)}
-          />
-        </MarkMessaageNotifications>
-      )}
+      {(reply) => {
+        const replyMessage = () => ({
+          ...reply,
+          thread_id: props.threadId,
+        });
+
+        return (
+          <MarkMessaageNotifications
+            messageId={reply.id}
+            channelId={props.channelId}
+          >
+            <ChannelMessage
+              message={reply}
+              actions={props.getMessageActions?.(replyMessage())}
+            />
+          </MarkMessaageNotifications>
+        );
+      }}
     </For>
   );
 }

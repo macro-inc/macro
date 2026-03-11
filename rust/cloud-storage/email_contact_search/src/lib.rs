@@ -115,6 +115,11 @@ pub async fn search_email_contacts<'a>(
         WITH link AS (
             SELECT id AS link_id FROM email_links WHERE macro_id = $1
         ),
+        user_messages AS MATERIALIZED (
+            SELECT m.id, m.thread_id, m.from_contact_id, m.from_name
+            FROM email_messages m
+            JOIN link l ON m.link_id = l.link_id
+        ),
         matching_contacts AS (
             SELECT c.id
             FROM email_contacts c
@@ -123,34 +128,30 @@ pub async fn search_email_contacts<'a>(
         ),
         matching_thread_ids AS (
             SELECT DISTINCT thread_id FROM (
-                SELECT m.thread_id
-                FROM email_messages m
-                JOIN link l ON m.link_id = l.link_id
-                WHERE m.from_contact_id IN (SELECT id FROM matching_contacts)
+                SELECT um.thread_id
+                FROM user_messages um
+                WHERE um.from_contact_id IN (SELECT id FROM matching_contacts)
 
                 UNION ALL
 
-                SELECT m.thread_id
-                FROM email_messages m
-                JOIN link l ON m.link_id = l.link_id
-                WHERE m.from_name ILIKE $2
+                SELECT um.thread_id
+                FROM user_messages um
+                WHERE um.from_name ILIKE $2
 
                 UNION ALL
 
-                SELECT m.thread_id
+                SELECT um.thread_id
                 FROM email_message_recipients mr
-                JOIN email_messages m ON m.id = mr.message_id
-                JOIN link l ON m.link_id = l.link_id
+                JOIN user_messages um ON um.id = mr.message_id
                 WHERE mr.contact_id IN (SELECT id FROM matching_contacts)
 
                 UNION ALL
 
-                SELECT m.thread_id
-                FROM email_messages m
-                JOIN link l ON m.link_id = l.link_id
+                SELECT um.thread_id
+                FROM user_messages um
                 WHERE EXISTS (
                     SELECT 1 FROM email_message_recipients mr
-                    WHERE mr.message_id = m.id
+                    WHERE mr.message_id = um.id
                     AND mr.name ILIKE $2
                 )
             ) all_matches

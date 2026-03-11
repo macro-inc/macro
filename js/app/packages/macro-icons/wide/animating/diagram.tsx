@@ -13,7 +13,7 @@ export const AnimatedDiagramIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-diagram-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated diagram icon</title>
+      {/*<title>Animated diagram icon</title>*/}
       <style>{`
         .animated-diagram-icon {
           .left-node, .right-node, .center-node, .left-arm, .right-arm {

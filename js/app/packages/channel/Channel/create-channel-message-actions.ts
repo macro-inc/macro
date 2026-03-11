@@ -19,6 +19,8 @@ type AddReactionInput = {
   messageId: string;
   emoji: string;
   userId: string;
+  threadId?: string;
+  currentReactions: MessageData['reactions'];
 };
 
 type RemoveReactionInput = {
@@ -26,6 +28,8 @@ type RemoveReactionInput = {
   messageId: string;
   emoji: string;
   userId: string;
+  threadId?: string;
+  currentReactions: MessageData['reactions'];
 };
 
 type PatchMessageInput = {
@@ -37,6 +41,7 @@ type PatchMessageInput = {
 type DeleteMessageInput = {
   channelID: string;
   messageID: string;
+  threadID?: string;
 };
 
 type ChannelMessageActionEffects = {
@@ -106,23 +111,32 @@ export function createChannelMessageActions(
 
             const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
             const channelId = options.channelId();
-            const hasReaction = hasReactionFromUser(message, emoji, userId);
+            const targetMessage = message;
+            const liveMessage = ctx.message;
+            const threadId =
+              (targetMessage as MessageData & { thread_id?: string | null })
+                .thread_id ?? undefined;
+            const hasReaction = hasReactionFromUser(liveMessage, emoji, userId);
 
             if (hasReaction) {
               options.removeReaction({
                 channelId,
-                messageId: message.id,
+                messageId: targetMessage.id,
                 emoji,
                 userId,
+                threadId,
+                currentReactions: liveMessage.reactions,
               });
               return;
             }
 
             options.addReaction({
               channelId,
-              messageId: message.id,
+              messageId: targetMessage.id,
               emoji,
               userId,
+              threadId,
+              currentReactions: liveMessage.reactions,
             });
           }
         : undefined,
@@ -159,6 +173,9 @@ export function createChannelMessageActions(
             options.deleteMessage({
               channelID: options.channelId(),
               messageID: message.id,
+              threadID:
+                (message as MessageData & { thread_id?: string | null })
+                  .thread_id ?? undefined,
             });
           }
         : undefined,

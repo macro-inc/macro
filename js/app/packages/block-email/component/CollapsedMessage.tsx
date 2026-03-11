@@ -1,13 +1,11 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
-import { UserIcon } from '@core/component/UserIcon';
+import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
+import { useEmail } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
-import {
-  getSenderDisplayName,
-  isMessageFromCurrentUser,
-} from '../util/emailUser';
+import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
+import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
   message: ApiMessage;
@@ -20,15 +18,16 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
   const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
-  const currentUserId = useUserId();
-
-  const isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, currentUserEmail())
-  );
 
   const senderDisplay = createMemo(() =>
     getSenderDisplayName(props.message, currentUserEmail())
   );
+  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
+  const senderIconProps = createMemo<UserIconProps>(() => {
+    const senderId = senderMacroId();
+    if (senderId) return { id: senderId };
+    return { email: props.message.from?.email ?? '' };
+  });
 
   const snippet = createMemo(() => {
     // Prefer body_text for snippet, fall back to stripping HTML
@@ -93,9 +92,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               }}
             >
               <UserIcon
-                {...(isFromCurrentUser()
-                  ? { id: currentUserId() ?? '' }
-                  : { email: props.message.from?.email ?? '' })}
+                {...senderIconProps()}
                 isDeleted={false}
                 size="fill"
                 suppressClick={true}
@@ -108,8 +105,12 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 'padding-left': 'var(--body-padding)',
               }}
             >
-              <span class="text-ink font-semibold w-16 shrink-0 truncate text-sm">
-                {senderDisplay()}
+              <span class="w-16 shrink-0">
+                <EmailUserTooltip recipient={props.message.from}>
+                  <span class="text-ink font-semibold truncate text-sm cursor-default block">
+                    {senderDisplay()}
+                  </span>
+                </EmailUserTooltip>
               </span>
               <span class="text-ink truncate">{snippet()}</span>
             </div>

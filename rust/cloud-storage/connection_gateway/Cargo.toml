@@ -22,6 +22,7 @@ path = "src/openapi.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
@@ -68,7 +69,7 @@ tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
-tungstenite = "0.27.0"
+tungstenite = "0.28"
 url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }

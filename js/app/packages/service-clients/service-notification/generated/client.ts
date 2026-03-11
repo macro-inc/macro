@@ -193,14 +193,16 @@ export type unsubscribeItemResponse =
   | unsubscribeItemResponseSuccess
   | unsubscribeItemResponseError;
 
-export const getUnsubscribeItemUrl = () => {
-  return `/unsubscribe/item/:item_type/:item_id`;
+export const getUnsubscribeItemUrl = (itemType: string, itemId: string) => {
+  return `/unsubscribe/item/${itemType}/${itemId}`;
 };
 
 export const unsubscribeItem = async (
+  itemType: string,
+  itemId: string,
   options?: RequestInit
 ): Promise<unsubscribeItemResponse> => {
-  const res = await fetch(getUnsubscribeItemUrl(), {
+  const res = await fetch(getUnsubscribeItemUrl(itemType, itemId), {
     ...options,
     method: 'POST',
   });
@@ -248,14 +250,19 @@ export type removeUnsubscribeItemResponse =
   | removeUnsubscribeItemResponseSuccess
   | removeUnsubscribeItemResponseError;
 
-export const getRemoveUnsubscribeItemUrl = () => {
-  return `/unsubscribe/item/:item_type/:item_id`;
+export const getRemoveUnsubscribeItemUrl = (
+  itemType: string,
+  itemId: string
+) => {
+  return `/unsubscribe/item/${itemType}/${itemId}`;
 };
 
 export const removeUnsubscribeItem = async (
+  itemType: string,
+  itemId: string,
   options?: RequestInit
 ): Promise<removeUnsubscribeItemResponse> => {
-  const res = await fetch(getRemoveUnsubscribeItemUrl(), {
+  const res = await fetch(getRemoveUnsubscribeItemUrl(itemType, itemId), {
     ...options,
     method: 'DELETE',
   });

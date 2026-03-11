@@ -35,7 +35,7 @@ pub struct Params {
 /// Optionally creates a new thread/anchor if one does not exist
 #[utoipa::path(
         post,
-        path = "/annotations/comments/document/:document_id",
+        path = "/annotations/comments/document/{document_id}",
         params(
             ("document_id" = String, Path, description = "The document id")
         ),

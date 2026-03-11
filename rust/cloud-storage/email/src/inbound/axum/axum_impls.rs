@@ -6,7 +6,7 @@ use crate::{
     inbound::{ApiSortMethod, EmailRouterState},
 };
 use axum::{
-    RequestPartsExt, async_trait,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path, rejection::PathRejection},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
@@ -48,7 +48,6 @@ impl IntoResponse for GetPreviewsCursorError {
 
 pub(crate) struct PreviewViewPathExtractor(pub PreviewView);
 
-#[async_trait]
 impl<S: Send + Sync> FromRequestParts<S> for PreviewViewPathExtractor {
     type Rejection = GetPreviewsCursorError;
 
@@ -102,7 +101,6 @@ impl IntoResponse for EmailLinkErr {
     }
 }
 
-#[async_trait]
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
@@ -136,7 +134,6 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
     }
 }
 
-#[async_trait]
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
@@ -230,7 +227,6 @@ impl IntoResponse for GmailAccessTokenErr {
     }
 }
 
-#[async_trait]
 impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
 where
     EmailRouterState<U>: FromRef<S>,

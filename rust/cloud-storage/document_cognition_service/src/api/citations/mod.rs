@@ -11,7 +11,7 @@ use model::{citations::DocumentTextPart, user::UserContext};
 use sqlx::PgPool;
 
 pub fn router() -> Router<ApiContext> {
-    Router::new().route("/:id", get(get_citation_handler))
+    Router::new().route("/{id}", get(get_citation_handler))
 }
 
 #[derive(serde::Deserialize)]

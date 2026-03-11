@@ -21,7 +21,7 @@ pub struct Params {
 /// Pins the item for the user
 #[utoipa::path(
         post,
-        path = "/pins/:pinned_item_id",
+        path = "/pins/{pinned_item_id}",
         params(
             ("pinned_item_id" = String, Path, description = "ID of the pinned item")
         ),

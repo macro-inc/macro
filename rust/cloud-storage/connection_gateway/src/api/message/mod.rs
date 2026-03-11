@@ -18,7 +18,10 @@ where
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/send/:entity_type/:entity_id", post(send_message_handler))
+        .route(
+            "/send/{entity_type}/{entity_id}",
+            post(send_message_handler),
+        )
         .route("/batch_send", post(batch_send_message_handler))
         .route(
             "/batch_send_unique",

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestPartsExt, async_trait,
+    Extension, Json, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
@@ -64,7 +64,6 @@ impl IntoResponse for StripeCustomerError {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for StripeCustomerExtractor
 where
     PgPool: FromRef<S>,

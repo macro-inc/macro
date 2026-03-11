@@ -1,6 +1,6 @@
 use crate::api::team::TeamPathParam;
 use axum::{
-    Extension, Json, RequestPartsExt, async_trait,
+    Extension, Json, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
@@ -78,7 +78,6 @@ impl IntoResponse for RoleAccessErr {
     }
 }
 
-#[async_trait]
 impl<S, T> FromRequestParts<S> for TeamAccessRoleExtractor<T>
 where
     PgPool: FromRef<S>,

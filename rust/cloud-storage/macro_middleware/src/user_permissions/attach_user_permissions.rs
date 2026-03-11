@@ -1,6 +1,6 @@
 use crate::error_handler::error_handler;
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Request, State, rejection::ExtensionRejection},
     http::{StatusCode, request::Parts},
     middleware::Next,
@@ -28,7 +28,6 @@ impl IntoResponse for PermissionErr {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for PermissionsExtractor
 where
     S: Send + Sync + 'static,

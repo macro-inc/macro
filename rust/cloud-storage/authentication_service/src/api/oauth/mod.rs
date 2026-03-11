@@ -13,7 +13,7 @@ pub(in crate::api) mod passwordless_callback;
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route(
-            "/passwordless/:code",
+            "/passwordless/{code}",
             get(passwordless_callback::handler).layer(
                 ServiceBuilder::new()
                     .layer(CookieManagerLayer::new())

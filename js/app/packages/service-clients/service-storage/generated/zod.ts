@@ -297,6 +297,81 @@ export const editAnchorResponse = zod
   );
 
 /**
+ * @summary Gets a set of comment anchors for a document
+ */
+export const getDocumentAnchorsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentAnchorsResponse = zod.object({
+  data: zod.array(
+    zod.union([
+      zod
+        .object({
+          allowableEdits: zod.any().optional(),
+          documentId: zod.string(),
+          heightPct: zod.number(),
+          originalIndex: zod.number(),
+          originalPage: zod.number(),
+          owner: zod.string(),
+          page: zod.number(),
+          rotation: zod.number(),
+          shouldLockOnSave: zod.boolean(),
+          threadId: zod.number(),
+          uuid: zod.string().uuid(),
+          wasDeleted: zod.boolean(),
+          wasEdited: zod.boolean(),
+          widthPct: zod.number(),
+          xPct: zod.number(),
+          yPct: zod.number(),
+        })
+        .and(
+          zod.object({
+            anchorType: zod.enum(['placeable']),
+          })
+        ),
+      zod
+        .object({
+          alpha: zod.number(),
+          blue: zod.number(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
+          documentId: zod.string(),
+          green: zod.number(),
+          highlightRects: zod.array(
+            zod.object({
+              height: zod.number(),
+              id: zod.number(),
+              left: zod.number(),
+              top: zod.number(),
+              width: zod.number(),
+            })
+          ),
+          highlightType: zod.union([
+            zod.literal(1),
+            zod.literal(2),
+            zod.literal(3),
+          ]),
+          owner: zod.string(),
+          page: zod.number(),
+          pageViewportHeight: zod.number(),
+          pageViewportWidth: zod.number(),
+          red: zod.number(),
+          text: zod.string(),
+          threadId: zod.number().nullish(),
+          updatedAt: zod.string().datetime({}).nullish(),
+          uuid: zod.string().uuid(),
+        })
+        .and(
+          zod.object({
+            anchorType: zod.enum(['highlight']),
+          })
+        ),
+    ])
+  ),
+});
+
+/**
  * @summary Creates an unthreaded anchor for a document
 If you need to create a threaded anchor, see the create comment handler
  */
@@ -407,81 +482,6 @@ export const createAnchorResponse = zod
   );
 
 /**
- * @summary Gets a set of comment anchors for a document
- */
-export const getDocumentAnchorsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const getDocumentAnchorsResponse = zod.object({
-  data: zod.array(
-    zod.union([
-      zod
-        .object({
-          allowableEdits: zod.any().optional(),
-          documentId: zod.string(),
-          heightPct: zod.number(),
-          originalIndex: zod.number(),
-          originalPage: zod.number(),
-          owner: zod.string(),
-          page: zod.number(),
-          rotation: zod.number(),
-          shouldLockOnSave: zod.boolean(),
-          threadId: zod.number(),
-          uuid: zod.string().uuid(),
-          wasDeleted: zod.boolean(),
-          wasEdited: zod.boolean(),
-          widthPct: zod.number(),
-          xPct: zod.number(),
-          yPct: zod.number(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['placeable']),
-          })
-        ),
-      zod
-        .object({
-          alpha: zod.number(),
-          blue: zod.number(),
-          createdAt: zod.string().datetime({}).nullish(),
-          deletedAt: zod.string().datetime({}).nullish(),
-          documentId: zod.string(),
-          green: zod.number(),
-          highlightRects: zod.array(
-            zod.object({
-              height: zod.number(),
-              id: zod.number(),
-              left: zod.number(),
-              top: zod.number(),
-              width: zod.number(),
-            })
-          ),
-          highlightType: zod.union([
-            zod.literal(1),
-            zod.literal(2),
-            zod.literal(3),
-          ]),
-          owner: zod.string(),
-          page: zod.number(),
-          pageViewportHeight: zod.number(),
-          pageViewportWidth: zod.number(),
-          red: zod.number(),
-          text: zod.string(),
-          threadId: zod.number().nullish(),
-          updatedAt: zod.string().datetime({}).nullish(),
-          uuid: zod.string().uuid(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['highlight']),
-          })
-        ),
-    ])
-  ),
-});
-
-/**
  * @summary Deletes a single comment for a document
  */
 export const deleteCommentParams = zod.object({
@@ -572,6 +572,44 @@ export const editCommentResponse = zod
       fileType: zod.string().nullish(),
     })
   );
+
+/**
+ * @summary Gets a set of comment threads for a document
+ */
+export const getDocumentCommentsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentCommentsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      comments: zod.array(
+        zod.object({
+          commentId: zod.number(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
+          metadata: zod.any().optional(),
+          order: zod.number().nullish(),
+          owner: zod.string(),
+          sender: zod.string().nullish(),
+          text: zod.string(),
+          threadId: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
+        })
+      ),
+      thread: zod.object({
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
+        documentId: zod.string(),
+        metadata: zod.any().optional(),
+        owner: zod.string(),
+        resolved: zod.boolean(),
+        threadId: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
+      }),
+    })
+  ),
+});
 
 /**
  * @summary Creates a single comment for a document
@@ -773,45 +811,7 @@ export const createCommentResponse = zod
   );
 
 /**
- * @summary Gets a set of comment threads for a document
- */
-export const getDocumentCommentsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const getDocumentCommentsResponse = zod.object({
-  data: zod.array(
-    zod.object({
-      comments: zod.array(
-        zod.object({
-          commentId: zod.number(),
-          createdAt: zod.string().datetime({}).nullish(),
-          deletedAt: zod.string().datetime({}).nullish(),
-          metadata: zod.any().optional(),
-          order: zod.number().nullish(),
-          owner: zod.string(),
-          sender: zod.string().nullish(),
-          text: zod.string(),
-          threadId: zod.number(),
-          updatedAt: zod.string().datetime({}).nullish(),
-        })
-      ),
-      thread: zod.object({
-        createdAt: zod.string().datetime({}).nullish(),
-        deletedAt: zod.string().datetime({}).nullish(),
-        documentId: zod.string(),
-        metadata: zod.any().optional(),
-        owner: zod.string(),
-        resolved: zod.boolean(),
-        threadId: zod.number(),
-        updatedAt: zod.string().datetime({}).nullish(),
-      }),
-    })
-  ),
-});
-
-/**
- * @summary Handler for `GET /channels/:channel_id/attachments`.
+ * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
   channel_id: zod.string().uuid().describe('Channel ID'),
@@ -860,7 +860,7 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
- * @summary Handler for `GET /channels/:channel_id/messages`.
+ * @summary Handler for `GET /channels/{channel_id}/messages`.
  */
 export const getChannelMessagesParams = zod.object({
   channel_id: zod.string().uuid().describe('Channel ID'),
@@ -1030,7 +1030,7 @@ export const getChannelMessagesResponse = zod
   .describe('Paginated response of channel messages.');
 
 /**
- * @summary Handler for `GET /channels/:channel_id/messages/:message_id/replies`.
+ * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
  */
 export const getThreadRepliesParams = zod.object({
   channel_id: zod.string().uuid().describe('Channel ID'),
@@ -1090,7 +1090,7 @@ export const getThreadRepliesResponseItem = zod
 export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
 
 /**
- * @summary Handler for `GET /channels/:channel_id/participants`.
+ * @summary Handler for `GET /channels/{channel_id}/participants`.
  */
 export const getChannelParticipantsParams = zod.object({
   channel_id: zod.string().uuid().describe('Channel ID'),
@@ -1775,7 +1775,7 @@ export const getBatchPreviewHandlerResponse = zod.object({
 
 /**
  * Returns document metadata, user access level, and view location.
- * @summary Handler for `GET /documents/:document_id`.
+ * @summary Handler for `GET /documents/{document_id}`.
  */
 export const getDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -2014,7 +2014,7 @@ export const saveDocumentHandlerResponse = zod.object({
 
 /**
  * Soft-deletes a document (only owners can delete).
- * @summary Handler for `DELETE /documents/:document_id`.
+ * @summary Handler for `DELETE /documents/{document_id}`.
  */
 export const deleteDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -2028,7 +2028,7 @@ export const deleteDocumentResponse = zod.object({
  * Edits document metadata such as name or project, and modifies
 the document's share permissions. Requires edit access to the document,
 and edit access to the target project if moving the document.
- * @summary Handler for `PATCH /documents/:document_id`.
+ * @summary Handler for `PATCH /documents/{document_id}`.
  */
 export const editDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -2290,7 +2290,7 @@ export const getLocationHandlerResponse = zod.union([
 
 /**
  * Returns a presigned URL or sync service content for accessing the document.
- * @summary Handler for `GET /documents/:document_id/location_v3`.
+ * @summary Handler for `GET /documents/{document_id}/location_v3`.
  */
 export const getDocumentLocationV3Params = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -2378,7 +2378,7 @@ export const revertDeleteDocumentResponse = zod.object({
 
 /**
  * Returns the short UUID for a document.
- * @summary Handler for `GET /documents/:document_id/short_id`.
+ * @summary Handler for `GET /documents/{document_id}/short_id`.
  */
 export const getDocumentShortIdParams = zod.object({
   document_id: zod.string().describe('Document ID'),

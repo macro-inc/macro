@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -19,7 +19,6 @@ pub struct ThreadAccessLevelExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for ThreadAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,

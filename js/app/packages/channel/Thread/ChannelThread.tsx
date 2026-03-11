@@ -84,69 +84,69 @@ export function ChannelThread(props: ThreadProps) {
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
               <Thread.RailDecorations isReplying={props.isReplying} />
-              <Thread.RepliesContainer>
-                <Show
-                  when={
-                    fetchRepliesEnabled() &&
-                    !repliesQuery.isLoading &&
-                    hasFetchedReplies()
-                  }
-                  fallback={
-                    <Thread.ReplyList
-                      replies={previewReplies()}
-                      getMessageActions={props.getMessageActions}
-                      channelId={props.channelId()}
-                    />
-                  }
-                >
-                  <Suspense>
-                    <Thread.ReplyList
-                      replies={fetchedReplies()}
-                      getMessageActions={props.getMessageActions}
-                      channelId={props.channelId()}
-                    />
-                  </Suspense>
-                </Show>
+              <Suspense>
+                <Thread.RepliesContainer>
+                  <Show
+                    when={!repliesQuery.isLoading && hasFetchedReplies()}
+                    fallback={
+                      <Thread.ReplyList
+                        threadId={props.data().id}
+                        replies={previewReplies()}
+                        getMessageActions={props.getMessageActions}
+                        channelId={props.channelId()}
+                      />
+                    }
+                  >
+                    <Suspense>
+                      <Thread.ReplyList
+                        threadId={props.data().id}
+                        replies={fetchedReplies()}
+                        getMessageActions={props.getMessageActions}
+                        channelId={props.channelId()}
+                      />
+                    </Suspense>
+                  </Show>
 
-                <Show when={props.isReplying()}>
-                  <Show when={!hasReplies()}>
-                    <Thread.ReplyAuthor
-                      userId={replyUserId()}
-                      displayName={displayName()}
+                  <Show when={props.isReplying()}>
+                    <Show when={!hasReplies()}>
+                      <Thread.ReplyAuthor
+                        userId={replyUserId()}
+                        displayName={displayName()}
+                      />
+                    </Show>
+                    <Thread.ReplyInput
+                      channelId={props.channelId()}
+                      messageId={props.data().id}
+                      replyInputState={props.replyInputState}
+                      setReplyInputState={props.setReplyInputState}
+                      setIsReplying={props.setIsReplying}
                     />
                   </Show>
-                  <Thread.ReplyInput
-                    channelId={props.channelId()}
-                    messageId={props.data().id}
-                    replyInputState={props.replyInputState}
-                    setReplyInputState={props.setReplyInputState}
-                    setIsReplying={props.setIsReplying}
-                  />
-                </Show>
 
-                <Show
-                  when={
-                    shouldShowCollapsedIndicator() || shouldShowReplyButton()
-                  }
-                >
-                  <Thread.ActionsFooter>
-                    <Show when={shouldShowCollapsedIndicator()}>
-                      <Thread.CollapsedIndicator
-                        collapsedRepliesCount={collapsedRepliesCount()}
-                        participants={collapsedReplyUsers()}
-                        latestReplyAt={collapsedLatestReplyAt()}
-                        onClick={expand}
-                      />
-                    </Show>
-                    <Show when={shouldShowReplyButton()}>
-                      <Thread.ReplyButton
-                        onClick={() => props.setIsReplying(true)}
-                        aria-label="Reply"
-                      />
-                    </Show>
-                  </Thread.ActionsFooter>
-                </Show>
-              </Thread.RepliesContainer>
+                  <Show
+                    when={
+                      shouldShowCollapsedIndicator() || shouldShowReplyButton()
+                    }
+                  >
+                    <Thread.ActionsFooter>
+                      <Show when={shouldShowCollapsedIndicator()}>
+                        <Thread.CollapsedIndicator
+                          collapsedRepliesCount={collapsedRepliesCount()}
+                          participants={collapsedReplyUsers()}
+                          latestReplyAt={collapsedLatestReplyAt()}
+                          onClick={expand}
+                        />
+                      </Show>
+                      <Show when={shouldShowReplyButton()}>
+                        <Thread.ReplyButton
+                          onClick={() => props.setIsReplying(true)}
+                          aria-label="Reply"
+                        />
+                      </Show>
+                    </Thread.ActionsFooter>
+                  </Show>
+                </Thread.RepliesContainer>
+              </Suspense>
             </div>
           </Show>
         </div>

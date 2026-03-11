@@ -5,7 +5,7 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
-import { isMessageFromCurrentUser } from '@block-email/util/emailUser';
+import { getSenderMacroId } from '@block-email/util/emailUser';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
@@ -17,7 +17,7 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type { Attachment, ApiMessage } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -65,12 +65,8 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   const userId = useUserId();
-  const currentUserEmail = useEmail();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
-
-  const isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, currentUserEmail())
-  );
+  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
 
   const isBodyExpanded = createMemo(() => {
     return props.isExpanded;
@@ -212,9 +208,7 @@ export function MessageContainer(props: MessageContainerProps) {
             focused={props.isFocused}
             isFirstMessage={props.isFirstMessage}
             isLastMessage={props.isLastMessage}
-            senderId={
-              isFromCurrentUser() ? userId() : props.message.from?.email
-            }
+            senderId={senderMacroId()}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
           >

@@ -32,11 +32,13 @@ export function ChannelInput(props: ChannelInputProps) {
     createInputAttachmentTracker({
       initialAttachments: props.input.attachments,
     });
+  let clearComposer = () => {};
 
   const inputState = createInputState({
     initialInput: props.input,
     mentions: mentionsTracker.mentions,
     attachmentTracker,
+    clearComposer: () => clearComposer(),
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
@@ -77,6 +79,7 @@ export function ChannelInput(props: ChannelInputProps) {
       return true;
     },
   });
+  clearComposer = () => markdownEditor.controls.clear();
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),

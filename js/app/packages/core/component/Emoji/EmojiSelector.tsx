@@ -48,6 +48,7 @@ export interface EmojiOptionProps {
 
 export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   const { groups, emojis: filteredEmojis, filter } = useEmojiData();
+  let scrollEl!: HTMLDivElement;
 
   function EmojiOption(props: EmojiOptionProps): JSX.Element {
     return (
@@ -67,6 +68,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   createEffect(() => {
     if (!props.nameFilter) return;
     filter(props.nameFilter);
+    scrollEl.scrollTop = 0;
   });
 
   function validFilter(filter: string | undefined) {
@@ -131,7 +133,12 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   });
 
   return (
-    <div class="w-full" role="listbox" aria-label="Emoji Selector">
+    <div
+      ref={scrollEl}
+      class="w-full h-full overflow-y-auto [overflow-anchor:none]"
+      role="listbox"
+      aria-label="Emoji Selector"
+    >
       {createMemo(() => {
         return (
           <Switch>

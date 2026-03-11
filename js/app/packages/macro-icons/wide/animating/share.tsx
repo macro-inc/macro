@@ -15,7 +15,7 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-share-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated share icon</title>
+      {/*<title>Animated share icon</title>*/}
       <defs>
         {/* Mask for right person - hides areas behind left person and bottom */}
         <mask id={maskRightPersonId} maskUnits="userSpaceOnUse">

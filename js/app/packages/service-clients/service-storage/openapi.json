@@ -198,39 +198,29 @@
         }
       }
     },
-    "/annotations/anchors/document/:document_id": {
-      "post": {
-        "tags": ["annotations::create_anchor"],
-        "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
-        "operationId": "create_anchor",
+    "/annotations/anchors/document/{document_id}": {
+      "get": {
+        "tags": ["annotations::get"],
+        "summary": "Gets a set of comment anchors for a document",
+        "operationId": "get_document_anchors",
         "parameters": [
           {
             "name": "document_id",
             "in": "path",
-            "description": "The document id",
+            "description": "Document ID",
             "required": true,
             "schema": {
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateUnthreadedAnchorRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUnthreadedAnchorResponse"
+                  "$ref": "#/components/schemas/AnchorResponse"
                 }
               }
             }
@@ -266,31 +256,39 @@
             }
           }
         }
-      }
-    },
-    "/annotations/anchors/document/{document_id}": {
-      "get": {
-        "tags": ["annotations::get"],
-        "summary": "Gets a set of comment anchors for a document",
-        "operationId": "get_document_anchors",
+      },
+      "post": {
+        "tags": ["annotations::create_anchor"],
+        "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
+        "operationId": "create_anchor",
         "parameters": [
           {
             "name": "document_id",
             "in": "path",
-            "description": "Document ID",
+            "description": "The document id",
             "required": true,
             "schema": {
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnthreadedAnchorRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AnchorResponse"
+                  "$ref": "#/components/schemas/CreateUnthreadedAnchorResponse"
                 }
               }
             }
@@ -468,7 +466,65 @@
         }
       }
     },
-    "/annotations/comments/document/:document_id": {
+    "/annotations/comments/document/{document_id}": {
+      "get": {
+        "tags": ["annotations::get"],
+        "summary": "Gets a set of comment threads for a document",
+        "operationId": "get_document_comments",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["annotations::create_comment"],
         "summary": "Creates a single comment for a document\nOptionally creates a new thread/anchor if one does not exist",
@@ -538,70 +594,10 @@
         }
       }
     },
-    "/annotations/comments/document/{document_id}": {
-      "get": {
-        "tags": ["annotations::get"],
-        "summary": "Gets a set of comment threads for a document",
-        "operationId": "get_document_comments",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/channels/{channel_id}/attachments": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
-        "summary": "Handler for `GET /channels/:channel_id/attachments`.",
+        "summary": "Handler for `GET /channels/{channel_id}/attachments`.",
         "operationId": "get_channel_attachments",
         "parameters": [
           {
@@ -682,7 +678,7 @@
     "/channels/{channel_id}/messages": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
-        "summary": "Handler for `GET /channels/:channel_id/messages`.",
+        "summary": "Handler for `GET /channels/{channel_id}/messages`.",
         "operationId": "get_channel_messages",
         "parameters": [
           {
@@ -792,7 +788,7 @@
     "/channels/{channel_id}/messages/{message_id}/replies": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
-        "summary": "Handler for `GET /channels/:channel_id/messages/:message_id/replies`.",
+        "summary": "Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.",
         "operationId": "get_thread_replies",
         "parameters": [
           {
@@ -866,7 +862,7 @@
     "/channels/{channel_id}/participants": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
-        "summary": "Handler for `GET /channels/:channel_id/participants`.",
+        "summary": "Handler for `GET /channels/{channel_id}/participants`.",
         "operationId": "get_channel_participants",
         "parameters": [
           {
@@ -1534,7 +1530,7 @@
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
-        "summary": "Handler for `GET /documents/:document_id`.",
+        "summary": "Handler for `GET /documents/{document_id}`.",
         "description": "Returns document metadata, user access level, and view location.",
         "operationId": "get_document",
         "parameters": [
@@ -1671,7 +1667,7 @@
       },
       "delete": {
         "tags": ["document"],
-        "summary": "Handler for `DELETE /documents/:document_id`.",
+        "summary": "Handler for `DELETE /documents/{document_id}`.",
         "description": "Soft-deletes a document (only owners can delete).",
         "operationId": "delete_document",
         "parameters": [
@@ -1730,7 +1726,7 @@
       },
       "patch": {
         "tags": ["document"],
-        "summary": "Handler for `PATCH /documents/:document_id`.",
+        "summary": "Handler for `PATCH /documents/{document_id}`.",
         "description": "Edits document metadata such as name or project, and modifies\nthe document's share permissions. Requires edit access to the document,\nand edit access to the target project if moving the document.",
         "operationId": "edit_document",
         "parameters": [
@@ -2070,7 +2066,7 @@
     "/documents/{document_id}/location_v3": {
       "get": {
         "tags": ["document"],
-        "summary": "Handler for `GET /documents/:document_id/location_v3`.",
+        "summary": "Handler for `GET /documents/{document_id}/location_v3`.",
         "description": "Returns a presigned URL or sync service content for accessing the document.",
         "operationId": "get_document_location_v3",
         "parameters": [
@@ -2402,7 +2398,7 @@
     "/documents/{document_id}/short_id": {
       "get": {
         "tags": ["document"],
-        "summary": "Handler for `GET /documents/:document_id/short_id`.",
+        "summary": "Handler for `GET /documents/{document_id}/short_id`.",
         "description": "Returns the short UUID for a document.",
         "operationId": "get_document_short_id",
         "parameters": [
@@ -3216,7 +3212,7 @@
         }
       }
     },
-    "/pins/:pinned_item_id": {
+    "/pins/{pinned_item_id}": {
       "post": {
         "tags": ["pins::add_pin"],
         "summary": "Pins the item for the user",
