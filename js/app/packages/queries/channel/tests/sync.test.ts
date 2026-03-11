@@ -15,6 +15,11 @@ vi.mock('../../client', () => ({
   },
 }));
 
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  ENABLE_NEW_CHANNELS: true,
+}));
+
 import type { ChannelMessagesData } from '../channel-messages';
 import { getChannelMessagesQueryKey } from '../channel-messages';
 import { channelKeys, ChannelNonceKeys } from '../keys';
