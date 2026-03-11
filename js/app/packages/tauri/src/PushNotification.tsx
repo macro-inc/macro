@@ -106,7 +106,10 @@ function usePushNotifications(
         .then((freshResult) => {
           if (freshResult.token && freshResult.token !== storedToken) {
             // Best-effort unregister the old token
-            notificationServiceClient.unregisterDevice({ deviceType, token: storedToken });
+            notificationServiceClient.unregisterDevice({
+              deviceType,
+              token: storedToken,
+            });
             setRegistrationResult(freshResult);
             // tokenToSend() emits the new value, triggering the createResource fetcher
             // to register the new token with the backend.
