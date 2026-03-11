@@ -57,7 +57,6 @@ import type { NotificationSource } from '@notifications';
 type EntityFilterConfig = FilterConfig<EntityData> & { label?: string };
 
 export const ENTITY_TYPE_FILTER_CONFIGS = [
-  // Entity type filters (mutually exclusive)
   {
     id: 'document',
     label: 'Docs',
@@ -271,7 +270,6 @@ export const createSoupFilters = (
   getUserID: () => string | undefined
 ) => {
   const list = [
-    // Focus filters (mutually exclusive)
     {
       id: 'signal',
       label: 'Inbox',
@@ -290,8 +288,6 @@ export const createSoupFilters = (
       predicate: (entity: EntityData) => !explicitNoiseFilter(entity),
       group: 'focus',
     },
-
-    // Notification filters
     {
       id: 'unread',
       label: 'Unread',
