@@ -1,6 +1,7 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
+import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotificationsAsSeen';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
@@ -71,10 +72,15 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
-          <ChannelMessage
-            message={props.data()}
-            actions={props.getMessageActions?.(props.data())}
-          />
+          <MarkMessaageNotifications
+            messageId={props.data().id}
+            channelId={props.channelId()}
+          >
+            <ChannelMessage
+              message={props.data()}
+              actions={props.getMessageActions?.(props.data())}
+            />
+          </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
               <Thread.RailDecorations isReplying={props.isReplying} />
@@ -89,6 +95,7 @@ export function ChannelThread(props: ThreadProps) {
                     <Thread.ReplyList
                       replies={previewReplies()}
                       getMessageActions={props.getMessageActions}
+                      channelId={props.channelId()}
                     />
                   }
                 >
@@ -96,6 +103,7 @@ export function ChannelThread(props: ThreadProps) {
                     <Thread.ReplyList
                       replies={fetchedReplies()}
                       getMessageActions={props.getMessageActions}
+                      channelId={props.channelId()}
                     />
                   </Suspense>
                 </Show>
