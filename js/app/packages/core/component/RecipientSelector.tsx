@@ -604,7 +604,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   setInputRef(el);
                   props.inputRef?.(el);
                 }}
-                class="flex-1 min-h-7 p-1 min-w-[100px] outline-none placeholder:text-ink-placeholder"
+                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
                 classList={{ 'ml-1': selectedLen() === 0 }}
                 onKeyDown={(e) => {
                   if (
