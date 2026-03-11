@@ -56,7 +56,10 @@ describe('insertThreadReply', () => {
 describe('removeThreadReply', () => {
   it('removes the matching reply', () => {
     expect(
-      removeThreadReply([createReply('reply-1'), createReply('reply-2')], 'reply-1')
+      removeThreadReply(
+        [createReply('reply-1'), createReply('reply-2')],
+        'reply-1'
+      )
     ).toEqual([createReply('reply-2')]);
   });
 
@@ -71,19 +74,27 @@ describe('replaceThreadReplyId', () => {
   it('replaces an optimistic id and preserves the rest of the reply', () => {
     expect(
       replaceThreadReplyId(
-        [createReply('optimistic-reply', '2024-01-03T01:00:00.000Z', { content: 'hello' })],
+        [
+          createReply('optimistic-reply', '2024-01-03T01:00:00.000Z', {
+            content: 'hello',
+          }),
+        ],
         'optimistic-reply',
         'real-reply'
       )
     ).toEqual([
-      createReply('real-reply', '2024-01-03T01:00:00.000Z', { content: 'hello' }),
+      createReply('real-reply', '2024-01-03T01:00:00.000Z', {
+        content: 'hello',
+      }),
     ]);
   });
 
   it('returns the same array when there is no matching optimistic id', () => {
     const existing = [createReply('reply-1')];
 
-    expect(replaceThreadReplyId(existing, 'missing', 'real-reply')).toBe(existing);
+    expect(replaceThreadReplyId(existing, 'missing', 'real-reply')).toBe(
+      existing
+    );
   });
 });
 
@@ -101,7 +112,9 @@ describe('getThreadReplySnapshot', () => {
   });
 
   it('returns undefined when the reply is missing', () => {
-    expect(getThreadReplySnapshot([createReply('reply-1')], 'missing')).toBeUndefined();
+    expect(
+      getThreadReplySnapshot([createReply('reply-1')], 'missing')
+    ).toBeUndefined();
   });
 });
 
