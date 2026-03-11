@@ -87,6 +87,7 @@ function getCachedChannel(channelId: string): GetChannelResponse | undefined {
   );
 }
 
+/** Finds a reply's parent thread id from cached channel data. */
 export function findThreadIdForMessage(
   channelId: string,
   messageId: string
@@ -106,6 +107,7 @@ export function findThreadIdForMessage(
   );
 }
 
+/** Resolves whether a message target is top-level or a thread reply. */
 export function resolveMessageTarget(args: {
   channelId: string;
   messageId: string;
@@ -131,6 +133,7 @@ export function resolveMessageTarget(args: {
   });
 }
 
+/** Inserts a message into the rendered caches for its target. */
 export function insertMessageIntoTargetCaches(
   channelId: string,
   target: MessageTarget,
@@ -156,6 +159,7 @@ export function insertMessageIntoTargetCaches(
   );
 }
 
+/** Removes a message from the rendered caches for its target. */
 export function removeMessageFromTargetCaches(
   channelId: string,
   target: MessageTarget
@@ -180,6 +184,7 @@ export function removeMessageFromTargetCaches(
   );
 }
 
+/** Captures rollback snapshots for a target before optimistic delete. */
 export function captureDeleteSnapshotForTarget(
   channelId: string,
   target: MessageTarget
@@ -210,6 +215,7 @@ export function captureDeleteSnapshotForTarget(
   };
 }
 
+/** Restores a previously captured target snapshot into rendered caches. */
 export function restoreMessageInTargetCaches(
   channelId: string,
   target: MessageTarget,
@@ -244,6 +250,7 @@ export function restoreMessageInTargetCaches(
   );
 }
 
+/** Replaces a target message id across all rendered caches. */
 export function replaceTargetMessageId(
   channelId: string,
   target: MessageTarget,
@@ -270,6 +277,7 @@ export function replaceTargetMessageId(
   );
 }
 
+/** Replaces reactions for a target message across all rendered caches. */
 export function replaceTargetReactions(
   channelId: string,
   target: MessageTarget,
@@ -300,6 +308,7 @@ export function replaceTargetReactions(
   );
 }
 
+/** Replaces attachments for a target message across all rendered caches. */
 export function replaceTargetAttachments(
   channelId: string,
   target: MessageTarget,
@@ -331,6 +340,7 @@ export function replaceTargetAttachments(
   );
 }
 
+/** Soft-invalidates the rendered caches touched by a target message. */
 export function softInvalidateTargetCaches(
   channelId: string,
   target?: MessageTarget

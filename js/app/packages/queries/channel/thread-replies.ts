@@ -46,6 +46,7 @@ export function useThreadRepliesQuery(
   }));
 }
 
+/** Returns the cache key for one thread replies query. */
 export function getThreadRepliesQueryKey(
   channelId: string,
   messageId: string
@@ -53,10 +54,12 @@ export function getThreadRepliesQueryKey(
   return channelKeys.threadReplies(channelId, messageId).queryKey;
 }
 
+/** Returns the shared prefix for all thread reply queries in a channel. */
 export function getThreadRepliesQueryKeyPrefix(channelId: string) {
   return [...channelKeys.threadReplies._def, channelId];
 }
 
+/** Returns all cached thread reply query entries for a channel. */
 export function getThreadRepliesEntries(channelId: string) {
   return queryClient.getQueriesData<Array<ApiThreadReply>>({
     queryKey: getThreadRepliesQueryKeyPrefix(channelId),
@@ -117,6 +120,7 @@ export function replaceThreadReplyReactions(
   return didChange ? nextReplies : data;
 }
 
+/** Replaces attachments on one cached thread reply. */
 export function replaceThreadReplyAttachments(
   data: Array<ApiThreadReply> | undefined,
   replyId: string,

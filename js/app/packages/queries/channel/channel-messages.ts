@@ -113,6 +113,7 @@ export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
   };
 }
 
+/** Returns the cache key for one channel message query variant. */
 export function getChannelMessagesQueryKey(
   channelId: string,
   loadAroundMessageId: string | null = null
@@ -120,10 +121,12 @@ export function getChannelMessagesQueryKey(
   return channelKeys.messages(channelId, loadAroundMessageId).queryKey;
 }
 
+/** Returns the shared prefix for all channel message query variants. */
 export function getChannelMessagesQueryKeyPrefix(channelId: string) {
   return [...channelKeys.messages._def, channelId];
 }
 
+/** Applies one updater to every cached message variant for a channel. */
 export function setChannelMessagesData(
   channelId: string,
   updater: (
@@ -136,6 +139,7 @@ export function setChannelMessagesData(
   );
 }
 
+/** Returns all cached message query entries for a channel. */
 export function getChannelMessagesEntries(channelId: string) {
   return queryClient.getQueriesData<ChannelMessagesData>({
     queryKey: getChannelMessagesQueryKeyPrefix(channelId),
@@ -245,6 +249,7 @@ export function replaceTopLevelMessageReactionsInChannelMessages(
   );
 }
 
+/** Replaces attachments on a top-level message in paginated channel caches. */
 export function replaceTopLevelMessageAttachmentsInChannelMessages(
   data: ChannelMessagesData | undefined,
   messageId: string,
@@ -373,6 +378,7 @@ export function replaceThreadReplyReactionsInChannelMessages(
   });
 }
 
+/** Replaces attachments on a thread preview reply in paginated channel caches. */
 export function replaceThreadReplyAttachmentsInChannelMessages(
   data: ChannelMessagesData | undefined,
   threadId: string,
@@ -438,6 +444,7 @@ export function restoreThreadPreviewReplyInChannelMessages(
   });
 }
 
+/** Finds a top-level message across all cached variants for a channel. */
 export function findTopLevelMessageInChannelMessages(
   channelId: string,
   messageId: string
@@ -451,6 +458,7 @@ export function findTopLevelMessageInChannelMessages(
   }
 }
 
+/** Finds a reply's parent thread id from cached channel messages. */
 export function findThreadIdInChannelMessages(
   channelId: string,
   replyId: string
@@ -467,6 +475,7 @@ export function findThreadIdInChannelMessages(
   }
 }
 
+/** Finds a top-level rollback snapshot across cached message variants. */
 export function findTopLevelMessageSnapshotInChannelMessages(
   channelId: string,
   messageId: string
@@ -477,6 +486,7 @@ export function findTopLevelMessageSnapshotInChannelMessages(
   }
 }
 
+/** Finds a thread preview rollback snapshot across cached message variants. */
 export function findThreadPreviewReplySnapshotInChannelMessages(
   channelId: string,
   threadId: string,
