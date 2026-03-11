@@ -44,7 +44,7 @@ import {
   signalFilter,
   noiseFilter,
   explicitNoiseFilter,
-} from '@app/component/next-soup/filters/signal-filters';
+} from '@app/component/next-soup/filters/inbox-filters';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import {
   type EntityData,

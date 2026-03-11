@@ -2,7 +2,7 @@ export {
   noiseFilter,
   signalFilter,
   explicitNoiseFilter,
-} from './signal-filters';
+} from './inbox-filters';
 
 export {
   createFilterState,
