@@ -52,7 +52,6 @@ import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 import { cn } from '@ui/utils/classname';
-import { ClippedPanel } from '@core/component/ClippedPanel';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -346,11 +345,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   return (
     <button
-      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
-      classList={{
-        '-translate-y-2 text-ink bracket-offset-1': props.focused,
-        'text-ink-extra-muted': !props.focused,
-      }}
+      class={cn(
+        ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
+        `create-menu-${props.creatableBlock.label.toLowerCase()}`,
+        {
+          '-translate-y-2 text-ink bracket-offset-1': props.focused,
+          'text-ink-extra-muted': !props.focused,
+        }
+      )}
       onClick={() => props.creatableBlock.keyDownHandler()}
       onFocus={props.onFocus}
       onMouseEnter={props.onMouseEnter}
@@ -383,12 +385,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>*/}
 
       <div
-        class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
-        classList={{
-          [getIconConfig(props.creatableBlock.blockName).background]: true,
-          'scale-y-0': !props.focused,
-          'scale-y-100': props.focused,
-        }}
+        class={cn(
+          'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
+          getIconConfig(props.creatableBlock.blockName).background,
+          {
+            'scale-y-0': !props.focused,
+            'scale-y-100': props.focused,
+          }
+        )}
       ></div>
 
       <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
@@ -396,10 +400,10 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>
 
       <div
-        class="absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50"
-        classList={{
-          [textFg()]: true,
-        }}
+        class={cn(
+          'absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50',
+          textFg()
+        )}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
       />
 
@@ -411,12 +415,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>
 
       <div
-        class="w-1/3 -translate-y-1 transition-all ease-click duration-200"
-        classList={{
-          [textFg()]: props.focused,
-          'text-edge': !props.focused,
-          'scale-110': props.focused,
-        }}
+        class={cn(
+          'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+          textFg(),
+          {
+            'text-edge': !props.focused,
+            'scale-110': props.focused,
+          }
+        )}
       >
         <Show
           when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
@@ -637,10 +643,10 @@ const LauncherInner = (props: LauncherInnerProps) => {
         </p>
       </div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never"
-        classList={{
-          [gridColsClass()]: true,
-        }}
+        class={cn(
+          'relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never',
+          gridColsClass()
+        )}
         ref={ref}
       >
         <For each={CREATABLE_BLOCKS}>
@@ -670,10 +676,12 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          classList={{
-            'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-          }}
+          class={cn(
+            'fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted',
+            {
+              'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
+            }
+          )}
         >
           <Show when={useJuicedScrim}>
             <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
