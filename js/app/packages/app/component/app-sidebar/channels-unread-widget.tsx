@@ -17,6 +17,8 @@ import {
   openNotification,
 } from '@notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -89,6 +91,8 @@ function groupByChannel(
 }
 
 function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
+  const layout = ENABLE_NEW_CHANNELS ? undefined : useSplitLayout();
+
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -115,15 +119,27 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     if (e.button === 1) return;
     e.preventDefault();
 
-    const splitManager = globalSplitManager();
-    if (!splitManager) return;
+    if (ENABLE_NEW_CHANNELS) {
+      const splitManager = globalSplitManager();
+      if (!splitManager) return;
 
-    const stacks = stackNotifications(props.group.notifications);
-    const nextStack = stacks[0];
-    if (!nextStack) return;
+      const stacks = stackNotifications(props.group.notifications);
+      const nextStack = stacks[0];
+      if (!nextStack) return;
 
-    const notification = getMostRecentNotification(nextStack);
-    await openNotification(notification, splitManager, e.shiftKey);
+      const notification = getMostRecentNotification(nextStack);
+      await openNotification(notification, splitManager, e.shiftKey);
+    } else {
+      layout!.openWithSplit(
+        {
+          type: 'channel',
+          id: props.group.entityId,
+        },
+        {
+          preferNewSplit: e.shiftKey,
+        }
+      );
+    }
   };
 
   return (
