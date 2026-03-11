@@ -1,5 +1,5 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
-import { UserIcon } from '@core/component/UserIcon';
+import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
@@ -23,6 +23,11 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     getSenderDisplayName(props.message, currentUserEmail())
   );
   const senderMacroId = createMemo(() => getSenderMacroId(props.message));
+  const senderIconProps = createMemo<UserIconProps>(() => {
+    const senderId = senderMacroId();
+    if (senderId) return { id: senderId };
+    return { email: props.message.from?.email ?? '' };
+  });
 
   const snippet = createMemo(() => {
     // Prefer body_text for snippet, fall back to stripping HTML
@@ -87,9 +92,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               }}
             >
               <UserIcon
-                {...(senderMacroId()
-                  ? { id: senderMacroId() }
-                  : { email: props.message.from?.email ?? '' })}
+                {...senderIconProps()}
                 isDeleted={false}
                 size="fill"
                 suppressClick={true}
