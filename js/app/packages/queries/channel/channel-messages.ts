@@ -10,6 +10,14 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
+import {
+  captureThreadPreviewReplySnapshot,
+  insertReplyIntoThreadPreview,
+  removeReplyFromThreadPreview,
+  replaceReplyIdInThreadPreview,
+  replaceReplyReactionsInThreadPreview,
+  restoreReplyToThreadPreview,
+} from './thread-preview';
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,
@@ -262,19 +270,8 @@ export function insertThreadReplyIntoChannelMessages(
 
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
-    if (message.thread.preview.some((preview) => preview.id === reply.id)) {
-      return message;
-    }
-
-    return {
-      ...message,
-      thread: {
-        ...message.thread,
-        latest_reply_at: reply.created_at,
-        reply_count: message.thread.reply_count + 1,
-        preview: [...message.thread.preview, reply],
-      },
-    };
+    const thread = insertReplyIntoThreadPreview(message.thread, reply);
+    return thread === message.thread ? message : { ...message, thread };
   });
 }
 
@@ -287,26 +284,8 @@ export function removeThreadReplyFromChannelMessages(
 
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
-    const nextPreview = message.thread.preview.filter(
-      (reply) => reply.id !== replyId
-    );
-    const didRemovePreview =
-      nextPreview.length !== message.thread.preview.length;
-    if (!didRemovePreview && message.thread.reply_count === 0) {
-      return message;
-    }
-
-    return {
-      ...message,
-      thread: {
-        ...message.thread,
-        latest_reply_at: didRemovePreview
-          ? (nextPreview.at(-1)?.created_at ?? null)
-          : message.thread.latest_reply_at,
-        reply_count: Math.max(message.thread.reply_count - 1, 0),
-        preview: nextPreview,
-      },
-    };
+    const thread = removeReplyFromThreadPreview(message.thread, replyId);
+    return thread === message.thread ? message : { ...message, thread };
   });
 }
 
@@ -320,23 +299,12 @@ export function replaceThreadReplyIdInChannelMessages(
 
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
-
-    let didChange = false;
-    const preview = message.thread.preview.map((reply) => {
-      if (reply.id !== optimisticId) return reply;
-      didChange = true;
-      return { ...reply, id: realId };
-    });
-
-    if (!didChange) return message;
-
-    return {
-      ...message,
-      thread: {
-        ...message.thread,
-        preview,
-      },
-    };
+    const thread = replaceReplyIdInThreadPreview(
+      message.thread,
+      optimisticId,
+      realId
+    );
+    return thread === message.thread ? message : { ...message, thread };
   });
 }
 
@@ -350,23 +318,12 @@ export function replaceThreadReplyReactionsInChannelMessages(
 
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
-
-    let didChange = false;
-    const preview = message.thread.preview.map((reply) => {
-      if (reply.id !== replyId) return reply;
-      didChange = true;
-      return { ...reply, reactions };
-    });
-
-    if (!didChange) return message;
-
-    return {
-      ...message,
-      thread: {
-        ...message.thread,
-        preview,
-      },
-    };
+    const thread = replaceReplyReactionsInThreadPreview(
+      message.thread,
+      replyId,
+      reactions
+    );
+    return thread === message.thread ? message : { ...message, thread };
   });
 }
 
@@ -382,14 +339,8 @@ export function getThreadPreviewReplySnapshot(
       (message) => message.id === threadId
     )?.thread;
     if (!thread) continue;
-    const previewIndex = thread.preview.findIndex(
-      (reply) => reply.id === replyId
-    );
-    if (previewIndex === -1) continue;
-    return {
-      previewIndex,
-      reply: thread.preview[previewIndex],
-    };
+    const snapshot = captureThreadPreviewReplySnapshot(thread, replyId);
+    if (snapshot) return snapshot;
   }
 }
 
@@ -403,33 +354,12 @@ export function restoreThreadPreviewReplyInChannelMessages(
 
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
-    if (
-      snapshot &&
-      message.thread.preview.some((reply) => reply.id === snapshot.reply.id)
-    ) {
-      return message;
-    }
-
-    const preview = [...message.thread.preview];
-    if (snapshot) {
-      preview.splice(snapshot.previewIndex, 0, snapshot.reply);
-    }
-
-    return {
-      ...message,
-      thread: {
-        ...message.thread,
-        preview,
-        reply_count: message.thread.reply_count + 1,
-        latest_reply_at:
-          [message.thread.latest_reply_at, replyCreatedAt]
-            .filter((value): value is string => !!value)
-            .sort()
-            .at(-1) ??
-          preview.at(-1)?.created_at ??
-          null,
-      },
-    };
+    const thread = restoreReplyToThreadPreview(
+      message.thread,
+      snapshot,
+      replyCreatedAt
+    );
+    return thread === message.thread ? message : { ...message, thread };
   });
 }
 
