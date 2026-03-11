@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
-import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -124,7 +124,7 @@ export function replaceThreadReplyReactions(
 export function replaceThreadReplyAttachments(
   data: Array<ApiThreadReply> | undefined,
   replyId: string,
-  attachments: ApiAttachment[]
+  attachments: ApiMessageAttachment[]
 ): Array<ApiThreadReply> | undefined {
   if (!data) return data;
 
@@ -133,6 +133,34 @@ export function replaceThreadReplyAttachments(
     if (reply.id !== replyId) return reply;
     didChange = true;
     return { ...reply, attachments };
+  });
+
+  return didChange ? nextReplies : data;
+}
+
+export function replaceThreadReplyState(
+  data: Array<ApiThreadReply> | undefined,
+  replyId: string,
+  nextState: {
+    content: string;
+    editedAt: string | null | undefined;
+    updatedAt: string;
+    attachments: ApiMessageAttachment[];
+  }
+): Array<ApiThreadReply> | undefined {
+  if (!data) return data;
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (reply.id !== replyId) return reply;
+    didChange = true;
+    return {
+      ...reply,
+      content: nextState.content,
+      edited_at: nextState.editedAt ?? undefined,
+      updated_at: nextState.updatedAt,
+      attachments: nextState.attachments,
+    };
   });
 
   return didChange ? nextReplies : data;

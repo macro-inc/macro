@@ -22,9 +22,9 @@ function buildHarness(input?: {
   userId?: string | undefined;
   channelId?: string;
   onReply?: Parameters<typeof createChannelMessageActions>[0]['onReply'];
+  onEdit?: Parameters<typeof createChannelMessageActions>[0]['onEdit'];
   effects?: Parameters<typeof createChannelMessageActions>[0]['effects'];
 }) {
-  const patchMessage = vi.fn();
   const deleteMessage = vi.fn();
   const addReaction = vi.fn();
   const removeReaction = vi.fn();
@@ -32,16 +32,15 @@ function buildHarness(input?: {
   const getMessageActions = createChannelMessageActions({
     channelId: () => input?.channelId ?? 'channel-1',
     userId: () => input?.userId,
-    patchMessage,
     deleteMessage,
     addReaction,
     removeReaction,
     onReply: input?.onReply,
+    onEdit: input?.onEdit,
     effects: input?.effects,
   });
 
   return {
-    patchMessage,
     deleteMessage,
     addReaction,
     removeReaction,
@@ -89,5 +88,17 @@ describe('createChannelMessageActions', () => {
       threadId: 'parent-1',
       currentReactions: [],
     });
+  });
+
+  it('delegates edit handling to the provided callback', () => {
+    const onEdit = vi.fn();
+    const harness = buildHarness({ userId: 'user-1', onEdit });
+    const message = buildMessage();
+    const actions = harness.getMessageActions(message);
+
+    actions.onEdit?.({ message });
+
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(onEdit).toHaveBeenCalledWith({ message });
   });
 });

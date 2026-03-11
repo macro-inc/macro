@@ -20,10 +20,19 @@ export type ThreadState = {
   setReplyInputState: Setter<InputSnapshot | undefined>;
 };
 
+export type MessageEditState = {
+  messageId: string;
+  snapshot: InputSnapshot;
+};
+
 export type ThreadProps = {
   data: Accessor<ApiChannelMessage>;
   channelId: Accessor<string>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
+  editState?: Accessor<MessageEditState | undefined>;
+  onEditChange?: (message: MessageData, snapshot: InputSnapshot) => void;
+  onEditCancel?: (messageId: string) => void;
+  onEditSave?: (message: MessageData, snapshot: InputSnapshot) => void;
 } & ThreadState;

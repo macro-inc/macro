@@ -3,13 +3,7 @@ import {
   type ChannelMessagesData,
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
-import {
-  createMemo,
-  createSignal,
-  Show,
-  Suspense,
-  type Accessor,
-} from 'solid-js';
+import { createMemo, createSignal, Show, Suspense, type Accessor } from 'solid-js';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -45,6 +39,7 @@ import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
+import { createMessageEditor } from './create-message-editor';
 
 type ChannelProps = {
   channelId: string;
@@ -78,6 +73,10 @@ export function Channel(props: ChannelProps) {
 
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
+  const messageEditor = createMessageEditor({
+    channelId: () => props.channelId,
+    patchMessage: patchMessageMutation.mutate,
+  });
 
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
     defaultThreadListTargetFromMessage(targetMessageId());
@@ -113,13 +112,15 @@ export function Channel(props: ChannelProps) {
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    patchMessage: patchMessageMutation.mutate,
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       const state = threadManager.getOrCreateThreadState(ctx.message.id);
       state.setIsReplying(true);
+    },
+    onEdit: ({ message }) => {
+      messageEditor.startEditing(message);
     },
   });
 
@@ -156,6 +157,10 @@ export function Channel(props: ChannelProps) {
                           replyInputState={state.replyInputState}
                           setReplyInputState={state.setReplyInputState}
                           listMeta={listMetaByMessageId()[item.id]}
+                          editState={messageEditor.editState}
+                          onEditChange={messageEditor.updateSnapshot}
+                          onEditCancel={messageEditor.cancelEditing}
+                          onEditSave={messageEditor.saveEditing}
                           threadActions={{
                             onDismissNewMessages:
                               activityTracker.dismissNewMessages,

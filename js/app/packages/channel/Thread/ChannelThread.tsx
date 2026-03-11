@@ -5,6 +5,7 @@ import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
+import { InlineMessageEditor } from '../Channel/InlineMessageEditor';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -62,6 +63,8 @@ export function ChannelThread(props: ThreadProps) {
   const expand = () => {
     props.setIsExpanded(true);
   };
+  const activeEditState = () =>
+    props.editState?.()?.messageId === props.data().id ? props.editState?.() : undefined;
 
   return (
     <Suspense>
@@ -71,10 +74,28 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
-          <ChannelMessage
-            message={props.data()}
-            actions={props.getMessageActions?.(props.data())}
-          />
+          <Show
+            when={activeEditState()}
+            fallback={
+              <ChannelMessage
+                message={props.data()}
+                actions={props.getMessageActions?.(props.data())}
+              />
+            }
+          >
+            {(editState) => (
+              <InlineMessageEditor
+                channelId={props.channelId()}
+                message={props.data()}
+                snapshot={editState().snapshot}
+                onChange={(snapshot) =>
+                  props.onEditChange?.(props.data(), snapshot)
+                }
+                onCancel={() => props.onEditCancel?.(props.data().id)}
+                onSave={(snapshot) => props.onEditSave?.(props.data(), snapshot)}
+              />
+            )}
+          </Show>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
               <Thread.RailDecorations isReplying={props.isReplying} />
@@ -84,17 +105,27 @@ export function ChannelThread(props: ThreadProps) {
                     when={!repliesQuery.isLoading && hasFetchedReplies()}
                     fallback={
                       <Thread.ReplyList
+                        channelId={props.channelId()}
                         threadId={props.data().id}
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
+                        editState={props.editState?.()}
+                        onEditChange={props.onEditChange}
+                        onEditCancel={props.onEditCancel}
+                        onEditSave={props.onEditSave}
                       />
                     }
                   >
                     <Suspense>
                       <Thread.ReplyList
+                        channelId={props.channelId()}
                         threadId={props.data().id}
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
+                        editState={props.editState?.()}
+                        onEditChange={props.onEditChange}
+                        onEditCancel={props.onEditCancel}
+                        onEditSave={props.onEditSave}
                       />
                     </Suspense>
                   </Show>
