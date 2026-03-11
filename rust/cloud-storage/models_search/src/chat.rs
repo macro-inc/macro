@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use item_filters::ChatFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -43,11 +44,11 @@ pub struct ChatSearchResponseItem {
 /// Metadata for a chat fetched from the database
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
-    pub deleted_at: Option<i64>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
@@ -136,7 +137,8 @@ pub struct SimpleChatSearchResponseBaseItem<T> {
     pub highlight: SearchHighlight,
 }
 
-pub type SimpleChatSearchResponseItem = SimpleChatSearchResponseBaseItem<crate::TimestampSeconds>;
+pub type SimpleChatSearchResponseItem =
+    SimpleChatSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChatSearchResponse {

@@ -23,7 +23,7 @@ pub struct PostActivityRequest {
         post,
         tag = "activity",
         operation_id = "post_activity",
-        path = "/activity",
+        path = "/comms/activity",
         responses(
             (status = 200, body=Activity),
             (status = 401, body=String),

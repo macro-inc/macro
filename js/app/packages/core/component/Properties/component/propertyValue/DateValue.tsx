@@ -1,10 +1,10 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import { formatDate } from '../../utils';
 import {
   EmptyValue,
   PropertyValueDeleteButton,
+  stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
 import { cn } from '@ui/utils/classname';
@@ -14,7 +14,7 @@ import { cn } from '@ui/utils/classname';
  * Opens date picker modal on click
  */
 export const DateValue: Component<PropertyValueProps> = (props) => {
-  const { saveHandler } = usePropertiesContext();
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
   const [isHovered, setIsHovered] = createSignal(false);
   const [isSaving, setIsSaving] = createSignal(false);
 
@@ -30,7 +30,7 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
     setIsSaving(true);
 
     try {
-      await saveHandler.saveProperty(props.property, {
+      await saveHandler().saveProperty(props.property, {
         valueType: 'DATE',
         value: null,
       });
@@ -60,8 +60,7 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
         class={cn(
           'inline-flex items-center leading-none shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted px-1.5',
           {
-            'cursor-pointer hover:border-edge-muted hover:bg-hover/50':
-              props.canEdit,
+            'hover:border-edge-muted hover:bg-hover/50': props.canEdit,
           }
         )}
       >

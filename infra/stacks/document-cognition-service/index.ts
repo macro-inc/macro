@@ -87,7 +87,38 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
+  'authentication_service_internal_api_key'
+);
+
+const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
+  aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+    })
+    .apply((secret) => secret.arn);
+
 export const coparse_api_vpc = get_coparse_api_vpc();
+
+const connectionGatewayStack = new pulumi.StackReference(
+  'connection-gateway-stack',
+  {
+    name: `macro-inc/connection-gateway/${stack}`,
+  }
+);
+
+const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayRedisUrl')
+  .apply((url) => url as string);
+
+const connectionGatewayTableName: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayTableName')
+  .apply((name) => name as string);
+
+const connectionGatewayTablePolicyArn: pulumi.Output<string> =
+  connectionGatewayStack
+    .getOutput('connectionGatewayTablePolicyArn')
+    .apply((arn) => arn as string);
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
@@ -99,6 +130,34 @@ const cloudStorageServiceStack = new pulumi.StackReference(
     name: `macro-inc/cloud-storage-service/${stack}`,
   }
 );
+
+const linksharingStack = new pulumi.StackReference('linksharing-stack', {
+  name: `macro-inc/link-sharing/${stack}`,
+});
+
+const cloudfronDistributionUrl: pulumi.Output<string> = linksharingStack
+  .getOutput('cloudfrontDistributionUrl')
+  .apply((url) => url as string);
+
+const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
+  .getOutput('cloudfrontDistributionPublicKeyId')
+  .apply((key) => key as string);
+
+const CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME = `linksharing-private-key-${stack}`;
+
+const cloudfrontPrivateKeySecretArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretOutput({
+    name: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
+  })
+  .apply((secret) => secret.arn);
+
+const docxUploadBucketName: pulumi.Output<string> = cloudStorageServiceStack
+  .getOutput('docxUploadBucketName')
+  .apply((name) => name as string);
+
+const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
+  .getOutput('docxUploadBucketArn')
+  .apply((arn) => arn as string);
 
 export const documentStorageServiceUrl: pulumi.Output<string> =
   cloudStorageServiceStack
@@ -134,6 +193,10 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
+const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
+  .getOutput('documentStorageBucketArn')
+  .apply((arn) => arn as string);
+
 export const deleteChatQueueArn: pulumi.Output<string> =
   cloudStorageServiceStack
     .getOutput('deleteChatQueueArn')
@@ -147,14 +210,6 @@ export const deleteChatQueueName: pulumi.Output<string> =
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
-
-const searchServiceStack = new pulumi.StackReference('search-service-stack', {
-  name: `macro-inc/search-service/${stack}`,
-});
-
-const searchServiceUrl: pulumi.Output<string> = searchServiceStack
-  .getOutput('searchServiceUrl')
-  .apply((arn) => arn as string);
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -173,15 +228,19 @@ const documentCognitionService = new DocumentCognitionService(
       jwtSecretKeyArn,
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+      authenticationServiceInternalApiKeyArn,
+      cloudfrontPrivateKeySecretArn,
     ],
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
+    bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
     queueArns: [
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
       searchEventQueueArn,
       notificationQueueArn,
     ],
+    connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
       {
         name: 'DATABASE_URL',
@@ -255,12 +314,6 @@ const documentCognitionService = new DocumentCognitionService(
         }.macro.com`,
       },
       {
-        name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'CONNECTION_GATEWAY_URL',
         value: `https://connection-gateway${
           stack === 'prod' ? '' : `-${stack}`
@@ -287,10 +340,6 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
       },
       {
-        name: 'SEARCH_SERVICE_URL',
-        value: pulumi.interpolate`${searchServiceUrl}`,
-      },
-      {
         name: 'PERPLEXITY_API_KEY',
         value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
       },
@@ -308,6 +357,49 @@ const documentCognitionService = new DocumentCognitionService(
         name: 'STATIC_FILE_SERVICE_URL',
         value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
       },
+      {
+        name: 'AUTHENTICATION_SERVICE_URL',
+        value: `https://auth-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
+      },
+      {
+        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
+        value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+      },
+      {
+        name: 'REDIS_HOST',
+        value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
+      },
+      {
+        name: 'CONNECTION_GATEWAY_TABLE',
+        value: pulumi.interpolate`${connectionGatewayTableName}`,
+      },
+      {
+        name: 'DOCX_DOCUMENT_UPLOAD_BUCKET',
+        value: pulumi.interpolate`${docxUploadBucketName}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
+        value: pulumi.interpolate`${cloudfronDistributionUrl}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+        value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
+      },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'document-cognition-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
+      },
     ],
     isPrivate: false,
     tags,
@@ -319,3 +411,5 @@ export const documentCognitionServiceSgId =
 export const documentCognitionServiceAlbSgId =
   documentCognitionService.serviceAlbSg.id;
 export const documentCognitionServiceUrl = pulumi.interpolate`${documentCognitionService.domain}`;
+export const documentCognitionServiceRoleArn =
+  documentCognitionService.role.arn;

@@ -1,10 +1,12 @@
 use crate::api::context::ApiContext;
+use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -12,23 +14,24 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod context;
 
 // Routes
-mod device;
 mod health;
-mod notification;
 mod unsubscribe;
-mod user_notification;
+pub(crate) mod user_notification;
 
 pub(crate) mod swagger;
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
+    state: ApiContext,
+    ingress_state: NotificationRouterState<S>,
+) -> anyhow::Result<()> {
     let port = state.config.port;
     let env = state.config.environment;
-    let app = api_router(state.clone())
+    let app = api_router(state.clone(), ingress_state)
         .with_state(state)
         .merge(health::router())
         .layer(
             ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
+                .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
                 .layer(axum::middleware::from_fn_with_state(
                     ServiceNameState {
                         service_name: VersionedApiServiceName::NotificationService,
@@ -36,7 +39,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(macro_cors::cors_layer())
-                .layer(CompressionLayer::new().gzip(true).br(true)),
+                .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
@@ -54,55 +57,31 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-fn api_router(state: ApiContext) -> Router<ApiContext> {
+fn api_router<S: ::notification::domain::service::NotificationReader>(
+    state: ApiContext,
+    ingress_state: NotificationRouterState<S>,
+) -> Router<ApiContext> {
+    let middleware = {
+        ServiceBuilder::new()
+            .layer(axum::middleware::from_fn_with_state(
+                state.jwt_args.clone(),
+                macro_middleware::auth::decode_jwt::handler,
+            ))
+            .layer(axum::middleware::from_fn(
+                macro_middleware::connection_drop_prevention_handler,
+            ))
+    };
+
     let internal_router = Router::new()
         .nest(
             "/device",
-            device::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.jwt_args.clone(),
-                        macro_middleware::auth::decode_jwt::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
+            ::notification::inbound::http::device::device_router(),
         )
-        .nest(
-            "/user_notifications",
-            user_notification::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.jwt_args.clone(),
-                        macro_middleware::auth::decode_jwt::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        )
-        .nest(
-            "/unsubscribe",
-            unsubscribe::router().layer(axum::middleware::from_fn_with_state(
-                state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        )
-        .nest(
-            "/notifications",
-            notification::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_extractor_with_state::<
-                        ValidInternalKey,
-                        _,
-                    >(state))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        );
+        .nest("/user_notifications", user_notification::router())
+        .with_state(ingress_state)
+        .nest("/unsubscribe", unsubscribe::router())
+        .layer(middleware);
     Router::new()
-        .nest("/:version", internal_router.clone())
+        .nest("/{version}", internal_router.clone())
         .merge(internal_router)
 }

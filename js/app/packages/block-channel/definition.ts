@@ -1,11 +1,8 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { isErr, ok } from '@core/util/maybeResult';
-import {
-  fetchAndCacheChannel,
-  optimisticUpdateChannelViewedAt,
-} from '@queries/channel/channel';
-import { optimisticUpdateViewedAt } from '@queries/history/history';
+import { ok } from '@core/util/maybeResult';
 import ChannelBlock from './component/Block';
+import { fetchAndCacheChannel } from '@queries/channel/channel';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 
 export const definition = defineBlock({
   name: 'channel',
@@ -14,30 +11,11 @@ export const definition = defineBlock({
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      const channel = await fetchAndCacheChannel(source.id);
-
-      if (isErr(channel)) {
-        if (isErr(channel, 'MISSING')) {
-          return LoadErrors.MISSING;
-        } else if (isErr(channel, 'UNAUTHORIZED')) {
-          return LoadErrors.UNAUTHORIZED;
-        } else if (isErr(channel, 'GONE')) {
-          return LoadErrors.GONE;
-        } else {
-          return LoadErrors.INVALID;
-        }
+      if (!ENABLE_NEW_CHANNELS) {
+        await fetchAndCacheChannel(source.id);
       }
-
-      const [, channelData] = channel;
-
-      optimisticUpdateViewedAt(source.id);
-      optimisticUpdateChannelViewedAt(source.id);
-
-      return ok({
-        ...channelData.channel,
-      });
+      return ok({ id: source.id });
     }
-
     return LoadErrors.MISSING;
   },
   accepted: {},

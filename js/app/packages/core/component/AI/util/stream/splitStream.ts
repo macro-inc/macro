@@ -1,4 +1,4 @@
-import type { StreamItem } from '@service-cognition/websocket';
+import type { StreamItem } from '.';
 import type { Splitter } from './types';
 
 export const noSplit: Splitter = (items) => items;

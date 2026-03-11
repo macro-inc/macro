@@ -2,10 +2,22 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug)]
 pub enum DeleteError {
     NotFound(String),
     Other(String),
 }
+
+impl std::fmt::Display for DeleteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeleteError::NotFound(msg) => write!(f, "Not found: {}", msg),
+            DeleteError::Other(msg) => write!(f, "Error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for DeleteError {}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// The model stored in themetadat dynamodb table
 pub struct MetadataObject {

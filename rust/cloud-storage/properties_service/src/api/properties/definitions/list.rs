@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -101,10 +101,10 @@ pub enum PropertyDefinitionResponse {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), err)]
+#[tracing::instrument(skip(state, user_context), err)]
 pub async fn list_properties(
     Query(query): Query<ListPropertiesQuery>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
     // Note - NOT using organization properties for now
@@ -142,7 +142,7 @@ pub async fn list_properties(
 
     let response = if query.include_options {
         let properties_with_options = property_definitions_get::get_properties_with_options(
-            &context.db,
+            &state.db,
             org_id,
             user_id_opt,
             include_system,
@@ -178,7 +178,7 @@ pub async fn list_properties(
         response
     } else {
         let properties = property_definitions_get::get_properties(
-            &context.db,
+            &state.db,
             org_id,
             user_id_opt,
             include_system,

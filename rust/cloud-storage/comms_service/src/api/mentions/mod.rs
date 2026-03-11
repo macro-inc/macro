@@ -13,5 +13,5 @@ mod mentions_middleware;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_mention_handler))
-        .route("/:mention_id", delete(delete_mention_handler))
+        .route("/{mention_id}", delete(delete_mention_handler))
 }

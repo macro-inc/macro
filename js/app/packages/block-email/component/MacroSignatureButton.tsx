@@ -2,6 +2,7 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { Tooltip } from '@core/component/Tooltip';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { useUserContext } from '@core/context/user';
 import { Show } from 'solid-js';
 
 interface MacroSignatureButtonProps {
@@ -11,8 +12,9 @@ interface MacroSignatureButtonProps {
 export const MacroSignatureButton = (props: MacroSignatureButtonProps) => {
   const paywall = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
+  const { isLoading } = useUserContext();
   return (
-    <Show when={!hasPaidAccess()}>
+    <Show when={!isLoading() && !hasPaidAccess()}>
       <Tooltip tooltip="Subscribe to remove watermark" class="w-fit">
         <button
           type="button"

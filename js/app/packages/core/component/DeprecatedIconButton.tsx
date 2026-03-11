@@ -1,5 +1,4 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import {
@@ -20,7 +19,7 @@ type IconButton = ComponentProps<'button'> & {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconSize?: number;
   theme?: Theme;
-  size?: 'sm' | 'base' | 'lg' | 'xs';
+  size?: 'sm' | 'base' | 'lg' | 'xs' | 'xxs';
   showChevron?: boolean;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent | KeyboardEvent>;
   border?: boolean;
@@ -125,6 +124,8 @@ export function DeprecatedIconButton(props: IconButtonProps) {
 
   const sizeClasses = createMemo(() => {
     switch (local.size ?? 'base') {
+      case 'xxs':
+        return 'h-4 w-4';
       case 'xs':
         return 'h-5 w-5';
       case 'sm':
@@ -138,6 +139,8 @@ export function DeprecatedIconButton(props: IconButtonProps) {
 
   const defaultIconSize = createMemo(() => {
     switch (local.size ?? 'base') {
+      case 'xxs':
+        return 12;
       case 'xs':
         return 12;
       case 'sm':
@@ -188,10 +191,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
         <Show when={props.showShortcut && primaryHotkeyToken()}>
           {(token) => {
             return (
-              <div
-                class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold"
-                classList={{ invisible: isMobileWidth() }}
-              >
+              <div class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold mobile-width:invisible">
                 <BasicHotkey token={token()} />
               </div>
             );

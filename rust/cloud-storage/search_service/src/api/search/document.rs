@@ -8,12 +8,12 @@ use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 
 /// Enriches document search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_documents(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {
@@ -86,11 +86,11 @@ pub fn construct_search_result(
             if let Some(info) = document_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::document::DocumentMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
                     project_id: info.project_id.clone(),
-                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                    deleted_at: info.deleted_at,
                 };
                 Some(DocumentSearchResponseItemWithMetadata {
                     metadata: Some(metadata),

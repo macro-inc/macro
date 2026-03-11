@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
@@ -23,7 +24,7 @@ export default function NotificationRoute() {
     logger.error('Failed to open notification.', { cause });
     toast.failure('Failed to open notification.');
     split.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
+      next: { type: 'component', id: LIST_VIEW_ID.inbox },
       mergeHistory: true,
     });
   };
@@ -53,9 +54,14 @@ export default function NotificationRoute() {
       notificationSource
     ).match(
       () => {
-        // We only use this route as a "bridge" from external navigation
-        // (e.g. push tap / deep link) into the split layout.
-        split.handle.close();
+        // We only use this route as a "bridge" from external navigation into the split layout.
+        // At narrowWidths, openWithSplit replaces this split in-place, so content()
+        // will have changed by the time we get here — closing would navigate
+        // away from the notification. Only close if we're still the bridge.
+        const current = split.handle.content();
+        if (current.type === 'component' && current.id === 'notification') {
+          split.handle.close();
+        }
       },
       (err) => {
         replaceWithUnifiedList(new Error(err.tag));

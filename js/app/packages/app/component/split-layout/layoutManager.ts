@@ -4,13 +4,14 @@ import type {
   BlockComponentProps,
   BlockName,
 } from '@core/block';
+import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
+import { isSettingsPanelOpen } from '@core/signal/layout';
 import {
   type Accessor,
   createMemo,
@@ -24,8 +25,9 @@ import {
   resolveComponent,
 } from './componentRegistry';
 import { createHistory, type History } from './history';
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 
-const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
+const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
 
 export type SplitId = string & { readonly SplitId: unique symbol };
 type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
@@ -95,7 +97,7 @@ export type PopoverSplitHandle = {
 };
 
 export type ReferredFrom =
-  | 'unified-list'
+  | 'list-view'
   | 'kommand-menu'
   | 'mention'
   | 'attachment'
@@ -119,7 +121,19 @@ export type SplitState = {
 export type CreateNewSplitOptions = {
   content?: SplitContent;
   activate?: boolean;
+  allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+};
+
+export type OpenWithSplitOptions = {
+  mergeHistory?: boolean;
+  activate?: boolean;
+  referredFrom?: ReferredFrom;
+  allowDuplicate?: boolean;
+  replaceWhenFull?: boolean;
+  /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
+  preferNewSplit?: boolean;
+  handle?: SplitHandle;
 };
 
 function keyOfSplitState(s: SplitState): SplitKey {
@@ -189,6 +203,7 @@ function attachAliasContext(content: SplitContent): SplitContent {
 export type SplitManager = {
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
   readonly activeSplitId: Accessor<SplitId | undefined>;
+  readonly activeSplit: Accessor<SplitHandle | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType>;
   readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
@@ -203,6 +218,11 @@ export type SplitManager = {
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
+  openWithSplit: (
+    content: SplitContent,
+    options?: OpenWithSplitOptions
+  ) => SplitHandle;
+
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
 
@@ -213,6 +233,8 @@ export type SplitManager = {
   toggleSpotlightSplit: (id: SplitId) => void;
 
   getOrchestrator: () => BlockOrchestrator;
+
+  canAppendSplit: () => boolean;
 
   /**
    * Reconcile the splits with the provided list of splits.
@@ -264,6 +286,7 @@ export type SplitManager = {
       mount: SplitMount;
       isOpen: boolean;
       options: PopoverSplitOptions;
+      handle: PopoverSplitHandle;
     }
   >;
 } & UrlCapabilities;
@@ -388,6 +411,7 @@ export function createSplitLayout(
         mount: SplitMount;
         isOpen: boolean;
         options: PopoverSplitOptions;
+        handle: PopoverSplitHandle;
       }
     >;
   }>({
@@ -401,6 +425,10 @@ export function createSplitLayout(
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
+  const canAppendSplit = createMemo(
+    () => resizeContext()?.canFit({ minSize: 400 }) ?? true
+  );
+
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
   }>({});
@@ -412,7 +440,7 @@ export function createSplitLayout(
 
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
     type: 'component',
-    id: 'unified-list',
+    id: LIST_VIEW_ID.inbox,
   };
 
   function dispatchEvent(
@@ -463,6 +491,13 @@ export function createSplitLayout(
 
     const splitIndex = state.splits.findIndex((s) => s.id === split.id);
     if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
+      setSplitNamesById(
+        produce((map) => {
+          delete map[split.id];
+          return map;
+        })
+      );
+
       const payload: SplitEventPayload[SplitEvent.ContentChange] = {
         splitId: split.id,
         splitIndex,
@@ -474,7 +509,9 @@ export function createSplitLayout(
 
       const listeners = contentChangeListeners.get(split.id);
       if (listeners) {
-        listeners.forEach((listener) => listener(payload));
+        listeners.forEach((listener) => {
+          listener(payload);
+        });
       }
     }
 
@@ -566,13 +603,6 @@ export function createSplitLayout(
     const i = state.splits.findIndex((s) => s.id === id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
-    setSplitNamesById(
-      produce((map) => {
-        delete map[id];
-        return map;
-      })
-    );
-
     const content = attachAliasContext(next);
 
     const split = state.splits[i];
@@ -609,7 +639,7 @@ export function createSplitLayout(
   };
 
   function activateSplit(id: SplitId) {
-    let current = state.activeSplitId;
+    const current = state.activeSplitId;
     setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
       setState('spotlightId', undefined);
@@ -618,11 +648,7 @@ export function createSplitLayout(
   }
 
   function spotlightSplit(id: SplitId) {
-    if (
-      state.splits.length <= 1 &&
-      !isSettingsPanelOpen() &&
-      !isRightPanelOpen()
-    ) {
+    if (state.splits.length <= 1 && !isSettingsPanelOpen()) {
       return;
     }
     const split = state.splits.find((s) => s.id === id);
@@ -736,11 +762,11 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom } = options;
+    const { content, activate, referredFrom, allowDuplicate } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
-    if (isDuplicateSplit(state.splits, initialContent)) {
+    if (!allowDuplicate && isDuplicateSplit(state.splits, initialContent)) {
       const existingSplit = state.splits.find(
         (s) =>
           s.content.type === initialContent.type &&
@@ -809,10 +835,10 @@ export function createSplitLayout(
   }
 
   function reconcileSplits(newSplits: SplitContent[]) {
-    let newState: SplitState[] = [];
+    const newState: SplitState[] = [];
     const currentCompositeSplits = state.splits.map(keyOfSplitState);
     const newCompositeSplits = newSplits.map(keyOfSplitContent);
-    let changed =
+    const changed =
       newCompositeSplits.join(',') !== currentCompositeSplits.join(',');
 
     if (!changed) return;
@@ -879,25 +905,19 @@ export function createSplitLayout(
     options: PopoverSplitOptions
   ): PopoverSplitHandle {
     const id = `popover-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Acquire focus lock BEFORE any state updates to capture the correct element
+    const focusLock = useFocusLock(`popover-${id}`);
+    focusLock.acquire();
+
     const mount = createPinnedMount(orchestrator, options.content);
-
-    const popoverData = {
-      id,
-      content: options.content,
-      mount,
-      isOpen: true,
-      options,
-    };
-
-    setState('popovers', (prev) => {
-      const newMap = new Map(prev);
-      newMap.set(id, popoverData);
-      return newMap;
-    });
 
     const handle: PopoverSplitHandle = {
       id,
       close: () => {
+        // Release focus lock to return focus to previously focused element
+        focusLock.release();
+
         setState('popovers', (prev) => {
           const newMap = new Map(prev);
           const popover = newMap.get(id);
@@ -923,62 +943,100 @@ export function createSplitLayout(
       content: () => options.content,
     };
 
+    const popoverData = {
+      id,
+      content: options.content,
+      mount,
+      isOpen: true,
+      options,
+      handle, // Store the handle so getActivePopovers can return it
+    };
+
+    setState('popovers', (prev) => {
+      const newMap = new Map(prev);
+      newMap.set(id, popoverData);
+      return newMap;
+    });
+
     return handle;
   }
 
   function getActivePopovers(): PopoverSplitHandle[] {
     return Array.from(state.popovers.values())
       .filter((popover) => popover.isOpen)
-      .map((popover) => ({
-        id: popover.id,
-        close: () => {
-          setState('popovers', (prev) => {
-            const newMap = new Map(prev);
-            const p = newMap.get(popover.id);
-            if (p) {
-              newMap.set(popover.id, { ...p, isOpen: false });
-              setTimeout(() => {
-                setState('popovers', (prev) => {
-                  const cleanupMap = new Map(prev);
-                  cleanupMap.delete(popover.id);
-                  return cleanupMap;
-                });
-              }, 300);
-            }
-            return newMap;
-          });
-          popover.options.onClose?.();
-        },
-        isOpen: () => {
-          const p = state.popovers.get(popover.id);
-          return p?.isOpen ?? false;
-        },
-        content: () => popover.content,
-      }));
+      .map((popover) => popover.handle);
   }
 
   function closeAllPopovers(): void {
-    setState('popovers', (prev) => {
-      const newMap = new Map();
-      for (const [id, popover] of prev) {
-        newMap.set(id, { ...popover, isOpen: false });
-        popover.options.onClose?.();
-      }
-      // Schedule cleanup
-      setTimeout(() => {
-        setState('popovers', () => new Map());
-      }, 300);
-      return newMap;
-    });
+    const popovers = Array.from(state.popovers.values());
+    for (const popover of popovers) {
+      popover.handle.close();
+    }
   }
+
+  function openWithSplit(
+    content: SplitContent,
+    options: OpenWithSplitOptions = {}
+  ): SplitHandle {
+    const existingSplit = getSplitByContent(content.type, content.id);
+
+    if (!options.allowDuplicate && existingSplit) {
+      if (options.activate !== false) {
+        existingSplit.activate();
+      }
+
+      return existingSplit;
+    }
+
+    let splitHandle = options.handle;
+
+    if (!splitHandle) {
+      splitHandle = state.activeSplitId
+        ? getSplit(state.activeSplitId)
+        : undefined;
+    }
+
+    const shouldReplaceWhenFull =
+      options.replaceWhenFull !== false && !canAppendSplit();
+
+    const shouldReplace = !options.preferNewSplit || shouldReplaceWhenFull;
+
+    if (splitHandle && shouldReplace) {
+      splitHandle.replace({
+        next: content,
+        referredFrom: options.referredFrom ?? null,
+        mergeHistory: options.mergeHistory,
+      });
+
+      if (options.activate !== false) {
+        splitHandle.activate();
+      }
+
+      return splitHandle;
+    } else {
+      return createNewSplit({
+        content,
+        activate: options.activate ?? true,
+        referredFrom: options.referredFrom ?? null,
+        allowDuplicate: options.allowDuplicate,
+      });
+    }
+  }
+
+  const activeSplit = () => {
+    const id = state.activeSplitId;
+    return id ? getSplit(id) : undefined;
+  };
 
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
+    activeSplit,
     lastActiveSplitId: () => state.lastActiveSplitId,
     events: lastEvent,
     reconcile: reconcileSplits,
     getSplit,
+    openWithSplit,
     removeSplit,
     createNewSplit,
     getUrlSegments,
@@ -998,5 +1056,6 @@ export function createSplitLayout(
     getActivePopovers,
     closeAllPopovers,
     popovers: () => state.popovers,
+    canAppendSplit,
   };
 }

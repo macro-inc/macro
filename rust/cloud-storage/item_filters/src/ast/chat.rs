@@ -19,6 +19,12 @@ pub enum ChatLiteral {
     ChatId(Uuid),
     /// the chat is owned by [MacroUserIdStr]
     Owner(MacroUserIdStr<'static>),
+    /// this node value filters by chat importance. false short-circuits to match nothing.
+    Importance(bool),
+    /// this node value filters by notification done state for chats.
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for chats.
+    NotificationSeen(bool),
 }
 
 /// the possible roles for a chat
@@ -55,6 +61,8 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             chat_ids,
             project_ids,
             owners,
+            importance,
+            notification_filters,
         } = filter_request;
 
         let project_ids = project_ids
@@ -77,8 +85,24 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChatLiteral::Owner), Expr::or)?;
 
-        Ok([project_ids, chat_ids, role, owners]
-            .into_iter()
-            .fold_with(Expr::and))
+        let importance_node = importance.map(|imp| Expr::Literal(ChatLiteral::Importance(imp)));
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(ChatLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(ChatLiteral::NotificationSeen(seen)));
+
+        Ok([
+            project_ids,
+            chat_ids,
+            role,
+            owners,
+            importance_node,
+            notification_done_node,
+            notification_seen_node,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

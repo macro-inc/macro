@@ -168,7 +168,6 @@ async fn edit_project_v2(
     // Update the project you are editting
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: Some(id.clone()), // The project you edited
             old_project_id: None,
@@ -180,7 +179,6 @@ async fn edit_project_v2(
     // Update the project you moved from and moved to
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_parent_id, // The new project you've placed your item in
             old_project_id: project_context.parent_id.clone(), // The old project you've moved your item from

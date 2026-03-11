@@ -1,11 +1,10 @@
 use crate::pubsub::backfill::process;
-use crate::pubsub::context::PubSubContext;
+use crate::pubsub::context::{NotificationIngressType, PubSubContext};
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
-use macro_notify::MacroNotifyClient;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -19,7 +18,7 @@ pub async fn run_worker(
     gmail_client: gmail_client::GmailClient,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
-    macro_notify_client: MacroNotifyClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
@@ -33,7 +32,7 @@ pub async fn run_worker(
         gmail_client,
         auth_service_client,
         redis_client,
-        macro_notify_client,
+        notification_ingress_service,
         sfs_client,
         connection_gateway_client,
         dss_client,

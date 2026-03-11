@@ -21,7 +21,6 @@ import { Tooltip } from '@core/component/Tooltip';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -31,7 +30,7 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import Plus from '@icon/regular/plus.svg';
-import Quotes from '@icon/regular/quotes.svg';
+import Quotes from '@icon/bold/quotes-bold.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -40,13 +39,20 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@lexical-core';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useSendMessageMutation } from '@queries/email/thread';
+import { invalidateSoupEntity } from '@queries/soup/cache';
+import { emailClient } from '@service-email/client';
+import {
+  useScheduleMessageMutation,
+  useSendMessageMutation,
+  useUnscheduleMessageMutation,
+} from '@queries/email/thread';
 import type {
-  AttachmentMacro,
-  MessageToSendDbId,
-  MessageWithBodyReplyless,
+  ApiDraftOutputDbId,
+  ApiMessage,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
@@ -81,7 +87,10 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
+import {
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -93,15 +102,27 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
-import { type EmailRecipient, useEmailContext } from './EmailContext';
+import {
+  type EmailRecipient,
+  markThreadDraftSaved,
+  useEmailContext,
+} from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import {
+  useAddForwardedAttachmentsMutation,
   useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { plural } from '@core/util/string';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
+import { isMobile } from '@core/mobile/isMobile';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
+import { stickyGate } from '@core/util/debounce';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -235,13 +256,13 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm font-mono overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
       <span
         ref={measureRef}
-        class="absolute invisible whitespace-nowrap text-sm font-mono"
+        class="absolute invisible whitespace-nowrap text-sm"
         aria-hidden="true"
       />
 
@@ -283,16 +304,31 @@ function TruncatedRecipientList(props: {
   );
 }
 
+type UndoReplySnapshot = {
+  threadId: string;
+  draftId: string;
+  bodyHtml: string;
+  attachments: DraftFormAttachment[];
+};
+// Set on send, persists across navigation, only consumed by undoSend.
+let undoSendSnapshot: UndoReplySnapshot | null = null;
+// Only set by undoSend for inline reply remount, consumed on mount.
+let undoReplySnapshot: UndoReplySnapshot | null = null;
+// Registered by the current BaseInput instance so stale undoSend closures
+// from a previous mount can restore state into the live component.
+let restoreUndoCallback:
+  | ((snapshot: UndoReplySnapshot, draftId: string) => void)
+  | null = null;
+
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  replyingTo: Accessor<ApiMessage | undefined>;
   // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
   isEditingExisting?: boolean;
-  draft?: MessageWithBodyReplyless;
+  draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
-  preloadedAttachments?: AttachmentMacro[];
-  sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -351,16 +387,119 @@ export function BaseInput(props: {
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
   const [savedDraftId, setSavedDraftId] = createSignal<
-    MessageToSendDbId | undefined
-  >(props.draft?.db_id ?? undefined);
+    ApiDraftOutputDbId | undefined
+  >(
+    props.draft?.db_id ??
+      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
+        ? undoReplySnapshot?.draftId
+        : undefined) ??
+      undefined
+  );
+
+  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
+  // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
+  if (restoredSnapshot) {
+    undoReplySnapshot = null;
+    onMount(() => {
+      for (const attachment of restoredSnapshot.attachments) {
+        form().attachments.add(attachment);
+      }
+    });
+  }
+
+  // Register a callback so stale undoSend closures from a previous mount can
+  // restore state into this (the live) component instance.
+  restoreUndoCallback = (snapshot, draftId) => {
+    setSavedDraftId(draftId);
+    const currentEditor = editor();
+    if (currentEditor && snapshot.bodyHtml) {
+      setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
+    }
+    for (const attachment of snapshot.attachments) {
+      form().attachments.add(attachment);
+    }
+  };
+  onCleanup(() => {
+    restoreUndoCallback = null;
+  });
 
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
     createSignal(false);
 
+  const undoSend = async (draftId: string) => {
+    try {
+      await emailClient.unscheduleMessage({ draftID: draftId });
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.previews._def,
+      });
+
+      // Remove the sent message from the thread cache so it disappears from the list.
+      const threadId = ctx.thread()?.db_id;
+      if (threadId) {
+        queryClient.setQueryData(
+          emailKeys.threadMessages(threadId).queryKey,
+          (old: any) => {
+            if (!old?.pages) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page: any) => ({
+                ...page,
+                messages: page.messages.filter((m: any) => m.db_id !== draftId),
+              })),
+            };
+          }
+        );
+        // Mark stale so next navigation fetches fresh data
+        queryClient.invalidateQueries({
+          queryKey: emailKeys.threadMessages(threadId).queryKey,
+          refetchType: 'none',
+        });
+      }
+
+      const snapshot = undoSendSnapshot;
+      undoSendSnapshot = null;
+
+      if (snapshot && restoreUndoCallback) {
+        // A live BaseInput is mounted — restore after reactive updates from
+        // setQueryData have settled (form may have re-keyed).
+        const cb = restoreUndoCallback;
+        setTimeout(() => cb(snapshot, draftId), 0);
+      } else if (snapshot) {
+        // No live component (e.g. inline reply was unmounted).
+        // Stash for mount-time restore.
+        undoReplySnapshot = snapshot;
+        props.setShowReply?.(true);
+      }
+
+      toast.success('Send cancelled');
+      invalidateSoupEntity(draftId);
+    } catch {
+      toast.failure('Failed to undo send');
+    }
+  };
+
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }) => {
-      toast.success('Email sent');
+      const draftId = message.db_id;
+      const toastId = toast.success(
+        'Email sent',
+        undefined,
+        draftId
+          ? {
+              text: 'Undo',
+              onClick: () => {
+                if (toastId != null) toast.dismiss(toastId);
+                void undoSend(draftId);
+              },
+            }
+          : undefined,
+        10_000
+      );
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
@@ -378,9 +517,15 @@ export function BaseInput(props: {
   });
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const addForwardedAttachmentsMutation = useAddForwardedAttachmentsMutation();
+  const saveDraftMutation = useSaveDraftMutation();
+  const deleteDraftMutation = useDeleteDraftMutation();
 
   function refetchThreadMessages() {
-    ctx.query.refetch();
+    const threadId = ctx.thread()?.db_id;
+    if (threadId) {
+      markThreadDraftSaved(threadId);
+    }
   }
 
   // Attach side-effect handlers on mount; they replay against current state
@@ -461,7 +606,7 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteEmailDraft(draftId);
+        await deleteDraftMutation.mutateAsync({ draftId });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -472,7 +617,7 @@ export function BaseInput(props: {
 
     if (!currentThread && !newMessage) {
       logger.error(new Error('Failed to save draft: thread not found'));
-      return false;
+      return;
     }
 
     if (newMessage && currentThread) {
@@ -481,39 +626,27 @@ export function BaseInput(props: {
           'Failed to save draft: new message and current thread cannot be provided together'
         )
       );
-      return false;
+      return;
     }
 
-    let linkId: string | undefined = currentThread?.link_id;
-    if (newMessage || !linkId) {
-      if (emailLinksQuery.isPending) {
-        return false;
-      }
+    const existingDraft = savedDraftId() !== undefined;
 
-      if (emailLinksQuery.isError) {
-        logger.error(
-          new Error('Failed to save email draft: could not load email links')
-        );
-        return false;
-      }
+    // If there's an existing draft, we should send the sendTime so that the send time
+    // stays up to date and is not removed
+    const sendTime = existingDraft ? form().sendTime() : undefined;
 
-      const linksData = emailLinksQuery.data;
-      if (!linksData || linksData.links.length === 0) {
-        logger.error(new Error('Failed to save email draft: no links found'));
-        return false;
-      }
-      linkId = linksData.links[0].id;
-    }
-
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: savedDraftId(),
-      link_id: linkId!,
-      provider_thread_id: currentThread?.provider_id,
-      thread_db_id: currentThread?.db_id,
+    const draftResponse = await saveDraftMutation.mutateAsync({
+      draft: {
+        ...draftToSave,
+        db_id: savedDraftId(),
+        provider_thread_id: currentThread?.provider_id,
+        thread_db_id: currentThread?.db_id,
+      },
+      sendTime,
     });
 
-    if (draftResponse) {
+    const draftId = draftResponse.draft.db_id;
+    if (draftId) {
       // If the email draft saved successfully, we want to upload the
       // attachments as well. We should grab only the attachments that
       // haven't been uploaded yet
@@ -526,7 +659,7 @@ export function BaseInput(props: {
 
       if (attachments.length) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftResponse,
+          draftID: draftId,
           attachments: attachments.map((a) => a.file),
         });
 
@@ -539,8 +672,26 @@ export function BaseInput(props: {
         }
       }
 
-      setSavedDraftId(draftResponse);
+      // Sync forwarded attachments
+      const forwardedAttachments = form()
+        .attachments.list()
+        .filter((a) => a.type === 'forwarded') as Extract<
+        DraftFormAttachment,
+        { type: 'forwarded' }
+      >[];
+
+      if (forwardedAttachments.length) {
+        await addForwardedAttachmentsMutation.mutateAsync({
+          draftID: draftId,
+          attachments: forwardedAttachments.map((a) => ({
+            attachmentID: a.attachmentID,
+          })),
+        });
+      }
+
+      setSavedDraftId(draftId);
       refetchThreadMessages();
+      return draftId;
     }
   }
 
@@ -591,6 +742,15 @@ export function BaseInput(props: {
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
+
+  const scheduleMessageMutation = useScheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email scheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to schedule email');
+    },
+  });
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -643,6 +803,29 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
+    // Ensure draft is saved before sending so undo-send always has a draft to restore
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    await executeSaveDraft();
+
+    // Snapshot editor state before watermark so undo-send can restore it.
+    // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
+    // navigation but isn't mistakenly auto-restored on next mount.
+    if (currentEditor) {
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      const snapshotDraftId = savedDraftId();
+      const snapshotThreadId = ctx.thread()?.db_id;
+      if (snapshotDraftId && snapshotThreadId) {
+        undoSendSnapshot = {
+          threadId: snapshotThreadId,
+          draftId: snapshotDraftId,
+          bodyHtml: snapshotHtml,
+          attachments: [...form().attachments.list()],
+        };
+      }
+    }
+
     // We handle cleaning up the signature after we've sent the request because
     // otherwise the `bodyMacro` signal would update after the clean up call and
     // not contain the signature in the request data
@@ -672,7 +855,26 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
-    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+
+    const sendTime = form().sendTime();
+
+    if (sendTime) {
+      if (!currentDraftID) {
+        console.error('No draft');
+        toast.failure('Failed to schedule message', 'Draft required');
+        cleanupWatermark();
+        return;
+      }
+
+      scheduleMessageMutation.mutate({
+        draftID: currentDraftID,
+        sendTime,
+        threadID: currentThread?.db_id,
+      });
+
+      cleanupWatermark();
+      return;
+    }
 
     sendMutation.mutate({
       message: {
@@ -688,7 +890,6 @@ export function BaseInput(props: {
         subject: form().subject(),
         thread_db_id: currentThread?.db_id,
         to,
-        link_id: linkId!,
       },
     });
 
@@ -716,10 +917,11 @@ export function BaseInput(props: {
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
-      await deleteEmailDraft(draftId);
+      await deleteDraftMutation.mutateAsync({ draftId });
       refetchThreadMessages();
     }
     resetState();
+    form().setReplyAppended(false);
     clearDraftState();
   };
 
@@ -824,7 +1026,7 @@ export function BaseInput(props: {
   // Focus when external shouldFocus signal is set to true
   createEffect(() => {
     if (form().shouldFocusInput()) {
-      if (!isMobileWidth()) {
+      if (!isMobile()) {
         requestAnimationFrame(() => {
           editor()?.focus();
           form().setShouldFocusInput(false);
@@ -872,10 +1074,14 @@ export function BaseInput(props: {
   };
 
   const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+  const removeForwardedAttachmentMutation =
+    useRemoveForwardedAttachmentMutation();
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form().attachments.removeByFile(attachment.file);
+    } else if (attachment.type === 'forwarded') {
+      form().attachments.removeForwarded(attachment.attachmentID);
     } else {
       form().attachments.removeByID(attachment.attachmentID);
     }
@@ -884,11 +1090,51 @@ export function BaseInput(props: {
 
     if (!currentDraftID || !attachment.attachmentID) return;
 
-    removeAttachmentMutation.mutate({
-      draftID: currentDraftID,
-      attachmentID: attachment.attachmentID,
-    });
+    if (attachment.type === 'forwarded') {
+      removeForwardedAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    } else {
+      removeAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    }
   };
+
+  const unscheduleMessageMutation = useUnscheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email unscheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to unschedule email');
+    },
+  });
+
+  const handleSendTimeChange = (date: Date | null) => {
+    const currentSendTime = form().sendTime();
+    const currentDraft = savedDraftId();
+
+    // If we unset the send time, we need to unschedule the message
+    if (!date && currentSendTime && currentDraft) {
+      unscheduleMessageMutation.mutate({
+        draftID: currentDraft,
+      });
+    }
+
+    form().setSendTime(date);
+    scheduleDraftSave();
+  };
+
+  const isDraftSaving = () => saveDraftMutation.isPending;
+
+  // Used to keep displaying draft status for some time
+  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
+
+  // Used to keep displaying spinner for a short time before switching
+  // to saved state
+  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
     <div
@@ -898,7 +1144,7 @@ export function BaseInput(props: {
       class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
       {/* Top Bar */}
-      <div class="flex items-start gap-2 p-2">
+      <div class="relative flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -957,18 +1203,21 @@ export function BaseInput(props: {
             />
           }
         >
-          <div ref={setExpandedRecipientsRef} class="w-full">
+          <div
+            ref={setExpandedRecipientsRef}
+            class="w-full text-sm text-ink-muted"
+          >
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline font-mono">
-              <span class="text-sm text-ink-muted min-w-8">
-                from <span>{userName()} </span>
-                <span>&lt;{userEmail()}&gt;</span>
+            <div class="flex flex-row items-baseline py-0.5">
+              <div class="min-w-8">from</div>
+              <span class="ml-2">
+                {userName()} &lt;{userEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}
 
-            <div class="flex flex-row items-baseline">
-              <div class="text-sm text-ink-muted min-w-8">to</div>
+            <div class="flex flex-row items-center -mt-0.5">
+              <div class="min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
@@ -980,8 +1229,8 @@ export function BaseInput(props: {
             </div>
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
-              <div class="flex flex-row items-start">
-                <div class="text-sm text-ink-muted min-w-8">cc</div>
+              <div class="flex flex-row items-center -mt-1.5">
+                <div class="min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
@@ -994,8 +1243,8 @@ export function BaseInput(props: {
             </Show>
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
-              <div class="flex flex-row items-start">
-                <div class="text-sm text-ink-muted min-w-8">bcc</div>
+              <div class="flex flex-row items-center -mt-1.5">
+                <div class="min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
@@ -1035,6 +1284,17 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
             </div>
+          </div>
+        </Show>
+        <Show when={debouncedIsDraftSaving()}>
+          <div class="absolute right-4 top-4 flex gap-1 items-center text-xs text-ink-muted">
+            <Show
+              when={laggedIsDraftSaving()}
+              fallback={<span>Draft saved</span>}
+            >
+              <Spinner class="size-4 animate-spin" />
+              <span>Saving draft</span>
+            </Show>
           </div>
         </Show>
       </div>
@@ -1110,7 +1370,7 @@ export function BaseInput(props: {
             class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
-            initialHtml={props.preloadedHtml}
+            initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
@@ -1167,6 +1427,18 @@ export function BaseInput(props: {
                         attachment={{
                           fileName: attachment().fileName,
                           mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
                         }}
                         removable
                         onRemove={() => handleRemoveAttachment(attachment())}
@@ -1241,6 +1513,12 @@ export function BaseInput(props: {
                 </div>
               </KToggleButton>
             </Tooltip>
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+              <EmailDateSelector
+                sendTime={form().sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+              />
+            </Show>
             <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}

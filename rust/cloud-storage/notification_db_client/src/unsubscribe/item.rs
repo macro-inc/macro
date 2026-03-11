@@ -67,7 +67,12 @@ pub async fn remove_unsubscribed_item_user(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_unsubscribed_item")))]
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_unsubscribed_item"))
+    )]
     async fn test_get_unsubscribed_item_users(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {
@@ -84,7 +89,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_unsubscribed_item")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_unsubscribed_item"))
+    )]
     async fn test_upsert_unsubscribed_item_user(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {
@@ -104,7 +112,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_unsubscribed_item")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_unsubscribed_item"))
+    )]
     async fn test_remove_unsubscribed_item_user(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {

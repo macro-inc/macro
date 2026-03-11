@@ -1,4 +1,5 @@
 use crate::SQS;
+use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::pubsub::{SFSUploaderMessage, ScheduledPubsubMessage};
@@ -103,6 +104,26 @@ impl SQS {
             return enqueue_sfs_delete_message(&self.inner, queue, message).await;
         }
         anyhow::bail!("email_sfs_delete_queue is not configured")
+    }
+}
+
+impl EmailMessageEnqueuer for SQS {
+    type Err = anyhow::Error;
+
+    async fn enqueue_scheduled_message(
+        &self,
+        link_id: Uuid,
+        message_id: Uuid,
+        delay_seconds: Option<i32>,
+    ) -> Result<(), Self::Err> {
+        self.enqueue_email_scheduled_message(
+            ScheduledPubsubMessage {
+                link_id,
+                message_id,
+            },
+            delay_seconds,
+        )
+        .await
     }
 }
 

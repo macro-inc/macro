@@ -6,56 +6,34 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import {
+  err,
   isErr,
   type MaybeError,
   type MaybeResult,
   mapOk,
   type ObjectLike,
+  ok,
 } from '@core/util/maybeResult';
+import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
-import { uuid } from 'short-uuid';
-import { waitExtractionStatus } from './extraction';
+import type OpenAI from 'openai';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
-import { DocumentCognitionServiceApiVersion } from './generated/schemas/documentCognitionServiceApiVersion';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponseV2 } from './generated/schemas/getChatPermissionsResponseV2';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { GetModelsForAttachmentsRequest } from './generated/schemas/getModelsForAttachmentsRequest';
-import type { GetModelsForAttachmentsResponse } from './generated/schemas/getModelsForAttachmentsResponse';
-import type { GetModelsResponse } from './generated/schemas/getModelsResponse';
+import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
+import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
-import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
-import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
-import type { VerifyAttachmentsRequest } from './generated/schemas/verifyAttachmentsRequest';
-import type { VerifyAttachmentsResponse } from './generated/schemas/verifyAttachmentsResponse';
-import type { CognitionWebsocketService } from './service';
-import {
-  createMessageStream,
-  sendCognitionWebsocketMessage,
-} from './websocket';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
-const apiVersions = Object.values(
-  DocumentCognitionServiceApiVersion
-) satisfies string[];
-const latestApiVersion = apiVersions[apiVersions.length - 1];
-
-// NOTE: change this to the version you want to use, defaults to latest
-// TODO: @whutchinson98 will update this back to undefined once we've made it so v2 is the default version
-const overrideApiVersion: string | undefined = 'v2';
-
-const apiVersion = overrideApiVersion ?? latestApiVersion;
-console.log('DCS API version:', apiVersion);
-
 type WithChatId = { chat_id: string };
-type WithDocumentId = { document_id: string };
 type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
@@ -73,11 +51,36 @@ export function dcsFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${dcsHost}/${apiVersion}${url}`, init);
+  return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 export type Success = { success: boolean };
 
+type IdMappingResponse = { target_id: string | null };
+
 export const cognitionApiServiceClient = {
+  /** Creates a mapping from source_id to target_id */
+  async createIdMapping(args: { source_id: string; target_id: string }) {
+    const { source_id, target_id } = args;
+    return mapOk(
+      await dcsFetch<{ success: boolean }>(`/id_mapping/${source_id}`, {
+        method: 'POST',
+        body: JSON.stringify({ target_id }),
+      }),
+      (result) => result
+    );
+  },
+
+  /** Gets the target_id for a given source_id */
+  async getIdMapping(args: { source_id: string }) {
+    const { source_id } = args;
+    return mapOk(
+      await dcsFetch<IdMappingResponse>(`/id_mapping/${source_id}`, {
+        method: 'GET',
+      }),
+      (result) => result.target_id
+    );
+  },
+
   getChat: cache(
     async function getChat(args: WithChatId) {
       const { chat_id } = args;
@@ -92,14 +95,6 @@ export const cognitionApiServiceClient = {
       seconds: 5,
     }
   ),
-  async getModels() {
-    return mapOk(
-      await dcsFetch<GetModelsResponse>(`/models`, {
-        method: 'GET',
-      }),
-      (result) => result
-    );
-  },
 
   async editChatProject(args: WithChatId & WithProjectId) {
     const { chat_id, project_id } = args;
@@ -207,15 +202,6 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
-  async upsertText(args: WithChatId & WithDocumentId & { content: string }) {
-    const { content, document_id } = args;
-    return await dcsFetch(`/document_text/${document_id}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        content: content,
-      }),
-    });
-  },
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;
     return mapOk(
@@ -226,17 +212,6 @@ export const cognitionApiServiceClient = {
         }
       ),
       (result) => result
-    );
-  },
-  async verifyAttachments(args: VerifyAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<VerifyAttachmentsResponse>(`/attachments/verify`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      }),
-      (result) => {
-        return result;
-      }
     );
   },
 
@@ -260,90 +235,67 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
-  async structuredOuputCompletion(args: StructedOutputCompletionRequest) {
+  /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
+  async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return mapOk(
-      await dcsFetch<StructedOutputCompletionResponse>(
-        `/completions/structured_output`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      ),
-      (result) => result as { completion: any }
-    );
-  },
-  async getModelsForAttachments(args: GetModelsForAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<GetModelsForAttachmentsResponse>(
-        `/attachments/get_models_for_attachments`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      ),
+      await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
       (result) => result
     );
   },
 };
 
-export const cognitionWebsocketServiceClient: CognitionWebsocketService = {
-  async stopChatMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'stop_chat_message',
-    });
-  },
-  async selectModel(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'select_model_for_chat',
-    });
-  },
-  async extractionStatus(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'extraction_status',
-    });
-  },
-  /// PDF completion
-  async sendCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'send_completion',
-    });
-  },
+export async function generateTitle(text: string): Promise<string | undefined> {
+  const result = await dcsCompletion({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'user',
+        content: `Generate a concise and informative title that describes the following text. A title should never be longer than 4 words. Respond with only the title, nothing else.\n\n${text}`,
+      },
+    ],
+    max_tokens: 100,
+  });
 
-  async streamSimpleCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'get_simple_completion_stream',
-    });
-  },
+  if (isErr(result)) {
+    console.error('Error generating title');
+    return undefined;
+  }
 
-  async editLastMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
+  return result[1].choices[0]?.message?.content?.trim() || undefined;
+}
 
-  sendStreamChatMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'send_chat_message',
-      stream_id: uuid(),
-    });
-  },
-  streamEditMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
+type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 
-  extractionStatusSync(args) {
-    return waitExtractionStatus(args.attachment_id);
-  },
-};
+export async function dcsCompletion(
+  body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
+): Promise<
+  MaybeResult<
+    FetchWithTokenErrorCode | DcsCompletionErrorCode,
+    OpenAI.ChatCompletion
+  >
+> {
+  let response: Response;
+  try {
+    response = await platformFetch(`${dcsHost}/chat/completions`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: false }),
+    });
+  } catch {
+    return err('NETWORK_ERROR', 'Failed to reach completions proxy');
+  }
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ??
+      `Completion failed with status ${response.status}`;
+    return err('OPENAI_ERROR', message);
+  }
+  return ok(data as OpenAI.ChatCompletion);
+}

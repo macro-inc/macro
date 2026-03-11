@@ -18,7 +18,6 @@ import {
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import {
-  ENABLE_FORM_EDITING,
   ENABLE_PDF_LOCATION_AUTOSAVE,
   ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE,
 } from '@core/constant/featureFlags';
@@ -27,7 +26,6 @@ import { observedSize } from '@core/directive/observedSize';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
 import { tempRedirectLocation } from '@core/signal/location';
-import { useReadOnly } from '@core/signal/permissions';
 import { isInDOMRect } from '@core/util/rect';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -102,7 +100,6 @@ const PDF = 72.0;
 const PDF_TO_CSS_UNITS = CSS / PDF;
 
 function InnerDocument() {
-  const readOnly = useReadOnly();
   const getViewer = useGetPopupContextViewer();
 
   // attach new tab listeners
@@ -132,38 +129,6 @@ function InnerDocument() {
     if (!overlays || overlays.length === 0) return;
     getViewer()?.setOverlays(overlays);
   });
-
-  // For PDF autosave we've disabled the annotation layer completely
-  if (ENABLE_FORM_EDITING) {
-    createEffect(() => {
-      const viewer_ = getViewer();
-      if (!viewer_ || !viewerReadySignal()) return;
-
-      const isReadOnly = readOnly();
-
-      const annotationSections = viewer_
-        .container()
-        .querySelectorAll('[data-annotation-id]');
-
-      annotationSections.forEach((section) => {
-        const inputs = section.querySelectorAll(
-          'input, textarea, select, button'
-        );
-
-        inputs.forEach((input) => {
-          if (
-            input instanceof HTMLInputElement ||
-            input instanceof HTMLTextAreaElement ||
-            input instanceof HTMLSelectElement ||
-            input instanceof HTMLButtonElement
-          ) {
-            input.disabled = isReadOnly;
-            input.style.pointerEvents = isReadOnly ? 'none' : 'auto';
-          }
-        });
-      });
-    });
-  }
 
   const isPopup = useIsPopup();
   if (!isPopup) {

@@ -2,7 +2,6 @@
  * @file This component rendered the accessory for the code nodes - a copy button and a syntax highlighting
  * language selector.
  */
-
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -33,8 +32,8 @@ import {
 } from '@lexical-core';
 import {
   $getNodeByKey,
-  type EditorThemeClasses,
   type LexicalEditor,
+  type EditorThemeClasses,
   type NodeKey,
 } from 'lexical';
 import {
@@ -222,9 +221,11 @@ export function CodeBoxAccessory(props: {
     <Show when={!isNested}>
       <div
         class="fixed pointer-events-none md-code-box-header"
-        use:glueToElement={{
-          element: () => props.floatRef,
-          editor: props.editor,
+        ref={(el) => {
+          glueToElement(el, () => ({
+            editor: props.editor,
+            element: () => props.floatRef,
+          }));
         }}
       >
         <div class="w-full flex justify-between content-center items-center p-1 pointer-events-auto text-ink-extra-muted">

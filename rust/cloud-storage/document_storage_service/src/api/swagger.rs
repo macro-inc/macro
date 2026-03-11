@@ -18,7 +18,7 @@ use crate::{
                 validate_permissions_token::DocumentPermissionsTokenRequest,
             },
         },
-        health, history, instructions, pins,
+        entity, health, history, instructions, pins,
         projects::{
             self,
             delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
@@ -33,7 +33,6 @@ use crate::{
         request::{
             documents::{
                 copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                edit::EditDocumentRequestV2,
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
@@ -65,7 +64,13 @@ use crate::{
         },
     },
 };
+use channels::inbound::axum_router::{
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiThreadInfo, ApiThreadReply,
+};
 use document_sub_type::DocumentSubType;
+use documents_hex::inbound::axum_router::ShortIdResponse;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -103,9 +108,8 @@ use models_permissions::share_permission::channel_share_permission::UpdateOperat
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
-    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-    SoupEnrichedEmailThreadPreview, SoupLabel, SoupLabelListVisibility, SoupLabelType,
-    SoupMacroAttachment, SoupMessageListVisibility,
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
+    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
@@ -135,19 +139,21 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
-        documents::get_document::handler,
+        documents_hex::inbound::axum_router::get_document_handler,
         documents::get_document_version::handler,
-        documents::create_document::create_document_handler,
+        documents_hex::inbound::axum_router::create_document_handler,
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
-        documents::edit_document::edit_document_handler_v2,
-        documents::delete_document::delete_document_handler,
+        documents_hex::inbound::axum_router::edit_document_handler,
+        documents_hex::inbound::axum_router::delete_document_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
         documents::get_document_permissions::get_document_permissions_handler_v2,
         documents::get_document_views::get_document_views_handler,
         documents::location::get_location_handler,
+        documents_hex::inbound::axum_router::get_location_v3_handler,
+        documents_hex::inbound::axum_router::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
         documents::get_batch_preview::get_batch_preview_handler,
@@ -179,6 +185,12 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
 
+        // channels
+        channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::get_thread_replies_handler,
+        channels::inbound::axum_router::get_channel_attachments_handler,
+        channels::inbound::axum_router::get_channel_participants_handler,
+
         // pins
         pins::add_pin::add_pin_handler,
         pins::remove_pin::remove_pin_handler,
@@ -204,6 +216,8 @@ use utoipa::OpenApi;
         // threads
         threads::edit_thread::edit_thread_handler,
 
+        entity::get_entity_permission::handler,
+
         // /recents
         recents::recently_deleted::handler,
         saved_views::create_view_handler,
@@ -211,6 +225,9 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+
+        // /github
+        github::inbound::github_sync_router::install_sync_handler
     ),
     components(
         schemas(
@@ -245,7 +262,8 @@ use utoipa::OpenApi;
             GetDocumentSearchResponse, // Search document
             CopyDocumentRequest,
             CopyDocumentQueryParams, // Copy document
-            EditDocumentRequestV2, // Edit document
+            documents_hex::domain::models::EditDocumentServiceArgs,
+            documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
             GetDocumentProcessingResult,
@@ -290,14 +308,24 @@ use utoipa::OpenApi;
             SoupEnrichedEmailThreadPreview,
             SoupEmailThreadPreview,
             SoupAttachment,
-            SoupMacroAttachment,
             SoupContact,
-            SoupEmailThreadPreviewMetadata,
             SoupLabel,
             SoupLabelListVisibility,
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+
+            // Channels
+            ApiChannelMessagesPage,
+            ApiChannelMessage,
+            ApiThreadInfo,
+            ApiThreadReply,
+            ApiCountedReaction,
+            ApiMessageAttachment,
+            ApiChannelAttachmentsPage,
+            ApiChannelAttachment,
+            ApiChannelParticipant,
+            ApiParticipantRole,
 
             DocumentSubType,
 
@@ -308,6 +336,9 @@ use utoipa::OpenApi;
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+            entity::get_entity_permission::EntityPermissionResponse,
+            entity_access::domain::models::EntityPermission,
+            entity_access::domain::models::ParticipantRole,
 
             // Chat
             Chat,
@@ -347,6 +378,7 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            ShortIdResponse,
         ),
     ),
     tags(

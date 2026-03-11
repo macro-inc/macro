@@ -1,22 +1,47 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
-import { hasPermissions, Permissions } from '@core/component/SharePermissions';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import {
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
-import { Show } from 'solid-js';
-import { useEmailContext } from './EmailContext';
-import { EmailPropertiesModal } from './EmailPropertiesModal';
+import IconShared from '@icon/regular/share.svg';
+import TagIcon from '@icon/regular/tag.svg';
+import {
+  EmailPropertiesButton,
+  PROPERTIES_DRAWER_ID,
+} from './EmailPropertiesModal';
 
 export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
 }) {
-  const email = useEmailContext();
+  const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const shareCtx = useShareDialogContext();
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Properties',
+      icon: TagIcon,
+      action: propertiesControl.toggle,
+      buttonComponent: () => <EmailPropertiesButton buttonSize="sm" />,
+    },
+    {
+      label: 'Share',
+      icon: IconShared,
+      action: () => shareCtx.open(),
+      divideAbove: true,
+      condition: () => ENABLE_EMAIL_SHARING,
+      buttonComponent: () => <ShareTrigger />,
+    },
+  ];
 
   return (
     <>
@@ -37,26 +62,13 @@ export function TopBar(props: {
         />
       </SplitHeaderLeft>
 
-      <SplitToolbarRight>
-        <div class="flex items-center gap-2">
-          <EmailPropertiesModal
-            buttonSize="sm"
-            subject={props.title}
-            canEdit={hasPermissions(
-              email.permissions().type,
-              Permissions.CAN_EDIT
-            )}
-          />
-          <Show when={ENABLE_EMAIL_SHARING}>
-            <ShareButton
-              id={props.id}
-              name={props.title}
-              itemType="email"
-              userPermissions={email.permissions().type}
-            />
-          </Show>
-        </div>
-      </SplitToolbarRight>
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={[]}
+        id={props.id}
+        itemType="email"
+        name={props.title}
+      />
     </>
   );
 }

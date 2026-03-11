@@ -6,8 +6,10 @@
  */
 import type { PatchMessageRequestAttachmentIdsToDelete } from './patchMessageRequestAttachmentIdsToDelete';
 import type { PatchMessageRequestContent } from './patchMessageRequestContent';
+import type { PatchMessageRequestNonce } from './patchMessageRequestNonce';
 
 export interface PatchMessageRequest {
   attachment_ids_to_delete?: PatchMessageRequestAttachmentIdsToDelete;
   content?: PatchMessageRequestContent;
+  nonce?: PatchMessageRequestNonce;
 }

@@ -10,6 +10,7 @@ use crate::api::email::generate_email_link::GenerateEmailLinkRequest;
 use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVerifyUserEmailRequest;
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
+use crate::api::link::github::InitGithubLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::team::create_team::CreateTeamRequest;
 use crate::api::team::get_team_invites::TeamInvitesResponse;
@@ -62,6 +63,7 @@ use model::user::{
 
                 /// /link
                 link::create_in_progress_link::handler,
+                link::github::init_github_link_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -146,6 +148,7 @@ use model::user::{
                         ResendFusionauthVerifyUserEmailRequest,
                         GenerateEmailLinkRequest,
                         CreateInProgressLinkResponse,
+                        InitGithubLinkResponse,
                         UserQuota,
                         UserOrganizationResponse,
                         GetLegacyUserPermissionsResponse,

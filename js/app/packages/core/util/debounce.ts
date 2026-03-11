@@ -1,4 +1,8 @@
-import { debounce as solidDebounce } from '@solid-primitives/scheduled';
+import {
+  debounce as solidDebounce,
+  leadingAndTrailing,
+  throttle as solidThrottle,
+} from '@solid-primitives/scheduled';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 export function debounce<T extends (...args: any[]) => any>(
@@ -17,6 +21,23 @@ export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
   createEffect(() => schedule(source()));
   onCleanup(() => schedule.clear());
   return debounced;
+}
+
+/**
+ * Create a throttled view of a signal. Updates immediately on the first change,
+ * then skips intermediate values during the cooldown period, catching the last
+ * value at the trailing edge.
+ */
+export function throttledDependent<T>(source: () => T, delay = 150): () => T {
+  const [throttled, setThrottled] = createSignal(source());
+  const schedule = leadingAndTrailing(
+    solidThrottle,
+    (v: T) => setThrottled(() => v),
+    delay
+  );
+  createEffect(() => schedule(source()));
+  onCleanup(() => schedule.clear());
+  return throttled;
 }
 
 /**

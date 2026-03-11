@@ -1,13 +1,15 @@
 use crate::{
     model::{
-        connection::ConnectionContext, message::OutgoingMessage, websocket::ToWebsocketMessage,
+        connection::ConnectionContext,
+        message::OutgoingMessage,
+        tracking::{EntityConnectionExt, TrackingData},
+        websocket::ToWebsocketMessage,
     },
-    service::tracker,
+    service::{stream_event::handle_stream_events, tracker},
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{StreamExt, stream::SplitStream};
-use model_entity::TrackingData;
 use std::error::Error;
 use tokio::sync::mpsc::Sender;
 use tungstenite::error::{Error as TungsteniteError, ProtocolError};
@@ -20,7 +22,9 @@ pub async fn handle_websocket_stream(
     while let Some(msg) = stream.next().await {
         match msg {
             Ok(msg) => {
-                handle_message(connection_context, msg, &sender).await?;
+                if let Err(e) = handle_message(connection_context, msg, &sender).await {
+                    tracing::error!(error=?e, "error handling message");
+                }
             }
             Err(err) => {
                 match err
@@ -84,13 +88,16 @@ pub async fn handle_message(
 
     match parsed_message {
         ToWebsocketMessage::TrackEntityMessage(message) => {
+            let entity_id = message.extra.entity_id.to_string();
+
             tracker::track_entity(
+                sender,
                 connection_context,
                 TrackingData {
                     entity: message
                         .extra
                         .entity_type
-                        .with_entity_str(&message.extra.entity_id)
+                        .with_entity_str(&entity_id)
                         .with_connection_str(connection_context.connection_id)
                         .with_user_str(&connection_context.user_context.user_id),
                     action: message.action,
@@ -98,6 +105,9 @@ pub async fn handle_message(
             )
             .await
             .ok();
+        }
+        ToWebsocketMessage::StreamEvents(message) => {
+            handle_stream_events(connection_context, sender.clone(), message)
         }
     };
 

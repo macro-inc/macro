@@ -30,6 +30,12 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DATABASE_URL_PROXY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
@@ -104,6 +110,22 @@ export const jobUpdateHandlerLambdaName = jobUpdateHandlerLambdaArn.apply(
   }
 );
 
+const opensearchStack = new pulumi.StackReference('opensearch-stack', {
+  name: `macro-inc/opensearch/${stack}`,
+});
+
+const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
+  .getOutput('domainEndpoint')
+  .apply((domainEndpoint) => `https://${domainEndpoint}`);
+
+const OPENSEARCH_USERNAME = 'macrouser';
+const OPENSEARCH_PASSWORD = config.require('opensearch_password_key');
+const opensearchPasswordArn = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: OPENSEARCH_PASSWORD,
+  })
+  .apply((secret) => secret.arn);
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -115,10 +137,6 @@ const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
 const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
-
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
 
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
@@ -139,6 +157,23 @@ const cloudfronDistributionUrl: pulumi.Output<string> = linksharingStack
 const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
   .getOutput('cloudfrontDistributionPublicKeyId')
   .apply((key) => key as string);
+
+// Retrieve name of queue used Contacts Service
+const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueName: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueName')
+  .apply((arn) => arn as string);
+
+// Get ARN to allow sending messages to contacts Queue
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
 
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
@@ -209,12 +244,31 @@ export const deleteChatQueueName = deleteChatHandler.queue.name;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
+const GITHUB_SYNC_APP_URL = config.require('github_sync_app_url');
+
+const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
+const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
+const GITHUB_SYNC_APP_PEM_SECRET_KEY = config.require('github_sync_app_pem');
+const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM_SECRET_KEY })
+  .apply((secret) => secret.arn);
+
+const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
+
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
   {
     ecsClusterArn: cloudStorageClusterArn,
     cloudStorageClusterName: cloudStorageClusterName,
-    searchEventQueueArn,
+    queueArns: [
+      searchEventQueueArn,
+      deleteDocumentHandler.queue.arn,
+      notificationQueueArn,
+      contactsQueueArn,
+    ],
     vpc: coparse_api_vpc,
     platform: {
       family: 'linux',
@@ -224,7 +278,6 @@ const cloudStorageService = new CloudStorageService(
     docxUploadBucketArn,
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
-    deleteDocumentQueueArn: deleteDocumentHandler.queue.arn,
     secretKeyArns: [
       jwtSecretKeyArn,
       documentStoragePermissionsKeyArn,
@@ -233,16 +286,30 @@ const cloudStorageService = new CloudStorageService(
       syncServiceAuthKeyArn,
       authenticationServiceSecretKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+      opensearchPasswordArn,
+      githubWebhookSecretKeyArn,
+      githubSyncAppPemArn,
     ],
-    notificationQueueArn,
     containerEnvVars: [
+      {
+        name: 'OPENSEARCH_URL',
+        value: OPENSEARCH_URL,
+      },
+      {
+        name: 'OPENSEARCH_USERNAME',
+        value: OPENSEARCH_USERNAME,
+      },
+      {
+        name: 'OPENSEARCH_PASSWORD',
+        value: OPENSEARCH_PASSWORD,
+      },
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
       },
       {
         name: 'REDIS_URI',
-        value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+        value: pulumi.interpolate`redis://${MACRO_CACHE}`,
       },
       {
         name: 'ENVIRONMENT',
@@ -250,11 +317,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `warn,document_storage_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=info,macro_share_permissions=${
-          stack === 'prod' ? 'error' : 'trace'
-        },macro_project_utils=info,macro_notify=info`,
+        value: 'info,github=trace',
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -277,23 +340,23 @@ const cloudStorageService = new CloudStorageService(
         value: stack === 'prod' ? '5000' : '5000',
       },
       {
-        name: 'PRESIGNED_URL_EXPIRY_SECONDS',
+        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS',
         value: '900',
       },
       {
-        name: 'PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS',
+        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS',
         value: '840',
       },
       {
-        name: 'CLOUDFRONT_DISTRIBUTION_URL',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
         value: pulumi.interpolate`${cloudfronDistributionUrl}`,
       },
       {
-        name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
         value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
       },
       {
-        name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
         value: pulumi.interpolate`${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}`,
       },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
@@ -365,6 +428,35 @@ const cloudStorageService = new CloudStorageService(
         name: 'FRECENCY_TABLE_NAME',
         value: `frecency-${stack}`,
       },
+      {
+        name: 'CONTACTS_QUEUE',
+        value: pulumi.interpolate`${contactsQueueName}`,
+      },
+      {
+        name: 'GITHUB_WEBHOOK_SECRET_KEY',
+        value: GITHUB_WEBHOOK_SECRET_KEY,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_URL',
+        value: GITHUB_SYNC_APP_URL,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_PEM_SECRET_KEY',
+        value: GITHUB_SYNC_APP_PEM_SECRET_KEY,
+      },
+      {
+        name: 'GITHUB_SYNC_APP_CLIENT_ID',
+        value: GITHUB_SYNC_APP_CLIENT_ID,
+      },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'cloud-storage-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
+      },
     ],
     isPrivate: false,
     tags,
@@ -395,7 +487,7 @@ const convertQueueArn: pulumi.Output<string> = convertServiceStack
 // ------------------------------------------- DOCX Unzip -------------------------------------------
 const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
-  REDIS_URI: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+  REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
   RUST_LOG: 'docx_unzip_handler=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,

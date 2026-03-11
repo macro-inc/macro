@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import {
   catchToResult,
   isErr,
@@ -5,13 +6,10 @@ import {
   ok,
   throwOnErr,
 } from '@core/util/maybeResult';
-import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
-import type {
-  ApiChannelWithLatest,
-  GetChannelResponse,
-} from '@service-comms/generated/models';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -26,7 +24,7 @@ type ChannelQueryOptions = UseBaseQueryOptions<
   getChannelResponseError
 >;
 
-function channelQueryOptions(channelId: string): ChannelQueryOptions {
+export function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
     queryKey: channelKeys.withID(channelId).queryKey,
     queryFn: async () => {
@@ -39,7 +37,7 @@ function channelQueryOptions(channelId: string): ChannelQueryOptions {
 
       return result;
     },
-    staleTime: 0,
+    staleTime: Infinity,
   };
 }
 
@@ -72,29 +70,91 @@ export function useChannelQuery(
   }, queryClient);
 }
 
-export function optimisticUpdateChannelName(
-  channelID: string,
-  newName: string
-) {
-  const queryKey = channelKeys.withID(channelID).queryKey;
-  queryClient.cancelQueries({ queryKey });
+type WithChannelId<T> = T & { channelId: string };
+
+export type UpdateChannelNameContext = {
+  previousName: string | null | undefined;
+  previousUpdatedAt: DateValue;
+};
+
+/** Helper to update channel name in both single channel and list queries. */
+function updateChannelNameInQueries(
+  channelId: string,
+  name: string | null | undefined,
+  updatedAt: DateValue
+): void {
+  const queryKey = channelKeys.withID(channelId).queryKey;
+  const listQueryKey = channelKeys.listChannels.queryKey;
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
-      if (!prev) return;
+      if (!prev) return prev;
 
-      const next = {
+      return {
         ...prev,
         channel: {
           ...prev.channel,
-          name: newName,
-          updatedAt: new Date().toISOString(),
+          name,
+          updated_at: updatedAt,
         },
       };
-
-      return { ...next };
     }
+  );
+
+  queryClient.setQueriesData(
+    { queryKey: listQueryKey },
+    (prev: ApiChannelWithLatest[] | undefined) => {
+      if (!prev) return prev;
+
+      return prev.map((channel) =>
+        channel.id === channelId
+          ? { ...channel, name, updated_at: updatedAt }
+          : channel
+      );
+    }
+  );
+}
+
+/**
+ * Optimistically update the channel name.
+ * Returns context needed to rollback the update.
+ */
+export function optimisticUpdateChannelName(
+  vars: WithChannelId<{ name: string }>
+): UpdateChannelNameContext | undefined {
+  const queryKey = channelKeys.withID(vars.channelId).queryKey;
+  const listQueryKey = channelKeys.listChannels.queryKey;
+
+  queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({ queryKey: listQueryKey });
+
+  let context: UpdateChannelNameContext | undefined;
+
+  // Capture previous state for rollback
+  const prev = queryClient.getQueryData<GetChannelResponse>(queryKey);
+  if (prev) {
+    context = {
+      previousName: prev.channel.name,
+      previousUpdatedAt: prev.channel.updated_at,
+    };
+  }
+
+  const now = new Date().toISOString();
+  updateChannelNameInQueries(vars.channelId, vars.name, now);
+
+  return context;
+}
+
+/** Rollback an optimistic channel name update. */
+export function rollbackUpdateChannelName(
+  channelId: string,
+  context: UpdateChannelNameContext
+): void {
+  updateChannelNameInQueries(
+    channelId,
+    context.previousName,
+    context.previousUpdatedAt
   );
 }
 
@@ -104,16 +164,14 @@ export function invalidateChannelWithID(channelID: string) {
   });
 }
 
-export function optimisticUpdateChannelViewedAt(channelId: string) {
-  const now = new Date().toISOString();
-
-  queryClient.setQueryData<ApiChannelWithLatest[]>(
-    queryKeys.all.channel,
-    (old) => {
-      if (!old) return old;
-      return old.map((channel) =>
-        channel.id === channelId ? { ...channel, viewed_at: now } : channel
-      );
-    }
-  );
+/**
+ * Marks the channel query as stale without triggering an immediate refetch.
+ * Uses `refetchType: 'inactive'` so queries only refetch when they become active again.
+ * Use this after WebSocket updates to ensure eventual consistency without redundant fetches.
+ */
+export function softInvalidateChannelWithID(channelID: string) {
+  queryClient.invalidateQueries({
+    queryKey: channelKeys.withID(channelID).queryKey,
+    refetchType: 'inactive',
+  });
 }

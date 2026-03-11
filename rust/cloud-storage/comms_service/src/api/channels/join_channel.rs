@@ -15,7 +15,7 @@ use sqlx::PgPool;
     tag = "channels",
     operation_id = "join_channel",
     description = "allows a user to attempt to join a channel",
-    path = "/channels/{channel_id}/join",
+    path = "/comms/channels/{channel_id}/join",
     params(
         ("channel_id" = String, Path, description = "channel id"),
     ),

@@ -1,5 +1,4 @@
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { ENABLE_PINS } from '@core/constant/featureFlags';
 import { v7 as uuid7 } from 'uuid';
 import { z } from 'zod';
 import {
@@ -184,20 +183,10 @@ export const CoParseSchema: z.ZodType<ICoParse, z.ZodTypeDef, any> = z.object({
   defs: z.string().optional(),
   overlays: z.array(z.string()),
   anomalies: z.array(TAnomalySchema).optional(),
-  pinnedTermsNames: z.preprocess((data) => {
-    if (!ENABLE_PINS) return undefined;
-
-    // TODO: remove this when the API is fixed
-    if (data === '[]' || data === '') {
-      return [];
-    }
-
-    if (typeof data === 'string') {
-      return JSON.parse(data);
-    }
-
-    return data;
-  }, z.array(z.string()).optional()),
+  pinnedTermsNames: z.preprocess(
+    () => undefined,
+    z.array(z.string()).optional()
+  ),
   documentData: TDocumentDataSchema.optional(),
 });
 

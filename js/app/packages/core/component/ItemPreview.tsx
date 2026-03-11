@@ -1,47 +1,40 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  isAccessiblePreviewItem,
+  useItemPreview,
+  type ItemEntity,
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import type { NamedSubType } from '@macro-entity';
-import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { NamedSubType } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
-  insertProjectIntoHistory,
-  postNewHistoryItem,
-} from '@service-storage/history';
-import { Match, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+  Match,
+  Switch,
+  Suspense,
+  type ComponentProps,
+  type Accessor,
+} from 'solid-js';
+import { PopupPreview } from './DocumentPreview';
+import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
-  ENTITY_ICON_CONFIGS,
   EntityIcon,
-  ICON_SIZE_CLASSES,
+  type EntityIconProps,
+  getPreviewItemIconType,
 } from './EntityIcon';
+import { cn } from '@ui/utils/classname';
 
-type ItemPreviewProps = {
-  itemId: string;
-  itemType?: ItemType;
-  cacheTimeSeconds?: number;
-};
-
-function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview({
-    id: props.itemId,
-    type: props.itemType,
-  });
+export function useItemPreviewData(entity: Accessor<ItemEntity>) {
+  const [item] = useItemPreview(entity);
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
@@ -69,19 +62,15 @@ function useItemPreviewData(props: ItemPreviewProps) {
   }
 
   async function onPreviewClick(
-    type: ItemPreviewProps['itemType'],
+    type: ItemType | undefined,
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
-    altKey?: boolean
+    shiftKey?: boolean
   ) {
-    if (type === 'project') {
-      insertProjectIntoHistory(id);
-      await postNewHistoryItem('project', id);
-    }
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, openInNewSplitForMention(altKey, true));
+    openItem(_type, id, openInNewSplitForMention(shiftKey, true));
   }
 
   const name = () => {
@@ -96,44 +85,51 @@ function useItemPreviewData(props: ItemPreviewProps) {
     return baseName;
   };
 
-  const blockConfig = () => ENTITY_ICON_CONFIGS['channel'];
-  const sizeClass = () => ICON_SIZE_CLASSES['xs'];
-  const className = () => {
-    return `${sizeClass()} ${blockConfig().foreground}`;
+  const targetType = () => {
+    return getPreviewItemIconType(item());
   };
 
-  const channelTypeIcon = (channelType: ChannelType | undefined) => {
-    switch (channelType) {
-      case 'direct_message':
-        return User;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return ChannelIcon;
-    }
+  const ItemEntityIcon = (
+    localProps?: Partial<Omit<ComponentProps<typeof EntityIcon>, 'targetType'>>
+  ) => {
+    return <EntityIcon targetType={targetType()} {...localProps} />;
+    // return <EntityIcon targetType={'task'} {...localProps} />;
   };
 
   return {
     item,
     name,
     onPreviewClick,
-    className,
-    channelTypeIcon,
+    targetType,
+    ItemEntityIcon,
   };
 }
 
-function ButtonNoAccess() {
+const DEFAULT_BUTTON_CLASS =
+  'text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center';
+const DEFAULT_ICON_CLASS = 'flex justify-start items-center w-3.5 h-3.5 mr-2';
+const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
+
+interface StatusDisplayProps {
+  class?: string;
+  iconClass?: string;
+  textClass?: string;
+}
+
+function ButtonNoAccess(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => <EyeSlash class="text-ink-muted w-4 h-4" />}
-      disabled
-      text="No Access"
-    />
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <EyeSlash class="text-ink-muted w-3.5 h-3.5" />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>No Access</div>
+    </div>
   );
 }
 
@@ -148,14 +144,20 @@ function InlineNoAccess() {
   );
 }
 
-function ButtonDeleted() {
+function ButtonDeleted(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => <TrashSimple class="text-ink-muted w-4 h-4" />}
-      disabled
-      text="Deleted"
-    />
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <TrashSimple class="text-ink-muted w-3.5 h-3.5" />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Deleted</div>
+    </div>
   );
 }
 
@@ -170,18 +172,22 @@ function InlineDeleted() {
   );
 }
 
-function ButtonLoading() {
+function ButtonLoading(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => (
-        <div class="w-4 h-4 animate-spin">
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <div class="w-3.5 h-3.5 animate-spin">
           <LoadingSpinner />
         </div>
-      )}
-      text="Loading..."
-      disabled
-    />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Loading...</div>
+    </div>
   );
 }
 
@@ -196,71 +202,115 @@ function InlineLoading() {
   );
 }
 
+export type ItemPreviewProps = ItemEntity & {
+  /** Custom class for the button wrapper */
+  class?: string;
+  /** Custom class for the icon container */
+  iconClass?: string;
+  /** Custom class for the text/name */
+  textClass?: string;
+  /** Disable hover card popup */
+  disableHoverCard?: boolean;
+  /** Max length for text truncation */
+  maxLength?: number;
+  /** Icon size (defaults to 'fill') */
+  iconSize?: EntityIconProps['size'];
+};
+
 export function ItemPreview(props: ItemPreviewProps) {
-  const { item, name, onPreviewClick, className, channelTypeIcon } =
-    useItemPreviewData(props);
+  return (
+    <Suspense>
+      <ItemPreviewInner {...props} />
+    </Suspense>
+  );
+}
+
+function ItemPreviewInner(props: ItemPreviewProps) {
+  const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
+    useItemPreviewData(() => props);
+
+  const maxLength = () => props.maxLength ?? 80;
+  const iconSize = () => props.iconSize ?? 'fill';
+  const buttonClass = () => cn(DEFAULT_BUTTON_CLASS, props.class);
+  const iconClass = () => cn(DEFAULT_ICON_CLASS, props.iconClass);
+  const textClass = () => cn(DEFAULT_TEXT_CLASS, props.textClass);
 
   return (
     <Switch>
       <Match when={item().loading}>
-        <ButtonLoading />
+        <ButtonLoading
+          class={props.class}
+          iconClass={props.iconClass}
+          textClass={props.textClass}
+        />
       </Match>
       <Match when={matches(item(), (i) => !i.loading)}>
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type as
-                  | NamedSubType
-                  | undefined;
+                const blockName = () => {
+                  const type = targetType();
+                  const itemType = accessibleItem().type;
+                  return fileTypeToBlockName(type ?? itemType);
+                };
+
                 const navHandlers =
-                  useSplitNavigationHandler<HTMLButtonElement>((e) =>
+                  useSplitNavigationHandler<HTMLButtonElement>((e) => {
+                    const item = accessibleItem();
                     onPreviewClick(
-                      itemData.type,
-                      itemData.id,
-                      fileType,
-                      subType,
-                      e.altKey
-                    )
-                  );
+                      item.type,
+                      item.id,
+                      item.fileType,
+                      item.subType?.type as NamedSubType | undefined,
+                      e.shiftKey
+                    );
+                  });
+
                 return (
-                  <DeprecatedTextButton
-                    theme="base"
-                    icon={() => {
-                      if (itemData.type === 'channel') {
-                        return (
-                          <div class={className()}>
-                            <Dynamic
-                              component={channelTypeIcon(itemData.channelType)}
-                            />
-                          </div>
-                        );
-                      }
-                      return (
-                        <EntityIcon
-                          targetType={
-                            itemData.type === 'document'
-                              ? (subType ?? fileType)
-                              : itemData.type
-                          }
-                          size="xs"
-                        />
-                      );
-                    }}
-                    {...navHandlers}
-                    text={truncateString(name(), 80)}
-                    width="min-w-0"
+                  <HoverCard
+                    disabled={
+                      props.disableHoverCard || isTouchDevice() || !blockName()
+                    }
+                    trigger={
+                      <button class={buttonClass()} {...navHandlers}>
+                        <div class={iconClass()}>
+                          <ItemEntityIcon size={iconSize()} />
+                        </div>
+                        <div class={textClass()}>
+                          {truncateString(name(), maxLength())}
+                        </div>
+                      </button>
+                    }
+                    content={
+                      <PopupPreview
+                        mouseEnter={() => {}}
+                        mouseLeave={() => {}}
+                        documentInfo={{
+                          id: accessibleItem().id,
+                          type: blockName() as BlockName,
+                          params: {},
+                          isOpenable: true,
+                        }}
+                      />
+                    }
                   />
                 );
               }}
             </Match>
             <Match when={loadedItem().access === 'no_access'}>
-              <ButtonNoAccess />
+              <ButtonNoAccess
+                class={props.class}
+                iconClass={props.iconClass}
+                textClass={props.textClass}
+              />
             </Match>
             <Match when={loadedItem().access === 'does_not_exist'}>
-              <ButtonDeleted />
+              <ButtonDeleted
+                class={props.class}
+                iconClass={props.iconClass}
+                textClass={props.textClass}
+              />
             </Match>
           </Switch>
         )}
@@ -269,8 +319,8 @@ export function ItemPreview(props: ItemPreviewProps) {
   );
 }
 
-export function InlineItemPreview(props: ItemPreviewProps) {
-  const { item, name, className, channelTypeIcon } = useItemPreviewData(props);
+export function InlineItemPreview(props: ItemEntity) {
+  const { item, name, ItemEntityIcon } = useItemPreviewData(() => props);
 
   return (
     <Switch>
@@ -281,36 +331,14 @@ export function InlineItemPreview(props: ItemPreviewProps) {
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
-              {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type;
-                return (
-                  <span class="inline-flex items-center gap-1">
-                    <span class="w-4 h-4">
-                      {itemData.type === 'channel' ? (
-                        <div class={className()}>
-                          <Dynamic
-                            component={channelTypeIcon(itemData.channelType)}
-                          />
-                        </div>
-                      ) : (
-                        <EntityIcon
-                          targetType={
-                            itemData.type === 'document'
-                              ? (subType ?? fileType)
-                              : itemData.type
-                          }
-                          size="xs"
-                        />
-                      )}
-                    </span>
-                    <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
-                      {truncateString(name(), 80)}
-                    </span>
-                  </span>
-                );
-              }}
+              <span class="inline-flex items-center gap-1">
+                <span class="w-4 h-4">
+                  <ItemEntityIcon size="fill" />
+                </span>
+                <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                  {truncateString(name(), 80)}
+                </span>
+              </span>
             </Match>
             <Match when={loadedItem().access === 'no_access'}>
               <InlineNoAccess />

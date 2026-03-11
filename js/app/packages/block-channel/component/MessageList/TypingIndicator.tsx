@@ -1,7 +1,8 @@
-import { usersTypingSignal } from '@block-channel/signal/typing';
+import { useBlockId } from '@core/block';
 import { Message } from '@core/component/Message';
 import { idToDisplayName } from '@core/user';
-import type { Message as MessageType } from '@service-comms/generated/models/message';
+import { getTypingUsersForChannel } from '@queries/channel/typing';
+import type { Message as MessageType } from '@queries/channel/types';
 import { createMemo, Show } from 'solid-js';
 
 type TypingIndicatorProps = {
@@ -10,9 +11,10 @@ type TypingIndicatorProps = {
 };
 
 export function TypingIndicator(props: TypingIndicatorProps) {
+  const channelId = useBlockId();
+
   const typingUsers = createMemo(() => {
-    const users =
-      usersTypingSignal.get().get(props.threadId ?? null) ?? new Set();
+    const users = getTypingUsersForChannel(channelId, props.threadId ?? null);
     return Array.from(users);
   });
 

@@ -1,6 +1,8 @@
-import { CustomEntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
+import { UserTooltip } from '@core/component/UserTooltip';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -9,12 +11,10 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -24,9 +24,9 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -37,9 +37,28 @@ import {
   type JSX,
   Match,
   onMount,
+  Show,
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+
+function RecipientChip(props: {
+  icon?: JSX.Element;
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+      <Show when={props.icon}>{props.icon}</Show>
+      <p class="text-sm">{truncateString(props.label, 20)}</p>
+      <XIcon
+        class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
+        onClick={props.onRemove}
+      />
+    </div>
+  );
+}
 
 function getRecipientOptionEmail(
   option: CombinedRecipientItem
@@ -114,21 +133,6 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
 
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
-  function channelTypeIcon(channel: Channel) {
-    switch (channel.channel_type) {
-      case 'direct_message':
-        return UserIcon;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return HashIcon;
-    }
-  }
-
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
     items.forEach((item) => {
@@ -187,9 +191,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             return (
               <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
-                  <CustomEntityIcon
-                    icon={channelTypeIcon(item().data)}
-                    size="xs"
+                  <EntityIcon
+                    targetType={item().data.channel_type || 'channel'}
                   />
                 </div>
                 <p class={'truncate my-auto'}>{item().data.name}</p>
@@ -323,10 +326,31 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
   );
 
-  const options = createMemo(() => {
-    const emailSet = new Set<string>();
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
 
-    const optionsList: CombinedRecipientItem<K>[] = [];
+  // Create search function for recipients - only used for initial sorting with no query
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
+    config: FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+      currentUserDomain,
+      getRecipientOptionEmail
+    ),
+    getName: getRecipientOptionTextValue,
+    isChannelItem: (item) => item.kind === 'channel',
+    getTimestamp: (item) => ({
+      lastInteraction:
+        item.kind === 'user' ? item.data.lastInteraction : undefined,
+    }),
+  });
+
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  const recipients = createMemo(() => {
+    const options: CombinedRecipientItem[] = [];
+    const emails = new Set<string>();
+
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
       const email = getRecipientOptionEmail(item);
@@ -341,18 +365,36 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       }
 
       if (email) {
-        emailSet.add(email.toLowerCase());
+        emails.add(email.toLowerCase());
       }
-      optionsList.push(option);
+
+      if (item.kind === 'user') {
+        item.data = augmentUserWithDmActivity(item.data);
+      }
+
+      options.push(item);
     }
 
+    const sorted = recipientSearch(options, '').map((item) => {
+      return item.item;
+    });
+
+    return {
+      raw: options,
+      emails,
+      sorted,
+    };
+  });
+
+  const options = createMemo(() => {
+    const { emails, sorted } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
     const hasExactEmailMatch =
-      currentUserInput && emailSet.has(currentUserInput.toLowerCase());
+      currentUserInput && emails.has(currentUserInput.toLowerCase());
 
-    const allOptions = [...optionsList, ...customUsers()];
+    const allOptions = [...sorted, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -370,7 +412,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       allOptions.push(customEntity);
     }
 
-    return allOptions;
+    return allOptions as CombinedRecipientItem<K>[];
   });
 
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
@@ -443,26 +485,36 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           const name = getRecipientOptionName(opt);
                           const email = getRecipientOptionEmail(opt);
 
-                          const displayText =
-                            name && name !== email
-                              ? `${name} | ${email}`
-                              : email;
+                          const displayText = () => name || email;
 
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <UserIcon
-                                id={opt.id}
-                                size="xs"
-                                isDeleted={false}
+                            <Tooltip
+                              placement="bottom"
+                              unstyled
+                              tooltip={
+                                <UserTooltip
+                                  displayName={name || ''}
+                                  email={email}
+                                  id={opt.id}
+                                  isDeleted={false}
+                                />
+                              }
+                            >
+                              <RecipientChip
+                                icon={
+                                  !isMobileWidth() ? (
+                                    <UserIcon
+                                      id={opt.id}
+                                      size="xs"
+                                      isDeleted={false}
+                                      showTooltip={false}
+                                    />
+                                  ) : undefined
+                                }
+                                label={displayText() ?? ''}
+                                onRemove={() => state.remove(option)}
                               />
-                              <p class={'text-sm'}>
-                                {truncateString(displayText ?? '', 20)}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            </Tooltip>
                           );
                         }}
                       </Match>
@@ -471,41 +523,47 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       >
                         {(channelOption) => {
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <HashIcon class="w-4 h-4" />
-                              <p class={'text-sm'}>
-                                {truncateString(
-                                  channelOption().data.name ??
-                                    channelOption().id,
-                                  20
-                                )}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            <RecipientChip
+                              icon={<HashIcon class="w-4 h-4" />}
+                              label={
+                                channelOption().data.name ?? channelOption().id
+                              }
+                              onRemove={() => state.remove(option)}
+                            />
                           );
                         }}
                       </Match>
                       <Match when={matches(option, (o) => o.kind === 'custom')}>
                         {(customOption) => {
                           const email = customOption().data.email;
+
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <UserIcon
-                                id={email}
-                                size="xs"
-                                isDeleted={false}
+                            <Tooltip
+                              placement="bottom"
+                              unstyled
+                              tooltip={
+                                <UserTooltip
+                                  displayName={email}
+                                  email={email}
+                                  isDeleted={false}
+                                />
+                              }
+                            >
+                              <RecipientChip
+                                icon={
+                                  !isMobileWidth() ? (
+                                    <UserIcon
+                                      id={email}
+                                      size="xs"
+                                      isDeleted={false}
+                                      showTooltip={false}
+                                    />
+                                  ) : undefined
+                                }
+                                label={email}
+                                onRemove={() => state.remove(option)}
                               />
-                              <p class={'text-sm'}>
-                                {truncateString(email, 20)}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            </Tooltip>
                           );
                         }}
                       </Match>

@@ -118,6 +118,17 @@ export class StaticFileService extends pulumi.ComponentResource {
         enabled: true,
         mfaDelete: false,
       },
+      lifecycleRules: [
+        {
+          enabled: true,
+          noncurrentVersionExpiration: {
+            days: 7,
+          },
+          expiration: {
+            expiredObjectDeleteMarker: true,
+          },
+        },
+      ],
       corsRules: [
         {
           allowedHeaders: ['*'],
@@ -215,6 +226,8 @@ export class StaticFileService extends pulumi.ComponentResource {
                 'dynamodb:DeleteItem',
                 'dynamodb:Query',
                 'dynamodb:Scan',
+                'dynamodb:BatchGetItem',
+                'dynamodb:BatchWriteItem',
               ],
               Resource: [
                 metadataTable.arn,
@@ -408,7 +421,6 @@ export class StaticFileService extends pulumi.ComponentResource {
         })
       ),
     });
-    const STORAGE_LOCATION = `https://${SERVICE_DOMAIN_NAME}.macro.com`;
     // service
     const service = new awsx.ecs.FargateService(
       `${SERVICE_NAME}`,
@@ -436,9 +448,14 @@ export class StaticFileService extends pulumi.ComponentResource {
               cpu: 256,
               memory: 512,
               environment: [
-                { name: `DYNAMODB_TABLE_NAME`, value: args.dynamoDbTableName },
-                { name: `S3_BUCKET_URL`, value: STORAGE_LOCATION },
-                { name: 'S3_EVENT_QUEUE_URL', value: queueQueue.url },
+                {
+                  name: `STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME`,
+                  value: args.dynamoDbTableName,
+                },
+                {
+                  name: 'STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL',
+                  value: queueQueue.url,
+                },
                 ...(args.containerEnvVars ?? []),
               ],
               logConfiguration: {
@@ -447,7 +464,7 @@ export class StaticFileService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `static-file-service-${stack}`,
+                  dd_service: 'static-file-service',
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',

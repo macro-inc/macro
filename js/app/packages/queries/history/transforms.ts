@@ -1,48 +1,72 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
+import type { DateValue } from '@core/util/date';
 import type { Item } from '@service-storage/generated/schemas/item';
-
-type ItemWithViewedAt = Item & { viewedAt?: number };
-
-export type HistoryItem = Item & {
-  name: string;
-  viewedAt?: number;
-};
-
-export type HistoryQueryResponse = {
-  data: Item[];
-};
+import type { HistoryItem, HistoryQueryResponse } from './types';
 
 export function transformHistoryItem(item: Item): HistoryItem {
-  return {
-    ...item,
+  const base = {
+    id: item.id,
     name: itemToSafeName(item),
-    viewedAt: (item as ItemWithViewedAt).viewedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    deletedAt: item.deletedAt,
+    rawName: item.name,
   };
-}
 
-export function filterInstructionsMd(
-  items: Item[],
-  instructionsId: string | null | undefined
-): Item[] {
-  if (!instructionsId) return items;
-  return items.filter((item) => item.id !== instructionsId);
+  switch (item.type) {
+    case 'document':
+      return {
+        ...base,
+        type: 'document',
+        fileType: item.fileType,
+        subType: item.subType,
+        ownerId: item.owner,
+      };
+
+    case 'chat':
+      return {
+        ...base,
+        type: 'chat',
+        isPersistent: item.isPersistent,
+        ownerId: item.userId,
+      };
+
+    case 'project':
+      return {
+        ...base,
+        type: 'project',
+        ownerId: item.userId,
+      };
+  }
 }
 
 export function transformHistoryResponse(
-  data: HistoryQueryResponse,
-  instructionsId: string | null | undefined
+  response: HistoryQueryResponse
 ): HistoryItem[] {
-  return filterInstructionsMd(data.data, instructionsId).map(
-    transformHistoryItem
-  );
+  return response.data.map(transformHistoryItem);
 }
 
-export function updateItemViewedAt(
-  items: Item[],
+/**
+ * Pure function: Updates an item's viewedAt timestamp and moves it to the front.
+ * Returns a new array without mutating the input.
+ */
+export function updateViewedAtAndMoveItemToFront(
+  items: HistoryItem[],
   itemId: string,
-  timestamp: number
-): Item[] {
-  return items.map((item) =>
-    item.id === itemId ? { ...item, viewedAt: timestamp } : item
-  );
+  timestamp: DateValue
+): HistoryItem[] {
+  const itemIndex = items.findIndex((item) => item.id === itemId);
+
+  // Item not found, return original array
+  if (itemIndex === -1) return items;
+
+  const item = items[itemIndex];
+  const updatedItem: HistoryItem = { ...item, viewedAt: timestamp };
+
+  // Return new array with updated item at front
+  return [
+    updatedItem,
+    ...items.slice(0, itemIndex),
+    ...items.slice(itemIndex + 1),
+  ];
 }

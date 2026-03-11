@@ -4,7 +4,7 @@
 use crate::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
     ast::{
-        channel::ChannelLiteral,
+        channel::{ChannelLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         email::EmailLiteral,
         project::ProjectLiteral,
@@ -49,6 +49,9 @@ pub enum ExpandErr {
     /// unknown chat type
     #[error(transparent)]
     ChatRoleErr(#[from] UnknownValue<ChatRole>),
+    /// unknown channel type
+    #[error(transparent)]
+    ChannelTypeErr(#[from] UnknownValue<ChannelTypeFilter>),
     /// invalid uuid
     #[error("Invalid uuid string: {0}")]
     Uuid(#[from] uuid::Error),

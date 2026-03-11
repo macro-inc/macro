@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 mod api;
 mod config;
 mod constants;
@@ -22,6 +23,11 @@ use frecency::{
         time::DefaultTime,
     },
 };
+use last_online_tracker::{
+    domain::services::LastOnlineService,
+    inbound::LastOnlineWorker,
+    outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
@@ -30,6 +36,7 @@ use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
+use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
 use tower_http::cors::CorsLayer;
 
 env_var!(
@@ -44,13 +51,11 @@ async fn main() -> Result<()> {
     // Parse our configuration from the environment.
     let config = Arc::new(Config::from_env(EnvVars::unwrap_new()));
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
@@ -69,8 +74,7 @@ async fn main() -> Result<()> {
         ])
         .allow_origin(ORIGINS);
 
-    let builder = aws_config::defaults(aws_config::BehaviorVersion::latest()).region("us-east-1");
-    let dynamodb_client = aws_sdk_dynamodb::Client::new(&builder.load().await);
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let redis_client = Arc::new(
         redis::Client::open(config.redis_host.as_ref())
@@ -88,6 +92,11 @@ async fn main() -> Result<()> {
 
     let connection_manager = create_dynamo_db_connection_manager(dynamodb_client.clone()).await?;
 
+    let last_online_redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let last_online_worker = Arc::new(LastOnlineWorker::new(LastOnlineService::new(
+        LastOnlineDefaultTime,
+        RedisLastOnlineRepo::new(last_online_redis_conn),
+    )));
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
@@ -101,10 +110,15 @@ async fn main() -> Result<()> {
         )
         .await?;
 
+    let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
+    let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
+
     let context = context::ApiContext {
         connection_manager,
         redis_client: Arc::clone(&redis_client),
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
+        stream_manager,
+        last_online_worker,
     };
 
     tokio::spawn(poll_messages(context.clone()));

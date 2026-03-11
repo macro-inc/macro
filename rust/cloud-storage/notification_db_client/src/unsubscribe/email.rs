@@ -62,7 +62,12 @@ pub async fn remove_email_unsubscribe(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("email_unsubscribe_list")))]
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("email_unsubscribe_list"))
+    )]
     async fn test_is_email_unsubscribed_batch(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {
@@ -89,7 +94,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("email_unsubscribe_list")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("email_unsubscribe_list"))
+    )]
     async fn test_upsert_email_unsubscribe(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         upsert_email_unsubscribe(&pool, "A").await?;
         upsert_email_unsubscribe(&pool, "NeW").await?;
@@ -106,7 +114,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("email_unsubscribe_list")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("email_unsubscribe_list"))
+    )]
     async fn test_remove_email_unsubscribe(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         remove_email_unsubscribe(&pool, "A").await?;
         let result = sqlx::query!(

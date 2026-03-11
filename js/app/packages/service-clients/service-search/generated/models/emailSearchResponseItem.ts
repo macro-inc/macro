@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { EmailSearchParticipant } from './emailSearchParticipant';
 import type { EmailSearchResponseItemName } from './emailSearchResponseItemName';
 import type { EmailSearchResponseItemSubject } from './emailSearchResponseItemSubject';
 import type { EmailSearchResult } from './emailSearchResult';
@@ -23,6 +24,8 @@ for consistency in our data model. */
   /** Subject of the email thread */
   name?: EmailSearchResponseItemName;
   owner_id: string;
+  /** The participants (senders) in this email thread */
+  participants: EmailSearchParticipant[];
   /** The subject of the email
 This is only present if the search result is on the message content */
   subject?: EmailSearchResponseItemSubject;

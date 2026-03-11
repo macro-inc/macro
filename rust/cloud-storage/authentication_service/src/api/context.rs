@@ -1,12 +1,23 @@
 use std::sync::Arc;
 
 use axum::extract::FromRef;
+use github::domain::service::GithubLinkServiceImpl;
+use github::outbound::github_auth_client::GithubAuthImpl;
+use github::outbound::github_oauth_client::GithubOauthImpl;
+use github::outbound::pg_github_repo::PgGithubRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
+use notification::domain::models::email_notification_digest::StateMachineDriverA;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -17,18 +28,36 @@ use teams::{
     outbound::team_repo::TeamRepositoryImpl,
 };
 
+type StateMachine = StateMachineDriverA<
+    DbUserExistenceChecker,
+    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
+    LastOnlineCheckerImpl<
+        last_online_tracker::outbound::time::DefaultTime,
+        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
+    >,
+    RedisDigestBatcher,
+>;
+
+pub(crate) type NotificationIngressType = NotificationIngressService<
+    DbNotificationRepository<PgPool>,
+    SqsNotificationQueue,
+    StateMachine,
+>;
+
+pub(crate) type GithubLinkServiceType =
+    GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
-    pub auth_client: Arc<authentication_service::service::fusionauth_client::FusionAuthClient>,
+    pub github_link_service: Arc<GithubLinkServiceType>,
+    pub auth_client: Arc<fusionauth::FusionAuthClient>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
-    pub comms_client: Arc<comms_service_client::CommsServiceClient>,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
-    pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,
     pub ses_client: Arc<ses_client::Ses>,
-    pub macro_notify_client: Arc<macro_notify::MacroNotify>,
+    pub notification_ingress_service: Arc<NotificationIngressType>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub environment: Environment,
     pub jwt_args: JwtValidationArgs,

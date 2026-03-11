@@ -8,6 +8,20 @@ export { mockMessages } from '@core/component/AI/util/mockMessage';
 export * from '@core/component/AI/util/stream';
 export { limitStream } from '@core/component/AI/util/stream';
 
+const TABLE = `Here's a comparison table:
+
+| Feature | React | Solid | Vue |
+|---------|-------|-------|-----|
+| Reactivity | Virtual DOM | Fine-grained | Proxy-based |
+| Bundle Size | ~40kb | ~7kb | ~33kb |
+| Learning Curve | Moderate | Easy | Easy |
+| Performance | Good | Excellent | Good |
+| TypeScript | Good | Excellent | Good |
+| Community | Large | Growing | Large |
+| Job Market | Excellent | Emerging | Good |
+
+As you can see, each framework has its strengths. Solid excels in performance and bundle size, while React has the largest community and job market.`;
+
 const POEM = `Here's a poem for you:
 
   Digital Dawn
@@ -43,6 +57,15 @@ export function poem() {
   ]);
 }
 
+export function table() {
+  return createStream([
+    {
+      type: 'text',
+      text: TABLE,
+    },
+  ]);
+}
+
 export function test() {
   const stream = poem();
   createEffect(() => {
@@ -53,7 +76,6 @@ export function test() {
 
   createEffect(() => {
     if (stream.isDone()) console.log('Stream Done');
-    if (stream.isErr()) console.log('Stream Error');
   });
 }
 
@@ -74,11 +96,11 @@ export function toolCall(_delay: NetworkDelay = noDelay) {
       type: 'toolCall',
       tool: {
         data: {
-          contentType: 'document',
+          contentType: 'channel',
           ids: ['this-is-not-a-real-id'],
           messagesSince: null,
         },
-        name: 'Read',
+        name: 'ReadThread',
       },
     },
     {

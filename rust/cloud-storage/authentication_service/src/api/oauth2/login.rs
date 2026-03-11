@@ -81,8 +81,7 @@ pub(in crate::api::oauth2) async fn handler(
 
     if let Some(session_code) = session_code {
         // Append the session code to the url
-        url.query_pairs_mut()
-            .append_pair("session_code", &session_code);
+        url.query_pairs_mut().append_pair("token", &session_code);
 
         ctx.macro_cache_client
             .set_mobile_login_session(&session_code, &refresh_token)

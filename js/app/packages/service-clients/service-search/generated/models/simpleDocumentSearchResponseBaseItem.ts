@@ -23,5 +23,5 @@ export interface SimpleDocumentSearchResponseBaseItem {
   /** The raw content of the document */
   raw_content?: SimpleDocumentSearchResponseBaseItemRawContent;
   /** The time the document was last updated */
-  updated_at: number;
+  updated_at: string;
 }

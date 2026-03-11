@@ -1,6 +1,6 @@
 use anyhow::Context;
 use axum::http::StatusCode;
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
 use sqlx::{Pool, Postgres};
 use tracing::instrument;
 

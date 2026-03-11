@@ -3,11 +3,12 @@ use std::marker::PhantomData;
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use model::{chat::ChatBasic, user::axum_extractor::MacroUserExtractor};
+use model::chat::ChatBasic;
+use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 
@@ -19,7 +20,6 @@ pub struct ChatAccessLevelExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for ChatAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,

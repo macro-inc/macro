@@ -16,4 +16,5 @@ export const ALLOWED_ORIGINS = [
   'https://website-staging.macro.com',
   'https://website-prod.macro.com',
   'https://apollo-testing.macro.com',
+  'tauri://localhost',
 ];

@@ -2,12 +2,18 @@ export type { DropdownOption } from './Dropdown';
 export { Dropdown } from './Dropdown';
 export {
   type CombinedEntity,
-  ENTITY_SEARCH_CONFIG,
-  entityMapper,
+  type EntityTypeItemMap,
+  createEntitySearchConfig,
+  entityTypeToBuckets,
+  useQuickAccessEntities,
   getEntityName,
   getEntitySearchText,
   getEntityType,
   threadMapper,
+  quickAccessItemToEntity,
+  entityDataToEntity,
+  userToEntity,
+  sortEntitiesWithSelfFirst,
 } from './entityUtils';
 export { PropertyEntitySelector } from './PropertyEntitySelector';
 export { PropertyOptionSelector } from './PropertyOptionSelector';

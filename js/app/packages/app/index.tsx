@@ -1,4 +1,5 @@
 import './index.css';
+import '@fontsource-variable/inter';
 // SolidDevtools retains disposed memos, causes memory leak
 // import 'solid-devtools';
 
@@ -7,10 +8,8 @@ import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
-import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
 
 // Override global fetch with platformFetch for Tauri compatibility
@@ -28,8 +27,6 @@ if (isTauri()) {
     },
   });
 }
-
-import './component/custom-cursor/custom-cursor';
 
 initializeLexical();
 
@@ -76,7 +73,6 @@ const renderApp = () => {
           )}
         >
           <Root />
-          <ReactiveFavicon />
         </ErrorBoundary>
       ),
       root
@@ -88,14 +84,26 @@ const renderApp = () => {
 
 function main() {
   console.log('App Version ', import.meta.env.__APP_VERSION__);
-  Observability.init(import.meta.env.__APP_VERSION__);
 
-  // during `vite dev` (but not dev builds), don't inject analytics garbage
+  // during `vite dev` (but not dev builds), don't inject analytics/observability
   if (!import.meta.hot) {
-    analytics.init({
-      appVersion: import.meta.env.__APP_VERSION__,
-      segmentWriteKey: import.meta.env.VITE_SEGMENT_WRITE_KEY,
-      mode: import.meta.env.MODE,
+    const scheduleIdleTask =
+      window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1));
+
+    // Lazy load and init observability (Datadog) to reduce initial bundle
+    scheduleIdleTask(() => {
+      import('@observability').then((Observability) => {
+        Observability.init(import.meta.env.__APP_VERSION__);
+      });
+    });
+
+    // Defer analytics initialization to avoid blocking initial render
+    scheduleIdleTask(() => {
+      analytics.init({
+        appVersion: import.meta.env.__APP_VERSION__,
+        segmentWriteKey: import.meta.env.VITE_SEGMENT_WRITE_KEY,
+        mode: import.meta.env.MODE,
+      });
     });
 
     // this event is emitted when dynamically loading a module fails

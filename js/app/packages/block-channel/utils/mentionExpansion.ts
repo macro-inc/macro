@@ -1,4 +1,7 @@
+import { $isSingleDocumentMention } from '@core/component/LexicalMarkdown/utils';
+import { $convertMentionToCard, $isDocumentMentionNode } from '@lexical-core';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import { $getRoot, $isParagraphNode } from 'lexical';
 
 export type MentionItem = {
   itemType: string;
@@ -35,4 +38,24 @@ export function toSimpleMention(
     seenUserIds.add(mention.itemId);
   }
   return { entity_type: mention.itemType, entity_id: mention.itemId };
+}
+
+export function $convertSingleMentionToCard() {
+  if ($isSingleDocumentMention()) {
+    const root = $getRoot();
+    const rootChildren = root.getChildren();
+    if (rootChildren.length > 0) {
+      const firstChild = rootChildren[0];
+      if ($isParagraphNode(firstChild)) {
+        const paragraphChildren = firstChild.getChildren();
+        if (paragraphChildren.length > 0) {
+          const mention = paragraphChildren[0];
+          console.log({ mention });
+          if ($isDocumentMentionNode(mention)) {
+            $convertMentionToCard(mention);
+          }
+        }
+      }
+    }
+  }
 }

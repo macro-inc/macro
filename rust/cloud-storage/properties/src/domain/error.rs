@@ -16,4 +16,8 @@ pub enum PropertiesErr {
     /// Repository/database errors - maps to 500
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
+
+    /// Permission service is not configured
+    #[error("permission service is not configured")]
+    PermissionServiceNotConfigured,
 }

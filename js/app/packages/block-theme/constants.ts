@@ -2,7 +2,7 @@ import type { ThemeV1 } from './types/themeTypes';
 
 export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
 export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
-export const BEVELED_CORNERS: boolean = false;
+export const BEVELED_CORNERS: boolean = true;
 export const BLACK_BEZELS: boolean = false;
 
 
@@ -93,6 +93,28 @@ export const DEFAULT_THEMES = [
       c2: { l: 0.58, c: 0.0, h: 14 },
       c3: { l: 0.62, c: 0.0, h: 14 },
       c4: { l: 0.71, c: 0.0, h: 14 },
+    },
+  },
+  {
+    id: 'Satsuma',
+    name: 'Satsuma',
+    version: 1,
+    tokens: {
+      a0: { l: 0.672984375, c: 0.291, h: 82.13203125 },
+      a1: { l: 0.672984375, c: 0.291, h: 122.13203125 },
+      a2: { l: 0.672984375, c: 0.291, h: 162.13203125 },
+      a3: { l: 0.672984375, c: 0.291, h: 202.13203125 },
+      a4: { l: 0.672984375, c: 0.291, h: 242.13203125 },
+      b0: { l: 0.971016, c: 0.023945808, h: 82.13203125 },
+      b1: { l: 0.961, c: 0.023945808, h: 82.13203125 },
+      b2: { l: 0.933, c: 0.023945808, h: 82.13203125 },
+      b3: { l: 0.91, c: 0.023945808, h: 82.13203125 },
+      b4: { l: 0.785, c: 0.023945808, h: 82.13203125 },
+      c0: { l: 0.275293, c: 0.023945808, h: 82.13203125 },
+      c1: { l: 0.213, c: 0.023945808, h: 82.13203125 },
+      c2: { l: 0.385, c: 0.023945808, h: 82.13203125 },
+      c3: { l: 0.454, c: 0.023945808, h: 82.13203125 },
+      c4: { l: 0.503, c: 0.023945808, h: 82.13203125 },
     },
   },
   {

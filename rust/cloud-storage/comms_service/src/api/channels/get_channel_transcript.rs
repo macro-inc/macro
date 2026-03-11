@@ -5,7 +5,7 @@ use crate::api::{
 use ai_format::insight_context_log::InsightContextLog;
 use ai_format::util::Indent;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
@@ -71,29 +71,6 @@ pub async fn handler_external(
     State(ctx): State<AppState>,
     ChannelMember(_channel_member): ChannelMember,
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
-    Query(query): Query<GetChannelTranscriptQuery>,
-) -> Result<Response, Response> {
-    let transcript = get_channel_transcript(&ctx.db, &channel_id, query.since, query.limit)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get channel transcript");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to get channel transcript",
-            )
-                .into_response()
-        })?;
-
-    let response = ChannelTranscriptResponse { transcript };
-
-    Ok((StatusCode::OK, Json(response)).into_response())
-}
-
-/// Internal handler without authentication
-#[tracing::instrument(skip(ctx))]
-pub async fn handler_internal(
-    State(ctx): State<AppState>,
-    Path(channel_id): Path<Uuid>,
     Query(query): Query<GetChannelTranscriptQuery>,
 ) -> Result<Response, Response> {
     let transcript = get_channel_transcript(&ctx.db, &channel_id, query.since, query.limit)

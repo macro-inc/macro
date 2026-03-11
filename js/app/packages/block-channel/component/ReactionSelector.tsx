@@ -227,7 +227,7 @@ export function ReactionSelector(props: ReactionSelectorProps) {
       slide={true}
       open={openPopover()}
     >
-      <Popover.Trigger>
+      <Popover.Trigger tabIndex={-1}>
         <DeprecatedIconButton icon={SmileIcon} tabIndex={-1} />
       </Popover.Trigger>
 

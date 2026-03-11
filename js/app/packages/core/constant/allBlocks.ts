@@ -6,7 +6,7 @@ import {
   type FileTypeString,
   type MimeType,
 } from '@core/block';
-import type { SubType } from '@macro-entity';
+import type { SubType } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
@@ -221,7 +221,8 @@ type ItemLike = {
  * @return The block name or undefined if there is no appropriate block.
  */
 export function itemToBlockName(
-  item: ItemLike
+  item: ItemLike,
+  icon?: boolean
 ): BlockName | BlockAlias | undefined {
   const subTypeName =
     item.subType && 'type' in item.subType
@@ -231,9 +232,9 @@ export function itemToBlockName(
     return subTypeName;
   }
   if (item.fileType) {
-    return fileTypeToBlockName(item.fileType);
+    return fileTypeToBlockName(item.fileType, icon);
   }
-  return fileTypeToBlockName(item.type);
+  return fileTypeToBlockName(item.type, icon);
 }
 
 /**

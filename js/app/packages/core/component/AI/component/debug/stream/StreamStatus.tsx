@@ -1,8 +1,8 @@
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { Match, Switch } from 'solid-js';
 
 type Props = {
-  stream: () => MessageStream | undefined;
+  stream: () => ChatMessageStream | undefined;
 };
 
 export function StreamStatus(props: Props) {
@@ -20,10 +20,6 @@ export function StreamStatus(props: Props) {
               <div class="flex items-center space-x-2">
                 <Dot active={stream().isDone()} />
                 <span>isDone: {String(stream().isDone())}</span>
-              </div>
-              <div class="flex items-center space-x-2">
-                <Dot active={stream().isErr()} />
-                <span>isErr: {String(stream().isErr())}</span>
               </div>
             </div>
           )}

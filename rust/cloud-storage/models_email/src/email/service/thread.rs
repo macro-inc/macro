@@ -1,11 +1,9 @@
 use crate::email::service::message::Message;
-use crate::service::attachment::{Attachment, AttachmentMacro};
+use crate::service::attachment::Attachment;
 use crate::service::contact::Contact;
-use crate::service::message::MessageWithBodyReplyless;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
-use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -29,7 +27,7 @@ pub struct ThreadList {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Thread {
-    pub db_id: Option<Uuid>,
+    pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub link_id: Uuid,
     pub inbox_visible: bool,
@@ -43,49 +41,6 @@ pub struct Thread {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub messages: Vec<Message>,
-}
-
-/// Thread object exposed to the FE in Get Threads Call
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct APIThread {
-    pub db_id: Option<Uuid>,
-    pub provider_id: Option<String>,
-    pub link_id: Uuid,
-    pub inbox_visible: bool,
-    pub is_read: bool,
-    pub access_level: AccessLevel,
-    // this field is only set w.r.t incoming messages (see is_inbound), for inbox thread ordering
-    pub latest_inbound_message_ts: Option<DateTime<Utc>>,
-    // this field is only set w.r.t outgoing messages (see is_outbound), for sent message thread ordering
-    pub latest_outbound_message_ts: Option<DateTime<Utc>>,
-    // latest message in the thread that isn't marked as spam, for all mail thread ordering
-    pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub messages: Vec<MessageWithBodyReplyless>,
-}
-
-impl APIThread {
-    pub fn from_thread_with_messages(
-        thread: Thread,
-        messages: Vec<MessageWithBodyReplyless>,
-        access_level: AccessLevel,
-    ) -> Self {
-        Self {
-            db_id: thread.db_id,
-            provider_id: thread.provider_id,
-            link_id: thread.link_id,
-            inbox_visible: thread.inbox_visible,
-            is_read: thread.is_read,
-            access_level,
-            latest_inbound_message_ts: thread.latest_inbound_message_ts,
-            latest_outbound_message_ts: thread.latest_outbound_message_ts,
-            latest_non_spam_message_ts: thread.latest_non_spam_message_ts,
-            created_at: thread.created_at,
-            updated_at: thread.updated_at,
-            messages,
-        }
-    }
 }
 
 /// thread summary returned in preview endpoint
@@ -122,23 +77,10 @@ pub struct ThreadPreviewCursor {
     pub sender_name: Option<String>,
     pub sender_photo_url: Option<String>,
     pub attachments: Vec<Attachment>,
-    pub attachments_macro: Vec<AttachmentMacro>,
     pub participants: Vec<Contact>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[schemars(with = "i64")]
     pub sort_ts: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[schemars(with = "i64")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[schema(value_type = i64)]
-    #[schemars(with = "i64")]
     pub updated_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    #[schemars(with = "Option<i64>")]
     pub viewed_at: Option<DateTime<Utc>>,
 }
 
@@ -208,7 +150,6 @@ impl ThreadPreviewCursor {
             sender_name: db_preview.sender_name,
             sender_photo_url: db_preview.sender_photo_url,
             attachments: Vec::new(),
-            attachments_macro: Vec::new(),
             participants: Vec::new(),
             viewed_at: db_preview.viewed_at,
             created_at: db_preview.created_at,

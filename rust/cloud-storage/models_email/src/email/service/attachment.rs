@@ -11,8 +11,8 @@ use uuid::Uuid;
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct Attachment {
-    #[schemars(with = "Option<String>")]
-    pub db_id: Option<Uuid>,
+    #[schemars(with = "String")]
+    pub db_id: Uuid,
     // a different value is returned by the gmail API for this each time you fetch a message -
     // don't make the mistake of using it to uniquely identify an attachment
     pub provider_id: Option<String>,
@@ -24,21 +24,6 @@ pub struct Attachment {
     #[schemars(with = "Option<String>")]
     pub sfs_id: Option<Uuid>,
     pub content_id: Option<String>,
-}
-
-/// Attachments of a message created when sending a message/draft through Macro FE. references
-/// a macro item (document, canvas, etc). These don't actually get sent to the provider when
-/// sending a message, but we store them so we can display the pills for the Macro objects in the FE
-/// when displaying the message.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
-pub struct AttachmentMacro {
-    #[schemars(with = "Option<String>")]
-    pub db_id: Option<Uuid>,
-    #[schemars(with = "Option<String>")]
-    pub message_id: Option<Uuid>,
-    #[schemars(with = "String")]
-    pub item_id: Uuid,
-    pub item_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +100,40 @@ impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
             sha: db.sha,
             size: db.size,
             s3_key: db.s3_key,
+        }
+    }
+}
+
+/// A forwarded attachment linking a draft to an original message's attachment.
+/// Data is fetched from Gmail at send time rather than stored in S3.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentForwarded {
+    /// The UUID of the original attachment in email_attachments.
+    pub attachment_id: Uuid,
+    /// The ID of the draft message this forwarded attachment belongs to.
+    pub draft_id: Uuid,
+    /// The Gmail attachment ID for fetching data from Gmail API.
+    pub provider_attachment_id: Option<String>,
+    /// The Gmail message ID of the original message containing the attachment.
+    pub message_provider_id: String,
+    /// Original file name of the attachment.
+    pub filename: Option<String>,
+    /// MIME type of the attachment.
+    pub mime_type: Option<String>,
+    /// File size in bytes.
+    pub size_bytes: Option<i64>,
+}
+
+impl From<crate::db::attachment::AttachmentForwarded> for AttachmentForwarded {
+    fn from(db: crate::db::attachment::AttachmentForwarded) -> Self {
+        Self {
+            attachment_id: db.attachment_id,
+            draft_id: db.draft_id,
+            provider_attachment_id: db.provider_attachment_id,
+            message_provider_id: db.message_provider_id,
+            filename: db.filename,
+            mime_type: db.mime_type,
+            size_bytes: db.size_bytes,
         }
     }
 }

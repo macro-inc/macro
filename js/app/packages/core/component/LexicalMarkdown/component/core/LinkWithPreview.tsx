@@ -4,6 +4,7 @@ import { useUnfurl } from '@core/signal/unfurl';
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 false && floatWithElement;
 
@@ -30,7 +31,10 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
         href={props.url}
         target="_blank"
         class={`${props.class || ''}`}
-        onMouseEnter={() => debouncedSetPreviewOpen(true)}
+        onMouseEnter={() => {
+          if (isTouchDevice()) return;
+          debouncedSetPreviewOpen(true);
+        }}
         onMouseLeave={() => {
           debouncedSetPreviewOpen.clear();
           debouncedSetPreviewOpen(false);
@@ -42,11 +46,11 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
       <Show when={previewOpen()}>
         <ScopedPortal>
           <div
-            class="p-1 absolute top-full left-0 z-10 bg-menu w-80 shadow-lg ring-edge ring-1 mt-2"
+            class="absolute bg-panel rounded-xs ring ring-edge-muted border-edge left-0 z-10 shadow-lg max-w-72"
             style={{
               transform: 'translateY(0)',
             }}
-            use:floatWithElement={{ element: () => linkRef }}
+            use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
           >
             {(() => {
               const data = unfurlData();

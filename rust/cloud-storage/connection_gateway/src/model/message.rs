@@ -1,7 +1,6 @@
 use anyhow::Result;
-use model_entity::Entity;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use stream::domain::StreamEvent;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
@@ -10,21 +9,23 @@ pub struct Message {
     pub data: String,
 }
 
+static STREAM_EVENT_TYPE: &str = "stream_event";
+impl TryFrom<StreamEvent> for Message {
+    type Error = anyhow::Error;
+    fn try_from(value: StreamEvent) -> Result<Self, Self::Error> {
+        serde_json::to_string(&value)
+            .map(|data| Self {
+                data,
+                message_type: STREAM_EVENT_TYPE.into(),
+            })
+            .map_err(anyhow::Error::from)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum OutgoingMessage {
     Pong,
     Message(Message),
-}
-
-// Represents a single unique message sent to a recipient
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct UniqueMessage {
-    /// the message to send
-    pub message_content: serde_json::Value,
-    /// all entity to send the message to
-    pub entity: Entity<'static>,
-    /// the type of the message we are sending
-    pub message_type: String,
 }
 
 impl TryFrom<Message> for axum::extract::ws::Message {
@@ -32,7 +33,7 @@ impl TryFrom<Message> for axum::extract::ws::Message {
 
     fn try_from(msg: Message) -> Result<Self> {
         let string: String = serde_json::to_string(&msg)?;
-        Ok(axum::extract::ws::Message::Text(string))
+        Ok(axum::extract::ws::Message::Text(string.into()))
     }
 }
 
@@ -41,7 +42,7 @@ impl TryFrom<OutgoingMessage> for axum::extract::ws::Message {
 
     fn try_from(msg: OutgoingMessage) -> Result<Self> {
         match msg {
-            OutgoingMessage::Pong => Ok(axum::extract::ws::Message::Text("pong".to_string())),
+            OutgoingMessage::Pong => Ok(axum::extract::ws::Message::Text("pong".into())),
             OutgoingMessage::Message(message) => message.try_into(),
         }
     }

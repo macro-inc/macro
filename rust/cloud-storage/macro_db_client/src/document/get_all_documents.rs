@@ -38,6 +38,7 @@ pub async fn get_all_documents(
             d."fileType" as file_type,
             d."createdAt"::timestamptz as created_at,
             d."updatedAt"::timestamptz as updated_at,
+            d."deletedAt"::timestamptz as deleted_at,
             db.bom_parts as "document_bom?",
             di.modification_data as "modification_data?",
             d."projectId" as "project_id?",
@@ -125,6 +126,7 @@ pub async fn get_all_documents(
             created_at: row.created_at,
             updated_at: row.updated_at,
             sub_type: row.sub_type,
+            deleted_at: row.deleted_at,
         })
     })
     .fetch_all(db)

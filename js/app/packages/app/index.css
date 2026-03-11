@@ -6,12 +6,6 @@
 /* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
 @plugin '../../tailwind-plugins/zIndex.ts';
 
-/* custom cursor */
-/* must be imported inside base layer to prevent tag element default properties overriding TW cursor utility  */
-@layer base {
-  @import "./component/custom-cursor/custom-cursor.css";
-}
-
 @property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.20; }
 @property --a0h { syntax: "<angle>";  inherits: false; initial-value: 145deg; }
@@ -251,6 +245,14 @@
 @custom-variant ios (&:where(.tauri-ios *));
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant mobile-width (@media (max-width: 639px));
+/* `mobile:` is equivalent to `touch:mobile-width:` */
+@custom-variant mobile {
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
 
 :root {
   --color-focus: var(--color-accent);
@@ -493,10 +495,24 @@
 :root {
   --viewport-padding: 16px;
   --keyboard-height: 0px;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
+
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+@media (max-width: 639px) {
+  :root:where(html[data-touch-device="true"]) {
+    --text-xxs: 0.6875rem;
+    --text-xs: 0.8125rem;
+    --text-sm: 0.9375rem;
+    --text-base: 1.0625rem;
+  }
+}
 
 @theme default {
     /* Font families */
@@ -505,6 +521,9 @@
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
+    
+    /* Custom container size */
+    --container-small: 40rem;
 
     /* Colors */
     --color-macro-accent: #00c4ff;
@@ -569,12 +588,6 @@
     --container-c: 0;
 
     /* --shadow-*: initial; */
-    --radius-sm: 6px;
-    --radius-md: 6px;
-    --radius-lg: 6px;
-    --radius-xl: 6px;
-    --radius-2xl: 6px;
-    --radius-3xl: 6px;
 }
 
 @custom-variant drop-valid (&[data-drop-valid]);
@@ -583,6 +596,7 @@
 @layer base {
     html {
         overscroll-behavior: none;
+        overflow: hidden;
         font: -apple-system-body;
     }
 
@@ -726,19 +740,28 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
 
+/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
+   Keeps UI elements within device safe areas (notch, home indicator, etc.). */
+@utility safe-insets {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
 :root {
-  --thread-shift: 23px;
-  --user-icon-width: 30px;
-  --left-of-connector: 20px;
+  --thread-shift: 32px;
+  --user-icon-width: 36px;
+  --body-padding: .5rem;
+  --left-of-connector: 16px;
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
 }
 
 @media (min-width: 640px) {
   :root {
-    --thread-shift: 46px;
-    --user-icon-width: 40px;
+    --thread-shift: 40px;
+    --body-padding: .5rem;
     --left-of-connector: 28px;
-    --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
   }
 }
 
@@ -747,14 +770,26 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
         max-width: 800px;
         min-width: 250px;
     }
+}
 
-    @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4);
-    }
-    @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2);
-    }
+@utility macro-message-padding {
+  
+  @container (width < 816px) {
+      padding-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      padding-inline: calc(var(--spacing) * 2);
+  }
+}
 
+@utility macro-message-margin {
+  
+  @container (width < 816px) {
+      margin-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      margin-inline: calc(var(--spacing) * 2);
+  }
 }
 
 ::-webkit-scrollbar {
@@ -952,4 +987,17 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .portal-child-collapse > div {
   display: contents;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
+  -webkit-mask: var(--icon) no-repeat;
+  mask: var(--icon) no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  background-color: currentColor;
+  color: inherit;
+  width: 1em;
+  height: 1em;
+  background-image: none;
 }

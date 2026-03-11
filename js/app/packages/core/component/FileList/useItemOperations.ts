@@ -1,9 +1,11 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { ok } from '@core/util/maybeResult';
 import type { ItemType } from '@service-storage/client';
-import { refetchDeletedItems, useDeletedItems } from '@service-storage/deleted';
+import {
+  getDeletedItems,
+  invalidateDeletedItems,
+  setDeletedItems,
+} from '@queries/storage/deleted';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { usePinnedIds } from '@service-storage/pins';
 import {
   createCallback,
   createSingletonRoot,
@@ -14,41 +16,18 @@ import {
   bulkDelete as bulkDeleteOp,
   bulkMoveToFolder as bulkMoveToFolderOp,
   bulkPermanentlyDelete as bulkPermanentlyDeleteOp,
-  bulkRename as bulkRenameOp,
   bulkRevertDelete as bulkRevertDeleteOp,
-  bulkTogglePin as bulkTogglePinOp,
   copyItem as copyItemOp,
   deleteItem as deleteItemOp,
   getItemAccessLevel as getItemAccessLevelOp,
   moveToFolder as moveToFolderOp,
   permanentlyDelete as permanentlyDeleteOp,
-  renameItem as renameItemOp,
   revertDelete as revertDeleteOp,
-  togglePin as togglePinOp,
 } from './itemOperations';
 
 export const useItemOperations = createSingletonRoot(() => {
   const getItemAccessLevel = createCallback(
     (args: { itemType: ItemType; id: string }) => getItemAccessLevelOp(args)
-  );
-
-  const renameItem = createCallback(
-    async (args: {
-      itemType: ItemType;
-      id: string;
-      itemName: string;
-      newName: string;
-    }) => {
-      const success = await renameItemOp({
-        itemType: args.itemType,
-        id: args.id,
-        newName: args.newName,
-      });
-      if (!success) {
-        toast.failure('Unable to rename item');
-      }
-      return success;
-    }
   );
 
   const deleteItem = createCallback(
@@ -116,34 +95,6 @@ export const useItemOperations = createSingletonRoot(() => {
       return id;
     }
   );
-  const togglePin = createCallback(
-    (args: { itemType: ItemType; id: string }) => {
-      if (!args.id) return toast.failure('Unable to pin item');
-      return togglePinOp(args);
-    }
-  );
-
-  const bulkTogglePin = createCallback(async (items: Item[]) => {
-    const pinnedIds = usePinnedIds();
-    const wasPinned = pinnedIds().includes(items[0].id);
-    const action = wasPinned ? 'unpin' : 'pin';
-
-    const result = await toast.promise(bulkTogglePinOp(items), {
-      loading: `${wasPinned ? 'Unpinning' : 'Pinning'} ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
-      success: ({ failedItems }) => {
-        if (failedItems.length > 0) {
-          return `Failed to ${action} ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
-        }
-        return `Successfully ${action}ned ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
-      },
-      error: (error) =>
-        `Failed to ${action} items: ${error.message || 'Unknown error'}`,
-      toastTypeDeterminer: (result) =>
-        result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
-    });
-    return result;
-  });
-
   const bulkDelete = createCallback(async (items: Item[]) => {
     const result = await toast.promise(bulkDeleteOp(items), {
       loading: `Deleting ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
@@ -220,44 +171,21 @@ export const useItemOperations = createSingletonRoot(() => {
     // If items have failed to permanently delete, we can't just refetch resources, because items delete so slowly everything that had been successfully deleted will reappear.
     // So we need to undo our optimistic removal here.
     if (result.failedItems.length > 0) {
-      await refetchDeletedItems();
-      const { deletedItems, mutate } = useDeletedItems();
-      mutate(
-        ok({
-          items:
-            deletedItems()?.filter((item) => {
-              return (
-                result.failedItems.some(
-                  (failedItem) => failedItem.id === item.id
-                ) || !items.some((argItem) => argItem.id === item.id)
-              );
-            }) ?? [],
-        })
-      );
+      await invalidateDeletedItems();
+      const deletedItems = getDeletedItems();
+      setDeletedItems(() => ({
+        items: deletedItems.filter((item) => {
+          return (
+            result.failedItems.some(
+              (failedItem) => failedItem.id === item.id
+            ) || !items.some((argItem) => argItem.id === item.id)
+          );
+        }),
+      }));
     }
 
     return result;
   });
-
-  const bulkRename = createCallback(
-    async (items: { item: Item; newName: string }[]) => {
-      const result = await toast.promise(bulkRenameOp(items), {
-        loading: `Renaming ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
-        success: ({ failedItems }) => {
-          if (failedItems.length > 0) {
-            return `Failed to rename ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
-          }
-          return `Successfully renamed ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
-        },
-        error: (error) => {
-          return `Failed to rename items: ${error.message || 'Unknown error'}`;
-        },
-        toastTypeDeterminer: (result) =>
-          result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
-      });
-      return result;
-    }
-  );
 
   const bulkRevertDelete = createCallback(async (items: Item[]) => {
     const result = await toast.promise(bulkRevertDeleteOp(items), {
@@ -277,16 +205,12 @@ export const useItemOperations = createSingletonRoot(() => {
   });
 
   return {
-    renameItem,
     deleteItem,
     moveToFolder,
     copyItem,
-    togglePin,
-    bulkTogglePin,
     bulkDelete,
     bulkCopy,
     bulkMoveToFolder,
-    bulkRename,
     getItemAccessLevel,
     revertDelete,
     permanentlyDelete,

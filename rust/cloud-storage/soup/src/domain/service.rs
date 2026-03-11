@@ -1,11 +1,12 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencySoupItem, SimpleSortQuery, SimpleSortRequest, SoupErr,
-        SoupQuery, SoupRequest, SoupType,
+        AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, SimpleQueryInner,
+        SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
+use cowlike::CowLike;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
@@ -16,17 +17,16 @@ use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
 };
-use item_filters::ast::EntityFilterAst;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::as_owned::ShallowClone;
+use item_filters::{EntityFilters, ast::EntityFilterAst};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
 use models_soup::{
     comms::SoupChannel,
     email_thread::{
-        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-        SoupEnrichedEmailThreadPreview, SoupLabel, SoupMacroAttachment,
+        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
+        SoupLabel,
     },
     item::SoupItem,
 };
@@ -65,6 +65,7 @@ where
         }
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_simple_request(
         &self,
         soup_type: SoupType,
@@ -89,6 +90,7 @@ where
         }))
     }
 
+    #[tracing::instrument(skip(self, req))]
     async fn handle_soup_by_ids(
         &self,
         soup_type: SoupType,
@@ -101,6 +103,7 @@ where
     }
 
     /// enriches a frecency response with further soup data if the initial results length was not long enough
+    #[tracing::instrument(err, skip(self, frecency_items))]
     async fn fallback_soup_data(
         &self,
         soup_type: SoupType,
@@ -127,6 +130,7 @@ where
         Ok(frecency_items.chain(updated_at_soup))
     }
 
+    #[tracing::instrument(err, skip(self, cursor))]
     async fn handle_advanced_sort(
         &self,
         cursor: Query<Uuid, Frecency, Option<EntityFilterAst>>,
@@ -199,6 +203,7 @@ where
         ))
     }
 
+    #[tracing::instrument(err, skip(self, from_value))]
     async fn handle_frecency_cursor(
         &self,
         from_value: Option<(f64, Option<EntityFilterAst>)>,
@@ -221,7 +226,7 @@ where
             })
             .await?;
 
-        let entities: Vec<_> = res.ids().map(|f| f.entity.shallow_clone()).collect();
+        let entities: Vec<_> = res.ids().map(|f| f.entity.copied()).collect();
 
         let res = self
             .handle_soup_by_ids(
@@ -253,6 +258,7 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
         req: Option<GetEmailsRequest>,
@@ -274,9 +280,7 @@ where
                 |EnrichedEmailThreadPreview {
                      thread,
                      attachments,
-                     attachments_macro,
                      labels,
-                     metadata,
                      mut frecency_score,
                      participants,
                      ..
@@ -285,9 +289,7 @@ where
                     let soup_email = SoupEnrichedEmailThreadPreview {
                         thread: SoupEmailThreadPreview::mirror(thread),
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
-                        attachments_macro: Vec::<SoupMacroAttachment>::mirror(attachments_macro),
                         participants: Vec::<SoupContact>::mirror(participants),
-                        metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
                         labels: Vec::<SoupLabel>::mirror(labels),
                         properties: Default::default(),
                     };
@@ -313,6 +315,7 @@ where
         Ok(Either::Right(emails_with_props.into_iter()))
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_comms_request(
         &self,
         req: Option<GetChannelsRequest>,
@@ -349,15 +352,16 @@ where
     C: ChannelsService,
 {
     #[tracing::instrument(err, skip(self))]
-    async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
+    async fn get_user_soup(&self, req: SoupRequest<EntityFilters>) -> Result<SoupOutput, SoupErr> {
+        let entity_filter = req.filters().clone();
+        let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
-        let paginate_filter = req.cursor.filter().cloned();
 
         let email_request = req.build_email_request();
         let comms_request = req.build_comms_request();
 
         match req.cursor {
-            SoupQuery::Simple(cursor) => {
+            SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
                 let main_soup_fut = self.handle_simple_request(
@@ -381,16 +385,16 @@ where
                         .chain(email_soup?)
                         .chain(comms_soup?)
                         .paginate_on(limit.into(), sort_method)
-                        .filter_on(paginate_filter)
+                        .filter_on(entity_filter)
                         .sort_desc()
                         .into_page(),
                 ))
             }
-            SoupQuery::Frecency(cursor) => Ok(Either::Right(
+            SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(Either::Right(
                 self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
                     .await?
                     .paginate_on(limit.into(), Frecency)
-                    .filter_on(paginate_filter)
+                    .filter_on(entity_filter)
                     .into_page(),
             )),
         }

@@ -4,10 +4,13 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { PostReactionRequestNonce } from './postReactionRequestNonce';
 import type { ReactionAction } from './reactionAction';
 
 export interface PostReactionRequest {
   action: ReactionAction;
   emoji: string;
   message_id: string;
+  nonce?: PostReactionRequestNonce;
 }

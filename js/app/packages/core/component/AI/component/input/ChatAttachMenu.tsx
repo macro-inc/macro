@@ -1,10 +1,11 @@
 import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
+import { useChatInputContext } from '@core/component/AI/context';
 import {
   useChatAttachableHistory,
   useGetChatAttachmentInfo,
 } from '@core/component/AI/signal/attachment';
-import type { Attachment, UploadQueue } from '@core/component/AI/types';
+import type { Attachment } from '@core/component/AI/types';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import clickOutside from '@core/directive/clickOutside';
@@ -23,7 +24,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem } from '@queries/history/history';
 import {
   createEffect,
   createMemo,
@@ -45,7 +46,6 @@ type ChatAttachMenuProps = {
   anchorRef: HTMLDivElement;
   containerRef: HTMLElement;
   onAttach: (attachment: Attachment) => void;
-  uploadQueue: UploadQueue;
 };
 
 function truncate(str: string, maxLength: number = 30) {
@@ -56,6 +56,9 @@ function truncate(str: string, maxLength: number = 30) {
 // TODO: create a shared component for chat attach menu and block channel AttachMenu
 // TODO: add other supported attachment types, e.g. chat/channel
 export function ChatAttachMenu(props: ChatAttachMenuProps) {
+  const chatInput = useChatInputContext();
+  const uploadQueue = chatInput.uploadQueue;
+
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
   const history = useChatAttachableHistory();
@@ -70,16 +73,14 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     const popupRef_ = popupRef();
     if (!popupRef_) return;
     const { x, y } = await computePosition(props.anchorRef, popupRef_, {
-      placement: 'bottom-start',
+      placement: 'top-start',
       middleware: [
         offset(8),
         flip({
           fallbackStrategy: 'bestFit',
-          boundary: props.containerRef,
         }),
         shift({
           padding: 8,
-          boundary: props.containerRef,
           limiter: limitShift(),
         }),
       ],
@@ -185,7 +186,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }
   };
 
-  const selectItem = (item: Item) => {
+  const selectItem = (item: HistoryItem) => {
     // TODO: add other supported attachment types, e.g. channel
     if (item.type !== 'document') {
       console.error('ChatAttachMenu only supports document items');
@@ -342,7 +343,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
                 acceptedFileExtensions: SUPPORTED_ATTACHMENT_EXTENSIONS,
                 multiple: true,
                 onSelect: (files) => {
-                  props.uploadQueue.upload(files);
+                  uploadQueue.upload(files);
                   props.close();
                 },
               }}

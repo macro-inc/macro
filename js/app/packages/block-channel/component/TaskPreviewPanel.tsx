@@ -1,5 +1,5 @@
 import type { PropertyApiValues } from '@core/component/Properties/types';
-import type { TaskWithProperties } from '@block-channel/utils/useTaskMode';
+import type { TaskWithProperties } from '@block-channel/hooks/taskmode';
 import { For } from 'solid-js';
 import { TaskPreviewRow } from './TaskPreviewRow';
 

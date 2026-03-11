@@ -1,6 +1,5 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { cache } from '@core/util/cache';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import {
   isOk,
@@ -132,24 +131,19 @@ export const authServiceClient = {
       (result) => result
     );
   },
-  getUserInfo: cache(
-    async function getUserInfo() {
-      return mapOk(
-        await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {
-          method: 'GET',
-        }),
-        (data) => ({
-          authenticated: !!data.user_id,
-          permissions: data.permissions || [],
-          userId: data.user_id,
-          organizationId: data.organization_id ?? undefined,
-        })
-      );
-    },
-    {
-      minutes: 15,
-    }
-  ),
+  async getUserInfo() {
+    return mapOk(
+      await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {
+        method: 'GET',
+      }),
+      (data) => ({
+        authenticated: !!data.user_id,
+        permissions: data.permissions || [],
+        userId: data.user_id,
+        organizationId: data.organization_id ?? undefined,
+      })
+    );
+  },
   async sessionLogin(args: { session_code: string }) {
     const maybeResult = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`
@@ -208,11 +202,15 @@ export const authServiceClient = {
       },
     });
   },
-  async postProfilePictures(args: GetProfilePicturesRequestBody) {
+  async postProfilePictures(
+    args: GetProfilePicturesRequestBody,
+    init?: SafeFetchInit
+  ) {
     return mapOk(
       await fetchWithAuth<ProfilePictures>(
         `${authHost}/user/profile_pictures`,
         {
+          ...init,
           method: 'POST',
           body: JSON.stringify(args),
         }
@@ -328,6 +326,16 @@ export const authServiceClient = {
     );
   },
 
+  async patchAiConsent(args: { aiDataConsent: boolean }) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/ai_consent`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
   // HTTP methods (migrated from RPC)
   async getLegacyUserPermissions() {
     const result = await fetchWithAuth<GetLegacyUserPermissionsResponse>(
@@ -347,6 +355,7 @@ export const authServiceClient = {
       authenticated: !!data.userId,
       userId: data.userId,
       hasTrialed: data.hasTrialed,
+      aiDataConsent: data.aiDataConsent,
     }));
   },
 

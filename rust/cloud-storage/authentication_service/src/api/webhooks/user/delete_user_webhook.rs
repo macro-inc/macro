@@ -3,8 +3,16 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use comms_db_client::{
+    channels::get_channels::get_org_channels,
+    participants::remove_participant::{RemoveParticipantOptions, remove_participant},
+};
 use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithMacroUserId};
+use notification::domain::ports::NotificationRepository;
+use notification::outbound::repository::DbNotificationRepository;
+use sqlx::{Pool, Postgres};
 use stripe::CustomerId;
 use tracing::Instrument;
 
@@ -158,10 +166,10 @@ async fn delete_user(
         .in_current_span(),
     );
 
-    // Send delete user call to comms service
+    // Remove user from organization channels
     tokio::spawn(
         {
-            let comms_client = ctx.comms_client.clone();
+            let db = ctx.db.clone();
             let user_infos = user_infos.clone();
             async move {
                 for user_info in user_infos {
@@ -170,9 +178,8 @@ async fn delete_user(
                     // TODO: create delete user endpoint in comms service and handle removing this user and
                     // deleting all of their channels. Keep the messages for now.
                     if let Some(org_id) = user_info.organization_id
-                        && let Err(err) = comms_client
-                            .remove_user_from_org_channels(&user_id, &(org_id as i64))
-                            .await
+                        && let Err(err) =
+                            remove_user_from_org_channels(&db, &user_id, org_id as i64).await
                     {
                         tracing::error!(error=?err, "unable to remove user from org channels");
                     }
@@ -183,20 +190,29 @@ async fn delete_user(
         .in_current_span(),
     );
 
-    // Send delete user call to notifications
+    // Delete user notifications directly from the database
+    // TODO: technically we should be calling into the notification service here
+    // but since the service method would just be a straight passthrough to the repo, this is simpler than plumbing the entire service down
     tokio::spawn(
         {
             let user_infos = user_infos.clone();
-            let notification_service_client = ctx.notification_service_client.clone();
+            let notification_repo = DbNotificationRepository::new(ctx.db.clone());
             async move {
                 for user_info in user_infos {
                     let user_id = user_info.id.clone();
                     tracing::trace!(user_id, "delete_user_notifications");
-                    if let Err(e) = notification_service_client
-                        .delete_user_notifications(&user_id)
-                        .await
-                    {
-                        tracing::error!(error=?e, user_id, "unable to delete user notifications");
+                    match MacroUserIdStr::parse_from_str(&user_id) {
+                        Ok(macro_user_id) => {
+                            if let Err(e) = notification_repo
+                                .delete_all_user_notifications(macro_user_id)
+                                .await
+                            {
+                                tracing::error!(error=?e, user_id, "unable to delete user notifications");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(error=?e, user_id, "unable to parse user id");
+                        }
                     }
                     tracing::trace!(user_id, "delete_user_notifications complete");
                 }
@@ -233,6 +249,28 @@ async fn delete_user(
                 let _ = macro_db_client::macro_user::delete_macro_user(&db, &macro_user_id).await.inspect_err(|e| tracing::error!(error=?e, "unable to delete macro user"));
             }
         }.in_current_span());
+
+    Ok(())
+}
+
+/// Removes a user from all organization channels
+async fn remove_user_from_org_channels(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    org_id: i64,
+) -> anyhow::Result<()> {
+    let org_channels = get_org_channels(db, &org_id).await?;
+
+    for channel in org_channels.iter() {
+        remove_participant(
+            db,
+            RemoveParticipantOptions {
+                channel_id: &channel.id.0,
+                user_id,
+            },
+        )
+        .await?;
+    }
 
     Ok(())
 }

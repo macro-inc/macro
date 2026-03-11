@@ -19,7 +19,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import {
   createEffect,
   createMemo,
@@ -55,7 +55,7 @@ function truncate(str: string, maxLength: number = 30) {
 export function AttachMenu(props: AttachMenuProps) {
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const inputAttachments = () =>
     props.inputAttachmentsStore.store[props.inputAttachmentsStore.key] ?? [];
 
@@ -83,7 +83,7 @@ export function AttachMenu(props: AttachMenuProps) {
   };
 
   const baseHistory = createMemo(() => {
-    return [...history()].filter(
+    return [...(historyQuery.data ?? [])].filter(
       (item) => !inputAttachments().find((a) => a.id === item.id)
     );
   });

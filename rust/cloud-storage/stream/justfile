@@ -1,0 +1,19 @@
+export REDIS_URL := env('REDIS_URL', 'redis://127.0.0.1:6379')
+
+mod ensure '../ensure.just'
+
+# Start Redis container
+start_redis:
+    just ensure::ensure_redis stream-redis
+
+# Stop Redis container
+stop_redis:
+    -docker stop stream-redis
+
+# Run all tests (unit tests only, no Redis required)
+test:
+    cargo test -p stream
+
+# Run integration tests (requires Redis)
+test_integration *args: start_redis
+    cargo test -p stream --features redis-test -- --ignored {{args}}

@@ -1,31 +1,33 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
-import { UserIcon } from '@core/component/UserIcon';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
+import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
+import type { ApiMessage } from '@service-email/generated/schemas';
+import { useEmail } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
-import {
-  getSenderDisplayName,
-  isMessageFromCurrentUser,
-} from '../util/emailUser';
+import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
+import { formatShortDate } from './EmailMessageTopBar';
+import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFocused: boolean;
+  isFirstMessage: boolean;
   onClick: () => void;
 }
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
+  const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
-  const currentUserId = useUserId();
-
-  const isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, currentUserEmail())
-  );
 
   const senderDisplay = createMemo(() =>
     getSenderDisplayName(props.message, currentUserEmail())
   );
+  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
+  const senderIconProps = createMemo<UserIconProps>(() => {
+    const senderId = senderMacroId();
+    if (senderId) return { id: senderId };
+    return { email: props.message.from?.email ?? '' };
+  });
 
   const snippet = createMemo(() => {
     // Prefer body_text for snippet, fall back to stripping HTML
@@ -53,16 +55,24 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   return (
     <div class="shrink-0 flex justify-center w-full">
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
-      <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
+      <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
-            class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-60 hover:opacity-100 transition-all"
+            class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
+            classList={{
+              'pt-2': !props.isFirstMessage,
+              'opacity-80': hasMouseLeft() && !hover(),
+              'opacity-100': !hasMouseLeft() || hover(),
+            }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onClick={props.onClick}
             onKeyDown={handleKeyDown}
             onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
+            onMouseLeave={() => {
+              setHover(false);
+              setHasMouseLeft(true);
+            }}
           >
             {/* Rail line - behind avatar */}
             <div
@@ -78,13 +88,11 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 width: 'var(--user-icon-width)',
                 height: 'var(--user-icon-width)',
                 'margin-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
               }}
             >
               <UserIcon
-                {...(isFromCurrentUser()
-                  ? { id: currentUserId() ?? '' }
-                  : { email: props.message.from?.email ?? '' })}
+                {...senderIconProps()}
                 isDeleted={false}
                 size="fill"
                 suppressClick={true}
@@ -94,25 +102,22 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             <div
               class="flex-1 flex items-center min-w-0"
               style={{
-                'padding-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                'padding-left': 'var(--body-padding)',
               }}
             >
-              <span class="text-ink-muted w-16 shrink-0 truncate">
-                {senderDisplay()}
+              <span class="w-16 shrink-0">
+                <EmailUserTooltip recipient={props.message.from}>
+                  <span class="text-ink font-semibold truncate text-sm cursor-default block">
+                    {senderDisplay()}
+                  </span>
+                </EmailUserTooltip>
               </span>
-              <span class="text-ink-extra-muted truncate">{snippet()}</span>
+              <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink-muted shrink-0 ml-4 pr-2">
+            <div class="text-xs text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
-                new Date(props.message.internal_date_ts).toLocaleDateString(
-                  'en-US',
-                  {
-                    month: 'short',
-                    day: 'numeric',
-                  }
-                )}
+                formatShortDate(props.message.internal_date_ts)}
             </div>
           </div>
         </BozzyBracket>

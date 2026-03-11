@@ -21,6 +21,7 @@ import type {
   GetProfilePicturesRequestBody,
   GetUserInfo,
   GetUserLinkExistsParams,
+  InitGithubLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
@@ -498,6 +499,72 @@ export const createInProgressLink = async (
     status: res.status,
     headers: res.headers,
   } as createInProgressLinkResponse;
+};
+
+/**
+ * @summary Initiates a link for a user
+ */
+export type initGithubLinkResponse200 = {
+  data: InitGithubLinkResponse;
+  status: 200;
+};
+
+export type initGithubLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type initGithubLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type initGithubLinkResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type initGithubLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initGithubLinkResponseSuccess = initGithubLinkResponse200 & {
+  headers: Headers;
+};
+export type initGithubLinkResponseError = (
+  | initGithubLinkResponse400
+  | initGithubLinkResponse401
+  | initGithubLinkResponse429
+  | initGithubLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type initGithubLinkResponse =
+  | initGithubLinkResponseSuccess
+  | initGithubLinkResponseError;
+
+export const getInitGithubLinkUrl = () => {
+  return `/link/github`;
+};
+
+export const initGithubLink = async (
+  options?: RequestInit
+): Promise<initGithubLinkResponse> => {
+  const res = await fetch(getInitGithubLinkUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initGithubLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as initGithubLinkResponse;
 };
 
 /**
@@ -3064,6 +3131,11 @@ export type createCheckoutSessionResponse404 = {
   status: 404;
 };
 
+export type createCheckoutSessionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type createCheckoutSessionResponse500 = {
   data: string;
   status: 500;
@@ -3076,6 +3148,7 @@ export type createCheckoutSessionResponseSuccess =
 export type createCheckoutSessionResponseError = (
   | createCheckoutSessionResponse400
   | createCheckoutSessionResponse404
+  | createCheckoutSessionResponse409
   | createCheckoutSessionResponse500
 ) & {
   headers: Headers;

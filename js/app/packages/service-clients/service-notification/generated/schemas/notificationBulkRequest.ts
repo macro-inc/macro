@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * the notification ids that we are bulk updating
+ */
 export interface NotificationBulkRequest {
   /** The ids of the notifications to handle */
   notificationIds: string[];

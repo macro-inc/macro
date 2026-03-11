@@ -1,12 +1,14 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMemo, createSelector, Index, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
   initialLoadComplete: boolean;
-  title: string;
+  onScrollPositionChange?: (scrollFromTop: number) => void;
+  title?: string;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -23,22 +25,22 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm"
       ref={context.registerMessagesList}
       onscroll={(e) => {
-        // Don't load more if we're programmatically scrolling to a message
-        if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
-
-        const threshold = 300;
-
-        // Since the list is reversed, the scrollTop is negative. So we get the scroll position
-        // from the bottom up using the scrollHeight and clientHeight
-        const currentScrollPosition =
+        // Since the list is reversed, calculate scroll from visual top
+        const scrollFromTop =
           e.currentTarget.scrollHeight +
           e.currentTarget.scrollTop -
           e.currentTarget.clientHeight;
 
-        const isNearBeginning = currentScrollPosition <= threshold;
+        props.onScrollPositionChange?.(scrollFromTop);
+
+        // Don't load more if we're programmatically scrolling to a message
+        if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
+
+        const threshold = 300;
+        const isNearBeginning = scrollFromTop <= threshold;
 
         if (
           isNearBeginning &&
@@ -99,10 +101,7 @@ export function MessageList(props: MessageListProps) {
             return (
               <MessageContainer
                 isFirstMessage={normalizedIndex() === 0}
-                isLastMessage={
-                  normalizedIndex() ===
-                  (context.messages.list().length ?? 0) - 1
-                }
+                isLastMessage={isLastMessage()}
                 isFocused={isFocusedSelector(message().db_id ?? undefined)}
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}
@@ -112,10 +111,10 @@ export function MessageList(props: MessageListProps) {
           }}
         </Index>
       </StaticMarkdownContext>
-      <Show when={props.title}>
+      <Show when={isMobile() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
-          <div class="macro-message-width w-full">
-            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">
+          <div class="macro-message-width macro-message-padding w-full">
+            <h1 class="text-3xl font-semibold text-ink pt-1 pb-4">
               {props.title}
             </h1>
           </div>

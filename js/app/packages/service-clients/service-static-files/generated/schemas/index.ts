@@ -5,6 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './bulkDeleteRequest';
+export * from './bulkDeleteResponse';
+export * from './deleteResult';
+export * from './deleteResultError';
+export * from './errorResponse';
 export * from './fileMetadata';
 export * from './putFileRequest';
 export * from './putFileRequestContentType';

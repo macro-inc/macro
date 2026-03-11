@@ -23,6 +23,24 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const GITHUB_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_client_id_key`),
+  })
+  .apply((secret) => secret.secretString);
+
+const GITHUB_CLIENT_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_client_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
+const GITHUB_IDP_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`github_idp_id_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_cache_secret_key`),
@@ -46,6 +64,8 @@ const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
 );
 const STRIPE_SECRET_KEY = config.require(`stripe_secret_key`);
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const FUSIONAUTH_TENANT_ID = config.require('fusionauth_tenant_id');
 
 const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
   .getSecretVersionOutput({
@@ -96,6 +116,9 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
+const STRIPE_PREMIUM_PRICE_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
+  .apply((secret) => secret.secretString);
 
 const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
@@ -169,7 +192,7 @@ const service = new AuthenticationService('authentication-service', {
     { name: 'ENVIRONMENT', value: stack },
     {
       name: 'RUST_LOG',
-      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'}`,
+      value: `authentication_service=${stack === 'prod' ? 'info' : 'trace'},tower_http=${stack === 'prod' ? 'info' : 'debug'},macro_auth=${stack === 'prod' ? 'info' : 'debug'},macro_middleware=${stack === 'prod' ? 'info' : 'debug'},github=${stack === 'prod' ? 'info' : 'debug'},fusionauth=debug,warn`,
     },
     {
       name: 'DATABASE_URL',
@@ -188,8 +211,8 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${FUSIONAUTH_CLIENT_SECRET_KEY}`,
     },
     {
-      name: 'FUSIONAUTH_APPLICATION_ID',
-      value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
+      name: 'FUSIONAUTH_TENANT_ID',
+      value: FUSIONAUTH_TENANT_ID,
     },
     { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
     {
@@ -229,12 +252,6 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${SERVICE_INTERNAL_AUTH_KEY}`,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
       value: `https://cloud-storage${
         stack === 'prod' ? '' : `-${stack}`
@@ -243,12 +260,6 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'NOTIFICATION_SERVICE_URL',
       value: `https://notifications${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
         stack === 'prod' ? '' : `-${stack}`
       }.macro.com`,
     },
@@ -283,6 +294,33 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'STRIPE_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PRICE_ID_KEY}`,
+    },
+    {
+      // NOTE: this is the fetched secret value of the STRIPE_PRICE_ID
+      // from above. Will unify these in a separate PR.
+      name: 'STRIPE_PREMIUM_PRICE_ID',
+      value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_ID',
+      value: pulumi.interpolate`${GITHUB_CLIENT_ID}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_SECRET',
+      value: pulumi.interpolate`${GITHUB_CLIENT_SECRET}`,
+    },
+    {
+      name: 'GITHUB_IDP_ID',
+      value: pulumi.interpolate`${GITHUB_IDP_ID}`,
+    },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'authentication-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
     },
   ],
 });

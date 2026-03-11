@@ -167,7 +167,6 @@ pub async fn create_user_chat_v2(
 
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_id.clone(),
             old_project_id: None,

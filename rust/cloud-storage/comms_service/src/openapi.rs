@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 mod api;
+mod channel_permissions;
 mod config;
 mod constants;
 mod notification;

@@ -3,7 +3,7 @@ import {
   DocumentMetadata,
   PdfDocumentMetadata,
   makeDocumentKey
-} from '@macro-inc/document-processing-job-types';
+} from '@coparse/document-processing-types';
 import { FileSystemError } from '../error';
 import { getFileNameWithExtension } from '../stringUtils';
 import {

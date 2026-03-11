@@ -62,9 +62,13 @@ pub async fn upsert_channel_notification_email_sent_bulk_channel_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("channel_notification_email_sent")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("channel_notification_email_sent"))
+    )]
     async fn test_upsert_channel_notification_email_sent_bulk(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {

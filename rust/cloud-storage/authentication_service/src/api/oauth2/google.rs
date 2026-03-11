@@ -17,16 +17,14 @@ use crate::api::{
         login::{self},
     },
 };
-use authentication_service::service::{
-    fusionauth_client::identity_provider::{IdentityProviderLink, LinkUserRequest},
-    user::create_user::create_user_profile,
-};
+use authentication_service::service::user::create_user::create_user_profile;
+use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 async fn link_user(
     ctx: &ApiContext,
     identity_provider_id: &str,
     code: &str,
-    link_id: &str,
+    link_id: &uuid::Uuid,
 ) -> Result<(), (StatusCode, String)> {
     // Get existing macro user id from link id
     let macro_user_id =

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM notification_user_device_registration\n        WHERE device_endpoint = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c7eb689e2b36b5f9d73ebb66746c36ad70078feb62d295e33506f317fe07bb1"
+}

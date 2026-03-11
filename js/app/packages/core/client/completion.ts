@@ -1,24 +1,30 @@
-import { cognitionWebsocketServiceClient } from '@service-cognition/client';
-import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
-import { createEffect, createRoot } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { v4 as uuid } from 'uuid';
+/**
+  date: 02/19/2026
+  note: Temporarily disabled pending port to connection-gateway
+  guy: Eric Hayes
+*/
+
+// import { cognitionWebsocketServiceClient } from "@service-cognition/client";
+// import { createCognitionWebsocketBlockEffect } from "@service-cognition/websocket";
+// import { createEffect, createRoot } from "solid-js";
+// import { createStore } from 'solid-js/store';
+// import { v4 as uuid } from "uuid";
 
 export type Completion = {
   content: string;
   status: 'loading' | 'streaming' | 'completed';
 };
 
-type CompletionStore = Record<string, Completion>;
+// type CompletionStore = Record<string, Completion>;
 
-const [completionStore, setCompletionStore] = createStore<CompletionStore>({});
+// const [completionStore, setCompletionStore] = createStore<CompletionStore>({});
 
-createCognitionWebsocketBlockEffect('completion_response', (data) => {
-  setCompletionStore(data.completion_id, {
-    content: data.content,
-    status: data.done ? 'completed' : 'streaming',
-  });
-});
+// createCognitionWebsocketBlockEffect("completion_response", (data) => {
+// 	setCompletionStore(data.completion_id, {
+// 		content: data.content,
+// 		status: data.done ? "completed" : "streaming",
+// 	});
+// });
 
 /** Streams a completion from the dcs websocket
  *
@@ -40,34 +46,32 @@ createCognitionWebsocketBlockEffect('completion_response', (data) => {
  * return <div>{completion()?.content}</div>
  * ```
  */
-export function streamCompletion(
-  data: { prompt: string; attachmentId?: string; selectedText?: string },
-  setter: (completion: Completion) => void
-) {
-  const completionId = uuid();
-  setCompletionStore(completionId, {
-    content: '',
-    status: 'loading',
-  });
-
-  cognitionWebsocketServiceClient.sendCompletion({
-    prompt:
-      data.prompt +
-      // TODO: @synoet - rework prompt later so that this is not needed
-      ' ... (PLEASE RENDER ANY MATHEMATICAL EQUATIONS OR LATEX e.g. left \right or \frac{}{} or anything like that AND ANY EXPRESSIONS USING LATEX SYNTAX ENCLOSED IN DOUBLE DOLLAR SIGNS ($$ ... $$))',
-    attachment_id: data.attachmentId,
-    completion_id: completionId,
-    selected_text: data.selectedText,
-  });
-
-  createRoot((dispose) => {
-    createEffect(() => {
-      const completion = completionStore[completionId];
-      if (!completion) return;
-      setter(completion);
-      if (completion.status === 'completed') {
-        dispose();
-      }
-    });
-  });
-}
+// export function streamCompletion(
+// 	data: { prompt: string; attachmentId?: string; selectedText?: string },
+// 	setter: (completion: Completion) => void,
+// ) {
+// 	const completionId = uuid();
+// 	setCompletionStore(completionId, {
+// 		content: "",
+// 		status: "loading",
+// 	});
+// 	cognitionWebsocketServiceClient.sendCompletion({
+// 		prompt:
+// 			data.prompt +
+// 			// TODO: @synoet - rework prompt later so that this is not needed
+// 			" ... (PLEASE RENDER ANY MATHEMATICAL EQUATIONS OR LATEX e.g. left \right or \frac{}{} or anything like that AND ANY EXPRESSIONS USING LATEX SYNTAX ENCLOSED IN DOUBLE DOLLAR SIGNS ($$ ... $$))",
+// 		attachment_id: data.attachmentId,
+// 		completion_id: completionId,
+// 		selected_text: data.selectedText,
+// 	});
+// 	createRoot((dispose) => {
+// 		createEffect(() => {
+// 			const completion = completionStore[completionId];
+// 			if (!completion) return;
+// 			setter(completion);
+// 			if (completion.status === "completed") {
+// 				dispose();
+// 			}
+// 		});
+// 	});
+// }

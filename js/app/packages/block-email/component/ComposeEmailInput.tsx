@@ -1,3 +1,4 @@
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import Trash from '@icon/regular/trash.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
@@ -12,8 +13,9 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
+import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import { useUserId } from '@core/context/user';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
@@ -26,7 +28,16 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
-import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
+import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { Button } from '@ui/components/Button';
@@ -35,6 +46,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { isMobile } from '@core/mobile/isMobile';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 
 false && fileFolderDrop;
 
@@ -51,6 +68,9 @@ type ComposeEmailInputProps = {
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
+  sendTime?: Date | null;
+  onSendTimeChange?: (date: Date | null) => void;
+  mobileScrollRef?: Accessor<HTMLElement | undefined>;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -187,7 +207,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full flex flex-col min-h-0">
+      <div class="w-full h-full min-h-60 sm:max-h-full mobile:flex-1 flex flex-col">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
             class="-ml-3"
@@ -202,7 +222,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </Show>
 
         <div
-          class="min-h-60 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
+          class="grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -223,8 +243,9 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           <MarkdownTextarea
             domRef={props.inputRef}
             captureEditor={captureEditor}
+            scrollRef={props.mobileScrollRef}
             initialHtml={props.initialHtml}
-            class="text-sm break-words text-ink"
+            class="text-sm break-words text-ink mobile:overflow-auto h-auto"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
@@ -273,6 +294,18 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                       />
                     )}
                   </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
                 </Switch>
               );
             }}
@@ -280,60 +313,117 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
-        <div class="flex flex-row items-center gap-2">
-          <div class="relative" ref={attachButtonRef}>
-            <Button
-              ref={(el) =>
-                fileSelector(el, () => ({
-                  multiple: true,
-                  onSelect: handleAddAttachments,
-                }))
-              }
-              tooltip="Attach"
-              class="aspect-square p-1"
-              disabled={props.disabled}
-            >
-              <PaperclipIcon class="h-5" />
-            </Button>
-          </div>
-          <DeprecatedIconButton
-            theme="base"
-            icon={TextAa}
-            disabled={props.disabled}
-            onclick={() => {
-              setShowFormatRibbon(!showFormatRibbon());
-            }}
-          />
-          <Show when={props.hasDraft}>
-            <Button
-              onclick={props.onDraftDeletePress}
-              tooltip="Delete draft"
-              class="aspect-square *:h-5 p-1"
-            >
-              <Trash />
-            </Button>
-          </Show>
-        </div>
-        <button
-          type="button"
-          disabled={props.isSubmitting || props.disabled}
-          onClick={() => {
-            handleSend();
-          }}
-          class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
+        <Show
+          when={!isMobile()}
+          fallback={
+            <SplitHeaderRight>
+              <div class="flex items-center pl-2">
+                <div class="relative" ref={attachButtonRef}>
+                  <Button
+                    ref={(el) =>
+                      fileSelector(el, () => ({
+                        multiple: true,
+                        onSelect: handleAddAttachments,
+                      }))
+                    }
+                    tooltip="Attach"
+                    class="aspect-square p-1"
+                    disabled={props.disabled}
+                  >
+                    <PaperclipHorizontalIcon class="h-5" />
+                  </Button>
+                </div>
+                <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+                  <EmailDateSelector
+                    sendTime={props.sendTime}
+                    onSendTimeChange={props.onSendTimeChange}
+                    compact
+                  />
+                </Show>
+                <Button
+                  disabled={props.isSubmitting || props.disabled}
+                  onClick={() => {
+                    handleSend();
+                  }}
+                >
+                  <PaperPlane class="size-4.5 text-accent" />
+                </Button>
+                <DropdownMenu placement="bottom-end">
+                  <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
+                    <DotsThreeIcon class="h-4.5" />
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenuContent>
+                      <MenuItem
+                        text="Delete Draft"
+                        disabled={!props.hasDraft}
+                        onClick={props.onDraftDeletePress}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu.Portal>
+                </DropdownMenu>
+              </div>
+            </SplitHeaderRight>
+          }
         >
-          <Show
-            when={!props.isSubmitting}
-            fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
-          >
-            <span class="font-medium font-mono uppercase">Send</span>
-            <ArrowFatLineUp
-              width={20}
-              height={20}
-              class="text-accent-ink fill-accent rotate-90"
+          <div class="flex flex-row items-center gap-2">
+            <div class="relative" ref={attachButtonRef}>
+              <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: handleAddAttachments,
+                  }))
+                }
+                tooltip="Attach"
+                class="aspect-square p-1"
+                disabled={props.disabled}
+              >
+                <PaperclipIcon class="h-5" />
+              </Button>
+            </div>
+            <DeprecatedIconButton
+              theme="base"
+              icon={TextAa}
+              disabled={props.disabled}
+              onclick={() => {
+                setShowFormatRibbon(!showFormatRibbon());
+              }}
             />
-          </Show>
-        </button>
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+              <EmailDateSelector
+                sendTime={props.sendTime}
+                onSendTimeChange={props.onSendTimeChange}
+              />
+            </Show>
+            <Show when={props.hasDraft}>
+              <Button
+                onclick={props.onDraftDeletePress}
+                tooltip="Delete draft"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Trash />
+              </Button>
+            </Show>
+          </div>
+
+          <Button
+            disabled={props.isSubmitting || props.disabled}
+            onClick={() => {
+              handleSend();
+            }}
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+          >
+            <Show
+              when={!props.isSubmitting}
+              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+            >
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Show>
+          </Button>
+        </Show>
       </div>
     </div>
   );

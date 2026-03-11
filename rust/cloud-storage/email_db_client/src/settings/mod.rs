@@ -31,7 +31,7 @@ pub async fn patch_settings(
 }
 
 /// Fetches a user's settings by link ID.
-#[tracing::instrument(skip(pool), level = "info", err)]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_settings(
     pool: &PgPool,
     link_id: Uuid,

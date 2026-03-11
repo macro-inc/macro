@@ -5,7 +5,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
-            parse_highlight_hit,
+            exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
@@ -25,7 +25,6 @@ pub(crate) struct ChannelMessageIndex {
     pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub mentions: Vec<String>,
-    pub content: String,
     pub created_at_seconds: i64,
     pub updated_at_seconds: i64,
 }
@@ -170,8 +169,10 @@ impl From<ChannelMessageSearchArgs> for ChannelMessageQueryBuilder {
 impl ChannelMessageSearchArgs {
     pub fn build(self) -> Result<Value> {
         let builder: ChannelMessageQueryBuilder = self.into();
-
-        Ok(builder.build_search_request()?.to_json())
+        let mut json = builder.build_search_request()?.to_json();
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
+        Ok(json)
     }
 }
 
@@ -241,8 +242,10 @@ pub(crate) async fn search_channel_messages(
                         channel_message_id: a.message_id,
                         thread_id: a.thread_id,
                         sender_id: a.sender_id,
-                        created_at: a.created_at_seconds,
-                        updated_at: a.updated_at_seconds,
+                        created_at: chrono::DateTime::from_timestamp(a.created_at_seconds, 0)
+                            .unwrap_or_default(),
+                        updated_at: chrono::DateTime::from_timestamp(a.updated_at_seconds, 0)
+                            .unwrap_or_default(),
                     })),
                     updated_at: chrono::DateTime::from_timestamp(a.updated_at_seconds, 0),
                 },

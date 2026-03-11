@@ -1,13 +1,14 @@
 use crate::model::connection::StoredConnectionEntity;
-use crate::service::connection::{ConnectionGatewayPersistence, ConnectionManager};
+use crate::model::tracking::{EntityConnection, UserEntityConnection};
+use crate::service::connection::{ConnectionManager, ConnectionRepo};
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use aws_sdk_dynamodb::error::ProvideErrorMetadata;
 use aws_sdk_dynamodb::types::{AttributeValue, ReturnValue};
-use axum::async_trait;
 use ensure_exists::dynamodb::{CreateTableErr, DefineTable, DynamoClientWrapper};
 use ensure_exists::{DoesExist, EnsureExists};
 use macro_env_var::env_var;
-use model_entity::{Entity, EntityConnection, EntityType, UserEntityConnection};
+use model_entity::{Entity, EntityType};
 use std::collections::HashMap;
 
 env_var! {
@@ -92,7 +93,7 @@ struct DynamoDbConnectionGatewayPersistence {
 const CONNECTION_ID_GSI: &str = "ConnectionPkIndex";
 
 #[async_trait]
-impl ConnectionGatewayPersistence for DynamoDbConnectionGatewayPersistence {
+impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
     async fn insert_connection_entry(
         &self,
         connection: UserEntityConnection<'_>,

@@ -95,7 +95,7 @@ pub async fn update_labels(
 
     let gmail_message_labels = match ctx
         .gmail_client
-        .get_message_label_ids(&gmail_access_token, &payload.provider_message_id, link.id)
+        .get_message_label_ids(&gmail_access_token, &payload.provider_message_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -152,7 +152,13 @@ pub async fn update_labels(
     }
 
     if has_label_changes {
-        notify_search(ctx, link, db_message.db_id).await?;
+        let is_spam_or_trash = gmail_message_labels.iter().any(|label| {
+            label == service::label::system_labels::SPAM
+                || label == service::label::system_labels::TRASH
+        });
+
+        notify_search(ctx, link, db_message.db_id, is_spam_or_trash).await?;
+
         // tell FE to refresh user's inbox
         cg_refresh_email(
             &ctx.connection_gateway_client,

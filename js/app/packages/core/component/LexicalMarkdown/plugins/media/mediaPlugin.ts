@@ -88,6 +88,9 @@ export const UPDATE_MEDIA_SIZE_COMMAND: LexicalCommand<
   [NodeKey, { width: number; height: number }, MediaType]
 > = createCommand('UPDATE_MEDIA_SIZE_COMMAND');
 
+export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<MediaType> =
+  createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
+
 export function validateMediaFile(file: File, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
   return ext != null && blockNameToFileExtensionSet[mediaType].has(ext);
@@ -526,6 +529,44 @@ function registerMediaPlugin(editor: LexicalEditor) {
           },
           { discrete: true, tag: 'historic' }
         );
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      TRY_INSERT_MEDIA_UPLOAD_COMMAND,
+      (mediaType) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = mediaType === 'video' ? 'video/*' : 'image/*';
+        input.multiple = true;
+        input.style.display = 'none';
+
+        input.addEventListener('change', () => {
+          const files = input.files;
+          if (!files || files.length === 0) return;
+
+          for (const file of Array.from(files)) {
+            const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
+            const type: MediaType | null = isImage
+              ? 'image'
+              : isVideo
+                ? 'video'
+                : null;
+            if (type) {
+              addMediaFromFile(editor, file, type);
+            }
+          }
+          input.remove();
+        });
+
+        input.addEventListener('cancel', () => {
+          input.remove();
+        });
+        document.body.appendChild(input);
+        input.click();
         return true;
       },
       COMMAND_PRIORITY_NORMAL

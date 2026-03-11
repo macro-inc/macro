@@ -273,7 +273,8 @@ export class ContactMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<ContactMentionNode>(ContactMentionNode);
+    const decorator =
+      getDecorator<ContactMentionDecoratorProps>(ContactMentionNode);
     if (decorator) {
       return () =>
         decorator({

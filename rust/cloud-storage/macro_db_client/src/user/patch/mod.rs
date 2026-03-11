@@ -1,6 +1,28 @@
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
 
 pub mod add_user_role;
+
+/// Given a users email, it will udpate their has_trialed
+#[tracing::instrument(skip_all, err)]
+pub async fn update_macro_user_has_trialed<'a>(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    email: &Email<Lowercase<'a>>,
+    has_trialed: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE macro_user
+        SET has_trialed = $2
+        WHERE email = $1
+        "#,
+        email.as_ref(),
+        has_trialed,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
 
 pub async fn update_macro_user_id(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -43,7 +65,7 @@ pub async fn patch_user_group(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
     }
 
     Ok(())
@@ -68,7 +90,33 @@ pub async fn patch_user_tutorial(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
+    }
+
+    Ok(())
+}
+
+/// Updates the user's AI data consent flag.
+#[tracing::instrument(skip(db), err)]
+pub async fn patch_ai_consent(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &MacroUserId<Lowercase<'_>>,
+    ai_data_consent: bool,
+) -> anyhow::Result<()> {
+    let result = sqlx::query!(
+        r#"
+            UPDATE "User"
+            SET "aiDataConsent" = $1
+            WHERE id = $2
+        "#,
+        ai_data_consent,
+        user_id.as_ref(),
+    )
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("user not found");
     }
 
     Ok(())
@@ -107,7 +155,7 @@ pub async fn patch_user_onboarding(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("user not found"));
+        anyhow::bail!("user not found");
     }
 
     Ok(())

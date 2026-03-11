@@ -12,6 +12,8 @@ fn test_chat_search_request_json_serialization() {
             chat_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,
@@ -85,6 +87,8 @@ fn test_chat_search_request_round_trip() {
             chat_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,

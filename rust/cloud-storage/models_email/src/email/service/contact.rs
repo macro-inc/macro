@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct Contact {
-    #[schemars(with = "Option<String>")]
-    pub id: Option<Uuid>,
+    #[schemars(with = "String")]
+    pub id: Uuid,
     #[schemars(with = "String")]
     pub link_id: Uuid,
     pub name: Option<String>,
@@ -25,7 +25,7 @@ pub struct ContactList {
 impl From<crate::email::db::contact::Contact> for Contact {
     fn from(db_contact: crate::email::db::contact::Contact) -> Self {
         Self {
-            id: Some(db_contact.id),
+            id: db_contact.id,
             link_id: db_contact.link_id,
             name: db_contact.name,
             email_address: db_contact.email_address,

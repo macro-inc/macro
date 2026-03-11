@@ -14,7 +14,7 @@ VALUES
     'item_id',
     'item_type',
     'test',
-    NULL
+    '{}'
   );
 
 INSERT INTO
@@ -33,7 +33,7 @@ VALUES
     'item_id',
     'item_type',
     'test',
-    NULL
+    '{}'
   );
 
 INSERT INTO

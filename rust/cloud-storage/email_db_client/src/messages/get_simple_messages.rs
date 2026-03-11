@@ -1,5 +1,4 @@
 use crate::parse::db_to_service::map_db_message_to_simple_message;
-use anyhow::Context;
 use models_email::db;
 use models_email::service::message;
 use sqlx::types::Uuid;
@@ -50,13 +49,7 @@ pub async fn get_simple_message_by_provider_and_link(
         link_id
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch message with provider_id {} and link_id {}",
-                provider_id, link_id
-            )
-        })?;
+        .await?;
 
     if let Some(db_message) = db_message {
         let simple_message = map_db_message_to_simple_message(db_message);
@@ -93,13 +86,7 @@ pub async fn get_simple_message(
         fusionauth_user_id
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch message {} for user {}",
-                message_id, fusionauth_user_id
-            )
-        })?;
+        .await?;
 
     if let Some(db_message) = db_message {
         let simple_message = map_db_message_to_simple_message(db_message);
@@ -110,7 +97,7 @@ pub async fn get_simple_message(
 }
 
 /// Returns a vector of SimpleMessage objects for all found messages
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_simple_messages_batch(
     pool: &PgPool,
     message_ids: &Vec<Uuid>,
@@ -139,13 +126,7 @@ pub async fn get_simple_messages_batch(
         fusionauth_user_id
     )
         .fetch_all(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch {} messages for user {}",
-                message_ids.len(), fusionauth_user_id
-            )
-        })?;
+        .await?;
 
     let simple_messages: Vec<message::SimpleMessage> = db_messages
         .into_iter()
@@ -156,7 +137,7 @@ pub async fn get_simple_messages_batch(
 }
 
 // returns SimpleMessage objects for each message in the passed thread. ordered by date desc nulls last
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn get_simple_messages_for_thread<'e, E>(
     executor: E,
     thread_id: Uuid,
@@ -206,13 +187,7 @@ where
         link_id
     )
     .fetch_all(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch simple messages for thread {} and link {}",
-            thread_id, link_id
-        )
-    })?;
+    .await?;
 
     let simple_messages: Vec<message::SimpleMessage> = db_messages
         .into_iter()
@@ -224,7 +199,7 @@ where
 
 /// Returns the first simple message draft that matches a specific "Macro-In-Reply-To" header value
 /// Returns None if no matching message is found
-#[tracing::instrument(skip(pool), level = "debug")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_first_simple_message_draft(
     pool: &PgPool,
     link_id: &Uuid,
@@ -256,13 +231,7 @@ pub async fn get_first_simple_message_draft(
         replying_to_id.to_string()
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch draft message with Macro-In-Reply-To {} for link_id {}",
-                replying_to_id, link_id
-            )
-        })?;
+        .await?;
 
     Ok(db_message.map(map_db_message_to_simple_message))
 }

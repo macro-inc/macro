@@ -169,4 +169,32 @@ describe('Testsuite for Websocket with Heartbeat', () => {
     expect(restartIndex).toBeGreaterThan(2);
     expect(missedCounts.slice(0, 3)).toEqual([1, 2, 3]);
   });
+
+  test(
+    'Calling scheduleConnectionRetryIfNeeded twice should only produce one retry',
+    async () => {
+      let retryCount = 0;
+
+      await new Promise<void>((resolve) => {
+        client = new WebsocketBuilder(url)
+          .withBackoff(new ConstantBackoff(50))
+          .withMaxRetries(Infinity)
+          .onRetry(() => {
+            retryCount++;
+          })
+          .onOpen(() => resolve())
+          .build();
+      });
+
+      // Simulate the race between the synthetic close event (from sendHeartbeat
+      // detecting CLOSING state) and the real browser close event — both call
+      // scheduleConnectionRetryIfNeeded before either retry timeout fires.
+      (client as any).scheduleConnectionRetryIfNeeded();
+      (client as any).scheduleConnectionRetryIfNeeded();
+
+      await new Promise((r) => setTimeout(r, 300));
+      expect(retryCount).toBe(1);
+    },
+    testTimeout
+  );
 });

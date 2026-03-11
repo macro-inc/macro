@@ -14,7 +14,7 @@ use comms_db_client::participants::remove_participant::{
     tag = "channels",
     operation_id = "leave_channel",
     description = "allows a user to attempt to leave a channel",
-    path = "/channels/{channel_id}/leave",
+    path = "/comms/channels/{channel_id}/leave",
     params(
         ("channel_id" = String, Path, description = "channel id"),
     ),

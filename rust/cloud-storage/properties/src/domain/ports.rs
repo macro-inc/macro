@@ -4,9 +4,11 @@
 //! Implementations live in the outbound module.
 
 use macro_user_id::user_id::MacroUserIdStr;
+use model_notifications::TaskAssignedMetadata;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
+use notification::domain::models::SendNotificationRequest;
 use uuid::Uuid;
 
 /// Repository trait for property operations.
@@ -95,6 +97,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         id: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Get the profile picture URL for a user.
+    /// Returns `None` if the user doesn't exist or has no profile picture.
+    fn get_user_profile_picture(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
@@ -104,6 +113,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait PermissionService: Send + Sync + 'static {
     type Err;
+
+    /// Gets the owner of the entity and whether it's deleted
+    fn get_owner_and_deleted(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(String, bool), Self::Err>> + Send;
 
     /// Check if a user has edit access to an entity.
     /// Returns an error if the user does not have edit or owner access.
@@ -126,15 +142,19 @@ pub trait PermissionService: Send + Sync + 'static {
 /// Notification service trait for sending notifications.
 ///
 /// This trait abstracts notification operations, allowing for different implementations
-/// (e.g., macro_notify-backed, mock for testing).
+/// (e.g., notification-service-backed, mock for testing).
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait NotificationService: Send + Sync + 'static {
     type Err;
 
     /// Send a notification message.
     /// Returns the notification ID if successful.
-    fn send_notification(
+    fn send_notification<'a>(
         &self,
-        message: model_notifications::NotificationQueueMessage,
+        message: SendNotificationRequest<
+            'a,
+            TaskAssignedMetadata,
+            notification::domain::models::apple::PushNotificationData,
+        >,
     ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
 }

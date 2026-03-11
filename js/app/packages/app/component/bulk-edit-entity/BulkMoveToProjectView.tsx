@@ -1,11 +1,11 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
+import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
-import { useProjects } from '@service-storage/projects';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { createBulkMoveToProjectDssEntityMutation } from '../../../macro-entity/src/queries/dss';
-import type { EntityData } from '../../../macro-entity/src/types/entity';
+import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
+import type { EntityData } from '@entity';
 import {
   BulkEditEntityModalActionFooter,
   BulkEditEntityModalTitle,
@@ -20,7 +20,8 @@ export const BulkMoveToProjectView = (props: {
 }) => {
   let listRef!: HTMLDivElement;
   const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
-  const projects = useProjects();
+  const projectsQuery = useProjectsQuery();
+  const projects = () => projectsQuery.data ?? [];
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedProject, setSelectedProject] =
     createSignal<ProjectWithDepth | null>(null);

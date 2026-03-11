@@ -1,26 +1,18 @@
 import type { BlockAlias, BlockName } from '@core/block';
-import type { FileType } from '@service-cognition/generated/schemas/fileType';
+import { FileType } from '@service-cognition/generated/schemas/fileType';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
+
+function isFileType(k: string): k is FileType {
+  return k in FileType;
+}
 
 // Code file extensions from the Rust FileType enum
-const codeFileExtensions: (keyof typeof FileType)[] = [
-  'py',
-  'js',
-  'ts',
-  'jsx',
-  'tsx',
-  'json',
-  'html',
-  'css',
-  'xml',
-  'yaml',
-  'yml',
-  'sql',
-  'sh',
-  'bash',
-  'markdown',
-  'txt',
-  'csv',
-] as const;
+const codeFileExtensions: (keyof typeof FileType)[] = Object.entries(
+  FileTypeMap
+)
+  .filter(([_, o]) => o.mime === 'text/plain')
+  .map(([ext, _]) => ext)
+  .filter(isFileType);
 
 // these will be converted to a supported format before upload
 const CONVERSION_SUPPORTED_IMAGE_EXTENSIONS = ['heic', 'heif'] as const;

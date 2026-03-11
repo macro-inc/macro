@@ -6,6 +6,7 @@ use crate::{
     error::MacroAuthError,
 };
 
+/// Extracts the access token from request headers
 pub fn extract_access_token_from_request_headers(
     headers: &axum::http::HeaderMap,
 ) -> Result<String, MacroAuthError> {
@@ -33,9 +34,8 @@ pub fn extract_access_token_from_request_headers(
                 // Otherwise, we want to prefix the cookie name with dev-
                 let access_token_cookie_name = match Environment::new_or_prod() {
                     Environment::Production => MACRO_ACCESS_TOKEN_COOKIE,
-                    Environment::Local | Environment::Develop => {
-                        &format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}")
-                    }
+                    Environment::Develop => &format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}"),
+                    Environment::Local => &format!("local-{MACRO_ACCESS_TOKEN_COOKIE}"),
                 };
 
                 if cookie.name() == access_token_cookie_name {
@@ -57,6 +57,7 @@ pub fn extract_access_token_from_request_headers(
     Err(MacroAuthError::NoAccessTokenProvided)
 }
 
+/// Extracts refresh token from request headers
 pub fn extract_refresh_token_from_request_headers(
     headers: &axum::http::HeaderMap,
 ) -> Result<String, MacroAuthError> {
@@ -77,9 +78,8 @@ pub fn extract_refresh_token_from_request_headers(
                 let cookie = Cookie::parse(cookie).ok()?;
                 let refresh_token_cookie_name = match Environment::new_or_prod() {
                     Environment::Production => MACRO_REFRESH_TOKEN_COOKIE,
-                    Environment::Local | Environment::Develop => {
-                        &format!("dev-{MACRO_REFRESH_TOKEN_COOKIE}")
-                    }
+                    Environment::Develop => &format!("dev-{MACRO_REFRESH_TOKEN_COOKIE}"),
+                    Environment::Local => &format!("local-{MACRO_REFRESH_TOKEN_COOKIE}"),
                 };
                 if cookie.name() == refresh_token_cookie_name {
                     Some(cookie.value().to_owned())

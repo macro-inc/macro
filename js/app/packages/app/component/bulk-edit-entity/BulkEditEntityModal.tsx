@@ -1,6 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Dialog } from '@kobalte/core/dialog';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import {
   type Accessor,
   createSignal,
@@ -137,7 +137,9 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   onFinish?: () => void;
   onCancel?: () => void;
 } | null>(null);
-const [modalOpen, setModalOpen] = createControlledOpenSignal();
+const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
+  id: 'entity-edit',
+});
 
 export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';

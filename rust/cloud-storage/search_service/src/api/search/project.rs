@@ -6,12 +6,12 @@ use models_search::project::{
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 
 /// Enriches project search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_projects(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
@@ -73,11 +73,11 @@ pub fn construct_search_result(
             if let Some(info) = project_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::project::ProjectMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
                     parent_project_id: info.parent_project_id.clone(),
-                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                    deleted_at: info.deleted_at,
                 };
                 Some(ProjectSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
@@ -86,8 +86,8 @@ pub fn construct_search_result(
                         owner_id: info.user_id.clone(),
                         name: info.name,
                         project_search_results: hits,
-                        updated_at: info.updated_at.timestamp(),
-                        created_at: info.created_at.timestamp(),
+                        updated_at: info.updated_at,
+                        created_at: info.created_at,
                     },
                 })
             } else {

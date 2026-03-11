@@ -80,7 +80,6 @@ pub async fn delete_project_handler(
         );
         macro_project_utils::update_project_modified(
             &ctx.db,
-            &ctx.macro_notify_client,
             macro_project_utils::ProjectModifiedArgs {
                 project_id: None,
                 old_project_id: Some(parent_id),

@@ -2,8 +2,7 @@ import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { useBigChat } from '@core/signal/layout';
-import { AiInstructionsIcon } from '@service-storage/instructionsMd';
+import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
@@ -17,31 +16,25 @@ import {
 } from '../../block-theme/signals/themeSignals';
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
-import { playSound } from '../util/sound';
-import {
-  konsoleOpen,
-  resetKonsoleMode,
-  toggleKonsoleVisibility,
-} from './command/state';
+import { CommandState } from './command';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
+import {
+  openFilePicker,
+  openFolderPicker,
+  handleFolderSelect,
+} from '@core/util/upload';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import Upload from '@icon/regular/upload.svg';
 
 export default function GlobalShortcuts() {
-  const [_, setBigChatOpen] = useBigChat();
-
-  const canFit = () =>
-    globalSplitManager()?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+  const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
   const { toggleSettings } = useSettingsState();
 
+  const handleFileUpload = useHandleFileUpload();
+
   const handleCommandMenu = () => {
-    const wasOpen = konsoleOpen();
-    resetKonsoleMode();
-    toggleKonsoleVisibility();
-    // Play sound when opening (not closing)
-    if (!wasOpen) {
-      playSound('Kick - Struct - Tight Minimal 4');
-    }
-    return;
+    CommandState.toggle();
   };
 
   const createCommandScope = registerHotkey({
@@ -90,40 +83,36 @@ export default function GlobalShortcuts() {
     hotkey: 'cmd+k',
     scopeId: 'global',
     description: () => {
-      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+      return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
     keyDownHandler: () => {
       handleCommandMenu();
       return true;
     },
     displayPriority: 10,
-    hide: konsoleOpen,
+    hide: CommandState.isOpen,
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleBigChat,
-    hotkey: 'cmd+j',
-    scopeId: 'global',
-    description: 'Toggle big chat',
-    keyDownHandler: () => {
-      setBigChatOpen((v) => !v);
-      return true;
-    },
-    runWithInputFocused: true,
-  });
+  const { openWithSplit } = useSplitLayout();
 
-  const { insertSplit } = useSplitLayout();
+  const createNewSplit = () => {
+    const active = globalSplitManager()?.activeSplit()?.content();
+    openWithSplit(active ?? { type: 'component', id: 'inbox' }, {
+      referredFrom: 'hotkey',
+      allowDuplicate: true,
+      preferNewSplit: true,
+    });
+    return true;
+  };
+
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: 'Create new split',
     condition: canFit,
-    keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
-      return true;
-    },
+    keyDownHandler: createNewSplit,
     runWithInputFocused: true,
   });
 
@@ -132,10 +121,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create new split',
     condition: canFit,
-    keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
-      return true;
-    },
+    keyDownHandler: createNewSplit,
   });
 
   registerHotkey({
@@ -251,6 +237,32 @@ export default function GlobalShortcuts() {
       return true;
     },
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Upload files',
+    icon: () => <Upload class="size-4" />,
+    keyDownHandler: () => {
+      openFilePicker({ multiple: true }, async (files) => {
+        await handleFileUpload(files, false);
+      });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Upload folders',
+    icon: () => <Upload class="size-4" />,
+    keyDownHandler: () => {
+      openFolderPicker({ multiple: true }, async (files) => {
+        await handleFolderSelect(files, async (entries) => {
+          await handleFileUpload(entries, false);
+        });
+      });
+      return true;
+    },
   });
 
   return null;

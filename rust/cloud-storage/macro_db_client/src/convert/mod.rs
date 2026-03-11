@@ -97,6 +97,7 @@ pub async fn get_docx_files(
             document_family_id: None,
             modification_data: None,
             sub_type: None,
+            deleted_at: None,
         })
     })
     .fetch_all(db)

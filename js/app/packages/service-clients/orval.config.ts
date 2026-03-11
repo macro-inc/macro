@@ -6,6 +6,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-auth/generated/client.ts',
       schemas: './service-auth/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-auth/openapi.json',
@@ -16,6 +19,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-cognition/generated/client.ts',
       schemas: './service-cognition/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-cognition/openapi.json',
@@ -26,6 +32,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-comms/generated/client.ts',
       schemas: './service-comms/generated/models',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-comms/openapi.json',
@@ -36,6 +45,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-connection/generated/client.ts',
       schemas: './service-connection/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-connection/openapi.json',
@@ -46,6 +58,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-contacts/generated/client.ts',
       schemas: './service-contacts/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-contacts/openapi.json',
@@ -56,6 +71,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-email/generated/client.ts',
       schemas: './service-email/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-email/openapi.json',
@@ -67,6 +85,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-notification/generated/client.ts',
       schemas: './service-notification/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-notification/openapi.json',
@@ -79,6 +100,9 @@ export default defineConfig({
       target: './service-organization/generated/zod.ts',
       schemas: './service-organization/generated/schemas',
       biome: true,
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-organization/openapi.json',
@@ -92,6 +116,9 @@ export default defineConfig({
       schemas: './service-properties/generated/schemas',
       indexFiles: false,
       biome: true,
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-properties/openapi.json',
@@ -102,6 +129,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-search/generated/client.ts',
       schemas: './service-search/generated/models',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-search/openapi.json',
@@ -112,6 +142,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-static-files/generated/client.ts',
       schemas: './service-static-files/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-static-files/openapi.json',
@@ -124,6 +157,9 @@ export default defineConfig({
       target: './service-storage/generated/zod.ts',
       schemas: './service-storage/generated/schemas',
       biome: true,
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-storage/openapi.json',
@@ -134,6 +170,9 @@ export default defineConfig({
       client: 'fetch',
       target: './service-unfurl/generated/client.ts',
       schemas: './service-unfurl/generated/schemas',
+      override: {
+        useDates: false,
+      },
     },
     input: {
       target: './service-unfurl/openapi.json',

@@ -1,10 +1,8 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { optimisticUpdateViewedAt } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
-import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import BlockChat from './component/Block';
 
@@ -17,6 +15,7 @@ export const definition = defineBlock({
   description: '',
   defaultFilename: DEFAULT_CHAT_NAME,
   component: BlockChat,
+  liveTrackingEnabled: true,
   async load(source, intent) {
     if (source.type === 'dss') {
       // Fetch the chat from dcs
@@ -33,14 +32,6 @@ export const definition = defineBlock({
         });
       }
 
-      optimisticUpdateViewedAt(source.id);
-
-      storageServiceClient
-        .trackOpenedChat({
-          chatId: source.id,
-        })
-        .catch((err) => console.error(err));
-
       return ok({
         ...chat,
         allModels: AllModels, // TODO maybe limit people with something more swag based on acoun
@@ -52,6 +43,7 @@ export const definition = defineBlock({
           owner: chat.chat.userId,
           createdAt: chat.chat.createdAt,
           updatedAt: chat.chat.updatedAt,
+          deletedAt: null,
           fileType: 'chat' as any,
         } satisfies DocumentMetadata,
       });

@@ -1,9 +1,8 @@
-use anyhow::{Context, anyhow};
 use models_email::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn insert_message_label(
     pool: &PgPool,
     message_id: Uuid,
@@ -11,7 +10,7 @@ pub async fn insert_message_label(
     link_id: Uuid,
 ) -> anyhow::Result<()> {
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let result = sqlx::query!(
@@ -29,14 +28,8 @@ pub async fn insert_message_label(
         link_id,
         provider_label_id
     )
-        .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to add message_label for message_id {} with provider_label_id {} and link_id {}",
-                message_id, provider_label_id, link_id
-            )
-        })?;
+    .fetch_optional(pool)
+    .await?;
 
     // Check if the label was found
     match result {
@@ -49,17 +42,17 @@ pub async fn insert_message_label(
                 link_id = %link_id,
                 "No message label found to create relation for"
             );
-            Err(anyhow!(
+            anyhow::bail!(
                 "No label found for link_id {} with provider_label_id {}",
                 link_id,
                 provider_label_id
-            ))
+            )
         }
     }
 }
 
 /// Inserts a label for multiple messages at once
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn insert_message_labels_batch<'e, E>(
     executor: E,
     message_ids: &Vec<Uuid>,
@@ -74,7 +67,7 @@ where
     }
 
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let result = sqlx::query!(
@@ -95,14 +88,8 @@ where
         link_id,
         provider_label_id
     )
-        .execute(executor)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to insert message_labels for {} messages with provider_label_id {} and link_id {}",
-                message_ids.len(), provider_label_id, link_id
-            )
-        })?;
+    .execute(executor)
+    .await?;
 
     let rows_affected = result.rows_affected() as usize;
 
@@ -112,7 +99,7 @@ where
 /// Inserts or updates labels for a user.
 /// Labels are shared across messages, so this should be done separately from inserting message_labels
 /// to avoid deadlock issues.
-#[tracing::instrument(skip(pool, service_labels), fields(label_count = service_labels.len()))]
+#[tracing::instrument(skip(pool, service_labels), fields(label_count = service_labels.len()), err)]
 pub async fn insert_or_update_labels(
     pool: &PgPool,
     mut service_labels: Vec<service::label::Label>,
@@ -208,13 +195,12 @@ pub async fn insert_or_update_labels(
         &types as _
     )
     .execute(pool)
-    .await
-    .with_context(|| "Failed during batch insert/update of labels".to_string())?;
+    .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(pool, service_label))]
+#[tracing::instrument(skip(pool, service_label), err)]
 pub async fn insert_label(
     pool: &PgPool,
     mut service_label: service::label::Label,
@@ -265,13 +251,7 @@ pub async fn insert_label(
         db_label.type_ as _
     )
     .fetch_one(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to insert label with provider_label_id {} for link_id {}",
-            db_label.provider_label_id, db_label.link_id
-        )
-    })?;
+    .await?;
 
     let populated_service_label: service::label::Label = inserted_label.into();
 
@@ -307,18 +287,14 @@ pub async fn insert_message_labels(
         &provider_label_ids
     )
     .fetch_all(&mut *tx)
-    .await
-    .context(format!(
-        "Failed to select label IDs after upsert. link_id: {}, provider_label_ids: {:?}",
-        link_id, provider_label_ids
-    ))?;
+    .await?;
 
     if label_mappings.len() != provider_label_ids.len() {
-        return Err(anyhow!(
+        anyhow::bail!(
             "Could not find all expected labels in database after upsert. link_id: {}, provider_label_ids: {:?}",
             link_id,
             provider_label_ids
-        ));
+        );
     }
 
     // insert into junction table
@@ -330,22 +306,18 @@ pub async fn insert_message_labels(
     // upsert and some of the old ones got removed
     if delete_old {
         sqlx::query!(
-        r#"
+            r#"
         DELETE FROM email_message_labels
         WHERE message_id = $1
         AND label_id NOT IN (
             SELECT UNNEST($2::uuid[])
         )
         "#,
-        message_id,
-        &label_db_ids
-    )
-            .execute(&mut *tx)
-            .await
-            .context(format!(
-                "Failed to delete message labels for message_id {} where label_id not in label_db_ids {:?}",
-                message_id, label_db_ids
-            ))?;
+            message_id,
+            &label_db_ids
+        )
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query(
@@ -358,11 +330,7 @@ pub async fn insert_message_labels(
     .bind(&message_ids_repeated)
     .bind(&label_db_ids)
     .execute(&mut *tx)
-    .await
-    .context(format!(
-        "Failed to batch insert message label links. message_id: {}, label_ids: {:?}",
-        message_id, label_db_ids
-    ))?;
+    .await?;
 
     Ok(())
 }

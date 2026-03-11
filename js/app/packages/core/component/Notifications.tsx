@@ -1,12 +1,11 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
-import { formatDate } from '@core/util/date';
+import { compareDateDesc, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationSource,
-  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
 import { openNotification } from '@notifications/notification-navigation';
@@ -24,16 +23,15 @@ export function Notifications(props: NotificationsProps) {
         `${props.entity.type}@${props.entity.id}`
       ] ?? [];
     return entityNotifications.sort((a, b) => {
-      return b.createdAt - a.createdAt;
+      return compareDateDesc(a.created_at, b.created_at);
     });
   });
 
   const handleNotificationClick = async (notification: UnifiedNotification) => {
     const splitManager = globalSplitManager();
-    const typed = tryToTypedNotification(notification);
-    if (!typed || !splitManager) return;
+    if (!splitManager) return;
 
-    openNotification(typed, splitManager);
+    openNotification(notification, splitManager);
     await props.notificationSource.markAsRead(notification);
   };
 
@@ -49,7 +47,7 @@ export function Notifications(props: NotificationsProps) {
       >
         <For each={notifications()}>
           {(notification) => {
-            const isUnread = !notification.viewedAt;
+            const isUnread = !notification.viewed_at;
             const navHandlers = useSplitNavigationHandler(() =>
               handleNotificationClick(notification)
             );
@@ -70,12 +68,14 @@ export function Notifications(props: NotificationsProps) {
                   <div>
                     {
                       NOTIFICATION_LABEL_BY_TYPE[
-                        notification.notificationEventType
+                        notification.notification_metadata.tag
                       ]
                     }
                   </div>
                   <div class="grow" />
-                  <div>{formatDate(notification.createdAt)}</div>
+                  <div>
+                    {formatDate(notification.created_at ?? new Date(0))}
+                  </div>
                 </div>
 
                 <div class="flex flex-col gap-2 ml-4">

@@ -22,6 +22,45 @@ pub enum SearchOn {
     NameContent,
 }
 
+/// Notification-level filters that apply to an entity type.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct NotificationFilters {
+    /// Filter by notification done state.
+    /// None to ignore, true to include only done notifications, false to include only not-done notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done: Option<bool>,
+
+    /// Filter by notification seen state.
+    /// None to ignore, true to include only seen notifications, false to include only unseen notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen: Option<bool>,
+}
+
+impl IsEmpty for NotificationFilters {
+    fn is_empty(&self) -> bool {
+        let NotificationFilters { done, seen } = self;
+        done.is_none() && seen.is_none()
+    }
+}
+
+/// Task-only filters nested under document filters.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct TaskFilters {
+    /// Include tasks that are created by me, assigned to me, and not completed,
+    /// even when they do not match other document filters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_cbm_atm_nc: Option<bool>,
+}
+
+impl IsEmpty for TaskFilters {
+    fn is_empty(&self) -> bool {
+        // false is equivalent to "disabled" and should not affect filtering.
+        self.include_cbm_atm_nc != Some(true)
+    }
+}
+
 /// The document filters used to filter down what documents you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -42,6 +81,18 @@ pub struct DocumentFilters {
     /// Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
+
+    /// Filter by document notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
+
+    /// Task-specific filters that only apply to task subtype documents.
+    #[serde(default, skip_serializing_if = "TaskFilters::is_empty")]
+    pub task_filters: TaskFilters,
 }
 
 impl IsEmpty for DocumentFilters {
@@ -51,11 +102,17 @@ impl IsEmpty for DocumentFilters {
             document_ids,
             project_ids,
             owners,
+            importance,
+            notification_filters,
+            task_filters,
         } = self;
         file_types.is_empty()
             && document_ids.is_empty()
             && project_ids.is_empty()
             && owners.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
+            && task_filters.is_empty()
     }
 }
 
@@ -78,6 +135,14 @@ pub struct ChatFilters {
     /// Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
+
+    /// Filter by chat notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ChatFilters {
@@ -87,8 +152,15 @@ impl IsEmpty for ChatFilters {
             chat_ids,
             project_ids,
             owners,
+            importance,
+            notification_filters,
         } = self;
-        role.is_empty() && chat_ids.is_empty() && project_ids.is_empty() && owners.is_empty()
+        role.is_empty()
+            && chat_ids.is_empty()
+            && project_ids.is_empty()
+            && owners.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -108,6 +180,30 @@ pub struct EmailFilters {
     /// Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recipients: Vec<String>,
+
+    /// Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub email_thread_ids: Vec<String>,
+
+    /// Filter by email importance. None to not filter. True to show only important emails
+    /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
+    /// (those categorized as promotions, social, updates, or forums).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
+
+    /// Filter by email notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
+
+    /// Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
+    /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include_labels: Vec<String>,
+
+    /// Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
+    /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_labels: Vec<String>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -117,8 +213,21 @@ impl IsEmpty for EmailFilters {
             cc,
             bcc,
             recipients,
+            email_thread_ids,
+            importance,
+            notification_filters,
+            include_labels,
+            exclude_labels,
         } = self;
-        senders.is_empty() && cc.is_empty() && bcc.is_empty() && recipients.is_empty()
+        senders.is_empty()
+            && cc.is_empty()
+            && bcc.is_empty()
+            && recipients.is_empty()
+            && email_thread_ids.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
+            && include_labels.is_empty()
+            && exclude_labels.is_empty()
     }
 }
 
@@ -141,6 +250,18 @@ pub struct ChannelFilters {
     /// Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sender_ids: Vec<String>,
+
+    /// Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_types: Vec<String>,
+
+    /// Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
+
+    /// Filter by channel notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ChannelFilters {
@@ -151,12 +272,18 @@ impl IsEmpty for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            channel_types,
+            importance,
+            notification_filters,
         } = self;
         thread_ids.is_empty()
             && mentions.is_empty()
             && org_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
+            && channel_types.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -171,6 +298,14 @@ pub struct ProjectFilters {
     /// Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
+
+    /// Filter by project notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ProjectFilters {
@@ -178,13 +313,18 @@ impl IsEmpty for ProjectFilters {
         let ProjectFilters {
             project_ids,
             owners,
+            importance,
+            notification_filters,
         } = self;
-        project_ids.is_empty() && owners.is_empty()
+        project_ids.is_empty()
+            && owners.is_empty()
+            && importance.is_none()
+            && notification_filters.is_empty()
     }
 }
 
 /// a bundle of all of the filters for each entity type
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
     /// the bundled [ProjectFilters]

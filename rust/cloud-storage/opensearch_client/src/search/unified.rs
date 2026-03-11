@@ -16,13 +16,15 @@ use crate::{
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoChat,
-            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit,
+            exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
 };
 use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use tracing::Instrument;
 
 use crate::SearchOn;
 use models_opensearch::SearchEntityType;
@@ -87,6 +89,9 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            include_labels: args.email_search_args.include_labels,
+            exclude_labels: args.email_search_args.exclude_labels,
+            importance: args.email_search_args.importance,
         }
     }
 }
@@ -150,6 +155,9 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
+    pub importance: Option<bool>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -244,8 +252,10 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     channel_message_id: a.message_id,
                     thread_id: a.thread_id,
                     sender_id: a.sender_id,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
+                    created_at: DateTime::from_timestamp(a.created_at_seconds, 0)
+                        .unwrap_or_default(),
+                    updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0)
+                        .unwrap_or_default(),
                 })),
                 updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
             },
@@ -294,7 +304,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     bcc: a.bcc,
                     cc: a.cc,
                     labels: a.labels,
-                    sent_at: a.sent_at_seconds,
+                    sent_at: a
+                        .sent_at_seconds
+                        .and_then(|ts| DateTime::from_timestamp(ts, 0)),
                     sender: a.sender,
                     recipients: a.recipients,
                 })),
@@ -407,14 +419,13 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    // Build highlight
     let highlight = Highlight::new().require_field_match(true).field(
         "content",
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(500),
+            .number_of_fragments(1),
     );
 
     search_request_builder.highlight(highlight);
@@ -433,7 +444,9 @@ pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
 ) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
-    let search_request = build_unified_search_request(&args)?.to_json();
+    let mut search_request = build_unified_search_request(&args)?.to_json();
+    inject_fragment_size(&mut search_request, 1000);
+    exclude_source_content(&mut search_request);
 
     tracing::trace!("search request {:?}", search_request);
 
@@ -450,26 +463,46 @@ pub(crate) async fn search_unified(
         return Ok((Vec::new(), SearchCursorOption::Done));
     }
 
-    let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        .body(search_request)
-        .send()
-        .await
-        .map_client_error()
-        .await?;
+    let response = async {
+        client
+            .search(opensearch::SearchParts::Index(&search_indices))
+            .body(search_request)
+            .send()
+            .await
+            .map_client_error()
+            .await
+    }
+    .instrument(tracing::info_span!("opensearch_http_request"))
+    .await?;
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
-        })?;
+    let bytes = async {
+        response
+            .bytes()
+            .await
+            .map_err(|e| OpensearchClientError::HttpBytesError {
+                details: e.to_string(),
+            })
+    }
+    .instrument(tracing::info_span!("opensearch_read_response_body"))
+    .await?;
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
-        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
-        })?;
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = {
+        let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
+            .entered();
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
+        })?
+    };
+
+    tracing::info!(
+        response_body_bytes = bytes.len(),
+        opensearch_took_ms = result.took,
+        hit_count = result.hits.hits.len(),
+        "opensearch response"
+    );
 
     let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
 

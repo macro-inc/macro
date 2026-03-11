@@ -344,7 +344,7 @@ emailAttachmentBucket.attachCloudfrontPolicy({
 const containerEnvVars = [
   {
     name: 'RUST_LOG',
-    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},entity_access=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
   },
   {
     name: 'ENVIRONMENT',
@@ -491,11 +491,11 @@ const containerEnvVars = [
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
   {
-    name: 'PRESIGNED_URL_TTL_SECS',
+    name: 'EMAIL_SERVICE_PRESIGNED_URL_TTL_SECS',
     value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
     value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
   },
   {
@@ -507,12 +507,21 @@ const containerEnvVars = [
     value: emailAttachmentBucket.bucket.id,
   },
   {
-    name: 'CLOUDFRONT_DISTRIBUTION_URL',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
     value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
     value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
+  },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'email-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
   },
 ];
 

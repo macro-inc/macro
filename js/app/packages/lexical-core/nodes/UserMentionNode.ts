@@ -189,7 +189,7 @@ export class UserMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<UserMentionNode>(UserMentionNode);
+    const decorator = getDecorator<UserMentionDecoratorProps>(UserMentionNode);
     if (decorator) {
       return () =>
         decorator({

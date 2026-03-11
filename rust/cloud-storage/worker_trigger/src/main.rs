@@ -36,10 +36,7 @@ async fn main() -> Result<(), Error> {
     tracing::trace!("initialized config");
 
     let ecs_client = service::ecs::ECSClient::new(aws_sdk_ecs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
+        &macro_aws_config::get_macro_aws_config().await,
     ));
 
     tracing::trace!("initialized ecs client");

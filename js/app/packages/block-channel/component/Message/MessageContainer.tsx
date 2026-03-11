@@ -1,7 +1,8 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
-import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { reactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/hooks/reactions';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import type { Attachment } from '@queries/channel/types';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -13,20 +14,21 @@ import {
 } from '@core/component/Menu';
 import { Message as MessageComponent } from '@core/component/Message';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   isStaticAttachmentType,
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { tryMacroId, useDisplayName } from '@core/user';
+import type { DateValue } from '@core/util/date';
+import { isEmojiOnly } from '@core/util/string';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
-import type { Message as MessageType } from '@service-comms/generated/models/message';
+import type { Message as MessageType } from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
-import { createCallback } from '@solid-primitives/rootless';
 import { activeElement } from 'app/signal/focus';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -53,28 +55,45 @@ import { EditMessageInput } from './EditMessageInput';
 import { MessageAttachments } from './MessageAttachments';
 import { MessageReactions } from './MessageReactions';
 import { ThreadReplyIndicator } from './ThreadReplyIndicator';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
-  highlight?: boolean;
+  highlightAbove?: boolean;
+  highlightBelow?: boolean;
 };
 
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2 ]" />
         <div
-          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightAbove && 'border-accent'
+          )}
+        />
+        <div
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={cn(
+            'w-7 border-b border-edge-muted',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-3 ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={cn(
+          'text-xs text-panel uppercase font-mono p-1 my-6 mt bg-edge',
+          props.highlightBelow && 'bg-accent'
+        )}
       >
         {props.text}
       </div>
@@ -82,35 +101,31 @@ export function MessageFlag(props: MessageFlagProps) {
   );
 }
 
-type NewIndicatorProps = {
-  setNewIndicatorShown: Setter<number | undefined>;
-  id: number;
-};
-
-function NewMessageIndicator(props: NewIndicatorProps) {
-  onMount(() => {
-    props.setNewIndicatorShown(props.id);
-  });
-
-  return <MessageFlag text="New" highlight />;
+function NewMessageIndicator(props: { onClick?: () => void }) {
+  return (
+    <button type="button" class="w-full text-left" onClick={props.onClick}>
+      <MessageFlag text="New" highlightBelow />
+    </button>
+  );
 }
 
 type MessageProps = {
   message: MessageType;
-  lastViewed: Accessor<string | null | undefined>;
+  lastViewed: Accessor<DateValue | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
-  newIndicatorShown: Accessor<number | undefined>;
-  setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
   listContext: MessageListContext;
   setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
-  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
   isTarget: boolean;
+  channelId: Accessor<string>;
+  attachments: Attachment[];
+  reactions: GetChannelResponseReactions;
+  onDismissNewMessages?: () => void;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -122,20 +137,7 @@ export function MessageContainer(props: MessageProps) {
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
   const [reactionSearchOpen, setReactionSearchOpen] = createSignal(false);
   const [topBarEmojiMenuOpen, setTopBarEmojiMenuOpen] = createSignal(false);
-  const [messageBodyRef, setMessageBodyRefInner] =
-    createSignal<HTMLDivElement>();
-
-  const setMessageBodyRef = ((
-    value?:
-      | HTMLDivElement
-      | ((prev?: HTMLDivElement) => HTMLDivElement | undefined)
-  ): undefined => {
-    setMessageBodyRefInner(value);
-    if (isLastMessage()) {
-      props.setLastMessageRef?.(value);
-    }
-    return undefined;
-  }) satisfies typeof setMessageBodyRefInner;
+  const [messageBodyRef, setMessageBodyRef] = createSignal<HTMLDivElement>();
 
   const editMessageMutation = usePatchMessageMutation();
 
@@ -150,8 +152,6 @@ export function MessageContainer(props: MessageProps) {
 
   const userId = useUserId();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
-
-  const attachmentStore = messageAttachmentsStore.get;
 
   const [displayName] = useDisplayName(tryMacroId(message.sender_id));
 
@@ -183,35 +183,40 @@ export function MessageContainer(props: MessageProps) {
   });
 
   // We're only checking new messages that are not part of a thread
-  const isNewMessage = () => props.listContext?.isNewMessage ?? false;
+  const isNewMessage = () => props.listContext.isNewMessage;
 
   // Works for one-level of nesting. In the future we'll need to track at which depths a message is part of a new message chain.
-  const isParentNewMessage = () =>
-    props.listContext?.isParentNewMessage ?? false;
+  const isParentNewMessage = () => props.listContext.isParentNewMessage;
 
-  const previousMessage = createMemo(() => {
+  const previousMessage = () => {
     return props.index() > 0
       ? props.orderedMessages()[props.index() - 1]
       : undefined;
-  });
+  };
 
-  const newDayPreviousNonThreadMessage = createMemo(() => {
-    const prev = props.listContext?.previousNonThreadedMessage;
+  const newDayPreviousNonThreadMessage = () => {
+    const prev = props.listContext.previousNonThreadedMessage;
     if (!prev) return false;
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
-  });
+  };
 
-  // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
-  const isConsecutive = createMemo(() => {
+  // We consider a message consecutive if it's from the same user, within 10 minutes, and has the same thread id.
+  const isConsecutive = () => {
     const prevMessage_ = previousMessage();
     if (!prevMessage_) return false;
     const prevSenderId = prevMessage_?.sender_id;
+    const withinTimeWindow =
+      Math.abs(
+        new Date(message.created_at).getTime() -
+          new Date(prevMessage_.created_at).getTime()
+      ) <
+      10 * 60 * 1000;
     return (
       (prevMessage_.thread_id ?? '') === (message.thread_id ?? '') &&
       prevSenderId === message.sender_id &&
-      isSameDay(new Date(prevMessage_.created_at), new Date(message.created_at))
+      withinTimeWindow
     );
-  });
+  };
 
   const threadState = createMemo(() => {
     const threadID = message.thread_id;
@@ -284,9 +289,9 @@ export function MessageContainer(props: MessageProps) {
   });
   const lastReplyTimestamp = createMemo(() => {
     if (collapsedThreadMessages()) {
-      return collapsedThreadMessages()?.at(-1)?.created_at ?? '';
+      return collapsedThreadMessages()?.at(-1)?.created_at;
     }
-    return '';
+    return;
   });
   const threadReplyUsers = createMemo(() => {
     if (collapsedThreadMessages()) {
@@ -306,21 +311,26 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const attachments = createMemo(() =>
-    message.id ? (attachmentStore[message.id] ?? []) : []
+    props.attachments.filter((a) => a.message_id === message.id)
   );
   const imageAttachments = createMemo(() =>
-    attachments().filter((a) => a.entity_type === STATIC_IMAGE)
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_IMAGE)
   );
   const videoAttachments = createMemo(() =>
-    attachments().filter((a) => a.entity_type === STATIC_VIDEO)
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_VIDEO)
   );
   const documentAttachments = createMemo(() =>
-    attachments().filter((a) => !isStaticAttachmentType(a.entity_type))
+    attachments().filter(
+      (a: Attachment) => !isStaticAttachmentType(a.entity_type)
+    )
   );
 
-  const react = createCallback((emoji: string) =>
-    reactToMessage(emoji, message.id)
+  const reactToMessage = useReactToMessage(
+    props.channelId,
+    () => props.reactions
   );
+
+  const react = (emoji: string) => reactToMessage(emoji, message.id);
 
   const onThreadAppend = () => {
     const threadId = message.thread_id;
@@ -334,7 +344,7 @@ export function MessageContainer(props: MessageProps) {
   const onCreateReply = () => {
     listContext.createReply(message.id, true);
     listContext.scrollToIndex(props.index(), {
-      align: 'end',
+      align: 'nearest',
     });
   };
 
@@ -463,6 +473,10 @@ export function MessageContainer(props: MessageProps) {
     return message.content.trim() === '';
   });
 
+  const isEmojiOnlyMessage = createMemo(() => {
+    return isEmojiOnly(message.content ?? '');
+  });
+
   const handleThreadToggle = () => {
     if (!message.thread_id) return;
     const threadState_ = threadState();
@@ -475,259 +489,287 @@ export function MessageContainer(props: MessageProps) {
     listContext.toggleThread(message.thread_id);
   };
 
+  const { isKeypressActive } = useIsKeyPressActive();
+
+  const setSelectedMessage = () => {
+    listContext.setFocusedMessageId(message.id);
+  };
+
+  const setSelectedMessageFromMouse = () => {
+    if (isKeypressActive()) return;
+    listContext.setFocusedMessageId(message.id);
+  };
+
   return (
     <div
-      class={`shrink-0 flex justify-center w-full ${isTouchDevice() ? 'no-select-children' : ''}`}
+      class={`macro-message-width macro-message-padding mx-auto ${isTouchDevice() ? 'no-select-children' : ''}`}
       ref={(el) => {
         props.setMessageContainerRef?.(el);
         messageContainerRef = el;
       }}
+      onFocusIn={() => {
+        setSelectedMessage();
+      }}
+      onMouseMove={() => {
+        if (isTouchDevice()) return;
+        setSelectedMessageFromMouse();
+      }}
       data-message-id={message.id}
     >
-      <div class="macro-message-width w-full">
-        {/* Date separator */}
-        <Show
-          when={
-            !message.thread_id &&
-            (props.index() === 0 ||
-              (props.index() > 0 &&
-                !message.thread_id &&
-                newDayPreviousNonThreadMessage()))
-          }
-        >
-          <MessageFlag text={formatRelativeDate(message.created_at)} />
-        </Show>
-        {/* New message indicator */}
-        <Show
-          when={
-            isNewMessage() &&
-            (!props.newIndicatorShown() ||
-              props.newIndicatorShown() === props.index())
-          }
-        >
-          <NewMessageIndicator
-            id={props.index()}
-            setNewIndicatorShown={props.setNewIndicatorShown}
-          />
-        </Show>
-        {/* Message item */}
+      {/* New message indicator */}
+      <Show when={props.listContext.isFirstNewMessage}>
+        <NewMessageIndicator onClick={props.onDismissNewMessages} />
+      </Show>
 
-        <ContextMenu
-          onOpenChange={(isOpen) => {
-            setContextMenuOpen(isOpen);
-          }}
-        >
-          <ContextMenu.Trigger disabled={editing()}>
-            <MessageComponent
-              id={message.id}
-              focused={props.isFocused}
-              senderId={message.sender_id}
-              isFirstMessage={isFirstMessage()}
-              isLastMessage={isLastMessage()}
-              isConsecutive={isConsecutive()}
-              shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
-              hoverActions={
-                <ActionMenu
-                  messageId={message.id}
-                  actions={actions()}
-                  setReactionMenuActivated={setTopBarEmojiMenuOpen}
+      {/* Date separator */}
+      <Show
+        when={
+          !message.thread_id &&
+          (props.index() === 0 ||
+            (props.index() > 0 &&
+              !message.thread_id &&
+              newDayPreviousNonThreadMessage()))
+        }
+      >
+        <MessageFlag
+          text={formatRelativeDate(message.created_at)}
+          highlightAbove={isNewMessage()}
+          highlightBelow={isNewMessage()}
+        />
+      </Show>
+
+      {/* Message item */}
+      <ContextMenu
+        onOpenChange={(isOpen) => {
+          setContextMenuOpen(isOpen);
+        }}
+      >
+        <ContextMenu.Trigger disabled={editing()}>
+          <MessageComponent
+            id={message.id}
+            focused={props.isFocused}
+            senderId={message.sender_id}
+            isFirstMessage={isFirstMessage()}
+            isLastMessage={isLastMessage()}
+            isConsecutive={isConsecutive()}
+            timestamp={message.created_at}
+            shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
+            hoverActions={() => (
+              <ActionMenu
+                messageId={message.id}
+                channelId={props.channelId}
+                reactions={() => props.reactions}
+                actions={actions()}
+                setReactionMenuActivated={setTopBarEmojiMenuOpen}
+              />
+            )}
+            threadDepth={threadDepth()}
+            hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
+            isFirstInThread={isFirstInThread()}
+            isLastInThread={isLastInThread()}
+            isDeleted={!!message.deleted_at}
+            isNewMessage={isNewMessage()}
+            isParentNewMessage={isParentNewMessage()}
+            onThreadAppend={onThreadAppend}
+            shouldShowThreadAppendInput={shouldShowThreadAppendInput()}
+            isTarget={props.isTarget}
+            setThreadAppendMountTarget={(el) => {
+              if (!message.thread_id) return;
+
+              listContext.registerThreadAppendMountTarget(
+                message.thread_id,
+                el
+              );
+            }}
+            setMessageBodyRef={setMessageBodyRef}
+          >
+            <MessageComponent.TopBar
+              name={displayName()}
+              timestamp={message.created_at}
+            />
+            <Show
+              when={!editing()}
+              fallback={
+                <EditMessageInput
+                  content={props.message?.content ?? ''}
+                  setEditing={setEditing}
+                  save={editMessage}
                 />
               }
-              threadDepth={threadDepth()}
-              hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
-              isFirstInThread={isFirstInThread()}
-              isLastInThread={isLastInThread()}
-              isDeleted={!!message.deleted_at}
-              isNewMessage={isNewMessage()}
-              isParentNewMessage={isParentNewMessage()}
-              onThreadAppend={onThreadAppend}
-              shouldShowThreadAppendInput={shouldShowThreadAppendInput()}
-              isTarget={props.isTarget}
-              setThreadAppendMountTarget={(el) => {
-                if (!message.thread_id) return;
-
-                listContext.registerThreadAppendMountTarget(
-                  message.thread_id,
-                  el
-                );
-              }}
-              setMessageBodyRef={setMessageBodyRef}
             >
-              <MessageComponent.TopBar
-                name={displayName()}
-                timestamp={message.created_at}
-              />
-              <Show
-                when={!editing()}
-                fallback={
-                  <EditMessageInput
-                    content={props.message?.content ?? ''}
-                    setEditing={setEditing}
-                    save={editMessage}
-                  />
-                }
-              >
-                <MessageComponent.Body isDeleted={!!message.deleted_at}>
-                  <Show when={!isEmptyMessage()}>
+              <MessageComponent.Body isDeleted={!!message.deleted_at}>
+                <Show when={!isEmptyMessage()}>
+                  <div
+                    class="max-w-full overflow-auto min-w-0"
+                    classList={{ 'text-3xl': isEmojiOnlyMessage() }}
+                  >
                     <StaticMarkdown
                       markdown={message.content ?? ''}
                       theme={channelTheme}
                       target="internal"
                     />
-                  </Show>
-                </MessageComponent.Body>
-              </Show>
-              <MessageAttachments
-                videoAttachments={videoAttachments}
-                imageAttachments={imageAttachments}
-                documentAttachments={documentAttachments}
-                isDeleted={() => !!message.deleted_at}
-                isCurrentUser={() => userId() === message.sender_id}
-                channelId={message.channel_id}
-                messageId={message.id}
-                content={message.content}
+                  </div>
+                </Show>
+              </MessageComponent.Body>
+            </Show>
+            <MessageAttachments
+              videoAttachments={videoAttachments}
+              imageAttachments={imageAttachments}
+              documentAttachments={documentAttachments}
+              isDeleted={() => !!message.deleted_at}
+              isCurrentUser={() => userId() === message.sender_id}
+              channelId={message.channel_id}
+              messageId={message.id}
+              content={message.content}
+            />
+            <Show when={!message.deleted_at}>
+              <MessageReactions
+                messageId={props.message?.id ?? ''}
+                channelId={props.channelId}
+                reactions={() => props.reactions}
               />
-              <Show when={!message.deleted_at}>
-                <MessageReactions messageId={props.message?.id ?? ''} />
-              </Show>
-            </MessageComponent>
-            <Show when={isLastInCollapsedThread()}>
+            </Show>
+          </MessageComponent>
+          <Show when={isLastInCollapsedThread()}>
+            <div
+              class={cn(
+                'border-l border-edge-muted pb-1',
+                isParentNewMessage() && 'border-accent'
+              )}
+              style={{
+                'margin-left': `var(--left-of-connector)`,
+              }}
+            >
               <div
-                class="border-l border-edge-muted pb-1"
+                class="relative"
                 style={{
-                  'margin-left': `var(--left-of-connector)`,
+                  'margin-left': `calc(var(--thread-shift) * ${threadDepth()} - 1px - var(--user-icon-width) / 2)`,
                 }}
               >
-                <div
-                  class="relative"
-                  style={{
-                    'margin-left': `calc(var(--thread-shift) * ${threadDepth()} - 1px - var(--user-icon-width) / 2)`,
+                <ThreadReplyIndicator
+                  countCollapsedMessages={
+                    collapsedThreadMessages()?.length || 0
+                  }
+                  timestamp={lastReplyTimestamp()}
+                  users={threadReplyUsers()}
+                  onClick={handleThreadToggle}
+                  isThreadOpen={threadState()?.threadExpanded}
+                  isParentNewMessage={isParentNewMessage()}
+                />
+              </div>
+            </div>
+          </Show>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenuContent
+            onCloseAutoFocus={() => {
+              setReactionSearchOpen(false);
+            }}
+            mobileFullScreen
+            overrideStyling
+          >
+            <Switch>
+              <Match when={!reactionSearchOpen()}>
+                <ReactionQuickSelector
+                  onEmojiClick={(emoji) => react(emoji.emoji)}
+                  handleClose={() => {
+                    setReactionSearchOpen(false);
                   }}
+                  setSearchOpen={setReactionSearchOpen}
+                  insideMenu
+                  showFocusRing={true}
+                />
+              </Match>
+              <Match when={reactionSearchOpen()}>
+                <EmojiSearchSelector
+                  onEmojiClick={(emoji) => react(emoji.emoji)}
+                  handleClose={() => {
+                    setReactionSearchOpen(false);
+                  }}
+                  fullWidth={isMobile()}
+                  insideMenu={true}
+                />
+              </Match>
+            </Switch>
+            <Show when={isMobile()}>
+              <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
+                <MessageComponent
+                  focused={props.isFocused}
+                  senderId={message.sender_id}
+                  isFirstMessage={isFirstMessage()}
+                  isLastMessage={isLastMessage()}
+                  hideConnectors
                 >
-                  <ThreadReplyIndicator
-                    countCollapsedMessages={
-                      collapsedThreadMessages()?.length || 0
-                    }
-                    timestamp={lastReplyTimestamp()}
-                    users={threadReplyUsers()}
-                    onClick={handleThreadToggle}
-                    isThreadOpen={threadState()?.threadExpanded}
+                  <MessageComponent.TopBar
+                    name={displayName()}
+                    timestamp={message.created_at}
                   />
-                </div>
+                  <MessageComponent.Body>
+                    <StaticMarkdown
+                      markdown={message.content ?? ''}
+                      theme={channelTheme}
+                      target="internal"
+                    />
+                  </MessageComponent.Body>
+                  <MessageAttachments
+                    videoAttachments={videoAttachments}
+                    imageAttachments={imageAttachments}
+                    documentAttachments={documentAttachments}
+                    isDeleted={() => !!message.deleted_at}
+                    isCurrentUser={() => userId() === message.sender_id}
+                    channelId={message.channel_id}
+                    messageId={message.id}
+                    content={message.content}
+                  />
+                </MessageComponent>
+              </ContextMenu.Item>
+            </Show>
+            <Show when={!reactionSearchOpen()}>
+              <div class={`${MENU_CONTENT_CLASS} mt-4`}>
+                <For each={actions().filter((a) => a.enabled)}>
+                  {(a) => (
+                    <>
+                      <Show when={a.dividerBefore}>
+                        <MenuSeparator />
+                      </Show>
+                      <MenuItem
+                        onClick={a.onClick}
+                        text={a.text}
+                        icon={a.icon}
+                      />
+                    </>
+                  )}
+                </For>
               </div>
             </Show>
-          </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenuContent
-              onCloseAutoFocus={() => {
-                setReactionSearchOpen(false);
-              }}
-              mobileFullScreen
-              overrideStyling
-            >
-              <Switch>
-                <Match when={!reactionSearchOpen()}>
-                  <ReactionQuickSelector
-                    onEmojiClick={(emoji) => react(emoji.emoji)}
-                    handleClose={() => {
-                      setReactionSearchOpen(false);
-                    }}
-                    setSearchOpen={setReactionSearchOpen}
-                    insideMenu
-                    showFocusRing={true}
-                  />
-                </Match>
-                <Match when={reactionSearchOpen()}>
-                  <EmojiSearchSelector
-                    onEmojiClick={(emoji) => react(emoji.emoji)}
-                    handleClose={() => {
-                      setReactionSearchOpen(false);
-                    }}
-                    fullWidth={isTouchDevice() && isMobileWidth()}
-                    insideMenu={true}
-                  />
-                </Match>
-              </Switch>
-              <Show when={isTouchDevice() && isMobileWidth()}>
-                <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
-                  <MessageComponent
-                    focused={props.isFocused}
-                    senderId={message.sender_id}
-                    isFirstMessage={isFirstMessage()}
-                    isLastMessage={isLastMessage()}
-                    hideConnectors
-                  >
-                    <MessageComponent.TopBar
-                      name={displayName()}
-                      timestamp={message.created_at}
-                    />
-                    <MessageComponent.Body>
-                      <StaticMarkdown
-                        markdown={message.content ?? ''}
-                        theme={channelTheme}
-                        target="internal"
-                      />
-                    </MessageComponent.Body>
-                    <MessageAttachments
-                      videoAttachments={videoAttachments}
-                      imageAttachments={imageAttachments}
-                      documentAttachments={documentAttachments}
-                      isDeleted={() => !!message.deleted_at}
-                      isCurrentUser={() => userId() === message.sender_id}
-                      channelId={message.channel_id}
-                      messageId={message.id}
-                      content={message.content}
-                    />
-                  </MessageComponent>
-                </ContextMenu.Item>
-              </Show>
-              <Show when={!reactionSearchOpen()}>
-                <div class={`${MENU_CONTENT_CLASS} mt-4`}>
-                  <For each={actions().filter((a) => a.enabled)}>
-                    {(a) => (
-                      <>
-                        <Show when={a.dividerBefore}>
-                          <MenuSeparator />
-                        </Show>
-                        <MenuItem
-                          onClick={a.onClick}
-                          text={a.text}
-                          icon={a.icon}
-                        />
-                      </>
-                    )}
-                  </For>
-                </div>
-              </Show>
-            </ContextMenuContent>
-          </ContextMenu.Portal>
-        </ContextMenu>
-        <Show when={shouldShowFirstReply()}>
-          <MessageComponent
-            focused={false}
-            unfocusable
-            senderId={userId()}
-            isFirstMessage={false}
-            isLastMessage={false}
-            threadDepth={threadDepth() + 1}
-            isFirstInThread
-            isLastInThread
-            shouldShowThreadAppendInput
-            setThreadAppendMountTarget={(el) =>
-              listContext.registerThreadAppendMountTarget(message.id, el)
-            }
-          >
-            <MessageComponent.TopBar name={currentUserName()} />
-            <div class="h-4" />
-          </MessageComponent>
-        </Show>
-        <Show when={isLastMessage()}>
-          <TypingIndicator
-            // threadId={message.thread_id ?? undefined}
-            previousMessage={message}
-          />
-        </Show>
-      </div>
+          </ContextMenuContent>
+        </ContextMenu.Portal>
+      </ContextMenu>
+      <Show when={shouldShowFirstReply()}>
+        <MessageComponent
+          focused={false}
+          unfocusable
+          senderId={userId()}
+          isFirstMessage={false}
+          isLastMessage={false}
+          threadDepth={threadDepth() + 1}
+          isFirstInThread
+          isLastInThread
+          shouldShowThreadAppendInput
+          setThreadAppendMountTarget={(el) =>
+            listContext.registerThreadAppendMountTarget(message.id, el)
+          }
+        >
+          <MessageComponent.TopBar name={currentUserName()} />
+          <div class="h-4" />
+        </MessageComponent>
+      </Show>
+      <Show when={isLastMessage()}>
+        <TypingIndicator
+          // threadId={message.thread_id ?? undefined}
+          previousMessage={message}
+        />
+      </Show>
     </div>
   );
 }

@@ -9,6 +9,7 @@ default = ["ports", "inbound", "outbound", "axum"]
 ports = ["dep:tokio"]
 inbound = ["axum", "ports"]
 outbound = ["ports"]
+schema = ["dep:utoipa"]
 axum = [
     "dep:axum",
     "dep:axum-extra",
@@ -40,6 +41,9 @@ axum-extra = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 model-error-response = { path = "../model-error-response", optional = true }
+
+# OpenAPI schema (optional)
+utoipa = { workspace = true, optional = true }
 
 # Database
 sqlx = { workspace = true }

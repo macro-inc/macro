@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { TaskAssignedMetadataSenderProfilePictureUrl } from './taskAssignedMetadataSenderProfilePictureUrl';
 import type { TaskAssignedMetadataTaskName } from './taskAssignedMetadataTaskName';
 
 /**
@@ -12,6 +13,7 @@ import type { TaskAssignedMetadataTaskName } from './taskAssignedMetadataTaskNam
 export interface TaskAssignedMetadata {
   /** The user who assigned the task */
   assignedBy: string;
+  senderProfilePictureUrl?: TaskAssignedMetadataSenderProfilePictureUrl;
   /** The unique identifier of the task */
   taskId: string;
   /** The name of the task (optional) */

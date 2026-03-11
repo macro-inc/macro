@@ -15,7 +15,7 @@ pub struct GetAttachmentReferencesResponse {
 
 #[utoipa::path(
         get,
-        path = "/attachments/{entity_type}/{entity_id}/references",
+        path = "/comms/attachments/{entity_type}/{entity_id}/references",
         tag = "attachments",
         operation_id = "get_attachment_references",
         params(

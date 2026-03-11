@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMessageSendMetadataAllOfSenderProfilePictureUrl } from './channelMessageSendMetadataAllOfSenderProfilePictureUrl';
 
 export type ChannelMessageSendMetadataAllOf = {
   /** The content of the message */
@@ -12,4 +13,5 @@ export type ChannelMessageSendMetadataAllOf = {
   messageId: string;
   /** The user who sent the message */
   sender: string;
+  senderProfilePictureUrl?: ChannelMessageSendMetadataAllOfSenderProfilePictureUrl;
 };

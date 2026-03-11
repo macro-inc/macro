@@ -1,10 +1,6 @@
-import {
-  isDraggingOverChannelSignal,
-  isValidChannelDragSignal,
-} from '@block-channel/signal/attachment';
-import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
+  $convertSingleMentionToCard,
   expandGroupParticipants,
   toSimpleMention,
 } from '@block-channel/utils/mentionExpansion';
@@ -12,15 +8,17 @@ import {
   createTasksFromPotential,
   replaceCheckboxesWithMentions,
 } from '@block-channel/utils/taskModeConversion';
-import { useTaskMode } from '@block-channel/utils/useTaskMode';
-import { isInBlock } from '@core/block';
+import { useTaskMode } from '@block-channel/hooks/taskmode';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
+import {
+  pendingEditorState,
+  editorStateAsMarkdown,
+  setEditorStateFromMarkdown,
+} from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -37,10 +35,10 @@ import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
+import { $getRoot } from 'lexical';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { staticFileClient } from '@service-static-files/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { Button } from '@ui/components/Button';
 import { activeElement } from 'app/signal/focus';
@@ -49,7 +47,6 @@ import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
-  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -66,6 +63,9 @@ import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
+import type { SendMessageArgs } from '@block-channel/hooks/message';
 
 false && fileFolderDrop;
 
@@ -112,6 +112,10 @@ type BaseInputProps = {
   closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
+  /** whether a file is being dragged over the parent channel container */
+  isDraggingOverChannel?: Accessor<boolean>;
+  /** whether the dragged file is a valid channel attachment */
+  isValidChannelDrag?: Accessor<boolean>;
 };
 
 /** the time after a user stops typing before we consider them idle. we want smooth remote changes, but local changes should happen more immediately. */
@@ -124,20 +128,13 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-  const [isPendingSend, setIsPendingSend] = createSignal(false);
-  const [isValidChannelDrag] = isInBlock()
-    ? isValidChannelDragSignal
-    : createSignal(false);
+  const isDraggingOverChannel = props.isDraggingOverChannel ?? (() => false);
+  const isValidChannelDrag = props.isValidChannelDrag ?? (() => true);
 
-  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
-    ? isDraggingOverChannelSignal
-    : createSignal(false);
+  const attachments = () => props.inputAttachments.store[key] ?? [];
 
-  const attachments = createMemo(() => props.inputAttachments.store[key] ?? []);
-
-  const hasPendingAttachments = createMemo(() =>
-    attachments().some((item) => item.pending)
-  );
+  const hasPendingAttachments = () =>
+    attachments().some((item) => item.pending);
 
   const [typing, setTyping] = createSignal(false);
   let remoteInactivityTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -183,13 +180,13 @@ export function BaseInput(props: BaseInputProps) {
 
   const startTyping = leading(
     throttle,
-    createCallback(() => {
+    () => {
       if (!typing()) {
         setTyping(true);
         props.onStartTyping();
       }
       props.setLocalTyping?.(true);
-    }),
+    },
     1000
   );
 
@@ -212,6 +209,7 @@ export function BaseInput(props: BaseInputProps) {
     toggleTaskMode,
     potentialTasks,
     updateTaskPropertyValue,
+    resetTaskProperties,
   } = useTaskMode(markdownState);
 
   createRenderEffect(() => {
@@ -241,7 +239,7 @@ export function BaseInput(props: BaseInputProps) {
   onMount(() => {
     attachFn(containerRef);
 
-    if (!isTouchDevice() && !isMobileWidth()) {
+    if (!isTouchDevice()) {
       setTimeout(() => {
         if (
           props.autoFocusOnMount === true ||
@@ -306,7 +304,7 @@ export function BaseInput(props: BaseInputProps) {
   // Focus when external shouldFocus signal is set to true
   createEffect(() => {
     if (props.shouldFocus) {
-      if (!isMobileWidth()) {
+      if (!isMobile()) {
         requestAnimationFrame(() => {
           focusMarkdownArea();
           props.clearShouldFocus?.();
@@ -359,9 +357,19 @@ export function BaseInput(props: BaseInputProps) {
   }
 
   async function handleSend() {
-    if (isPendingSend()) return false;
-    setIsPendingSend(true);
-    let content = markdownState();
+    const statePromise = pendingEditorState(editor);
+    editor.update(
+      () => {
+        $getRoot().markDirty();
+        if (ENABLE_STATIC_DOCUMENT_CARDS) {
+          $convertSingleMentionToCard();
+        }
+      },
+      { discrete: true }
+    );
+
+    const state = await statePromise;
+    let content = editorStateAsMarkdown(state);
     const originalContent = content;
 
     if (taskModeEnabled() && potentialTasks().length > 0) {
@@ -382,6 +390,7 @@ export function BaseInput(props: BaseInputProps) {
     };
 
     clearMarkdownArea();
+    resetTaskProperties();
     focusMarkdownArea();
 
     props
@@ -402,9 +411,6 @@ export function BaseInput(props: BaseInputProps) {
           });
         }
         focusMarkdownArea();
-      })
-      .finally(() => {
-        setIsPendingSend(false);
       });
 
     return true;
@@ -450,7 +456,6 @@ export function BaseInput(props: BaseInputProps) {
       ref={containerRef}
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
-          setIsDraggingOverChannel(false);
           handleFileFolderDrop(files, folders, (uploadEntries) =>
             handleFileUpload(uploadEntries, {
               store: props.inputAttachments.store,
@@ -491,7 +496,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </Show>
       <div
-        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm touch:mobile-width:text-base"
+        class="transition-all duration-150 px-3 pt-2 pb-2 @min-[40rem]:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm mobile:text-base"
         onClick={(e) => {
           e.stopPropagation();
           focusMarkdownArea();
@@ -501,10 +506,10 @@ export function BaseInput(props: BaseInputProps) {
         <MarkdownArea
           placeholder={props.placeholder}
           onEnter={
-            isMobileWidth()
+            isMobile()
               ? (_e) => false
               : (_e) => {
-                  if (hasPendingAttachments() || isPendingSend()) {
+                  if (hasPendingAttachments()) {
                     return true;
                   }
                   handleSend();
@@ -631,13 +636,14 @@ export function BaseInput(props: BaseInputProps) {
         </div>
         <Button
           disabled={hasPendingAttachments()}
-          onClick={() => {
+          onPointerDown={(e) => {
+            e.preventDefault();
             handleSend();
           }}
           class="group transition ease-in-out hover:bg-transparent"
         >
           <Show
-            when={!hasPendingAttachments() && !isPendingSend()}
+            when={!hasPendingAttachments()}
             fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
           >
             <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">

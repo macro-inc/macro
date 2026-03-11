@@ -1,11 +1,14 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { createTask } from './create';
 
 export type TaskData = {
   title: string;
   assigneeUserIds: string[];
-  dueDate: string | null;
+  dueDate: Date | null;
 };
 
 export type TaskCreationOptions = {
@@ -42,9 +45,17 @@ function buildPropertyInputs(
   if (task.dueDate) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: { type: 'date', value: task.dueDate },
+      value: { type: 'date', value: task.dueDate.toISOString() },
     });
   }
+
+  properties.push({
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    value: {
+      type: 'select_option',
+      option_id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+    },
+  });
 
   if (options.parentTaskId) {
     properties.push({

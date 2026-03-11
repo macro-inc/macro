@@ -43,12 +43,7 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized db client");
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
-
-    let s3_client = service::s3::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = service::s3::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
     // Set which pdfium binary to use

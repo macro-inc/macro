@@ -32,6 +32,7 @@ import {
 import linkify, { type Match } from 'linkify-it';
 import { createSignal } from 'solid-js';
 import { editorFocusSignal } from '../../utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const strictLinkifier = new linkify(undefined, {
   fuzzyLink: false,
@@ -371,6 +372,7 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
   };
 
   const handlePointerMove = (e: MouseEvent) => {
+    if (isTouchDevice()) return;
     const target = e.target;
     const link = getLinkFromDom(target);
     if (link === null) {

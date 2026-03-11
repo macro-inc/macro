@@ -1,9 +1,8 @@
-use anyhow::Context;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 
 /// deletes recipients for a given message
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_message_recipients<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,
@@ -13,8 +12,7 @@ where
         message_id
     )
     .execute(executor)
-    .await
-    .with_context(|| format!("Failed to delete recipients for message_id {}", message_id))?;
+    .await?;
 
     let deleted_count = result.rows_affected();
 

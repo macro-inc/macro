@@ -10,7 +10,7 @@ use axum::{
 };
 use thiserror::Error;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use crate::api::permissions::{PermissionError, check_entity_edit_permission};
 use model::user::UserContext;
 use models_properties::{EntityReference, EntityType};
@@ -61,20 +61,20 @@ impl IntoResponse for SetPropertyStatusCompleteErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_id = %entity_id, entity_type = ?entity_type, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, entity_type = ?entity_type, user_id = %user_context.user_id), err)]
 pub async fn set_property_status_complete(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, SetPropertyStatusCompleteErr> {
     tracing::info!("setting entity status to complete");
 
     // Check edit permissions
     let entity_ref = EntityReference::new(entity_id.clone(), entity_type);
-    check_entity_edit_permission(&context, &user_context.user_id, &entity_ref).await?;
+    check_entity_edit_permission(&state, &user_context.user_id, &entity_ref).await?;
 
     // Delegate to service layer for business logic
-    context
+    state
         .properties_service
         .set_system_property_status_complete(&entity_id, entity_type)
         .await

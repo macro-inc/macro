@@ -2,6 +2,7 @@ import type { Maybe } from '@core/types';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import {
   type InfiniteData,
@@ -9,8 +10,21 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import { P, match } from 'ts-pattern';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
+import type { UnifiedNotification } from '@notifications/types';
+import {
+  type SoupEntityTag,
+  optimisticUpdateSoupItemUpdatedAt,
+} from '@queries/soup/normalized-cache';
+
+function stripOwnerId({
+  owner_id: _,
+  ...rest
+}: ApiUserNotification): UnifiedNotification {
+  return rest;
+}
 
 export { notificationKeys } from './keys';
 
@@ -61,7 +75,7 @@ export function useUserNotificationsQuery(args?: { limit?: number }) {
         GetAllUserNotificationsResponse,
         UserNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
   }));
 }
 
@@ -113,7 +127,7 @@ export function useEntityNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntityNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
   }));
 }
 
@@ -167,7 +181,7 @@ export function useEntitiesNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntitiesNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
     enabled: args.eventItemIds().length > 0,
   }));
 }
@@ -313,7 +327,7 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, viewedAt: Date.now() }
+            ? { ...n, viewed_at: new Date().toISOString() }
             : n
         ),
       })),
@@ -367,20 +381,35 @@ type NotificationItem = GetAllUserNotificationsResponse['items'][number];
  */
 export async function getNotificationById(
   notificationId: string
-): Promise<NotificationItem | undefined> {
+): Promise<UnifiedNotification | undefined> {
   const res = await throwOnErr(async () => {
     return await notificationServiceClient.getUserNotificationById(
       notificationId
     );
   });
 
-  return res as NotificationItem;
+  if (!res) return undefined;
+  return stripOwnerId(res as NotificationItem);
+}
+
+function notificationEntityTypeToSoupTag(
+  entityType: UnifiedNotification['entity_type']
+): SoupEntityTag | null {
+  return match(entityType)
+    .with('document', () => 'document' as const)
+    .with('chat', () => 'chat' as const)
+    .with('channel', () => 'channel' as const)
+    .with('project', () => 'project' as const)
+    .with('email_thread', () => 'emailThread' as const)
+    .with(P.union('user', 'team'), () => null)
+    .exhaustive();
 }
 
 export function optimisticInsertNotification(
-  notification: Omit<NotificationItem, 'ownerId'>
+  notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
+  const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
 
   queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
     { queryKey: notificationKeys.user._def },
@@ -400,6 +429,14 @@ export function optimisticInsertNotification(
       };
     }
   );
+
+  if (soupTag && notification.created_at) {
+    optimisticUpdateSoupItemUpdatedAt(
+      notification.entity_id,
+      soupTag,
+      notification.created_at
+    );
+  }
 
   invalidateUserNotifications();
 }

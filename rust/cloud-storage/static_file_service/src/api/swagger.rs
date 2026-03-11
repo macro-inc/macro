@@ -1,5 +1,8 @@
 use crate::api::file;
-use crate::model::api::*;
+use crate::model::api::{
+    BulkDeleteRequest, BulkDeleteResponse, DeleteResult, GetFileMetadataResponse, PutFileRequest,
+    PutFileResponse,
+};
 use utoipa::OpenApi;
 
 #[utoipa::path(
@@ -28,13 +31,17 @@ fn get_file_documentation() {}
       file::metadata::handle_get_metadata,
       file::put_presigned_url::put_presigned_url,
       file::delete_file::handle_delete_file,
+      file::bulk_delete_file::handle_bulk_delete_file,
       get_file_documentation
     ),
     components(
       schemas(
         PutFileRequest,
         PutFileResponse,
-        GetFileMetadataResponse
+        GetFileMetadataResponse,
+        BulkDeleteRequest,
+        BulkDeleteResponse,
+        DeleteResult
       )
     ),
     tags(

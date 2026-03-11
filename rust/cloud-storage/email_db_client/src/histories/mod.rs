@@ -1,4 +1,3 @@
-use anyhow::{Context, anyhow};
 use doppleganger::Mirror;
 use models_email::gmail::history::{GmailHistory, GmailHistoryDb};
 use sqlx::PgPool;
@@ -6,14 +5,14 @@ use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_history_id_for_link(
     pool: &PgPool,
     email_address: &str,
     provider: models_email::service::link::UserProvider,
 ) -> anyhow::Result<Option<String>> {
     if email_address.is_empty() {
-        return Err(anyhow!("Email address cannot be empty"));
+        anyhow::bail!("Email address cannot be empty");
     }
 
     let normalized_email = email_address.to_lowercase();
@@ -30,20 +29,13 @@ pub async fn fetch_history_id_for_link(
         db_provider as _
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch history_id for email {} and provider {}",
-            email_address,
-            db_provider.as_str()
-        )
-    })?;
+    .await?;
 
     // Extract the history_id field from the result
     Ok(result.map(|r| r.history_id))
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn upsert_gmail_history(
     pool: &PgPool,
     link_id: Uuid,
@@ -71,13 +63,7 @@ pub async fn upsert_gmail_history(
         db_history.history_id
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to upsert gmail_history for link_id {} with history_id {}",
-            db_history.link_id, db_history.history_id
-        )
-    })?;
+    .await?;
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
 
 use crate::config::Config;
 

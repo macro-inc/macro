@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use axum::{
     Extension, Json,
     extract::State,
@@ -36,6 +34,8 @@ pub struct GetLegacyUserPermissionsResponse {
     has_chrome_ext: bool,
     /// Whether the user has trialed through stripe
     has_trialed: bool,
+    /// Whether the user has consented to AI data sharing
+    ai_data_consent: bool,
 }
 
 #[derive(serde::Serialize, Debug, utoipa::ToSchema)]
@@ -54,8 +54,6 @@ impl IntoResponse for GetLegacyUserPermissionsResponse {
 pub enum GetLegacyUserPermissionsError {
     #[error("Internal error")]
     InternalError(#[from] anyhow::Error),
-    #[error("Stripe error")]
-    StripeError,
     #[error("Invalid macro user id")]
     InvalidMacroUserId,
 }
@@ -67,12 +65,6 @@ impl IntoResponse for GetLegacyUserPermissionsError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal error",
-                }),
-            ),
-            GetLegacyUserPermissionsError::StripeError => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "stripe error",
                 }),
             ),
             GetLegacyUserPermissionsError::InvalidMacroUserId => (
@@ -116,35 +108,16 @@ pub async fn handler(
         .await
         .map_err(GetLegacyUserPermissionsError::InternalError)?;
 
-    let license_status = if user_context.organization_id.is_some() {
-        // organizations default to active license status
-        "active"
-    } else if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
-        // If the user has premium permission their license status is active
-        "active"
-    } else {
-        // By default, we can be lazy and just say they are inactive
-        // If the requirements change, we will need to update this to actually check the user's
-        // stripe subscription if present
-        "inactive"
-    };
-
-    let has_trialed = if let Some(stripe_customer_id) = legacy_user_info.stripe_customer_id.as_ref()
-    {
-        let customer_id = stripe::CustomerId::from_str(stripe_customer_id)
-            .map_err(|_| GetLegacyUserPermissionsError::StripeError)?;
-        // Get the user's stripe metadata and check if they have trialed
-        let customer = stripe::Customer::retrieve(&ctx.stripe_client, &customer_id, &[])
-            .await
-            .map_err(|_| GetLegacyUserPermissionsError::StripeError)?;
-
-        customer
-            .metadata
-            .map(|m| m.contains_key("has_trialed"))
-            .unwrap_or(false)
-    } else {
-        false
-    };
+    let license_status =
+        if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
+            // If the user has premium permission their license status is active
+            "active"
+        } else {
+            // By default, we can be lazy and just say they are inactive
+            // If the requirements change, we will need to update this to actually check the user's
+            // stripe subscription if present
+            "inactive"
+        };
 
     Ok(GetLegacyUserPermissionsResponse {
         user_id: user_id.as_ref().to_string(),
@@ -159,6 +132,7 @@ pub async fn handler(
             _ => None,
         },
         has_chrome_ext: legacy_user_info.has_chrome_ext,
-        has_trialed,
+        has_trialed: legacy_user_info.has_trialed,
+        ai_data_consent: legacy_user_info.ai_data_consent,
     })
 }

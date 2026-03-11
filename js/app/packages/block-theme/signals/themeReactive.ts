@@ -18,7 +18,7 @@ export const themeReactive: ThemeReactive = {
   c2: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
   c3: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
   c4: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-};
+} as const;
 
 const previousTheme: ThemePrevious = {
   a0: {l: Number.NaN, c: Number.NaN, h: Number.NaN},
@@ -130,4 +130,9 @@ createEffect(
 
 export function createThemeEffect(cb: () => void) {
   return createEffect(on(ALL_THEME_SIGNALS, cb));
+}
+
+export function useReactiveColorString(colorKey: keyof ThemeReactive) {
+  const  [l, c, h] = [themeReactive[colorKey].l[0], themeReactive[colorKey].c[0], themeReactive[colorKey].h[0]];
+  return () => `oklch(${l()} ${c()} ${h()}deg)`;
 }

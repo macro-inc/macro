@@ -19,6 +19,7 @@ import {
 import {
   createEffect,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -231,14 +232,16 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   });
 
   const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(() => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (node && $isVideoNode(node)) {
-        node.setScale(debouncedScale(), false);
-      }
-    });
-  });
+  createEffect(
+    on(debouncedScale, (value) => {
+      editor()?.update(() => {
+        const node = $getNodeByKey(props.key);
+        if (node && $isVideoNode(node)) {
+          node.setScale(value, false);
+        }
+      });
+    })
+  );
 
   const debouncedSetHover = debounce((state: boolean) => {
     setVideoHover(state);
@@ -295,7 +298,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         <video
           crossorigin="anonymous"
           class="h-full object-contain"
-          draggable={false}
+          draggable={true}
           classList={{
             invisible: state() === 'loading' || state() === 'error',
           }}
@@ -315,7 +318,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted">
+          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
             <Spinner />
           </div>
         </Show>

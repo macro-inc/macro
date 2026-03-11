@@ -1,8 +1,8 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import type { DeleteCommentInfo } from '@core/collab/comments/commentType';
-import { threadMeasureContainerId } from '@core/collab/comments/Thread';
+import type { DeleteCommentInfo } from '@core/comments/commentType';
+import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
   CREATE_COMMENT_COMMAND,
   DELETE_COMMENT_COMMAND,

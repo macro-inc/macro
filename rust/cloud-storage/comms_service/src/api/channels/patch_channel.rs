@@ -11,7 +11,7 @@ use comms_db_client::channels::patch_channel::{self, PatchChannelOptions};
         patch,
         tag = "channels",
         operation_id = "patch_channel",
-        path = "/channels/{channel_id}",
+        path = "/comms/channels/{channel_id}",
         params(
             ("channel_id" = String, Path, description = "id of the channel"),
         ),

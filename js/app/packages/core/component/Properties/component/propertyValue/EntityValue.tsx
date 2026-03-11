@@ -1,12 +1,12 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import { getEntityValues } from '../../utils';
 import { EntityIcon } from './EntityIcon';
 import {
   AddPropertyValueButton,
   EmptyValue,
+  stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
 
@@ -15,7 +15,7 @@ import {
  * Shows entity badges and opens modal on click
  */
 export const EntityValue: Component<PropertyValueProps> = (props) => {
-  const { saveHandler } = usePropertiesContext();
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
   const [isSaving, setIsSaving] = createSignal(false);
 
   const handleEditClick = (e: MouseEvent) => {
@@ -43,7 +43,7 @@ export const EntityValue: Component<PropertyValueProps> = (props) => {
           entity.entity_type !== entityToRemove.entity_type
       );
 
-      await saveHandler.saveProperty(props.property, {
+      await saveHandler().saveProperty(props.property, {
         valueType: 'ENTITY',
         refs: newValues.length > 0 ? newValues : null,
       });

@@ -1,6 +1,6 @@
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
-import { usePropertiesContext } from '../context/PropertiesContext';
+import type { PropertySaveHandler } from '../context/PropertiesContext';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
 
@@ -13,6 +13,7 @@ import { formatPropertyValue } from '../utils';
  */
 export function useInlineEditor(
   property: Property,
+  saveHandler: PropertySaveHandler,
   onSaved?: () => void
 ): {
   isEditing: Accessor<boolean>;
@@ -23,7 +24,6 @@ export function useInlineEditor(
   cancelEdit: () => void;
   save: () => Promise<void>;
 } {
-  const { saveHandler } = usePropertiesContext();
   const [isEditing, setIsEditing] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [isSaving, setIsSaving] = createSignal(false);

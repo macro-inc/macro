@@ -1,13 +1,33 @@
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
-import { type JSXElement, lazy } from 'solid-js';
+import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { Soup } from '../Soup';
-import { SettingsPanel } from '../settings/Settings';
+import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
+import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { useUserContext } from '@core/context/user';
+import { useSplitPanelOrThrow } from './layoutUtils';
+import type { SplitContent } from './layoutManager';
+
+/**
+ * Guard that delays rendering until user is authenticated.
+ * Use for components that require user context (userId, email).
+ */
+const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
+  return (props: P) => {
+    const isAuthenticated = useIsAuthenticated();
+    return (
+      <Show when={isAuthenticated()} fallback={<LoadingBlock />}>
+        <Comp {...props} />
+      </Show>
+    );
+  };
+};
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -43,6 +63,17 @@ export type ResolvedComponent = {
   initialMeta?: ComponentMeta;
 };
 
+// Similar to SolidRouter's `<Navigate />` but for splits
+export function RedirectSplit(props: { to: SplitContent }) {
+  const panel = useSplitPanelOrThrow();
+
+  onMount(() => {
+    panel.handle.replace({ next: props.to });
+  });
+
+  return null;
+}
+
 export function resolveComponent(
   name: string,
   params?: Record<string, any>
@@ -55,16 +86,155 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
+registerComponent('unified-list', () => (
+  <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+));
+
+/** BEGIN - APP ROUTES */
+registerComponent(
+  'inbox',
+  withAuth(() => {
+    const preset = getDefaultListViewPreset('inbox');
+    return (
+      <SoupView
+        viewName="Inbox"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'agents',
+  withAuth(() => {
+    const user = useUserContext();
+    const preset = getDefaultListViewPreset('agents', {
+      userId: user.userId(),
+      email: user.email(),
+    });
+    return (
+      <SoupView
+        viewName="Agents"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'mail',
+  withAuth(() => {
+    const preset = getDefaultListViewPreset('mail');
+    return (
+      <SoupView
+        viewName="Mail"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'documents',
+  withAuth(() => {
+    const user = useUserContext();
+    const preset = getDefaultListViewPreset('documents', {
+      userId: user.userId(),
+      email: user.email(),
+    });
+    return (
+      <SoupView
+        viewName="Documents"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'tasks',
+  withAuth(() => {
+    const user = useUserContext();
+    const preset = getDefaultListViewPreset('tasks', {
+      userId: user.userId(),
+      email: user.email(),
+    });
+    return (
+      <SoupView
+        viewName="Tasks"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'channels',
+  withAuth(() => {
+    const preset = getDefaultListViewPreset('channels');
+    return (
+      <SoupView
+        viewName="Channels"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'files',
+  withAuth(() => {
+    const user = useUserContext();
+    const preset = getDefaultListViewPreset('files', {
+      userId: user.userId(),
+      email: user.email(),
+    });
+    return (
+      <SoupView
+        viewName="Files"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'search',
+  withAuth(() => {
+    const user = useUserContext();
+    const preset = getDefaultListViewPreset('search', {
+      userId: user.userId(),
+      email: user.email(),
+    });
+    return (
+      <SoupView
+        viewName="Search"
+        queryFilters={preset.queryFilters}
+        initialClientFilters={preset.clientFilters}
+      />
+    );
+  })
+);
+/** END - APP ROUTES */
+
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
-registerComponent('email-compose', () => <EmailCompose />);
+registerComponent('email-compose', (params) => (
+  <EmailCompose draftID={params?.draftID} />
+));
 registerComponent('task-compose', () => <ComposeTask />);
 registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsPanel />);
+registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
 
 if (LOCAL_ONLY) {
@@ -105,6 +275,10 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/component/AI/component/debug/Tool'))
   );
   registerComponent(
+    'http-stream',
+    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
+  );
+  registerComponent(
     'new-form-primitives',
     lazy(
       () => import('@core/component/FormControls/debug/NewFormPrimitivesDemo')
@@ -137,6 +311,16 @@ if (LOCAL_ONLY) {
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
+
+  registerComponent(
+    'entity-debug',
+    lazy(() => import('@entity/debug/DebugEntityView'))
+  );
+
+  registerComponent(
+    'quick-access-list',
+    lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
+  );
 }
 
 if (DEV_MODE_ENV) {
@@ -154,4 +338,16 @@ if (DEV_MODE_ENV) {
         )
     )
   );
+  registerComponent(
+    'md-builder',
+    lazy(
+      () => import('@core/component/LexicalMarkdown/builder/BuilderTestPage')
+    )
+  );
 }
+
+// Icon gallery
+registerComponent(
+  'icon-gallery',
+  lazy(() => import('@core/internal/IconGallery'))
+);

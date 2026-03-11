@@ -4,13 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupChatDeletedAt } from './soupChatDeletedAt';
 import type { SoupChatProjectId } from './soupChatProjectId';
 import type { SoupChatViewedAt } from './soupChatViewedAt';
 import type { SoupProperty } from './soupProperty';
 
 export interface SoupChat {
   /** The time the chat was created */
-  createdAt: number;
+  createdAt: string;
+  /** The time the chat was deleted */
+  deletedAt?: SoupChatDeletedAt;
   /** The chat uuid */
   id: string;
   /** Whether the chat is persistent or not */
@@ -24,7 +27,7 @@ export interface SoupChat {
   /** Properties */
   properties: SoupProperty[];
   /** The time the chat was last updated */
-  updatedAt: number;
+  updatedAt: string;
   /** The time the chat was last viewed */
-  viewedAt: SoupChatViewedAt;
+  viewedAt?: SoupChatViewedAt;
 }

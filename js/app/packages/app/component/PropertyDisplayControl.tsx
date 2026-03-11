@@ -19,7 +19,14 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { DisplayOptions } from './ViewConfig';
+
+export type DisplayOptions = {
+  layout: 'compact' | 'expanded' | 'visual';
+  unrollNotifications: boolean;
+  showUnreadIndicator: boolean;
+  displayProperties: string[];
+  limit?: number;
+};
 
 const MAX_DISPLAY_PROPERTIES = 4;
 
@@ -104,7 +111,6 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
              text-xs text-ink
              bg-transparent hover:bg-hover
              border border-edge
-             cursor-pointer
              transition-colors"
     >
       <PropertyDataTypeIcon property={props.property} />

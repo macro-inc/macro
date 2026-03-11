@@ -107,7 +107,8 @@ pub async fn get_user_documents(
             d."projectId" as "project_id",
             p.name as "project_name",
             di.sha as "sha",
-            dt.sub_type as "sub_type"
+            dt.sub_type as "sub_type",
+            d."deletedAt"::timestamptz as deleted_at
         FROM
             "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id

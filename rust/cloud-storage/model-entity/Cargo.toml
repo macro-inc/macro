@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+cowlike = { path = "../cowlike" }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true, features = ["derive"] }
 utoipa = { workspace = true }

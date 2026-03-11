@@ -1,14 +1,12 @@
 [package]
-default-run = "comms_service"
 edition = "2024"
 name = "comms_service"
 publish = false
 version = "0.1.0"
 
-[[bin]]
+[lib]
 name = "comms_service"
-path = "src/main.rs"
-required-features = ["channel_search", "service"]
+path = "src/lib.rs"
 
 [[bin]]
 name = "backfill_comms_search"
@@ -29,8 +27,6 @@ service = ["comms_db_client"]
 ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client/" }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
@@ -39,30 +35,34 @@ axum-macros = { workspace = true }
 chrono = { workspace = true }
 comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
-connection_gateway = { path = "../connection_gateway" }
-document_storage_service_client = { path = "../document_storage_service_client" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 doppleganger = { workspace = true }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken.workspace = true
 macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
+  "cloud_storage",
 ] }
-macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
 models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
+last_online_tracker = { path = "../last_online_tracker" }
+notification_hex = { path = "../notification", package = "notification" }
 reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

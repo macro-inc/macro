@@ -5,8 +5,10 @@ import type {
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
 import { DateMentionNode } from '../nodes/DateMentionNode';
+import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
+import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 
 // NOTE: If you are changing this file, you may need to update the `mention_utils` crate in `macro-api` as well. Please notify @hutch should you update this file.
@@ -303,6 +305,112 @@ export const E_GROUP_MENTION: ElementTransformer = {
     }
 
     return `@${groupAlias}`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Document Cards
+
+export const I_DOCUMENT_CARD: ElementTransformer = {
+  dependencies: [DocumentCardNode],
+  type: 'element',
+  regExp: /<m-document-card>(.*?)<\/m-document-card>/,
+  export: (node) => {
+    if (!(node instanceof DocumentCardNode)) return null;
+    const data = JSON.stringify({
+      documentId: node.getDocumentId(),
+      blockName: node.getBlockName(),
+      documentName: node.getDocumentName(),
+      blockParams: node.getBlockParams(),
+      previewBox: node.getPreviewBox(),
+      previewData: node.getPreviewData(),
+      mentionUuid: node.getMentionUuid(),
+    });
+    return `<m-document-card>${data}</m-document-card>`;
+  },
+  replace: (
+    parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    match: Array<string>
+  ) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of ['documentId', 'documentName', 'blockName']) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      const documentCardNode = new DocumentCardNode(
+        data.documentId,
+        data.documentName,
+        data.blockName,
+        data.blockParams,
+        data.previewBox,
+        data.previewData,
+        data.mentionUuid
+      );
+      parentNode.replace(documentCardNode);
+    } catch (e) {
+      console.error('Error in I_DOCUMENT_CARD replace:', e);
+    }
+  },
+};
+
+// Internal Theme Mentions
+export const I_THEME_MENTION: TextMatchTransformer = {
+  dependencies: [ThemeMentionNode],
+  type: 'text-match',
+  regExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
+  importRegExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
+  export: (node) => {
+    if (!(node instanceof ThemeMentionNode)) return null;
+    const data = JSON.stringify({
+      name: node.getThemeName(),
+      data: node.getThemeData(),
+    });
+    return `<m-theme-mention>${data}</m-theme-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        typeof parsed.name !== 'string'
+      )
+        throw new Error('Invalid theme mention JSON');
+      const themeMentionNode = new ThemeMentionNode(parsed.name, parsed.data);
+      node.replace(themeMentionNode);
+    } catch (e) {
+      console.error('Error in I_THEME_MENTION replace:', e);
+    }
+  },
+};
+
+// External Document Cards
+export const E_DOCUMENT_CARD: ElementTransformer = {
+  dependencies: [DocumentCardNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof DocumentCardNode)) return null;
+
+    const documentName = node.getDocumentName();
+    const documentId = node.getDocumentId();
+    const blockType = node.getBlockName();
+
+    if (!documentName || !documentId || !blockType) {
+      return null;
+    }
+
+    const hostname = cleanHostname(window.location.hostname);
+    const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
+    return `[${documentName}](${documentUrl})`;
   },
   replace: (
     _parentNode: ElementNode,

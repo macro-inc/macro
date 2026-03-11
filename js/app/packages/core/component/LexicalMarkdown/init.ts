@@ -5,10 +5,13 @@ import {
   DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
+  SnapshotNode,
   GroupMentionNode,
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  ThemeMentionNode,
+  UnknownMentionNode,
   UserMentionNode,
   VideoNode,
   WatermarkNode,
@@ -20,12 +23,15 @@ import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
 import { DocumentMention } from './component/decorator/DocumentMention';
 import { Equation } from './component/decorator/Equation';
+import { Snapshot } from './component/decorator/Snapshot';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { UserMention } from './component/decorator/UserMention';
+import { ThemeMention } from './component/decorator/ThemeMention';
+import { UnknownMention } from './component/decorator/UnknownMention';
 import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
@@ -45,7 +51,10 @@ export function initializeLexical() {
   setDecorator(ImageNode, MarkdownImage);
   setDecorator(VideoNode, MarkdownVideo);
   setDecorator(EquationNode, Equation);
+  setDecorator(SnapshotNode, Snapshot);
   setDecorator(HtmlRenderNode, HtmlRender);
+  setDecorator(ThemeMentionNode, ThemeMention);
+  setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
   registerDiffNodeFactory();
 }

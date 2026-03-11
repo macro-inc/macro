@@ -1,0 +1,3 @@
+name: image-proxy-service
+runtime: nodejs
+description: Image Proxy Service

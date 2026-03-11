@@ -198,39 +198,29 @@
         }
       }
     },
-    "/annotations/anchors/document/:document_id": {
-      "post": {
-        "tags": ["annotations::create_anchor"],
-        "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
-        "operationId": "create_anchor",
+    "/annotations/anchors/document/{document_id}": {
+      "get": {
+        "tags": ["annotations::get"],
+        "summary": "Gets a set of comment anchors for a document",
+        "operationId": "get_document_anchors",
         "parameters": [
           {
             "name": "document_id",
             "in": "path",
-            "description": "The document id",
+            "description": "Document ID",
             "required": true,
             "schema": {
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateUnthreadedAnchorRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUnthreadedAnchorResponse"
+                  "$ref": "#/components/schemas/AnchorResponse"
                 }
               }
             }
@@ -266,31 +256,39 @@
             }
           }
         }
-      }
-    },
-    "/annotations/anchors/document/{document_id}": {
-      "get": {
-        "tags": ["annotations::get"],
-        "summary": "Gets a set of comment anchors for a document",
-        "operationId": "get_document_anchors",
+      },
+      "post": {
+        "tags": ["annotations::create_anchor"],
+        "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
+        "operationId": "create_anchor",
         "parameters": [
           {
             "name": "document_id",
             "in": "path",
-            "description": "Document ID",
+            "description": "The document id",
             "required": true,
             "schema": {
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnthreadedAnchorRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AnchorResponse"
+                  "$ref": "#/components/schemas/CreateUnthreadedAnchorResponse"
                 }
               }
             }
@@ -468,7 +466,65 @@
         }
       }
     },
-    "/annotations/comments/document/:document_id": {
+    "/annotations/comments/document/{document_id}": {
+      "get": {
+        "tags": ["annotations::get"],
+        "summary": "Gets a set of comment threads for a document",
+        "operationId": "get_document_comments",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["annotations::create_comment"],
         "summary": "Creates a single comment for a document\nOptionally creates a new thread/anchor if one does not exist",
@@ -538,17 +594,38 @@
         }
       }
     },
-    "/annotations/comments/document/{document_id}": {
+    "/channels/{channel_id}/attachments": {
       "get": {
-        "tags": ["annotations::get"],
-        "summary": "Gets a set of comment threads for a document",
-        "operationId": "get_document_comments",
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/attachments`.",
+        "operationId": "get_channel_attachments",
         "parameters": [
           {
-            "name": "document_id",
+            "name": "channel_id",
             "in": "path",
-            "description": "Document ID",
+            "description": "Channel ID",
             "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -560,7 +637,255 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/messages": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages`.",
+        "operationId": "get_channel_messages",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "load_around_message_id",
+            "in": "query",
+            "description": "Return a centered window around this message ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/messages/{message_id}/replies": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.",
+        "operationId": "get_thread_replies",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message ID (thread parent or reply id)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiThreadReply"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/participants": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/participants`.",
+        "operationId": "get_channel_participants",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiChannelParticipant"
+                  }
                 }
               }
             }
@@ -679,8 +1004,9 @@
       },
       "post": {
         "tags": ["document"],
-        "summary": "Handles creating a document",
-        "operationId": "create_document_handler",
+        "summary": "Handler for `POST /documents`.",
+        "description": "Creates a new document, generates an S3 presigned upload URL, and returns\nthe document metadata with the URL for the client to upload to.",
+        "operationId": "create_document",
         "requestBody": {
           "content": {
             "application/json": {
@@ -740,7 +1066,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -750,17 +1076,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
-          "403": {
+          "409": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -770,7 +1096,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1204,7 +1530,8 @@
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
-        "summary": "Gets a particular document by its id",
+        "summary": "Handler for `GET /documents/{document_id}`.",
+        "description": "Returns document metadata, user access level, and view location.",
         "operationId": "get_document",
         "parameters": [
           {
@@ -1233,7 +1560,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1243,7 +1570,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1253,7 +1580,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1340,8 +1667,9 @@
       },
       "delete": {
         "tags": ["document"],
-        "summary": "Deletes a specific document.\nThe document will be soft deleted and appear in the user's trash for 30 days.",
-        "operationId": "delete_document_handler",
+        "summary": "Handler for `DELETE /documents/{document_id}`.",
+        "description": "Soft-deletes a document (only owners can delete).",
+        "operationId": "delete_document",
         "parameters": [
           {
             "name": "document_id",
@@ -1359,7 +1687,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
                 }
               }
             }
@@ -1369,7 +1697,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1379,7 +1707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1389,7 +1717,86 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["document"],
+        "summary": "Handler for `PATCH /documents/{document_id}`.",
+        "description": "Edits document metadata such as name or project, and modifies\nthe document's share permissions. Requires edit access to the document,\nand edit access to the target project if moving the document.",
+        "operationId": "edit_document",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditDocumentServiceArgs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditDocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1656,6 +2063,89 @@
         }
       }
     },
+    "/documents/{document_id}/location_v3": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/{document_id}/location_v3`.",
+        "description": "Returns a presigned URL or sync service content for accessing the document.",
+        "operationId": "get_document_location_v3",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "document_version_id",
+            "in": "query",
+            "description": "A specific document version id to get the location for.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "get_converted_docx_url",
+            "in": "query",
+            "description": "If true, this will return the converted docx url.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/permanent": {
       "delete": {
         "tags": ["document"],
@@ -1905,6 +2395,67 @@
         }
       }
     },
+    "/documents/{document_id}/short_id": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/{document_id}/short_id`.",
+        "description": "Returns the short UUID for a document.",
+        "operationId": "get_document_short_id",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/simple_save": {
       "put": {
         "tags": ["document"],
@@ -2091,6 +2642,66 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/entity/{entity_type}/{entity_id}/permissions": {
+      "get": {
+        "tags": ["entity::get_entity_permission"],
+        "summary": "Get the current user's permission for a given entity.",
+        "operationId": "get_entity_permission",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (document, chat, project, thread, email_thread, channel)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPermissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Entity not found"
+          }
+        }
+      }
+    },
+    "/github/install-sync": {
+      "get": {
+        "tags": ["github::inbound::github_sync_router"],
+        "summary": "Redirects the user to the github sync app installation page.",
+        "operationId": "install_sync",
+        "responses": {
+          "307": {
+            "description": "Redirects to the github sync app installation page"
           }
         }
       }
@@ -2601,7 +3212,7 @@
         }
       }
     },
-    "/pins/:pinned_item_id": {
+    "/pins/{pinned_item_id}": {
       "post": {
         "tags": ["pins::add_pin"],
         "summary": "Pins the item for the user",
@@ -3971,76 +4582,6 @@
         }
       }
     },
-    "/v2/documents/{document_id}": {
-      "patch": {
-        "tags": ["document"],
-        "summary": "Edit document v2\nEdits traits of a document such as owner, or name as well as modify the documents share\npermissions.",
-        "operationId": "edit_document_v2",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditDocumentRequestV2"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v2/documents/{document_id}/permissions": {
       "get": {
         "tags": ["document"],
@@ -4471,17 +5012,328 @@
           }
         ]
       },
-      "BasicDocument": {
+      "ApiChannelAttachment": {
         "type": "object",
+        "description": "A channel-level attachment.",
         "required": [
           "id",
-          "documentVersionId",
-          "owner",
-          "name",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
+          "channel_id",
+          "message_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
         ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height (for images)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id this attachment belongs to."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width (for images)."
+          }
+        }
+      },
+      "ApiChannelAttachmentsPage": {
+        "type": "object",
+        "description": "Paginated response of channel attachments.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelAttachment"
+            },
+            "description": "Attachments on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          }
+        }
+      },
+      "ApiChannelMessage": {
+        "type": "object",
+        "description": "A top-level channel message with thread info.",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "thread",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was created."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was soft-deleted."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this message."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ApiThreadInfo",
+            "description": "Thread metadata and preview."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was last updated."
+          }
+        }
+      },
+      "ApiChannelMessagesPage": {
+        "type": "object",
+        "description": "Paginated response of channel messages.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelMessage"
+            },
+            "description": "Messages on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          },
+          "previous_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the previous page, null if no newer page exists."
+          }
+        }
+      },
+      "ApiChannelParticipant": {
+        "type": "object",
+        "description": "A channel participant.",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ApiParticipantRole",
+            "description": "Role in the channel."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id."
+          }
+        }
+      },
+      "ApiCountedReaction": {
+        "type": "object",
+        "description": "A reaction with emoji and user list.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "The emoji string."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User ids who added this reaction."
+          }
+        }
+      },
+      "ApiMessageAttachment": {
+        "type": "object",
+        "description": "An attachment on a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          }
+        }
+      },
+      "ApiParticipantRole": {
+        "type": "string",
+        "description": "Participant role in a channel.",
+        "enum": ["owner", "admin", "member"]
+      },
+      "ApiThreadInfo": {
+        "type": "object",
+        "description": "Thread metadata and preview replies.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp of the latest reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiThreadReply"
+            },
+            "description": "Last N replies for thread preview."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total reply count."
+          }
+        }
+      },
+      "ApiThreadReply": {
+        "type": "object",
+        "description": "A thread reply shown in preview.",
+        "required": [
+          "id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this reply."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reply content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was created."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the reply was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reply id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this reply."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was last updated."
+          }
+        }
+      },
+      "BasicDocument": {
+        "type": "object",
+        "required": ["id", "documentVersionId", "owner", "name"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -4493,13 +5345,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
@@ -4548,8 +5400,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -4641,12 +5493,27 @@
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
+          "channel_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "mentions": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by channel notification state."
           },
           "org_id": {
             "type": ["integer", "null"],
@@ -4775,24 +5642,16 @@
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "isPersistent",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -4819,8 +5678,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -4839,6 +5698,14 @@
               "type": "string"
             },
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by chat notification state."
           },
           "owners": {
             "type": "array",
@@ -4869,27 +5736,19 @@
       },
       "Comment": {
         "type": "object",
-        "required": [
-          "commentId",
-          "threadId",
-          "owner",
-          "text",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["commentId", "threadId", "owner", "text"],
         "properties": {
           "commentId": {
             "type": "integer",
             "format": "int64"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "metadata": {},
           "order": {
@@ -4910,8 +5769,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -5108,6 +5967,7 @@
           },
           "id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the document in the database"
           },
           "isTask": {
@@ -5123,11 +5983,16 @@
             "description": "The content type of the document (currently only used for logging matches against file type)."
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "format": "uuid"
           },
           "sha": {
             "type": "string",
             "description": "The sha of the document."
+          },
+          "skipHistory": {
+            "type": "boolean",
+            "description": "Whether to add a viewed_at record for this document upon creation."
           }
         }
       },
@@ -5196,6 +6061,7 @@
         "properties": {
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "Optional project id to associate the task with"
           },
           "propertyValues": {
@@ -5445,6 +6311,14 @@
             },
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by document notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -5458,6 +6332,10 @@
               "type": "string"
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "task_filters": {
+            "$ref": "#/components/schemas/TaskFilters",
+            "description": "Task-specific filters that only apply to task subtype documents."
           }
         }
       },
@@ -5467,9 +6345,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5482,9 +6358,14 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The time the document was deleted"
           },
           "documentBom": {
             "type": ["array", "null"],
@@ -5546,8 +6427,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -5656,7 +6537,7 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner", "updated_at"],
+        "required": ["document_id", "document_name", "owner"],
         "properties": {
           "document_id": {
             "type": "string",
@@ -5686,8 +6567,8 @@
             ]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last updated"
           }
         }
@@ -5730,9 +6611,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5745,8 +6624,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentBom": {
@@ -5801,8 +6680,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -5902,16 +6781,32 @@
           }
         ]
       },
-      "EditDocumentRequestV2": {
+      "EditDocumentResponse": {
         "type": "object",
+        "description": "Edit document response.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GenericSuccessResponse",
+            "description": "The response data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Whether an error occurred."
+          }
+        }
+      },
+      "EditDocumentServiceArgs": {
+        "type": "object",
+        "description": "Arguments for the edit_document service call.",
         "properties": {
           "documentName": {
             "type": ["string", "null"],
-            "description": "The name of the document"
+            "description": "The name of the document."
           },
           "projectId": {
             "type": ["string", "null"],
-            "description": "The new project id of the document.\nThis will also update the documents permissions to match the project it is going into"
+            "description": "The new project id of the document."
           },
           "sharePermission": {
             "oneOf": [
@@ -6017,6 +6912,35 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          },
+          "exclude_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
+          },
+          "include_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by email notification state."
+          },
           "recipients": {
             "type": "array",
             "items": {
@@ -6062,6 +6986,69 @@
             "description": "the bundled [ProjectFilters]"
           }
         }
+      },
+      "EntityPermission": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Permission for item-based entities (document, chat, project, thread).",
+            "required": ["access_level", "type"],
+            "properties": {
+              "access_level": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level the user has."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["access_level"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Permission for channel-based entities.",
+            "required": ["role", "type"],
+            "properties": {
+              "role": {
+                "$ref": "#/components/schemas/ParticipantRole",
+                "description": "The role the user has in the channel."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel_role"]
+              }
+            }
+          }
+        ],
+        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+      },
+      "EntityPermissionResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["permission", "status"],
+            "properties": {
+              "permission": {
+                "$ref": "#/components/schemas/EntityPermission"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_access"]
+              }
+            }
+          }
+        ],
+        "description": "API response envelope for entity permissions."
       },
       "EntityReference": {
         "type": "object",
@@ -6192,41 +7179,424 @@
           "pdf",
           "md",
           "canvas",
-          "py",
-          "js",
-          "ts",
-          "jsx",
-          "tsx",
-          "json",
-          "html",
+          "coffee",
+          "cson",
+          "iced",
+          "c",
+          "i",
+          "cpp",
+          "cppm",
+          "cc",
+          "ccm",
+          "cxx",
+          "cxxm",
+          "cplusplus",
+          "cplusplusm",
+          "hpp",
+          "hh",
+          "hxx",
+          "hplusplus",
+          "h",
+          "ii",
+          "ino",
+          "inl",
+          "ipp",
+          "ixx",
+          "tpp",
+          "txx",
+          "hppin",
+          "hin",
+          "cu",
+          "cuh",
+          "cs",
+          "csx",
+          "cake",
           "css",
-          "xml",
-          "yaml",
-          "yml",
-          "sql",
+          "dart",
+          "diff",
+          "patch",
+          "rej",
+          "dockerfile",
+          "containerfile",
+          "go",
+          "handlebars",
+          "hbs",
+          "hjs",
+          "hlsl",
+          "hlsli",
+          "fx",
+          "fxh",
+          "vsh",
+          "psh",
+          "cginc",
+          "compute",
+          "html",
+          "htm",
+          "shtml",
+          "xhtml",
+          "xht",
+          "mdoc",
+          "jsp",
+          "asp",
+          "aspx",
+          "jshtm",
+          "volt",
+          "ejs",
+          "rhtml",
+          "ini",
+          "conf",
+          "properties",
+          "cfg",
+          "directory",
+          "gitattributes",
+          "gitconfig",
+          "gitmodules",
+          "editorconfig",
+          "repo",
+          "java",
+          "jav",
+          "jsx",
+          "js",
+          "es6",
+          "mjs",
+          "cjs",
+          "pac",
+          "json",
+          "bowerrc",
+          "jscsrc",
+          "webmanifest",
+          "jsmap",
+          "cssmap",
+          "tsmap",
+          "har",
+          "jslintrc",
+          "jsonld",
+          "geojson",
+          "ipynb",
+          "vuerc",
+          "jsonc",
+          "eslintrc",
+          "eslintrcjson",
+          "jsfmtrc",
+          "jshintrc",
+          "swcrc",
+          "hintrc",
+          "babelrc",
+          "jsonl",
+          "ndjson",
+          "codesnippets",
+          "jl",
+          "jmd",
+          "sty",
+          "cls",
+          "bbx",
+          "cbx",
+          "tex",
+          "ltx",
+          "ctx",
+          "bib",
+          "less",
+          "log",
+          "lua",
+          "mak",
+          "mk",
+          "mkd",
+          "mdwn",
+          "mdown",
+          "markdown",
+          "markdn",
+          "mdtxt",
+          "mdtext",
+          "workbook",
+          "m",
+          "mm",
+          "pl",
+          "pm",
+          "pod",
+          "t",
+          "psgi",
+          "raku",
+          "rakumod",
+          "rakutest",
+          "rakudoc",
+          "nqp",
+          "p6",
+          "pl6",
+          "pm6",
+          "php",
+          "php4",
+          "php5",
+          "phtml",
+          "ctp",
+          "ps1",
+          "psm1",
+          "psd1",
+          "pssc",
+          "psrc",
+          "py",
+          "rpy",
+          "pyw",
+          "cpy",
+          "gyp",
+          "gypi",
+          "pyi",
+          "ipy",
+          "pyt",
+          "r",
+          "rhistory",
+          "rprofile",
+          "rt",
+          "cshtml",
+          "razor",
+          "rb",
+          "rbx",
+          "rjs",
+          "gemspec",
+          "rake",
+          "ru",
+          "erb",
+          "podspec",
+          "rbi",
+          "rs",
+          "scss",
+          "sass",
+          "shader",
           "sh",
           "bash",
-          "markdown",
+          "bashrc",
+          "bashaliases",
+          "bashprofile",
+          "bashlogin",
+          "ebuild",
+          "eclass",
+          "profile",
+          "bashlogout",
+          "xprofile",
+          "xsession",
+          "xsessionrc",
+          "zsh",
+          "zshrc",
+          "zprofile",
+          "zlogin",
+          "zlogout",
+          "zshenv",
+          "zshtheme",
+          "fish",
+          "ksh",
+          "csh",
+          "cshrc",
+          "tcshrc",
+          "yashrc",
+          "yashprofile",
+          "sql",
+          "dsql",
+          "swift",
+          "ts",
+          "cts",
+          "mts",
+          "tsx",
+          "tsbuildinfo",
+          "xml",
+          "xsd",
+          "ascx",
+          "atom",
+          "axml",
+          "axaml",
+          "bpmn",
+          "cpt",
+          "csl",
+          "csproj",
+          "csprojuser",
+          "dita",
+          "ditamap",
+          "dtd",
+          "ent",
+          "mod",
+          "dtml",
+          "fsproj",
+          "fxml",
+          "iml",
+          "isml",
+          "jmx",
+          "launch",
+          "menu",
+          "mxml",
+          "nuspec",
+          "opml",
+          "owl",
+          "proj",
+          "props",
+          "pt",
+          "publishsettings",
+          "pubxml",
+          "pubxmluser",
+          "rbxlx",
+          "rbxmx",
+          "rdf",
+          "rng",
+          "rss",
+          "shproj",
+          "storyboard",
+          "targets",
+          "tld",
+          "tmx",
+          "vbproj",
+          "vbprojuser",
+          "vcxproj",
+          "vcxprojfilters",
+          "wsdl",
+          "wxi",
+          "wxl",
+          "wxs",
+          "xaml",
+          "xbl",
+          "xib",
+          "xlf",
+          "xliff",
+          "xpdl",
+          "xul",
+          "xoml",
+          "xsl",
+          "xslt",
+          "yaml",
+          "yml",
+          "eyaml",
+          "eyml",
+          "cff",
+          "yamltmlanguage",
+          "yamltmpreferences",
+          "yamltmtheme",
+          "winget",
           "txt",
           "csv",
+          "tsv",
           "jpeg",
           "jpg",
           "png",
           "gif",
           "svg",
           "webp",
+          "avif",
+          "bmp",
+          "ico",
+          "tiff",
+          "tif",
           "heic",
           "heif",
-          "zip",
           "tar",
           "targz",
           "tgz",
           "gz",
+          "bz2",
+          "tarbz2",
+          "tbz2",
+          "z",
+          "tarz",
+          "lz",
+          "tarlz",
+          "xz",
+          "tarxz",
+          "txz",
+          "lzma",
+          "tarlzma",
+          "rar",
+          "sevenz",
+          "zst",
+          "tarzst",
+          "tzst",
+          "zip",
+          "exe",
+          "msi",
+          "dll",
+          "bat",
+          "cmd",
+          "com",
+          "appimage",
+          "app",
+          "bin",
+          "deb",
+          "rpm",
+          "apk",
+          "dmg",
+          "pkg",
+          "crx",
+          "xpi",
+          "mp3",
+          "wav",
+          "ogg",
+          "flac",
+          "aac",
+          "m4a",
+          "wma",
+          "mid",
+          "midi",
           "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
+          "ttf",
+          "otf",
+          "woff",
+          "woff2",
+          "eot",
+          "rtf",
+          "odt",
+          "ods",
+          "odp",
+          "odg",
+          "odf",
+          "epub",
+          "mobi",
+          "azw",
+          "azw3",
+          "djvu",
           "xls",
           "ppt",
           "pptx",
-          "xlsx"
+          "xlsx",
+          "db",
+          "sqlite",
+          "sqlite3",
+          "mdb",
+          "accdb",
+          "dbf",
+          "plist",
+          "toml",
+          "env",
+          "dot",
+          "gv",
+          "torrent",
+          "ics",
+          "vcf",
+          "ai",
+          "eps",
+          "ps",
+          "dxf",
+          "dwg",
+          "stl",
+          "obj",
+          "fbx",
+          "blend",
+          "dae",
+          "threeds",
+          "gltf",
+          "glb",
+          "vhd",
+          "vhdx",
+          "vmdk",
+          "ova",
+          "ovf",
+          "iso",
+          "img",
+          "swf"
         ]
       },
       "FolderItem": {
@@ -6399,13 +7769,7 @@
       },
       "GetDocumentListResult": {
         "type": "object",
-        "required": [
-          "documentId",
-          "documentVersionId",
-          "documentName",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["documentId", "documentVersionId", "documentName"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -6417,8 +7781,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentFamilyId": {
@@ -6444,8 +7808,8 @@
             "description": "The file type of the document"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -6837,6 +8201,20 @@
           }
         }
       },
+      "NotificationFilters": {
+        "type": "object",
+        "description": "Notification-level filters that apply to an entity type.",
+        "properties": {
+          "done": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+          },
+          "seen": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          }
+        }
+      },
       "Params": {
         "type": "object",
         "properties": {
@@ -6865,6 +8243,7 @@
       },
       "ParticipantRole": {
         "type": "string",
+        "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
       },
       "PatchProjectRequestV2": {
@@ -7051,9 +8430,6 @@
           "text",
           "pageViewportWidth",
           "pageViewportHeight",
-          "createdAt",
-          "updatedAt",
-          "deletedAt",
           "highlightRects"
         ],
         "properties": {
@@ -7066,12 +8442,12 @@
             "format": "int32"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -7116,8 +8492,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "uuid": {
             "type": "string",
@@ -7480,23 +8856,16 @@
       },
       "Project": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -7511,8 +8880,8 @@
             "description": "The parent project id"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "userId": {
@@ -7564,6 +8933,14 @@
         "type": "object",
         "description": "The project filters used to filter down what projects you search over.",
         "properties": {
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by project notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -7637,7 +9014,7 @@
       },
       "ProjectPreviewData": {
         "type": "object",
-        "required": ["id", "name", "owner", "path", "updatedAt"],
+        "required": ["id", "name", "owner", "path"],
         "properties": {
           "id": {
             "type": "string"
@@ -7655,8 +9032,8 @@
             }
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8218,6 +9595,17 @@
           }
         }
       },
+      "ShortIdResponse": {
+        "type": "object",
+        "description": "Short ID response.",
+        "required": ["shortId"],
+        "properties": {
+          "shortId": {
+            "type": "string",
+            "description": "The short id of the document."
+          }
+        }
+      },
       "SoupApiItem": {
         "allOf": [
           {
@@ -8253,8 +9641,8 @@
             "type": ["string", "null"]
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "filename": {
             "type": ["string", "null"]
@@ -8311,14 +9699,18 @@
           "isPersistent",
           "createdAt",
           "updatedAt",
-          "viewedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was created"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The time the chat was deleted"
           },
           "id": {
             "type": "string",
@@ -8350,13 +9742,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last viewed"
           }
         }
@@ -8393,7 +9785,6 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt",
           "properties"
         ],
         "properties": {
@@ -8408,9 +9799,14 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document was created"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The time the document was deleted"
           },
           "documentFamilyId": {
             "type": ["integer", "null"],
@@ -8467,13 +9863,13 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -8509,13 +9905,12 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt",
-          "viewedAt"
+          "updatedAt"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -8555,43 +9950,16 @@
             "type": ["string", "null"]
           },
           "sortTs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
-          }
-        }
-      },
-      "SoupEmailThreadPreviewMetadata": {
-        "type": "object",
-        "required": [
-          "knownSender",
-          "tabular",
-          "calendarInvite",
-          "genericSender"
-        ],
-        "properties": {
-          "calendarInvite": {
-            "type": "boolean",
-            "description": "if any email contains a calendar invite"
-          },
-          "genericSender": {
-            "type": "boolean",
-            "description": "if any sender is a generic email"
-          },
-          "knownSender": {
-            "type": "boolean",
-            "description": "if user has previously emailed any sender"
-          },
-          "tabular": {
-            "type": "boolean",
-            "description": "if any email contains a <table> html tag"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8602,14 +9970,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "attachments",
-              "attachmentsMacro",
-              "participants",
-              "metadata",
-              "labels",
-              "properties"
-            ],
+            "required": ["attachments", "participants", "labels", "properties"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -8617,20 +9978,11 @@
                   "$ref": "#/components/schemas/SoupAttachment"
                 }
               },
-              "attachmentsMacro": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SoupMacroAttachment"
-                }
-              },
               "labels": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupLabel"
                 }
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/SoupEmailThreadPreviewMetadata"
               },
               "participants": {
                 "type": "array",
@@ -8767,31 +10119,6 @@
         "type": "string",
         "enum": ["system", "user"]
       },
-      "SoupMacroAttachment": {
-        "type": "object",
-        "required": ["threadId", "dbId", "messageId", "itemId", "itemType"],
-        "properties": {
-          "dbId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemType": {
-            "type": "string"
-          },
-          "messageId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "threadId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
       "SoupMessageListVisibility": {
         "type": "string",
         "enum": ["show", "hide"]
@@ -8819,14 +10146,18 @@
           "ownerId",
           "createdAt",
           "updatedAt",
-          "viewedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was created"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The time the project was deleted"
           },
           "id": {
             "type": "string",
@@ -8854,13 +10185,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -8914,25 +10245,27 @@
           }
         }
       },
+      "TaskFilters": {
+        "type": "object",
+        "description": "Task-only filters nested under document filters.",
+        "properties": {
+          "include_cbm_atm_nc": {
+            "type": ["boolean", "null"],
+            "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
+      },
       "Thread": {
         "type": "object",
-        "required": [
-          "threadId",
-          "owner",
-          "resolved",
-          "documentId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["threadId", "owner", "resolved", "documentId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -8949,8 +10282,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },

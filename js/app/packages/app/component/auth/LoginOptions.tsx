@@ -1,11 +1,17 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { RedirectLocation } from '@core/util/authRedirect';
+import { unsetTokenPromise } from '@core/util/fetchWithToken';
+import { isOk } from '@core/util/maybeResult';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@macro-icons/macro-apple.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
+import { invoke } from '@tauri-apps/api/core';
 import { type JSX, type Setter, Show } from 'solid-js';
 import { Stage } from './Shared';
 
@@ -16,7 +22,17 @@ function LoginOption(props: {
 }) {
   return (
     <div
-      onClick={props.onClick}
+      onClick={(_e) => {
+        if (isTouchDevice()) return;
+        props.onClick();
+      }}
+      // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
+      onPointerDown={(e) => {
+        if (!isTouchDevice()) return;
+        e.stopPropagation();
+        e.preventDefault();
+        props.onClick();
+      }}
       class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer"
     >
       <div class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center">
@@ -35,6 +51,32 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
     if (isNativeMobilePlatform()) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
+
+    if (getNativeMobilePlatform() === 'ios') {
+      // iOS: use ASWebAuthenticationSession via tauri-plugin-auth
+      // so the auth flow stays in-app (required by App Store)
+      authUrl.searchParams.set('original_url', 'macro://login');
+      const result = await invoke<{
+        success: boolean;
+        token?: string;
+        error?: string;
+      }>('plugin:auth|authenticate', {
+        payload: { authUrl: authUrl.toString(), callbackScheme: 'macro' },
+      });
+      if (!result.success || !result.token) {
+        console.error('Authentication failed:', result.error);
+        return;
+      }
+      unsetTokenPromise();
+      const res = await authServiceClient.sessionLogin({
+        session_code: result.token,
+      });
+      if (isOk(res)) {
+        invalidateUserInfo();
+      }
+      return;
+    }
+
     if (location.state?.originalLocation) {
       const { pathname, search, hash } = location.state.originalLocation;
       authUrl.searchParams.set(

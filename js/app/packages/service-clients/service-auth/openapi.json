@@ -365,6 +365,65 @@
         }
       }
     },
+    "/link/github": {
+      "post": {
+        "tags": ["link::github"],
+        "summary": "Initiates a link for a user",
+        "operationId": "init_github_link",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitGithubLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login/apple": {
       "post": {
         "tags": ["login::apple"],
@@ -2681,6 +2740,16 @@
               }
             }
           },
+          "409": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -2945,9 +3014,14 @@
           "licenseStatus",
           "tutorialComplete",
           "hasChromeExt",
-          "hasTrialed"
+          "hasTrialed",
+          "aiDataConsent"
         ],
         "properties": {
+          "aiDataConsent": {
+            "type": "boolean",
+            "description": "Whether the user has consented to AI data sharing"
+          },
           "email": {
             "type": "string",
             "description": "The user's email"
@@ -3039,6 +3113,21 @@
           "user_id": {
             "type": "string",
             "description": "The user id"
+          }
+        }
+      },
+      "InitGithubLinkResponse": {
+        "type": "object",
+        "required": ["authorization_url", "link_id"],
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "description": "The OAuth authorization URL to redirect the user to"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The link ID for tracking the OAuth flow"
           }
         }
       },

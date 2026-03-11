@@ -1,10 +1,10 @@
-#[cfg(test)]
-mod test;
-use chrono::serde::ts_seconds_option;
 pub mod list;
 pub mod response;
+#[cfg(test)]
+mod test;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use schemars::JsonSchema;
 use utoipa::ToSchema;
 
 mod file_type;
@@ -103,17 +103,11 @@ pub struct BasicDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_family_id: Option<i64>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The time the document was deleted
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
@@ -149,7 +143,15 @@ pub struct BackfillSearchDocumentInformation {
     pub file_type: FileType,
 }
 #[derive(
-    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
+    sqlx::FromRow,
+    serde::Serialize,
+    serde::Deserialize,
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    ToSchema,
+    JsonSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMetadata {
@@ -162,6 +164,7 @@ pub struct DocumentMetadata {
     /// The owner of the document
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
+    #[schemars(with = "String")]
     pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     pub document_name: String,
@@ -198,13 +201,12 @@ pub struct DocumentMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modification_data: Option<serde_json::Value>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// The time the document was deleted
+    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -247,6 +249,7 @@ impl DocumentMetadata {
             created_at,
             updated_at,
             sub_type: None,
+            deleted_at: None, // New documents should never be deleted
         }
     }
 
@@ -287,47 +290,7 @@ impl DocumentMetadata {
             project_name: project_name.map(|s| s.to_string()),
             created_at,
             updated_at,
-            sub_type,
-        }
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "no good reason but too hard to fix right now"
-    )]
-    pub fn document(
-        document_id: &str,
-        document_instance_id: i64,
-        owner: MacroUserIdStr<'static>,
-        document_name: &str,
-        file_type: Option<&str>,
-        sha: &str,
-        modification_data: Option<serde_json::Value>,
-        document_family_id: Option<i64>,
-        branched_from_id: Option<String>,
-        branched_from_version_id: Option<i64>,
-        project_id: Option<String>,
-        project_name: Option<String>,
-        created_at: Option<chrono::DateTime<chrono::Utc>>,
-        updated_at: Option<chrono::DateTime<chrono::Utc>>,
-        sub_type: Option<DocumentSubType>,
-    ) -> Self {
-        Self {
-            document_id: document_id.to_string(),
-            owner,
-            document_name: document_name.to_string(),
-            file_type: file_type.map(|s| s.to_string()),
-            sha: Some(sha.to_string()),
-            document_version_id: document_instance_id,
-            document_bom: None,
-            modification_data,
-            document_family_id,
-            branched_from_id,
-            branched_from_version_id,
-            project_id,
-            project_name,
-            created_at,
-            updated_at,
+            deleted_at: None, // New documents should never be deleted
             sub_type,
         }
     }
@@ -378,8 +341,6 @@ pub struct DocumentPreviewData {
     /// The id of the owner of the document
     pub owner: String,
     /// The time the document was last updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
     /// Task-related properties are encoded within the variant.

@@ -18,6 +18,7 @@ use uuid::Uuid;
 /// the requested items, those items WILL be included in the results even if the user doesn't
 /// have explicit permissions on them. Project items themselves are excluded from results -
 /// only documents and chats are returned. Results are sorted to match the input entity order.
+#[tracing::instrument(err, skip(db, entities))]
 pub async fn expanded_soup_by_ids<'a>(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
@@ -101,14 +102,15 @@ pub async fn expanded_soup_by_ids<'a>(
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 uh."updatedAt"::timestamptz as "viewed_at",
-                CASE 
-                    WHEN dt.sub_type = 'task' 
+                CASE
+                    WHEN dt.sub_type = 'task'
                         AND ep_status.values->'value' ? $4
-                    THEN true 
+                    THEN true
                     WHEN dt.sub_type = 'task'
                     THEN false
-                    ELSE NULL 
-                END as "is_completed"
+                    ELSE NULL
+                END as "is_completed",
+                d."deletedAt"::timestamptz as "deleted_at"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -159,14 +161,15 @@ pub async fn expanded_soup_by_ids<'a>(
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",
-                NULL as "is_completed"
+                NULL as "is_completed",
+                c."deletedAt"::timestamptz as "deleted_at"
             FROM "Chat" c
-            INNER JOIN UserAccessibleItems uai 
-                ON uai.item_id = c.id 
+            INNER JOIN UserAccessibleItems uai
+                ON uai.item_id = c.id
                 AND uai.item_type = 'chat'
-            LEFT JOIN "UserHistory" uh 
-                ON uh."itemId" = c.id 
-                AND uh."itemType" = 'chat' 
+            LEFT JOIN "UserHistory" uh
+                ON uh."itemId" = c.id
+                AND uh."itemType" = 'chat'
                 AND uh."userId" = $1
             WHERE c."deletedAt" IS NULL
             AND c.id = ANY($3::text[])

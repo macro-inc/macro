@@ -41,10 +41,10 @@ export const attachPolicyToBucket = ({
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
   documentStorageBucketReplicationRoleArn,
-  deleteDocumentWorkerRoleArn,
   searchProcessingServiceRoleArn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
+  documentCognitionRoleArn,
 }: {
   cloudfrontDistributionArn: pulumi.Output<string>;
   bucket: pulumi.Output<GetStorageBucketResult>;
@@ -55,10 +55,10 @@ export const attachPolicyToBucket = ({
   documentProcessingServiceRoleArn: pulumi.Output<string>;
   pdfPreprocessLambdaRoleArn: pulumi.Output<string>;
   documentStorageBucketReplicationRoleArn: pulumi.Output<string>;
-  deleteDocumentWorkerRoleArn: pulumi.Output<string>;
   searchProcessingServiceRoleArn: pulumi.Output<string>;
   bulkUploadLambdaRoleArn: pulumi.Output<string>;
   convertServiceRoleArn: pulumi.Output<string>;
+  documentCognitionRoleArn: pulumi.Output<string>;
 }) => {
   const groupName = config.require('adminGroupName');
 
@@ -83,11 +83,11 @@ export const attachPolicyToBucket = ({
         documentProcessingServiceRoleArn,
         pdfPreprocessLambdaRoleArn,
         documentStorageBucketReplicationRoleArn,
-        deleteDocumentWorkerRoleArn,
         documentTextExtractorArn,
         searchProcessingServiceRoleArn,
         bulkUploadLambdaRoleArn,
         convertServiceRoleArn,
+        documentCognitionRoleArn,
       ];
     });
 
@@ -176,15 +176,6 @@ export const attachPolicyToBucket = ({
         Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
       },
       {
-        Sid: 'AllowAccessForDeleteDocumentWorker',
-        Effect: 'Allow',
-        Principal: {
-          AWS: deleteDocumentWorkerRoleArn,
-        },
-        Action: ['s3:ListBucket', 's3:GetObject', 's3:DeleteObject'],
-        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
-      },
-      {
         Sid: 'AllowAccessForShaCleanupWorker',
         Effect: 'Allow',
         Principal: {
@@ -218,6 +209,20 @@ export const attachPolicyToBucket = ({
           AWS: pdfPreprocessLambdaRoleArn,
         },
         Action: ['s3:GetObject', 's3:PutObject'],
+        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
+      },
+      {
+        Sid: 'AllowAccessForDocumentCognitionService',
+        Effect: 'Allow',
+        Principal: {
+          AWS: documentCognitionRoleArn,
+        },
+        Action: [
+          's3:ListBucket',
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+        ],
         Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
       },
       {
@@ -269,6 +274,7 @@ export const attachPolicyToBucket = ({
           's3:GetInventoryConfiguration',
           's3:PutReplicationConfiguration',
           's3:PutBucketNotification',
+          's3:PutLifecycleConfiguration',
         ],
         Resource: [
           pulumi.interpolate`${bucket.arn}`,
@@ -310,6 +316,7 @@ export const attachPolicyToBucket = ({
           's3:GetInventoryConfiguration',
           's3:PutReplicationConfiguration',
           's3:PutBucketNotification',
+          's3:PutLifecycleConfiguration',
         ],
         Resource: [
           pulumi.interpolate`${bucket.arn}`,

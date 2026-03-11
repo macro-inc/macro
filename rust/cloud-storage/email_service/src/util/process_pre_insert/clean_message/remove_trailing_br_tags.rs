@@ -14,6 +14,7 @@ pub fn remove_trailing_br_tags_threads(threads: &mut [Thread]) {
 }
 
 // removes any trailing brs from body_html_sanitized
+#[tracing::instrument(skip(message))]
 pub fn remove_trailing_br_tags(message: &mut Message) {
     // Clean body_html_sanitized if it exists
     if let Some(body_html_sanitized) = message.body_html_sanitized.as_ref() {
@@ -117,10 +118,10 @@ mod tests {
     fn test_clean_html(dirty_html: &str, expected_clean_html: &str, test_name: &str) {
         // Create a message with HTML content
         let mut message = service::message::Message {
-            db_id: None,
+            db_id: uuid::Uuid::default(),
             provider_id: None,
             global_id: None,
-            thread_db_id: None,
+            thread_db_id: uuid::Uuid::default(),
             provider_thread_id: None,
             replying_to_id: None,
             link_id: Default::default(),
@@ -143,8 +144,8 @@ mod tests {
             body_html_sanitized: Some(dirty_html.to_string()),
             body_text: None,
             attachments: vec![],
-            attachments_macro: vec![],
             attachments_draft: vec![],
+            attachments_forwarded: vec![],
             headers_json: None,
             created_at: Default::default(),
             labels: vec![],

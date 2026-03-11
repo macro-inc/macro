@@ -11,7 +11,6 @@ import type {
 } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { chatRuleset, uploadFile } from '@core/util/upload';
-import { waitExtractionStatus } from '@service-cognition/extraction';
 import {
   fileExtension,
   filenameWithoutExtension,
@@ -35,23 +34,6 @@ async function uploadFileForChat(
         error: 'upload',
         preview,
       };
-    }
-
-    // For documents uploaded to DSS, check extraction status
-    // TODO: do we need this for pdf/docx only or can this be removed?
-    if (
-      result.destination === 'dss' &&
-      result.type === 'document' &&
-      ['pdf', 'docx'].includes(result.fileType as any)
-    ) {
-      const status = await waitExtractionStatus(result.documentId);
-      if (status === 'error') {
-        return {
-          type: 'error',
-          error: 'extract',
-          preview,
-        };
-      }
     }
 
     let attachmentId: string;
@@ -180,7 +162,7 @@ export function useUploadAttachment(): UploadQueue {
 
           // Show error toast if the result indicates an error
           if (result.type === 'error') {
-            let filename = getUploadFilename(result);
+            const filename = getUploadFilename(result);
 
             const errorMessage =
               result.error === 'upload'
@@ -198,7 +180,7 @@ export function useUploadAttachment(): UploadQueue {
           // Remove from uploading on error
           setUploading((prev) => prev.filter((u) => u !== item));
 
-          let filename = getUploadFilename(item);
+          const filename = getUploadFilename(item);
 
           // Show error toast
           toast.failure(

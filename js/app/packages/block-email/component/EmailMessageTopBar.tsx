@@ -1,8 +1,9 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
+import { EmailUserTooltip } from './EmailUserTooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
 import X from '@icon/regular/x.svg';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import {
   type Accessor,
@@ -18,10 +19,12 @@ import {
   getSenderDisplayName,
   isMessageFromCurrentUser,
 } from '../util/emailUser';
+import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
+import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   focused: boolean;
   setExpandedBodyId: (id: string, expanded: boolean) => void;
   isBodyExpanded: Accessor<boolean>;
@@ -38,8 +41,8 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(timestamp: string): string {
-  return new Date(timestamp)
+function formatFullDate(date: DateValue): string {
+  return new Date(date)
     .toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -52,20 +55,19 @@ function formatFullDate(timestamp: string): string {
     .replace(',', '');
 }
 
-function formatShortDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString('en-US', {
+export function formatShortDate(date: DateValue): string {
+  const d = new Date(date);
+  if (d.getFullYear() !== new Date().getFullYear()) {
+    return d.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit',
+    });
+  }
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });
-}
-
-function formatRecipientList(recipients: string[]): string {
-  if (recipients.length === 0) return '';
-  if (recipients.length === 1) return recipients[0];
-  if (recipients.length === 2) return `${recipients[0]} & ${recipients[1]}`;
-  const rest = recipients.slice(0, -1);
-  const last = recipients[recipients.length - 1];
-  return `${rest.join(', ')} & ${last}`;
 }
 
 function RecipientRow(props: {
@@ -81,14 +83,20 @@ function RecipientRow(props: {
           <For each={props.recipients}>
             {(r, index) => (
               <>
-                <span
-                  classList={{ 'font-semibold': props.bold, 'text-ink': true }}
-                >
-                  {r.name ?? r.email}
-                </span>
-                <Show when={r.name && r.email}>
-                  <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
-                </Show>
+                <EmailUserTooltip recipient={r}>
+                  <span
+                    classList={{
+                      'font-semibold': props.bold,
+                      'text-ink': true,
+                      'cursor-default': true,
+                    }}
+                  >
+                    {r.name ?? r.email}
+                    <Show when={r.name && r.email}>
+                      <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
+                    </Show>
+                  </span>
+                </EmailUserTooltip>
                 <Show when={index() < props.recipients.length - 1}>
                   <span class="text-ink-muted">, </span>
                 </Show>
@@ -102,23 +110,27 @@ function RecipientRow(props: {
 }
 
 function ExpandedHeader(props: {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   onClose: () => void;
 }): JSX.Element {
   return (
-    <div class="flex flex-col gap-1 text-sm">
+    <div class="flex flex-col gap-1 text-sm select-children cursor-text">
       <div class="flex flex-row gap-2">
         <span class="text-ink-extra-muted min-w-10">From</span>
         <span class="select-text cursor-text">
-          <span class="font-semibold text-ink">
-            {props.message.from?.name ?? props.message.from?.email}
-          </span>
-          <Show when={props.message.from?.name && props.message.from?.email}>
-            <span class="text-ink-muted">
-              {' '}
-              &lt;{props.message.from?.email}&gt;
+          <EmailUserTooltip recipient={props.message.from}>
+            <span class="font-semibold text-ink cursor-default">
+              {props.message.from?.name ?? props.message.from?.email}
+              <Show
+                when={props.message.from?.name && props.message.from?.email}
+              >
+                <span class="text-ink-muted">
+                  {' '}
+                  &lt;{props.message.from?.email}&gt;
+                </span>
+              </Show>
             </span>
-          </Show>
+          </EmailUserTooltip>
         </span>
       </div>
       <RecipientRow label="To" recipients={props.message.to} />
@@ -139,22 +151,60 @@ function ExpandedHeader(props: {
   );
 }
 
+function CollapsedRecipientList(props: {
+  recipients: Recipient[];
+  currentUserEmail?: string;
+}): JSX.Element {
+  return (
+    <For each={props.recipients}>
+      {(r, index) => {
+        const displayName = () =>
+          getRecipientDisplayName(r, props.currentUserEmail);
+        const isLast = () => index() === props.recipients.length - 1;
+        const isSecondToLast = () => index() === props.recipients.length - 2;
+        return (
+          <>
+            <EmailUserTooltip recipient={r}>
+              <span class="cursor-default">{displayName()}</span>
+            </EmailUserTooltip>
+            <Show when={!isLast()}>
+              <span>{isSecondToLast() ? ' & ' : ', '}</span>
+            </Show>
+          </>
+        );
+      }}
+    </For>
+  );
+}
+
 function CollapsedHeader(props: {
   senderName: string;
-  recipientSummary: string;
   isHovering: boolean;
   onExpand: () => void;
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   focused: boolean;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
   hiddenActions?: EmailMessageAction[];
+  currentUserEmail?: string;
 }): JSX.Element {
+  const allRecipients = createMemo(() => [
+    ...props.message.to,
+    ...props.message.cc,
+  ]);
+
   return (
     <div class="flex flex-row w-full items-center justify-between">
       <div class="flex flex-row items-center gap-1 text-sm min-w-0">
-        <span class="text-ink-muted truncate">
-          {props.senderName} to {props.recipientSummary}
+        <span class="text-ink font-semibold truncate">
+          <EmailUserTooltip recipient={props.message.from}>
+            <span class="cursor-default">{props.senderName}</span>
+          </EmailUserTooltip>
+          <span style={{ padding: '0 0.375em' }}>to</span>
+          <CollapsedRecipientList
+            recipients={allRecipients()}
+            currentUserEmail={props.currentUserEmail}
+          />
         </span>
         <div
           class="transition-opacity"
@@ -185,7 +235,7 @@ function CollapsedHeader(props: {
           hiddenActions={props.hiddenActions}
         />
         <Show when={props.message.internal_date_ts}>
-          <div class="text-xs text-ink-muted">
+          <div class="text-xs text-ink">
             {formatShortDate(props.message.internal_date_ts!)}
           </div>
         </Show>
@@ -197,6 +247,26 @@ function CollapsedHeader(props: {
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
+  const context = useEmailContext();
+
+  // Wraps setExpandedHeader with scroll compensation.
+  // The message list uses flex-col-reverse, so expanding the header
+  // shifts content above upward. This adjusts scrollTop to keep the
+  // visual position stable.
+  const toggleExpandedHeader = (expanded: boolean) => {
+    const scrollContainer = context.messagesListRef();
+    if (!scrollContainer) {
+      props.setExpandedHeader(expanded);
+      return;
+    }
+    const prevScrollHeight = scrollContainer.scrollHeight;
+    const prevScrollTop = scrollContainer.scrollTop;
+    props.setExpandedHeader(expanded);
+    requestAnimationFrame(() => {
+      const delta = scrollContainer.scrollHeight - prevScrollHeight;
+      scrollContainer.scrollTop = prevScrollTop - delta;
+    });
+  };
 
   const _isFromCurrentUser = createMemo(() =>
     isMessageFromCurrentUser(props.message, userEmail())
@@ -205,15 +275,6 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const senderName = createMemo(() =>
     getSenderDisplayName(props.message, userEmail())
   );
-
-  const recipientSummary = createMemo(() => {
-    const currentEmail = userEmail();
-    const allRecipients = [...props.message.to, ...props.message.cc];
-    const names = allRecipients.map((r) =>
-      getRecipientDisplayName(r, currentEmail)
-    );
-    return formatRecipientList(names);
-  });
 
   const shouldIgnoreClick = (target: Element) =>
     target.localName === 'button' ||
@@ -231,7 +292,8 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="pr-2 font-mono"
+      class="pr-2 flex items-center -mt-1 sm:mt-0"
+      style={{ 'min-height': 'var(--user-icon-width)' }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}
@@ -242,20 +304,20 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           fallback={
             <ExpandedHeader
               message={props.message}
-              onClose={() => props.setExpandedHeader(false)}
+              onClose={() => toggleExpandedHeader(false)}
             />
           }
         >
           <CollapsedHeader
             senderName={senderName()}
-            recipientSummary={recipientSummary()}
             isHovering={isHovering()}
-            onExpand={() => props.setExpandedHeader(true)}
+            onExpand={() => toggleExpandedHeader(true)}
             message={props.message}
             focused={props.focused}
             setShowReply={props.setShowReply}
             isLastMessage={props.isLastMessage}
             hiddenActions={props.hiddenActions}
+            currentUserEmail={userEmail()}
           />
         </Show>
       </Show>

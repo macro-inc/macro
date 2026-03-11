@@ -25,7 +25,7 @@ import {
   CommentsContext,
   type CommentsContextType,
   Thread,
-} from '@core/collab/comments/Thread';
+} from '@core/comments/Thread';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { createMemo, createSelector, For } from 'solid-js';
 

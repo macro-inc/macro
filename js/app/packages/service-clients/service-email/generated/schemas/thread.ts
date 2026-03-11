@@ -6,7 +6,6 @@
  */
 
 import type { Message } from './message';
-import type { ThreadDbId } from './threadDbId';
 import type { ThreadLatestInboundMessageTs } from './threadLatestInboundMessageTs';
 import type { ThreadLatestNonSpamMessageTs } from './threadLatestNonSpamMessageTs';
 import type { ThreadLatestOutboundMessageTs } from './threadLatestOutboundMessageTs';
@@ -14,7 +13,7 @@ import type { ThreadProviderId } from './threadProviderId';
 
 export interface Thread {
   created_at: string;
-  db_id?: ThreadDbId;
+  db_id: string;
   inbox_visible: boolean;
   is_read: boolean;
   latest_inbound_message_ts?: ThreadLatestInboundMessageTs;

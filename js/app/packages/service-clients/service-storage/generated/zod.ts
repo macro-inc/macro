@@ -44,11 +44,14 @@ export const getRecentActivityHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -101,7 +104,9 @@ export const getRecentActivityHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -111,11 +116,14 @@ export const getRecentActivityHandlerResponse = zod.object({
               zod.object({
                 Chat: zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -130,7 +138,9 @@ export const getRecentActivityHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
@@ -246,8 +256,8 @@ export const editAnchorResponse = zod
       .object({
         alpha: zod.number(),
         blue: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         documentId: zod.string(),
         green: zod.number(),
         highlightRects: zod.array(
@@ -271,7 +281,7 @@ export const editAnchorResponse = zod
         red: zod.number(),
         text: zod.string(),
         threadId: zod.number().nullish(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
         uuid: zod.string().uuid(),
       })
       .and(
@@ -285,6 +295,81 @@ export const editAnchorResponse = zod
       documentId: zod.string(),
     })
   );
+
+/**
+ * @summary Gets a set of comment anchors for a document
+ */
+export const getDocumentAnchorsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentAnchorsResponse = zod.object({
+  data: zod.array(
+    zod.union([
+      zod
+        .object({
+          allowableEdits: zod.any().optional(),
+          documentId: zod.string(),
+          heightPct: zod.number(),
+          originalIndex: zod.number(),
+          originalPage: zod.number(),
+          owner: zod.string(),
+          page: zod.number(),
+          rotation: zod.number(),
+          shouldLockOnSave: zod.boolean(),
+          threadId: zod.number(),
+          uuid: zod.string().uuid(),
+          wasDeleted: zod.boolean(),
+          wasEdited: zod.boolean(),
+          widthPct: zod.number(),
+          xPct: zod.number(),
+          yPct: zod.number(),
+        })
+        .and(
+          zod.object({
+            anchorType: zod.enum(['placeable']),
+          })
+        ),
+      zod
+        .object({
+          alpha: zod.number(),
+          blue: zod.number(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
+          documentId: zod.string(),
+          green: zod.number(),
+          highlightRects: zod.array(
+            zod.object({
+              height: zod.number(),
+              id: zod.number(),
+              left: zod.number(),
+              top: zod.number(),
+              width: zod.number(),
+            })
+          ),
+          highlightType: zod.union([
+            zod.literal(1),
+            zod.literal(2),
+            zod.literal(3),
+          ]),
+          owner: zod.string(),
+          page: zod.number(),
+          pageViewportHeight: zod.number(),
+          pageViewportWidth: zod.number(),
+          red: zod.number(),
+          text: zod.string(),
+          threadId: zod.number().nullish(),
+          updatedAt: zod.string().datetime({}).nullish(),
+          uuid: zod.string().uuid(),
+        })
+        .and(
+          zod.object({
+            anchorType: zod.enum(['highlight']),
+          })
+        ),
+    ])
+  ),
+});
 
 /**
  * @summary Creates an unthreaded anchor for a document
@@ -356,8 +441,8 @@ export const createAnchorResponse = zod
       .object({
         alpha: zod.number(),
         blue: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         documentId: zod.string(),
         green: zod.number(),
         highlightRects: zod.array(
@@ -381,7 +466,7 @@ export const createAnchorResponse = zod
         red: zod.number(),
         text: zod.string(),
         threadId: zod.number().nullish(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
         uuid: zod.string().uuid(),
       })
       .and(
@@ -395,81 +480,6 @@ export const createAnchorResponse = zod
       documentId: zod.string(),
     })
   );
-
-/**
- * @summary Gets a set of comment anchors for a document
- */
-export const getDocumentAnchorsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const getDocumentAnchorsResponse = zod.object({
-  data: zod.array(
-    zod.union([
-      zod
-        .object({
-          allowableEdits: zod.any().optional(),
-          documentId: zod.string(),
-          heightPct: zod.number(),
-          originalIndex: zod.number(),
-          originalPage: zod.number(),
-          owner: zod.string(),
-          page: zod.number(),
-          rotation: zod.number(),
-          shouldLockOnSave: zod.boolean(),
-          threadId: zod.number(),
-          uuid: zod.string().uuid(),
-          wasDeleted: zod.boolean(),
-          wasEdited: zod.boolean(),
-          widthPct: zod.number(),
-          xPct: zod.number(),
-          yPct: zod.number(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['placeable']),
-          })
-        ),
-      zod
-        .object({
-          alpha: zod.number(),
-          blue: zod.number(),
-          createdAt: zod.number(),
-          deletedAt: zod.number().nullable(),
-          documentId: zod.string(),
-          green: zod.number(),
-          highlightRects: zod.array(
-            zod.object({
-              height: zod.number(),
-              id: zod.number(),
-              left: zod.number(),
-              top: zod.number(),
-              width: zod.number(),
-            })
-          ),
-          highlightType: zod.union([
-            zod.literal(1),
-            zod.literal(2),
-            zod.literal(3),
-          ]),
-          owner: zod.string(),
-          page: zod.number(),
-          pageViewportHeight: zod.number(),
-          pageViewportWidth: zod.number(),
-          red: zod.number(),
-          text: zod.string(),
-          threadId: zod.number().nullish(),
-          updatedAt: zod.number(),
-          uuid: zod.string().uuid(),
-        })
-        .and(
-          zod.object({
-            anchorType: zod.enum(['highlight']),
-          })
-        ),
-    ])
-  ),
-});
 
 /**
  * @summary Deletes a single comment for a document
@@ -544,15 +554,15 @@ export const editCommentBody = zod.object({
 export const editCommentResponse = zod
   .object({
     commentId: zod.number(),
-    createdAt: zod.number(),
-    deletedAt: zod.number().nullable(),
+    createdAt: zod.string().datetime({}).nullish(),
+    deletedAt: zod.string().datetime({}).nullish(),
     metadata: zod.any().optional(),
     order: zod.number().nullish(),
     owner: zod.string(),
     sender: zod.string().nullish(),
     text: zod.string(),
     threadId: zod.number(),
-    updatedAt: zod.number(),
+    updatedAt: zod.string().datetime({}).nullish(),
   })
   .and(
     zod.object({
@@ -562,6 +572,44 @@ export const editCommentResponse = zod
       fileType: zod.string().nullish(),
     })
   );
+
+/**
+ * @summary Gets a set of comment threads for a document
+ */
+export const getDocumentCommentsParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentCommentsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      comments: zod.array(
+        zod.object({
+          commentId: zod.number(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
+          metadata: zod.any().optional(),
+          order: zod.number().nullish(),
+          owner: zod.string(),
+          sender: zod.string().nullish(),
+          text: zod.string(),
+          threadId: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
+        })
+      ),
+      thread: zod.object({
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
+        documentId: zod.string(),
+        metadata: zod.any().optional(),
+        owner: zod.string(),
+        resolved: zod.boolean(),
+        threadId: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
+      }),
+    })
+  ),
+});
 
 /**
  * @summary Creates a single comment for a document
@@ -666,26 +714,26 @@ export const createCommentResponse = zod
     comments: zod.array(
       zod.object({
         commentId: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         metadata: zod.any().optional(),
         order: zod.number().nullish(),
         owner: zod.string(),
         sender: zod.string().nullish(),
         text: zod.string(),
         threadId: zod.number(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
       })
     ),
     thread: zod.object({
-      createdAt: zod.number(),
-      deletedAt: zod.number().nullable(),
+      createdAt: zod.string().datetime({}).nullish(),
+      deletedAt: zod.string().datetime({}).nullish(),
       documentId: zod.string(),
       metadata: zod.any().optional(),
       owner: zod.string(),
       resolved: zod.boolean(),
       threadId: zod.number(),
-      updatedAt: zod.number(),
+      updatedAt: zod.string().datetime({}).nullish(),
     }),
   })
   .and(
@@ -722,8 +770,8 @@ export const createCommentResponse = zod
               .object({
                 alpha: zod.number(),
                 blue: zod.number(),
-                createdAt: zod.number(),
-                deletedAt: zod.number().nullable(),
+                createdAt: zod.string().datetime({}).nullish(),
+                deletedAt: zod.string().datetime({}).nullish(),
                 documentId: zod.string(),
                 green: zod.number(),
                 highlightRects: zod.array(
@@ -747,7 +795,7 @@ export const createCommentResponse = zod
                 red: zod.number(),
                 text: zod.string(),
                 threadId: zod.number().nullish(),
-                updatedAt: zod.number(),
+                updatedAt: zod.string().datetime({}).nullish(),
                 uuid: zod.string().uuid(),
               })
               .and(
@@ -763,42 +811,304 @@ export const createCommentResponse = zod
   );
 
 /**
- * @summary Gets a set of comment threads for a document
+ * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
-export const getDocumentCommentsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
+export const getChannelAttachmentsParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
 });
 
-export const getDocumentCommentsResponse = zod.object({
-  data: zod.array(
-    zod.object({
-      comments: zod.array(
-        zod.object({
-          commentId: zod.number(),
-          createdAt: zod.number(),
-          deletedAt: zod.number().nullable(),
-          metadata: zod.any().optional(),
-          order: zod.number().nullish(),
-          owner: zod.string(),
-          sender: zod.string().nullish(),
-          text: zod.string(),
-          threadId: zod.number(),
-          updatedAt: zod.number(),
-        })
-      ),
-      thread: zod.object({
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
-        documentId: zod.string(),
-        metadata: zod.any().optional(),
-        owner: zod.string(),
-        resolved: zod.boolean(),
-        threadId: zod.number(),
-        updatedAt: zod.number(),
-      }),
-    })
-  ),
+export const getChannelAttachmentsQueryLimitMin = 0;
+
+export const getChannelAttachmentsQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelAttachmentsQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod.string().optional().describe('Base64 encoded cursor value'),
 });
+
+export const getChannelAttachmentsResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.string().uuid().describe('Channel id.'),
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the attachment was created.'),
+            entity_id: zod.string().describe('Entity id.'),
+            entity_type: zod.string().describe('Type of entity.'),
+            height: zod.number().nullish().describe('Height (for images).'),
+            id: zod.string().uuid().describe('Attachment id.'),
+            message_id: zod
+              .string()
+              .uuid()
+              .describe('Message id this attachment belongs to.'),
+            width: zod.number().nullish().describe('Width (for images).'),
+          })
+          .describe('A channel-level attachment.')
+      )
+      .describe('Attachments on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+  })
+  .describe('Paginated response of channel attachments.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages`.
+ */
+export const getChannelMessagesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const getChannelMessagesQueryLimitMin = 0;
+
+export const getChannelMessagesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelMessagesQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+  load_around_message_id: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe('Return a centered window around this message ID'),
+});
+
+export const getChannelMessagesResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod
+                      .string()
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    id: zod.string().uuid().describe('Attachment id.'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.string().uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.string().uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod
+                                  .string()
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                id: zod
+                                  .string()
+                                  .uuid()
+                                  .describe('Attachment id.'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod
+                          .string()
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.string().uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod
+                          .string()
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod
+              .string()
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Messages on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
+  })
+  .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
+ */
+export const getThreadRepliesParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+  message_id: zod
+    .string()
+    .uuid()
+    .describe('Message ID (thread parent or reply id)'),
+});
+
+export const getThreadRepliesResponseItem = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod
+              .string()
+              .datetime({})
+              .describe('When the attachment was created.'),
+            entity_id: zod.string().describe('Entity id.'),
+            entity_type: zod.string().describe('Type of entity.'),
+            id: zod.string().uuid().describe('Attachment id.'),
+          })
+          .describe('An attachment on a message.')
+      )
+      .describe('Attachments on this reply.'),
+    content: zod.string().describe('Reply content.'),
+    created_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was created.'),
+    edited_at: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('When the reply was edited.'),
+    id: zod.string().uuid().describe('Reply id.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('The emoji string.'),
+            users: zod
+              .array(zod.string())
+              .describe('User ids who added this reaction.'),
+          })
+          .describe('A reaction with emoji and user list.')
+      )
+      .describe('Reactions on this reply.'),
+    sender_id: zod.string().describe('Sender user id.'),
+    updated_at: zod
+      .string()
+      .datetime({})
+      .describe('When the reply was last updated.'),
+  })
+  .describe('A thread reply shown in preview.');
+export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/participants`.
+ */
+export const getChannelParticipantsParams = zod.object({
+  channel_id: zod.string().uuid().describe('Channel ID'),
+});
+
+export const getChannelParticipantsResponseItem = zod
+  .object({
+    channel_id: zod.string().uuid().describe('Channel id.'),
+    joined_at: zod.string().datetime({}).describe('When the user joined.'),
+    role: zod
+      .enum(['owner', 'admin', 'member'])
+      .describe('Participant role in a channel.'),
+    user_id: zod.string().describe('User id.'),
+  })
+  .describe('A channel participant.');
+export const getChannelParticipantsResponse = zod.array(
+  getChannelParticipantsResponseItem
+);
 
 /**
  * @summary Gets the users documents to populate their recent document list
@@ -831,8 +1141,15 @@ export const getUserDocumentsHandlerResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the document was deleted'),
             documentBom: zod
               .array(
                 zod.object({
@@ -902,7 +1219,9 @@ export const getUserDocumentsHandlerResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
@@ -923,9 +1242,11 @@ export const getUserDocumentsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Handles creating a document
+ * Creates a new document, generates an S3 presigned upload URL, and returns
+the document metadata with the URL for the client to upload to.
+ * @summary Handler for `POST /documents`.
  */
-export const createDocumentHandlerBody = zod.object({
+export const createDocumentBody = zod.object({
   branchedFromId: zod
     .string()
     .nullish()
@@ -959,7 +1280,11 @@ export const createDocumentHandlerBody = zod.object({
     .string()
     .nullish()
     .describe('Optional file type of the document.'),
-  id: zod.string().nullish().describe('The id of the document in the database'),
+  id: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe('The id of the document in the database'),
   isTask: zod
     .boolean()
     .optional()
@@ -978,11 +1303,17 @@ export const createDocumentHandlerBody = zod.object({
     .describe(
       'The content type of the document (currently only used for logging matches against file type).'
     ),
-  projectId: zod.string().nullish(),
+  projectId: zod.string().uuid().nullish(),
   sha: zod.string().describe('The sha of the document.'),
+  skipHistory: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to add a viewed_at record for this document upon creation.'
+    ),
 });
 
-export const createDocumentHandlerResponse = zod.object({
+export const createDocumentResponse = zod.object({
   data: zod
     .object({
       documentMetadata: zod.object({
@@ -996,7 +1327,11 @@ export const createDocumentHandlerResponse = zod.object({
           .describe(
             'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
           ),
-        createdAt: zod.number().describe('The time the document was created'),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the document was created'),
         documentBom: zod
           .array(
             zod.object({
@@ -1054,7 +1389,9 @@ export const createDocumentHandlerResponse = zod.object({
           ])
           .optional(),
         updatedAt: zod
-          .number()
+          .string()
+          .datetime({})
+          .nullish()
           .describe(
             'The time the document instance / document BOM was updated'
           ),
@@ -1089,6 +1426,7 @@ export const createTaskHandlerBody = zod
   .object({
     projectId: zod
       .string()
+      .uuid()
       .nullish()
       .describe('Optional project id to associate the task with'),
     propertyValues: zod
@@ -1260,7 +1598,11 @@ export const getDocumentListHandlerResponse = zod.object({
           .describe(
             'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
           ),
-        createdAt: zod.number().describe('The time the document was created'),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the document was created'),
         documentFamilyId: zod
           .number()
           .nullish()
@@ -1275,7 +1617,9 @@ export const getDocumentListHandlerResponse = zod.object({
           .nullish()
           .describe('The file type of the document'),
         updatedAt: zod
-          .number()
+          .string()
+          .datetime({})
+          .nullish()
           .describe(
             'The time the document instance / document BOM was updated'
           ),
@@ -1397,7 +1741,9 @@ export const getBatchPreviewHandlerResponse = zod.object({
             ])
             .optional(),
           updated_at: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the document was last updated'),
         })
         .and(
@@ -1428,7 +1774,8 @@ export const getBatchPreviewHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets a particular document by its id
+ * Returns document metadata, user access level, and view location.
+ * @summary Handler for `GET /documents/{document_id}`.
  */
 export const getDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -1447,7 +1794,16 @@ export const getDocumentResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
+      deletedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -1513,7 +1869,9 @@ export const getDocumentResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -1577,7 +1935,11 @@ export const saveDocumentHandlerResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       documentBom: zod
         .array(
           zod.object({
@@ -1635,7 +1997,9 @@ export const saveDocumentHandlerResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     presignedUrl: zod
@@ -1649,19 +2013,87 @@ export const saveDocumentHandlerResponse = zod.object({
 });
 
 /**
- * @summary Deletes a specific document.
-The document will be soft deleted and appear in the user's trash for 30 days.
+ * Soft-deletes a document (only owners can delete).
+ * @summary Handler for `DELETE /documents/{document_id}`.
  */
-export const deleteDocumentHandlerParams = zod.object({
+export const deleteDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
 });
 
-export const deleteDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
+export const deleteDocumentResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
 });
+
+/**
+ * Edits document metadata such as name or project, and modifies
+the document's share permissions. Requires edit access to the document,
+and edit access to the target project if moving the document.
+ * @summary Handler for `PATCH /documents/{document_id}`.
+ */
+export const editDocumentParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const editDocumentBody = zod
+  .object({
+    documentName: zod.string().nullish().describe('The name of the document.'),
+    projectId: zod
+      .string()
+      .nullish()
+      .describe('The new project id of the document.'),
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created/updated/removed'
+            ),
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe('Arguments for the edit_document service call.');
+
+export const editDocumentResponse = zod
+  .object({
+    data: zod.object({
+      success: zod
+        .boolean()
+        .describe('Indicates if the request was successful'),
+    }),
+    error: zod.boolean().describe('Whether an error occurred.'),
+  })
+  .describe('Edit document response.');
 
 /**
  * @summary Handles copying a given document. This is the similar to
@@ -1711,7 +2143,16 @@ export const copyDocumentHandlerResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
+      deletedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -1777,7 +2218,9 @@ export const copyDocumentHandlerResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -1844,6 +2287,25 @@ export const getLocationHandlerResponse = zod.union([
     })
     .describe('The presigned urls of the docx bom parts if it is a docx'),
 ]);
+
+/**
+ * Returns a presigned URL or sync service content for accessing the document.
+ * @summary Handler for `GET /documents/{document_id}/location_v3`.
+ */
+export const getDocumentLocationV3Params = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentLocationV3QueryParams = zod.object({
+  document_version_id: zod
+    .number()
+    .optional()
+    .describe('A specific document version id to get the location for.'),
+  get_converted_docx_url: zod
+    .boolean()
+    .optional()
+    .describe('If true, this will return the converted docx url.'),
+});
 
 /**
  * @summary Permanently deletes a document.
@@ -1915,6 +2377,14 @@ export const revertDeleteDocumentResponse = zod.object({
 });
 
 /**
+ * Returns the short UUID for a document.
+ * @summary Handler for `GET /documents/{document_id}/short_id`.
+ */
+export const getDocumentShortIdParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+/**
  * @summary For any file that isn't PDF or DOCX, use this endpoint for saving.
 This endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.
 simple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).
@@ -1936,7 +2406,11 @@ export const simpleSaveResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       documentBom: zod
         .array(
           zod.object({
@@ -1994,7 +2468,9 @@ export const simpleSaveResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     presignedUrl: zod
@@ -2042,7 +2518,16 @@ export const getDocumentVersionResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
+      deletedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -2108,7 +2593,9 @@ export const getDocumentVersionResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -2121,6 +2608,53 @@ export const getDocumentVersionResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Get the current user's permission for a given entity.
+ */
+export const getEntityPermissionParams = zod.object({
+  entity_type: zod
+    .string()
+    .describe(
+      'Entity type (document, chat, project, thread, email_thread, channel)'
+    ),
+  entity_id: zod.string().describe('Entity ID'),
+});
+
+export const getEntityPermissionResponse = zod
+  .union([
+    zod.object({
+      permission: zod
+        .union([
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              type: zod.enum(['access_level']),
+            })
+            .describe(
+              'Permission for item-based entities (document, chat, project, thread).'
+            ),
+          zod
+            .object({
+              role: zod
+                .enum(['owner', 'admin', 'member'])
+                .describe('The role a user has within a channel.'),
+              type: zod.enum(['channel_role']),
+            })
+            .describe('Permission for channel-based entities.'),
+        ])
+        .describe(
+          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+        ),
+      status: zod.enum(['access']),
+    }),
+    zod.object({
+      status: zod.enum(['no_access']),
+    }),
+  ])
+  .describe('API response envelope for entity permissions.');
 
 /**
  * @summary Gets the users history
@@ -2140,10 +2674,15 @@ export const getHistoryHandlerResponse = zod.object({
             .describe(
               'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
             ),
-          createdAt: zod.number().describe('The time the document was created'),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the document was created'),
           deletedAt: zod
-            .number()
-            .nullable()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the document was deleted'),
           documentFamilyId: zod
             .number()
@@ -2190,17 +2729,24 @@ export const getHistoryHandlerResponse = zod.object({
             ])
             .optional(),
           updatedAt: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe(
               'The time the document instance / document BOM was updated'
             ),
           type: zod.enum(['document']),
         }),
         zod.object({
-          createdAt: zod.number().describe('The time the chat was created'),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the chat was created'),
           deletedAt: zod
-            .number()
-            .nullable()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the chat was deleted'),
           id: zod.string().describe('The chat uuid'),
           isPersistent: zod.boolean(),
@@ -2215,18 +2761,28 @@ export const getHistoryHandlerResponse = zod.object({
             .describe('The project id of the chat'),
           tokenCount: zod.number().nullish(),
           updatedAt: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the chat was last updated'),
           userId: zod.string().describe('Who the chat belongs to'),
           type: zod.enum(['chat']),
         }),
         zod.object({
-          createdAt: zod.number().describe('The time the project was created'),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was created'),
+          deletedAt: zod.string().datetime({}).nullish(),
           id: zod.string().describe('The id of the project'),
           name: zod.string().describe('The name of the project'),
           parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod.number().describe('The time the project was updated'),
+          updatedAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was updated'),
           userId: zod
             .string()
             .describe('The user id of who created the project'),
@@ -2332,8 +2888,14 @@ export const getItemsSoupResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the document was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
               .nullish()
@@ -2603,20 +3165,30 @@ export const getItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .describe('The time the chat was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
               .boolean()
@@ -2850,11 +3422,13 @@ export const getItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
@@ -2862,8 +3436,14 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             ownerId: zod
@@ -3096,11 +3676,13 @@ export const getItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -3108,7 +3690,7 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.string().datetime({}),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -3121,31 +3703,22 @@ export const getItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.string().datetime({}),
+              updatedAt: zod.string().datetime({}),
+              viewedAt: zod.string().datetime({}).nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.string().datetime({}),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
                     mimeType: zod.string().nullish(),
                     providerAttachmentId: zod.string().nullish(),
                     sizeBytes: zod.number().nullish(),
-                  })
-                ),
-                attachmentsMacro: zod.array(
-                  zod.object({
-                    dbId: zod.string().uuid(),
-                    itemId: zod.string().uuid(),
-                    itemType: zod.string(),
-                    messageId: zod.string().uuid(),
-                    threadId: zod.string().uuid(),
                   })
                 ),
                 labels: zod.array(
@@ -3164,20 +3737,6 @@ export const getItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),
@@ -3435,7 +3994,9 @@ export const getItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),
@@ -3519,12 +4080,41 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           ),
+        channel_types: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         mentions: zod
           .array(zod.string())
           .optional()
           .describe(
             "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -3556,6 +4146,29 @@ export const postItemsSoupBody = zod
           .describe(
             "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -3593,6 +4206,29 @@ export const postItemsSoupBody = zod
           .describe(
             "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -3605,6 +4241,17 @@ export const postItemsSoupBody = zod
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           ),
+        task_filters: zod
+          .object({
+            include_cbm_atm_nc: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
+              ),
+          })
+          .optional()
+          .describe('Task-only filters nested under document filters.'),
       })
       .optional()
       .describe(
@@ -3624,6 +4271,47 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        email_thread_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          ),
+        exclude_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
+          ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums).'
+          ),
+        include_labels: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -3643,6 +4331,29 @@ export const postItemsSoupBody = zod
       ),
     project_filters: zod
       .object({
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -3718,8 +4429,14 @@ export const postItemsSoupResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the document was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
               .nullish()
@@ -3989,20 +4706,30 @@ export const postItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .describe('The time the chat was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
               .boolean()
@@ -4236,11 +4963,13 @@ export const postItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
@@ -4248,8 +4977,14 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was created'),
+            deletedAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             ownerId: zod
@@ -4482,11 +5217,13 @@ export const postItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -4494,7 +5231,7 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.string().datetime({}),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -4507,31 +5244,22 @@ export const postItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.string().datetime({}),
+              updatedAt: zod.string().datetime({}),
+              viewedAt: zod.string().datetime({}).nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.string().datetime({}),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
                     mimeType: zod.string().nullish(),
                     providerAttachmentId: zod.string().nullish(),
                     sizeBytes: zod.number().nullish(),
-                  })
-                ),
-                attachmentsMacro: zod.array(
-                  zod.object({
-                    dbId: zod.string().uuid(),
-                    itemId: zod.string().uuid(),
-                    itemType: zod.string(),
-                    messageId: zod.string().uuid(),
-                    threadId: zod.string().uuid(),
                   })
                 ),
                 labels: zod.array(
@@ -4550,20 +5278,6 @@ export const postItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),
@@ -4821,7 +5535,9 @@ export const postItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),
@@ -4912,11 +5628,14 @@ export const getPinsHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -4969,7 +5688,9 @@ export const getPinsHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -4977,11 +5698,14 @@ export const getPinsHandlerResponse = zod.object({
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -4996,16 +5720,20 @@ export const getPinsHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was created'),
-                  deletedAt: zod.number().nullable(),
+                  deletedAt: zod.string().datetime({}).nullish(),
                   id: zod.string().describe('The id of the project'),
                   name: zod.string().describe('The name of the project'),
                   parentId: zod
@@ -5013,7 +5741,9 @@ export const getPinsHandlerResponse = zod.object({
                     .nullish()
                     .describe('The parent project id'),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was updated'),
                   userId: zod
                     .string()
@@ -5036,11 +5766,14 @@ export const getPinsHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -5093,7 +5826,9 @@ export const getPinsHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -5101,11 +5836,14 @@ export const getPinsHandlerResponse = zod.object({
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -5120,16 +5858,20 @@ export const getPinsHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was created'),
-                  deletedAt: zod.number().nullable(),
+                  deletedAt: zod.string().datetime({}).nullish(),
                   id: zod.string().describe('The id of the project'),
                   name: zod.string().describe('The name of the project'),
                   parentId: zod
@@ -5137,7 +5879,9 @@ export const getPinsHandlerResponse = zod.object({
                     .nullish()
                     .describe('The parent project id'),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was updated'),
                   userId: zod
                     .string()
@@ -5216,12 +5960,20 @@ export const getProjectsHandlerResponse = zod.object({
   data: zod
     .array(
       zod.object({
-        createdAt: zod.number().describe('The time the project was created'),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the project was created'),
+        deletedAt: zod.string().datetime({}).nullish(),
         id: zod.string().describe('The id of the project'),
         name: zod.string().describe('The name of the project'),
         parentId: zod.string().nullish().describe('The parent project id'),
-        updatedAt: zod.number().describe('The time the project was updated'),
+        updatedAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the project was updated'),
         userId: zod.string().describe('The user id of who created the project'),
         type: zod.enum(['project']),
       })
@@ -5244,12 +5996,20 @@ export const createProjectHandlerBody = zod.object({
 
 export const createProjectHandlerResponse = zod.object({
   data: zod.object({
-    createdAt: zod.number().describe('The time the project was created'),
-    deletedAt: zod.number().nullable(),
+    createdAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('The time the project was created'),
+    deletedAt: zod.string().datetime({}).nullish(),
     id: zod.string().describe('The id of the project'),
     name: zod.string().describe('The name of the project'),
     parentId: zod.string().nullish().describe('The parent project id'),
-    updatedAt: zod.number().describe('The time the project was updated'),
+    updatedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('The time the project was updated'),
     userId: zod.string().describe('The user id of who created the project'),
     type: zod.enum(['project']),
   }),
@@ -5264,12 +6024,20 @@ export const getPendingProjectsHandlerResponse = zod.object({
     .array(
       zod
         .object({
-          createdAt: zod.number().describe('The time the project was created'),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was created'),
+          deletedAt: zod.string().datetime({}).nullish(),
           id: zod.string().describe('The id of the project'),
           name: zod.string().describe('The name of the project'),
           parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod.number().describe('The time the project was updated'),
+          updatedAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was updated'),
           userId: zod
             .string()
             .describe('The user id of who created the project'),
@@ -5305,7 +6073,7 @@ export const getBatchProjectPreviewResponse = zod.object({
           name: zod.string(),
           owner: zod.string(),
           path: zod.array(zod.string()),
-          updatedAt: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
         })
         .and(
           zod.object({
@@ -5351,41 +6119,424 @@ export const uploadFolderHandlerBody = zod.object({
                 'pdf',
                 'md',
                 'canvas',
-                'py',
-                'js',
-                'ts',
-                'jsx',
-                'tsx',
-                'json',
-                'html',
+                'coffee',
+                'cson',
+                'iced',
+                'c',
+                'i',
+                'cpp',
+                'cppm',
+                'cc',
+                'ccm',
+                'cxx',
+                'cxxm',
+                'cplusplus',
+                'cplusplusm',
+                'hpp',
+                'hh',
+                'hxx',
+                'hplusplus',
+                'h',
+                'ii',
+                'ino',
+                'inl',
+                'ipp',
+                'ixx',
+                'tpp',
+                'txx',
+                'hppin',
+                'hin',
+                'cu',
+                'cuh',
+                'cs',
+                'csx',
+                'cake',
                 'css',
-                'xml',
-                'yaml',
-                'yml',
-                'sql',
+                'dart',
+                'diff',
+                'patch',
+                'rej',
+                'dockerfile',
+                'containerfile',
+                'go',
+                'handlebars',
+                'hbs',
+                'hjs',
+                'hlsl',
+                'hlsli',
+                'fx',
+                'fxh',
+                'vsh',
+                'psh',
+                'cginc',
+                'compute',
+                'html',
+                'htm',
+                'shtml',
+                'xhtml',
+                'xht',
+                'mdoc',
+                'jsp',
+                'asp',
+                'aspx',
+                'jshtm',
+                'volt',
+                'ejs',
+                'rhtml',
+                'ini',
+                'conf',
+                'properties',
+                'cfg',
+                'directory',
+                'gitattributes',
+                'gitconfig',
+                'gitmodules',
+                'editorconfig',
+                'repo',
+                'java',
+                'jav',
+                'jsx',
+                'js',
+                'es6',
+                'mjs',
+                'cjs',
+                'pac',
+                'json',
+                'bowerrc',
+                'jscsrc',
+                'webmanifest',
+                'jsmap',
+                'cssmap',
+                'tsmap',
+                'har',
+                'jslintrc',
+                'jsonld',
+                'geojson',
+                'ipynb',
+                'vuerc',
+                'jsonc',
+                'eslintrc',
+                'eslintrcjson',
+                'jsfmtrc',
+                'jshintrc',
+                'swcrc',
+                'hintrc',
+                'babelrc',
+                'jsonl',
+                'ndjson',
+                'codesnippets',
+                'jl',
+                'jmd',
+                'sty',
+                'cls',
+                'bbx',
+                'cbx',
+                'tex',
+                'ltx',
+                'ctx',
+                'bib',
+                'less',
+                'log',
+                'lua',
+                'mak',
+                'mk',
+                'mkd',
+                'mdwn',
+                'mdown',
+                'markdown',
+                'markdn',
+                'mdtxt',
+                'mdtext',
+                'workbook',
+                'm',
+                'mm',
+                'pl',
+                'pm',
+                'pod',
+                't',
+                'psgi',
+                'raku',
+                'rakumod',
+                'rakutest',
+                'rakudoc',
+                'nqp',
+                'p6',
+                'pl6',
+                'pm6',
+                'php',
+                'php4',
+                'php5',
+                'phtml',
+                'ctp',
+                'ps1',
+                'psm1',
+                'psd1',
+                'pssc',
+                'psrc',
+                'py',
+                'rpy',
+                'pyw',
+                'cpy',
+                'gyp',
+                'gypi',
+                'pyi',
+                'ipy',
+                'pyt',
+                'r',
+                'rhistory',
+                'rprofile',
+                'rt',
+                'cshtml',
+                'razor',
+                'rb',
+                'rbx',
+                'rjs',
+                'gemspec',
+                'rake',
+                'ru',
+                'erb',
+                'podspec',
+                'rbi',
+                'rs',
+                'scss',
+                'sass',
+                'shader',
                 'sh',
                 'bash',
-                'markdown',
+                'bashrc',
+                'bashaliases',
+                'bashprofile',
+                'bashlogin',
+                'ebuild',
+                'eclass',
+                'profile',
+                'bashlogout',
+                'xprofile',
+                'xsession',
+                'xsessionrc',
+                'zsh',
+                'zshrc',
+                'zprofile',
+                'zlogin',
+                'zlogout',
+                'zshenv',
+                'zshtheme',
+                'fish',
+                'ksh',
+                'csh',
+                'cshrc',
+                'tcshrc',
+                'yashrc',
+                'yashprofile',
+                'sql',
+                'dsql',
+                'swift',
+                'ts',
+                'cts',
+                'mts',
+                'tsx',
+                'tsbuildinfo',
+                'xml',
+                'xsd',
+                'ascx',
+                'atom',
+                'axml',
+                'axaml',
+                'bpmn',
+                'cpt',
+                'csl',
+                'csproj',
+                'csprojuser',
+                'dita',
+                'ditamap',
+                'dtd',
+                'ent',
+                'mod',
+                'dtml',
+                'fsproj',
+                'fxml',
+                'iml',
+                'isml',
+                'jmx',
+                'launch',
+                'menu',
+                'mxml',
+                'nuspec',
+                'opml',
+                'owl',
+                'proj',
+                'props',
+                'pt',
+                'publishsettings',
+                'pubxml',
+                'pubxmluser',
+                'rbxlx',
+                'rbxmx',
+                'rdf',
+                'rng',
+                'rss',
+                'shproj',
+                'storyboard',
+                'targets',
+                'tld',
+                'tmx',
+                'vbproj',
+                'vbprojuser',
+                'vcxproj',
+                'vcxprojfilters',
+                'wsdl',
+                'wxi',
+                'wxl',
+                'wxs',
+                'xaml',
+                'xbl',
+                'xib',
+                'xlf',
+                'xliff',
+                'xpdl',
+                'xul',
+                'xoml',
+                'xsl',
+                'xslt',
+                'yaml',
+                'yml',
+                'eyaml',
+                'eyml',
+                'cff',
+                'yamltmlanguage',
+                'yamltmpreferences',
+                'yamltmtheme',
+                'winget',
                 'txt',
                 'csv',
+                'tsv',
                 'jpeg',
                 'jpg',
                 'png',
                 'gif',
                 'svg',
                 'webp',
+                'avif',
+                'bmp',
+                'ico',
+                'tiff',
+                'tif',
                 'heic',
                 'heif',
-                'zip',
                 'tar',
                 'targz',
                 'tgz',
                 'gz',
+                'bz2',
+                'tarbz2',
+                'tbz2',
+                'z',
+                'tarz',
+                'lz',
+                'tarlz',
+                'xz',
+                'tarxz',
+                'txz',
+                'lzma',
+                'tarlzma',
+                'rar',
+                'sevenz',
+                'zst',
+                'tarzst',
+                'tzst',
+                'zip',
+                'exe',
+                'msi',
+                'dll',
+                'bat',
+                'cmd',
+                'com',
+                'appimage',
+                'app',
+                'bin',
+                'deb',
+                'rpm',
+                'apk',
+                'dmg',
+                'pkg',
+                'crx',
+                'xpi',
+                'mp3',
+                'wav',
+                'ogg',
+                'flac',
+                'aac',
+                'm4a',
+                'wma',
+                'mid',
+                'midi',
                 'mp4',
+                'mkv',
+                'webm',
+                'avi',
+                'mov',
+                'wmv',
+                'mpg',
+                'mpeg',
+                'm4v',
+                'flv',
+                'f4v',
+                'threegp',
+                'ttf',
+                'otf',
+                'woff',
+                'woff2',
+                'eot',
+                'rtf',
+                'odt',
+                'ods',
+                'odp',
+                'odg',
+                'odf',
+                'epub',
+                'mobi',
+                'azw',
+                'azw3',
+                'djvu',
                 'xls',
                 'ppt',
                 'pptx',
                 'xlsx',
+                'db',
+                'sqlite',
+                'sqlite3',
+                'mdb',
+                'accdb',
+                'dbf',
+                'plist',
+                'toml',
+                'env',
+                'dot',
+                'gv',
+                'torrent',
+                'ics',
+                'vcf',
+                'ai',
+                'eps',
+                'ps',
+                'dxf',
+                'dwg',
+                'stl',
+                'obj',
+                'fbx',
+                'blend',
+                'dae',
+                'threeds',
+                'gltf',
+                'glb',
+                'vhd',
+                'vhdx',
+                'vmdk',
+                'ova',
+                'ovf',
+                'iso',
+                'img',
+                'swf',
               ])
               .describe(
                 'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
@@ -5462,41 +6613,424 @@ export const uploadFolderHandlerResponse = zod.object({
                     'pdf',
                     'md',
                     'canvas',
-                    'py',
-                    'js',
-                    'ts',
-                    'jsx',
-                    'tsx',
-                    'json',
-                    'html',
+                    'coffee',
+                    'cson',
+                    'iced',
+                    'c',
+                    'i',
+                    'cpp',
+                    'cppm',
+                    'cc',
+                    'ccm',
+                    'cxx',
+                    'cxxm',
+                    'cplusplus',
+                    'cplusplusm',
+                    'hpp',
+                    'hh',
+                    'hxx',
+                    'hplusplus',
+                    'h',
+                    'ii',
+                    'ino',
+                    'inl',
+                    'ipp',
+                    'ixx',
+                    'tpp',
+                    'txx',
+                    'hppin',
+                    'hin',
+                    'cu',
+                    'cuh',
+                    'cs',
+                    'csx',
+                    'cake',
                     'css',
-                    'xml',
-                    'yaml',
-                    'yml',
-                    'sql',
+                    'dart',
+                    'diff',
+                    'patch',
+                    'rej',
+                    'dockerfile',
+                    'containerfile',
+                    'go',
+                    'handlebars',
+                    'hbs',
+                    'hjs',
+                    'hlsl',
+                    'hlsli',
+                    'fx',
+                    'fxh',
+                    'vsh',
+                    'psh',
+                    'cginc',
+                    'compute',
+                    'html',
+                    'htm',
+                    'shtml',
+                    'xhtml',
+                    'xht',
+                    'mdoc',
+                    'jsp',
+                    'asp',
+                    'aspx',
+                    'jshtm',
+                    'volt',
+                    'ejs',
+                    'rhtml',
+                    'ini',
+                    'conf',
+                    'properties',
+                    'cfg',
+                    'directory',
+                    'gitattributes',
+                    'gitconfig',
+                    'gitmodules',
+                    'editorconfig',
+                    'repo',
+                    'java',
+                    'jav',
+                    'jsx',
+                    'js',
+                    'es6',
+                    'mjs',
+                    'cjs',
+                    'pac',
+                    'json',
+                    'bowerrc',
+                    'jscsrc',
+                    'webmanifest',
+                    'jsmap',
+                    'cssmap',
+                    'tsmap',
+                    'har',
+                    'jslintrc',
+                    'jsonld',
+                    'geojson',
+                    'ipynb',
+                    'vuerc',
+                    'jsonc',
+                    'eslintrc',
+                    'eslintrcjson',
+                    'jsfmtrc',
+                    'jshintrc',
+                    'swcrc',
+                    'hintrc',
+                    'babelrc',
+                    'jsonl',
+                    'ndjson',
+                    'codesnippets',
+                    'jl',
+                    'jmd',
+                    'sty',
+                    'cls',
+                    'bbx',
+                    'cbx',
+                    'tex',
+                    'ltx',
+                    'ctx',
+                    'bib',
+                    'less',
+                    'log',
+                    'lua',
+                    'mak',
+                    'mk',
+                    'mkd',
+                    'mdwn',
+                    'mdown',
+                    'markdown',
+                    'markdn',
+                    'mdtxt',
+                    'mdtext',
+                    'workbook',
+                    'm',
+                    'mm',
+                    'pl',
+                    'pm',
+                    'pod',
+                    't',
+                    'psgi',
+                    'raku',
+                    'rakumod',
+                    'rakutest',
+                    'rakudoc',
+                    'nqp',
+                    'p6',
+                    'pl6',
+                    'pm6',
+                    'php',
+                    'php4',
+                    'php5',
+                    'phtml',
+                    'ctp',
+                    'ps1',
+                    'psm1',
+                    'psd1',
+                    'pssc',
+                    'psrc',
+                    'py',
+                    'rpy',
+                    'pyw',
+                    'cpy',
+                    'gyp',
+                    'gypi',
+                    'pyi',
+                    'ipy',
+                    'pyt',
+                    'r',
+                    'rhistory',
+                    'rprofile',
+                    'rt',
+                    'cshtml',
+                    'razor',
+                    'rb',
+                    'rbx',
+                    'rjs',
+                    'gemspec',
+                    'rake',
+                    'ru',
+                    'erb',
+                    'podspec',
+                    'rbi',
+                    'rs',
+                    'scss',
+                    'sass',
+                    'shader',
                     'sh',
                     'bash',
-                    'markdown',
+                    'bashrc',
+                    'bashaliases',
+                    'bashprofile',
+                    'bashlogin',
+                    'ebuild',
+                    'eclass',
+                    'profile',
+                    'bashlogout',
+                    'xprofile',
+                    'xsession',
+                    'xsessionrc',
+                    'zsh',
+                    'zshrc',
+                    'zprofile',
+                    'zlogin',
+                    'zlogout',
+                    'zshenv',
+                    'zshtheme',
+                    'fish',
+                    'ksh',
+                    'csh',
+                    'cshrc',
+                    'tcshrc',
+                    'yashrc',
+                    'yashprofile',
+                    'sql',
+                    'dsql',
+                    'swift',
+                    'ts',
+                    'cts',
+                    'mts',
+                    'tsx',
+                    'tsbuildinfo',
+                    'xml',
+                    'xsd',
+                    'ascx',
+                    'atom',
+                    'axml',
+                    'axaml',
+                    'bpmn',
+                    'cpt',
+                    'csl',
+                    'csproj',
+                    'csprojuser',
+                    'dita',
+                    'ditamap',
+                    'dtd',
+                    'ent',
+                    'mod',
+                    'dtml',
+                    'fsproj',
+                    'fxml',
+                    'iml',
+                    'isml',
+                    'jmx',
+                    'launch',
+                    'menu',
+                    'mxml',
+                    'nuspec',
+                    'opml',
+                    'owl',
+                    'proj',
+                    'props',
+                    'pt',
+                    'publishsettings',
+                    'pubxml',
+                    'pubxmluser',
+                    'rbxlx',
+                    'rbxmx',
+                    'rdf',
+                    'rng',
+                    'rss',
+                    'shproj',
+                    'storyboard',
+                    'targets',
+                    'tld',
+                    'tmx',
+                    'vbproj',
+                    'vbprojuser',
+                    'vcxproj',
+                    'vcxprojfilters',
+                    'wsdl',
+                    'wxi',
+                    'wxl',
+                    'wxs',
+                    'xaml',
+                    'xbl',
+                    'xib',
+                    'xlf',
+                    'xliff',
+                    'xpdl',
+                    'xul',
+                    'xoml',
+                    'xsl',
+                    'xslt',
+                    'yaml',
+                    'yml',
+                    'eyaml',
+                    'eyml',
+                    'cff',
+                    'yamltmlanguage',
+                    'yamltmpreferences',
+                    'yamltmtheme',
+                    'winget',
                     'txt',
                     'csv',
+                    'tsv',
                     'jpeg',
                     'jpg',
                     'png',
                     'gif',
                     'svg',
                     'webp',
+                    'avif',
+                    'bmp',
+                    'ico',
+                    'tiff',
+                    'tif',
                     'heic',
                     'heif',
-                    'zip',
                     'tar',
                     'targz',
                     'tgz',
                     'gz',
+                    'bz2',
+                    'tarbz2',
+                    'tbz2',
+                    'z',
+                    'tarz',
+                    'lz',
+                    'tarlz',
+                    'xz',
+                    'tarxz',
+                    'txz',
+                    'lzma',
+                    'tarlzma',
+                    'rar',
+                    'sevenz',
+                    'zst',
+                    'tarzst',
+                    'tzst',
+                    'zip',
+                    'exe',
+                    'msi',
+                    'dll',
+                    'bat',
+                    'cmd',
+                    'com',
+                    'appimage',
+                    'app',
+                    'bin',
+                    'deb',
+                    'rpm',
+                    'apk',
+                    'dmg',
+                    'pkg',
+                    'crx',
+                    'xpi',
+                    'mp3',
+                    'wav',
+                    'ogg',
+                    'flac',
+                    'aac',
+                    'm4a',
+                    'wma',
+                    'mid',
+                    'midi',
                     'mp4',
+                    'mkv',
+                    'webm',
+                    'avi',
+                    'mov',
+                    'wmv',
+                    'mpg',
+                    'mpeg',
+                    'm4v',
+                    'flv',
+                    'f4v',
+                    'threegp',
+                    'ttf',
+                    'otf',
+                    'woff',
+                    'woff2',
+                    'eot',
+                    'rtf',
+                    'odt',
+                    'ods',
+                    'odp',
+                    'odg',
+                    'odf',
+                    'epub',
+                    'mobi',
+                    'azw',
+                    'azw3',
+                    'djvu',
                     'xls',
                     'ppt',
                     'pptx',
                     'xlsx',
+                    'db',
+                    'sqlite',
+                    'sqlite3',
+                    'mdb',
+                    'accdb',
+                    'dbf',
+                    'plist',
+                    'toml',
+                    'env',
+                    'dot',
+                    'gv',
+                    'torrent',
+                    'ics',
+                    'vcf',
+                    'ai',
+                    'eps',
+                    'ps',
+                    'dxf',
+                    'dwg',
+                    'stl',
+                    'obj',
+                    'fbx',
+                    'blend',
+                    'dae',
+                    'threeds',
+                    'gltf',
+                    'glb',
+                    'vhd',
+                    'vhdx',
+                    'vmdk',
+                    'ova',
+                    'ovf',
+                    'iso',
+                    'img',
+                    'swf',
                   ])
                   .describe(
                     'Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n'
@@ -5557,12 +7091,20 @@ export const getProjectHandlerParams = zod.object({
 export const getProjectHandlerResponse = zod.object({
   data: zod.object({
     projectMetadata: zod.object({
-      createdAt: zod.number().describe('The time the project was created'),
-      deletedAt: zod.number().nullable(),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the project was created'),
+      deletedAt: zod.string().datetime({}).nullish(),
       id: zod.string().describe('The id of the project'),
       name: zod.string().describe('The name of the project'),
       parentId: zod.string().nullish().describe('The parent project id'),
-      updatedAt: zod.number().describe('The time the project was updated'),
+      updatedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the project was updated'),
       userId: zod.string().describe('The user id of who created the project'),
       type: zod.enum(['project']),
     }),
@@ -5634,11 +7176,14 @@ export const getProjectContentHandlerResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -5687,17 +7232,24 @@ export const getProjectContentHandlerResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             type: zod.enum(['document']),
           }),
           zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().describe('The chat uuid'),
             isPersistent: zod.boolean(),
@@ -5712,21 +7264,27 @@ export const getProjectContentHandlerResponse = zod.object({
               .describe('The project id of the chat'),
             tokenCount: zod.number().nullish(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last updated'),
             userId: zod.string().describe('Who the chat belongs to'),
             type: zod.enum(['chat']),
           }),
           zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was created'),
-            deletedAt: zod.number().nullable(),
+            deletedAt: zod.string().datetime({}).nullish(),
             id: zod.string().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             parentId: zod.string().nullish().describe('The parent project id'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was updated'),
             userId: zod
               .string()
@@ -5829,11 +7387,14 @@ export const recentlyDeletedResponse = zod.object({
                   'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                 ),
               createdAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the document was created'),
               deletedAt: zod
-                .number()
-                .nullable()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the document was deleted'),
               documentFamilyId: zod
                 .number()
@@ -5884,17 +7445,24 @@ export const recentlyDeletedResponse = zod.object({
                 ])
                 .optional(),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe(
                   'The time the document instance / document BOM was updated'
                 ),
               type: zod.enum(['document']),
             }),
             zod.object({
-              createdAt: zod.number().describe('The time the chat was created'),
+              createdAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was created'),
               deletedAt: zod
-                .number()
-                .nullable()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the chat was deleted'),
               id: zod.string().describe('The chat uuid'),
               isPersistent: zod.boolean(),
@@ -5909,16 +7477,20 @@ export const recentlyDeletedResponse = zod.object({
                 .describe('The project id of the chat'),
               tokenCount: zod.number().nullish(),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the chat was last updated'),
               userId: zod.string().describe('Who the chat belongs to'),
               type: zod.enum(['chat']),
             }),
             zod.object({
               createdAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the project was created'),
-              deletedAt: zod.number().nullable(),
+              deletedAt: zod.string().datetime({}).nullish(),
               id: zod.string().describe('The id of the project'),
               name: zod.string().describe('The name of the project'),
               parentId: zod
@@ -5926,7 +7498,9 @@ export const recentlyDeletedResponse = zod.object({
                 .nullish()
                 .describe('The parent project id'),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the project was updated'),
               userId: zod
                 .string()
@@ -6041,72 +7615,6 @@ export const deleteUserDocumentViewLocationResponse = zod
   .describe(
     'Empty response is required due to custom fetch forcing `response.json()`'
   );
-
-/**
- * @summary Edit document v2
-Edits traits of a document such as owner, or name as well as modify the documents share
-permissions.
- */
-export const editDocumentV2Params = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const editDocumentV2Body = zod.object({
-  documentName: zod.string().nullish().describe('The name of the document'),
-  projectId: zod
-    .string()
-    .nullish()
-    .describe(
-      'The new project id of the document.\nThis will also update the documents permissions to match the project it is going into'
-    ),
-  sharePermission: zod
-    .union([
-      zod.null(),
-      zod.object({
-        channelSharePermissions: zod
-          .array(
-            zod.object({
-              accessLevel: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['view', 'comment', 'edit', 'owner'])
-                    .describe(
-                      'Ordered from least to most access top -> bottom'
-                    ),
-                ])
-                .optional(),
-              channelId: zod.string().describe('The channel id'),
-              operation: zod.enum(['add', 'remove', 'replace']),
-            })
-          )
-          .nullish()
-          .describe(
-            'Any channel share permissions to be created/updated/removed'
-          ),
-        isPublic: zod
-          .boolean()
-          .nullish()
-          .describe('If the item is publicly accessible'),
-        publicAccessLevel: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['view', 'comment', 'edit', 'owner'])
-              .describe('Ordered from least to most access top -> bottom'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional(),
-});
-
-export const editDocumentV2Response = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
-});
 
 /**
  * @summary Gets the current documents share permissions

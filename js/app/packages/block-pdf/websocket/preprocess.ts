@@ -2,7 +2,7 @@ import { isErr } from '@core/util/maybeResult';
 import type {
   PreprocessInvoke,
   PreprocessResponseData,
-} from '@macro-inc/document-processing-job-types';
+} from '@coparse/document-processing-types';
 import {
   type ProcessingResultResponseType,
   storageServiceClient,

@@ -41,7 +41,7 @@ impl LexicalClient {
                 status=%status_code,
                 "unexpected response from sync service while getting raw document"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         let data: LexicalResponse = response.json().await?;
@@ -65,10 +65,18 @@ impl LexicalClient {
                 status=%status_code,
                 "unexpected response from sync service while getting raw document"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
-        response.json().await.context("unexpected response")
+        response
+            .json::<CognitionResponseData>()
+            .await
+            .context("unexpected response")
+            .inspect(|md| {
+                if md.data.is_empty() {
+                    tracing::warn!(document_id=?document_id,"Empty MD content")
+                }
+            })
     }
 
     /// Parse markdown content from a presigned URL (for documents not in sync-service)
@@ -96,7 +104,15 @@ impl LexicalClient {
             anyhow::bail!(body);
         }
 
-        response.json().await.context("unexpected response")
+        response
+            .json::<CognitionResponseData>()
+            .await
+            .context("unexpected response")
+            .inspect(|md| {
+                if md.data.is_empty() {
+                    tracing::warn!(presigned_url=?presigned_url,"Empty MD content")
+                }
+            })
     }
 }
 

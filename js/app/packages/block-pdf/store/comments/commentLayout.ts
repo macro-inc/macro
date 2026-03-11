@@ -11,7 +11,7 @@ import {
   createBlockRenderEffect,
   createBlockStore,
 } from '@core/block';
-import { isRoot, type Root } from '@core/collab/comments/commentType';
+import { isRoot, type Root } from '@core/comments/commentType';
 import { reconcile } from 'solid-js/store';
 import { activeCommentThreadSignal, commentsStore } from './commentStore';
 

@@ -7,24 +7,36 @@ import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
-import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { withAnalytics } from '@coparse/analytics';
-import { useOrganizationName } from '@core/user';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
-import { Inbox } from './Inbox';
 import { Shortcuts } from './Shortcuts';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { SettingsButton } from './SettingsButton';
 
 const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
+
+/**
+ * Wrapper specifically for in-Split version of Settings Panel used on Mobile. Includes the correct Header button.
+ */
+export function SettingsPanelComponentWrapper() {
+  return (
+    <>
+      <SplitHeaderRight>
+        <SettingsButton />
+      </SplitHeaderRight>
+      <SettingsPanel />
+    </>
+  )
+}
 
 type SettingsPanelProps = {
   hide?: boolean;
@@ -33,7 +45,6 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
-  const orgName = useOrganizationName();
   const [spotlight, setSpotlight] = createSignal(false);
 
   // Set up hotkey scope for settings panel
@@ -124,13 +135,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
     const tabs: {value: string; label: string }[] = [
       {value: 'Appearance', label: 'Appearance'},
       {value: 'Account', label: 'Account'},
-      {value: 'Shortcuts', label: 'Shortcuts'}
     ];
 
-    if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(orgName() && permissions()?.includes('WriteItPanel')){tabs.push({value: 'Organization', label: 'Organization'})}
+    if (!isMobile()) {
+      tabs.push({value: 'Shortcuts', label: 'Shortcuts'})
+    }
+
+    if(permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
-    if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
     return tabs;
   });
@@ -214,7 +226,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <div
-      class="size-full outline-none"
+      class="size-full p-2 pl-0 outline-none bracket-never"
       classList={{
         invisible: props.hide,
       }}
@@ -226,11 +238,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         spotlight={spotlight}
         tr={!spotlight()}
       >
-        <div class="flex flex-col h-full bg-panel">
+        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden">
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -240,7 +252,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2">
-                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                  <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
                       onClick={closeSettings}
@@ -321,7 +333,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
                   <div class="flex-1" />
 
-                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                  <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={spotlight() ? ContractIcon : ExpandIcon}
                       onClick={() => setSpotlight(!spotlight())}
@@ -342,14 +354,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <Account />
                   </Suspense>
                 </Tabs.Content>
-                <Show when={!orgName() && !isNativeMobilePlatform()}>
+                <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
                   <Tabs.Content value="Subscription" class="absolute inset-0">
                     <Subscription />
-                  </Tabs.Content>
-                </Show>
-                <Show when={ orgName() && permissions()?.includes('WriteItPanel')}>
-                  <Tabs.Content value="Organization" class="absolute inset-0">
-                    <Organization />
                   </Tabs.Content>
                 </Show>
                 <Tabs.Content value="Appearance" class="absolute inset-0">
@@ -358,11 +365,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Tabs.Content value="Shortcuts" class="absolute inset-0">
                   <Shortcuts />
                 </Tabs.Content>
-                <Show when={DEV_MODE_ENV}>
-                  <Tabs.Content value="Inbox" class="absolute inset-0">
-                    <Inbox />
-                  </Tabs.Content>
-                </Show>
               </div>
             </Tabs>
           </div>

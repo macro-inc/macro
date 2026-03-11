@@ -4,7 +4,14 @@
  * static_file_service
  * OpenAPI spec version: 0.1.0
  */
-import type { FileMetadata, PutFileRequest, PutFileResponse } from './schemas';
+import type {
+  BulkDeleteRequest,
+  BulkDeleteResponse,
+  ErrorResponse,
+  FileMetadata,
+  PutFileRequest,
+  PutFileResponse,
+} from './schemas';
 
 export type putPresignedUrlResponse200 = {
   data: PutFileResponse;
@@ -58,6 +65,78 @@ export const putPresignedUrl = async (
     status: res.status,
     headers: res.headers,
   } as putPresignedUrlResponse;
+};
+
+/**
+ * @summary Bulk delete files.
+ */
+export type handleBulkDeleteFileResponse200 = {
+  data: BulkDeleteResponse;
+  status: 200;
+};
+
+export type handleBulkDeleteFileResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type handleBulkDeleteFileResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type handleBulkDeleteFileResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type handleBulkDeleteFileResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type handleBulkDeleteFileResponseSuccess =
+  handleBulkDeleteFileResponse200 & {
+    headers: Headers;
+  };
+export type handleBulkDeleteFileResponseError = (
+  | handleBulkDeleteFileResponse400
+  | handleBulkDeleteFileResponse401
+  | handleBulkDeleteFileResponse403
+  | handleBulkDeleteFileResponse500
+) & {
+  headers: Headers;
+};
+
+export type handleBulkDeleteFileResponse =
+  | handleBulkDeleteFileResponseSuccess
+  | handleBulkDeleteFileResponseError;
+
+export const getHandleBulkDeleteFileUrl = () => {
+  return `/api/file/bulk-delete`;
+};
+
+export const handleBulkDeleteFile = async (
+  bulkDeleteRequest: BulkDeleteRequest,
+  options?: RequestInit
+): Promise<handleBulkDeleteFileResponse> => {
+  const res = await fetch(getHandleBulkDeleteFileUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkDeleteRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: handleBulkDeleteFileResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as handleBulkDeleteFileResponse;
 };
 
 export type handleGetMetadataResponse200 = {

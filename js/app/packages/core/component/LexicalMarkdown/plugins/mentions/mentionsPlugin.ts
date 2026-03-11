@@ -9,6 +9,8 @@ import {
   $createDocumentMentionNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
+  $createSnapshotNode,
+  $createThemeMentionNode,
   $createUserMentionNode,
   $handleInlineSearchNodeMutation,
   $handleInlineSearchNodeTransform,
@@ -28,6 +30,8 @@ import {
   GroupMentionNode,
   InlineSearchNode,
   InlineSearchNodesType,
+  type SnapshotNodeInfo,
+  type ThemeMentionInfo,
   type UserMentionInfo,
   UserMentionNode,
   validTriggerPosition,
@@ -65,6 +69,9 @@ import { mapRegisterDelete } from '../shared';
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');
 
+export const INSERT_SNAPSHOT_NODE_COMMAND: LexicalCommand<SnapshotNodeInfo> =
+  createCommand('INSERT_SNAPSHOT_NODE_COMMAND');
+
 export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> =
   createCommand('INSERT_CONTACT_MENTION_COMMAND');
 
@@ -97,6 +104,9 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
 
+export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
+  createCommand('INSERT_THEME_MENTION_COMMAND');
+
 export type ItemMention = {
   itemType:
     | 'document'
@@ -107,7 +117,7 @@ export type ItemMention = {
     | 'rss'
     | 'contact'
     | 'date'
-    | 'email'
+    | 'thread'
     | 'unknown'
     | 'color'
     | 'group';
@@ -155,11 +165,14 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'chat') {
+      fileType = 'chat';
+      itemType = 'chat';
     } else if (blockName === 'rss') {
       fileType = 'rss';
     } else if (blockName === 'email') {
       fileType = 'email';
-      itemType = 'email';
+      itemType = 'thread';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }
@@ -195,8 +208,8 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
 }
 
 // Validators for the position of the @ trigger.
-const beforeRegex = /[(['"\`\s]$/;
-const afterRegex = /^[)\]'"\`\s]/;
+const beforeRegex = /[(['\"\`\s]$/;
+const afterRegex = /^[)\]'\"\`\s]/;
 
 /**
  * When mentions nodes are selected by using the arrow keys, we want to be able to delete them.
@@ -233,8 +246,9 @@ const getDocumentMentionItemType = (
     case 'chat':
     case 'channel':
     case 'project':
-    case 'email':
       return itemType;
+    case 'email':
+      return 'thread';
     default:
       console.error(`Invalid item type: ${itemType} for document mention node`);
       return 'document';
@@ -348,6 +362,31 @@ function registerMentionsPlugin(
     ),
 
     editor.registerCommand(
+      INSERT_SNAPSHOT_NODE_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const selection = $getSelection();
+          const snapshotNode = $createSnapshotNode(payload);
+
+          // Do not paste snapshot nodes over range-selected text -- append after.
+          if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+            $collapseSelection(selection);
+            $insertNodes([$createTextNode(' '), snapshotNode]);
+            snapshotNode.selectEnd();
+            return true;
+          }
+          $insertNodes([snapshotNode]);
+          if ($isRootOrShadowRoot(snapshotNode.getParentOrThrow())) {
+            $wrapNodeInElement(snapshotNode, $createParagraphNode);
+          }
+          snapshotNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
       INSERT_USER_MENTION_COMMAND,
       (payload) => {
         editor.update(() => {
@@ -416,6 +455,33 @@ function registerMentionsPlugin(
         editor.update(() => {
           const mentionNode = $createGroupMentionNode(payload);
 
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_THEME_MENTION_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const selection = $getSelection();
+          const mentionNode = $createThemeMentionNode(
+            payload.name,
+            payload.data
+          );
+
+          if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+            $collapseSelection(selection);
+            $insertNodes([$createTextNode(' '), mentionNode]);
+            mentionNode.selectEnd();
+            return true;
+          }
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);
@@ -614,7 +680,7 @@ function registerMentionsPlugin(
                 fileType = 'unknown';
               }
               onCreateMention({
-                itemType: blockName === 'email' ? 'email' : itemType,
+                itemType: blockName === 'email' ? 'thread' : itemType,
                 itemId: node.getDocumentId(),
                 fileType,
                 documentName,

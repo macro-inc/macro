@@ -2,7 +2,9 @@ use crate::api::context::ApiContext;
 use chrono::{DateTime, Utc};
 use sqs_client::search::SearchQueueMessage;
 
-/// Spawns a tokio task to send a remove chat message to the search text extractor
+/// Spawns a tokio task to send a remove chat message from the search text extractor
+// used in edit_message which is dead for now
+#[allow(dead_code)]
 pub fn send_remove_chat_message_to_search(ctx: &ApiContext, chat_id: &str, message_id: &str) {
     let chat_id = chat_id.to_string();
     let message_id = message_id.to_string();

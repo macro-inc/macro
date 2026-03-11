@@ -8,7 +8,7 @@ use sqlx::types::Uuid;
 
 /// Updates a thread's metadata
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-#[tracing::instrument(skip(tx), level = "debug")]
+#[tracing::instrument(skip(tx), err)]
 async fn update_db_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -42,17 +42,13 @@ async fn update_db_thread_metadata(
         link_id,
     )
     .execute(tx)
-    .await
-    .context(format!(
-        "Failed to update timestamps for thread ID {} with link_id {}",
-        thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
 
 // updates a thread's archived status to the passed boolean without performing checks
-#[tracing::instrument(skip(conn))]
+#[tracing::instrument(skip(conn), err)]
 pub async fn update_inbox_visible_status(
     conn: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -74,11 +70,7 @@ pub async fn update_inbox_visible_status(
         link_id,
     )
     .execute(conn)
-    .await
-    .context(format!(
-        "Failed to update archived status to {} for thread ID {} with link_id {}",
-        inbox_visible, thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
@@ -114,7 +106,7 @@ where
 }
 
 /// Updates a thread's provider_id
-#[tracing::instrument(skip(conn))]
+#[tracing::instrument(skip(conn), err)]
 pub async fn update_thread_provider_id(
     conn: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -136,17 +128,13 @@ pub async fn update_thread_provider_id(
         link_id,
     )
     .execute(conn)
-    .await
-    .context(format!(
-        "Failed to update provider_id to '{}' for thread ID {} with link_id {}",
-        provider_id, thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
 
 // Updates a thread's metadata (archived status, latest_timestamps)
-#[tracing::instrument(skip(tx), level = "debug")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn update_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
@@ -156,13 +144,18 @@ pub async fn update_thread_metadata(
         .await
         .context("Failed to get messages for thread")?;
 
-    // if any message in the thread has the INBOX label, the thread is visible in the inbox
+    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
     let inbox_visible = messages.iter().any(|message| {
-        message
+        let has_inbox = message
             .labels
             .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::INBOX)
-            || (is_macro_draft(message))
+            .any(|label| label.provider_label_id == service::label::system_labels::INBOX);
+        let has_sent = message
+            .labels
+            .iter()
+            .any(|label| label.provider_label_id == service::label::system_labels::SENT);
+
+        (has_inbox && !has_sent) || is_macro_draft(message)
     });
 
     // if any message in the thread is unread, the thread is considered unread in the FE

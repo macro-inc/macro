@@ -1,4 +1,4 @@
-import { getDocumentKeyParts } from '@macro-inc/document-processing-job-types';
+import { getDocumentKeyParts } from '@coparse/document-processing-types';
 
 /**
  * Note that this is only for DSS documents. Temp files have document keys of a different format, and will be handled in {@link documentOverrideInfoAtom}.

@@ -220,8 +220,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 1024 : 512,
-              memory: stack === 'prod' ? 4096 : 1024,
+              cpu: stack === 'prod' ? 2048 : 512,
+              memory: stack === 'prod' ? 6000 : 1024,
               environment: containerEnvVars ?? [],
               logConfiguration: {
                 logDriver: 'awsfirelens',
@@ -229,7 +229,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `search-processing-service-${stack}`,
+                  dd_service: 'search-processing-service',
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',

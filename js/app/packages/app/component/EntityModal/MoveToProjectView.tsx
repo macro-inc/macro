@@ -2,7 +2,7 @@ import { BozzyBracket } from '@core/component/BozzyBracket';
 import {
   CustomEntityIcon,
   EntityIcon,
-  getIconConfig,
+  getEntityIconConfig,
 } from '@core/component/EntityIcon';
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -10,8 +10,8 @@ import Fragment from '@core/util/Fragment';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import CaretRight from '@icon/regular/caret-right.svg';
 import ArrowRight from '@phosphor-icons/core/regular/arrow-right.svg?component-solid';
+import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
-import { useProjects } from '@service-storage/projects';
 import {
   createEffect,
   createMemo,
@@ -22,8 +22,8 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { VList } from 'virtua/solid';
-import { createMoveToProjectDssEntityMutation } from '../../../macro-entity/src/queries/dss';
-import type { EntityData } from '../../../macro-entity/src/types/entity';
+import { createMoveToProjectDssEntityMutation } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
 export const MoveToProjectView = (props: {
@@ -33,7 +33,8 @@ export const MoveToProjectView = (props: {
 }) => {
   let listRef!: HTMLDivElement;
   const moveToProjectMutation = createMoveToProjectDssEntityMutation();
-  const projects = useProjects();
+  const projectsQuery = useProjectsQuery();
+  const projects = () => projectsQuery.data ?? [];
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedProject, setSelectedProject] = createSignal<Project | null>(
     null
@@ -365,27 +366,7 @@ export const MoveToProjectView = (props: {
     props.onFinish();
   };
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
-      case 'document':
-        return getIconConfig(props.entity.fileType || 'default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   return (
     <div class="" ref={rootScopeId} tabindex={-1}>

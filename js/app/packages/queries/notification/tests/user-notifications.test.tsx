@@ -3,8 +3,9 @@
  */
 
 import { err, ok } from '@core/util/maybeResult';
+import type { UnifiedNotification } from '@notifications/types';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
-import type { UserNotification } from '@service-notification/generated/schemas/userNotification';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -27,13 +28,21 @@ vi.mock('@service-notification/client', () => ({
   documentMentionMetadata: {},
 }));
 
+vi.mock('@queries/soup/normalized-cache', () => ({
+  optimisticUpdateSoupItemUpdatedAt: vi.fn(),
+}));
+
 import { notificationServiceClient } from '@service-notification/client';
+import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
 
 const mockBulkMarkNotificationAsSeen = vi.mocked(
   notificationServiceClient.bulkMarkNotificationAsSeen
 );
 const mockBulkMarkNotificationAsDone = vi.mocked(
   notificationServiceClient.bulkMarkNotificationAsDone
+);
+const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
+  optimisticUpdateSoupItemUpdatedAt
 );
 
 let testQueryClient: QueryClient;
@@ -47,33 +56,36 @@ vi.mock('../../client', () => ({
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
 function createMockNotification(
-  overrides: Partial<UserNotification> = {}
-): UserNotification {
+  overrides: Partial<UnifiedNotification> = {}
+): UnifiedNotification {
   return {
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
-    createdAt: Date.now(),
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    created_at: new Date().toISOString(),
+    updated_at: null,
+    viewed_at: null,
+    deleted_at: null,
     done: false,
     sent: true,
-    notificationEventType: 'ItemShared',
-    notificationMetadata: {
-      sharer_id: 'user-1',
-      permission_level: 'editor',
+    notification_event_type: 'item_shared_user',
+    notification_metadata: {
+      tag: 'item_shared_user',
+      content: {
+        sharedBy: 'user-1',
+        permissionLevel: 'editor',
+      },
     },
     ...overrides,
-  } as UserNotification;
+  } as UnifiedNotification;
 }
 
 function createMockNotificationPage(
-  notifications: UserNotification[],
+  notifications: UnifiedNotification[],
   nextCursor?: string
 ): GetAllUserNotificationsResponse {
   return {
-    items: notifications,
+    items: notifications as unknown as ApiUserNotification[],
     next_cursor: nextCursor,
   };
 }
@@ -143,9 +155,9 @@ describe('notification mutations', () => {
   });
 
   describe('useMarkNotificationsAsSeenMutation', () => {
-    it('should optimistically update viewedAt when marking as seen', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+    it('should optimistically update viewed_at when marking as seen', async () => {
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
@@ -163,14 +175,14 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).not.toBeNull();
-      expect(notifications[1].viewedAt).toBeNull();
+      expect(typeof notifications[0].viewed_at).toBe('string');
+      expect(notifications[1].viewed_at).toBe(null);
 
       cleanup();
     });
 
     it('should rollback optimistic update on error', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(
@@ -194,14 +206,14 @@ describe('notification mutations', () => {
       await new Promise((r) => setTimeout(r, 10));
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeNull();
+      expect(notifications[0].viewed_at).toBe(null);
 
       cleanup();
     });
 
     it('should handle marking notifications across multiple pages', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
       seedQueryCache([
         createMockNotificationPage([n1]),
         createMockNotificationPage([n2]),
@@ -222,8 +234,8 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeNull(); // n1 unchanged
-      expect(notifications[1].viewedAt).not.toBeNull(); // n2 updated
+      expect(notifications[0].viewed_at).toBe(null); // n1 unchanged
+      expect(typeof notifications[1].viewed_at).toBe('string'); // n2 updated
 
       cleanup();
     });
@@ -349,6 +361,11 @@ describe('optimisticInsertNotification', () => {
     expect(notifications[0].id).toBe('new-notification');
     expect(notifications[1].id).toBe('n1');
     expect(notifications[2].id).toBe('n2');
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      newNotification.entity_id,
+      'document',
+      newNotification.created_at
+    );
   });
 
   it('should not insert duplicate notifications', () => {
@@ -363,5 +380,48 @@ describe('optimisticInsertNotification', () => {
     expect(notifications).toHaveLength(2);
     expect(notifications[0].id).toBe('n1');
     expect(notifications[1].id).toBe('n2');
+  });
+
+  it('should map email notifications to emailThread soup tag', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const emailNotification = createMockNotification({
+      entity_type: 'email_thread',
+      entity_id: 'thread-1',
+      created_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    optimisticInsertNotification(emailNotification);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      'thread-1',
+      'emailThread',
+      '2024-01-01T00:00:00.000Z'
+    );
+  });
+
+  it('should skip soup update when notification has no created_at', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const notificationWithoutCreatedAt = createMockNotification({
+      created_at: null,
+    });
+
+    optimisticInsertNotification(notificationWithoutCreatedAt);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+  });
+
+  it('should skip soup update for unsupported entity types', () => {
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const userNotification = createMockNotification({
+      entity_type: 'user',
+      created_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    optimisticInsertNotification(userNotification);
+
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
   });
 });

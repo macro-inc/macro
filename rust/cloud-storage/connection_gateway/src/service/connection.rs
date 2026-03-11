@@ -1,11 +1,12 @@
 use crate::model::{
     connection::{Connection, StoredConnectionEntity},
     message::{Message, OutgoingMessage},
+    tracking::{EntityConnection, UserEntityConnection},
 };
 use anyhow::Result;
-use axum::async_trait;
+use async_trait::async_trait;
 use dashmap::DashMap;
-use model_entity::{Entity, EntityConnection, UserEntityConnection};
+use model_entity::Entity;
 use std::{
     sync::{Arc, atomic::AtomicUsize},
     time::{SystemTime, UNIX_EPOCH},
@@ -13,7 +14,7 @@ use std::{
 use tokio::{sync::mpsc::Sender, task::AbortHandle};
 
 #[async_trait]
-pub trait ConnectionGatewayPersistence: Send + Sync {
+pub trait ConnectionRepo: Send + Sync {
     /// Inserts a new [StoredConnectionEntity] into storage
     async fn insert_connection_entry(
         &self,
@@ -72,11 +73,11 @@ pub trait ConnectionGatewayPersistence: Send + Sync {
 pub struct ConnectionManager {
     pub connections: Arc<DashMap<String, Connection>>,
     pub connection_count: Arc<AtomicUsize>,
-    pub persistence: Arc<dyn ConnectionGatewayPersistence>,
+    pub persistence: Arc<dyn ConnectionRepo>,
 }
 
 impl ConnectionManager {
-    pub fn new(persistence: impl ConnectionGatewayPersistence + 'static) -> Self {
+    pub fn new(persistence: impl ConnectionRepo + 'static) -> Self {
         tracing::info!("creating new connection manager");
         Self {
             connections: Arc::new(DashMap::new()),
@@ -201,12 +202,12 @@ impl ConnectionManager {
     pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
-            None => return Err(anyhow::anyhow!("connection not found")),
+            None => anyhow::bail!("connection not found"),
         };
 
         if let Err(err) = sender.send(OutgoingMessage::Message(message)).await {
             self.remove_connection(id).await?;
-            return Err(anyhow::anyhow!("failed to send message: {}", err));
+            anyhow::bail!("failed to send message: {}", err);
         }
 
         Ok(())

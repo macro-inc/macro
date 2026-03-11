@@ -134,7 +134,7 @@ export const highlightComments = createBlockMemo(() => {
           text: '',
           owner: userId,
           author: userId,
-          createdAt: Date.now(),
+          createdAt: new Date(),
           isNew: true,
           children: [],
           threadId: -1,

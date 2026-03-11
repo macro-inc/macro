@@ -1,11 +1,9 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createStubSoupContext } from '../../SoupContext';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import type {
   PopoverSplitOptions,
@@ -14,6 +12,7 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 
 false && clickOutside;
 
@@ -91,7 +90,6 @@ function PopoverSplitModal(props: {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
     isPanelActive: () => true,
-    soupContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,
@@ -127,27 +125,20 @@ function PopoverSplitModal(props: {
       }}
       modal={true}
     >
-      <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
-      <div class={`fixed inset-0 z-modal flex pointer-events-none isolate`}>
-        <Dialog.Content
-          use:clickOutside={() => props.onClose()}
-          ref={(r) => {
-            bindHotKeyDom(r);
-          }}
-        >
-          <DialogWrapper>
-            <Dialog.Content class="portal-scope">
-              <ClippedPanel active tl ref={setPanelRef}>
-                <SplitPanelContext.Provider value={stubPanelContext}>
-                  <Show when={props.popover.mount}>
-                    <Dynamic component={props.popover.mount.element} />
-                  </Show>
-                </SplitPanelContext.Provider>
-              </ClippedPanel>
-            </Dialog.Content>
-          </DialogWrapper>
-        </Dialog.Content>
-      </div>
+      <DialogWrapper
+        contentRef={(r) => {
+          setPanelRef(r);
+          bindHotKeyDom(r);
+        }}
+      >
+        <SplitPanelContext.Provider value={stubPanelContext}>
+          <SoupContextProvider>
+            <Show when={props.popover.mount}>
+              <Dynamic component={props.popover.mount.element} />
+            </Show>
+          </SoupContextProvider>
+        </SplitPanelContext.Provider>
+      </DialogWrapper>
     </Dialog>
   );
 }

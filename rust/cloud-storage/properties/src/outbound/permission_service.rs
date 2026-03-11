@@ -101,4 +101,24 @@ impl PermissionService for PermissionServiceImpl {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_owner_and_deleted(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(String, bool), Self::Err> {
+        let item_type = match entity_type {
+            // The following entity types are either deleted immediately or simply unsupported
+            EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => {
+                anyhow::bail!("unsupported entity type")
+            }
+            EntityType::Chat => "chat",
+            EntityType::Document | EntityType::Task => "document",
+            EntityType::Project => "project",
+        };
+
+        macro_db_client::item_access::get::get_owner_and_deleted(&self.db, entity_id, item_type)
+            .await
+    }
 }

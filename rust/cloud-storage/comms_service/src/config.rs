@@ -25,9 +25,6 @@ pub struct Config {
     /// The SQS queue to send notifications to
     pub notification_queue: String,
 
-    /// The url of the document storage service
-    pub document_storage_service_url: String,
-
     /// The contacts SQS queue
     pub contacts_queue: String,
 
@@ -58,9 +55,6 @@ impl Config {
         let notification_queue =
             std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
 
-        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
-            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
-
         let contacts_queue =
             std::env::var("CONTACTS_QUEUE").context("CONTACTS_QUEUE must be provided")?;
 
@@ -82,7 +76,6 @@ impl Config {
             internal_auth_key,
             connection_gateway_url,
             notification_queue,
-            document_storage_service_url,
             contacts_queue,
             auth_service_url,
             auth_service_secret_key,

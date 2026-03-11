@@ -14,7 +14,6 @@ pub(crate) mod messages;
 pub(crate) mod settings;
 pub(crate) mod sync;
 pub(crate) mod threads;
-pub(crate) mod validation;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()

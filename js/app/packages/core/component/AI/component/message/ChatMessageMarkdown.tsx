@@ -35,7 +35,6 @@ export function ChatMessageMarkdown(props: {
     <StaticMarkdown
       markdown={text()}
       theme={aiChatTheme}
-      isGenerating={props.generating}
       rootRef={props.rootRef}
       target="internal"
     />

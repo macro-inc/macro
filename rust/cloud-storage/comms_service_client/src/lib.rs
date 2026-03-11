@@ -1,15 +1,6 @@
-use constants::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY;
-
-pub mod channel_message;
 pub mod channels;
-pub(crate) mod constants;
-pub mod create_welcome_message;
 pub mod error;
-pub mod mentions;
 pub mod messages;
-pub mod organization;
-pub mod participants;
-pub mod permissions;
 
 #[derive(Clone)]
 pub struct CommsServiceClient {
@@ -18,18 +9,14 @@ pub struct CommsServiceClient {
 }
 
 impl CommsServiceClient {
-    pub fn new(internal_auth_key: String, url: String) -> Self {
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            MACRO_INTERNAL_AUTH_KEY_HEADER_KEY,
-            internal_auth_key.parse().unwrap(),
-        );
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .unwrap();
+    pub fn new(url: String) -> Self {
+        let client = reqwest::Client::builder().build().unwrap();
 
         Self { url, client }
+    }
+
+    /// Returns the base URL of the comms service
+    pub fn url(&self) -> &str {
+        &self.url
     }
 }

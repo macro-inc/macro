@@ -31,6 +31,7 @@ type UserContextValue = {
   group: Accessor<string | null | undefined>;
   hasChromeExt: Accessor<boolean | undefined>;
   hasTrialed: Accessor<boolean | undefined>;
+  aiDataConsent: Accessor<boolean>;
 };
 
 export const [UserContextProvider, useUserContext] =
@@ -60,6 +61,7 @@ export const [UserContextProvider, useUserContext] =
     const group = createMemo(() => userInfo()?.group);
     const hasChromeExt = createMemo(() => userInfo()?.hasChromeExt);
     const hasTrialed = createMemo(() => userInfo()?.hasTrialed);
+    const aiDataConsent = createMemo(() => userInfo()?.aiDataConsent ?? false);
 
     return {
       userInfo,
@@ -74,6 +76,7 @@ export const [UserContextProvider, useUserContext] =
       group,
       hasChromeExt,
       hasTrialed,
+      aiDataConsent,
     };
   });
 
@@ -120,4 +123,8 @@ export function useHasTrialed() {
 
 export function useUserInfo() {
   return useUserContext().userInfo;
+}
+
+export function useAiDataConsent() {
+  return useUserContext().aiDataConsent;
 }

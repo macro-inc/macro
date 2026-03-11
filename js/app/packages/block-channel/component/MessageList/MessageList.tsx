@@ -2,16 +2,12 @@ import {
   COLLAPSED_THREAD_INDEX_CUTOFF,
   TARGET_MESSAGE_ACTIVE_TIME,
 } from '@block-channel/constants';
-import { openedChannelSignal } from '@block-channel/signal/activity';
-import { messageToReactionStore } from '@block-channel/signal/reactions';
-import {
-  type ThreadStoreData,
-  threadsStore,
-} from '@block-channel/signal/threads';
+import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import type {
   ThreadView,
   ThreadViewData,
 } from '@block-channel/type/threadView';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
 import {
   createMessageListContextLookup,
@@ -25,11 +21,15 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
-import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
-import type { Message } from '@service-comms/generated/models/message';
+import type { ApiActivity as ChannelActivity } from '@service-comms/generated/models';
+import type {
+  Attachment,
+  ChannelParticipant,
+  Message,
+} from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
 import { debounce } from '@solid-primitives/scheduled';
-import { activeElement } from 'app/signal/focus';
 import {
   type Accessor,
   createContext,
@@ -38,6 +38,7 @@ import {
   createRenderEffect,
   createSelector,
   createSignal,
+  For,
   Match,
   mapArray,
   on,
@@ -53,24 +54,53 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
+import type { MessageListContext } from '@block-channel/utils/listContext';
+import { match } from 'ts-pattern';
 
 false && observedSize;
 
-// Provide stable row models to VList so item instances are preserved across moves/insertions
-type RowModel = {
+type ThreadRow = {
   id: string;
   message: Message;
+  children: Accessor<Message[]>;
+};
+
+type MessageListItemProps = {
+  message: Message;
+  index: Accessor<number>;
+  listContext: MessageListContext;
+  isFocused: boolean;
+  isTarget: boolean;
+  threadChildren?: Message[];
+  threadSiblings?: Message[];
 };
 
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
+const createDefaultMessageListContext = (index: Accessor<number>) =>
+  createMemo<MessageListContext>(() => ({
+    index: index(),
+    isNewMessage: false,
+    isFirstNewMessage: false,
+    isParentNewMessage: false,
+    threadIndex: -1,
+    previousNonThreadedMessage: undefined,
+    isInLastThread: false,
+  }));
+
 type MessageListContentContextValues = {
+  setFocusedMessageId: Setter<string | undefined>;
   registerVirtualHandle: (handle: VirtualizerHandle) => void;
   scrollContainerRef: Accessor<HTMLElement | undefined>;
   registerScrollContainer: (el: HTMLElement) => void;
   scrollToIndex: (index: number, alignOpts?: ScrollToIndexOpts) => void;
-  scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
+  scrollToMessage: (
+    messageID: string,
+    index: number,
+    focus?: boolean,
+    alignOpts?: ScrollToIndexOpts
+  ) => void;
   createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
   closeThreadReply: (threadID: string, expanded?: boolean) => void;
@@ -86,23 +116,44 @@ const MessageListContentContext =
 
 export const useMessageListContext = () => {
   const context = useContext(MessageListContentContext);
-
-  return context!;
+  if (!context) {
+    throw new Error(
+      'useMessageListContext must be used within MessageListContentContext.Provider'
+    );
+  }
+  return context;
 };
 
 export type TargetMessageInfo = { messageId: string; threadId?: string };
 
+export type MessageListNavigation = {
+  /** Navigate to previous message (up in the list) */
+  navigatePrevious: () => boolean;
+  /** Navigate to next message (down in the list) */
+  navigateNext: () => boolean;
+  /** Navigate to a specific message by ID */
+  navigateToMessage: (messageId: string) => boolean;
+};
+
+export type ThreadStoreData = Record<string, MessageWithThreadId[]>;
+
 export type MessageListProps = {
   channelId: string;
   messages: Message[];
+  threads: ThreadStoreData;
+  reactions: GetChannelResponseReactions;
+  attachments: Attachment[];
+  participants: ChannelParticipant[];
   latestActivity?: ChannelActivity;
+  openedChannel?: Date;
   containerRef?: HTMLDivElement;
   targetMessage: Accessor<TargetMessageInfo | undefined>;
   focusedMessageId: Accessor<string | undefined>;
   setFocusedMessageId: Setter<string | undefined>;
+  /** Callback to expose navigation methods to parent */
+  onNavigationReady?: (nav: MessageListNavigation) => void;
   orderedMessages: Accessor<Message[]>;
   setOrderedMessages: Setter<Message[]>;
-  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 function EmptyMessageList() {
@@ -125,38 +176,135 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const normalizeIndex = (index: number) => {
-    const length = props.orderedMessages().length;
+  const topLevelMessages = createMemo(() =>
+    props.messages.filter(
+      (message) =>
+        !message.thread_id &&
+        (!message.deleted_at || (props.threads[message.id]?.length ?? 0) > 0)
+    )
+  );
 
-    return length - 1 - index;
+  const topLevelIndexByMessageId = createMemo(() => {
+    const list = topLevelMessages();
+    const map = new Map<string, number>();
+    for (let i = 0; i < list.length; i++) {
+      const parent = list[i];
+      map.set(parent.id, i);
+      const children = props.threads[parent.id] ?? [];
+      for (const child of children) {
+        map.set(child.id, i);
+      }
+    }
+    return map;
+  });
+
+  const getVirtualIndexForMessageId = (messageId: string) => {
+    const list = topLevelMessages();
+    const topLevelIndex = topLevelIndexByMessageId().get(messageId);
+    if (topLevelIndex === undefined) return undefined;
+    return list.length - 1 - topLevelIndex;
+  };
+
+  const scrollElementIntoView = (
+    targetEl: HTMLElement,
+    align: ScrollToIndexOpts['align'] = 'nearest'
+  ) => {
+    const handle = virtualHandle();
+    const container = scrollContainerRef();
+    if (!handle || !container) return;
+
+    const targetBounds = targetEl.getBoundingClientRect();
+    const containerBounds = container.getBoundingClientRect();
+    const currentOffset = handle.scrollOffset;
+
+    const visualTop = targetBounds.top - containerBounds.top;
+    const visualBottom = targetBounds.bottom - containerBounds.top;
+
+    const targetTop = currentOffset + handle.viewportSize - visualTop;
+    const targetBottom = currentOffset + handle.viewportSize - visualBottom;
+
+    const visibleBottomEdge = currentOffset;
+    const visibleTopEdge = currentOffset + handle.viewportSize;
+
+    const nextOffset = match(align)
+      .with('start', () => targetTop - handle.viewportSize)
+      .with('end', () => targetBottom)
+      .with('center', () => {
+        // Center the element in the viewport
+        const elementCenter = (targetTop + targetBottom) / 2;
+        return elementCenter - handle.viewportSize / 2;
+      })
+      .otherwise(() => {
+        // 'nearest': only scroll if element is out of view
+        if (targetTop > visibleTopEdge) {
+          // Element is above the visible area, scroll up to show it
+          return targetTop - handle.viewportSize;
+        } else if (targetBottom < visibleBottomEdge) {
+          // Element is below the visible area, scroll down to show it
+          return targetBottom;
+        }
+        return undefined;
+      });
+
+    if (nextOffset !== undefined) {
+      handle.scrollTo(nextOffset);
+    }
+  };
+
+  const tryAlignMessageElement = (
+    messageId: string,
+    align: ScrollToIndexOpts['align'],
+    focus: boolean
+  ) => {
+    const container = scrollContainerRef();
+    if (!container) return false;
+    const targetEl = container.querySelector<HTMLElement>(
+      `[data-message-body-id="${messageId}"]`
+    );
+    if (!targetEl) return false;
+    scrollElementIntoView(targetEl, align);
+    if (focus) targetEl.focus();
+    return true;
+  };
+
+  const scheduleAlignMessageElement = (
+    messageId: string,
+    align: ScrollToIndexOpts['align'] = 'nearest',
+    focus: boolean = false
+  ) => {
+    requestAnimationFrame(() => {
+      if (tryAlignMessageElement(messageId, align, focus)) return;
+      setTimeout(() => {
+        tryAlignMessageElement(messageId, align, focus);
+      }, 0);
+    });
   };
 
   const context: MessageListContentContextValues = {
+    setFocusedMessageId: props.setFocusedMessageId,
     registerVirtualHandle: setVirtualHandle,
     scrollContainerRef,
     registerScrollContainer: setScrollContainerRef,
     scrollToIndex: function (index: number, opts?: ScrollToIndexOpts): void {
-      virtualHandle()?.scrollToIndex(normalizeIndex(index), opts);
+      const messageId = props.orderedMessages()[index]?.id;
+      if (!messageId) return;
+      const virtualIndex = getVirtualIndexForMessageId(messageId);
+      if (virtualIndex === undefined) return;
+      virtualHandle()?.scrollToIndex(virtualIndex, opts);
+      scheduleAlignMessageElement(messageId, opts?.align, false);
     },
     scrollToMessage: function (
       messageID: string,
-      index: number,
-      focus: boolean = true
+      _index: number,
+      focus: boolean = true,
+      alignOpts?: ScrollToIndexOpts
     ): void {
-      const handle = virtualHandle();
-
-      if (!handle) return;
-
-      handle.scrollToIndex(normalizeIndex(index), { align: 'end' });
-      if (!focus) return;
-      const targetEl = scrollContainerRef()?.querySelector<HTMLElement>(
-        `[data-message-body-id="${messageID}"]`
-      );
-      if (targetEl) {
-        requestAnimationFrame(() => {
-          targetEl.focus();
-        });
-      }
+      const virtualIndex = getVirtualIndexForMessageId(messageID);
+      if (virtualIndex === undefined) return;
+      virtualHandle()?.scrollToIndex(virtualIndex, {
+        align: alignOpts?.align ?? 'nearest',
+      });
+      scheduleAlignMessageElement(messageID, alignOpts?.align, focus);
     },
     createReply: function (id: string, focus = false): void {
       setThreadViewStore(id, (prev) => {
@@ -226,13 +374,11 @@ function MessageListImpl(props: MessageListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
   const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
   const [messageListContext, setMessageListContext] =
     createStore<MessageListContextLookup>({});
 
   const userId = useUserId();
-  const threads = threadsStore.get;
   const [viewThreads, setViewThreads] = createStore<ThreadStoreData>({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
@@ -240,29 +386,93 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
+  const [isScrolledBackSignificantly, setIsScrolledBackSignificantly] =
+    createSignal(false);
+  const [isScrollingDown, setIsScrollingDown] = createSignal(false);
+  let prevScrollOffset: number | undefined;
+  let downwardScrollAccumulator = 0;
 
-  const openedChannel = openedChannelSignal.get;
+  // Navigation methods for keyboard navigation
+  const navigateToMessage = (messageId: string): boolean => {
+    const messages = props.orderedMessages();
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index === -1) return false;
+    listContext.scrollToMessage(messageId, index, false, {
+      align: 'nearest',
+    });
 
-  const normalizeIndex = (index: number) => {
-    const length = props.orderedMessages().length;
+    // Focus after scroll completes
+    requestAnimationFrame(() => {
+      const targetEl = containerRef()?.querySelector<HTMLElement>(
+        `[data-message-body-id="${messageId}"]`
+      );
+      targetEl?.focus();
+    });
 
-    return length - 1 - index;
+    return true;
   };
 
-  const lastViewed = createMemo(() => {
+  const navigateByOffset = (
+    direction: -1 | 1,
+    fallbackToLast: boolean
+  ): boolean => {
+    const messages = props.orderedMessages();
+    const currentId = props.focusedMessageId();
+    const currentIndex = currentId
+      ? messages.findIndex((m) => m.id === currentId)
+      : -1;
+
+    if (currentIndex === -1) {
+      if (fallbackToLast && messages.length > 0) {
+        return navigateToMessage(messages[messages.length - 1].id);
+      }
+      return false;
+    }
+
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= messages.length) return false;
+
+    return navigateToMessage(messages[nextIndex].id);
+  };
+
+  const navigatePrevious = (): boolean => navigateByOffset(-1, true);
+  const navigateNext = (): boolean => navigateByOffset(1, false);
+
+  // Expose navigation methods to parent
+  onMount(() => {
+    props.onNavigationReady?.({
+      navigatePrevious,
+      navigateNext,
+      navigateToMessage,
+    });
+  });
+
+  // Snapshot the lastViewed time so it reflects the pre-session value.
+  // Without this, the activity mutation on channel open would update
+  // lastViewed reactively, causing the "New" indicator to disappear.
+  const lastViewed = createMemo<DateValue | null | undefined>((prev) => {
+    if (prev !== undefined) return prev;
     return props?.latestActivity?.viewed_at;
   });
 
+  const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
+
   const checkIfNewMessage = (message: Message) => {
+    if (newMessagesDismissed()) return false;
     const lastViewed_ = lastViewed();
-    const openedChannel_ = openedChannel();
+    const openedChannel_ = props.openedChannel;
     return (
       !!lastViewed_ &&
       !!openedChannel_ &&
       new Date(message.created_at) > new Date(lastViewed_) &&
       userId() !== message.sender_id &&
-      new Date(message.created_at) < new Date(openedChannel_)
+      new Date(message.created_at) < openedChannel_
     );
+  };
+
+  const dismissNewMessages = () => {
+    setNewMessagesDismissed(true);
+    computeListContext(flattenedThreaded());
   };
 
   // Keep some additional timing information for goToLocationFromParams
@@ -301,10 +511,7 @@ function MessageListImpl(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      const lastIndex = 0;
-      virtualHandle()?.scrollToIndex(lastIndex, {
-        align: 'end',
-      });
+      virtualHandle()?.scrollTo(0);
       return;
     }
 
@@ -350,7 +557,7 @@ function MessageListImpl(props: MessageListProps) {
     }
 
     setTargetMessageActive(true);
-    virtualHandle()?.scrollToIndex(normalizeIndex(index), {
+    listContext.scrollToMessage(targetMessageId, index, false, {
       align: 'center',
     });
     setTimeout(() => {
@@ -371,15 +578,6 @@ function MessageListImpl(props: MessageListProps) {
 
     setMessageListContext(reconcile(context));
   }
-
-  createEffect(() => {
-    const activeElement_ = activeElement();
-    const activeMessageId = activeElement_?.getAttribute(
-      'data-message-body-id'
-    );
-
-    props.setFocusedMessageId(activeMessageId ?? undefined);
-  });
 
   const isFocused = createSelector(props.focusedMessageId);
 
@@ -449,7 +647,7 @@ function MessageListImpl(props: MessageListProps) {
 
     for (const message of baseMessages) {
       const id = message.id;
-      const threadArr = threads[id] ?? [];
+      const threadArr = props.threads[id] ?? [];
       const currentView = viewThreads[id];
       const isTypingThisThread = id === activeThreadId;
 
@@ -479,7 +677,7 @@ function MessageListImpl(props: MessageListProps) {
       prevTypingId !== currentTypingId &&
       dirtyTypingThreadId === prevTypingId
     ) {
-      const threadArr = untrack(() => threads[prevTypingId] ?? []);
+      const threadArr = untrack(() => props.threads[prevTypingId] ?? []);
       setViewThreads(prevTypingId, reconcile(threadArr));
       dirtyTypingThreadId = undefined;
     }
@@ -487,21 +685,23 @@ function MessageListImpl(props: MessageListProps) {
     return currentTypingId;
   });
 
-  const rows = mapArray(
-    () => props.orderedMessages().toReversed(),
-    (msg) => {
-      return { id: msg.id, message: msg } as RowModel;
+  const threadRows = mapArray(
+    () => filteredTopLevelMessages().toReversed(),
+    (message) => {
+      const children = () =>
+        (viewThreads[message.id] ?? []).filter(messageFilterFn);
+      return { id: message.id, message, children };
     }
   );
 
   createEffect(() => {
-    rows();
+    threadRows();
     setIsPrepend(false);
   });
 
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
-    const base = filteredTopLevelMessages() ?? [];
+    const base = filteredTopLevelMessages();
     for (const message of base) {
       const hasDraft = !!loadDraftMessage(message.channel_id, message.id);
       const threadDetails = listContext.getThreadState(message.id);
@@ -511,34 +711,18 @@ function MessageListImpl(props: MessageListProps) {
     }
   });
 
-  // Indices of messages that should remain mounted even when off screen.
-  // Criteria: message is last in its thread AND that thread has an active reply.
+  // Indices of top-level rows that should remain mounted even when off screen.
+  // Criteria: thread has an active reply, so keep its parent row mounted.
+  // NOTE: VList receives reversed top-level rows, so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
-    const list = props.orderedMessages() ?? [];
+    const list = filteredTopLevelMessages();
+    const length = list.length;
     const indices: number[] = [];
-    for (let i = 0; i < list.length; i++) {
+    for (let i = 0; i < length; i++) {
       const msg = list[i];
-      const next = list[i + 1];
-      const threadId = msg.thread_id;
-
-      if (!threadId) continue;
-
-      const threadState = listContext.getThreadState(threadId);
-
-      // Since orderedMessages is a flat list: if the next message' thread id is different OR
-      // there is no next message, then this message is the last message in the thread
-      const isLastInThread =
-        (next && next.thread_id !== msg.thread_id) || !next;
-
-      // We captured this thread reply but there was no message. The user might be
-      // typing or want to type a reply
-      const isLocallyFrozenWithEmptyMessage = !viewThreads[msg.id]?.length;
-
-      if (
-        (isLastInThread && threadState?.hasActiveReply) ||
-        (threadState?.hasActiveReply && isLocallyFrozenWithEmptyMessage)
-      ) {
-        indices.push(i);
+      const threadState = listContext.getThreadState(msg.id);
+      if (threadState?.hasActiveReply) {
+        indices.push(length - 1 - i);
       }
     }
     return indices;
@@ -554,15 +738,44 @@ function MessageListImpl(props: MessageListProps) {
     return distanceFromBottom <= THRESHOLD;
   };
 
+  const checkIfScrolledBackSignificantly = () => {
+    const handle = virtualHandle();
+    if (!handle) return false;
+    const THRESHOLD = 2000;
+    return handle.scrollOffset > THRESHOLD;
+  };
+
+  // Track scroll direction.
+  // Requires 100px of cumulative downward scrolling before triggering.
+  // Any upward scroll resets the accumulator immediately.
+  const updateScrollDirection = () => {
+    const handle = virtualHandle();
+    if (handle && prevScrollOffset !== undefined) {
+      const currentOffset = handle.scrollOffset;
+      const delta = prevScrollOffset - currentOffset; // positive = scrolling down
+      if (delta > 0) {
+        downwardScrollAccumulator += delta;
+        if (downwardScrollAccumulator >= 100) {
+          setIsScrollingDown(true);
+        }
+      } else if (delta < 0) {
+        downwardScrollAccumulator = 0;
+        setIsScrollingDown(false);
+      }
+    }
+    if (handle) {
+      prevScrollOffset = handle.scrollOffset;
+    }
+  };
+
   const lastMessageReaction = createMemo(() => {
-    const messageToReaction = messageToReactionStore.get;
     const list = props.orderedMessages();
     const lastMessageId = list[list.length - 1]?.id;
-    return messageToReaction[lastMessageId];
+    return props.reactions[lastMessageId];
   });
 
   const lastMessageThread = createMemo(() => {
-    const base = filteredTopLevelMessages() ?? [];
+    const base = filteredTopLevelMessages();
     const lastTopLevelId = base[base.length - 1]?.id;
     return viewThreads[lastTopLevelId];
   });
@@ -653,6 +866,9 @@ function MessageListImpl(props: MessageListProps) {
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
 
+    setIsScrolledBackSignificantly(checkIfScrolledBackSignificantly());
+    updateScrollDirection();
+
     if (!nearBottom && dismissJumpToLatest()) {
       setDismissJumpToLatest(false);
     }
@@ -685,7 +901,9 @@ function MessageListImpl(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === messages[0].id);
       if (firstUnviewedIndex === undefined) return;
-      virtualHandle()?.scrollToIndex(normalizeIndex(firstUnviewedIndex), {
+      const targetMessageId = props.orderedMessages()?.[firstUnviewedIndex]?.id;
+      if (!targetMessageId) return;
+      listContext.scrollToMessage(targetMessageId, firstUnviewedIndex, false, {
         align: 'start',
       });
     }
@@ -702,6 +920,86 @@ function MessageListImpl(props: MessageListProps) {
   };
 
   const listHeight = createMemo(() => size()?.height ?? 0);
+
+  const MessageListItem = (params: MessageListItemProps) => (
+    <MessageContainer
+      message={params.message}
+      lastViewed={lastViewed}
+      isFocused={params.isFocused}
+      index={params.index}
+      orderedMessages={props.orderedMessages}
+      threadChildren={params.threadChildren}
+      threadSiblings={params.threadSiblings}
+      virtualHandle={virtualHandle()!}
+      container={containerRef()}
+      listContext={params.listContext}
+      isTarget={params.isTarget}
+      channelId={() => props.channelId}
+      attachments={props.attachments}
+      reactions={props.reactions}
+      onDismissNewMessages={dismissNewMessages}
+    />
+  );
+
+  const ThreadRowItem = (rowProps: { row: ThreadRow }) => {
+    const row = () => rowProps.row;
+    const threadChildren = () => row().children();
+    const threadState = createMemo(() =>
+      listContext.getThreadState(row().message.id)
+    );
+    const isThreadExpanded = () => threadState()?.threadExpanded === true;
+    const parentIndex = () => messageListContext[row().id]?.index ?? 0;
+    const parentDefaultContext = createDefaultMessageListContext(parentIndex);
+    const parentContext = () =>
+      messageListContext[row().id] ?? parentDefaultContext();
+
+    const renderThreadChild = (child: Message) => {
+      const childId = () => child.id;
+      const childContext = () => messageListContext[childId()];
+      const childIndexAccessor = () => childContext()?.index ?? 0;
+      const childDefaultContext =
+        createDefaultMessageListContext(childIndexAccessor);
+      const resolvedChildContext = () =>
+        childContext() ?? childDefaultContext();
+      const isThreadIndexWithinCutoff = createMemo(() => {
+        const ctx = childContext();
+        if (!ctx) return false;
+        return (
+          ctx.threadIndex !== -1 &&
+          ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
+        );
+      });
+
+      return (
+        <Show when={isThreadExpanded() || isThreadIndexWithinCutoff()}>
+          <MessageListItem
+            message={child}
+            isFocused={isFocused(childId())}
+            index={childIndexAccessor}
+            threadSiblings={threadChildren()}
+            listContext={resolvedChildContext()}
+            isTarget={isActiveTargetMessage(child.id)}
+          />
+        </Show>
+      );
+    };
+
+    return (
+      <Show when={virtualHandle()}>
+        <div>
+          <MessageListItem
+            message={row().message}
+            isFocused={isFocused(row().id)}
+            index={parentIndex}
+            threadChildren={threadChildren()}
+            listContext={parentContext()}
+            isTarget={isActiveTargetMessage(row().message.id)}
+          />
+          <For each={threadChildren()}>{renderThreadChild}</For>
+        </div>
+      </Show>
+    );
+  };
 
   return (
     <div
@@ -749,7 +1047,7 @@ function MessageListImpl(props: MessageListProps) {
               }}
               class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
-              data={rows() ?? []}
+              data={threadRows()}
               shift={isPrepend()}
               itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
@@ -761,58 +1059,7 @@ function MessageListImpl(props: MessageListProps) {
                 }
               }}
             >
-              {(row: { id: string; message: Message }, i) => {
-                const isParentless = () => !row.message.thread_id;
-                const isThreadExpanded = createMemo(() => {
-                  if (!row.message.thread_id) return false;
-
-                  const state = listContext.getThreadState(
-                    row.message.thread_id
-                  );
-
-                  return state?.threadExpanded === true;
-                });
-                const isThreadIndexWithinCutoff = createMemo(
-                  () =>
-                    messageListContext[row.id].threadIndex !== -1 &&
-                    messageListContext[row.id].threadIndex <=
-                      COLLAPSED_THREAD_INDEX_CUTOFF
-                );
-                return (
-                  <Show
-                    when={
-                      (isParentless() ||
-                        isThreadExpanded() ||
-                        isThreadIndexWithinCutoff()) &&
-                      virtualHandle()
-                    }
-                    // For the last message in the channel, we display this
-                    // empty small div. This is a temporary fix for last thread elements not rendering
-                    fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
-                  >
-                    <MessageContainer
-                      message={row.message}
-                      lastViewed={lastViewed}
-                      isFocused={isFocused(row.id)}
-                      index={() => normalizeIndex(i())}
-                      orderedMessages={props.orderedMessages}
-                      threadSiblings={viewThreads[
-                        row.message.thread_id ?? ''
-                      ]?.filter(messageFilterFn)}
-                      threadChildren={viewThreads[row.message.id ?? '']?.filter(
-                        messageFilterFn
-                      )}
-                      newIndicatorShown={newIndicatorShown}
-                      setNewIndicatorShown={setNewIndicatorShown}
-                      virtualHandle={virtualHandle()!}
-                      container={containerRef()}
-                      listContext={messageListContext[row.id]}
-                      setLastMessageRef={props.setLastMessageRef}
-                      isTarget={isActiveTargetMessage(row.message.id)}
-                    />
-                  </Show>
-                );
-              }}
+              {(row: ThreadRow) => <ThreadRowItem row={row} />}
             </VList>
           </Match>
         </Switch>
@@ -835,7 +1082,8 @@ function MessageListImpl(props: MessageListProps) {
             initialScrollComplete() &&
             !dismissJumpToLatest() &&
             !showJumpToUnviewedMessages() &&
-            !isNearBottom()
+            isScrolledBackSignificantly() &&
+            isScrollingDown()
           }
         >
           <DeprecatedTextButton
@@ -863,6 +1111,7 @@ function MessageListImpl(props: MessageListProps) {
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
         setLocalTypingThreadId={setLocalTypingThreadId}
+        participants={props.participants}
       />
     </div>
   );

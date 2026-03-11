@@ -32,12 +32,6 @@ pub struct Config {
     /// API key for sync service
     pub sync_service_auth_key: String,
 
-    /// The email service URL
-    pub email_service_url: String,
-
-    /// The comms service URL
-    pub comms_service_url: String,
-
     /// The number of workers to spawn
     pub worker_count: u8,
 
@@ -83,12 +77,6 @@ impl Config {
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
 
-        let email_service_url =
-            std::env::var("EMAIL_SERVICE_URL").context("EMAIL_SERVICE_URL must be provided")?;
-
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
-
         let worker_count: u8 = std::env::var("WORKER_COUNT")
             .unwrap_or("10".to_string())
             .parse::<u8>()
@@ -109,8 +97,6 @@ impl Config {
             opensearch_password,
             document_storage_bucket,
             sync_service_auth_key,
-            email_service_url,
-            comms_service_url,
             worker_count,
             lexical_service_url,
         })

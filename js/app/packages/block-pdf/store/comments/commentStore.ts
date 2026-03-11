@@ -7,7 +7,7 @@ import {
   createBlockSignal,
   createBlockStore,
 } from '@core/block';
-import type { ThreadId } from '@core/collab/comments/commentType';
+import type { ThreadId } from '@core/comments/commentType';
 import { createMemo, createSelector } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 

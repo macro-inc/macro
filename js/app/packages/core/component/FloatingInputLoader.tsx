@@ -26,7 +26,6 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
   const successDuration = props.successDuration ?? 500;
 
   const [loaderState, setLoaderState] = createSignal<LoaderState>('hidden');
-  // Track what content to display - keeps showing success during fade-out
   const [displayState, setDisplayState] = createSignal<'loading' | 'success'>(
     'loading'
   );
@@ -47,7 +46,6 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
 
   onCleanup(clearTimeouts);
 
-  // Use on() to only react to isLoading changes, not loaderState changes
   createEffect(
     on(
       () => props.isLoading(),
@@ -69,7 +67,6 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
             setDisplayState('success');
             setLoaderState('success');
             successTimeoutId = setTimeout(() => {
-              // Keep displayState as 'success' during fade-out to prevent flash
               setLoaderState('hidden');
               loadingStartTime = null;
             }, successDuration);

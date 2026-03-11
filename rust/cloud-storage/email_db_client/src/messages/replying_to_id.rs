@@ -6,7 +6,7 @@ use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 /// Updates a single message's replying_to_id field
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn update_db_message_replying_to_id<'e, E>(
     executor: E,
     link_id: Uuid,
@@ -32,13 +32,7 @@ where
         link_id
     )
     .fetch_optional(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update replying_to_id for message {} for link_id {}",
-            message_id, link_id
-        )
-    })?;
+    .await?;
 
     // Return true if a message was updated, false otherwise
     let updated = result.is_some();
@@ -56,7 +50,7 @@ where
 
 /// Updates the replying_to_id for multiple messages belonging to a single link (typically part
 /// of the same thread)
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn update_db_messages_replying_to_ids<'e, E>(
     executor: E,
     link_id: Uuid,
@@ -89,14 +83,7 @@ where
         link_id
     )
     .execute(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to bulk update replying_to_id for {} messages for link_id {}",
-            updates.len(),
-            link_id
-        )
-    })?;
+    .await?;
 
     let rows_affected = result.rows_affected();
 
@@ -115,7 +102,7 @@ where
 /// Update the replying_to_id field of a message based on its In-Reply-To header. This can only be done
 /// after all existing messages in the message's thread have been inserted, else the message the passed
 /// message is replying to may not exist in the database yet.
-#[tracing::instrument(skip(tx, message), level = "info")]
+#[tracing::instrument(skip(tx, message), err)]
 pub async fn update_message_replying_to_from_headers(
     tx: &mut sqlx::PgConnection,
     message: &message::Message,
@@ -161,7 +148,7 @@ pub async fn update_message_replying_to_from_headers(
 /// Update the replying_to_id field of a message in a thread based on its In-Reply-To header. This can only be done
 /// after all existing messages in the message's thread have been inserted, else the message a message
 /// is replying to may not exist in the database yet.
-#[tracing::instrument(skip(tx), level = "info")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn update_thread_messages_replying_to(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,

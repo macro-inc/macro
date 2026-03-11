@@ -3,11 +3,10 @@ import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
   isBlockAlias,
+  itemToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  USE_PIXEL_BLOCK_ICONS,
-  USE_WIDE_ICONS,
-} from '@core/constant/featureFlags';
+import { match } from 'ts-pattern';
+import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
@@ -28,24 +27,6 @@ import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
 import Check from '@icon/regular/check-fat.svg';
-import PixelChat from '@macro-icons/pixel/ai.svg';
-import PixelBuilding from '@macro-icons/pixel/building.svg';
-import PixelCanvas from '@macro-icons/pixel/canvas.svg';
-import PixelChannel from '@macro-icons/pixel/channel.svg';
-import PixelCode from '@macro-icons/pixel/code.svg';
-import PixelEmail from '@macro-icons/pixel/email.svg';
-import PixelEmailRead from '@macro-icons/pixel/email-read.svg';
-import PixelFile from '@macro-icons/pixel/file.svg';
-import PixelFolder from '@macro-icons/pixel/folder-alt.svg';
-import PixelHtml from '@macro-icons/pixel/html.svg';
-import PixelImage from '@macro-icons/pixel/image.svg';
-import PixelMd from '@macro-icons/pixel/notes.svg';
-import PixelPdf from '@macro-icons/pixel/pdf.svg';
-import PixelUnknown from '@macro-icons/pixel/unknown.svg';
-import PixelUser from '@macro-icons/pixel/user.svg';
-import PixelUsers from '@macro-icons/pixel/users.svg';
-import PixelVideo from '@macro-icons/pixel/video.svg';
-import PixelWord from '@macro-icons/pixel/write.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
@@ -62,8 +43,18 @@ import WideTask from '@macro-icons/wide/task.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
 import WideVideo from '@macro-icons/wide/video.svg';
+import GlobeIcon from '@icon/duotone/globe-duotone.svg';
+import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import type {
+  EntityData,
+  ChannelEntity,
+  DocumentEntity,
+  EmailEntity,
+} from '@entity';
+import type { PreviewItem } from '@queries/preview';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -77,11 +68,9 @@ type IconConfig = {
 export type EntityWithValidIcon =
   | BlockName
   | BlockAlias
+  | ChannelType
   | 'default'
   | 'sharedProject'
-  | 'company'
-  | 'user'
-  | 'directMessage'
   | 'emailRead'
   | 'archive'
   | 'html';
@@ -111,11 +100,29 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Channel',
   },
-  company: {
+  public: {
+    icon: GlobeIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Public Channel',
+  },
+  organization: {
     icon: Building,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Company',
+    prettyName: 'Organization Channel',
+  },
+  private: {
+    icon: ThreeUsersIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Private Channel',
+  },
+  direct_message: {
+    icon: Users,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Direct Message',
   },
   email: {
     icon: Email,
@@ -207,23 +214,11 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'File',
   },
-  directMessage: {
-    icon: Users,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
-  user: {
-    icon: User,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
   emailRead: {
     icon: EmailRead,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Direct Message',
+    prettyName: 'Read Email',
   },
   task: {
     icon: Check,
@@ -258,37 +253,14 @@ function validateEntity(entity: string): EntityWithValidIcon {
   }
 }
 
-export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
-  canvas: PixelCanvas,
-  html: PixelHtml,
-  channel: PixelChannel,
-  company: PixelBuilding,
-  email: PixelEmail,
-  code: PixelCode,
-  csv: PixelCode,
-  pdf: PixelPdf,
-  md: PixelMd,
-  image: PixelImage,
-  write: PixelWord,
-  chat: PixelChat,
-  project: PixelFolder,
-  sharedProject: PixelFolder,
-  unknown: PixelUnknown,
-  archive: PixelUnknown,
-  video: PixelVideo,
-  contact: PixelUser,
-  default: PixelFile,
-  directMessage: PixelUsers,
-  user: PixelUser,
-  emailRead: PixelEmailRead,
-  task: Check,
-};
-
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  company: Building,
+  public: GlobeIcon,
+  organization: Building,
+  private: ThreeUsersIcon,
+  direct_message: WideChat,
   email: WideEmail,
   code: WideFileCode,
   csv: WideCsv,
@@ -304,8 +276,6 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   video: WideVideo,
   contact: WideUser,
   default: WideUnknown,
-  directMessage: WideChat,
-  user: WideUser,
   emailRead: WideEmail,
   task: WideTask,
 };
@@ -372,9 +342,7 @@ export function EntityIcon(props: EntityIconProps) {
 
   const config = () => ENTITY_ICON_CONFIGS[getName()];
   const icon = () => {
-    if (USE_PIXEL_BLOCK_ICONS) {
-      return PIXEL_ICONS[getName()];
-    } else if (USE_WIDE_ICONS) {
+    if (USE_WIDE_ICONS) {
       return WIDE_ICONS[getName()];
     } else {
       return config().icon;
@@ -407,7 +375,7 @@ export function CustomEntityIcon(
 ) {
   const config = () =>
     ENTITY_ICON_CONFIGS[validateEntity(props.targetType || 'default')];
-  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'sm'];
+  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
   return (
     <div
@@ -426,14 +394,42 @@ export function CustomEntityIcon(
 }
 
 export function getIconConfig(
-  targetType: EntityWithValidIcon | FileType | string
+  targetType: EntityWithValidIcon | FileType | (string & {})
 ) {
   const key = validateEntity(targetType);
   const config = { ...ENTITY_ICON_CONFIGS[key] };
-  if (USE_PIXEL_BLOCK_ICONS) {
-    config.icon = PIXEL_ICONS[key];
-  } else if (USE_WIDE_ICONS) {
+  if (USE_WIDE_ICONS) {
     config.icon = WIDE_ICONS[key];
   }
   return config;
+}
+
+type EntityIconData = Pick<EntityData, 'type'> & {
+  channelType?: ChannelEntity['channelType'];
+  fileType?: DocumentEntity['fileType'] | null;
+  subType?: DocumentEntity['subType'];
+  isRead?: EmailEntity['isRead'];
+};
+
+export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
+  const typeString = match(entity)
+    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
+    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
+    .with({ type: 'email', isRead: true }, () => 'emailRead')
+    .with({ type: 'email' }, () => 'email')
+    .otherwise((e) => e.type);
+
+  return validateEntity(typeString);
+}
+
+export function getEntityIconConfig(entity: EntityData) {
+  return getIconConfig(getEntityIconType(entity));
+}
+
+export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {
+  if (item.loading || item.access !== 'access') {
+    return 'default';
+  }
+
+  return getEntityIconType(item);
 }

@@ -1,5 +1,8 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { EntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityWithValidIcon,
+} from '@core/component/EntityIcon';
 import { OldMenu } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
@@ -7,7 +10,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
@@ -47,7 +50,7 @@ function ItemOption(props: { file: FileItem; type: ItemType }) {
       tabIndex={0}
     >
       <EntityIcon
-        targetType={props.file.type ?? (props.type as 'chat')}
+        targetType={props.file.type ?? (props.type as EntityWithValidIcon)}
         size={'sm'}
       />
       <div class="ml-2 line-clamp-1 text-ellipsis">{props.file.name}</div>
@@ -59,14 +62,14 @@ export function FileSelector() {
   const [userFiles, setUserFiles] = createSignal<
     { file: FileItem; type: string }[]
   >([]);
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const { focusCanvas } = useToolManager();
 
   const [fileSelectorOpen, setFileSelectorOpen] = createSignal(false);
 
   createEffect(async () => {
     const files: { file: FileItem; type: string }[] = [];
-    history().forEach((item) => {
+    (historyQuery.data ?? []).forEach((item) => {
       if (
         item.type === 'document' &&
         item.fileType &&

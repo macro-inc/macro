@@ -4,13 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupProjectDeletedAt } from './soupProjectDeletedAt';
 import type { SoupProjectParentId } from './soupProjectParentId';
 import type { SoupProjectViewedAt } from './soupProjectViewedAt';
 import type { SoupProperty } from './soupProperty';
 
 export interface SoupProject {
   /** The time the project was created */
-  createdAt: number;
+  createdAt: string;
+  /** The time the project was deleted */
+  deletedAt?: SoupProjectDeletedAt;
   /** The id of the project */
   id: string;
   /** The name of the project */
@@ -22,7 +25,7 @@ export interface SoupProject {
   /** Properties */
   properties: SoupProperty[];
   /** The time the project was updated */
-  updatedAt: number;
+  updatedAt: string;
   /** The time the document was last viewed */
-  viewedAt: SoupProjectViewedAt;
+  viewedAt?: SoupProjectViewedAt;
 }

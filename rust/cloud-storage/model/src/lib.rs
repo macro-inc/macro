@@ -1,4 +1,3 @@
-use chrono::serde::ts_seconds_option;
 use serde::{Deserialize, Serialize};
 pub mod activity;
 pub mod annotations;
@@ -30,9 +29,7 @@ pub mod version;
 #[serde(rename_all = "snake_case")]
 pub struct IDWithTimeStamps {
     pub id: String,
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

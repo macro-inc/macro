@@ -1,17 +1,14 @@
-use crate::messages::get::{convert_db_messages_to_service, get_messages_by_thread_id};
 use crate::parse::db_to_service;
-use anyhow::{Context, anyhow};
-use models_email::email::db;
-use models_email::email::service::thread;
 use models_email::email::service::thread::{
     ThreadProviderMap, ThreadUserInfo, UserThreadIds, UserThreadsPage,
 };
+use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
 /// gets a list of thread ids with the macro user id for the user
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_paginated_thread_ids_with_macro_user_id(
     pool: &PgPool,
     thread_limit: i64,
@@ -30,54 +27,13 @@ pub async fn get_paginated_thread_ids_with_macro_user_id(
     )
     .map(|row| (row.id, row.macro_id))
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch thread ids with macro user id")?;
+    .await?;
 
     Ok(result)
 }
 
-/// fetch thread with number of most recent messages specified by limit and offset
-#[tracing::instrument(skip(pool), err)]
-pub async fn fetch_thread_with_messages_paginated(
-    pool: &PgPool,
-    thread_db_id: Uuid,
-    offset: i64,
-    limit: i64,
-) -> anyhow::Result<Option<thread::Thread>> {
-    if offset < 0 || limit <= 0 {
-        anyhow::bail!("Offset must be non-negative and limit must be positive");
-    }
-
-    let db_thread = sqlx::query_as!(
-        db::thread::Thread,
-        r#"
-    SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
-           t.latest_inbound_message_ts, t.latest_outbound_message_ts,
-           t.latest_non_spam_message_ts, t.created_at, t.updated_at
-    FROM email_threads t
-    WHERE t.id = $1
-    "#,
-        thread_db_id,
-    )
-    .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?;
-
-    let Some(db_thread) = db_thread else {
-        return Ok(None);
-    };
-
-    let db_messages = get_messages_by_thread_id(pool, thread_db_id, offset, limit).await?;
-
-    let processed_messages = convert_db_messages_to_service(pool, db_messages).await?;
-
-    let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
-
-    Ok(Some(full_thread))
-}
-
 /// get the ids of the latest-updated threads for the user.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_latest_thread_ids_paginated(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -85,9 +41,7 @@ pub async fn get_latest_thread_ids_paginated(
     offset: i64,
 ) -> anyhow::Result<Vec<Uuid>> {
     if offset < 0 || limit <= 0 {
-        return Err(anyhow!(
-            "Offset must be non-negative and limit must be positive"
-        ));
+        anyhow::bail!("Offset must be non-negative and limit must be positive");
     }
 
     let thread_ids = sqlx::query_scalar!(
@@ -103,19 +57,13 @@ pub async fn get_latest_thread_ids_paginated(
         limit,
         offset
     )
-        .fetch_all(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch latest thread IDs for links associated with user {} with limit {} offset {}",
-                fusionauth_user_id, limit, offset
-            )
-        })?;
+    .fetch_all(pool)
+    .await?;
 
     Ok(thread_ids)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_threads_by_link_id_and_provider_ids(
     pool: &PgPool,
     link_id: Uuid,
@@ -139,13 +87,7 @@ pub async fn get_threads_by_link_id_and_provider_ids(
         &provider_ids_vec
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch threads by link_id {} and provider_ids {:?}",
-            link_id, provider_ids_vec
-        )
-    })?;
+    .await?;
 
     // Build the result map
     let thread_map = rows
@@ -157,6 +99,7 @@ pub async fn get_threads_by_link_id_and_provider_ids(
 }
 
 /// For a user, get threads where user has sent a message, paginated.
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_threads_by_user_with_outbound(
     pool: &PgPool,
     macro_user_id: &str,
@@ -194,6 +137,7 @@ pub async fn get_threads_by_user_with_outbound(
 }
 
 /// For a list of user to thread IDs, filter out threads where user has not sent a message
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_outbound_threads_by_thread_ids(
     pool: &PgPool,
     user_thread_ids: Vec<UserThreadIds>,
@@ -259,7 +203,7 @@ pub async fn get_outbound_threads_by_thread_ids(
     Ok(result)
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_provider_id_by_link_and_thread_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -275,19 +219,13 @@ pub async fn get_provider_id_by_link_and_thread_id(
         thread_db_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch provider_id for thread ID {} with link_id {}",
-            thread_db_id, link_id
-        )
-    })?
+    .await?
     .flatten();
 
     Ok(provider_id)
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_macro_id_from_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
@@ -302,19 +240,18 @@ pub async fn get_macro_id_from_thread_id(
         thread_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch macro_id for thread ID {}", thread_id))?;
+    .await?;
 
     Ok(macro_id)
 }
 
 /// Gets a single thread by ID and link_ID
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_by_id_and_link_id(
     pool: &PgPool,
     thread_id: Uuid,
     link_id: Uuid,
-) -> anyhow::Result<Option<thread::Thread>> {
+) -> anyhow::Result<Option<service::thread::Thread>> {
     // Fetch the thread record
     let db_thread = sqlx::query_as!(
         db::thread::Thread,
@@ -329,13 +266,7 @@ pub async fn get_thread_by_id_and_link_id(
         link_id,
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch thread with ID {} and link_id {}",
-            thread_id, link_id
-        )
-    })?;
+    .await?;
 
     // If no thread found, return None
     if let Some(db_thread) = db_thread {
@@ -348,7 +279,7 @@ pub async fn get_thread_by_id_and_link_id(
 }
 
 /// Returns a paginated list of thread IDs, sorting by ascending so we don't miss new ones
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_all_thread_ids_paginated(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,

@@ -1,6 +1,6 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import shortuuid from 'short-uuid';
-
+import { getWebOrigin } from './webOrigin';
 const short = shortuuid(shortuuid.constants.flickrBase58, {
   consistentLength: false,
 });
@@ -37,7 +37,7 @@ export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
   params: Record<string, any>
 ): string {
-  const urlString = `${window.location.origin}/app/${entity.type}/${entity.id}`;
+  const urlString = `${getWebOrigin()}/app/${entity.type}/${entity.id}`;
   const url = new URL(urlString);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);

@@ -26,6 +26,7 @@ import { DiffNode } from './nodes/DiffNode';
 import { DocumentCardNode } from './nodes/DocumentCardNode';
 import { DocumentMentionNode } from './nodes/DocumentMentionNode';
 import { EquationNode } from './nodes/EquationNode';
+import { SnapshotNode } from './nodes/SnapshotNode';
 import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
@@ -34,6 +35,8 @@ import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
 import { UserMentionNode } from './nodes/UserMentionNode';
 import { VideoNode } from './nodes/VideoNode';
+import { ThemeMentionNode } from './nodes/ThemeMentionNode';
+import { UnknownMentionNode } from './nodes/UnknownMentionNode';
 import { WatermarkNode } from './nodes/WatermarkNode';
 
 /**
@@ -84,6 +87,7 @@ export const SupportedNodeTypes = [
   CommentNode,
   SearchMatchNode,
   EquationNode,
+  SnapshotNode,
   HorizontalRuleNode,
   DiffNode,
   DiffInsertNode,
@@ -91,6 +95,8 @@ export const SupportedNodeTypes = [
   HtmlRenderNode,
   ClassedBlockNode,
   WatermarkNode,
+  ThemeMentionNode,
+  UnknownMentionNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [
@@ -114,6 +120,6 @@ export const RegisteredNodesByType: { [K in EditorType]: ValidNode[] } = {
   'plain-text': [ParagraphNode, TextNode],
   markdown: [...SupportedNodeTypes],
   'markdown-sync': [...SupportedNodeTypes],
-  chat: exclude([HeadingNode, ImageNode, VideoNode, DocumentCardNode]),
+  chat: exclude([HeadingNode, ImageNode, VideoNode]),
   title: [ParagraphNode, TextNode, InlineSearchNode],
 } as const;

@@ -15,7 +15,7 @@ VALUES
     'test',
     'document',
     'test',
-    NULL,
+    '{}',
     'macro|user2@user.com'
   );
 
@@ -36,7 +36,7 @@ VALUES
     'test',
     'document',
     'test',
-    NULL,
+    '{}',
     NULL
   );
 
@@ -57,7 +57,7 @@ VALUES
     'test',
     'document',
     'test',
-    NULL,
+    '{}',
     NULL
   );
 
@@ -78,7 +78,7 @@ VALUES
     'test',
     'test',
     'test',
-    NULL,
+    '{}',
     NULL
   );
 

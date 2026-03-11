@@ -13,9 +13,9 @@ export type GetMessageWithContextParams = {
   /**
    * Number of messages to fetch before the target message (defaults to 0)
    */
-  before: number;
+  before?: number;
   /**
    * Number of messages to fetch after the target message (defaults to 0)
    */
-  after: number;
+  after?: number;
 };

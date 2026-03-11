@@ -200,7 +200,7 @@ export class DateMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<DateMentionNode>(DateMentionNode);
+    const decorator = getDecorator<DateMentionDecoratorProps>(DateMentionNode);
     if (decorator) {
       return () =>
         decorator({

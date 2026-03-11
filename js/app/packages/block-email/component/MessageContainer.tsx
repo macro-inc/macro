@@ -5,30 +5,26 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
-import { isMessageFromCurrentUser } from '@block-email/util/emailUser';
+import { getSenderMacroId } from '@block-email/util/emailUser';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
-import type {
-  Attachment,
-  MessageWithBodyReplyless,
-} from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
+import type { Attachment, ApiMessage } from '@service-email/generated/schemas';
+import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isFocused: boolean;
@@ -69,12 +65,8 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   const userId = useUserId();
-  const currentUserEmail = useEmail();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
-
-  const isFromCurrentUser = createMemo(() =>
-    isMessageFromCurrentUser(props.message, currentUserEmail())
-  );
+  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
 
   const isBodyExpanded = createMemo(() => {
     return props.isExpanded;
@@ -135,8 +127,14 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const entityQueryClient = useQueryClient();
+  const { openWithSplit } = useSplitLayout();
+  const draftAttachments = createMemo(() => {
+    return props.message.attachments_draft ?? [];
+  });
+
+  const forwardedAttachments = createMemo(() => {
+    return props.message.attachments_forwarded ?? [];
+  });
 
   const onClickAttachment = async (
     attachment: Attachment,
@@ -174,15 +172,13 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
-    });
+    refetchSoupEntity(document_id, 'document');
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    replaceOrInsertSplit({
-      type: blockName,
-      id: document_id,
-    })?.activate?.();
+    openWithSplit(
+      { type: blockName, id: document_id },
+      { preferNewSplit: true }
+    );
   };
 
   const handleExpand = () => {
@@ -199,21 +195,20 @@ export function MessageContainer(props: MessageContainerProps) {
         <CollapsedMessage
           message={props.message}
           isFocused={props.isFocused}
+          isFirstMessage={props.isFirstMessage}
           onClick={handleExpand}
         />
       }
     >
       {/* Expanded message view */}
       <div class="shrink-0 flex justify-center w-full">
-        <div class="macro-message-width w-full">
+        <div class="macro-message-width macro-message-padding w-full">
           <Message
             id={props.message.db_id ?? undefined}
             focused={props.isFocused}
             isFirstMessage={props.isFirstMessage}
             isLastMessage={props.isLastMessage}
-            senderId={
-              isFromCurrentUser() ? userId() : props.message.from?.email
-            }
+            senderId={senderMacroId()}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
           >
@@ -244,35 +239,20 @@ export function MessageContainer(props: MessageContainerProps) {
                 }
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}
+                isFocused={props.isFocused}
               />
             </Message.Body>
             {/* Image attachments */}
             <Show when={imageAttachmentsWithSfs().length > 0}>
-              <Switch>
-                <Match when={imageAttachmentsWithSfs().length === 1}>
-                  <div class="max-w-[400px] w-fit mt-2">
-                    <ImagePreview
-                      image={{
-                        id: imageAttachmentsWithSfs()[0].sfs_id!,
-                      }}
-                      variant="dynamic"
-                    />
-                  </div>
-                </Match>
-                <Match when={imageAttachmentsWithSfs().length > 1}>
-                  <div class="flex flex-wrap gap-2 mt-2">
-                    <ImageGalleryPreview
-                      images={imageAttachmentsWithSfs().map((a) => ({
-                        id: a.sfs_id!,
-                      }))}
-                      variant="dynamic"
-                      attachmentIds={imageAttachmentsWithSfs().map(
-                        (a) => a.db_id!
-                      )}
-                    />
-                  </div>
-                </Match>
-              </Switch>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <ImageGalleryPreview
+                  images={imageAttachmentsWithSfs().map((a) => ({
+                    id: a.sfs_id!,
+                  }))}
+                  variant="small"
+                  attachmentIds={imageAttachmentsWithSfs().map((a) => a.db_id!)}
+                />
+              </div>
             </Show>
 
             {/* Video attachments */}
@@ -297,6 +277,37 @@ export function MessageContainer(props: MessageContainerProps) {
                       onClick={(fileType) =>
                         onClickAttachment(attachment, fileType)
                       }
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+
+            {/* Draft attachments. Needed to display attachments of sent messages before they actually get sent (undo window). */}
+            <Show
+              when={
+                draftAttachments().length > 0 ||
+                forwardedAttachments().length > 0
+              }
+            >
+              <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+                <For each={draftAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.file_name,
+                        mimeType: attachment.content_type,
+                      }}
+                    />
+                  )}
+                </For>
+                <For each={forwardedAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.filename ?? '',
+                        mimeType: attachment.mime_type ?? undefined,
+                      }}
                     />
                   )}
                 </For>

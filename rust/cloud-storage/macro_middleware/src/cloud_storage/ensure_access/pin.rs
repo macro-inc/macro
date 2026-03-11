@@ -5,7 +5,7 @@ use crate::cloud_storage::ensure_access::{
 };
 use axum::extract::FromRef;
 use axum::{
-    Extension, async_trait,
+    Extension,
     extract::{FromRequest, Path, Request},
 };
 use axum::{Json, RequestExt};
@@ -36,7 +36,6 @@ pub struct PinAccessLevelExtractor<T, V> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S, V> FromRequest<S> for PinAccessLevelExtractor<T, V>
 where
     T: BuildAccessLevel,

@@ -1,6 +1,5 @@
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { PropertyValueIcon } from './PropertyValueIcon';
@@ -8,6 +7,7 @@ import {
   AddPropertyValueButton,
   EmptyValue,
   PropertyValueDeleteButton,
+  stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
 
@@ -16,7 +16,7 @@ import {
  * Opens options modal on click
  */
 export const SelectValue: Component<PropertyValueProps> = (props) => {
-  const { saveHandler } = usePropertiesContext();
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
   const [hoveredValue, setHoveredValue] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
 
@@ -40,7 +40,7 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
         return;
       }
 
-      await saveHandler.saveProperty(props.property, {
+      await saveHandler().saveProperty(props.property, {
         valueType,
         values: newValues.length > 0 ? newValues : null,
       });

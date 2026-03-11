@@ -1,65 +1,114 @@
 import { cornerClip } from '@core/util/clipPath';
-import type { JSX, JSXElement, Ref } from 'solid-js';
+import { createMemo, splitProps, type JSX } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { cn } from '@ui/utils/classname';
 
-interface PanelProps {
-  children?: JSXElement;
+export type ClippedPanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   active?: boolean;
-  edgeMutedColor?: JSX.CSSProperties['color'];
+  edgeColor?: JSX.CSSProperties['color'];
+  /**
+   * When provided, this overrides all corner behavior:
+   * - bypasses clip-path (no corner clipping)
+   * - bypasses beveled corner logic (no signal check)
+   * - sets a uniform border-radius on both wrapper and inner panel
+   */
+  cornerRadius?: JSX.CSSProperties['border-radius'];
   tr?: boolean;
   tl?: boolean;
   bl?: boolean;
   br?: boolean;
-  ref?: Ref<HTMLDivElement>;
-}
+};
 
-export function ClippedPanel(props: PanelProps) {
+export function ClippedPanel(props: ClippedPanelProps) {
+  const [local, rest] = splitProps(props, [
+    'active',
+    'edgeColor',
+    'cornerRadius',
+    'tr',
+    'tl',
+    'br',
+    'bl',
+    'children',
+    'class',
+  ]);
+
+  const outerBgImage = createMemo(() => {
+    const edge = local.edgeColor || 'var(--color-edge-muted)';
+    return `linear-gradient(${
+      local.active ? `var(--color-accent), ${edge} 80%` : edge
+    } )`;
+  });
+
+  const useCornerRadiusOverride = createMemo(() => local.cornerRadius != null);
+
+  const clipEnabled = createMemo(() => {
+    if (useCornerRadiusOverride()) return false;
+    return !beveledCorners();
+  });
+
+  const outerClipPath = createMemo(() => {
+    if (!clipEnabled()) return '';
+    return cornerClip(
+      local.tl ? '0.5rem' : 0,
+      local.tr ? '0.5rem' : 0,
+      local.br ? '0.5rem' : 0,
+      local.bl ? '0.5rem' : 0
+    );
+  });
+
+  const innerClipPath = createMemo(() => {
+    if (!clipEnabled()) return '';
+    return cornerClip(
+      local.tl ? 'calc(0.5rem - 0.5px)' : 0,
+      local.tr ? 'calc(0.5rem - 0.5px)' : 0,
+      local.br ? 'calc(0.5rem - 0.5px)' : 0,
+      local.bl ? 'calc(0.5rem - 0.5px)' : 0
+    );
+  });
+
+  const outerBorderRadius = createMemo(() => {
+    if (useCornerRadiusOverride()) return local.cornerRadius;
+    if (!beveledCorners()) return '0';
+    return `
+            ${local.tl ? '16px' : '4px'}
+            ${local.tr ? '16px' : '4px'}
+            ${local.br ? '16px' : '4px'}
+            ${local.bl ? '16px' : '4px'}
+          `;
+  });
+
+  const innerBorderRadius = createMemo(() => {
+    if (useCornerRadiusOverride()) return `calc(${local.cornerRadius} - 0.5px)`;
+    if (!beveledCorners()) return '0';
+    return `
+              ${local.tl ? '15.5px' : '3.3px'}
+              ${local.tr ? '15.5px' : '3.3px'}
+              ${local.br ? '15.5px' : '3.3px'}
+              ${local.bl ? '15.5px' : '3.3px'}
+            `;
+  });
+
   return (
     <div
       style={{
-        'background-image': `linear-gradient(${props.active ? `var(--color-accent), ${props.edgeMutedColor || 'var(--color-edge-muted)'} 80%` : `${props.edgeMutedColor || 'var(--color-edge-muted)'}`} )`,
-        'clip-path': !beveledCorners()
-          ? cornerClip(
-              props.tl ? '0.5rem' : 0,
-              props.tr ? '0.5rem' : 0,
-              props.br ? '0.5rem' : 0,
-              props.bl ? '0.5rem' : 0
-            )
-          : '',
-        'border-radius': beveledCorners()
-          ? `
-            ${props.tl ? '16px' : '4px'}
-            ${props.tr ? '16px' : '4px'}
-            ${props.br ? '16px' : '4px'}
-            ${props.bl ? '16px' : '4px'}
-          `
-          : '0',
+        'background-image': outerBgImage(),
+        'clip-path': outerClipPath(),
+        'border-radius': outerBorderRadius(),
       }}
       class="p-px h-full w-full box-border"
     >
       <div
         style={{
-          'clip-path': !beveledCorners()
-            ? cornerClip(
-                props.tl ? 'calc(0.5rem - 0.5px)' : 0,
-                props.tr ? 'calc(0.5rem - 0.5px)' : 0,
-                props.br ? 'calc(0.5rem - 0.5px)' : 0,
-                props.bl ? 'calc(0.5rem - 0.5px)' : 0
-              )
-            : '',
-          'border-radius': beveledCorners()
-            ? `
-              ${props.tl ? '15.5px' : '3.3px'}
-              ${props.tr ? '15.5px' : '3.3px'}
-              ${props.br ? '15.5px' : '3.3px'}
-              ${props.bl ? '15.5px' : '3.3px'}
-            `
-            : '0',
+          'clip-path': innerClipPath(),
+          'border-radius': innerBorderRadius(),
         }}
-        class="h-full w-full box-border overflow-hidden bg-panel"
-        ref={props.ref}
+        class={cn(
+          'h-full w-full box-border overflow-hidden bg-panel',
+          local.class
+        )}
+        {...rest}
       >
-        {props.children}
+        {local.children}
       </div>
     </div>
   );

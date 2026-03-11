@@ -12,6 +12,7 @@ import { invalidateUserInfo } from '@queries/auth/user-info';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
@@ -115,7 +116,7 @@ function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
 function connectEmail(): ResultAsync<void, TimeoutError> {
   openEmailAuthPopup({
     idpName: 'google_gmail',
-    returnPath: '/app/login/popup/success',
+    returnPath: `${ROUTER_BASE_CONCAT}login/popup/success`,
   });
 
   return authenticateWithEmailPermissions();

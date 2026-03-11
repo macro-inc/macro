@@ -7,4 +7,5 @@ pub mod get_dm;
 pub mod get_mentions_for_channel;
 pub mod get_private;
 pub mod patch_channel;
+pub mod seed_channel;
 pub mod updated_at;

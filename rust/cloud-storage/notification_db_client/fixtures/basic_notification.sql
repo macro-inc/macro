@@ -16,7 +16,7 @@ VALUES
     'item-123',
     'document',
     'test-service',
-    NULL,
+    '{}',
     'macro|user@user.com',
     NULL
   );

@@ -2,15 +2,15 @@ import type { IHighlight } from '@block-pdf/model/Highlight';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { structuredOutputCompletion } from '@core/client/structuredOutput';
+import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
+// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
-import { blockMetadataSignal } from '@core/signal/load';
-import { createFromMarkdownText } from '@core/util/md';
+import { createMarkdownFile } from '@core/util/create';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -95,10 +95,10 @@ function LoadingContent(props: { lines: number }) {
 }
 
 export function PDFPopup(props: PDFPopupProps) {
-  const isAuthenticated = useIsAuthenticated();
+  const _isAuthenticated = useIsAuthenticated();
 
   const blockId = useBlockId();
-  const [completion, setCompletion] = PDFPopupCompletionSignal;
+  const [completion, _setCompletion] = PDFPopupCompletionSignal;
   const isGenerating = () => completion()?.status !== 'completed';
 
   const [copied, setCopied] = createSignal(false);
@@ -116,7 +116,7 @@ export function PDFPopup(props: PDFPopupProps) {
     }
   });
 
-  const selectedText = createMemo(() => {
+  const _selectedText = createMemo(() => {
     const currentSelection = PDFPopupSelectedTextSignal();
     if (currentSelection && currentSelection.length > 0) {
       return currentSelection;
@@ -162,41 +162,7 @@ export function PDFPopup(props: PDFPopupProps) {
     }
   };
 
-  async function generateTitleForMarkdown(markdownText: string) {
-    try {
-      const schema = {
-        type: 'object',
-        properties: {
-          title: {
-            type: 'string',
-            description:
-              'A concise and informative title that describes the following text excerpt',
-          },
-        },
-        required: ['title'],
-        additionalProperties: false,
-      };
-
-      const result = await structuredOutputCompletion(
-        `Generate a concise and informative title that describes the following markdown text:\n\n${markdownText}`,
-        schema,
-        'markdown_title_generator'
-      );
-
-      if (
-        typeof result === 'object' &&
-        result !== null &&
-        'title' in result &&
-        typeof result.title === 'string'
-      ) {
-        return result.title;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return undefined;
-  }
-
+  const name = useBlockDocumentName();
   const handleEditInMarkdown = createCallback(async () => {
     setIsLoading(true);
     const content = completion()?.content;
@@ -204,21 +170,14 @@ export function PDFPopup(props: PDFPopupProps) {
       return;
     }
 
-    const title: string | undefined = await generateTitleForMarkdown(content);
-    const maybeDoc = await createFromMarkdownText({
-      markdown: content,
-      title: title ?? `${blockMetadataSignal()?.documentName} - AI Explanation`,
-      preserveNewLines: false,
+    const title = await generateTitle(content);
+    const documentId = await createMarkdownFile({
+      content,
+      title: title ?? `${name()} - AI Explanation`,
     });
 
-    if ('error' in maybeDoc) {
-      console.error('Error opening AI message in Notes', maybeDoc.error);
-      setIsLoading(false);
-      return;
-    }
-
-    const documentId = maybeDoc.documentId;
     if (!documentId) {
+      console.error('Error opening AI message in Notes');
       setIsLoading(false);
       return;
     }
@@ -256,16 +215,16 @@ export function PDFPopup(props: PDFPopupProps) {
     return (
       <>
         <div class="flex flex-row items-center space-x-2 justify-between w-full">
-          <Show when={isAuthenticated() && !!selectedText() && props.aiProps}>
-            {(aiProps) => (
-              <AskAi
-                attachmentId={aiProps().attachmentId}
-                blockName="pdf"
-                setCompletion={setCompletion}
-                selectedText={selectedText()!}
-              />
-            )}
-          </Show>
+          {/*<Show when={isAuthenticated() && !!selectedText() && props.aiProps}>
+						{(aiProps) => (
+							<AskAi
+								attachmentId={aiProps().attachmentId}
+								blockName="pdf"
+								setCompletion={setCompletion}
+								selectedText={selectedText()!}
+							/>
+						)}
+					</Show>*/}
           <div class="flex flex-row space-x-2 items-center">
             <Show when={completion() && props.insertProps}>
               {(insertProps) => (

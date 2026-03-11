@@ -48,9 +48,7 @@ pub(crate) async fn fetch_google_public_keys(
     }
 
     if keys_map.is_empty() {
-        return Err(anyhow::anyhow!(
-            "No valid RSA keys found in Google JWKS response"
-        ));
+        anyhow::bail!("No valid RSA keys found in Google JWKS response");
     }
 
     Ok(GooglePublicKeys {

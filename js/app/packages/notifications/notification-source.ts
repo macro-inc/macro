@@ -86,7 +86,9 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
-  const notifications = createMemo(() => notificationsQuery.data ?? []);
+  const notifications = createMemo(() =>
+    notificationsQuery.isSuccess ? notificationsQuery.data : []
+  );
 
   const notificationsByEntity = createMemo(() => {
     const data = notifications();

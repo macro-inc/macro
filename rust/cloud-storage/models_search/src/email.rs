@@ -1,4 +1,5 @@
 use crate::{MatchType, SearchHighlight, SearchOn};
+use chrono::{DateTime, Utc};
 use item_filters::EmailFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -27,12 +28,19 @@ pub struct EmailSearchResult {
     pub labels: Vec<String>,
     /// When the email message was sent
     /// This is only present if the search result is on the message content
-    pub sent_at: Option<i64>,
+    pub sent_at: Option<DateTime<Utc>>,
     /// The highlights for the email message
     pub highlight: SearchHighlight,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
+}
+
+/// A participant (sender) in an email thread
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema, Clone)]
+pub struct EmailSearchParticipant {
+    pub email: String,
+    pub name: Option<String>,
 }
 
 /// A single response item, part of the EmailSearchResponse object
@@ -57,6 +65,8 @@ pub struct EmailSearchResponseItem {
     /// The search results for the document
     /// This may be empty if the search result match was on the email subject only
     pub email_message_search_results: Vec<EmailSearchResult>,
+    /// The participants (senders) in this email thread
+    pub participants: Vec<EmailSearchParticipant>,
 }
 
 /// EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these
@@ -64,10 +74,14 @@ pub struct EmailSearchResponseItem {
 /// every time the thread updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EmailSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
     pub snippet: Option<String>,
+    pub is_read: bool,
+    pub inbox_visible: bool,
+    pub is_draft: bool,
+    pub is_important: bool,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
 }
@@ -143,7 +157,8 @@ pub struct SimpleEmailSearchResponseBaseItem<T> {
     pub highlight: SearchHighlight,
 }
 
-pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::TimestampSeconds>;
+pub type SimpleEmailSearchResponseItem =
+    SimpleEmailSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleEmailSearchResponse {

@@ -86,11 +86,11 @@ export function Content(props: ComponentProps<typeof Dialog.Content<'div'>>) {
   return (
     <Dialog.Content
       {...props}
-      class={`absolute z-modal
-              min-w-96 p-3
+      class={`absolute z-modal min-w-[calc(100vw-2rem)]
+              @sm:min-w-96 p-3
               bg-dialog shadow
               rounded-lg border border-edge
-              flex-col justify-start items-end inline-flex gap-3
+              flex-col justify-start inline-flex gap-3
               duration-slow
               data-open:animate-in
               data-open:fade-in-0 data-open:zoom-in-95
@@ -130,7 +130,7 @@ export function ButtonBar(props: ComponentProps<'div'>) {
   return (
     <div
       {...props}
-      class={`pt-3 justify-start items-start gap-3 inline-flex ${props.class}`}
+      class={`pt-3 justify-start items-start self-end gap-3 inline-flex ${props.class}`}
     >
       {props.children}
     </div>

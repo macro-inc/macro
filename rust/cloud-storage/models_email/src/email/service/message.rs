@@ -2,11 +2,10 @@ use crate::db;
 use crate::email::service::address::ContactInfo;
 use crate::email::service::attachment::Attachment;
 use crate::email::service::label::{LabelInfo, system_labels};
-use crate::service::attachment::{AttachmentDraft, AttachmentMacro, AttachmentToSend};
+use crate::service::attachment::{AttachmentDraft, AttachmentForwarded, AttachmentToSend};
 use crate::service::body_parsing::body_parsed::{
     get_body_parsed_for_message, get_body_parsed_linkless_for_message,
 };
-use crate::service::body_parsing::body_replyless::get_body_replyless_for_message;
 use crate::service::label::Label;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,11 +50,11 @@ pub struct ParsedSearchMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Message {
     // the uuid we generated for the message in our database
-    pub db_id: Option<Uuid>,
+    pub db_id: Uuid,
     // the id the user's provider (i.e. gmail) uses to identify the message
     pub provider_id: Option<String>,
     // the uuid we generated for the message's thread in the database
-    pub thread_db_id: Option<Uuid>,
+    pub thread_db_id: Uuid,
     // the id the user's provider (i.e. gmail) uses to identify the thread
     pub provider_thread_id: Option<String>,
     // the db id of the specific message this message is replying to (if any)
@@ -86,9 +85,10 @@ pub struct Message {
     pub body_html_sanitized: Option<String>,
     pub body_macro: Option<String>,
     pub attachments: Vec<Attachment>,
-    pub attachments_macro: Vec<AttachmentMacro>,
     /// Uploaded file attachments for the message, if it is a draft
     pub attachments_draft: Vec<AttachmentDraft>,
+    /// Forwarded attachments from original messages, if it is a draft
+    pub attachments_forwarded: Vec<AttachmentForwarded>,
     pub headers_json: Option<JsonValue>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -105,7 +105,11 @@ pub struct MessageWithBodyReplyless {
 impl From<Message> for MessageWithBodyReplyless {
     fn from(message: Message) -> Self {
         Self {
-            body_replyless: get_body_replyless_for_message(&message),
+            body_replyless: email_utils::body_replyless::compute_body_replyless(
+                message.subject.as_deref(),
+                message.body_html_sanitized.as_deref(),
+                message.body_text.as_deref(),
+            ),
             inner: message,
         }
     }
@@ -115,9 +119,9 @@ impl From<MessageWithBodyReplyless> for ParsedMessage {
     fn from(msg: MessageWithBodyReplyless) -> Self {
         Self {
             body_parsed: get_body_parsed_for_message(&msg),
-            db_id: msg.inner.db_id.unwrap_or_default(),
+            db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,
-            thread_db_id: msg.inner.thread_db_id.unwrap_or_default(),
+            thread_db_id: msg.inner.thread_db_id,
             subject: msg.inner.subject,
             from: msg.inner.from,
             to: msg.inner.to,
@@ -141,9 +145,9 @@ impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
     fn from(msg: MessageWithBodyReplyless) -> Self {
         Self {
             body_parsed_linkless: get_body_parsed_linkless_for_message(&msg),
-            db_id: msg.inner.db_id.unwrap_or_default(),
+            db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,
-            thread_db_id: msg.inner.thread_db_id.unwrap_or_default(),
+            thread_db_id: msg.inner.thread_db_id,
             subject: msg.inner.subject,
             from: msg.inner.from,
             to: msg.inner.to,
@@ -284,7 +288,6 @@ pub struct MessageToSend {
     pub body_html: Option<String>,
     pub body_macro: Option<String>,
     pub attachments: Option<Vec<AttachmentToSend>>,
-    pub attachments_macro: Option<Vec<AttachmentMacro>>,
     pub headers_json: Option<JsonValue>,
     pub send_time: Option<DateTime<Utc>>,
 }
@@ -331,6 +334,10 @@ pub struct ThreadHistoryInfo {
     /// The pretty sender of the latest email in the thread.
     /// This could be the sender's email if there is no contact name for the sender.
     pub pretty_sender: String,
+    pub is_read: bool,
+    pub inbox_visible: bool,
+    pub is_draft: bool,
+    pub is_important: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

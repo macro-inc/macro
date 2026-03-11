@@ -115,23 +115,26 @@ pub struct Config {
     pub connection_gateway_url: String,
 
     // The URL for cloudfront
-    pub cloudfront_distribution_url: String,
+    pub email_service_cloudfront_distribution_url: String,
 
     // The secret for the cloudfront private key
-    pub cloudfront_signer_private_key: LocalOrRemoteSecret<CloudfrontSignerPrivateKey>,
+    pub email_service_cloudfront_signer_private_key:
+        LocalOrRemoteSecret<EmailServiceCloudfrontSignerPrivateKey>,
 
     // The public key for cloudfront
-    pub cloudfront_signer_public_key_id: String,
+    pub email_service_cloudfront_signer_public_key_id: String,
 
     // How long presigned urls should be valid for attachments
-    pub presigned_url_ttl_secs: u64,
+    pub email_service_presigned_url_ttl_secs: u64,
 }
 
-env_var! { pub struct CloudfrontSignerPrivateKey; }
+env_var! { pub struct EmailServiceCloudfrontSignerPrivateKey; }
 
 impl Config {
     pub fn from_env(
-        cloudfront_signer_private_key: LocalOrRemoteSecret<CloudfrontSignerPrivateKey>,
+        email_service_cloudfront_signer_private_key: LocalOrRemoteSecret<
+            EmailServiceCloudfrontSignerPrivateKey,
+        >,
     ) -> anyhow::Result<Self> {
         let database_url =
             std::env::var("MACRO_DB_URL").context("MACRO_DB_URL must be provided")?;
@@ -267,16 +270,19 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let cloudfront_distribution_url = std::env::var("CLOUDFRONT_DISTRIBUTION_URL")
-            .context("CLOUDFRONT_DISTRIBUTION_URL must be provided")?;
+        let email_service_cloudfront_distribution_url =
+            std::env::var("EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")
+                .context("EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL must be provided")?;
 
-        let cloudfront_signer_public_key_id = std::env::var("CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")
-            .context("CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
+        let email_service_cloudfront_signer_public_key_id =
+            std::env::var("EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")
+                .context("EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
 
-        let presigned_url_ttl_secs: u64 = std::env::var("PRESIGNED_URL_TTL_SECS")
-            .unwrap_or("3600".to_string())
-            .parse::<u64>()
-            .unwrap();
+        let email_service_presigned_url_ttl_secs: u64 =
+            std::env::var("EMAIL_SERVICE_PRESIGNED_URL_TTL_SECS")
+                .unwrap_or("3600".to_string())
+                .parse::<u64>()
+                .unwrap();
 
         Ok(Config {
             macro_db_url: database_url,
@@ -314,10 +320,10 @@ impl Config {
             static_file_service_url,
             document_storage_service_url,
             connection_gateway_url,
-            cloudfront_distribution_url,
-            cloudfront_signer_public_key_id,
-            cloudfront_signer_private_key,
-            presigned_url_ttl_secs,
+            email_service_cloudfront_distribution_url,
+            email_service_cloudfront_signer_public_key_id,
+            email_service_cloudfront_signer_private_key,
+            email_service_presigned_url_ttl_secs,
         })
     }
 }

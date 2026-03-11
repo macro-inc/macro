@@ -1,12 +1,15 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { makeMarkDoneAction } from '@app/component/next-soup/actions';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { URL_PARAMS } from '@block-email/constants';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import {
@@ -15,18 +18,17 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
-import {
-  createEffectOnEntityTypeNotification,
-  isNewEmail,
-} from '@notifications';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { emailKeys } from '@queries/email/keys';
+import { queryClient } from '@queries/client';
 import type {
-  APIThread,
+  ApiThread,
   ContactInfo,
-  MessageWithBodyReplyless,
+  ApiMessage,
 } from '@service-email/generated/schemas';
 import { useSearchParams } from '@solidjs/router';
 import {
@@ -36,11 +38,24 @@ import {
   createMemo,
   createSignal,
   type FlowProps,
+  onCleanup,
   Suspense,
   untrack,
   useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+
+/**
+ * Tracks thread IDs that had a draft saved since the last query fetch.
+ * When the EmailProvider unmounts, threads in this set have their query
+ * cache cleared so the next visit fetches fresh data (with the draft).
+ * This avoids touching the active query during draft save, which would
+ * trigger Suspense DOM detach and reset scroll position.
+ */
+const draftSavedThreadIds = new Set<string>();
+export function markThreadDraftSaved(threadId: string) {
+  draftSavedThreadIds.add(threadId);
+}
 
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
@@ -54,16 +69,14 @@ export type EmailContextValues = {
   onRecipientsChange: (items: EmailRecipient[]) => void;
 
   drafts: {
-    getDraftForMessage: (
-      messageDbID: string
-    ) => MessageWithBodyReplyless | undefined;
+    getDraftForMessage: (messageDbID: string) => ApiMessage | undefined;
     deleteDraftForMessage: (messageDbID: string) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
   messages: {
-    unfiltered: Accessor<MessageWithBodyReplyless[]>;
-    list: Accessor<MessageWithBodyReplyless[]>;
+    unfiltered: Accessor<ApiMessage[]>;
+    list: Accessor<ApiMessage[]>;
     targetMessageID: Accessor<string | undefined>;
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
@@ -74,7 +87,7 @@ export type EmailContextValues = {
     replyingToMessageId: Accessor<string | undefined>;
     setReplyingToMessageId: (id: string | undefined) => void;
   };
-  thread: Accessor<APIThread | undefined>;
+  thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
     type: Permissions;
     isOwner: boolean;
@@ -119,7 +132,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         });
 
         const filtered = [];
-        const messageDraftMap: Record<string, MessageWithBodyReplyless> = {};
+        const messageDraftMap: Record<string, ApiMessage> = {};
 
         for (const message of messages) {
           if (!message.is_draft) {
@@ -154,9 +167,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     notificationSource,
     'email',
     (notification) => {
-      if (!isNewEmail(notification)) return;
-      const notificationThreadId = notification.notificationMetadata.threadId;
-      if (notificationThreadId === threadQuery.data?.db_id) {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'new_email') return;
+      if (meta.content.threadId === threadQuery.data?.db_id) {
         threadQuery.refetch();
       }
     }
@@ -197,7 +210,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   });
 
   const [messageDraftMap, setMessageDraftMap] = createStore<
-    Record<string, MessageWithBodyReplyless | undefined>
+    Record<string, ApiMessage | undefined>
   >({});
 
   const deleteDraftForMessage = (messageID: string) => {
@@ -251,7 +264,12 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     const optionsMap = new Map<string, EmailRecipient>();
 
     for (const contact of contacts()) {
-      const mapped = recipientEntityMapper('user')(contact);
+      const mapped = recipientEntityMapper('contact')({
+        type: 'extracted',
+        email: contact.email,
+        id: contact.id,
+        name: contact.name,
+      });
       optionsMap.set(mapped.data.email, mapped);
     }
 
@@ -276,11 +294,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       });
 
       for (const value of seen.values()) {
-        const mapped = recipientEntityMapper('contact')({
-          ...value,
-          type: 'extracted',
-          id: value.email,
-        });
+        const mapped = convertContactInfoToEmailRecipient(value);
         optionsMap.set(mapped.data.email, mapped);
       }
     }
@@ -293,12 +307,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return Array.from(optionsMap.values());
   };
 
-  const {
-    soupContext: {
-      entitiesSignal: [entities],
-      actionRegistry,
-    },
-  } = useSplitPanelOrThrow();
+  const soup = useMaybeSoup();
+
+  const userId = useUserId();
+
+  const markAsDoneAction = makeMarkDoneAction({
+    notificationSource: () => notificationSource,
+    userId,
+  });
 
   const archiveMutation = useArchiveThreadMutation({
     onError: () => {
@@ -318,12 +334,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!props) return false;
 
-    const selectedEntity = entities()?.find(
-      (entity) => entity.id === thread.db_id
-    );
+    const selectedEntity = soup?.items.get(thread.db_id);
 
     if (selectedEntity) {
-      actionRegistry.execute('mark_as_done', selectedEntity);
+      if (soup) {
+        markAsDoneAction.executeWithSoup([selectedEntity], soup);
+      } else {
+        markAsDoneAction.execute([selectedEntity]);
+      }
     } else {
       archiveMutation.mutate({
         threadId: thread.db_id,
@@ -426,6 +444,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       messagesListRef()?.scrollBy({ top: diff });
     });
   };
+
+  // When the provider unmounts (user navigates away), clear the thread query
+  // cache if a draft was saved during this session. This ensures the next visit
+  // fetches fresh data from the server (which includes the saved draft).
+  // We can't invalidate/refetch while mounted because any query state change
+  // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
+  // DOM detach, which resets scroll position.
+  onCleanup(() => {
+    if (draftSavedThreadIds.has(props.threadID)) {
+      draftSavedThreadIds.delete(props.threadID);
+      queryClient.removeQueries({
+        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
+      });
+    }
+  });
 
   return (
     <Suspense>

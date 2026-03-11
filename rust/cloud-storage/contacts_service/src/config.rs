@@ -14,6 +14,8 @@ pub struct Config {
     pub queue_max_messages: i32,
     /// The notification queue wait time seconds
     pub queue_wait_time_seconds: i32,
+    /// Connection gateway URL for sending real-time notifications
+    pub connection_gateway_url: Option<String>,
 }
 
 impl Config {
@@ -39,6 +41,8 @@ impl Config {
             .parse::<i32>()
             .unwrap();
 
+        let connection_gateway_url = std::env::var("CONNECTION_GATEWAY_URL").ok();
+
         let environment = Environment::new_or_prod();
 
         Ok(Config {
@@ -48,6 +52,7 @@ impl Config {
             queue_url,
             queue_wait_time_seconds,
             queue_max_messages,
+            connection_gateway_url,
         })
     }
 
@@ -60,6 +65,7 @@ impl Config {
             queue_url: "".to_string(),
             queue_max_messages: 0,
             queue_wait_time_seconds: 0,
+            connection_gateway_url: None,
         }
     }
 }

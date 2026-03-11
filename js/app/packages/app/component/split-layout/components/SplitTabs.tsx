@@ -1,4 +1,3 @@
-import { playSound } from '@app/util/sound';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
@@ -95,18 +94,8 @@ export function SplitTabs(props: {
     updateClipIndicators();
   });
 
-  // Play sound when tab changes
-  let previousActive: ViewId | undefined;
-  createEffect(() => {
-    const currentActive = props.active();
-    if (previousActive !== undefined && previousActive !== currentActive) {
-      playSound('open');
-    }
-    previousActive = currentActive;
-  });
-
   return (
-    <div class="touch:mobile-width:hidden relative isolate h-full shrink grow-2 @container-normal">
+    <div class="mobile:hidden relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
       <div
         class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"

@@ -8,11 +8,11 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import { utf8Encode } from '@core/util/string';
 import { storageServiceClient } from '@service-storage/client';
-import { refetchHistory } from '@service-storage/history';
-import { refetchResources } from '@service-storage/util/refetchResources';
+import { refetchHistory } from '@queries/history/history';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
+import { createRenameDssEntityMutation } from '@macro-entity';
 
 export const useBlockSave = () => {
   const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);
@@ -45,16 +45,18 @@ export function useSaveMarkdownDocument() {
 
 export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
+  const renameMutation = createRenameDssEntityMutation();
 
-  return createCallback(async (documentName: string) => {
-    const result = await storageServiceClient.editDocument({
-      documentId,
-      documentName,
+  return async (newName: string, oldName: string) => {
+    await renameMutation.mutateAsync({
+      entity: {
+        type: 'document',
+        name: oldName,
+        id: documentId,
+      },
+      newName,
     });
-    if (isErr(result)) return;
-
-    refetchResources();
-  });
+  };
 }
 
 export function useDownloadDocumentAsMarkdownText() {

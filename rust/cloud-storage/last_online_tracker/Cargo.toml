@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "last_online_tracker"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }

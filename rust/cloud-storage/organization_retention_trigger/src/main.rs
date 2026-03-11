@@ -49,10 +49,7 @@ async fn main() -> Result<(), Error> {
     let organization_retention_queue = std::env::var("ORGANIZATION_RETENTION_QUEUE")
         .context("ORGANIZATION_RETENTION_QUEUE must be set")?;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
+        &macro_aws_config::get_macro_aws_config().await,
     ))
     .organization_retention_queue(&organization_retention_queue);
 

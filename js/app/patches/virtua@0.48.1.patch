@@ -1,13 +1,34 @@
+diff --git a/node_modules/virtua/.bun-tag-15612e2a041760f2 b/.bun-tag-15612e2a041760f2
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-172fdc1cd9f249d3 b/.bun-tag-172fdc1cd9f249d3
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-24dd483730732e6d b/.bun-tag-24dd483730732e6d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-2824fc852a5fa84f b/.bun-tag-2824fc852a5fa84f
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-3f7fdc11113d6518 b/.bun-tag-3f7fdc11113d6518
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-642a2a583764625e b/.bun-tag-642a2a583764625e
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-69ffcae45e968edb b/.bun-tag-69ffcae45e968edb
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-943ab1ac08ad6c4 b/.bun-tag-943ab1ac08ad6c4
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-a52dba5b35f86f0d b/.bun-tag-a52dba5b35f86f0d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-b5e5cc1416c6ecd6 b/.bun-tag-b5e5cc1416c6ecd6
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-c5121815fed5cc5b b/.bun-tag-c5121815fed5cc5b
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-dc314e50881f3a5e b/.bun-tag-dc314e50881f3a5e
@@ -17,7 +38,7 @@ diff --git a/node_modules/virtua/.bun-tag-eeedd702ea82f0a5 b/.bun-tag-eeedd702ea
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
-index 84788e713100b0e5a746bae3411a789002b42b8d..032896f69f7806c829bbbcf2e0c762b9868a5449 100644
+index 84788e713100b0e5a746bae3411a789002b42b8d..48b8b9c36ee3b7d97fa356f26d0d1e29098610b2 100644
 --- a/lib/solid/index.jsx
 +++ b/lib/solid/index.jsx
 @@ -819,9 +819,9 @@ const createScroller = (store, isHorizontal) => {
@@ -41,3 +62,50 @@ index 84788e713100b0e5a746bae3411a789002b42b8d..032896f69f7806c829bbbcf2e0c762b9
          },
          _unobserve(e) {
              ro.unobserve(e);
+@@ -1084,7 +1084,9 @@ const createResizeObserver = (cb) => {
+  */
+ const createResizer = (store, isHorizontal) => {
+     let viewportElement;
++    let containerElement;
+     const sizeKey = isHorizontal ? "width" : "height";
++    const scrollOffsetKey = isHorizontal ? "scrollLeft" : "scrollTop";
+     const mountedIndexes = new WeakMap();
+     const resizeObserver = createResizeObserver((entries) => {
+         const resizes = [];
+@@ -1092,10 +1094,14 @@ const createResizer = (store, isHorizontal) => {
+             // Skip zero-sized rects that may be observed under `display: none` style
+             if (!target.offsetParent)
+                 continue;
++
++      const scrollOffset = viewportElement[scrollOffsetKey]
++
+             if (target === viewportElement) {
+                 store.$update(ACTION_VIEWPORT_RESIZE, contentRect[sizeKey]);
+-            }
+-            else {
++            } else if (target === containerElement && normalizeScrollOffset(scrollOffset, scrollOffset < 0) !== store.$getScrollOffset()) {
++                store.$update(ACTION_SCROLL, normalizeScrollOffset(scrollOffset, scrollOffset < 0));
++            } else {
+                 const index = mountedIndexes.get(target);
+                 if (index != NULL) {
+                     resizes.push([index, contentRect[sizeKey]]);
+@@ -1107,8 +1113,9 @@ const createResizer = (store, isHorizontal) => {
+         }
+     });
+     return {
+-        $observeRoot(viewport) {
++        $observeRoot(container, viewport) {
+             resizeObserver._observe((viewportElement = viewport));
++            resizeObserver._observe((containerElement = container));
+         },
+         $observeItem: (el, i) => {
+             mountedIndexes.set(el, i);
+@@ -1389,7 +1396,7 @@ const Virtualizer = (props) => {
+             });
+         }
+         const scrollable = props.scrollRef || containerRef.parentElement;
+-        resizer.$observeRoot(scrollable);
++        resizer.$observeRoot(containerRef, scrollable);
+         scroller.$observe(scrollable);
+         onCleanup(() => {
+             if (props.ref) {

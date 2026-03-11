@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "cloud-storage-infra",
@@ -58,10 +59,6 @@
       "name": "cloud-storage-service-stack",
       "version": "0.0.0",
     },
-    "stacks/comms-service": {
-      "name": "comms-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/connection-gateway": {
       "name": "connection-gateway-stack",
       "version": "0.0.0",
@@ -72,10 +69,6 @@
     },
     "stacks/convert-service": {
       "name": "convert-service-stack",
-      "version": "0.0.0",
-    },
-    "stacks/delete-document-worker": {
-      "name": "delete-document-worker-stack",
       "version": "0.0.0",
     },
     "stacks/deleted-item-poller": {
@@ -114,10 +107,6 @@
       "name": "email-suppression-stack",
       "version": "0.0.0",
     },
-    "stacks/experiment-service": {
-      "name": "experiment-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/fusion-auth": {
       "name": "fusion-auth",
       "version": "0.0.0",
@@ -129,8 +118,16 @@
         "pulumi-fusionauth": "6.0.2",
       },
     },
+    "stacks/image-proxy-service": {
+      "name": "image-proxy-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
+      "version": "0.0.0",
+    },
+    "stacks/macrodb": {
+      "name": "macrodb-stack",
       "version": "0.0.0",
     },
     "stacks/notification-service": {
@@ -145,24 +142,12 @@
       "name": "organization-retention-stack",
       "version": "0.0.0",
     },
-    "stacks/organization-service": {
-      "name": "organization-service-stack",
-      "version": "0.0.0",
-    },
-    "stacks/properties-service": {
-      "name": "properties-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/search-event-queue": {
       "name": "search-event-queue-stack",
       "version": "0.0.0",
     },
     "stacks/search-processing-service": {
       "name": "search-processing-service-stack",
-      "version": "0.0.0",
-    },
-    "stacks/search-service": {
-      "name": "search-service-stack",
       "version": "0.0.0",
     },
     "stacks/search-text-extractor-queue": {
@@ -175,10 +160,6 @@
     },
     "stacks/sha-cleanup": {
       "name": "cloud-storage-sha-cleanup-stack",
-      "version": "0.0.0",
-    },
-    "stacks/sha-ref-count-resetter": {
-      "name": "sha-ref-count-resetter-stack",
       "version": "0.0.0",
     },
     "stacks/static-file-service": {
@@ -589,8 +570,6 @@
 
     "common-ancestor-path": ["common-ancestor-path@1.0.1", "", {}, "sha512-L3sHRo1pXXEqX8VU28kfgUY+YGsk09hPqZiZmLacNib6XNTCM8ubYeT7ryXQw8asB1sKgcU5lkB7ONug08aB8w=="],
 
-    "comms-service-stack": ["comms-service-stack@workspace:stacks/comms-service"],
-
     "connection-gateway-stack": ["connection-gateway-stack@workspace:stacks/connection-gateway"],
 
     "contacts-service-stack": ["contacts-service-stack@workspace:stacks/contacts-service"],
@@ -608,8 +587,6 @@
     "decompress-response": ["decompress-response@6.0.0", "", { "dependencies": { "mimic-response": "^3.1.0" } }, "sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ=="],
 
     "defer-to-connect": ["defer-to-connect@2.0.1", "", {}, "sha512-4tvttepXG1VaYGrRibk5EwJd1t4udunSOVMdLSAL6mId1ix438oPwPZMALY41FCijukO1L0twNcGsdzS7dHgDg=="],
-
-    "delete-document-worker-stack": ["delete-document-worker-stack@workspace:stacks/delete-document-worker"],
 
     "deleted-item-poller-stack": ["deleted-item-poller-stack@workspace:stacks/deleted-item-poller"],
 
@@ -652,8 +629,6 @@
     "esprima": ["esprima@4.0.1", "", { "bin": { "esparse": "./bin/esparse.js", "esvalidate": "./bin/esvalidate.js" } }, "sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A=="],
 
     "execa": ["execa@5.1.1", "", { "dependencies": { "cross-spawn": "^7.0.3", "get-stream": "^6.0.0", "human-signals": "^2.1.0", "is-stream": "^2.0.0", "merge-stream": "^2.0.0", "npm-run-path": "^4.0.1", "onetime": "^5.1.2", "signal-exit": "^3.0.3", "strip-final-newline": "^2.0.0" } }, "sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg=="],
-
-    "experiment-service-stack": ["experiment-service-stack@workspace:stacks/experiment-service"],
 
     "exponential-backoff": ["exponential-backoff@3.1.1", "", {}, "sha512-dX7e/LHVJ6W3DE1MHWi9S1EYzDESENfLrYohG2G++ovZrYOkm4Knwa0mc1cn84xJOR4KEU0WSchhLbd0UklbHw=="],
 
@@ -702,6 +677,8 @@
     "iconv-lite": ["iconv-lite@0.6.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw=="],
 
     "ignore-walk": ["ignore-walk@6.0.5", "", { "dependencies": { "minimatch": "^9.0.0" } }, "sha512-VuuG0wCnjhnylG1ABXT3dAuIpTNDs/G8jlpmwXY03fXoXy/8ZK8/T+hMzt8L4WnrLCJgdybqgPagnF/f97cg3A=="],
+
+    "image-proxy-service-stack": ["image-proxy-service-stack@workspace:stacks/image-proxy-service"],
 
     "import-in-the-middle": ["import-in-the-middle@1.12.0", "", { "dependencies": { "acorn": "^8.8.2", "acorn-import-attributes": "^1.9.5", "cjs-module-lexer": "^1.2.2", "module-details-from-path": "^1.0.3" } }, "sha512-yAgSE7GmtRcu4ZUSFX/4v69UGXwugFFSdIQJ14LHPOPPQrWv8Y7O9PHsw8Ovk7bKCLe4sjXMbZFqGFcLHpZ89w=="],
 
@@ -758,6 +735,8 @@
     "lowercase-keys": ["lowercase-keys@2.0.0", "", {}, "sha512-tqNXrS78oMOE73NMxK4EMLQsQowWf8jKooH9g7xPavRT706R6bkQJ6DY2Te7QukaZsulxa30wQ7bk0pm4XiHmA=="],
 
     "lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
+
+    "macrodb-stack": ["macrodb-stack@workspace:stacks/macrodb"],
 
     "make-error": ["make-error@1.3.6", "", {}, "sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw=="],
 
@@ -831,8 +810,6 @@
 
     "organization-retention-stack": ["organization-retention-stack@workspace:stacks/organization-retention"],
 
-    "organization-service-stack": ["organization-service-stack@workspace:stacks/organization-service"],
-
     "p-cancelable": ["p-cancelable@2.1.1", "", {}, "sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg=="],
 
     "p-limit": ["p-limit@4.0.0", "", { "dependencies": { "yocto-queue": "^1.0.0" } }, "sha512-5b0R4txpzjPWVw/cXXUResoD4hb6U/x9BH08L7nw+GN1sezDzPdxeRvpc9c433fZhBan/wusjbCsqwqm4EIBIQ=="],
@@ -873,8 +850,6 @@
 
     "promise-retry": ["promise-retry@2.0.1", "", { "dependencies": { "err-code": "^2.0.2", "retry": "^0.12.0" } }, "sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g=="],
 
-    "properties-service-stack": ["properties-service-stack@workspace:stacks/properties-service"],
-
     "protobufjs": ["protobufjs@7.4.0", "", { "dependencies": { "@protobufjs/aspromise": "^1.1.2", "@protobufjs/base64": "^1.1.2", "@protobufjs/codegen": "^2.0.4", "@protobufjs/eventemitter": "^1.1.0", "@protobufjs/fetch": "^1.1.0", "@protobufjs/float": "^1.0.2", "@protobufjs/inquire": "^1.1.0", "@protobufjs/path": "^1.1.2", "@protobufjs/pool": "^1.1.0", "@protobufjs/utf8": "^1.1.0", "@types/node": ">=13.7.0", "long": "^5.0.0" } }, "sha512-mRUWCc3KUU4w1jU8sGxICXH/gNS94DvI1gxqDvBzhj1JpcsimQkYiOJfwsPUykUI5ZaspFbSgmBLER8IrQ3tqw=="],
 
     "pulumi-fusionauth": ["pulumi-fusionauth@6.0.2", "", { "dependencies": { "@pulumi/pulumi": "^3.0.0" } }, "sha512-9By39HUEnap5kCasy7a1ELXEDDeWvBqBY4h7rS/knWUWemoMuaVYaF4YH/qGOR85Gw6AdLRzP6WFqfU7m6j/kw=="],
@@ -909,8 +884,6 @@
 
     "search-processing-service-stack": ["search-processing-service-stack@workspace:stacks/search-processing-service"],
 
-    "search-service-stack": ["search-service-stack@workspace:stacks/search-service"],
-
     "search-text-extractor-queue-stack": ["search-text-extractor-queue-stack@workspace:stacks/search-text-extractor-queue"],
 
     "search-upload-stack": ["search-upload-stack@workspace:stacks/search-upload"],
@@ -918,8 +891,6 @@
     "semver": ["semver@7.6.3", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A=="],
 
     "service": ["service@workspace:packages/service"],
-
-    "sha-ref-count-resetter-stack": ["sha-ref-count-resetter-stack@workspace:stacks/sha-ref-count-resetter"],
 
     "shared": ["shared@workspace:packages/shared"],
 

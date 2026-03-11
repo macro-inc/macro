@@ -323,12 +323,12 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('editDocument', {
-    description: schemas.editDocumentV2Params.description!,
+    description: schemas.editDocumentParams.description!,
     args: {
-      documentId: schemas.editDocumentV2Params.shape.document_id,
-      ...schemas.editDocumentV2Body.shape,
+      documentId: schemas.editDocumentParams.shape.document_id,
+      ...schemas.editDocumentBody.shape,
     },
-    result: schemas.editDocumentV2Response.shape.data.shape,
+    result: schemas.editDocumentResponse.shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
@@ -347,31 +347,13 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('deleteDocument', {
-    description: schemas.deleteDocumentHandlerResponse.description!,
+    description: schemas.deleteDocumentResponse.description!,
     args: {
-      documentId: schemas.deleteDocumentHandlerParams.shape.document_id,
+      documentId: schemas.deleteDocumentParams.shape.document_id,
     },
-    result: schemas.deleteDocumentHandlerResponse.shape.data.shape,
+    result: schemas.deleteDocumentResponse.shape,
     modifies: true,
     access: { exclude: ['ai'] },
-    throws: withFetchErrors(),
-  })
-  .fn('trackOpenedDocument', {
-    description: schemas.upsertHistoryHandlerResponse.description!,
-    args: {
-      documentId: schemas.upsertHistoryHandlerParams.shape.item_id,
-    },
-    result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('trackOpenedChat', {
-    description: schemas.upsertHistoryHandlerResponse.description!,
-    args: {
-      chatId: schemas.upsertHistoryHandlerParams.shape.item_id,
-    },
-    result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
-    modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getPins', {
@@ -421,37 +403,18 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('createDocument', {
-    description: schemas.createDocumentHandlerResponse.description!,
-    args: schemas.createDocumentHandlerBody.shape,
+    description: schemas.createDocumentResponse.description!,
+    args: schemas.createDocumentBody.shape,
     result: {
       metadata:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
+        schemas.createDocumentResponse.shape.data._def.left.shape
           .documentMetadata,
       presignedUrl:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
-          .presignedUrl,
+        schemas.createDocumentResponse.shape.data._def.left.shape.presignedUrl,
       contentType:
-        schemas.createDocumentHandlerResponse.shape.data._def.right.shape
-          .contentType,
+        schemas.createDocumentResponse.shape.data._def.right.shape.contentType,
       fileType:
-        schemas.createDocumentHandlerResponse.shape.data._def.right.shape
-          .fileType,
-    },
-    modifies: true,
-    throws: withFetchErrors('INVALID_RESPONSE'),
-  })
-  .fn('createTextDocument', {
-    description: 'Creates a new text document',
-    args: {
-      ...schemas.createDocumentHandlerBody.omit({
-        sha: true,
-      }).shape,
-      text: z.string().describe('The text content of the document'),
-    },
-    result: {
-      metadata:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
-          .documentMetadata,
+        schemas.createDocumentResponse.shape.data._def.right.shape.fileType,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),

@@ -14,7 +14,7 @@ impl CommsServiceClient {
         jwt_token: &str,
     ) -> Result<GetMessageWithContextResponse, ClientError> {
         let url = format!(
-            "{}/channels/messages/context?message_id={}&before={}&after={}",
+            "{}/comms/channels/messages/context?message_id={}&before={}&after={}",
             self.url, message_id, before, after
         );
 
@@ -33,7 +33,7 @@ impl CommsServiceClient {
             .map_err(|e| {
                 ClientError::Generic(anyhow::anyhow!(
                     "unable to parse response from get_message_with_context: {}",
-                    e.to_string()
+                    e
                 ))
             })?;
 

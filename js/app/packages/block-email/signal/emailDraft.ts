@@ -1,13 +1,19 @@
 import { isErr } from '@core/util/maybeResult';
 import { logger } from '@observability/logger';
 import { emailClient } from '@service-email/client';
-import type { MessageToSendDbId } from '@service-email/generated/schemas';
-import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
+import type {
+  ApiDraftInput,
+  ApiDraftOutputDbId,
+} from '@service-email/generated/schemas';
 
 export async function saveEmailDraft(
-  draft: MessageToSend
-): Promise<MessageToSendDbId | false> {
-  const createRes = await emailClient.createDraft({ draft });
+  draft: ApiDraftInput,
+  sendTime?: Date | null
+): Promise<ApiDraftOutputDbId | false> {
+  const createRes = await emailClient.createDraft({
+    draft,
+    send_time: sendTime?.toISOString() ?? null,
+  });
   if (isErr(createRes)) {
     logger.error(new Error('Failed to save draft', { cause: createRes[0] }));
     return false;

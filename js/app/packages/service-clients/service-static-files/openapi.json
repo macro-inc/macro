@@ -58,6 +58,75 @@
         }
       }
     },
+    "/api/file/bulk-delete": {
+      "post": {
+        "tags": ["file::bulk_delete_file"],
+        "summary": "Bulk delete files.",
+        "operationId": "handle_bulk_delete_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk delete results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/file/metadata/{file_id}": {
       "get": {
         "tags": ["file::metadata"],
@@ -206,6 +275,76 @@
   },
   "components": {
     "schemas": {
+      "BulkDeleteRequest": {
+        "type": "object",
+        "required": ["file_ids"],
+        "properties": {
+          "file_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of file IDs to delete"
+          }
+        }
+      },
+      "BulkDeleteResponse": {
+        "type": "object",
+        "required": ["total", "succeeded", "failed", "results"],
+        "properties": {
+          "failed": {
+            "type": "integer",
+            "description": "Number of failed deletions",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeleteResult"
+            },
+            "description": "Individual results for each file"
+          },
+          "succeeded": {
+            "type": "integer",
+            "description": "Number of successful deletions",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of files attempted",
+            "minimum": 0
+          }
+        }
+      },
+      "DeleteResult": {
+        "type": "object",
+        "required": ["file_id", "success"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "Error message if deletion failed"
+          },
+          "file_id": {
+            "type": "string",
+            "description": "File ID that was attempted to delete"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the deletion was successful"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
       "FileMetadata": {
         "type": "object",
         "description": "File metadata for static files",

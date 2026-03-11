@@ -55,7 +55,6 @@ pub async fn delete_chat_handler(
 
     macro_project_utils::update_project_modified(
         &state.db,
-        &state.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: chat.project_id.clone(),
             old_project_id: None,

@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use doppleganger::Mirror;
 use models_email::email::service;
 use sqlx::PgPool;
@@ -14,13 +13,13 @@ struct LinkId {
 /// If a record with matching fusionauth_user_id, email_address, and provider already exists,
 /// updates the existing record with values from the provided Link.
 /// Returns the ID of the inserted or updated link and a boolean indicating if a new record was created.
-#[tracing::instrument(skip(pool), level = "info", err)]
+#[tracing::instrument(skip(pool), err)]
 pub async fn upsert_link(
     pool: &PgPool,
     service_link: service::link::Link,
 ) -> anyhow::Result<service::link::Link> {
     if service_link.fusionauth_user_id.is_empty() {
-        return Err(anyhow!("FusionAuth User ID cannot be empty"));
+        anyhow::bail!("FusionAuth User ID cannot be empty");
     }
 
     let service::link::Link {

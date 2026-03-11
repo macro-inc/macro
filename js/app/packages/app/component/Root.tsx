@@ -1,21 +1,19 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { ROUTER_BASE } from '@app/constants/routerBase';
+import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
-import { ChannelsContextProvider } from '@core/context/channels';
-import { UserContextProvider } from '@core/context/user';
+import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
-import {
-  ENABLE_WEBSOCKET_DEBUGGER,
-  ENABLE_WHICHKEY_OVERLAY,
-  PROD_MODE_ENV,
-} from '@core/constant/featureFlags';
+import { PROD_MODE_ENV } from '@core/constant/featureFlags';
+import { ChannelsContextProvider } from '@core/context/channels';
+import { UserContextProvider, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
+import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -28,13 +26,15 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
-import { prefetchHistory } from '@queries/history/history';
-import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { prefetchHistory } from '@queries/history/history';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -50,12 +50,10 @@ import { detect } from 'detect-browser';
 import {
   createEffect,
   type JSX,
-  lazy,
   Match,
   onCleanup,
   onMount,
   type ParentProps,
-  Show,
   Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
@@ -65,19 +63,19 @@ import {
   systemThemeEffect,
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
-import { useSoundHover } from '../util/soundHover';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
+import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { ReactiveFavicon } from './ReactiveFavicon';
 import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
-import { setOpenWhichKey, WhichKey } from './WhichKey';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -176,8 +174,10 @@ function BasePathComponent() {
   return (
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
-      <Match when={userInfoQuery.data?.authenticated === false}>
-        <Navigate href="/signup" />
+      <Match
+        when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
+      >
+        <Navigate href={isNativeMobilePlatform() ? '/login' : '/signup'} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
@@ -199,6 +199,37 @@ const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
+  /** BEGIN - APP ROUTES */
+  {
+    path: '/inbox',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/agents',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/mail',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/documents',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/tasks',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/channels',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/files',
+    component: LAYOUT_ROUTE.component,
+  },
+  /** END - APP ROUTES */
+
   {
     path: '/',
     component: BasePathComponent,
@@ -246,11 +277,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/login',
-    component: () => (
-      <div class="flex w-full h-dvh overflow-y-hidden">
-        <Login />
-      </div>
-    ),
+    component: () => <Login />,
   },
   {
     path: '/onboarding',
@@ -259,10 +286,6 @@ const ROUTES: RouteDefinition[] = [
         <Onboarding />
       </div>
     ),
-  },
-  {
-    path: '/new/:block',
-    component: lazy(() => import('./NewRoute')),
   },
   {
     // This splat route must be last to catch all unmatched routes
@@ -289,6 +312,18 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
+
+  if (isNativeMobilePlatform()) {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        invalidateUserNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    );
+  }
 
   const blockOrchestrator = createBlockOrchestrator();
 
@@ -340,16 +375,13 @@ const clearBodyInlineStyleColor = () => {
   document.body.style.backgroundColor = '';
 };
 
+function QuerySyncProviderWithUserId() {
+  const userId = useUserId();
+  return <QuerySyncProvider userId={userId} />;
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
-
-  useSubscribeToKeypress((context) => {
-    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
-      setOpenWhichKey(true);
-    }
-  });
-
-  useSoundHover();
 
   clearBodyInlineStyleColor();
 
@@ -374,7 +406,6 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
-  const routerBase = isTauri() ? '/' : '/app';
 
   let runRootWarningLog = false;
   const RootSuspenseFallback = () => {
@@ -399,33 +430,34 @@ export function Root() {
       <MetaProvider>
         <EntityProvider>
           <UserContextProvider>
+            <QuerySyncProviderWithUserId />
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
-                <Title>{tabTitle()}</Title>
-                <MacroJump />
-                <Visor />
-                <Show when={ENABLE_WHICHKEY_OVERLAY}>
-                  <WhichKey />
-                </Show>
-                <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                  <IsomorphicRouter
-                    transformUrl={transformShortIdInUrlPathname}
-                    root={Layout}
-                    rootPreload={rootPreload}
-                    base={routerBase}
-                  >
-                    {{
-                      path: '/',
-                      component: TauriRouteListener,
-                      children: ROUTES,
-                    }}
-                  </IsomorphicRouter>
-                </SuspenseContextComp>
-                <ToastRegion />
-                <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                  <WebsocketDebugger />
-                </Show>
+                <QuickAccessProvider>
+                  <SearchProvider>
+                    <TabAttachmentsInit />
+                    <ReactiveFavicon />
+                    <Title>{tabTitle()}</Title>
+                    <MacroJump />
+                    <Visor />
+                    <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                      <IsomorphicRouter
+                        transformUrl={transformShortIdInUrlPathname}
+                        root={Layout}
+                        rootPreload={rootPreload}
+                        base={ROUTER_BASE}
+                      >
+                        {{
+                          path: '/',
+                          component: TauriRouteListener,
+                          children: ROUTES,
+                        }}
+                      </IsomorphicRouter>
+                    </SuspenseContextComp>
+                    <ToastRegion />
+                  </SearchProvider>
+                </QuickAccessProvider>
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
           </UserContextProvider>

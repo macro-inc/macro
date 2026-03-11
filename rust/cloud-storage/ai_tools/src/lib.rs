@@ -1,24 +1,26 @@
+#![recursion_limit = "256"]
+
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod code_execution;
-pub mod list;
 pub mod prompts;
 pub mod read;
-pub mod rewrite;
+#[allow(dead_code)]
+mod rewrite;
 pub mod search;
 mod tool_context;
 pub mod web_fetch;
 use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
+use documents::inbound::toolset::document_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
+use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use web_fetch::anthropic_web_fetch_tool;
 
 pub use search::search_toolset;
 pub use tool_context::*;
-
-use crate::list::list_toolset;
 
 pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
 
@@ -38,12 +40,14 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
         .expect("failed to add search toolset")
-        .add_toolset(list_toolset())
-        .expect("failed to add list toolset")
-        .add_tool::<read::Read, Arc<ToolScribe>>()
-        .expect("read tool")
-        .add_tool::<rewrite::MarkdownRewrite, Arc<ToolScribe>>()
-        .expect("markdown revision tool");
+        // .add_toolset(list_toolset())
+        // .expect("failed to add list toolset")
+        .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
+        .expect("failed to add list entities tool")
+        .add_tool::<read::ReadThread, Arc<ToolScribe>>()
+        .expect("read thread tool")
+        .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .expect("failed to add document toolset");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
 }

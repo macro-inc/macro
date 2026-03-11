@@ -7,6 +7,7 @@ pub mod thread;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+pub use model_entity::EntityType;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use models_permissions::share_permission::access_level::{
     AccessLevel, CommentAccessLevel, EditAccessLevel, OwnerAccessLevel,
@@ -127,6 +128,59 @@ pub async fn get_users_access_level_v2(
             ));
         }
     }
+}
+
+/// Gets public access level for an entity (no user required).
+#[tracing::instrument(skip(db))]
+pub async fn get_public_access_level(
+    db: &Pool<Postgres>,
+    entity_id: &str,
+    entity_type: EntityType,
+) -> Result<Option<AccessLevel>, (StatusCode, String)> {
+    let result = match entity_type {
+        EntityType::Document => {
+            macro_db_client::share_permission::access_level::document::get_public_access_level_for_document(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        EntityType::Chat => {
+            macro_db_client::share_permission::access_level::chat::get_public_access_level_for_chat(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        EntityType::Project => {
+            macro_db_client::share_permission::access_level::project::get_public_access_level_for_project(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        EntityType::EmailThread => {
+            macro_db_client::share_permission::access_level::thread::get_public_access_level_for_thread(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        _ => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("unsupported entity type {entity_type}"),
+            ));
+        }
+    };
+
+    result.map_err(|e| {
+        tracing::error!(error=?e, "failed to get public access level");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to get public access level".to_string(),
+        )
+    })
 }
 
 /// Gets the users AccessLevel for a given item using UserItemAccess and SharePermissions

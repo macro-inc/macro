@@ -1,27 +1,37 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { NotificationsModal } from '@core/component/NotificationsModal';
+import {
+  NotificationsButton,
+  NOTIFICATIONS_DRAWER_ID,
+} from '@core/component/NotificationsModal';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import Bell from '@icon/regular/bell.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import { useChannelQuery } from '@queries/channel/channel';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import UsersIcon from '@icon/regular/users.svg';
+import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { Show } from 'solid-js';
-import { AttachmentsModal } from './AttachmentsModal';
-import { ParticipantManager } from './ParticipantManager';
+import { createMemo, Show } from 'solid-js';
+import { AttachmentsButton } from './AttachmentsModal';
+import { useChannelContext } from '@block-channel/hooks/channel';
+import { isChannelAdminOrOwner } from '@queries/channel/derived';
+import { useChannelModals } from './ModalsProvider';
+import { ParticipantManagerButton } from './ParticipantManager';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -36,7 +46,7 @@ function TopIcon(props: TopIconProps) {
 
   return (
     <Show
-      when={props.channelType === 'direct_message' && recipient()}
+      when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
       fallback={<HashIcon class="w-4 h-4" />}
     >
       {(recipient) => {
@@ -48,14 +58,26 @@ function TopIcon(props: TopIconProps) {
   );
 }
 
-export function Top(props: { channelID: string }) {
-  const channel = useChannelQuery(() => props.channelID);
+type TopProps = {
+  channelType: ChannelType;
+  participants: ChannelParticipant[];
+  channelName: string;
+  channelId: string;
+};
 
-  const channelType = () => channel.data?.channel?.channel_type ?? 'private';
-  const participantCount = () => channel.data?.participants.length ?? 0;
-  const participants = () => channel.data?.participants ?? [];
+export function Top(props: TopProps) {
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
+  const channelContext = useChannelContext();
+
+  const notificationsControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
+  const attachmentsControl = useDrawerControl('attachments');
+  const channelModals = useChannelModals();
+
+  const isAdminOrOwner = createMemo(() => {
+    const channelData = channelContext.channel();
+    return isChannelAdminOrOwner(channelData);
+  });
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -69,57 +91,82 @@ export function Top(props: { channelID: string }) {
     );
     toast.success('Link copied to clipboard');
   }
-  const _channelName = useChannelName(
+  const channelName = useChannelName(
     blockId,
-    channel.data?.channel?.name ?? 'New Channel'
+    props.channelName ?? 'New Channel'
   );
 
-  const channelName = () => {
-    return channel.data?.channel?.name ?? _channelName() ?? 'New Channel';
-  };
+  const tools: BlockTool[] = [
+    {
+      label: 'Copy Link',
+      icon: LinkIcon,
+      action: handleCopyLink,
+      condition: () => props.channelType === ChannelTypeEnum.Public,
+    },
+    {
+      label: 'Notifications',
+      icon: Bell,
+      action: notificationsControl.toggle,
+      buttonComponent: () => (
+        <NotificationsButton
+          entity={{ id: blockId, type: 'channel' }}
+          notificationSource={notificationSource}
+          buttonSize="sm"
+        />
+      ),
+    },
+    {
+      label: 'Attachments',
+      icon: PaperclipIcon,
+      action: attachmentsControl.toggle,
+      buttonComponent: () => (
+        <AttachmentsButton attachments={channelModals.attachments} />
+      ),
+    },
+    {
+      label: 'Participants',
+      icon: UsersIcon,
+      action: () => channelModals.openParticipants(),
+      condition: () => props.channelType !== ChannelTypeEnum.DirectMessage,
+      buttonComponent: () => (
+        <ParticipantManagerButton onClick={channelModals.openParticipants} />
+      ),
+    },
+  ];
 
   return (
     <>
       <SplitHeaderLeft>
-        <div class="h-full my-auto flex gap-2 justify-center items-center">
+        <div class="h-full my-auto flex gap-2 justify-start items-center">
           <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
             <TopIcon
-              channelType={channelType()}
-              participants={participants()}
+              channelType={props.channelType}
+              participants={props.participants}
             />
             <SplitLabel
-              label={channelName()}
-              id={channel.data?.channel.id}
+              label={channelName() ?? 'New Channel'}
+              id={props.channelId}
               itemType="channel"
+              lockRename={
+                props.channelType === ChannelTypeEnum.DirectMessage ||
+                !isAdminOrOwner()
+              }
             />
           </div>
         </div>
       </SplitHeaderLeft>
+
       <SplitHeaderRight>
         <BlockLiveIndicators />
       </SplitHeaderRight>
-      <SplitToolbarRight>
-        <div class="p-1 flex flex-row gap-1 items-center h-full">
-          <Show when={channelType() === 'public'}>
-            <DeprecatedIconButton
-              theme="clear"
-              size="sm"
-              tooltip={{ label: 'Copy Link to Public Channel' }}
-              icon={LinkIcon}
-              onClick={handleCopyLink}
-            />
-          </Show>
-          <NotificationsModal
-            entity={{ id: blockId, type: 'channel' }}
-            notificationSource={notificationSource}
-            buttonSize="sm"
-          />
-          <AttachmentsModal />
-          <Show when={channelType() !== 'direct_message'}>
-            <ParticipantManager participantCount={participantCount()} />
-          </Show>
-        </div>
-      </SplitToolbarRight>
+
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={[]}
+        id={blockId}
+        itemType="channel"
+        name={channelName() ?? 'New Channel'}
+      />
     </>
   );
 }

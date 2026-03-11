@@ -1,22 +1,32 @@
 pub(crate) mod add_attachment;
-pub(crate) mod create;
+pub(crate) mod add_forwarded_attachment;
 pub(crate) mod delete;
 pub(crate) mod remove_attachment;
+pub(crate) mod remove_forwarded_attachment;
 pub(crate) mod scheduled;
 
 use crate::api::ApiContext;
 use axum::Router;
 use axum::routing::{delete, post};
+use email::inbound::draft_router;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .route("/", post(create::handler))
+        .merge(draft_router(state.email_service.clone()))
         .nest("/scheduled", scheduled::router())
-        .route("/:id", delete(delete::handler))
-        .route("/:id/attachments", post(add_attachment::handler))
+        .route("/{id}", delete(delete::handler))
+        .route("/{id}/attachments", post(add_attachment::handler))
         .route(
-            "/:id/attachments/:attachment_id",
+            "/{id}/attachments/{attachment_id}",
             delete(remove_attachment::handler),
+        )
+        .route(
+            "/{id}/forwarded-attachments",
+            post(add_forwarded_attachment::handler),
+        )
+        .route(
+            "/{id}/forwarded-attachments/{attachment_id}",
+            delete(remove_forwarded_attachment::handler),
         )
         .layer(axum::middleware::from_fn_with_state(
             state.email_service,

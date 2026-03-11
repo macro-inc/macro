@@ -1,3 +1,4 @@
+use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
@@ -10,7 +11,7 @@ use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
-use model_notifications::{NewEmailMetadata, NotificationQueueMessage};
+use model_notifications::NewEmailMetadata;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -18,8 +19,10 @@ use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
-use models_email::service::message::Message;
+use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
@@ -42,9 +45,9 @@ pub async fn upsert_message(
     )
     .await?;
 
-    let message = match ctx
+    let message_resource = match ctx
         .gmail_client
-        .get_message(&gmail_access_token, &payload.provider_message_id, link.id)
+        .get_message(&gmail_access_token, &payload.provider_message_id)
         .await
         .map_err(|e| {
             // retryable because we don't return an error if message doesn't exist, so this means
@@ -61,12 +64,27 @@ pub async fn upsert_message(
             return Ok(());
         }
     };
+
+    // Map Gmail resource to service model (IDs are generated in the parse function)
+    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: e.context("Failed to map message resource to service".to_string()),
+        })
+    })?;
     let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
 
     let is_sent = message.is_sent;
+    let is_spam_or_trash = is_spam_or_trash(&message);
+
+    let sender_email = message
+        .from
+        .as_ref()
+        .map(|from| from.email.clone())
+        .filter(|e| !email_utils::is_generic_email(e));
 
     // deduped list of all non-generic emails the message was sent to
     let recipient_emails = dedupe_emails(
@@ -165,12 +183,12 @@ pub async fn upsert_message(
         ctx,
         link,
         &recipient_emails,
+        sender_email.as_deref(),
         is_sent,
-        &payload.provider_message_id,
     )
     .await?;
 
-    notify_search(ctx, link, message_db_id).await?;
+    notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;
 
     // trigger FE inbox refresh
     cg_refresh_email(
@@ -211,10 +229,12 @@ async fn handle_attachment_upload(
     let (document_atts, media_atts) = tokio::try_join!(
         email_db_client::attachments::provider::upload::new_email_document_atts(
             &ctx.db,
+            link.id,
             &payload.provider_message_id,
         ),
         email_db_client::attachments::provider::upload::new_email_media_atts(
             &ctx.db,
+            link.id,
             &payload.provider_message_id,
         )
     )
@@ -294,34 +314,42 @@ async fn handle_attachment_upload(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, link, recipient_emails))]
+#[tracing::instrument(skip(ctx, link, recipient_emails, sender_email))]
 async fn handle_contacts_sync(
     ctx: &PubSubContext,
     link: &link::Link,
     recipient_emails: &[String],
+    sender_email: Option<&str>,
     is_sent: bool,
-    provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
-    // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    if cfg!(not(feature = "contacts_sync")) || !is_sent || recipient_emails.is_empty() {
+    if cfg!(not(feature = "contacts_sync")) {
         return Ok(());
     }
 
-    // Create users list starting with the sender, then all recipients
+    // Determine which emails to create connections to based on message direction
+    let connection_emails: Vec<&str> = if is_sent {
+        recipient_emails.iter().map(String::as_str).collect()
+    } else {
+        sender_email.into_iter().collect()
+    };
+
+    if connection_emails.is_empty() {
+        return Ok(());
+    }
+
+    // Build users list: current user at index 0, connection targets after
     let mut users = vec![link.macro_id.to_string()];
     users.extend(
-        recipient_emails
+        connection_emails
             .iter()
-            .map(|email| format!("macro|{}", email)),
+            .map(|email| format!("macro|{email}")),
     );
 
-    // Create connections from sender (index 0) to each recipient
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
+    // Create connections from current user (index 0) to each other user
+    let connections = (1..users.len()).map(|i| (0, i)).collect();
 
     ctx.sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+        .enqueue_contacts_add_connection(ConnectionsMessage { users, connections })
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
@@ -355,13 +383,9 @@ async fn fetch_and_insert_thread(
     .await
     .map_err(anyhow::Error::from)?;
 
-    let mut threads = ctx
+    let thread_resources = ctx
         .gmail_client
-        .get_threads(
-            link_id,
-            gmail_access_token,
-            &vec![provider_thread_id.to_string()],
-        )
+        .get_threads(gmail_access_token, &vec![provider_thread_id.to_string()])
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
@@ -370,8 +394,18 @@ async fn fetch_and_insert_thread(
             })
         })?;
 
+    // Map Gmail resources to service models (IDs are generated in the parse functions)
+    let mut threads = map_thread_resources_to_service(thread_resources, link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: anyhow::anyhow!("Failed to map thread resources: {}", e),
+            })
+        })?;
+
     // process threads
-    process_threads_pre_insert(&ctx.db, &ctx.sfs_client, &mut threads).await;
+    process_threads_pre_insert(&mut threads).await;
 
     // insert threads into db
     for thread in threads.into_iter() {
@@ -396,7 +430,7 @@ async fn process_and_insert_message(
     thread_db_id: Uuid,
     mut message: Message,
 ) -> anyhow::Result<()> {
-    process_message_pre_insert(&ctx.db, &ctx.sfs_client, &mut message).await;
+    process_message_pre_insert(&mut message).await;
 
     email_db_client::messages::insert::insert_message(
         &ctx.db,
@@ -475,7 +509,7 @@ async fn send_notifications(
     let sender_id =
         sender_contact.and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok());
 
-    let notification_metadata = NewEmailMetadata {
+    let notification = NewEmailMetadata {
         sender,
         to_email: link.email_address.0.as_ref().to_string(),
         thread_id: message.thread_db_id.to_string(),
@@ -483,16 +517,27 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let notification_queue_message = NotificationQueueMessage {
-        notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
-        notification_event: notification_metadata.into(),
+    let macro_id_str = link.macro_id.to_string();
+    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::InvalidData,
+            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
+        })
+    })?;
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::EmailThread
+            .with_entity_string(message.thread_db_id.to_string()),
+        notification,
         sender_id,
-        recipient_ids: Some(vec![link.macro_id.to_string()]),
-    };
+        recipient_ids: HashSet::from([recipient]),
+    }
+    .into_request()
+    .with_conn_gateway();
 
     if let Err(e) = ctx
-        .macro_notify_client
-        .send_notification(notification_queue_message)
+        .notification_ingress_service
+        .send_notification(request)
         .await
     {
         tracing::error!(error=?e, "unable to send notification");

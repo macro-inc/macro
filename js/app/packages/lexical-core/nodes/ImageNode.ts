@@ -222,7 +222,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
     if (!this.__componentDirty && this.__cachedDecoratorComponent) {
       return this.__cachedDecoratorComponent;
     }
-    const decorator = getDecorator<ImageNode>(ImageNode);
+    const decorator = getDecorator<ImageDecoratorProps>(ImageNode);
     if (decorator) {
       const comp = () => decorator(this.exportComponentProps());
       this.__cachedDecoratorComponent = comp;

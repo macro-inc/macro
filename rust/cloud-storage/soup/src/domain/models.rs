@@ -1,7 +1,10 @@
 use comms::domain::models::GetChannelsRequest;
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
-use item_filters::ast::EntityFilterAst;
+use item_filters::{
+    EntityFilters,
+    ast::{EntityFilterAst, ExpandErr},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{
@@ -93,31 +96,112 @@ pub struct AdvancedSortParams<'a> {
 }
 
 #[derive(Debug)]
-pub enum SoupQuery {
-    Simple(Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>),
-    Frecency(Query<Uuid, Frecency, Option<EntityFilterAst>>),
+pub enum SoupQuery<T> {
+    Simple(SimpleQueryInner<T>),
+    Frecency(FrecencyQueryInner<T>),
 }
 
-impl SoupQuery {
-    pub(crate) fn filter(&self) -> Option<&EntityFilterAst> {
+/// the inner private type for [SoupQuery::Simple]
+#[derive(Debug)]
+pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
+
+/// the inner private type for [SoupQuery::Frecency]
+#[derive(Debug)]
+pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
+
+impl SoupQuery<EntityFilters> {
+    /// create a new instance of a [SimpleSortMethod] with [EntityFilters] this is used to
+    /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_simple]
+    pub fn new_sort_simple(method: SimpleSortMethod, filters: EntityFilters) -> Self {
+        SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Sort(
+            method, filters,
+        )))
+    }
+
+    /// create a new instance of a [Frecency] with [EntityFilters] this is used to
+    /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_frecency]
+    pub fn new_sort_frecency(method: Frecency, filters: EntityFilters) -> Self {
+        SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Sort(
+            method, filters,
+        )))
+    }
+
+    /// create a new instance of a [SimpleSortMethod] with an existing cursor on [EntityFilters].
+    /// This is used to continue paginating on an existing cursor.
+    /// To create a new initial page see [Self::new_sort_simple]
+    pub fn new_cursor_simple(
+        cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilters>,
+    ) -> Self {
+        SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Cursor(cursor)))
+    }
+
+    /// create a new instance of a [Frecency] with an existing cursor on [EntityFilters].
+    /// This is used to continue paginating on an existing cursor.
+    /// To create a new initial page see [Self::new_sort_simple]
+    pub fn new_cursor_frecency(
+        cursor: CursorWithValAndFilter<Uuid, Frecency, EntityFilters>,
+    ) -> Self {
+        SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
+    }
+
+    pub fn filter(&self) -> &EntityFilters {
         match self {
-            SoupQuery::Simple(query) => query.filter().as_ref(),
-            SoupQuery::Frecency(query) => query.filter().as_ref(),
+            SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
+            SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
+        }
+    }
+
+    pub fn into_ast(self) -> Result<SoupQuery<Option<EntityFilterAst>>, ExpandErr> {
+        match self {
+            SoupQuery::Simple(SimpleQueryInner(query)) => Ok(SoupQuery::Simple(SimpleQueryInner(
+                query.try_map_filter(EntityFilterAst::new_from_filters)?,
+            ))),
+            SoupQuery::Frecency(FrecencyQueryInner(query)) => Ok(SoupQuery::Frecency(
+                FrecencyQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
+            )),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct SoupRequest {
+pub struct SoupRequest<T> {
     pub soup_type: SoupType,
     pub limit: u16,
-    pub cursor: SoupQuery,
+    pub cursor: SoupQuery<T>,
     pub user: MacroUserIdStr<'static>,
     pub email_preview_view: PreviewView,
     pub link_id: Option<Uuid>,
 }
 
-impl SoupRequest {
+impl SoupRequest<EntityFilters> {
+    /// returns a reference to the filters to pass to the paginator
+    /// this is used to prevent passing back the full ast on each server request
+    pub(crate) fn filters(&self) -> &EntityFilters {
+        self.cursor.filter()
+    }
+
+    pub(crate) fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr> {
+        let SoupRequest {
+            soup_type,
+            limit,
+            cursor,
+            user,
+            email_preview_view,
+            link_id,
+        } = self;
+
+        Ok(SoupRequest {
+            soup_type,
+            limit,
+            cursor: cursor.into_ast()?,
+            user,
+            email_preview_view,
+            link_id,
+        })
+    }
+}
+
+impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
     /// and move them into a [GetEmailsRequest] if it is possible to create one
     pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
@@ -127,16 +211,16 @@ impl SoupRequest {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
-                SoupQuery::Simple(Query::Sort(t, f)) => Some(Query::Sort(
+                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
                     f.as_ref().and_then(|f| f.email_filter.clone()),
                 )),
-                SoupQuery::Simple(Query::Cursor(CursorWithValAndFilter {
+                SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
                     limit,
                     val,
                     filter,
-                })) => Some(Query::Cursor(CursorWithValAndFilter {
+                }))) => Some(Query::Cursor(CursorWithValAndFilter {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
@@ -153,16 +237,16 @@ impl SoupRequest {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
-                SoupQuery::Simple(Query::Sort(t, f)) => Some(Query::Sort(
+                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
                     f.as_ref().and_then(|f| f.channel_filter.clone()),
                 )),
-                SoupQuery::Simple(Query::Cursor(CursorWithValAndFilter {
+                SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
                     limit,
                     val,
                     filter,
-                })) => Some(Query::Cursor(CursorWithValAndFilter {
+                }))) => Some(Query::Cursor(CursorWithValAndFilter {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
@@ -223,4 +307,6 @@ pub enum SoupErr {
     EmailErr(#[from] email::domain::models::EmailErr),
     #[error("A comms error has occured, see logs for more details")]
     CommsErr,
+    #[error(transparent)]
+    AstErr(#[from] ExpandErr),
 }

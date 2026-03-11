@@ -4,7 +4,7 @@ import type {
   Reply,
   Root,
   ThreadId,
-} from '@core/collab/comments/commentType';
+} from '@core/comments/commentType';
 import type { NodeKey } from 'lexical';
 
 export type MarkId = string; // uuid

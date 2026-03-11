@@ -24,13 +24,13 @@ pub struct GetMessageWithContextParams {
 
 #[utoipa::path(
     get,
-    path = "/channels/messages/context",
+    path = "/comms/channels/messages/context",
     tag = "channels",
     operation_id = "get_message_with_context",
     params(
         ("message_id" = String, Query, description = "ID of the message to get context around"),
-        ("before" = i64, Query, description = "Number of messages to fetch before the target message (defaults to 0)"),
-        ("after" = i64, Query, description = "Number of messages to fetch after the target message (defaults to 0)"),
+        ("before" = Option<i64>, Query, description = "Number of messages to fetch before the target message (defaults to 0)"),
+        ("after" = Option<i64>, Query, description = "Number of messages to fetch after the target message (defaults to 0)"),
     ),
     responses(
         (status = 200, body = GetMessageWithContextResponse, description = "Successfully retrieved messages with context"),

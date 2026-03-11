@@ -1,8 +1,8 @@
 use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter, Sortable};
+use axum::Json;
 use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
-use axum::{Json, async_trait};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -10,7 +10,7 @@ use thiserror::Error;
 
 /// An enum which denotes either the client did not provide a cursor value
 /// or the cursor was provided and parsed.
-/// Provided but invalid cursors will be rejected as 401
+/// Provided but invalid cursors will be rejected as 400
 // TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
 #[derive(Debug)]
 pub enum CursorExtractor<Id, S: Sortable, F> {
@@ -44,6 +44,12 @@ pub enum CursorExtractErr {
     /// The query was too large to deserialize
     #[error("Query is too large, must be < 32kb")]
     SizeErr,
+    /// The cursor query parameters could not be parsed
+    #[error("invalid cursor query parameters")]
+    InvalidQueryParamsErr,
+    /// Both forward and backward cursors were provided.
+    #[error("provide only one of cursor or previous_cursor")]
+    MutuallyExclusiveErr,
 }
 
 impl IntoResponse for CursorExtractErr {
@@ -67,12 +73,45 @@ impl IntoResponse for CursorExtractErr {
                     message: "Query is too large, must be <32kb",
                 }),
             ),
+            CursorExtractErr::InvalidQueryParamsErr => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "invalid cursor query parameters",
+                }),
+            ),
+            CursorExtractErr::MutuallyExclusiveErr => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "provide only one of cursor or previous_cursor",
+                }),
+            ),
         }
         .into_response()
     }
 }
 
-#[async_trait]
+fn decode_cursor<Id, Sort, F>(
+    encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>>,
+) -> Result<CursorWithValAndFilter<Id, Sort, F>, CursorExtractErr>
+where
+    Sort: Sortable + DeserializeOwned,
+    Sort::Value: DeserializeOwned,
+    Id: DeserializeOwned,
+    F: DeserializeOwned,
+{
+    let bytes = encoded.len();
+    if bytes > 32_000 {
+        return Err(CursorExtractErr::SizeErr);
+    }
+
+    encoded
+        .decode(|bytes| {
+            let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
+            <CursorWithValAndFilter<Id, Sort, F>>::deserialize(&mut deserializer)
+        })
+        .map_err(CursorExtractErr::DecodeErr)
+}
+
 impl<S, Id, Sort, F> FromRequestParts<S> for CursorExtractor<Id, Sort, F>
 where
     S: Send + Sync,
@@ -87,32 +126,99 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         #[derive(Deserialize)]
         struct Params {
-            cursor: String,
+            cursor: Option<String>,
         }
-        let Ok(Query(Params { cursor })) = <Query<Params>>::from_request_parts(parts, state).await
-        else {
+        let Query(Params { cursor }) = <Query<Params>>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| CursorExtractErr::InvalidQueryParamsErr)?;
+
+        let Some(cursor) = cursor else {
             return Ok(CursorExtractor::None);
         };
 
         let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
             Base64Str::new_from_string(cursor);
 
-        let bytes = encoded.len();
-        if bytes > 32_000 {
-            return Err(CursorExtractErr::SizeErr);
-        }
-
-        let decoded = encoded
-            .decode(|bytes| {
-                let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
-                deserializer.disable_recursion_limit();
-                <CursorWithValAndFilter<Id, Sort, F>>::deserialize(&mut deserializer)
-            })
-            .inspect_err(|e| {
-                dbg!(e);
-            })
-            .map_err(CursorExtractErr::DecodeErr)?;
+        let decoded = decode_cursor(encoded)?;
 
         Ok(CursorExtractor::Some(decoded))
+    }
+}
+
+/// A parsed bidirectional cursor used for pagination.
+#[derive(Debug)]
+pub enum BidirectionalCursor<Id, S: Sortable, F> {
+    /// The client provided a cursor to fetch the next page.
+    Next(Cursor<Id, CursorVal<S>, F>),
+    /// The client provided a cursor to fetch the previous page.
+    Previous(Cursor<Id, CursorVal<S>, F>),
+}
+
+/// An enum which denotes either the client did not provide cursor params
+/// or exactly one cursor direction was provided and parsed.
+/// Provided but invalid cursors will be rejected as 400.
+// TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
+#[derive(Debug)]
+pub enum BidirectionalCursorExtractor<Id, S: Sortable, F> {
+    /// The client provided a valid parsed cursor.
+    Some(BidirectionalCursor<Id, S, F>),
+    /// The client did not provide cursor params.
+    None,
+}
+
+impl<Id, S: Sortable, F> BidirectionalCursorExtractor<Id, S, F> {
+    /// convert self into an optional [BidirectionalCursor]
+    pub fn into_option(self) -> Option<BidirectionalCursor<Id, S, F>> {
+        match self {
+            BidirectionalCursorExtractor::Some(parsed_cursor) => Some(parsed_cursor),
+            BidirectionalCursorExtractor::None => None,
+        }
+    }
+}
+
+impl<S, Id, Sort, F> FromRequestParts<S> for BidirectionalCursorExtractor<Id, Sort, F>
+where
+    S: Send + Sync,
+    Sort: Sortable + DeserializeOwned,
+    Sort::Value: DeserializeOwned,
+    Id: DeserializeOwned,
+    F: DeserializeOwned,
+{
+    type Rejection = CursorExtractErr;
+
+    #[tracing::instrument(err, skip(parts, state))]
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        #[derive(Deserialize)]
+        struct Params {
+            cursor: Option<String>,
+            previous_cursor: Option<String>,
+        }
+        let Query(Params {
+            cursor,
+            previous_cursor,
+        }) = <Query<Params>>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| CursorExtractErr::InvalidQueryParamsErr)?;
+
+        match (cursor, previous_cursor) {
+            (Some(_), Some(_)) => Err(CursorExtractErr::MutuallyExclusiveErr),
+            (Some(cursor), None) => {
+                let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
+                    Base64Str::new_from_string(cursor);
+                let decoded = decode_cursor(encoded)?;
+                Ok(BidirectionalCursorExtractor::Some(
+                    BidirectionalCursor::Next(decoded),
+                ))
+            }
+            (None, Some(previous_cursor)) => {
+                let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
+                    Base64Str::new_from_string(previous_cursor);
+                let decoded = decode_cursor(encoded)?;
+                Ok(BidirectionalCursorExtractor::Some(
+                    BidirectionalCursor::Previous(decoded),
+                ))
+            }
+            (None, None) => Ok(BidirectionalCursorExtractor::None),
+        }
     }
 }

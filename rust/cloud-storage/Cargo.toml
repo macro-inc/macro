@@ -9,16 +9,19 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
+  "channels",
   "comms_db_client",
   "comms_service",
   "comms_service_client",
   "connection_gateway",
+  "connection_gateway_client",
+  "connection_gateway_models",
   "contacts_db_client",
   "contacts_service",
   "convert_service",
+  "cowlike",
   "dataloss_prevention_handler",
   "delete_chat_handler",
-  "delete_document_worker",
   "deleted_item_poller",
   "document_cognition_service",
   "document_cognition_service_client",
@@ -26,26 +29,31 @@ members = [
   "document_storage_service_client",
   "document_sub_type",
   "document_text_extractor",
+  "documents",
   "docx_unzip_handler",
   "dynamodb_client",
   "email_contact_search",
   "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
-  "email_sfs_delete_handler",
   "email_service",
   "email_service_client",
+  "email_sfs_delete_handler",
   "email_suppression_handler",
   "email_utils",
   "email_validator",
   "entity_access",
-  "experiment_service",
   "frecency",
+  "fusionauth",
+  "github",
   "gmail_client",
+  "image_proxy_service",
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
+  "local_stream_processor",
   "macro_auth",
+  "macro_aws_config",
   "macro_cache_client",
   "macro_client_errors",
   "macro_cors",
@@ -53,11 +61,10 @@ members = [
   "macro_db_migrator",
   "macro_env",
   "macro_middleware",
-  "macro_notify",
   "macro_project_utils",
   "macro_redis",
-  "macro_redis_cluster_client",
   "macro_service_client",
+  "macro_sha_count_client",
   "macro_share_permissions",
   "macro_uuid",
   "mention_utils",
@@ -77,19 +84,17 @@ members = [
   "models_team",
   "name_search",
   "non_empty",
+  "notification",
   "notification_db_client",
+  "notification_sandbox",
   "notification_service",
-  "notification_service_client",
   "opensearch_client",
   "organization_retention_handler",
   "organization_retention_trigger",
-  "organization_service",
-  "organization_service_client",
   "permission",
   "properties",
   "properties_db_client",
   "properties_service",
-  "properties_service_client",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -101,9 +106,9 @@ members = [
   "search_service_client",
   "search_upload_handler",
   "secretsmanager_client",
+  "seed_cli",
   "ses_client",
   "sha_cleanup_worker",
-  "sha_ref_count_resetter",
   "sns_client",
   "soup",
   "sqs_client",
@@ -126,50 +131,60 @@ anyhow = "1.0.93"
 async-openai = { version = "0.28.3", features = ["byot"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.5.17", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.98.0"
 aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.119.0"
+aws-sdk-s3 = "1.121.0"
 aws-sdk-secretsmanager = "1.93.0"
 aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.61.0"
+aws-sdk-sns = "1.90.0"
 aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
-axum = { version = "0.7.9", features = [
+axum = { version = "0.8", features = [
   "tower-log",
-] } # causes breaking changes to bump to 0.8.x
-axum-extra = { version = "0.9" }
+] }
+axum-extra = { version = "0.10" }
 base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
+csv = "1"
 dashmap = "6.1.0"
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
-jsonwebtoken = "9.3.1"
+inquire = "0.7"
+itertools = "0.14"
+jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
+  "rust_crypto",
+] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
+opentelemetry = "0.31.0"
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
+paste = "1"
 pdfium-render = { version = "0.8.28" }
 quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
-redis = "0.29.0"
+redis = "1.0.3"
 regex = "1.11.1"
-reqwest = { version = "0.12.12", features = ["json"] }
+reqwest = { version = "0.12.12", features = ["hickory-dns", "json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
+rootcause = "0.11"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -197,17 +212,18 @@ tower-http = { version = "0.6.1", features = [
   "trace",
 ] }
 tracing = "0.1.44"
+tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 unsynn = "0.3"
 urlencoding = "2.1.3"
-utoipa = { version = "5.2.0", features = [
+utoipa = { version = "5.4.0", features = [
   "axum_extras",
   "chrono",
   "repr",
   "uuid",
 ] }
-utoipa-swagger-ui = { version = "8.0.3", features = ["axum", "vendored"] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
@@ -215,8 +231,8 @@ async-stripe = { version = "0.41", default-features = false, features = [
   "checkout",
   "runtime-tokio-hyper",
 ] }
-axum-macros = "0.4.2"
-bytes = "1.10.1"
+axum-macros = "0.5"
+bytes = "1.11.1"
 bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }

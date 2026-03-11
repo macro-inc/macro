@@ -8,6 +8,19 @@
   "requests": [
     {
       "method": "POST",
+      "url": "/api/key/import/d7d09513-a3f5-401c-9685-34ab6c552453",
+      "body": {
+        "key": {
+          "id": "d7d09513-a3f5-401c-9685-34ab6c552453",
+          "algorithm": "HS256",
+          "name": "JWT Signing Key",
+          "secret": "super-secret-jwt-signing-key-for-local-development-only",
+          "type": "HMAC"
+        }
+      }
+    },
+    {
+      "method": "POST",
       "url": "/api/user/registration",
       "body": {
         "user": {

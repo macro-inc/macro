@@ -1,8 +1,7 @@
 //! The polling aggregator defines a worker process for updating frecency aggregation records in the background
 
-use std::time::Duration;
-
 use crate::domain::{models::EventAggregationStats, ports::PullEventAggregatorService};
+use std::time::Duration;
 
 /// Stats about the current state of the background worker
 #[derive(Debug, Clone, Copy, Default)]

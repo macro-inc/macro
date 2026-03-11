@@ -5,10 +5,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   isAccessiblePreviewItem,
-  isDocumentPreviewItem,
   type PreviewItem,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -21,9 +20,11 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
+  entityType?: ItemType;
 };
 
 function isChannelReference(ref: EntityReference): ref is EntityReference & {
@@ -53,10 +54,19 @@ function isGenericReference(
   );
 }
 
+const getReferenceCreatedAt = (ref: EntityReference) => {
+  if (isChannelReference(ref)) {
+    return ref.attachment_created_at;
+  } else if (isGenericReference(ref)) {
+    return ref.created_at;
+  }
+};
+
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
+    const entityType = props.entityType ?? 'document';
     const response = await commsServiceClient.attachmentReferences({
-      entity_type: 'document',
+      entity_type: entityType,
       entity_id: props.documentId,
     });
 
@@ -67,7 +77,7 @@ export function References(props: ReferenceProps) {
 
     return response[1].references;
   });
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const messageLocation = async (
@@ -82,33 +92,52 @@ export function References(props: ReferenceProps) {
     });
   };
 
-  const navigateToMessage = (
-    channelId: string,
-    messageId: string,
-    threadId?: string
-  ) => {
-    replaceOrInsertSplit({
-      type: 'channel',
-      id: channelId,
+  const navigateToItem = ({
+    event,
+    blockId,
+    blockName,
+  }: {
+    event?: KeyboardEvent | MouseEvent;
+    blockName: BlockName | BlockAlias;
+    blockId: string;
+  }) => {
+    openWithSplit(
+      { type: blockName, id: blockId },
+      { preferNewSplit: event?.shiftKey !== true }
+    );
+  };
+
+  const navigateToMessage = ({
+    channelId,
+    messageId,
+    threadId,
+    event,
+  }: {
+    event?: KeyboardEvent | MouseEvent;
+    channelId: string;
+    messageId: string;
+    threadId?: string;
+  }) => {
+    navigateToItem({
+      event,
+      blockName: 'channel',
+      blockId: channelId,
     });
     messageLocation(channelId, messageId, threadId);
   };
 
-  const navigateToItem = (
-    blockName: BlockName | BlockAlias,
-    blockId: string
+  const navigateToGenericReference = (
+    item: PreviewItem,
+    event?: KeyboardEvent | MouseEvent
   ) => {
-    replaceOrInsertSplit({
-      type: blockName,
-      id: blockId,
-    });
-  };
-
-  const navigateToGenericReference = (item: PreviewItem) => {
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
       const blockId = item.id;
       const blockType = fileTypeToBlockName(item.fileType);
-      navigateToItem(blockType, blockId);
+      navigateToItem({
+        event,
+        blockName: blockType,
+        blockId,
+      });
     } else {
       toast.failure('Failed to open reference');
     }
@@ -116,29 +145,14 @@ export function References(props: ReferenceProps) {
 
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
-    return refs.sort((a, b) => {
-      let timeA = '0';
-      let timeB = '0';
-
-      if (isChannelReference(a)) {
-        timeA = a.attachment_created_at;
-      } else if (isGenericReference(a)) {
-        timeA = a.created_at;
-      }
-
-      if (isChannelReference(b)) {
-        timeB = b.attachment_created_at;
-      } else if (isGenericReference(b)) {
-        timeB = b.created_at;
-      }
-
-      return new Date(timeB).getTime() - new Date(timeA).getTime();
-    });
+    return refs.sort((a, b) =>
+      compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
+    );
   });
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const datePart = date
+  const formatTimestamp = (input: DateValue) => {
+    const timestamp = input instanceof Date ? input : new Date(input);
+    const datePart = timestamp
       .toLocaleDateString('en-US', {
         month: 'numeric',
         day: 'numeric',
@@ -146,7 +160,7 @@ export function References(props: ReferenceProps) {
       })
       .replaceAll('/', '-');
 
-    const timePart = date.toLocaleTimeString('en-US', {
+    const timePart = timestamp.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: 'numeric',
     });
@@ -171,8 +185,12 @@ export function References(props: ReferenceProps) {
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
-              const navHandlers = useSplitNavigationHandler(() =>
-                navigateToMessage(ref.channel_id, ref.message_id)
+              const navHandlers = useSplitNavigationHandler((e) =>
+                navigateToMessage({
+                  event: e,
+                  channelId: ref.channel_id,
+                  messageId: ref.message_id,
+                })
               );
 
               return (
@@ -193,10 +211,7 @@ export function References(props: ReferenceProps) {
                     <span class="text-ink-extra-muted">
                       {hasMessageContent ? 'referenced in' : 'attached in'}
                     </span>
-                    <InlineItemPreview
-                      itemId={ref.channel_id}
-                      itemType="channel"
-                    />
+                    <InlineItemPreview id={ref.channel_id} type="channel" />
                   </span>
                   <Show when={hasMessageContent}>
                     <div class="pl-4 text-ink-muted text-xs">
@@ -210,13 +225,13 @@ export function References(props: ReferenceProps) {
             if (isGenericReference(ref)) {
               const userId = ref.user_id!;
               const [userName] = useDisplayName(tryMacroId(userId));
-              const [item] = useItemPreview({
+              const [item] = useItemPreview(() => ({
                 id: ref.source_entity_id,
-                type: ref.source_entity_type as any,
-              });
+                type: ref.source_entity_type as ItemType,
+              }));
 
-              const navHandlers = useSplitNavigationHandler(() =>
-                navigateToGenericReference(item())
+              const navHandlers = useSplitNavigationHandler((e) =>
+                navigateToGenericReference(item(), e)
               );
 
               return (
@@ -236,8 +251,8 @@ export function References(props: ReferenceProps) {
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">mentioned in</span>
                     <InlineItemPreview
-                      itemId={ref.source_entity_id}
-                      itemType={ref.source_entity_type as ItemType}
+                      id={ref.source_entity_id}
+                      type={ref.source_entity_type as ItemType}
                     />
                   </span>
                 </button>

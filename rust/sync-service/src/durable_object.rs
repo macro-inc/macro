@@ -11,8 +11,9 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Cors, Date, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder, Result,
-    ScheduledTime, State, WebSocket, WebSocketIncomingMessage, WebSocketPair, durable_object,
+    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
+    WebSocketPair, durable_object,
 };
 
 use crate::{
@@ -187,7 +188,13 @@ impl<'a> Wsm<'a> {
             .lock("Wsm::maybe_update_ws_meta_map contains_key")
             .contains_key(&ws_id)
         {
-            let wsm: WebSocketMetadata = self.dss.state.storage().get(&ws_id).await?;
+            let wsm: WebSocketMetadata = self
+                .dss
+                .state
+                .storage()
+                .get(&ws_id)
+                .await?
+                .ok_or(Error::from("WebSocketMetadata not found in storage"))?;
             self.dss
                 .ws_meta_map
                 .lock("Wsm::maybe_update_ws_meta_map insert")
@@ -625,7 +632,8 @@ impl DocumentSyncSession {
                         "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
                         DOCUMENT_ID_KEY
                     )
-                })?,
+                })?
+                .ok_or(Error::from("DOCUMENT_ID not found in storage"))?,
         );
         *self
             .document_id

@@ -1,4 +1,4 @@
-INSERT INTO user_device_registration (
+INSERT INTO notification_user_device_registration (
     id,
     user_id,
     device_token,

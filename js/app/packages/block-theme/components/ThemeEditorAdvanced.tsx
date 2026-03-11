@@ -98,6 +98,8 @@ export function ThemeEditorAdvanced(){
 
             <For each={Object.entries(themeReactive)}>
               {([colorKey, colorValue]) => {
+                // a1 thru a4 are not currently being used, so we will hide them
+                if (['a1', 'a2', 'a3', 'a4'].includes(colorKey)) return null;
                 const [isSetByInput, setIsSetByInput] = createSignal(false);
                 const [inputValue, setInputValue] = createSignal('');
 

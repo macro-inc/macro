@@ -21,7 +21,7 @@ export type SendChatMessagePayloadAllOf = {
   content: string;
   /** the chate model to respond with */
   model: Model;
-  /** you give me id, i give you id */
+  /** Stream ID for tracking the response */
   stream_id: string;
   /** Which toolset to use. Defaults to `all` */
   toolset?: ToolSet;

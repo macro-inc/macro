@@ -3,15 +3,18 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useBooleanEditor } from '../../hooks';
 import type { Property } from '../../types';
-import type { PropertyValueProps } from './ValueComponents';
+import { stubSaveHandler, type PropertyValueProps } from './ValueComponents';
 
 /**
  * Display component for boolean properties with instant toggle
  * Treats null as false (unchecked)
  */
 export const BooleanValue: Component<PropertyValueProps> = (props) => {
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
+
   const { value, isSaving, toggle } = useBooleanEditor(
     props.property as Property & { valueType: 'BOOLEAN' },
+    saveHandler(),
     props.onRefresh
   );
 

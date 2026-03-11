@@ -5,11 +5,7 @@ import {
   createBlockSignal,
   createBlockStore,
 } from '@core/block';
-import {
-  isRoot,
-  type Reply,
-  type Root,
-} from '@core/collab/comments/commentType';
+import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import { MARK_SELECTED_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
 import { makePersisted } from '@solid-primitives/storage';
@@ -145,7 +141,7 @@ export const highlightComments = createBlockMemo(() => {
         text: '',
         owner: userId,
         author: userId,
-        createdAt: Date.now(),
+        createdAt: new Date(),
         isNew: true,
         children: [],
         threadId: -1,

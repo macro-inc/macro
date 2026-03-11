@@ -7,12 +7,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+use macro_env::Environment;
 use model::{response::ErrorResponse, tracking::IPContext};
 
 /// Attempts to decode the JWT and attach user to the request context
 /// If there is no JWT to decode, the user context remains empty
 pub async fn attach_ip_context_handler(mut req: Request, next: Next) -> Result<Response, Response> {
-    if cfg!(feature = "local_auth") {
+    // If running locally we automatically attach the ip context for you
+    if let Environment::Local = Environment::new_or_prod() {
         req.extensions_mut().insert(IPContext {
             client_ip: std::env::var("LOCAL_IP").unwrap_or("127.0.0.1".to_string()),
         });

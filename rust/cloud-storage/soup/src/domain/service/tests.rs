@@ -4,13 +4,16 @@ use chrono::Days;
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
+use item_filters::EntityFilters;
 use model_entity::EntityType;
 use models_pagination::{
-    Cursor, CursorVal, FrecencyValue, PaginatedCursor, SimpleSortMethod, TypeEraseCursor,
+    Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
+    TypeEraseCursor,
 };
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
@@ -41,6 +44,58 @@ impl EmailService for NoopEmailService {
         _auth_id: &str,
         _macro_id: MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::Thread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<email::domain::models::ParsedThread>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn create_draft(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn send_message(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn list_labels(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::LinkLabel>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
+    async fn update_thread_labels(
+        &self,
+        _access_token: &str,
+        _link: &email::domain::models::Link,
+        _thread_id: uuid::Uuid,
+        _label_id: uuid::Uuid,
+        _add: bool,
+    ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 }
@@ -125,6 +180,7 @@ fn soup_document_with_is_completed(
         viewed_at: Default::default(),
         sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
         properties: Default::default(),
+        deleted_at: None,
     }
 }
 
@@ -175,7 +231,10 @@ async fn it_should_not_query_frecency() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -253,7 +312,7 @@ async fn it_should_query_frecency() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: u16::MAX,
-        cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -331,7 +390,7 @@ async fn it_should_sort_frecency_descending() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: u16::MAX,
-        cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+        cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -418,7 +477,7 @@ async fn frecency_should_fallback() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 100,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await
@@ -436,10 +495,11 @@ async fn frecency_should_fallback() {
         assert!(v.frecency_score.is_none());
     });
     // cursor should encode correct info
-    let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
+    let typed_cursor: CursorWithValAndFilter<String, Frecency, EntityFilters> =
+        res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
+        CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: _ } => {
         let expected_uuid_str = Uuid::from_u128(100).to_string();
         assert_eq!(id, expected_uuid_str);
         assert_eq!(updated, <DateTime<Utc>>::default() + Days::new(100));
@@ -488,7 +548,7 @@ async fn frecency_should_paginate() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 100,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await
@@ -508,10 +568,11 @@ async fn frecency_should_paginate() {
     );
 
     // cursor should encode correct info
-    let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
+    let typed_cursor: CursorWithValAndFilter<String, Frecency, EntityFilters> =
+        res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
+        CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: _} => {
         let expected_uuid_str = Uuid::from_u128(1).to_string();
         assert_eq!(id, expected_uuid_str);
         // last item should be the lowest score because we sort desc
@@ -560,7 +621,7 @@ async fn frecency_should_resume_cursor() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 100,
-            cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
+            cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
                 id: Uuid::from_u128(5),
                 limit: 100,
                 val: CursorVal {
@@ -568,7 +629,7 @@ async fn frecency_should_resume_cursor() {
                     last_val: FrecencyValue::FrecencyScore(5.0),
                 },
                 filter: Default::default(),
-            })),
+            }),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await
@@ -585,10 +646,11 @@ async fn frecency_should_resume_cursor() {
     );
 
     // cursor should encode correct info
-    let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
+    let typed_cursor: CursorWithValAndFilter<String, Frecency, EntityFilters> =
+        res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
+        CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: _} => {
         let expected_uuid_str = Uuid::from_u128(100).to_string();  // "next-100" -> 100
         assert_eq!(id, expected_uuid_str);
         // last item should be the lowest score because we sort desc
@@ -648,15 +710,15 @@ async fn frecency_fallback_cursor_should_resume() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 100,
-            cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
+            cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
                 id: Uuid::from_u128(100),
                 limit: 100,
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
                 },
-                filter: None,
-            })),
+                filter: Default::default(),
+            }),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await
@@ -664,8 +726,9 @@ async fn frecency_fallback_cursor_should_resume() {
         .unwrap_right();
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
-    let cursor = res.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
+    let cursor: CursorWithValAndFilter<String, Frecency, EntityFilters> =
+        res.next_cursor.unwrap().decode_json().unwrap();
+    assert_matches!(cursor, CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: _ } => {
         let expected_uuid_str = Uuid::from_u128(100).to_string();  // "next-100" -> 100
         assert_eq!(id, expected_uuid_str);
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
@@ -717,20 +780,23 @@ async fn cursor_should_return_simple_sort() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
     .unwrap();
 
     let simple_cursor = res.unwrap_left();
-    let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor_decoded, Cursor { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val }, filter } => {
+    let cursor_decoded: CursorWithValAndFilter<String, SimpleSortMethod, EntityFilters> =
+        simple_cursor.next_cursor.unwrap().decode_json().unwrap();
+    assert_matches!(cursor_decoded, CursorWithValAndFilter { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val }, filter: _ } => {
         let expected_uuid_str = Uuid::from_u128(19).to_string();  // "my-document-19" -> 19
         assert_eq!(id, expected_uuid_str);
         let date: DateTime<Utc> = Default::default();
         assert_eq!(last_val, date);
-        assert!(filter.is_none());
     })
 }
 
@@ -775,19 +841,19 @@ async fn cursor_should_return_frecency() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 100,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await
         .unwrap();
 
     let simple_cursor = res.unwrap_right();
-    let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor_decoded, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0) }, filter } => {
+    let cursor_decoded: CursorWithValAndFilter<String, Frecency, EntityFilters> =
+        simple_cursor.next_cursor.unwrap().decode_json().unwrap();
+    assert_matches!(cursor_decoded, CursorWithValAndFilter { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0) }, filter: _ } => {
         // frecency sort is descending so the last item is id 1
         let expected_uuid_str = Uuid::from_u128(1).to_string();
         assert_eq!(id, expected_uuid_str);
-        assert!(filter.is_none());
     })
 }
 
@@ -831,7 +897,10 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -874,7 +943,10 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -917,7 +989,10 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -972,7 +1047,10 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         link_id: Some(Uuid::new_v4()),
         soup_type: SoupType::UnExpanded,
         limit: 0,
-        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        cursor: SoupQuery::new_sort_simple(
+            SimpleSortMethod::ViewedUpdated,
+            EntityFilters::default(),
+        ),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
     })
     .await
@@ -1041,7 +1119,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
             link_id: Some(Uuid::new_v4()),
             soup_type: SoupType::UnExpanded,
             limit: 3,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+            cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
         .await

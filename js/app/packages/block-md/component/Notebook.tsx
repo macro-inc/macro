@@ -47,7 +47,8 @@ enum CommentLayoutMode {
 const BreaksPoints: Record<CommentLayoutMode, number> = {
   lg: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
   md: NoteTargetWidth + CommentTargetWidth + 3 * GapTargetWidth,
-  sm: NoteTargetWidth - 2 * GapTargetWidth,
+  // hardcoded value below accounts for extra padding at sm size, keeps it from getting too squished
+  sm: NoteTargetWidth - 2 * GapTargetWidth + 260,
   xs: 0,
   none: 0,
 };

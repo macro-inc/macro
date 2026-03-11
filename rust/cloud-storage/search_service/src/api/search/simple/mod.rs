@@ -1,4 +1,4 @@
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 use axum::{
     Json, Router,
     http::StatusCode,
@@ -16,9 +16,9 @@ pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
 pub(in crate::api) mod simple_email;
 pub(in crate::api) mod simple_project;
-pub(in crate::api) mod simple_unified;
+pub mod simple_unified;
 
-pub fn router() -> Router<ApiContext> {
+pub fn router() -> Router<SearchHandlerState> {
     Router::new().route("/", post(simple_unified::handler))
 }
 

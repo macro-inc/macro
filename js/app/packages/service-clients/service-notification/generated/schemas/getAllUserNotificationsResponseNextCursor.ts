@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The next page cursor if it exists.
+ */
 export type GetAllUserNotificationsResponseNextCursor = string | null;

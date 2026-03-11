@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.thread_id,\n            c.email_address as \"email_address!\",\n            COALESCE(m.from_name, c.name) as \"name\"\n        FROM email_messages m\n        JOIN email_contacts c ON m.from_contact_id = c.id\n        WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL\n        ORDER BY m.created_at ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "14398843140a148be3189f593e689c36283225f47a6b37c197bc543f3fa18703"
+}

@@ -33,39 +33,20 @@ export {
   useUnreadEntityTypeNotifications,
   useUnreadNotifications,
 } from './notification-helpers';
-export type {
-  NotificationMetadataByType,
-  TypedNotification,
-  UnifiedNotificationMetadata,
-  UnifiedNotificationWithMetadata,
-} from './notification-metadata';
 export {
-  extractMetadata,
-  isChannelInvite,
-  isChannelMention,
-  isChannelMessageDocument,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  isDocumentMention,
-  isInviteToTeam,
-  isItemSharedOrganization,
-  isItemSharedUser,
-  isNewEmail,
-  isNotificationWithMetadata,
-  isRejectTeamInvite,
-  tryToTypedNotification,
+  getNotificationAction,
+  getNotificationContent,
+  getNotificationTargetName,
+  shouldShowNotificationTarget,
 } from './notification-metadata';
+export { openNotificationFromId } from './notification-navigation';
 export { openNotification } from './notification-navigation';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,
   toPlatformNotificationData,
 } from './notification-platform';
-export type { NotificationData } from './notification-preview';
-export {
-  extractNotificationData,
-  NOTIFICATION_LABEL_BY_TYPE,
-} from './notification-preview';
+export { NOTIFICATION_LABEL_BY_TYPE } from './notification-preview';
 export type {
   DocumentNameResolver,
   NotificationBlockNameResolver,
@@ -83,6 +64,13 @@ export type {
 export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
 export { createNotificationSource } from './notification-source';
+export type { NotificationStack } from './notification-stacking';
+export {
+  getAllNotificationsFromGroup,
+  getMostRecentNotification,
+  getThreadId,
+  stackNotifications,
+} from './notification-stacking';
 export { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 export { createMutedEntitiesQuery } from './queries/muted-entities-query';
 export type {

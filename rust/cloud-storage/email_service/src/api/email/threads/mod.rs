@@ -15,15 +15,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             email::inbound::router(state.email_service.clone()),
         )
         .route(
-            "/:id/seen",
+            "/{id}/seen",
             post(seen::seen_handler).layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 crate::api::middleware::gmail_token::attach_gmail_token,
             )),
         )
-        .route("/:id/messages", get(get::get_thread_messages_handler))
+        .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route(
-            "/:id/archived",
+            "/{id}/archived",
             patch(archived::archived_handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),
@@ -36,10 +36,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             crate::api::middleware::link::attach_link_context,
         ));
 
-    // user can still view threads shared with them if they don't have email enabled
-    let optional_link_routes = Router::new().route("/:id", get(get::get_thread_handler));
+    let hex_thread_routes = email::inbound::thread_router(state.email_thread_state.clone());
+
+    let hex_thread_labels_routes = email::inbound::thread_labels_router::<
+        ApiContext,
+        crate::api::context::EmailSvc,
+        email::outbound::GmailTokenProviderImpl,
+    >();
 
     Router::new()
         .merge(required_link_routes)
-        .merge(optional_link_routes)
+        .merge(hex_thread_routes)
+        .merge(hex_thread_labels_routes)
 }

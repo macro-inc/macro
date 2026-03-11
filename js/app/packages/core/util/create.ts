@@ -3,13 +3,13 @@ import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { invalidateUserQuota } from '@service-auth/userQuota';
+import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-import { postNewHistoryItem } from '@service-storage/history';
+import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
 import { contentHash } from './hash';
@@ -19,6 +19,7 @@ import {
   isCodeEditorLanguageSupported,
 } from './languageQuery';
 import { err, isErr, ok } from './maybeResult';
+import { refetchSoupEntity } from '@queries/soup/cache';
 
 /**
  * Generate a fake sha256 hash
@@ -36,11 +37,11 @@ type CreateMarkdownFileArgs = {
   title?: string;
   content?: string;
   projectId?: string;
-  isTask?: boolean;
 };
 
 /**
- * Initializes a new markdown file in dss & sync_service given a content string
+ * Initializes a new markdown file in dss & sync_service given a content string.
+ * Use createTask for the task subtype.
  */
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
@@ -58,7 +59,7 @@ export async function createMarkdownFile(
     fileType: 'md',
     sha: fakeSha,
     projectId: args?.projectId,
-    isTask: args?.isTask ?? false,
+    isTask: false,
   });
 
   invalidateUserQuota();
@@ -78,6 +79,7 @@ export async function createMarkdownFile(
   if (isErr(res)) {
     return;
   }
+  refetchSoupEntity(documentId, 'document');
   return documentId;
 }
 
@@ -128,85 +130,54 @@ export async function createTask(
     // Task was created, just without content - still return the id
   }
 
+  refetchSoupEntity(documentId, 'document');
   return documentId;
 }
 
 export async function createCodeFileFromText({
   code,
   extension,
-  title,
-}: {
-  code: string;
-  title?: string;
-  extension: CodeFileExtension;
-}) {
-  const encoder = new TextEncoder();
-  const buffer = encoder.encode(code);
-  const sha = await contentHash(buffer);
-  if (!isCodeEditorExtensionSupported(extension))
-    return err(
-      'UNSUPPORTED_EXTENSION',
-      `${extension} is not supported by the code block`
-    );
-  // mime types for code blocks are all text, and the backend doesn't care
-  const mimeType = 'text/plain';
-
-  const maybeCode = await storageServiceClient.createDocument({
-    documentName: title ?? 'New Code File',
-    fileType: extension,
-    sha: sha,
-  });
-
-  invalidateUserQuota();
-
-  // TODO: this is kind of odd, since there's an actual code we could use for the paywall, 402 Payment Required
-  if (isErr(maybeCode) && maybeCode[0][0].message.includes('403')) {
-    return err('UNAUTHORIZED', maybeCode[0][0].message);
-  }
-  if (isErr(maybeCode)) return err('SERVER_ERROR', maybeCode[0][0].message);
-  const [, document] = maybeCode;
-  const uploadResult = await uploadToPresignedUrl({
-    presignedUrl: document.presignedUrl,
-    buffer,
-    sha,
-    type: mimeType,
-  });
-  if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
-  postNewHistoryItem('document', document.metadata.documentId);
-  return ok({ documentId: document.metadata.documentId });
-}
-
-export async function createCodeFileFromTextWithLanguage({
-  code,
   language,
   title,
 }: {
   code: string;
   title?: string;
-  language: string;
+  extension?: CodeFileExtension;
+  language?: string;
 }) {
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
   const sha = await contentHash(buffer);
-  if (!isCodeEditorLanguageSupported(language))
-    return err(
-      'UNSUPPORTED_LANGUAGE',
-      `${language} is not supported by the code block`
-    );
-  // mime types for code blocks are all text, and the backend doesn't care
-  const mimeType = 'text/plain';
 
-  const extension = getExtensionForLanguage(language);
-  if (!extension) {
-    return err(
-      'UNSUPPORTED_LANGUAGE',
-      `Could not find file extension for language: ${language}`
-    );
+  let finalExtension: string | undefined = extension;
+
+  if (language && !extension) {
+    if (!isCodeEditorLanguageSupported(language))
+      return err(
+        'UNSUPPORTED_LANGUAGE',
+        `${language} is not supported by the code block`
+      );
+
+    finalExtension = getExtensionForLanguage(language) ?? undefined;
+    if (!finalExtension) {
+      return err(
+        'UNSUPPORTED_LANGUAGE',
+        `Could not find file extension for language: ${language}`
+      );
+    }
   }
+
+  if (!finalExtension || !isCodeEditorExtensionSupported(finalExtension))
+    return err(
+      'UNSUPPORTED_EXTENSION',
+      `${finalExtension ?? 'undefined'} is not supported by the code block`
+    );
+
+  const mimeType = 'text/plain';
 
   const maybeCode = await storageServiceClient.createDocument({
     documentName: title ?? 'New Code File',
-    fileType: extension,
+    fileType: finalExtension,
     sha: sha,
   });
 
@@ -226,6 +197,7 @@ export async function createCodeFileFromTextWithLanguage({
   });
   if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
   postNewHistoryItem('document', document.metadata.documentId);
+  refetchSoupEntity(document.metadata.documentId, 'document');
   return ok({ documentId: document.metadata.documentId });
 }
 
@@ -259,6 +231,7 @@ export async function createCanvasFileFromJsonString(args: {
   if (isErr(uploadResult)) return { error: 'Failed to upload file.' };
 
   postNewHistoryItem('document', canvas.metadata.documentId);
+  refetchSoupEntity(canvas.metadata.documentId, 'document');
   return { documentId: canvas.metadata.documentId };
 }
 
@@ -275,6 +248,7 @@ export async function createChat(args?: CreateChatRequest) {
   }
   const [, chat] = maybeChat;
   postNewHistoryItem('chat', chat.id);
+  refetchSoupEntity(chat.id, 'chat');
   return { chatId: chat.id };
 }
 
@@ -288,7 +262,7 @@ export async function createStaticFile(file: File): Promise<string> {
   if (isErr(result)) throw new Error('Failed to upload file');
 
   const { upload_url, id } = result[1];
-  const uploadResult = await staticFileClient.uploadToPresignedUlr({
+  const uploadResult = await staticFileClient.uploadToPresignedUrl({
     url: upload_url,
     blob: file,
   });

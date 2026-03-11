@@ -8,7 +8,6 @@ use std::str::FromStr;
 use crate::document::{BomPart, FileType};
 use crate::response::TypedSuccessResponse;
 use crate::{document::DocumentMetadata, response::PresignedUrl};
-use chrono::serde::ts_seconds_option;
 use models_permissions::share_permission::access_level::AccessLevel;
 use tracing::instrument;
 use utoipa::ToSchema;
@@ -38,12 +37,8 @@ pub struct GetDocumentListResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_family_id: Option<i64>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -123,12 +118,8 @@ pub struct DocumentResponseMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modification_data: Option<serde_json::Value>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,9 +162,7 @@ impl DocumentResponseMetadata {
             let document_bom: Vec<BomPart> = match serde_json::from_value(document_bom.clone()) {
                 Ok(document_bom) => document_bom,
                 Err(e) => {
-                    return Err(anyhow::anyhow!(format!(
-                        "document bom could not be serialized {e}",
-                    )));
+                    anyhow::bail!("document bom could not be serialized {e}");
                 }
             };
             document_response_metadata.document_bom = Some(document_bom);
@@ -200,7 +189,7 @@ pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseDat
 #[serde(rename_all = "camelCase")]
 pub struct CreateDocumentRequest {
     /// The id of the document in the database
-    pub id: Option<String>,
+    pub id: Option<uuid::Uuid>,
     /// The sha of the document.
     pub sha: String,
     /// The name of the document without extension.
@@ -219,7 +208,7 @@ pub struct CreateDocumentRequest {
     /// Will need to have a corresponding job initiated for the file beforehand.
     pub job_id: Option<String>,
     //// Optional project id to be used to what project the document belongs to.
-    pub project_id: Option<String>,
+    pub project_id: Option<uuid::Uuid>,
     /// Internal only field that links the document created to the specified email attachment by
     /// creating a row in the document_email table.
     pub email_attachment_id: Option<Uuid>,
@@ -230,4 +219,7 @@ pub struct CreateDocumentRequest {
     /// md.
     #[serde(default)]
     pub is_task: bool,
+    /// Whether to add a viewed_at record for this document upon creation.
+    #[serde(default)]
+    pub skip_history: bool,
 }

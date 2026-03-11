@@ -1,4 +1,4 @@
-import type { ExpandedEntityType } from '@macro-entity';
+import type { ExpandedEntityType } from '@entity';
 import type { PropertyDefinitionDomain } from '../types';
 
 /**

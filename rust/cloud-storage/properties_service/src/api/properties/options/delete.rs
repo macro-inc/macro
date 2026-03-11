@@ -6,7 +6,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use properties_db_client::{
     error::PropertiesDatabaseError,
@@ -68,16 +68,16 @@ impl IntoResponse for DeletePropertyOptionErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), err)]
+#[tracing::instrument(skip(state, user_context), err)]
 pub async fn delete_property_option(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     tracing::info!("deleting property option");
 
     // First check if property exists and if it's a system property
-    let property = property_definitions_get::get_property_definition(&context.db, def_uuid)
+    let property = property_definitions_get::get_property_definition(&state.db, def_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
@@ -93,7 +93,7 @@ pub async fn delete_property_option(
 
     // Then verify ownership
     let _property_definition = property_definitions_get::get_property_definition_with_owner(
-        &context.db,
+        &state.db,
         def_uuid,
         &user_context.user_id,
         user_context.organization_id,
@@ -107,7 +107,7 @@ pub async fn delete_property_option(
     })?
     .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
 
-    let option = property_options_get::get_property_option_by_id(&context.db, option_uuid)
+    let option = property_options_get::get_property_option_by_id(&state.db, option_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
@@ -121,7 +121,7 @@ pub async fn delete_property_option(
         return Err(DeletePropertyOptionErr::OptionNotFound);
     }
 
-    let deleted = property_options_delete::delete_property_option(&context.db, option_uuid)
+    let deleted = property_options_delete::delete_property_option(&state.db, option_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(

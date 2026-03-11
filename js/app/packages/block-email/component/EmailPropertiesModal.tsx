@@ -6,33 +6,35 @@ import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
 
-const DRAWER_ID = 'properties';
+export const PROPERTIES_DRAWER_ID = 'properties';
+const DRAWER_ID = PROPERTIES_DRAWER_ID;
 
-export function EmailPropertiesModal(props: {
-  buttonSize?: 'sm' | 'base';
-  subject?: string;
-  canEdit: boolean;
-}) {
+export function EmailPropertiesButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
-
   return (
-    <>
-      <DeprecatedIconButton
-        icon={TagIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'Properties' }}
-        onClick={drawerControl.toggle}
-      />
-      <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
-        <Suspense fallback={<LoadingFallback />}>
-          <EmailPropertiesContent
-            canEdit={props.canEdit}
-            subject={props.subject}
-          />
-        </Suspense>
-      </SplitDrawer>
-    </>
+    <DeprecatedIconButton
+      icon={TagIcon}
+      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+      size={props.buttonSize ?? 'base'}
+      tooltip={{ label: 'Properties' }}
+      onClick={drawerControl.toggle}
+    />
+  );
+}
+
+export function EmailPropertiesDrawer(props: {
+  canEdit: boolean;
+  subject?: string;
+}) {
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
+      <Suspense fallback={<LoadingFallback />}>
+        <EmailPropertiesContent
+          canEdit={props.canEdit}
+          subject={props.subject}
+        />
+      </Suspense>
+    </SplitDrawer>
   );
 }
 

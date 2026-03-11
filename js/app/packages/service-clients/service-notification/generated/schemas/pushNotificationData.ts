@@ -4,7 +4,12 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Entity } from './entity';
-import type { PushNotificationDataAllOf } from './pushNotificationDataAllOf';
+import type { PushNotificationDataSenderProfilePictureUrl } from './pushNotificationDataSenderProfilePictureUrl';
 
-export type PushNotificationData = Entity & PushNotificationDataAllOf;
+export interface PushNotificationData {
+  /** The id of the notification record (UserNotification.id) */
+  notificationId: string;
+  /** The sender's profile picture URL, used by the Notification Service Extension
+to download and attach as a rich notification image. */
+  senderProfilePictureUrl?: PushNotificationDataSenderProfilePictureUrl;
+}

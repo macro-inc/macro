@@ -1,18 +1,19 @@
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import { Button } from '@ui/components/Button';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
 import type { ReplyType } from '@block-email/util/replyType';
+import { createCallback } from '@solid-primitives/rootless';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
 
 export function MessageActions(props: {
-  message: MessageWithBodyReplyless;
+  message: ApiMessage;
   showActions: boolean;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
@@ -41,17 +42,15 @@ export function MessageActions(props: {
   };
 
   const onChangeReplyType = (type: ReplyType) => {
-    return () => {
-      if (!props.isLastMessage) {
-        props.setShowReply(true);
-      }
+    return createCallback(() => {
+      props.setShowReply(true);
       const form = formRegistry.getOrInit({
         type: 'replying_to',
         messageID: props.message.db_id ?? '',
       });
       form.setReplyType(type);
       form.setShouldFocusInput(true);
-    };
+    });
   };
 
   return (

@@ -4,7 +4,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { useHistory } from '@service-storage/history';
+import { getHistoryItems } from '@queries/history/history';
 import { validate as uuidValidate } from 'uuid';
 
 export const jsonToXML = (tag: string, data: object) => {
@@ -12,8 +12,8 @@ export const jsonToXML = (tag: string, data: object) => {
 };
 
 const createDocumentMentionXML = (documentId: string) => {
-  const history = useHistory();
-  const item = history().find((item) => item.id === documentId);
+  const history = getHistoryItems();
+  const item = history.find((item) => item.id === documentId);
   if (!item) {
     if (import.meta.env.DEV) {
       console.error('Could not find item', documentId);
@@ -34,8 +34,8 @@ const createDocumentMentionXML = (documentId: string) => {
 };
 
 const createChatMentionXML = (chatId: string) => {
-  const chats = useHistory();
-  const chat = chats().find((c) => c.id === chatId);
+  const chats = getHistoryItems();
+  const chat = chats.find((c) => c.id === chatId);
   if (!chat) {
     if (import.meta.env.DEV) {
       console.error('Could not find chat', chatId);
@@ -78,8 +78,8 @@ const createChannelMentionXML = (channelId: string) => {
 };
 
 const createProjectMentionXML = (projectId: string) => {
-  const projects = useHistory();
-  const project = projects().find((p) => p.id === projectId);
+  const projects = getHistoryItems();
+  const project = projects.find((p) => p.id === projectId);
   if (!project) {
     if (import.meta.env.DEV) {
       console.error('Could not find project', projectId);

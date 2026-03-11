@@ -12,6 +12,12 @@ pub enum ProjectLiteral {
     ProjectId(Uuid),
     /// the owner of the project
     Owner(MacroUserIdStr<'static>),
+    /// this node value filters by project importance. false short-circuits to match nothing.
+    Importance(bool),
+    /// this node value filters by notification done state for projects.
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for projects.
+    NotificationSeen(bool),
 }
 
 impl ExpandFrame<ProjectLiteral> for ProjectFilters {
@@ -21,6 +27,8 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
         let ProjectFilters {
             project_ids,
             owners,
+            importance,
+            notification_filters,
         } = input;
 
         let project_ids = project_ids
@@ -33,6 +41,22 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ProjectLiteral::Owner), Expr::or)?;
 
-        Ok([project_ids, owners].into_iter().fold_with(Expr::and))
+        let importance_node = importance.map(|imp| Expr::Literal(ProjectLiteral::Importance(imp)));
+        let notification_done_node = notification_filters
+            .done
+            .map(|done| Expr::Literal(ProjectLiteral::NotificationDone(done)));
+        let notification_seen_node = notification_filters
+            .seen
+            .map(|seen| Expr::Literal(ProjectLiteral::NotificationSeen(seen)));
+
+        Ok([
+            project_ids,
+            owners,
+            importance_node,
+            notification_done_node,
+            notification_seen_node,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

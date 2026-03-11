@@ -1,9 +1,9 @@
 pub(crate) mod get;
 pub(crate) mod labels;
-pub(crate) mod send;
 
 use axum::Router;
 use axum::routing::{get, patch, post};
+use email::inbound::send_router;
 
 use crate::api::ApiContext;
 
@@ -11,7 +11,7 @@ const BATCH_UPDATE_MESSAGE_LIMIT: usize = 10;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .route("/", post(send::send_handler))
+        .merge(send_router(state.email_service.clone()))
         .route(
             "/labels",
             patch(labels::handler).layer(axum::middleware::from_fn_with_state(
@@ -24,5 +24,5 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             state.email_service,
             crate::api::middleware::link::attach_link_context,
         ))
-        .route("/:id", get(get::handler))
+        .route("/{id}", get(get::handler))
 }

@@ -1,5 +1,4 @@
 use crate::GmailClient;
-use crate::parse::map_watch_response_to_service;
 use anyhow::Context;
 use models_email::gmail::WatchRequest;
 use models_email::gmail::error::GmailError;
@@ -52,7 +51,7 @@ pub(crate) async fn register_watch(
         .await
         .map_err(|e| GmailError::BodyReadError(e.to_string()))?;
 
-    Ok(map_watch_response_to_service(watch_response))
+    Ok(watch_response)
 }
 
 /// Stops push notifications for a user's Gmail inbox

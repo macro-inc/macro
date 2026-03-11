@@ -130,7 +130,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<HtmlRenderNode>(HtmlRenderNode);
+    const decorator = getDecorator<HtmlRenderDecoratorProps>(HtmlRenderNode);
     if (decorator) {
       return () =>
         decorator({

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_attachments_fwd eaf\n        USING email_messages m\n        WHERE eaf.message_id = m.id\n        AND eaf.message_id = $1 AND eaf.attachment_id = $2 AND m.link_id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f61e5ffbf5f10d3989640c3f1b70bbe79c9e1b2e6d2e6925bdf89df1a07ead5d"
+}

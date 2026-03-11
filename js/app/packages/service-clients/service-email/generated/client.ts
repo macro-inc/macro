@@ -7,6 +7,8 @@
 import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
+  AddForwardedAttachmentRequest,
+  AddForwardedAttachmentResponse,
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   CancelBackfillParams,
@@ -38,6 +40,8 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateThreadLabelRequest,
+  UpdateThreadLabelsResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -443,9 +447,9 @@ export type createDraftResponse400 = {
   status: 400;
 };
 
-export type createDraftResponse401 = {
+export type createDraftResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type createDraftResponse500 = {
@@ -458,7 +462,7 @@ export type createDraftResponseSuccess = createDraftResponse201 & {
 };
 export type createDraftResponseError = (
   | createDraftResponse400
-  | createDraftResponse401
+  | createDraftResponse404
   | createDraftResponse500
 ) & {
   headers: Headers;
@@ -921,6 +925,129 @@ export const removeDraftAttachment = async (
 };
 
 /**
+ * @summary Add a forwarded attachment to a draft.
+ */
+export type addForwardedAttachmentResponse201 = {
+  data: AddForwardedAttachmentResponse;
+  status: 201;
+};
+
+export type addForwardedAttachmentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addForwardedAttachmentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addForwardedAttachmentResponseSuccess =
+  addForwardedAttachmentResponse201 & {
+    headers: Headers;
+  };
+export type addForwardedAttachmentResponseError = (
+  | addForwardedAttachmentResponse404
+  | addForwardedAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type addForwardedAttachmentResponse =
+  | addForwardedAttachmentResponseSuccess
+  | addForwardedAttachmentResponseError;
+
+export const getAddForwardedAttachmentUrl = (id: string) => {
+  return `/email/drafts/${id}/forwarded-attachments`;
+};
+
+export const addForwardedAttachment = async (
+  id: string,
+  addForwardedAttachmentRequest: AddForwardedAttachmentRequest,
+  options?: RequestInit
+): Promise<addForwardedAttachmentResponse> => {
+  const res = await fetch(getAddForwardedAttachmentUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addForwardedAttachmentRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addForwardedAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addForwardedAttachmentResponse;
+};
+
+/**
+ * @summary Remove a forwarded attachment from a draft.
+ */
+export type removeForwardedAttachmentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type removeForwardedAttachmentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type removeForwardedAttachmentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type removeForwardedAttachmentResponseSuccess =
+  removeForwardedAttachmentResponse204 & {
+    headers: Headers;
+  };
+export type removeForwardedAttachmentResponseError = (
+  | removeForwardedAttachmentResponse404
+  | removeForwardedAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeForwardedAttachmentResponse =
+  | removeForwardedAttachmentResponseSuccess
+  | removeForwardedAttachmentResponseError;
+
+export const getRemoveForwardedAttachmentUrl = (
+  id: string,
+  attachmentId: string
+) => {
+  return `/email/drafts/${id}/forwarded-attachments/${attachmentId}`;
+};
+
+export const removeForwardedAttachment = async (
+  id: string,
+  attachmentId: string,
+  options?: RequestInit
+): Promise<removeForwardedAttachmentResponse> => {
+  const res = await fetch(getRemoveForwardedAttachmentUrl(id, attachmentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeForwardedAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeForwardedAttachmentResponse;
+};
+
+/**
  * @summary Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
  */
 export type initUserResponse200 = {
@@ -975,16 +1102,11 @@ export const initUser = async (
 };
 
 /**
- * @summary List user labels.
+ * @summary List all labels for the user's email link.
  */
 export type listLabelsResponse200 = {
   data: ListLabelsResponse;
   status: 200;
-};
-
-export type listLabelsResponse400 = {
-  data: ErrorResponse;
-  status: 400;
 };
 
 export type listLabelsResponse401 = {
@@ -1001,7 +1123,6 @@ export type listLabelsResponseSuccess = listLabelsResponse200 & {
   headers: Headers;
 };
 export type listLabelsResponseError = (
-  | listLabelsResponse400
   | listLabelsResponse401
   | listLabelsResponse500
 ) & {
@@ -1244,7 +1365,7 @@ export const listLinks = async (
 };
 
 /**
- * @summary Send an email message.
+ * @summary Send a message.
  */
 export type sendMessageResponse201 = {
   data: SendMessageResponse;
@@ -1256,9 +1377,9 @@ export type sendMessageResponse400 = {
   status: 400;
 };
 
-export type sendMessageResponse401 = {
+export type sendMessageResponse404 = {
   data: ErrorResponse;
-  status: 401;
+  status: 404;
 };
 
 export type sendMessageResponse500 = {
@@ -1271,7 +1392,7 @@ export type sendMessageResponseSuccess = sendMessageResponse201 & {
 };
 export type sendMessageResponseError = (
   | sendMessageResponse400
-  | sendMessageResponse401
+  | sendMessageResponse404
   | sendMessageResponse500
 ) & {
   headers: Headers;
@@ -1569,66 +1690,6 @@ export const patchSettings = async (
 };
 
 /**
- * @summary Enables inbox syncing for user.
- */
-export type enableSyncResponse201 = {
-  data: EmptyResponse;
-  status: 201;
-};
-
-export type enableSyncResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type enableSyncResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type enableSyncResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type enableSyncResponseSuccess = enableSyncResponse201 & {
-  headers: Headers;
-};
-export type enableSyncResponseError = (
-  | enableSyncResponse400
-  | enableSyncResponse401
-  | enableSyncResponse500
-) & {
-  headers: Headers;
-};
-
-export type enableSyncResponse =
-  | enableSyncResponseSuccess
-  | enableSyncResponseError;
-
-export const getEnableSyncUrl = () => {
-  return `/email/sync`;
-};
-
-export const enableSync = async (
-  options?: RequestInit
-): Promise<enableSyncResponse> => {
-  const res = await fetch(getEnableSyncUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: enableSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as enableSyncResponse;
-};
-
-/**
  * @summary Disables inbox syncing for user.
  */
 export type disableSyncResponse204 = {
@@ -1769,86 +1830,6 @@ export const previewsInboxCursor = async (
 };
 
 /**
- * @summary Get a thread with a paginated number of messages.
- */
-export type getThreadResponse200 = {
-  data: GetThreadResponse;
-  status: 200;
-};
-
-export type getThreadResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getThreadResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getThreadResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getThreadResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getThreadResponseSuccess = getThreadResponse200 & {
-  headers: Headers;
-};
-export type getThreadResponseError = (
-  | getThreadResponse400
-  | getThreadResponse401
-  | getThreadResponse404
-  | getThreadResponse500
-) & {
-  headers: Headers;
-};
-
-export type getThreadResponse =
-  | getThreadResponseSuccess
-  | getThreadResponseError;
-
-export const getGetThreadUrl = (id: string, params: GetThreadParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/threads/${id}?${stringifiedParams}`
-    : `/email/threads/${id}`;
-};
-
-export const getThread = async (
-  id: string,
-  params: GetThreadParams,
-  options?: RequestInit
-): Promise<getThreadResponse> => {
-  const res = await fetch(getGetThreadUrl(id, params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getThreadResponse;
-};
-
-/**
  * @summary Change the archived status of a thread.
  */
 export type archiveThreadResponse200 = {
@@ -1910,6 +1891,79 @@ export const archiveThread = async (
     status: res.status,
     headers: res.headers,
   } as archiveThreadResponse;
+};
+
+/**
+ * @summary Add or remove a label from all messages in a thread.
+ */
+export type addRemoveThreadLabelResponse200 = {
+  data: UpdateThreadLabelsResponse;
+  status: 200;
+};
+
+export type addRemoveThreadLabelResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addRemoveThreadLabelResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type addRemoveThreadLabelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addRemoveThreadLabelResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addRemoveThreadLabelResponseSuccess =
+  addRemoveThreadLabelResponse200 & {
+    headers: Headers;
+  };
+export type addRemoveThreadLabelResponseError = (
+  | addRemoveThreadLabelResponse400
+  | addRemoveThreadLabelResponse401
+  | addRemoveThreadLabelResponse404
+  | addRemoveThreadLabelResponse500
+) & {
+  headers: Headers;
+};
+
+export type addRemoveThreadLabelResponse =
+  | addRemoveThreadLabelResponseSuccess
+  | addRemoveThreadLabelResponseError;
+
+export const getAddRemoveThreadLabelUrl = (id: string) => {
+  return `/email/threads/${id}/labels`;
+};
+
+export const addRemoveThreadLabel = async (
+  id: string,
+  updateThreadLabelRequest: UpdateThreadLabelRequest,
+  options?: RequestInit
+): Promise<addRemoveThreadLabelResponse> => {
+  const res = await fetch(getAddRemoveThreadLabelUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadLabelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addRemoveThreadLabelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRemoveThreadLabelResponse;
 };
 
 export type getThreadMessagesHandlerResponse200 = {
@@ -2054,6 +2108,86 @@ export const threadSeen = async (
     status: res.status,
     headers: res.headers,
   } as threadSeenResponse;
+};
+
+/**
+ * @summary Get a thread with paginated messages.
+ */
+export type getThreadResponse200 = {
+  data: GetThreadResponse;
+  status: 200;
+};
+
+export type getThreadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getThreadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getThreadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getThreadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getThreadResponseSuccess = getThreadResponse200 & {
+  headers: Headers;
+};
+export type getThreadResponseError = (
+  | getThreadResponse400
+  | getThreadResponse401
+  | getThreadResponse404
+  | getThreadResponse500
+) & {
+  headers: Headers;
+};
+
+export type getThreadResponse =
+  | getThreadResponseSuccess
+  | getThreadResponseError;
+
+export const getGetThreadUrl = (threadId: string, params?: GetThreadParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/threads/${threadId}?${stringifiedParams}`
+    : `/email/threads/${threadId}`;
+};
+
+export const getThread = async (
+  threadId: string,
+  params?: GetThreadParams,
+  options?: RequestInit
+): Promise<getThreadResponse> => {
+  const res = await fetch(getGetThreadUrl(threadId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadResponse;
 };
 
 /**

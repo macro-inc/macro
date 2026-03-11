@@ -1,19 +1,46 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
+use ai_tools::{NoOpConnectionService, NoOpTaskProperties};
 use anyhow::Context;
+use comms::domain::service::ChannelServiceImpl;
+use comms::outbound::postgres::comms_repo::PgCommsRepo;
+use comms::outbound::postgres::user_repo::PgUserRepo;
 use comms_service_client::CommsServiceClient;
-use config::{Config, Environment};
+use config::{Config, EnvVars, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
+use documents::{
+    domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
+    inbound::toolset::DocumentToolContext,
+    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
+};
+use email::domain::service::EmailServiceImpl;
+use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use frecency::domain::services::FrecencyQueryServiceImpl;
+use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use notification::domain::models::email_notification_digest::{
+    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
+};
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
+use soup::domain::service::SoupImpl;
+use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
 
 mod api;
@@ -28,15 +55,10 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
-    let config = Config::from_env().context("failed to parse config from environment")?;
+    let config = Config::from_env(EnvVars::unwrap_new())
+        .context("failed to parse config from environment")?;
 
     tracing::info!("initialized config");
-
-    if matches!(config.environment, Environment::Local) {
-        let tool_schemas =
-            serde_json::to_string_pretty(&ai_tools::all_tool_schemas()).expect("tool schemas");
-        std::fs::write("schemas/tools.json", tool_schemas).expect("write_tool_schema");
-    }
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 30),
@@ -57,46 +79,22 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let queue_aws_client = if cfg!(feature = "local_queue") {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url("http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/")
-                .load()
-                .await,
-        )
-    } else {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        )
-    };
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .search_event_queue(&config.search_event_queue);
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
     );
-
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.notification_queue.clone(),
-        "document_cognition_service".to_string(),
-    )
-    .await;
-    tracing::info!("initialized macro_notify client");
 
     let document_storage_client = DocumentStorageServiceClient::new(
         internal_auth_key.as_ref().to_string(),
@@ -104,10 +102,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    let comms_service_client = CommsServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.comms_service_url.clone(),
-    );
+    // Comms service is now served from document_storage_service under /comms prefix
+    let comms_service_client = CommsServiceClient::new(config.document_storage_service_url.clone());
 
     tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
@@ -127,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized sync service client");
     let search_service_client = SearchServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.search_service_url.clone(),
+        config.document_storage_service_url.clone(),
     );
 
     tracing::info!("initialized search service client");
@@ -159,6 +155,133 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized static file service client");
 
+    // Build soup service
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    );
+    let channels_service = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        PgUserRepo::new(db.clone()),
+        frecency_storage,
+    );
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(db.clone()),
+        frecency_service,
+        email_service,
+        channels_service,
+    ));
+
+    tracing::info!("initialized soup service");
+
+    // Initialize Redis client for stream service
+    let redis_client = Arc::new(
+        redis::Client::open(config.redis_host.as_ref())
+            .inspect(|client| {
+                client
+                    .get_connection()
+                    .map(|_| tracing::trace!("initialized redis connection"))
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to connect to redis");
+                    })
+                    .expect("redis connetion required");
+            })
+            .context("failed to connect to redis")?,
+    );
+    let stream_repo = RedisPostgresStreamRepo::new((*redis_client).clone(), db.clone()).obj();
+
+    tracing::info!("initialized stream repo");
+
+    let connection_manager =
+        connection_gateway::service::dynamodb::create_dynamo_db_connection_manager(dynamodb_client)
+            .await
+            .context("failed to create connection manager")?;
+
+    tracing::info!("initialized connection repo");
+
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for notification state machine")?;
+
+    let notification_ingress_service = Arc::new({
+        let notification_repository = DbNotificationRepository::new(db.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.notification_queue.clone(),
+        );
+        let state_machine = StateMachineDriverA {
+            user_checker: DbUserExistenceChecker::new(db.clone()),
+            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
+                db.clone(),
+            )),
+            online_checker: LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        redis_multiplexed_conn.clone(),
+                    ),
+                ),
+            ),
+            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
+            )
+            .append::<model_notifications::ChannelInviteMetadata>(),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
+        };
+        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
+    });
+
+    tracing::info!("initialized notification ingress service");
+
+    // Build document tool context for AI tools
+    let s3_client = macro_aws_config::s3_client().await;
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        s3_client,
+        config.document_storage_bucket.clone(),
+        config.docx_document_upload_bucket.clone(),
+    );
+    let document_repo = PgDocumentRepo::new(db.clone());
+    let cloudfront_private_key = match config.environment {
+        Environment::Local => config.cloudfront_signer_private_key.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.cloudfront_signer_private_key)
+            .await
+            .context("failed to get CloudFront signer private key from secrets manager")?
+            .to_string(),
+    };
+    let cloudfront_config = CloudFrontConfig {
+        distribution_url: config.cloudfront_distribution_url.clone(),
+        signer_public_key_id: config.cloudfront_signer_public_key_id.clone(),
+        signer_private_key: cloudfront_private_key,
+        presigned_url_expiry_seconds: 3600,
+        browser_cache_expiry_seconds: 86400,
+    };
+    let document_service = DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.clone(),
+        s3_upload_adapter,
+        NoOpTaskProperties,
+        NoOpConnectionService,
+    );
+    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+    let lexical_client_for_tools = (*lexical_client).clone();
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        entity_access_service,
+        lexical_client_for_tools,
+    );
+
+    tracing::info!("initialized document tool context");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -174,19 +297,23 @@ async fn main() -> anyhow::Result<()> {
                         .with_macro_db(db.clone())
                         .build(),
                 )
-                .with_channel_client(comms_service_client.clone())
+                .with_channel_client_and_db(comms_service_client.clone(), db.clone())
                 .with_dcs_client(document_cognition_service_client)
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),
         ),
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
-        macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client: Arc::new(comms_service_client),
         search_service_client: Arc::new(search_service_client),
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,
+        notification_ingress_service,
+        connection_repo: connection_manager.persistence,
+        soup_service,
+        stream_repo,
+        document_tool_context,
     })
     .await
     .context("failed to setup and serve api")?;

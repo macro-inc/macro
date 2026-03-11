@@ -1,22 +1,18 @@
 use crate::parse::service_to_db::map_new_contact_to_db;
-use anyhow::Context;
 use models_email::db;
 use models_email::service::contact::Contact;
 use sqlx::PgPool;
-use sqlx::types::Uuid;
 
 /// Upsert methods used by contact sync process, triggered by initial backfill and daily cron.
 /// Upserts multiple contacts into the contacts table
-#[tracing::instrument(skip(pool, contacts), level = "info")]
+#[tracing::instrument(skip(pool, contacts), err)]
 pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Result<u64> {
     if contacts.is_empty() {
         return Ok(0);
     }
 
-    let db_contacts: Vec<db::contact::Contact> = contacts
-        .iter()
-        .map(|c| map_new_contact_to_db(c, macro_uuid::generate_uuid_v7()))
-        .collect();
+    let db_contacts: Vec<db::contact::Contact> =
+        contacts.iter().map(map_new_contact_to_db).collect();
 
     // Filter out contacts without email addresses and prepare vectors for bulk insert
     let mut ids = Vec::new();
@@ -29,6 +25,7 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
     for contact in db_contacts {
         if let Some(email) = &contact.email_address
             && !email.trim().is_empty()
+            && email.len() < 310
         {
             ids.push(contact.id);
             link_ids.push(contact.link_id);
@@ -63,15 +60,7 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
     &sfs_photo_urls as &[Option<String>]
 )
 .execute(pool)
-.await
-.with_context(|| {
-    format!(
-        "Failed to insert {} contacts for link_id {}",
-        link_ids.len(),
-        // all contacts should have the same link_id
-        link_ids.first().unwrap_or(&Uuid::default())
-    )
-})?;
+.await?;
 
     Ok(result.rows_affected())
 }

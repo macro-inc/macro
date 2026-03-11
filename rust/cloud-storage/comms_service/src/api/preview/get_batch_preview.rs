@@ -26,7 +26,7 @@ pub struct GetBatchChannelPreviewResponse {
     post,
     tag = "preview",
     operation_id="get_batch_channel_preview",
-    path = "/preview",
+    path = "/comms/preview",
     responses(
         (status = 200, body=GetBatchChannelPreviewResponse),
         (status = 401, body=GenericErrorResponse),

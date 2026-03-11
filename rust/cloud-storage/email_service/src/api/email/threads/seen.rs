@@ -103,7 +103,7 @@ pub async fn seen_handler(
         return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
     }
 
-    let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id.unwrap()).collect();
+    let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id).collect();
     let message_provider_ids: Vec<String> = unread_messages
         .iter()
         .map(|m| m.provider_id.clone().unwrap_or_default())

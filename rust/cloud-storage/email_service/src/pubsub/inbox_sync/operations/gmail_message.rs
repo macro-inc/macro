@@ -1,3 +1,4 @@
+use crate::convert::map_history_list_response_to_history;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::process::fetch_pubsub_gmail_token;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
@@ -91,7 +92,7 @@ pub async fn gmail_message(
         is_backfill: false,
     })
     .await?;
-    let inbox_changes = ctx
+    let history_response = ctx
         .gmail_client
         .get_history(&gmail_access_token, &db_history_id)
         .await
@@ -101,6 +102,7 @@ pub async fn gmail_message(
                 source: e.context(format!("unable to get history for link id: {}", link.id)),
             })
         })?;
+    let inbox_changes = map_history_list_response_to_history(history_response);
 
     // Update the history_id in the database immediately to prevent duplicate processing.
     // The db history_id is used to determine which inbox changes need processing when

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use axum::{
     Extension, Json,
     extract::{self, Path, State},
@@ -9,6 +11,8 @@ use macro_user_id::{
 };
 use model_entity::EntityType;
 use model_user::axum_extractor::MacroUserExtractor;
+use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::service::NotificationIngress;
 use teams::domain::{
     model::{InviteUsersToTeamError, TeamInvite},
     team_repo::TeamService,
@@ -22,10 +26,9 @@ use crate::api::{
     },
     team::TeamPathParam,
 };
+use model_notifications::InviteToTeamMetadata;
 
 use model::{response::ErrorResponse, tracking::IPContext};
-
-use model_notifications::{InviteToTeamMetadata, NotificationQueueMessage};
 
 /// The request body to invite a user to a team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -145,13 +148,13 @@ pub async fn handler(
     // Send the invites
     tokio::spawn({
         let db = ctx.db.clone();
-        let macro_notify_client = ctx.macro_notify_client.clone();
+        let notification_ingress_service = ctx.notification_ingress_service.clone();
         let team_invites = team_invites.clone();
         let invited_by = user_context.macro_user_id;
         async move {
             let _ = notify_team_invite(
                 &db,
-                &macro_notify_client,
+                &*notification_ingress_service,
                 &team_id,
                 team_invites,
                 invited_by,
@@ -166,32 +169,38 @@ pub async fn handler(
 
 pub(in crate::api::team) async fn notify_team_invite(
     db: &sqlx::Pool<sqlx::Postgres>,
-    macro_notify_client: &macro_notify::MacroNotify,
+    notification_ingress_service: &impl NotificationIngress,
     team_id: &uuid::Uuid,
     team_invites: Vec<TeamInvite<'_>>,
     invited_by: MacroUserIdStr<'static>,
 ) -> anyhow::Result<()> {
     let team_name = macro_db_client::team::get::get_team_name(db, team_id).await?;
 
-    let notification_metadata = InviteToTeamMetadata {
-        invited_by: invited_by.clone(),
-        team_name: team_name.clone(),
-        team_id: team_id.to_string(),
-        role: None,
-    };
-
     for team_invite in team_invites {
-        let notification_queue_message = NotificationQueueMessage {
-            notification_entity: EntityType::Team
-                .with_entity_string(team_invite.team_invite_id.to_string()),
-            notification_event: notification_metadata.clone().into(),
-            sender_id: Some(invited_by.clone()),
-            recipient_ids: Some(vec![format!("macro|{}", team_invite.email.as_ref())]),
+        let notification = InviteToTeamMetadata {
+            invited_by: invited_by.clone(),
+            team_name: team_name.clone(),
+            team_id: team_id.to_string(),
+            role: None,
         };
 
-        macro_notify_client
-            .send_notification(notification_queue_message)
-            .await?;
+        let recipient = MacroUserIdStr::try_from_email(team_invite.email.as_ref())
+            .map_err(|e| anyhow::anyhow!("failed to parse email as macro user id: {}", e))?;
+
+        let entity_id = team_invite.team_invite_id.to_string();
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::Team.with_entity_str(&entity_id),
+            notification,
+            sender_id: Some(invited_by.clone()),
+            recipient_ids: HashSet::from([recipient]),
+        }
+        .into_request()
+        .with_conn_gateway();
+
+        notification_ingress_service
+            .send_notification(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
     }
 
     Ok(())

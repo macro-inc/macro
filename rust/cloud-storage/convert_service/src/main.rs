@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use config::Config;
@@ -20,10 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
     MacroEntrypoint::new(env).init();
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -45,20 +43,9 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
-    let queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.convert_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
+    let queue_aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))

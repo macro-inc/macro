@@ -25,7 +25,7 @@ pub async fn get_document_metadata(
         FROM
             "Document" d
         WHERE
-            d.id = $1 AND d."deletedAt" IS NULL
+            d.id = $1
         "#,
         document_id
     )

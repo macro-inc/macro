@@ -4,7 +4,16 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { Button } from '@ui/components/Button';
 import type { Component, JSX } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
+import type { PropertySaveHandler } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+
+/**
+ * Stub save handler for read-only contexts.
+ */
+export const stubSaveHandler: PropertySaveHandler = {
+  saveProperty: async () => {},
+  saveDate: async () => {},
+};
 
 /**
  * Shared props type for all property value display components
@@ -12,9 +21,10 @@ import type { Property } from '../../types';
 export type PropertyValueProps = {
   property: Property;
   canEdit: boolean;
-  entityType: EntityType;
+  entityType?: EntityType;
   onEdit?: (property: Property, anchor?: HTMLElement) => void;
   onRefresh?: () => void;
+  saveHandler?: PropertySaveHandler;
 };
 
 /**

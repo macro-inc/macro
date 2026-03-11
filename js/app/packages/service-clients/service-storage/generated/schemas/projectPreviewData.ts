@@ -4,11 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectPreviewDataUpdatedAt } from './projectPreviewDataUpdatedAt';
 
 export interface ProjectPreviewData {
   id: string;
   name: string;
   owner: string;
   path: string[];
-  updatedAt: number;
+  updatedAt?: ProjectPreviewDataUpdatedAt;
 }

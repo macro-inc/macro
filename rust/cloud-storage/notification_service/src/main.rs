@@ -1,8 +1,13 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
+use ::notification::domain::service::NotificationEgressService;
+use ::notification::inbound::worker::NotificationWorker;
+use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::mobile::MobilePushAdapter;
+use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use anyhow::Context;
 use config::Config;
-use connection_gateway_client::client::ConnectionGatewayClient;
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
@@ -13,10 +18,11 @@ use std::sync::Arc;
 
 mod api;
 mod config;
+#[allow(dead_code)]
 mod env;
 mod model;
 mod notification;
-mod push_notification_event;
+#[allow(dead_code)]
 mod templates;
 
 #[tokio::main]
@@ -34,8 +40,6 @@ pub async fn main() -> anyhow::Result<()> {
         Environment::Local => (1, 10),
     };
 
-    println!("database url: {:?}", &config.database_url);
-
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
@@ -49,128 +53,66 @@ pub async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_secret_key = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
-    let _dcs_client = DocumentCognitionServiceClient::new(
-        internal_secret_key.as_ref().to_string(),
-        config.document_cognition_service_url.clone(),
-    );
-
-    let conn_gateway_client = ConnectionGatewayClient::new(
-        internal_secret_key.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
-    );
-
-    let notification_queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.notification_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
-
-    let push_delivery_queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.push_notification_event_handler_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
-
-    // Normal config for non-local stack items
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
-
-    let notification_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&notification_queue_aws_config),
-        config.notification_queue.clone(),
-        config.notification_queue_max_messages,
-        config.notification_queue_wait_time_seconds,
-    );
-
-    let push_notification_event_handler_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&push_delivery_queue_aws_config),
-        config.push_notification_event_handler_queue.clone(),
-        config.notification_queue_max_messages,
-        config.notification_queue_wait_time_seconds,
-    );
-
-    let ses_client = ses_client::Ses::new(
-        aws_sdk_sesv2::Client::new(&aws_config),
-        &config.environment.to_string(),
-    );
-    let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));
-
-    let macro_cache_client = macro_cache_client::MacroCache::new(config.redis_uri.as_str());
-
-    #[cfg(feature = "notification_worker")]
-    {
-        use std::sync::Arc;
-
-        let auth_service_internal_key = match config.environment {
-            Environment::Local => config.auth_service_secret_key.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(config.auth_service_secret_key.clone())
-                .await
-                .context("unable to get secret")?
-                .to_string(),
-        };
-
-        let auth_service_client = authentication_service_client::AuthServiceClient::new(
-            auth_service_internal_key,
-            config.auth_service_url.clone(),
-        );
-
-        let queue_worker_context = notification::context::QueueWorkerContext {
-            db: db.clone(),
-            worker: Arc::new(notification_worker),
-            conn_gateway_client: Arc::new(conn_gateway_client),
-            ses_client: Arc::new(ses_client),
-            sns_client: Arc::new(sns_client.clone()),
-            macro_cache_client: Arc::new(macro_cache_client),
-            auth_service_client: Arc::new(auth_service_client),
-        };
-
-        // Spawn the runner in a task of it's own so we don't block the main thread
-        tokio::spawn(
-            async move { notification::run_notification_worker(queue_worker_context).await },
-        );
-    }
+    let vars = config::Vars::new()?;
+    let redis_client =
+        redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
 
     #[cfg(feature = "push_notification_event_handler")]
     {
-        let db = db.clone();
-        let sns_client = sns_client.clone();
-        tokio::spawn(async move {
-            push_notification_event::run_push_notification_event_worker(
-                db,
-                sns_client,
-                push_notification_event_handler_worker,
-            )
+        let event_notif_repo =
+            ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+        let event_sns_manager =
+            ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+                aws_sdk_sns::Client::new(&aws_config),
+            );
+
+        let push_event_redis_conn = redis_client
+            .get_multiplexed_async_connection()
             .await
-        });
+            .context("failed to get redis connection for push event digest state machine")?;
+
+        let digest_failure_sm =
+            ::notification::domain::models::email_notification_digest::StateMachineDriverC {
+                message_receipt_repo:
+                    ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                        db.clone(),
+                    ),
+                digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+                    push_event_redis_conn,
+                ),
+                notif_repo:
+                    ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+                digest_window: std::time::Duration::from_secs(30 * 60),
+            };
+
+        let event_service = ::notification::domain::service::PushNotificationEventService::new(
+            event_notif_repo,
+            event_sns_manager,
+            digest_failure_sm,
+        );
+        let event_queue =
+            ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                config.push_notification_event_handler_queue.clone(),
+                config.notification_queue_max_messages,
+                config.notification_queue_wait_time_seconds,
+            );
+        let event_worker =
+            ::notification::inbound::push_notification_event_worker::PushNotificationEventWorker::new(
+                event_service,
+                event_queue,
+            );
+        tokio::spawn(async move { event_worker.run().await });
     }
 
     let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));
@@ -179,13 +121,95 @@ pub async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    api::setup_and_serve(ApiContext {
-        db,
-        sns_client: Arc::new(sns_client),
-        config: Arc::new(config),
-        jwt_args,
-        internal_secret_key,
-    })
+    let notification_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+
+    let notification_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        vars.notification_queue.as_ref().to_string(),
+    );
+    let sns_endpoint_manager =
+        ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+            aws_sdk_sns::Client::new(&aws_config),
+        );
+    let platform_config = ::notification::domain::service::PlatformArnConfig {
+        apns_platform_arn: config.sns_apns_platform_arn.clone(),
+        fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
+    };
+    let reader_service = ::notification::domain::service::NotificationReaderService::new(
+        notification_repository,
+        notification_queue.clone(),
+        sns_endpoint_manager,
+        platform_config,
+    );
+    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(reader_service);
+
+    // Set up egress worker for delivering notifications from the queue
+    let egress_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+
+    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_secret_key.as_ref().to_string(),
+        vars.connection_gateway_url.as_ref().to_string(),
+    ));
+
+    let mobile_adapter = MobilePushAdapter::new(
+        aws_sdk_sns::Client::new(&aws_config),
+        vars.apple_bundle_id.as_ref().to_string(),
+    );
+
+    let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
+    let email_adapter = EmailAdapter::new(ses_client, config.sender_base_address.clone());
+
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for egress state machine")?;
+    let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+
+    let egress_state_machine =
+        ::notification::domain::models::email_notification_digest::StateMachineDriverB {
+            message_receipt_repo:
+                ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                    db.clone(),
+                ),
+            digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+                redis_multiplexed_conn.clone(),
+            ),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+        };
+
+    let egress_digest_batcher =
+        ::notification::outbound::digest_batcher::RedisDigestBatcher::new(redis_multiplexed_conn);
+
+    let egress_service = NotificationEgressService {
+        queue: notification_queue,
+        repository: egress_repository,
+        websocket: websocket_adapter,
+        mobile: mobile_adapter,
+        email: email_adapter,
+        rate_limiter: rate_limit_adapter,
+        state_machine: egress_state_machine,
+        digest_batcher: egress_digest_batcher,
+    };
+
+    let worker = NotificationWorker::new(egress_service);
+
+    tokio::spawn(async move {
+        tracing::info!("starting notification egress worker");
+        worker.run().await
+    });
+
+    api::setup_and_serve(
+        ApiContext {
+            db,
+            sns_client: Arc::new(sns_client),
+            config: Arc::new(config),
+            jwt_args,
+            internal_secret_key,
+        },
+        ingress_state,
+    )
     .await?;
 
     Ok(())

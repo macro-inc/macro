@@ -1,7 +1,11 @@
 use super::*;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_notification")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("basic_notification"))
+)]
 async fn test_get_basic_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let notification_id = macro_uuid::string_to_uuid("0193b1ea-a542-7589-893b-2b4a509c1e76")?;
 
@@ -15,7 +19,10 @@ async fn test_get_basic_notification(pool: Pool<Postgres>) -> anyhow::Result<()>
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_notification")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("basic_notification"))
+)]
 async fn test_update_basic_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let notification_id = macro_uuid::string_to_uuid("0193b1ea-a542-7589-893b-2b4a509c1e76")?;
     let collapse_key = "test-collapse-key";

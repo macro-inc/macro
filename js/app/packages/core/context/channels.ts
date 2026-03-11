@@ -1,12 +1,15 @@
 import { createMemo, type Accessor } from 'solid-js';
+import type { DateValue } from '@core/util/date';
 import type {
   ApiActivity as ChannelsActivity,
   ApiChannelWithLatest,
 } from '@service-comms/generated/models';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
 import { queryReadyGate } from '@queries/gate';
 import { createAssertedContextProvider } from './createContext';
+import { useUserId } from './user';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -67,4 +70,35 @@ export function useChannelName(channelId: string, fallback?: string) {
 export function useChannelActivity(channelId: string) {
   const ctx = useChannelsContext();
   return createMemo(() => ctx.activityByChannelId()[channelId]);
+}
+
+/**
+ * Get a reactive map of userId -> Date for the most recent DM
+ * activity with that user. Useful for ranking/sorting users by recency of
+ * interaction.
+ */
+export function useDmActivityByUserId(): Accessor<Map<string, DateValue>> {
+  const { channels } = useChannelsContext();
+  const currentUserId = useUserId();
+
+  return createMemo(() => {
+    const currentUser = currentUserId();
+    if (!currentUser) return new Map();
+
+    const allChannels = channels();
+    const map = new Map<string, DateValue>();
+
+    for (const channel of allChannels) {
+      if (channel.channel_type !== ChannelTypeEnum.DirectMessage) continue;
+
+      const otherParticipant = channel.participants.find(
+        (p) => p.user_id !== currentUser
+      );
+      if (!otherParticipant) continue;
+
+      map.set(otherParticipant.user_id, channel.updated_at);
+    }
+
+    return map;
+  });
 }

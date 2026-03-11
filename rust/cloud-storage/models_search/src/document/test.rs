@@ -12,6 +12,8 @@ fn test_document_search_request_json_serialization() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,
@@ -85,6 +87,8 @@ fn test_document_search_request_round_trip() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: None,
+            ..Default::default()
         }),
         search_on: SearchOn::Content,
         collapse: None,

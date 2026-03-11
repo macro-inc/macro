@@ -1,14 +1,12 @@
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
-use model::{
-    project::BasicProject,
-    user::{UserContext, axum_extractor::MacroUserExtractor},
-};
+use model::{project::BasicProject, user::UserContext};
+use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, de::DeserializeOwned};
 use sqlx::PgPool;
@@ -21,7 +19,6 @@ pub struct ProjectAccessLevelExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for ProjectAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,
@@ -133,7 +130,6 @@ impl<T, V> ProjectBodyAccessLevelExtractor<T, V> {
     }
 }
 
-#[async_trait]
 impl<T, S, V> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V>
 where
     T: BuildAccessLevel,

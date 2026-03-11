@@ -91,9 +91,6 @@
       "@service-cognition/*": [
         "./packages/service-clients/service-cognition/*"
       ],
-      "@service-organization/*": [
-        "./packages/service-clients/service-organization/*"
-      ],
       "@service-connection/*": [
         "./packages/service-clients/service-connection/*"
       ],
@@ -123,6 +120,9 @@
       ],
       "@block-channel/*": [
         "./packages/block-channel/*"
+      ],
+      "@channel/*": [
+        "./packages/channel/*"
       ],
       "@block-email/*": [
         "./packages/block-email/*"
@@ -198,7 +198,16 @@
       ],
       "@ui/*": [
         "./packages/ui/*"
-      ]
+      ],
+      "@block-theme/*": [
+        "./packages/block-theme/*"
+      ],
+      "@entity": [
+        "./packages/entity/src/index.ts"
+      ],
+      "@entity/*": [
+        "./packages/entity/src/*"
+      ],
     },
     "rootDir": ".",
     "outDir": "./dist"
@@ -230,6 +239,9 @@
     },
     {
       "path": "./packages/service-clients"
+    },
+    {
+      "path": "./packages/entity"
     }
   ]
 }

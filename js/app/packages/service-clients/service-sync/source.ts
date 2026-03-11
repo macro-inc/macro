@@ -80,11 +80,12 @@ function createSyncServiceSocket(documentId: string, token: string) {
     .withBackoff(new ConstantBackoff(500))
     .withMaxRetries(20)
     .withHeartbeat({
-      interval: 1_000,
-      timeout: 1_000,
+      interval: 3_000,
+      timeout: 2_000,
       pingMessage: 'ping',
       pongMessage: 'pong',
-      maxMissedHeartbeats: 1,
+      maxMissedHeartbeats: 2,
+      autoStart: false, // Start heartbeat manually after initial sync completes
     })
     .build();
 }
@@ -126,6 +127,10 @@ export const createSyncServiceSource = async (
   }
 
   const initialSync = initialSyncResult.value;
+
+  // Start heartbeat only after initial sync completes successfully
+  // This prevents the heartbeat from closing the connection during slow initial syncs
+  ws.startHeartbeat();
 
   const eventBus = createEventBus<SyncSourceEvent>();
 
@@ -183,6 +188,11 @@ export const createSyncServiceSource = async (
   });
 
   createReconnectEffect(ws, async () => {
+    // Always restart heartbeat after reconnect, regardless of sync success/failure.
+    // This ensures the connection is monitored even if sync fails.
+    // startHeartbeat() is safe to call - it will no-op if connection closed.
+    ws.startHeartbeat();
+
     let reconnectSyncResult: Result<InitialSync, TimeoutError> =
       await ResultAsync.fromPromise(
         raceTimeout(
@@ -198,6 +208,8 @@ export const createSyncServiceSource = async (
         'Failed to reconnect to sync service',
         reconnectSyncResult.error
       );
+      // Heartbeat is already running from above, so connection remains monitored
+      // even though sync failed. The connection will eventually timeout and retry.
       return;
     }
 

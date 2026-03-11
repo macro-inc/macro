@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use aws_config::{Region, meta::region::RegionProviderChain};
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
 use dynamodb_client::DynamodbClient;
 use lambda_runtime::{
@@ -100,8 +99,7 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized env vars");
 
-    let region_provider = RegionProviderChain::default_provider().or_else(Region::new("us-east-1"));
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = macro_aws_config::get_macro_aws_config().await;
     let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
 
     tracing::trace!("initialized dynamodb client");

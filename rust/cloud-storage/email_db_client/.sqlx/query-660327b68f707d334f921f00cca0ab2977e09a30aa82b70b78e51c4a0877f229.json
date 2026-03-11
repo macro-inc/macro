@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                m.id as message_id,\n                c.id,\n                c.link_id,\n                c.email_address,\n                COALESCE(m.from_name, c.name) as \"name\",\n                c.original_photo_url,\n                c.sfs_photo_url,\n                c.created_at,\n                c.updated_at\n            FROM email_messages m\n            INNER JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.id = ANY($1)\n            AND m.from_contact_id IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "original_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sfs_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "660327b68f707d334f921f00cca0ab2977e09a30aa82b70b78e51c4a0877f229"
+}

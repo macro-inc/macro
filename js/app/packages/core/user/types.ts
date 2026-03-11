@@ -1,14 +1,20 @@
-import type { IOrganizationUserInternal } from '@service-organization/client';
+import type { DateValue } from '@core/util/date';
 import type { Accessor } from 'solid-js';
 
 export type { ChannelWithParticipants } from '@service-comms/generated/models';
 export type { ContactInfo } from '@service-email/generated/schemas';
-export type IOrganizationUser = IOrganizationUserInternal;
+
+export interface IOrganizationUser {
+  email: string;
+  id: string;
+  is_it_admin: boolean;
+}
 
 export type IUser = {
   id: string;
   email: string;
   name: string;
+  lastInteraction?: DateValue;
 };
 
 type BaseUserName = {

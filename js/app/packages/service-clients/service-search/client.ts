@@ -12,7 +12,7 @@ import {
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 
-const searchServiceHost = `${SERVER_HOSTS['search-service']}`;
+const searchServiceHost = `${SERVER_HOSTS['document-storage-service']}`;
 
 import type { UnifiedSearchRequest } from './generated/models/unifiedSearchRequest';
 import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResponse';

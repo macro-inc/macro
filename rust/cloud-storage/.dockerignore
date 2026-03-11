@@ -4,6 +4,7 @@
 # Docker
 .dockerignore
 Dockerfile*
+.env*
 
 # Rust
 target/
@@ -38,3 +39,6 @@ CLAUDE.md
 *.swp
 *.swo
 *~
+
+.env
+docker-compose.yml

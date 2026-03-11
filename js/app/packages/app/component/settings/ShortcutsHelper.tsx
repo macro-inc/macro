@@ -1,6 +1,5 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import KeyboardIcon from '@icon/regular/keyboard.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { makePersisted } from '@solid-primitives/storage';
@@ -24,7 +23,7 @@ export function ShortcutsHelper() {
   };
 
   const shouldShow = () =>
-    showShortcutsHelper() && !isTouchDevice() && !isMobileWidth();
+    showShortcutsHelper() && !isTouchDevice();
 
   return (
     <Show when={shouldShow()}>

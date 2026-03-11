@@ -1,11 +1,12 @@
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import type { ApiMessage } from '@service-email/generated/schemas';
+import { emailToMacroId } from '@core/user';
 import { getFirstName } from './name';
 
 /**
  * Check if a message is from the current user
  */
 export function isMessageFromCurrentUser(
-  message: MessageWithBodyReplyless,
+  message: ApiMessage,
   currentUserEmail?: string
 ): boolean {
   if (!currentUserEmail) return false;
@@ -18,7 +19,7 @@ export function isMessageFromCurrentUser(
  * Get the sender display name, showing "Me" for the current user
  */
 export function getSenderDisplayName(
-  message: MessageWithBodyReplyless,
+  message: ApiMessage,
   currentUserEmail?: string
 ): string {
   if (isMessageFromCurrentUser(message, currentUserEmail)) {
@@ -30,6 +31,14 @@ export function getSenderDisplayName(
     return getFirstName(from.name);
   }
   return from.email ?? 'Unknown';
+}
+
+/**
+ * Convert the message sender email to a macro id for user tooling.
+ */
+export function getSenderMacroId(message: ApiMessage): string | undefined {
+  const senderEmail = message.from?.email;
+  return senderEmail ? emailToMacroId(senderEmail) : undefined;
 }
 
 interface Recipient {

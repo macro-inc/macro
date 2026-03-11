@@ -4,19 +4,21 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
 use serde::de::DeserializeOwned;
 
-use super::{ExtractorError, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
-    models::{AccessLevel, EntityType},
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
 use model::project::BasicProject;
-use model_user::axum_extractor::MacroUserExtractor;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Validates that the user has at least the required access level to a project.
 ///
@@ -25,19 +27,17 @@ use model_user::axum_extractor::MacroUserExtractor;
 ///
 /// # Prerequisites
 ///
-/// - User must be authenticated (MacroUserExtractor in extensions)
 /// - Project context must be loaded (BasicProject in extensions)
 #[derive(Debug)]
-pub struct ProjectAccessLevelExtractor<T, Svc> {
-    /// The actual access level the user has.
-    pub access_level: AccessLevel,
+pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc> {
+    /// The entity access receipt
+    pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -48,7 +48,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
+        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -58,10 +58,48 @@ where
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        // Owner always has full access
-        if project_context.user_id == macro_user_id {
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
             return Ok(Self {
-                access_level: AccessLevel::Owner,
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: project_context.id.clone(),
+                        entity_type: EntityType::Project,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                    _marker: PhantomData,
+                },
+                _marker: PhantomData,
+            });
+        }
+
+        // Check ownership only if authenticated
+        if let Some(ref user_id) = macro_user_id
+            && project_context.user_id == *user_id
+        {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: project_context.id.clone(),
+                        entity_type: EntityType::Project,
+                    },
+                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                    _marker: PhantomData,
+                },
                 _marker: PhantomData,
             });
         }
@@ -73,20 +111,36 @@ where
             ));
         }
 
-        // Check access via service
-        let required_level = T::required_level();
-        let access_level = service
-            .check_access(
-                &macro_user_id,
+        let access_level = match service
+            .get_access_level(
+                macro_user_id.as_deref(),
                 &project_context.id,
                 EntityType::Project,
-                required_level,
             )
             .await
-            .map_err(ExtractorError::from)?;
+            .map_err(ExtractorError::from)?
+        {
+            Some(access_level) => access_level,
+            None => return Err(ExtractorError::Unauthorized),
+        };
+
+        let permission = EntityPermission::AccessLevel { access_level };
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
+        };
 
         Ok(Self {
-            access_level,
+            entity_access_receipt: EntityAccessReceipt {
+                entity: Entity {
+                    entity_id: project_context.id.clone(),
+                    entity_type: EntityType::Project,
+                },
+                auth: macro_user_id
+                    .map(EntityAccessAuth::Authenticated)
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                entity_permission: permission,
+                _marker: PhantomData,
+            },
             _marker: PhantomData,
         })
     }
@@ -142,15 +196,15 @@ impl ProjectOrParentId {
 ///
 /// Downstream consumers also use the body (which is an antipattern) so we need to keep the value around.
 #[derive(Debug)]
-pub enum ProjectBodyAccessLevelExtractor<T, V, Svc> {
+pub enum ProjectBodyAccessLevelExtractor<T: RequiredPermission, V, Svc> {
     /// A project was found in the body and access was validated.
     FoundProject {
         /// The project ID that was found.
         project: ProjectOrParentId,
         /// Marker for the desired access level.
         desired: PhantomData<(T, Svc)>,
-        /// The actual access level the user has.
-        access_level: AccessLevel,
+        /// The entity access receipt
+        entity_access_receipt: EntityAccessReceipt<T>,
         /// The parsed body.
         body: V,
     },
@@ -163,7 +217,7 @@ pub enum ProjectBodyAccessLevelExtractor<T, V, Svc> {
     },
 }
 
-impl<T, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
+impl<T: RequiredPermission, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     /// Extract the body from this extractor.
     pub fn into_inner(self) -> V {
         match self {
@@ -173,10 +227,9 @@ impl<T, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     }
 }
 
-#[async_trait]
 impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -187,10 +240,18 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = req
+        let OptionalMacroUserExtractor { macro_user_id, .. } = req
             .extract_parts()
             .await
             .map_err(|_| ExtractorError::Internal)?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            req.extract_parts()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
 
         let Json(json) = req
             .extract::<Json<serde_json::Value>, _>()
@@ -210,19 +271,51 @@ where
             });
         };
 
-        let required_level = T::required_level();
-        let access_level = service
-            .check_access(
-                &macro_user_id,
-                project.id(),
-                EntityType::Project,
-                required_level,
-            )
+        if internal_user.is_some() {
+            return Ok(Self::FoundProject {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: project.id().to_owned(),
+                        entity_type: EntityType::Project,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                    _marker: PhantomData,
+                },
+                project,
+                desired: PhantomData,
+                body: cb()?,
+            });
+        }
+
+        let access_level = match service
+            .get_access_level(macro_user_id.as_deref(), project.id(), EntityType::Project)
             .await
-            .map_err(ExtractorError::from)?;
+            .map_err(ExtractorError::from)?
+        {
+            Some(access_level) => access_level,
+            None => return Err(ExtractorError::Unauthorized),
+        };
+
+        let permission = EntityPermission::AccessLevel { access_level };
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
+        };
 
         Ok(Self::FoundProject {
-            access_level,
+            entity_access_receipt: EntityAccessReceipt {
+                entity: Entity {
+                    entity_id: project.id().to_owned(),
+                    entity_type: EntityType::Project,
+                },
+                auth: macro_user_id
+                    .map(EntityAccessAuth::Authenticated)
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                entity_permission: permission,
+                _marker: PhantomData,
+            },
             project,
             desired: PhantomData,
             body: cb()?,

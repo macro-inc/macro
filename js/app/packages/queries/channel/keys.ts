@@ -4,6 +4,28 @@ export const channelKeys = createQueryKeys('channel', {
   withID: (channelID: string) => ({
     queryKey: [channelID],
   }),
+  mentions: (channelID: string) => ({
+    queryKey: [channelID],
+  }),
+  messages: (channelID: string) => ({
+    queryKey: [channelID],
+  }),
+  attachments: (channelID: string) => ({
+    queryKey: [channelID],
+  }),
+  participants: (channelID: string) => ({
+    queryKey: [channelID],
+  }),
+  threadReplies: (channelID: string, messageID: string) => ({
+    queryKey: [channelID, messageID],
+  }),
   activity: null,
   listChannels: null,
 });
+
+export const ChannelNonceKeys = {
+  MESSAGE: 'comms_message',
+  REACTION: 'comms_reaction',
+  TYPING: 'comms_typing',
+  ATTACHMENT: 'comms_attachment',
+} as const;

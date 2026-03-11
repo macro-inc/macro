@@ -17,7 +17,7 @@ pub async fn update_upload_job(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(anyhow::anyhow!("jobId not found"));
+        anyhow::bail!("jobId not found");
     }
 
     Ok(())

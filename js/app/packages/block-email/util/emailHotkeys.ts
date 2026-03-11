@@ -1,5 +1,5 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import type { Thread } from '@service-email/generated/schemas';
+import type { ApiThread } from '@service-email/generated/schemas';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { Accessor } from 'solid-js';
 
@@ -11,7 +11,7 @@ export interface EmailHotkeyHandlers {
 
 export function registerEmailHotkeys(
   scopeId: string,
-  threadData: Accessor<Thread | undefined>,
+  threadData: Accessor<ApiThread | undefined>,
   handlers: EmailHotkeyHandlers
 ) {
   registerHotkey({

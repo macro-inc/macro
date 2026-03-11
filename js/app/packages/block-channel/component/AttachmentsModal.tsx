@@ -1,60 +1,43 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { channelStore } from '@block-channel/signal/channel';
-import { threadsStore } from '@block-channel/signal/threads';
+import { filterSafeAttachments } from '@block-channel/utils/attachments';
 import { type BlockAlias, type BlockName, useBlockId } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  isAccessiblePreviewItem,
-  isDocumentPreviewItem,
-  useItemPreview,
-} from '@core/signal/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
 import type { MessageMention } from '@service-comms/generated/models';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { Attachment } from '@queries/channel/types';
 import type { ItemType } from '@service-storage/client';
-import { createMemo, createResource, Show } from 'solid-js';
+import { useMentionsQuery } from '@queries/channel/mentions';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
-export function AttachmentsModal() {
-  const drawerControl = useDrawerControl(DRAWER_ID);
+export function useAttachments() {
   const currentBlockId = useBlockId();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const channelContext = useChannelContext();
+  const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
-  const [mentionsResource] = createResource(() =>
-    commsServiceClient.getMentions({ channel_id: currentBlockId })
-  );
+  return createMemo(() => {
+    const mentions: Attachment[] = !mentionsQuery.isSuccess
+      ? []
+      : (mentionsQuery.data?.mentions ?? []).map((m) =>
+          makeAttachmentFromMention(m, currentBlockId)
+        );
 
-  const attachments = createMemo(() => {
-    if (mentionsResource.loading || mentionsResource.error) return [];
-
-    const mentions: Attachment[] = (() => {
-      let res = mentionsResource();
-      if (!res || isErr(res)) {
-        console.error('failed to get mentions', res);
-        return [];
-      }
-
-      const mentions = (res[1] ?? { mentions: [] }).mentions.map((m) =>
-        makeAttachmentFromMention(m, currentBlockId)
-      );
-
-      return mentions;
-    })();
-
-    const all = [...(messageAttachmentsStore.get.all || []), ...mentions];
+    const channelAttachments = channelContext.attachments() ?? [];
+    const safeAttachments = filterSafeAttachments(channelAttachments);
+    const all = [...safeAttachments, ...mentions];
     return all
       .filter(
         (a) => !a.entity_type.startsWith('static/') && a.entity_type !== 'user'
@@ -65,58 +48,78 @@ export function AttachmentsModal() {
           new Date(a.created_at || 0).getTime()
       );
   });
+}
 
-  const navigateToItem = (blockName: BlockName, blockId: string) => {
-    replaceOrInsertSplit({ type: blockName, id: blockId });
+export function AttachmentsButton(props: { attachments: () => Attachment[] }) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+
+  return (
+    <Tooltip tooltip={'View all attachments'}>
+      <div
+        class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
+        tabIndex={0}
+        role="button"
+        onClick={drawerControl.toggle}
+      >
+        <BracketLeft class="h-4 w-2 text-edge" />
+        <PaperclipIcon class="size-4 text-ink" />
+        <span class="text-xs">{props.attachments().length}</span>
+        <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
+      </div>
+    </Tooltip>
+  );
+}
+
+export function AttachmentsDrawer(props: { attachments: () => Attachment[] }) {
+  const { openWithSplit } = useSplitLayout();
+  const channelContext = useChannelContext();
+
+  const onClickAttachment = (
+    event: MouseEvent,
+    details: { blockName: BlockName; blockId: string }
+  ) => {
+    openWithSplit(
+      { type: details.blockName, id: details.blockId },
+      { preferNewSplit: !event.shiftKey }
+    );
   };
 
   return (
-    <>
-      <Tooltip tooltip={'View all attachments'}>
-        <div
-          class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
-          tabIndex={0}
-          role="button"
-          onClick={drawerControl.toggle}
-        >
-          <BracketLeft class="h-4 w-2 text-edge" />
-          <PaperclipIcon class="size-4 text-ink" />
-          <span class="text-xs">{attachments().length}</span>
-          <BracketLeft class="h-4 w-2 rotate-180 text-edge" />
-        </div>
-      </Tooltip>
-
-      <SplitDrawer
-        id={DRAWER_ID}
-        title="Channel Attachments"
-        side="right"
-        size={768}
-      >
-        <div class="flex justify-center items-center max-w-full h-full max-h-full">
-          <div class="flex-1 size-full overflow-x-hidden overflow-y-auto">
-            <Show
-              when={attachments().length > 0}
-              fallback={
-                <div class="py-8 text-ink-muted text-sm text-center">
-                  No attachments in this channel
-                </div>
-              }
-            >
-              <div class="flex flex-col h-full">
-                <VList data={attachments()}>
-                  {(attachment) => (
+    <SplitDrawer
+      id={DRAWER_ID}
+      title="Channel Attachments"
+      side="right"
+      size={768}
+    >
+      <div class="flex justify-center items-center max-w-full h-full max-h-full">
+        <div class="flex-1 size-full overflow-x-hidden overflow-y-auto">
+          <Show
+            when={props.attachments().length > 0}
+            fallback={
+              <div class="py-8 text-ink-muted text-sm text-center">
+                No attachments in this channel
+              </div>
+            }
+          >
+            <div class="flex flex-col h-full">
+              <VList data={props.attachments()}>
+                {(attachment) => (
+                  <Suspense>
                     <AttachmentItem
                       attachment={attachment}
-                      onNavigate={navigateToItem}
+                      onNavigate={onClickAttachment}
+                      senderId={channelContext
+                        .messageSenderMap()
+                        .get(attachment.message_id)}
                     />
-                  )}
-                </VList>
-              </div>
-            </Show>
-          </div>
+                  </Suspense>
+                )}
+              </VList>
+            </div>
+          </Show>
         </div>
-      </SplitDrawer>
-    </>
+      </div>
+    </SplitDrawer>
   );
 }
 
@@ -136,32 +139,29 @@ function makeAttachmentFromMention(
 
 type AttachmentItemProps = {
   attachment: Attachment;
-  onNavigate: (blockName: BlockName | BlockAlias, blockId: string) => void;
+  onNavigate: (
+    event: MouseEvent,
+    details: { blockName: BlockName | BlockAlias; blockId: string }
+  ) => void;
+  senderId: string | undefined;
 };
 
 function AttachmentItem(props: AttachmentItemProps) {
-  const message = createMemo(() => {
-    const channel = channelStore.get;
-    const threads = threadsStore.get;
-    const allMessages = [
-      ...(channel.messages || []),
-      ...Object.values(threads || {}).flat(),
-    ];
-    return allMessages.find((msg) => msg.id === props.attachment.message_id);
-  });
-
-  const senderId = () => message()?.sender_id || '';
+  const senderId = () => props.senderId ?? '';
   const [userName] = useDisplayName(tryMacroId(senderId()));
 
-  const [preview] = useItemPreview({
+  const [preview] = useItemPreview(() => ({
     id: props.attachment.entity_id,
     type: props.attachment.entity_type as ItemType,
-  });
+  }));
 
-  const handleClick = () => {
+  const handleClick = (event: MouseEvent) => {
     const item = preview();
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
-      props.onNavigate(fileTypeToBlockName(item.fileType), item.id);
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
+      props.onNavigate(event, {
+        blockName: fileTypeToBlockName(item.fileType),
+        blockId: item.id,
+      });
     } else {
       toast.failure('Failed to open attachment');
     }
@@ -186,17 +186,17 @@ function AttachmentItem(props: AttachmentItemProps) {
 
         <span class="text-ink-extra-muted">attached</span>
         <InlineItemPreview
-          itemId={props.attachment.entity_id}
-          itemType={props.attachment.entity_type as any}
+          id={props.attachment.entity_id}
+          type={props.attachment.entity_type as ItemType}
         />
       </span>
     </button>
   );
 }
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const datePart = date
+const formatTimestamp = (date: DateValue) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const datePart = d
     .toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -204,7 +204,7 @@ const formatTimestamp = (timestamp: string) => {
     })
     .replaceAll('/', '-');
 
-  const timePart = date.toLocaleTimeString('en-US', {
+  const timePart = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: 'numeric',
   });

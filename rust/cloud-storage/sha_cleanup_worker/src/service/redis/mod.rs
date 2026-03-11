@@ -12,7 +12,7 @@ pub use RedisClient as Redis;
 
 #[derive(Clone)]
 pub struct RedisClient {
-    inner: redis::cluster::ClusterClient,
+    inner: redis::Client,
 }
 
 // Key prefixes
@@ -21,7 +21,7 @@ static SHA_DELETE_BUCKET: &str = "bucket:sha-delete";
 
 #[cfg_attr(test, automock)]
 impl RedisClient {
-    pub fn new(inner: redis::cluster::ClusterClient) -> Self {
+    pub fn new(inner: redis::Client) -> Self {
         Self { inner }
     }
 

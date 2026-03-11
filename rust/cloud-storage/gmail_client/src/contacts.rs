@@ -1,17 +1,14 @@
 use crate::GmailClient;
-use crate::parse::map_person_to_contact;
 use anyhow::Context;
 use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
-use models_email::service::contact::{Contact, ContactList};
-use uuid::Uuid;
 
-/// Get the user's own connection
+/// Get the user's own connection.
+/// Returns raw Gmail PersonResource - callers should map to service layer Contact.
 #[tracing::instrument(skip(client, access_token))]
 pub(crate) async fn get_self_connection(
     client: &GmailClient,
     access_token: &str,
-    link_id: Uuid,
-) -> anyhow::Result<Contact> {
+) -> anyhow::Result<PersonResource> {
     let http_client = client.inner.clone();
 
     let url = format!(
@@ -24,33 +21,31 @@ pub(crate) async fn get_self_connection(
         .bearer_auth(access_token)
         .send()
         .await
-        .context("Failed to send request to People API (list connections)")?;
+        .context("Failed to send request to People API (get self connection)")?;
 
     let response = response
         .error_for_status()
-        .context("People API returned an error status (list connections)")?;
+        .context("People API returned an error status (get self connection)")?;
 
-    let connection_response = response
+    let person_resource = response
         .json::<PersonResource>()
         .await
-        .context("Failed to parse JSON response from People API (list connections)")?;
+        .context("Failed to parse JSON response from People API (get self connection)")?;
 
-    let new_contact = map_person_to_contact(link_id, connection_response);
-
-    Ok(new_contact)
+    Ok(person_resource)
 }
 
 /// Fetches contacts from the People API.
 /// If a sync_token is provided, it fetches only the changes since the last sync.
 /// Otherwise, it performs a full sync of all contacts.
+/// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
 #[tracing::instrument(skip(client, access_token, sync_token))]
 pub(crate) async fn list_connections(
     client: &GmailClient,
     access_token: &str,
-    link_id: Uuid,
     sync_token: Option<&str>,
-) -> anyhow::Result<ContactList> {
-    let mut all_contacts: Vec<Contact> = Vec::new();
+) -> anyhow::Result<(Vec<PersonResource>, String)> {
+    let mut all_persons: Vec<PersonResource> = Vec::new();
     let mut next_page_token: Option<String> = None;
     let mut final_sync_token: Option<String> = None;
 
@@ -93,12 +88,7 @@ pub(crate) async fn list_connections(
             .await
             .context("Failed to parse JSON response from People API (list connections)")?;
 
-        let new_contacts = connection_response
-            .connections
-            .into_iter()
-            .map(|person| map_person_to_contact(link_id, person));
-
-        all_contacts.extend(new_contacts);
+        all_persons.extend(connection_response.connections);
 
         // Keep the latest sync token returned by the API.
         if let Some(sync_token) = connection_response.next_sync_token {
@@ -115,23 +105,20 @@ pub(crate) async fn list_connections(
 
     let next_sync_token = final_sync_token.context("People API did not return a nextSyncToken")?;
 
-    Ok(ContactList {
-        contacts: all_contacts,
-        next_sync_token,
-    })
+    Ok((all_persons, next_sync_token))
 }
 
 /// Fetches "Other Contacts" from the People API.
 /// If a sync_token is provided, it fetches only the changes since the last sync.
 /// Otherwise, it performs a full sync of all "Other Contacts".
+/// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
 #[tracing::instrument(skip(client, access_token, sync_token))]
 pub(crate) async fn list_other_contacts(
     client: &GmailClient,
     access_token: &str,
-    link_id: Uuid,
     sync_token: Option<&str>,
-) -> anyhow::Result<ContactList> {
-    let mut all_contacts: Vec<Contact> = Vec::new();
+) -> anyhow::Result<(Vec<PersonResource>, String)> {
+    let mut all_persons: Vec<PersonResource> = Vec::new();
     let mut next_page_token: Option<String> = None;
     let mut final_sync_token: Option<String> = None;
 
@@ -174,12 +161,7 @@ pub(crate) async fn list_other_contacts(
             .await
             .context("Failed to parse JSON response from People API (list other contacts)")?;
 
-        let new_contacts = other_contacts_response
-            .other_contacts
-            .into_iter()
-            .map(|person| map_person_to_contact(link_id, person));
-
-        all_contacts.extend(new_contacts);
+        all_persons.extend(other_contacts_response.other_contacts);
 
         // Keep the latest sync token returned by the API.
         if let Some(sync_token) = other_contacts_response.next_sync_token {
@@ -196,8 +178,5 @@ pub(crate) async fn list_other_contacts(
 
     let next_sync_token = final_sync_token.context("People API did not return a nextSyncToken")?;
 
-    Ok(ContactList {
-        contacts: all_contacts,
-        next_sync_token,
-    })
+    Ok((all_persons, next_sync_token))
 }

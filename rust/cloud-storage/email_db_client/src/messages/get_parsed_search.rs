@@ -10,7 +10,7 @@ use sqlx::types::Uuid;
 
 /// retreive a parsed search message by its id.
 /// returns None if no message was found.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_parsed_search_message_by_id(
     pool: &PgPool,
     message_id: &Uuid,
@@ -36,13 +36,7 @@ pub async fn get_parsed_search_message_by_id(
         message_id,
     )
         .fetch_optional(&mut *conn)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch message {}",
-                message_id
-            )
-        })?;
+        .await?;
 
     let db_message: db::message::Message = if let Some(db_message) = db_message {
         db_message
@@ -83,17 +77,14 @@ pub async fn get_parsed_search_message_by_id(
 }
 
 /// get a paginated number of messages for a given thread.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_paginated_parsed_search_messages_by_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
     offset: i64,
     limit: i64,
 ) -> anyhow::Result<Vec<message::ParsedSearchMessage>> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .context("failed to acquire connection")?;
+    let mut conn = pool.acquire().await?;
 
     // Get messages for thread
     let db_messages: Vec<db::message::Message> = sqlx::query_as!(

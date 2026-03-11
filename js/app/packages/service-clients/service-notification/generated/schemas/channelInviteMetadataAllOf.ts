@@ -4,7 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelInviteMetadataAllOfSenderProfilePictureUrl } from './channelInviteMetadataAllOfSenderProfilePictureUrl';
 
 export type ChannelInviteMetadataAllOf = {
   invitedBy: string;
+  senderProfilePictureUrl?: ChannelInviteMetadataAllOfSenderProfilePictureUrl;
 };

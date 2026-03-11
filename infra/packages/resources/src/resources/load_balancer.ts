@@ -55,7 +55,7 @@ export function serviceLoadBalancer(
       loadBalancerType: 'application',
       securityGroups: [albSecurityGroupId],
       subnets: isPrivate ? vpc.privateSubnetIds : vpc.publicSubnetIds,
-      enableDeletionProtection: stack === 'prod',
+      enableDeletionProtection: false,
       // default is 60 seconds, can be up to 4000 seconds
       idleTimeout,
       tags,

@@ -1,11 +1,11 @@
-use authentication_service::service::fusionauth_client::FusionAuthClient;
-use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
 use axum::{
     Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use fusionauth::FusionAuthClient;
+use fusionauth::error::FusionAuthClientError;
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::authentication::google_token::GoogleAccessToken;
 use model::response::ErrorResponse;

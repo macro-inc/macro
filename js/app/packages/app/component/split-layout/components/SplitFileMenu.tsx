@@ -1,18 +1,16 @@
 import { useBlockName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
-import Unpin from '@icon/fill/push-pin-slash-fill.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import Copy from '@icon/regular/copy.svg';
 import ThreeDots from '@icon/regular/list.svg';
 import Rename from '@icon/regular/pencil-line.svg';
-import Pin from '@icon/regular/push-pin.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { usePinnedIds } from '@service-storage/pins';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   type Component,
   createMemo,
@@ -21,16 +19,12 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { useSplitModal } from './SplitModalContext';
 
-export type FileOperationName =
-  | 'pin'
-  | 'delete'
-  | 'rename'
-  | 'copy'
-  | 'moveToProject';
+export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
 export type DefaultFileOperation = {
   op: FileOperationName;
@@ -58,6 +52,8 @@ export function SplitFileMenu(props: {
   name: string;
   formattedName?: string;
   ops: Array<FileOperation>;
+  tools?: BlockTool[];
+  buttonClass?: string;
 }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -71,9 +67,6 @@ export function SplitFileMenu(props: {
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
 
-  const pinnedIds = usePinnedIds();
-  const isPinned = () => pinnedIds().includes(props.id);
-
   const modal = useSplitModal();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
@@ -83,18 +76,6 @@ export function SplitFileMenu(props: {
       .map((op) => {
         if (isDefaultFileOperation(op)) {
           switch (op.op) {
-            case 'pin':
-              return {
-                label: isPinned() ? 'Unpin' : 'Pin',
-                action: () =>
-                  itemOperations.togglePin({
-                    itemType: props.itemType,
-                    id: props.id,
-                  }),
-                icon: isPinned() ? Unpin : Pin,
-                divideAbove: op.divideAbove || false,
-              };
-
             case 'delete':
               if (!isOwner()) return null;
               return {
@@ -183,16 +164,22 @@ export function SplitFileMenu(props: {
       .filter((op) => !!op);
   });
 
+  const filteredTools = createMemo(() =>
+    (props.tools ?? []).filter((t) => !t.condition || t.condition())
+  );
+
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen} boundary={ctx.panelRef}>
       <DropdownMenu.Trigger
-        as={DeprecatedIconButton}
-        theme={open() ? 'accent' : 'clear'}
-        size="sm"
-        icon={ThreeDots}
-        onclick={() => setOpen((p) => !p)}
-        onClick={() => setOpen((p) => !p)}
-      />
+        as={Button}
+        class={cn(
+          'px-1',
+          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink',
+          props.buttonClass
+        )}
+      >
+        <ThreeDots class="size-4 shrink-0" />
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="bg-menu w-44 p-1 border border-edge mt-2">
           <For each={ops()}>
@@ -202,6 +189,25 @@ export function SplitFileMenu(props: {
                   <div class="my-1 h-[1px] bg-edge" />
                 </Show>
                 <MenuItem text={op.label} onClick={op.action} icon={op.icon} />
+              </>
+            )}
+          </For>
+          <Show when={filteredTools().length > 0 && ops().length > 0}>
+            <div class="my-1 h-[1px] bg-edge" />
+          </Show>
+          <For each={filteredTools()}>
+            {(tool, i) => (
+              <>
+                <Show when={tool.divideAbove && i() > 0}>
+                  <div class="my-1 h-[1px] bg-edge" />
+                </Show>
+                <MenuItem
+                  text={
+                    typeof tool.label === 'function' ? tool.label() : tool.label
+                  }
+                  onClick={tool.action}
+                  icon={tool.icon}
+                />
               </>
             )}
           </For>

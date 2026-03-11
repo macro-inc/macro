@@ -44,6 +44,15 @@ const unfurlService = new UnfurlService(`unfurl-service-${stack}`, {
         stack === 'prod' ? 'debug' : 'trace'
       },tower_http=debug`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'unfurl-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
   ],
   isPrivate: false,
   tags,

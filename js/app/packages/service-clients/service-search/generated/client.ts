@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
-  EmptyResponse,
   ErrorResponse,
   SimpleUnifiedSearchBaseResponse,
   SimpleUnifiedSearchParams,
@@ -13,42 +12,6 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponse,
 } from './models';
-
-/**
- * @summary Health check
- */
-export type healthHandlerResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type healthHandlerResponseSuccess = healthHandlerResponse200 & {
-  headers: Headers;
-};
-
-export type healthHandlerResponse = healthHandlerResponseSuccess;
-
-export const getHealthHandlerUrl = () => {
-  return `/health`;
-};
-
-export const healthHandler = async (
-  options?: RequestInit
-): Promise<healthHandlerResponse> => {
-  const res = await fetch(getHealthHandlerUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as healthHandlerResponse;
-};
 
 /**
  * @summary Perform a search through all items

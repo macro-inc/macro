@@ -279,4 +279,21 @@ where
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_owner_and_deleted(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(String, bool), PropertiesErr> {
+        if let Some(permission_service) = self.permission_service.as_ref() {
+            let result = permission_service
+                .get_owner_and_deleted(entity_id, entity_type)
+                .await
+                .map_err(anyhow::Error::from)?;
+
+            return Ok(result);
+        }
+        Err(PropertiesErr::PermissionServiceNotConfigured)
+    }
 }

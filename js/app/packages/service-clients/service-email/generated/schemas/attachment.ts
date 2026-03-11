@@ -6,7 +6,6 @@
  */
 import type { AttachmentContentId } from './attachmentContentId';
 import type { AttachmentDataUrl } from './attachmentDataUrl';
-import type { AttachmentDbId } from './attachmentDbId';
 import type { AttachmentFilename } from './attachmentFilename';
 import type { AttachmentMimeType } from './attachmentMimeType';
 import type { AttachmentProviderId } from './attachmentProviderId';
@@ -19,7 +18,7 @@ import type { AttachmentSizeBytes } from './attachmentSizeBytes';
 export interface Attachment {
   content_id?: AttachmentContentId;
   data_url?: AttachmentDataUrl;
-  db_id?: AttachmentDbId;
+  db_id: string;
   filename?: AttachmentFilename;
   mime_type?: AttachmentMimeType;
   provider_id?: AttachmentProviderId;

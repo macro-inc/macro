@@ -144,6 +144,7 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 /// This helper collects entity references from items that support properties,
 /// fetches their properties in bulk, and assigns them to each item.
 /// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
+#[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &PgPool,
     items: &mut [SoupItem],
@@ -230,6 +231,7 @@ macro_rules! map_soup_type {
                         r.sub_type,
                         r.is_completed,
                     ),
+                    deleted_at: r.deleted_at,
                     properties: Default::default(),
                 },
             )),
@@ -250,6 +252,7 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
+                    deleted_at: r.deleted_at,
                     properties: Default::default(),
                 },
             )),
@@ -269,6 +272,7 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
+                    deleted_at: r.deleted_at,
                     properties: Default::default(),
                 },
             )),

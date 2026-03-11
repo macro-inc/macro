@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { Attachment, AttachmentPreview } from '@core/component/AI/types';
 import {
   isDssImage,
@@ -6,23 +5,13 @@ import {
 } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
-import type { ChannelType } from '@service-cognition/generated/schemas';
 import type { Accessor } from 'solid-js';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;
@@ -35,10 +24,12 @@ export function AttachmentList(props: AttachmentListProps) {
     <div class="flex flex-row w-full space-x-2 items-end flex-wrap overflow-x-hidden pb-1">
       <For each={props.attached()}>
         {(attachment) => (
-          <ChatAttachment
-            attachment={attachment}
-            onRemove={() => props.removeAttachment(attachment.attachmentId)}
-          />
+          <Suspense>
+            <ChatAttachment
+              attachment={attachment}
+              onRemove={() => props.removeAttachment(attachment.attachmentId)}
+            />
+          </Suspense>
         )}
       </For>
       <For each={props.uploading()}>
@@ -104,44 +95,6 @@ function ChatAttachment(props: {
   attachment: Attachment;
   onRemove: () => void;
 }) {
-  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
-  const name = createMemo(() => {
-    const attachment = props.attachment;
-    if (!attachment.metadata) return '';
-    return attachment.metadata.type === 'document'
-      ? attachment.metadata.document_name
-      : attachment.metadata.type === 'image'
-        ? attachment.metadata.image_name
-        : attachment.metadata.type === 'channel'
-          ? attachment.metadata.channel_name
-          : attachment.metadata.type === 'project'
-            ? attachment.metadata.project_name
-            : attachment.metadata.email_subject;
-  });
-
-  const block = createMemo(() => {
-    const attachment = props.attachment;
-    if (!attachment.metadata) return;
-    return attachment.metadata.type === 'document'
-      ? fileTypeToBlockName(attachment.metadata.document_type)
-      : attachment.metadata.type === 'image'
-        ? 'image'
-        : 'channel';
-  });
-
-  const onClick = (e: MouseEvent) => {
-    const attachment = props.attachment;
-    if (isImageAttachment(attachment)) return;
-    const block_ = block();
-    if (!block_) return;
-    const inNewSplit = openInNewSplitForMention(e.altKey, true);
-    const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
-    open({
-      id: attachment.attachmentId,
-      type: block_,
-    })?.activate?.();
-  };
-  const navHandlers = useSplitNavigationHandler<HTMLDivElement>(onClick);
   return (
     <Switch>
       <Match when={isImageAttachment(props.attachment)}>
@@ -150,89 +103,38 @@ function ChatAttachment(props: {
           onRemove={props.onRemove}
         />
       </Match>
-      <Match when={true}>
-        <div
-          class={`
-      flex items-center p-1 space-x-2
-      hover:bg-hover hover-transition-bg cursor-default
-      text-sm
-      `}
-          {...navHandlers}
-        >
-          <Switch>
-            <Match
-              when={
-                props.attachment.metadata?.type === 'channel' &&
-                props.attachment.metadata
-              }
-            >
-              {(a) => (
-                <div class="flex gap-1 items-center">
-                  <Dynamic
-                    component={channelTypeIcon(a().channel_type)}
-                    width={14}
-                    height={14}
-                  />
-                  <div> {name()}</div>
-                </div>
-              )}
-            </Match>
-            <Match
-              when={
-                props.attachment.metadata?.type === 'document' &&
-                props.attachment.metadata
-              }
-            >
-              {(a) => (
-                <div class="flex gap-1 items-center">
-                  <EntityIcon targetType={a().document_type} />
-                  <div>{name()}</div>
-                </div>
-              )}
-            </Match>
-            <Match when={props.attachment.attachmentType === 'email'}>
-              <div class="flex gap-1 items-center">
-                <Envelope class="w-4" />
-                <div> {name()}</div>
-              </div>
-            </Match>
-            <Match when={props.attachment.attachmentType === 'project'}>
-              <div class="flex gap-1 items-center">
-                <EntityIcon targetType="project" />
-                <div> {name()}</div>
-              </div>
-            </Match>
-          </Switch>
-          <div
-            class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onRemove?.();
-            }}
-          >
-            <Close
-              width={12}
-              height={12}
-              class="text-ink-muted group-hover:text-failure"
+      <Match
+        when={
+          props.attachment.metadata?.type !== 'image' &&
+          props.attachment.metadata
+        }
+      >
+        {(metadata) => (
+          <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+            <ItemPreview
+              id={props.attachment.attachmentId}
+              type={metadata().type}
+              class="flex items-center gap-1 text-sm ring-0"
+              textClass="truncate"
+              iconSize="xs"
+              disableHoverCard
             />
+            <div
+              class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onRemove?.();
+              }}
+            >
+              <Close
+                width={12}
+                height={12}
+                class="text-ink-muted group-hover:text-failure"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </Match>
     </Switch>
   );
-}
-
-function channelTypeIcon(channelType: ChannelType) {
-  switch (channelType) {
-    case 'direct_message':
-      return User;
-    case 'private':
-      return ThreeUsersIcon;
-    case 'organization':
-      return BuildingIcon;
-    case 'public':
-      return GlobeIcon;
-    default:
-      return ChannelIcon;
-  }
 }

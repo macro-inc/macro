@@ -94,6 +94,63 @@ export const getActivity = async (
   } as getActivityResponse;
 };
 
+export type getChannelsResponse200 = {
+  data: ApiChannelWithLatest[];
+  status: 200;
+};
+
+export type getChannelsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getChannelsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getChannelsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getChannelsResponseSuccess = getChannelsResponse200 & {
+  headers: Headers;
+};
+export type getChannelsResponseError = (
+  | getChannelsResponse401
+  | getChannelsResponse404
+  | getChannelsResponse500
+) & {
+  headers: Headers;
+};
+
+export type getChannelsResponse =
+  | getChannelsResponseSuccess
+  | getChannelsResponseError;
+
+export const getGetChannelsUrl = () => {
+  return `/channels`;
+};
+
+export const getChannels = async (
+  options?: RequestInit
+): Promise<getChannelsResponse> => {
+  const res = await fetch(getGetChannelsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChannelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChannelsResponse;
+};
+
 export type postActivityResponse200 = {
   data: Activity;
   status: 200;
@@ -130,7 +187,7 @@ export type postActivityResponse =
   | postActivityResponseError;
 
 export const getPostActivityUrl = () => {
-  return `/activity`;
+  return `/comms/activity`;
 };
 
 export const postActivity = async (
@@ -194,7 +251,7 @@ export const getGetAttachmentReferencesUrl = (
   entityType: string,
   entityId: string
 ) => {
-  return `/attachments/${entityType}/${entityId}/references`;
+  return `/comms/attachments/${entityType}/${entityId}/references`;
 };
 
 export const getAttachmentReferences = async (
@@ -217,63 +274,6 @@ export const getAttachmentReferences = async (
     status: res.status,
     headers: res.headers,
   } as getAttachmentReferencesResponse;
-};
-
-export type getChannelsResponse200 = {
-  data: ApiChannelWithLatest[];
-  status: 200;
-};
-
-export type getChannelsResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type getChannelsResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type getChannelsResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getChannelsResponseSuccess = getChannelsResponse200 & {
-  headers: Headers;
-};
-export type getChannelsResponseError = (
-  | getChannelsResponse401
-  | getChannelsResponse404
-  | getChannelsResponse500
-) & {
-  headers: Headers;
-};
-
-export type getChannelsResponse =
-  | getChannelsResponseSuccess
-  | getChannelsResponseError;
-
-export const getGetChannelsUrl = () => {
-  return `/channels`;
-};
-
-export const getChannels = async (
-  options?: RequestInit
-): Promise<getChannelsResponse> => {
-  const res = await fetch(getGetChannelsUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getChannelsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChannelsResponse;
 };
 
 export type createChannelResponse201 = {
@@ -318,7 +318,7 @@ export type createChannelResponse =
   | createChannelResponseError;
 
 export const getCreateChannelUrl = () => {
-  return `/channels`;
+  return `/comms/channels`;
 };
 
 export const createChannel = async (
@@ -387,7 +387,7 @@ export type getOrCreateDmResponse =
   | getOrCreateDmResponseError;
 
 export const getGetOrCreateDmUrl = () => {
-  return `/channels/get_or_create_dm`;
+  return `/comms/channels/get_or_create_dm`;
 };
 
 export const getOrCreateDm = async (
@@ -457,7 +457,7 @@ export type getOrCreatePrivateResponse =
   | getOrCreatePrivateResponseError;
 
 export const getGetOrCreatePrivateUrl = () => {
-  return `/channels/get_or_create_private`;
+  return `/comms/channels/get_or_create_private`;
 };
 
 export const getOrCreatePrivate = async (
@@ -531,8 +531,8 @@ export const getGetMessageWithContextUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/channels/messages/context?${stringifiedParams}`
-    : `/channels/messages/context`;
+    ? `/comms/channels/messages/context?${stringifiedParams}`
+    : `/comms/channels/messages/context`;
 };
 
 export const getMessageWithContext = async (
@@ -606,8 +606,8 @@ export const getGetChannelUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/channels/${channelId}?${stringifiedParams}`
-    : `/channels/${channelId}`;
+    ? `/comms/channels/${channelId}?${stringifiedParams}`
+    : `/comms/channels/${channelId}`;
 };
 
 export const getChannel = async (
@@ -666,7 +666,7 @@ export type deleteChannelResponse =
   | deleteChannelResponseError;
 
 export const getDeleteChannelUrl = (channelId: string) => {
-  return `/channels/${channelId}`;
+  return `/comms/channels/${channelId}`;
 };
 
 export const deleteChannel = async (
@@ -710,7 +710,7 @@ export type patchChannelResponse =
   | patchChannelResponseError;
 
 export const getPatchChannelUrl = (channelId: string) => {
-  return `/channels/${channelId}`;
+  return `/comms/channels/${channelId}`;
 };
 
 export const patchChannel = async (
@@ -774,7 +774,7 @@ export type joinChannelResponse =
   | joinChannelResponseError;
 
 export const getJoinChannelUrl = (channelId: string) => {
-  return `/channels/${channelId}/join`;
+  return `/comms/channels/${channelId}/join`;
 };
 
 export const joinChannel = async (
@@ -835,7 +835,7 @@ export type leaveChannelResponse =
   | leaveChannelResponseError;
 
 export const getLeaveChannelUrl = (channelId: string) => {
-  return `/channels/${channelId}/leave`;
+  return `/comms/channels/${channelId}/leave`;
 };
 
 export const leaveChannel = async (
@@ -894,7 +894,7 @@ export type getMentionsForChannelResponse =
   | getMentionsForChannelResponseError;
 
 export const getGetMentionsForChannelUrl = (channelId: string) => {
-  return `/channels/${channelId}/mentions`;
+  return `/comms/channels/${channelId}/mentions`;
 };
 
 export const getMentionsForChannel = async (
@@ -954,7 +954,7 @@ export type postMessageResponse =
   | postMessageResponseError;
 
 export const getPostMessageUrl = (channelId: string) => {
-  return `/channels/${channelId}/message`;
+  return `/comms/channels/${channelId}/message`;
 };
 
 export const postMessage = async (
@@ -1015,7 +1015,7 @@ export type deleteMessageResponse =
   | deleteMessageResponseError;
 
 export const getDeleteMessageUrl = (channelId: string, messageId: string) => {
-  return `/channels/${channelId}/message/${messageId}`;
+  return `/comms/channels/${channelId}/message/${messageId}`;
 };
 
 export const deleteMessage = async (
@@ -1074,7 +1074,7 @@ export type patchMessageResponse =
   | patchMessageResponseError;
 
 export const getPatchMessageUrl = (channelId: string, messageId: string) => {
-  return `/channels/${channelId}/message/${messageId}`;
+  return `/comms/channels/${channelId}/message/${messageId}`;
 };
 
 export const patchMessage = async (
@@ -1139,7 +1139,7 @@ export type addParticipantsResponse =
   | addParticipantsResponseError;
 
 export const getAddParticipantsUrl = (channelId: string) => {
-  return `/channels/${channelId}/participants`;
+  return `/comms/channels/${channelId}/participants`;
 };
 
 export const addParticipants = async (
@@ -1204,7 +1204,7 @@ export type removeParticipantsResponse =
   | removeParticipantsResponseError;
 
 export const getRemoveParticipantsUrl = (channelId: string) => {
-  return `/channels/${channelId}/participants`;
+  return `/comms/channels/${channelId}/participants`;
 };
 
 export const removeParticipants = async (
@@ -1265,7 +1265,7 @@ export type postReactionResponse =
   | postReactionResponseError;
 
 export const getPostReactionUrl = (channelId: string) => {
-  return `/channels/${channelId}/reaction`;
+  return `/comms/channels/${channelId}/reaction`;
 };
 
 export const postReaction = async (
@@ -1326,7 +1326,7 @@ export type postTypingResponse =
   | postTypingResponseError;
 
 export const getPostTypingUrl = (channelId: string) => {
-  return `/channels/${channelId}/typing`;
+  return `/comms/channels/${channelId}/typing`;
 };
 
 export const postTyping = async (
@@ -1382,7 +1382,7 @@ export type createMentionHandlerResponse =
   | createMentionHandlerResponseError;
 
 export const getCreateMentionHandlerUrl = () => {
-  return `/mentions`;
+  return `/comms/mentions`;
 };
 
 export const createMentionHandler = async (
@@ -1451,7 +1451,7 @@ export type deleteMentionHandlerResponse =
   | deleteMentionHandlerResponseError;
 
 export const getDeleteMentionHandlerUrl = (mentionId: string) => {
-  return `/mentions/${mentionId}`;
+  return `/comms/mentions/${mentionId}`;
 };
 
 export const deleteMentionHandler = async (
@@ -1512,7 +1512,7 @@ export type getBatchChannelPreviewResponse =
   | getBatchChannelPreviewResponseError;
 
 export const getGetBatchChannelPreviewUrl = () => {
-  return `/preview`;
+  return `/comms/preview`;
 };
 
 export const getBatchChannelPreview = async (

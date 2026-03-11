@@ -19,19 +19,6 @@ pub struct Attachment {
     pub created_at: DateTime<Utc>,
 }
 
-/// Attachments of a message created when sending a message/draft through Macro FE. references
-/// a macro item (document, canvas, etc). These don't actually get sent to the provider when
-/// sending a message, but we store them so we can display the pills for the Macro objects in the FE
-/// when displaying the message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AttachmentMacro {
-    pub id: Uuid,
-    pub message_id: Uuid,
-    pub item_id: Uuid,
-    pub item_type: String,
-    pub created_at: DateTime<Utc>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachmentSfs {
     pub id: Uuid,
@@ -79,4 +66,24 @@ impl From<crate::service::attachment::AttachmentDraft> for AttachmentDraft {
             s3_key: service.s3_key,
         }
     }
+}
+
+/// A forwarded attachment linking a draft to an original message's attachment.
+/// Data is fetched from Gmail at send time rather than stored in S3.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AttachmentForwarded {
+    /// The UUID of the original attachment in email_attachments.
+    pub attachment_id: Uuid,
+    /// The ID of the draft message this forwarded attachment belongs to.
+    pub draft_id: Uuid,
+    /// The Gmail attachment ID for fetching data from Gmail API.
+    pub provider_attachment_id: Option<String>,
+    /// The Gmail message ID of the original message containing the attachment.
+    pub message_provider_id: String,
+    /// Original file name of the attachment.
+    pub filename: Option<String>,
+    /// MIME type of the attachment.
+    pub mime_type: Option<String>,
+    /// File size in bytes.
+    pub size_bytes: Option<i64>,
 }

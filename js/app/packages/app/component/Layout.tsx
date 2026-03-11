@@ -1,38 +1,53 @@
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import {
   LAYOUT_CONTEXT_ID,
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
-import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { updateCookie } from '@core/util/cookies';
+import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import { cn } from '@ui/utils/classname';
+import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
-import { KommandMenu } from './command/Konsole';
+import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
+import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
-import { RightbarWrapper } from './rightbar/Rightbar';
+import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
-import { ShortcutsHelper } from './settings/ShortcutsHelper';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { cn } from '@ui/utils/classname';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+import {
+  AppSidebar,
+  type SidebarState,
+} from '@app/component/app-sidebar/sidebar';
+import { isMobile } from '@core/mobile/isMobile';
+import { MobileDock } from './mobile/MobileDock';
+import { MobileSearchOuter } from './mobile/MobileSearch';
+import { makePersisted } from '@solid-primitives/storage';
 
 const AUTH_URLS = [
-  '/app/login',
-  '/app/login/popup',
-  '/app/login/popup/success',
-  '/app/onboarding',
-  '/app/signup',
-  '/app/email-signup-callback',
+  `${ROUTER_BASE_CONCAT}login`,
+  `${ROUTER_BASE_CONCAT}login/popup`,
+  `${ROUTER_BASE_CONCAT}login/popup/success`,
+  `${ROUTER_BASE_CONCAT}onboarding`,
+  `${ROUTER_BASE_CONCAT}signup`,
+  `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
+
+export const [sidebarState, setSidebarState] = makePersisted(
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  {
+    name: 'sidebar-state',
+  }
+);
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -64,13 +79,6 @@ export function Layout(props: RouteSectionProps) {
     }
   });
 
-  // This effect handles transitioning from desktop to mobile width to ensure sidebar state is properly reset
-  createEffect((_prevMobileWidth: boolean | undefined) => {
-    const currentMobileWidth = isMobileWidth();
-    // Note: No longer need to reset resizable context since we use simple boolean signal
-    return currentMobileWidth;
-  }, isMobileWidth());
-
   // This effect is to handle moving from unauthenticated to authenticated
   createEffect((prevAuth: boolean | undefined) => {
     const currentAuth = isAuthenticated();
@@ -90,29 +98,25 @@ export function Layout(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]',
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)]',
         {
-          'pb-[max(env(safe-area-inset-bottom,0px),var(--tauri-inset-bottom,0px))]':
-            !virtualKeyboardVisible(),
+          'pb-[var(--safe-bottom)]': !virtualKeyboardVisible(),
         }
       )}
-      style={{
-        'padding-top':
-          'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-        'padding-left':
-          'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
-        'padding-right':
-          'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
-      }}
     >
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
+          <Show when={!isMobile()}>
+            <Suspense>
+              <CommandMenu />
+            </Suspense>
+          </Show>
           <Suspense>
-            <KommandMenu />
+            <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
-          <ShortcutsHelper />
+          <GlobalShareModal />
         </Show>
         <Show
           when={
@@ -130,9 +134,23 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="grow-1">
+      <div class="max-h-full grow-1 flex">
+        <Show when={isAuthenticated()}>
+          <AppSidebar
+            sidebarState={sidebarState()}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSidebarState(isMobile() ? 'hidden' : 'slim');
+                return;
+              }
+
+              setSidebarState('expanded');
+            }}
+          />
+        </Show>
+
         <Resize.Zone
-          gutter={4}
+          gutter={2}
           direction="horizontal"
           class="flex-1 w-full min-h-0 font-sans text-ink caret-accent"
           id={'main-layout'}
@@ -141,11 +159,16 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <RightbarWrapper />
             <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
+      <Show when={isMobile() && !virtualKeyboardVisible()}>
+        <MobileDock />
+      </Show>
+      <Show when={isMobile()}>
+        <MobileSearchOuter />
+      </Show>
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}

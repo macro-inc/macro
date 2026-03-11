@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO id_mapping (source_id, target_id)\n        VALUES ($1, $2)\n        ON CONFLICT (source_id)\n        DO UPDATE SET target_id = EXCLUDED.target_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce97d5a94360438e17479379fcab57a8d30a1d2a7c03150526322a2aa8175c71"
+}

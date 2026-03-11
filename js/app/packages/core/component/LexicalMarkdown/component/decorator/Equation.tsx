@@ -1,9 +1,22 @@
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
 import type { NodeKey } from 'lexical';
-import { createEffect, createSignal, useContext } from 'solid-js';
+import { createEffect, createSignal, onMount, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { TRY_UPDATE_EQUATION_COMMAND } from '../../plugins';
+
+// Lazy load katex - will be loaded on first render
+let katexModule: typeof import('katex') | null = null;
+let katexLoaded = false;
+
+async function loadKatex() {
+  if (katexLoaded) return katexModule;
+  const [mod] = await Promise.all([
+    import('katex'),
+    import('katex/dist/katex.min.css'),
+  ]);
+  katexModule = mod;
+  katexLoaded = true;
+  return mod;
+}
 
 export function Equation(props: {
   equation: string;
@@ -13,6 +26,7 @@ export function Equation(props: {
   const [katexElementRef, setKatexElementRef] = createSignal<
     HTMLElement | undefined
   >(undefined);
+  const [isKatexReady, setIsKatexReady] = createSignal(katexLoaded);
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
@@ -23,11 +37,19 @@ export function Equation(props: {
     return sel.type === 'node' && sel.nodeKeys.has(props.key ?? '');
   };
 
+  onMount(async () => {
+    if (!katexLoaded) {
+      await loadKatex();
+      setIsKatexReady(true);
+    }
+  });
+
   createEffect(() => {
     const katexElement = katexElementRef();
+    const ready = isKatexReady();
 
-    if (katexElement) {
-      katex.render(props.equation, katexElement, {
+    if (katexElement && ready && katexModule) {
+      katexModule.default.render(props.equation, katexElement, {
         displayMode: !props.inline,
         errorColor: '#cc0000',
         output: 'html',

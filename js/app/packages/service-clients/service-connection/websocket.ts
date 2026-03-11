@@ -1,10 +1,11 @@
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
+import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
+  ArrayQueue,
   createSocketEffect,
   JsonSerializer,
   LinearBackoff,
@@ -33,6 +34,8 @@ async function resolveWsUrl() {
 
     return `${wsHost}/?macro-api-token=${apiToken}`;
   }
+  // Clear any cached token promise to force a fresh refresh on reconnect
+  unsetTokenPromise();
   await fetchToken();
   return wsHost;
 }
@@ -41,6 +44,7 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   .withSerializer(
     new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
   )
+  .withBuffer(new ArrayQueue())
   .withBackoff(new LinearBackoff(500, 500))
   .withMaxRetries(20)
   .withHeartbeat({
@@ -53,7 +57,6 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   .build();
 
 export const state = createWebsocketStateSignal(ws);
-
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(
   callback: (data: FromWebsocketMessage) => void

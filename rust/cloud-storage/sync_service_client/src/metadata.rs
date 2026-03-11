@@ -4,6 +4,7 @@ use super::SyncServiceClient;
 use anyhow::Result;
 
 impl SyncServiceClient {
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_metadata(&self, document_id: &str) -> Result<DocumentMetadata> {
         let full_url = format!("{}/document/{}/metadata", self.url, document_id);
         let res = self.client.get(&full_url).send().await?;
@@ -17,7 +18,7 @@ impl SyncServiceClient {
                 status=%status_code,
                 "unexpected response from sync service"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         let metadata: DocumentMetadata = res.json().await?;

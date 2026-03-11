@@ -1,180 +1,258 @@
-import WideChannel from '@macro-icons/wide/channel.svg';
-import SignalIcon from '@macro-icons/wide/signal.svg';
-import WideFolder from '@macro-icons/wide/folder.svg';
-import WidePlus from '@macro-icons/wide/plus.svg';
-import WideTask from '@macro-icons/wide/task.svg';
-import { batch, type Component, type JSX } from 'solid-js';
+import './MobileDock.css';
+import ChevronUpIcon from '@icon/regular/caret-up.svg?component-solid';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
+import { impactFeedback } from '@tauri-apps/plugin-haptics';
+import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { Popover } from '@kobalte/core/popover';
+import { cn } from '@ui/utils/classname';
+import { useSplitLayout } from '../split-layout/layout';
+import { SIDEBAR_LINKS } from '../app-sidebar/sidebar';
+import { type ListView, isListViewID } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { SearchState } from './mobileSearchState';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { setCreateMenuOpen } from '../Launcher';
-import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
-import { VIEWCONFIG_BASE } from '../ViewConfig';
-import { FOCUS_FILTER_CONFIGS } from '../Soup/utils/filterConfigs';
-import {
-  isEntityTypeFilterActive,
-  isFocusFilterActive,
-  sameSet,
-} from '../Soup/utils/filterHelpers';
+import { useLocation } from '@solidjs/router';
+
+const ICON_ANIMATION_DURATION_MS = 500;
 
 type MobileDockButtonProps = {
-  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  icon: Component<
+    JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+  >;
   label: string;
   onClick: () => void;
   active?: boolean;
+  ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
+  onTouchMove?: (e: TouchEvent) => void;
+  onTouchEnd?: (e: TouchEvent) => void;
+  iconClass?: string;
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
+  const [animating, setAnimating] = createSignal(false);
+
   return (
     <button
-      onClick={props.onClick}
-      class="flex flex-col items-center justify-center w-[20%] py-4"
-      classList={{
-        'text-ink-muted': !props.active,
-        'text-ink bg-panel': props.active,
+      type="button"
+      ref={props.ref}
+      onPointerDown={() => {
+        impactFeedback('light');
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
+        props.onClick();
       }}
+      onTouchMove={props.onTouchMove}
+      onTouchEnd={props.onTouchEnd}
+      class={cn(
+        'flex flex-col items-center justify-center w-[20%] pt-3 bg-page border-t border-edge-muted',
+        props.active && 'text-accent'
+      )}
     >
-      <props.icon class="w-6 h-6" />
+      <div class={cn('w-6 h-6 [&_svg]:size-6', props.iconClass)}>
+        <Dynamic component={props.icon} triggerAnimation={animating()} />
+      </div>
       <span class="text-xs">{props.label}</span>
     </button>
   );
 }
 
-export function MobileDock() {
-  const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setViewDataStore, viewsDataStore } =
-    splitContext.soupContext;
+const PRIMARY_IDS = ['inbox', 'channels', 'files', 'search'] as const;
 
-  const splitContent = () => splitContext.handle.content();
-  const view = () => viewsDataStore[selectedView()];
-  const filters = () => view()?.filters ?? VIEWCONFIG_BASE.filters;
-  const typeFilter = () => filters().typeFilter ?? [];
-  const channelCategoryFilter = () => filters().channelCategoryFilter ?? [];
-  const focusFilters = () => filters().focusFilters ?? [];
+const MORE_VIEWS = SIDEBAR_LINKS.filter(
+  (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
+).reverse();
 
-  const splitIsUnifiedList = () =>
-    splitContent().type === 'component' && splitContent().id === 'unified-list';
+function MorePopover(props: {
+  active: boolean;
+  isActive: (id: ListView) => boolean;
+  onNavigate: (id: ListView) => void;
+}) {
+  const { toggleSettings } = useSettingsState();
+  const [open, setOpen] = createSignal(false);
+  const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
+  const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
-  const ensureUnifiedList = () => {
-    if (splitIsUnifiedList()) return;
-    splitContext.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
-    });
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!open()) return;
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const button = el?.closest('[data-more-item]') as HTMLElement | null;
+    const id = button?.dataset.moreItem ?? null;
+    if (id !== hoveredId()) {
+      setHoveredId(id);
+      if (id) impactFeedback('light');
+    }
   };
 
-  const isInboxActive = () =>
-    isFocusFilterActive(focusFilters(), 'signal') && splitIsUnifiedList();
-  const isPeopleTeamsActive = () =>
-    isEntityTypeFilterActive(typeFilter(), 'channel') &&
-    sameSet(channelCategoryFilter(), ['people', 'groups']) &&
-    splitIsUnifiedList();
-  const isTasksActive = () =>
-    isEntityTypeFilterActive(typeFilter(), 'task') && splitIsUnifiedList();
-  const isAllActive = () =>
-    !isInboxActive() &&
-    !isPeopleTeamsActive() &&
-    !isTasksActive() &&
-    splitIsUnifiedList();
-
-  const setFocusFilter = (target: 'signal' | 'noise' | 'none') => {
-    const config =
-      target === 'none'
-        ? FOCUS_FILTER_CONFIGS.none
-        : FOCUS_FILTER_CONFIGS[target];
-    const viewId = selectedView();
-    setViewDataStore(viewId, 'filters', 'focusFilters', [
-      ...config.focusFilters,
-    ]);
-    setViewDataStore(
-      viewId,
-      'filters',
-      'notificationFilter',
-      config.notificationFilter
-    );
-    setViewDataStore(
-      viewId,
-      'display',
-      'unrollNotifications',
-      config.unrollNotifications
-    );
-  };
-
-  const setTypeFilters = ({
-    type,
-    channelCategories = [],
-  }: {
-    type: Array<'channel' | 'chat' | 'document' | 'email' | 'project' | 'task'>;
-    channelCategories?: Array<'people' | 'groups'>;
-  }) => {
-    const viewId = selectedView();
-    setViewDataStore(viewId, 'filters', 'typeFilter', type);
-    setViewDataStore(viewId, 'filters', 'documentTypeFilter', []);
-    setViewDataStore(viewId, 'filters', 'channelCategoryFilter', [
-      ...channelCategories,
-    ]);
-  };
-
-  const clearSearchFilters = () => {
-    const viewId = selectedView();
-    batch(() => {
-      setTypeFilters({ type: [], channelCategories: [] });
-      setFocusFilter('none');
-      setViewDataStore(viewId, 'filters', 'unreadOnly', false);
-    });
+  const handleTouchEnd = () => {
+    const id = hoveredId();
+    setHoveredId(null);
+    if (id === 'settings') {
+      toggleSettings();
+      setOpen(false);
+    } else if (id === 'create') {
+      setCreateMenuOpen(true);
+      setOpen(false);
+    } else if (isListViewID(id)) {
+      props.onNavigate(id);
+      setOpen(false);
+    }
   };
 
   return (
-    <div class="flex flex-row justify-between bg-linear-to-t from-page to-panel border-t border-edge-muted">
+    <>
       <MobileDockButton
-        icon={WideFolder}
-        label="All"
-        active={isAllActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          clearSearchFilters();
-        }}
+        icon={ChevronUpIcon}
+        label="More"
+        active={props.active}
+        onClick={() => setOpen((prev) => !prev)}
+        ref={setAnchorRef}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        iconClass={cn(
+          'transition-transform duration-200 [perspective:200px]',
+          open() && '[transform:rotateX(180deg)]'
+        )}
       />
+      <Popover
+        open={open()}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen);
+          if (!isOpen) setHoveredId(null);
+        }}
+        placement="top"
+        overflowPadding={10}
+        anchorRef={anchorRef}
+      >
+        <Popover.Content class="more-popover-content -z-2 bg-page border-t border-l border-r border-edge-muted rounded-t-sm flex flex-col gap-1 w-[calc(100vw-20px)] shadow-lg">
+          <button
+            type="button"
+            data-more-item="settings"
+            class={cn(
+              'flex items-center gap-2 px-3 h-11 text-sm text-ink',
+              hoveredId() === 'settings' ? 'bg-hover' : 'hover:bg-hover'
+            )}
+            onClick={() => {
+              impactFeedback('light');
+              toggleSettings();
+              setOpen(false);
+            }}
+          >
+            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+              <AnimatedSlidersHorizontalIcon
+                triggerAnimation={hoveredId() === 'settings'}
+              />
+            </div>
+            <span>Settings</span>
+          </button>
+          <button
+            type="button"
+            data-more-item="create"
+            class={cn(
+              'flex items-center gap-2 px-3 h-11 text-sm text-ink border-b border-edge-muted',
+              hoveredId() === 'create' ? 'bg-hover' : 'hover:bg-hover'
+            )}
+            onClick={() => {
+              impactFeedback('light');
+              setCreateMenuOpen(true);
+              setOpen(false);
+            }}
+          >
+            <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+              <AnimatedPlusIcon triggerAnimation={hoveredId() === 'create'} />
+            </div>
+            <span>Create</span>
+          </button>
+          <For each={MORE_VIEWS}>
+            {(item) => (
+              <button
+                type="button"
+                data-more-item={item.id}
+                class={cn(
+                  'flex items-center gap-2 px-3 h-11 text-sm',
+                  props.isActive(item.id) ? 'text-accent' : 'text-ink',
+                  hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
+                )}
+                onClick={() => {
+                  impactFeedback('light');
+                  props.onNavigate(item.id);
+                  setOpen(false);
+                }}
+              >
+                <div class="w-4 h-4 shrink-0 [&_svg]:size-4">
+                  <Dynamic
+                    component={item.icon}
+                    triggerAnimation={hoveredId() === item.id}
+                  />
+                </div>
+                <span>{item.label}</span>
+              </button>
+            )}
+          </For>
+        </Popover.Content>
+      </Popover>
+    </>
+  );
+}
+
+export function MobileDock() {
+  const { openWithSplit } = useSplitLayout();
+  const location = useLocation();
+
+  const isActive = (id: ListView) => {
+    const activeContent = globalSplitManager()?.activeSplit()?.content();
+    if (!activeContent) {
+      const segments = location.pathname.split('/').filter(Boolean);
+      return segments[segments.length - 1] === id;
+    }
+    return activeContent.id === id;
+  };
+
+  const isMoreActive = () => MORE_VIEWS.some((v) => isActive(v.id));
+
+  const navigate = (id: ListView) => {
+    openWithSplit({ type: 'component', id }, { mergeHistory: true });
+  };
+
+  return (
+    <div class="relative z-mobile-nav-bar flex flex-row justify-between">
+      <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-page" />
       <MobileDockButton
-        icon={SignalIcon}
+        icon={AnimatedInboxIcon}
         label="Inbox"
-        active={isInboxActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          batch(() => {
-            setFocusFilter('signal');
-            setTypeFilters({ type: [] });
-          });
-        }}
+        active={isActive('inbox')}
+        onClick={() => navigate('inbox')}
       />
       <MobileDockButton
-        icon={WideChannel}
-        label="People"
-        active={isPeopleTeamsActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          batch(() => {
-            setFocusFilter('none');
-            setTypeFilters({
-              type: ['channel'],
-              channelCategories: ['people', 'groups'],
-            });
-          });
-        }}
+        icon={AnimatedChannelIcon}
+        label="Channels"
+        active={isActive('channels')}
+        onClick={() => navigate('channels')}
       />
       <MobileDockButton
-        icon={WideTask}
-        label="Tasks"
-        active={isTasksActive()}
-        onClick={() => {
-          ensureUnifiedList();
-          batch(() => {
-            setFocusFilter('none');
-            setTypeFilters({ type: ['task'] });
-          });
-        }}
+        icon={AnimatedFolderIcon}
+        label="Files"
+        active={isActive('files')}
+        onClick={() => navigate('files')}
+      />
+      <MorePopover
+        active={isMoreActive()}
+        isActive={isActive}
+        onNavigate={navigate}
       />
       <MobileDockButton
-        icon={WidePlus}
-        label="Create"
+        icon={AnimatedSearchIcon}
+        label="Search"
         onClick={() => {
-          setCreateMenuOpen(true);
+          SearchState.maybeResetState();
+          SearchState.open();
         }}
       />
     </div>

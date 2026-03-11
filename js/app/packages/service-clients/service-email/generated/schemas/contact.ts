@@ -5,14 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ContactEmailAddress } from './contactEmailAddress';
-import type { ContactId } from './contactId';
 import type { ContactName } from './contactName';
 import type { ContactOriginalPhotoUrl } from './contactOriginalPhotoUrl';
 import type { ContactSfsPhotoUrl } from './contactSfsPhotoUrl';
 
 export interface Contact {
   email_address?: ContactEmailAddress;
-  id?: ContactId;
+  id: string;
   link_id: string;
   name?: ContactName;
   original_photo_url?: ContactOriginalPhotoUrl;

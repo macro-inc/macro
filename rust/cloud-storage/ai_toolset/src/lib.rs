@@ -76,6 +76,56 @@
 //!     .add_tool::<ReadDocumentTool, Arc<dyn DocumentApi>>().unwrap()
 //!     .add_tool::<UpdatePropertyTool, Arc<dyn PropertyApi>>().unwrap();
 //! ```
+//!
+//! # Nested Toolsets
+//!
+//! Toolsets can be composed by merging a subtoolset with a narrower context into
+//! a parent toolset with a broader context. The subtoolset's context must be
+//! derivable from the parent context via `FromRef`.
+//!
+//! ```
+//! use ai_toolset::{AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolResult};
+//! use axum_macros::FromRef;
+//! use schemars::JsonSchema;
+//! use serde::{Deserialize, Serialize};
+//! use std::sync::Arc;
+//!
+//! // Narrower context for a subset of tools
+//! #[derive(Clone)]
+//! struct SubContext {
+//!     sub_api: Arc<String>,
+//! }
+//!
+//! // Broader parent context that contains SubContext
+//! #[derive(Clone, FromRef)]
+//! struct ParentContext {
+//!     sub: SubContext,
+//!     other_api: Arc<String>,
+//! }
+//!
+//! // A tool that works with SubContext
+//! #[derive(JsonSchema, Deserialize)]
+//! #[schemars(title = "SubTool", description = "A tool using SubContext")]
+//! struct SubTool { value: String }
+//!
+//! #[async_trait::async_trait]
+//! impl AsyncTool<SubContext> for SubTool {
+//!     type Output = serde_json::Value;
+//!     async fn call(&self, ctx: ServiceContext<SubContext>, _req: RequestContext) -> ToolResult<Self::Output> {
+//!         Ok(serde_json::json!({"value": self.value, "api": *ctx.sub_api}))
+//!     }
+//! }
+//!
+//! // Build a subtoolset with the narrower context
+//! let sub_toolset = AsyncToolSet::<SubContext>::new()
+//!     .add_tool::<SubTool, SubContext>().unwrap();
+//!
+//! // Merge into parent toolset - tools are automatically widened
+//! let parent_toolset = AsyncToolSet::<ParentContext>::new()
+//!     .add_subtoolset::<SubContext>(sub_toolset).unwrap();
+//!
+//! assert!(parent_toolset.tools.contains_key("SubTool"));
+//! ```
 
 #![deny(missing_docs)]
 

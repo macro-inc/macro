@@ -4,11 +4,12 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MessageToSend } from './messageToSend';
+import type { ApiDraftInput } from './apiDraftInput';
 
 /**
- * The request passed to send a message
+ * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).
  */
 export interface SendMessageRequest {
-  message: MessageToSend;
+  /** The message content. */
+  message: ApiDraftInput;
 }

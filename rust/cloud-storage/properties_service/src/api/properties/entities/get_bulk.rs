@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::api::{
-    context::ApiContext,
+    context::PropertiesHandlerState,
     properties::entities::types::{BulkEntityPropertiesRequest, EntityPropertiesResponse},
 };
 use model::user::UserContext;
@@ -51,7 +51,7 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
 
 /// Shared implementation for bulk entity properties retrieval
 async fn get_bulk_entity_properties_impl(
-    context: &ApiContext,
+    state: &PropertiesHandlerState,
     request: BulkEntityPropertiesRequest,
 ) -> Result<HashMap<String, EntityPropertiesResponse>, GetBulkEntityPropertiesErr> {
     if request.entities.is_empty() {
@@ -65,11 +65,10 @@ async fn get_bulk_entity_properties_impl(
     // Note: the public endpoint requires property_ids, but internal callers can
     // pass an empty vec to fetch all properties for the given entities.
     let bulk_properties = if request.property_ids.is_empty() {
-        entity_properties_get::get_bulk_entity_properties_values(&context.db, &request.entities)
-            .await
+        entity_properties_get::get_bulk_entity_properties_values(&state.db, &request.entities).await
     } else {
         entity_properties_get::get_bulk_entity_properties_values_filtered(
-            &context.db,
+            &state.db,
             &request.entities,
             &request.property_ids,
         )
@@ -113,12 +112,12 @@ async fn get_bulk_entity_properties_impl(
     ),
     tag = "Internal"
 )]
-#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()), err)]
+#[tracing::instrument(skip(state, request), fields(entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties_internal(
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    get_bulk_entity_properties_impl(&context, request)
+    get_bulk_entity_properties_impl(&state, request)
         .await
         .map(Json)
 }
@@ -139,9 +138,9 @@ pub async fn get_bulk_entity_properties_internal(
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, request, user_context), fields(user_id = %user_context.user_id, entity_count = request.entities.len()), err)]
+#[tracing::instrument(skip(state, request, user_context), fields(user_id = %user_context.user_id, entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties(
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
@@ -155,7 +154,7 @@ pub async fn get_bulk_entity_properties(
     let mut permitted_entities = Vec::with_capacity(request.entities.len());
     for entity_ref in &request.entities {
         match crate::api::permissions::check_entity_view_permission(
-            &context,
+            &state,
             &user_context.user_id,
             entity_ref,
         )
@@ -187,7 +186,7 @@ pub async fn get_bulk_entity_properties(
         property_ids: request.property_ids.clone(),
     };
 
-    get_bulk_entity_properties_impl(&context, filtered_request)
+    get_bulk_entity_properties_impl(&state, filtered_request)
         .await
         .map(Json)
 }
