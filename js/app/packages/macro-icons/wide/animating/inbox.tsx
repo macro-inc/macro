@@ -13,7 +13,7 @@ export const AnimatedInboxIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-inbox-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated inbox icon</title>
+      {/*<title>Animated inbox icon</title>*/}
       <style>{`
         .animated-inbox-icon {
           .right-bar {

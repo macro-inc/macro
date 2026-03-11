@@ -10,7 +10,7 @@ export const AnimatedTaskIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-task-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated task icon</title>
+      {/*<title>Animated task icon</title>*/}
       <style>{`
         .animated-task-icon {
           .box {
