@@ -28,13 +28,19 @@ export type StickyScrollerProps = {
 
 export function createStickyScrollEffect(props: StickyScrollerProps) {
   createEffect(
-    on(props.messages, (currentMessages, previousMessage) => {
-      if (
-        didInsertMessageOnBottom(currentMessages, previousMessage) &&
-        isNearTrueBottom(props.isNearBottom(), props.hasMoreBelow())
-      ) {
-        props.scrollToBottom();
+    on(
+      props.messages,
+      (currentMessages, previousMessage) => {
+        if (
+          didInsertMessageOnBottom(currentMessages, previousMessage) &&
+          isNearTrueBottom(props.isNearBottom(), props.hasMoreBelow())
+        ) {
+          props.scrollToBottom();
+        }
+      },
+      {
+        defer: true,
       }
-    })
+    )
   );
 }
