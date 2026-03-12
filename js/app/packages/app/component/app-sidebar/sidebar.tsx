@@ -400,7 +400,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
+        'relative flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
         isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink',
         props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
         props.sidebarState !== 'slim' && 'w-full'
@@ -437,12 +437,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
       <Show when={props.hotkeyVisible}>
         <div
           class={cn(
-            'bg-accent-180 text-page text-xs w-4 aspect-square text-center',
-            props.sidebarState === 'slim' &&
-              'text-xxs text-page absolute -bottom-1 -right-1',
-            props.sidebarState !== 'slim' && 'ml-auto'
+            'text-xs size-4 outline outline-1 outline-accent/50 rounded bg-page text-ink flex items-center justify-center bg-page overflow-hidden',
+            props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
+            props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
           )}
         >
+          <div class="absolute inset-0 size-full bg-accent/30" />
           <Hotkey shortcut={props.hotkey} />
         </div>
       </Show>
