@@ -18,16 +18,14 @@ pub struct ApiContext {
     pub connection_manager: crate::service::connection::ConnectionManager,
     pub frecency_ingestor_service: EventIngestorImpl<FrecencyPgStorage>,
     pub redis_client: Arc<redis::Client>,
+    pub redis_connection: MultiplexedConnection,
     pub stream_manager: Arc<dyn StreamManager + Send + Sync>,
     pub last_online_worker: Arc<LastOnlineWorker>,
 }
 
 impl ApiContext {
-    #[tracing::instrument(err, skip(self))]
-    pub async fn get_multiplexed_async_connection(
-        &self,
-    ) -> Result<MultiplexedConnection, RedisError> {
-        self.redis_client.get_multiplexed_async_connection().await
+    pub fn get_multiplexed_async_connection(&self) -> Result<MultiplexedConnection, RedisError> {
+        Ok(self.redis_connection.clone())
     }
 }
 

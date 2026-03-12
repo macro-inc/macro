@@ -156,7 +156,7 @@ pub async fn notify_tracking_change(ctx: ConnectionContext<'_>, entity: &Entity<
         })?,
     };
 
-    let redis_connection = ctx.api_context.get_multiplexed_async_connection().await?;
+    let redis_connection = ctx.api_context.redis_connection.clone();
     send_message_to_entity(ctx, entity, message, redis_connection).await?;
 
     Ok(())
