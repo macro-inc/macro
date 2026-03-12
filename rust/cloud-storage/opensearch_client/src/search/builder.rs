@@ -47,16 +47,16 @@ macro_rules! delegate_methods {
     };
 }
 
-/// Creates sort vec to sort by the updated_at with entity_id as a tiebreaker.
-/// Items without a timestamp are pushed to the end by returning 0L (DESC order).
+/// Creates sort vec to sort by sent_at_seconds (preferred) or updated_at_seconds (fallback)
+/// with entity_id as a tiebreaker. Items without a timestamp are pushed to the end.
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
     vec![
         SortType::ScriptSort(ScriptSort::new(
             Script::new(
                 r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
-                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                    return doc['sent_at_seconds'].value.millis;
                 } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
-                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
+                    return doc['updated_at_seconds'].value.millis;
                 } else {
                     return 0L;
                 }"#,
