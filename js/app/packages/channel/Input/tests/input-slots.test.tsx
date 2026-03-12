@@ -31,10 +31,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
 
-vi.mock('../utils/render-icon', () => ({
-  renderIcon: () => null,
-}));
-
 vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => <span data-testid="entity-icon" />,
 }));

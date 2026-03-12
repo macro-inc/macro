@@ -6,7 +6,6 @@ import {
   useInput,
   useInputCommands,
 } from '../Input';
-import { renderIcon } from '../Input/utils/render-icon';
 import { InputActionButton } from '@channel/Input/PrimaryActions';
 import type { MessageEditor } from './create-message-editor';
 import { useMessage } from '../Message';
@@ -22,10 +21,10 @@ function EditPrimaryActions() {
         active={input().showFormatRibbon}
         onClick={() => commands.toggleFormatRibbon()}
       >
-        {renderIcon(FormatIcon, 'size-5')}
+        <FormatIcon class="size-5" />
       </InputActionButton>
       <InputActionButton label="Discard Edit" onClick={() => commands.close()}>
-        {renderIcon(TrashIcon, 'size-5')}
+        <TrashIcon class="size-5" />
       </InputActionButton>
     </>
   );
