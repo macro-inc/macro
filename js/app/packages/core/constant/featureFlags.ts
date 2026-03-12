@@ -129,6 +129,6 @@ export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = true;
 
 export const ENABLE_FEATURED_SEARCH_RESULTS = true;
 
-export const ENABLE_NEW_CHANNELS = true;
+export const ENABLE_NEW_CHANNELS = false;
 
 export const ENABLE_PROXY_EMAIL_IMAGES = true;
