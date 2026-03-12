@@ -10,14 +10,14 @@ export const LOCAL_ONLY = !!import.meta.hot;
  *
  * @returns true in dev.macro.com and bun run dev, false otherwise
  */
-export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
+export const DEV_MODE_ENV = import.meta.env.MODE === "development";
 
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise
  */
-export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
+export const PROD_MODE_ENV = import.meta.env.MODE === "production";
 
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = true;
 
@@ -129,6 +129,6 @@ export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = true;
 
 export const ENABLE_FEATURED_SEARCH_RESULTS = true;
 
-export const ENABLE_NEW_CHANNELS = false;
+export const ENABLE_NEW_CHANNELS = true;
 
 export const ENABLE_PROXY_EMAIL_IMAGES = true;
