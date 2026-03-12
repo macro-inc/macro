@@ -111,6 +111,7 @@ dependencies = [
  "models_email",
  "models_pagination",
  "models_permissions",
+ "models_properties",
  "models_search",
  "rand 0.9.0",
  "schemars",
@@ -3052,6 +3053,7 @@ dependencies = [
  "model_file_type",
  "model_user",
  "models_permissions",
+ "models_properties",
  "reqwest",
  "schemars",
  "serde",
@@ -6774,9 +6776,7 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -9694,15 +9694,24 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stripe",
+ "axum",
+ "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
  "non_empty",
+ "notification",
  "roles_and_permissions",
+ "serde",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 

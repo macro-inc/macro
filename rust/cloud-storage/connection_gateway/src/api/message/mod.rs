@@ -55,17 +55,7 @@ pub async fn send_message_handler(
     Path(entity): Path<Entity<'static>>,
     Json(body): Json<SendMessageBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
-    let redis_connection = ctx
-        .context
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get redis connection");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to send message".to_string(),
-            )
-        })?;
+    let redis_connection = ctx.context.redis_connection.clone();
 
     let res = send_message_to_entity(
         &ctx,
@@ -107,17 +97,7 @@ pub async fn batch_send_message_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let now = Instant::now();
 
-    let redis_connection = ctx
-        .context
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get redis connection");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to send message".to_string(),
-            )
-        })?;
+    let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.entities.iter().map(|entity| {
         let redis_connection = redis_connection.clone();
@@ -168,17 +148,7 @@ pub async fn batch_send_unique_messages_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let now = Instant::now();
 
-    let redis_connection = ctx
-        .context
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get redis connection");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to send message".to_string(),
-            )
-        })?;
+    let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.messages.iter().map(|message| {
         let redis_connection = redis_connection.clone();

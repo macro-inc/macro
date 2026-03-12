@@ -111,15 +111,17 @@ function SplitCloseButton() {
   });
 
   return (
-    <Button
-      class="p-1"
-      tooltip={
-        <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
-      }
-      onClick={context.handle.close}
-    >
-      <CloseIcon class="w-4 h-4" />
-    </Button>
+    <Show when={layout.manager.splits().length > 1}>
+      <Button
+        class="p-1"
+        tooltip={
+          <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
+        }
+        onClick={context.handle.close}
+      >
+        <CloseIcon class="w-4 h-4" />
+      </Button>
+    </Show>
   );
 }
 

@@ -112,54 +112,16 @@ pub async fn search_email_contacts<'a>(
 
     let rows = sqlx::query!(
         r#"
-        WITH link AS (
-            SELECT id AS link_id FROM email_links WHERE macro_id = $1
-        ),
-        user_messages AS MATERIALIZED (
-            SELECT m.id, m.thread_id, m.from_contact_id, m.from_name
-            FROM email_messages m
-            JOIN link l ON m.link_id = l.link_id
-        ),
-        matching_contacts AS (
-            SELECT c.id
-            FROM email_contacts c
-            JOIN link l ON c.link_id = l.link_id
-            WHERE c.name ILIKE $2 OR c.email_address ILIKE $2
-        ),
-        matching_thread_ids AS (
-            SELECT DISTINCT thread_id FROM (
-                SELECT um.thread_id
-                FROM user_messages um
-                WHERE um.from_contact_id IN (SELECT id FROM matching_contacts)
-
-                UNION ALL
-
-                SELECT um.thread_id
-                FROM user_messages um
-                WHERE um.from_name ILIKE $2
-
-                UNION ALL
-
-                SELECT um.thread_id
-                FROM email_message_recipients mr
-                JOIN user_messages um ON um.id = mr.message_id
-                WHERE mr.contact_id IN (SELECT id FROM matching_contacts)
-
-                UNION ALL
-
-                SELECT um.thread_id
-                FROM user_messages um
-                WHERE EXISTS (
-                    SELECT 1 FROM email_message_recipients mr
-                    WHERE mr.message_id = um.id
-                    AND mr.name ILIKE $2
-                )
-            ) all_matches
+        WITH matches AS (
+            SELECT thread_id, message_id, contact_name, contact_email, contact_type
+            FROM email_contact_search_index
+            WHERE link_id = (SELECT id FROM email_links WHERE macro_id = $1)
+              AND (contact_name ILIKE $2 OR contact_email ILIKE $2)
         ),
         paginated_threads AS (
             SELECT t.id, t.latest_non_spam_message_ts
             FROM email_threads t
-            JOIN matching_thread_ids mt ON mt.thread_id = t.id
+            JOIN (SELECT DISTINCT thread_id FROM matches) mt ON mt.thread_id = t.id
             WHERE t.latest_non_spam_message_ts IS NOT NULL
               AND (
                   $4::timestamptz IS NULL
@@ -171,35 +133,12 @@ pub async fn search_email_contacts<'a>(
         SELECT
             pt.id as "thread_id!",
             pt.latest_non_spam_message_ts as "updated_at!",
-            matches.message_id as "message_id!",
-            matches.contact_name as "contact_name?",
-            matches.contact_email as "contact_email!",
-            matches.contact_type as "contact_type!"
+            m.message_id as "message_id!",
+            m.contact_name as "contact_name?",
+            m.contact_email as "contact_email!",
+            m.contact_type as "contact_type!"
         FROM paginated_threads pt
-        CROSS JOIN LATERAL (
-            SELECT DISTINCT
-                m.id as message_id,
-                COALESCE(m.from_name, c.name) as contact_name,
-                c.email_address as contact_email,
-                'FROM'::text as contact_type
-            FROM email_messages m
-            JOIN email_contacts c ON c.id = m.from_contact_id
-            WHERE m.thread_id = pt.id
-              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR m.from_name ILIKE $2)
-
-            UNION
-
-            SELECT DISTINCT
-                m.id as message_id,
-                COALESCE(mr.name, c.name) as contact_name,
-                c.email_address as contact_email,
-                mr.recipient_type::text as contact_type
-            FROM email_messages m
-            JOIN email_message_recipients mr ON mr.message_id = m.id
-            JOIN email_contacts c ON c.id = mr.contact_id
-            WHERE m.thread_id = pt.id
-              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR mr.name ILIKE $2)
-        ) matches(message_id, contact_name, contact_email, contact_type)
+        JOIN matches m ON m.thread_id = pt.id
         ORDER BY pt.latest_non_spam_message_ts DESC, pt.id DESC
         "#,
         macro_user_id.as_ref(),

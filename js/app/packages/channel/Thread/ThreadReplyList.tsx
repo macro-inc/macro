@@ -5,6 +5,7 @@ import {
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
+import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import { useActivityTracker } from '@channel/activity-tracker-context';
@@ -13,6 +14,7 @@ export function ThreadReplyList(props: {
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
+  channelId: string;
 }) {
   const { isNewMessage } = useActivityTracker();
   const listMetaByReplyId = createMemo(() =>
@@ -32,11 +34,16 @@ export function ThreadReplyList(props: {
             <ThreadRail
               newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
-            <ChannelMessage
-              message={reply}
-              actions={props.getMessageActions?.(replyMessage())}
-              listMeta={listMetaByReplyId()[reply.id]}
-            />
+            <MarkMessaageNotifications
+              messageId={reply.id}
+              channelId={props.channelId}
+            >
+              <ChannelMessage
+                message={reply}
+                actions={props.getMessageActions?.(replyMessage())}
+                listMeta={listMetaByReplyId()[reply.id]}
+              />
+            </MarkMessaageNotifications>
           </div>
         );
       }}

@@ -1108,7 +1108,7 @@
       "post": {
         "tags": ["document"],
         "summary": "Creates a task document with properties in a single call.",
-        "description": "This endpoint creates task metadata and sets properties atomically.\nTask content should be set separately via the sync service.\n\nNOTE: Ideally content initialization would happen here on the backend, but that requires\nadding Loro/Lexical support to initialize sync service documents server-side. Deferring\nfor now — client must call `syncServiceClient.initializeFromSnapshot()` after this returns.",
+        "description": "This endpoint creates task metadata and sets properties atomically.\nTask content should be set separately via the sync service.",
         "operationId": "create_task_handler",
         "requestBody": {
           "content": {
@@ -1127,12 +1127,12 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response for create_task",
+                  "description": "Response for creating a task.",
                   "required": ["documentId"],
                   "properties": {
                     "documentId": {
                       "type": "string",
-                      "description": "The document id of the created task"
+                      "description": "The document ID of the created task."
                     }
                   }
                 }
@@ -1150,16 +1150,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -6056,35 +6046,35 @@
       },
       "CreateTaskRequest": {
         "type": "object",
-        "description": "Request body for create_task",
+        "description": "Request body for creating a task.",
         "required": ["taskName"],
         "properties": {
           "projectId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Optional project id to associate the task with"
+            "description": "Optional project ID to associate the task with."
           },
           "propertyValues": {
             "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/PropertyInput"
             },
-            "description": "Optional property values to set on the task"
+            "description": "Optional property values to set on the task."
           },
           "taskName": {
             "type": "string",
-            "description": "The name of the task"
+            "description": "The name of the task."
           }
         }
       },
       "CreateTaskResponse": {
         "type": "object",
-        "description": "Response for create_task",
+        "description": "Response for creating a task.",
         "required": ["documentId"],
         "properties": {
           "documentId": {
             "type": "string",
-            "description": "The document id of the created task"
+            "description": "The document ID of the created task."
           }
         }
       },
@@ -9098,16 +9088,16 @@
       },
       "PropertyInput": {
         "type": "object",
-        "description": "Property input for setting a property value on the task",
+        "description": "Property input for setting a property value on a task.",
         "required": ["propertyId", "value"],
         "properties": {
           "propertyId": {
             "type": "string",
-            "description": "The property definition ID"
+            "description": "The property definition ID."
           },
           "value": {
             "$ref": "#/components/schemas/SetPropertyValue",
-            "description": "The value to set for the property"
+            "description": "The value to set for the property."
           }
         }
       },

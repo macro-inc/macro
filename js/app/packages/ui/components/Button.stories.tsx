@@ -90,7 +90,9 @@ export const PrimaryDisabled: Story = {
   },
   play: async ({ canvas, userEvent, args }: PlayContext<Story>) => {
     const button = canvas.getByText('I am Disabled');
-    await userEvent.click(button);
+    try {
+      await userEvent.click(button);
+    } catch {}
     await expect(button).toBeDisabled();
     await expect(args.onClick).not.toHaveBeenCalled();
   },

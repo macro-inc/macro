@@ -11,6 +11,7 @@
 mod tests;
 
 mod create_document;
+mod create_task;
 mod delete_document;
 mod edit_document;
 mod get_document;
@@ -37,6 +38,7 @@ use crate::domain::ports::DocumentService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use create_document::*;
+pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
 pub use get_document::*;
@@ -127,6 +129,10 @@ where
     Router::new()
         .merge(document_id_routes)
         .route("/", axum::routing::post(create_document_handler::<T, Svc>))
+        .route(
+            "/create_task",
+            axum::routing::post(create_task_handler::<T, Svc>),
+        )
         .with_state(state)
 }
 

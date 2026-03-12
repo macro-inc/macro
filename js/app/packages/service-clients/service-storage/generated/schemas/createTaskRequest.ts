@@ -8,13 +8,13 @@ import type { CreateTaskRequestProjectId } from './createTaskRequestProjectId';
 import type { CreateTaskRequestPropertyValues } from './createTaskRequestPropertyValues';
 
 /**
- * Request body for create_task
+ * Request body for creating a task.
  */
 export interface CreateTaskRequest {
-  /** Optional project id to associate the task with */
+  /** Optional project ID to associate the task with. */
   projectId?: CreateTaskRequestProjectId;
-  /** Optional property values to set on the task */
+  /** Optional property values to set on the task. */
   propertyValues?: CreateTaskRequestPropertyValues;
-  /** The name of the task */
+  /** The name of the task. */
   taskName: string;
 }
