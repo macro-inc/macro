@@ -6,6 +6,7 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
 #[derive(Eq, PartialEq, Debug, Clone, PartialOrd, sqlx::Type, Copy, std::cmp::Ord)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[sqlx(type_name = "\"team_role\"", rename_all = "lowercase")]
 /// Ordered from least to most access top -> bottom
 pub enum TeamRole {
@@ -38,6 +39,7 @@ pub struct TeamMember<'a> {
 
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,

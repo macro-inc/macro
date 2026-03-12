@@ -9694,9 +9694,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stripe",
+ "axum",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-error-response",
+ "model_user",
  "non_empty",
  "roles_and_permissions",
  "serde",
@@ -9704,6 +9707,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
