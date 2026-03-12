@@ -6,6 +6,7 @@ import {
 import {
   createMemo,
   createSignal,
+  onMount,
   Show,
   Suspense,
   type Accessor,
@@ -40,6 +41,10 @@ import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { ActivityTrackerProvider } from '@channel/activity-tracker-context';
 import { useChannelActivity } from '@core/context/channels';
+import {
+  invalidateChannelsActivity,
+  useUpdateChannelsActivityMutation,
+} from '@queries/channel/activity';
 import { createChannelDragState } from './create-channel-drag-state';
 import { ChannelDropZone } from './ChannelDropZone';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
@@ -72,6 +77,26 @@ export function Channel(props: ChannelProps) {
   );
 
   const activity = useChannelActivity(props.channelId);
+
+  const updateActivityMutation = useUpdateChannelsActivityMutation({
+    onSuccess: () => {
+      invalidateChannelsActivity();
+    },
+  });
+
+  onMount(() => {
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
+  });
+
+  useBeforeLeave(() => {
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
+  });
 
   const [threadListNavigation, setThreadListNavigation] =
     createSignal<ThreadListNavigation>();
