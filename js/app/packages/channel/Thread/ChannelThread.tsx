@@ -24,7 +24,6 @@ function sliceIf<T>(
 }
 
 export function ChannelThread(props: ThreadProps) {
-  const { isNewMessage } = useActivityTracker();
   const userId = useUserId();
   const replyUserId = () => userId() ?? props.data().sender_id;
   const macroId = () => tryMacroId(replyUserId());
@@ -54,14 +53,14 @@ export function ChannelThread(props: ThreadProps) {
   };
   const firstReplyIsNewMessage = () => {
     const first = activeReplies()[0];
-    return first ? isNewMessage(first) : false;
+    return first ? props.isNewMessage?.(first) : false;
   };
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
       .slice(DEFAULT_VISIBLE_REPLY_COUNT)
-      .some((reply: ApiThreadReply) => isNewMessage(reply));
+      .some((reply: ApiThreadReply) => props.isNewMessage?.(reply));
   const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
@@ -111,7 +110,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
-                        isNewMessage={isNewMessage}
+                        isNewMessage={props.isNewMessage}
                       />
                     }
                   >
@@ -122,7 +121,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
-                        isNewMessage={isNewMessage}
+                        isNewMessage={props.isNewMessage}
                       />
                     </Suspense>
                   </Show>

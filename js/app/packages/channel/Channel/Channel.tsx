@@ -207,6 +207,7 @@ export function Channel(props: ChannelProps) {
                             onDismissNewMessages:
                               activityTracker.dismissNewMessages,
                           }}
+                          isNewMessage={activityTracker.isNewMessage}
                         />
                       )}
                     </Show>
