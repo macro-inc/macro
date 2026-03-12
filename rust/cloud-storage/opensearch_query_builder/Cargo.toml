@@ -1,17 +1,9 @@
 [package]
-name = "opensearch_query_builder"
-description = "Opensearch query builder"
-version = "0.2.8"
 edition = "2024"
-authors = ["whutchinson98"]
-include = ["src/**/*.rs"]
-categories = ["data-structures"]
-homepage = "https://github.com/whutchinson98/opensearch-query-builder"
-repository = "https://github.com/whutchinson98/opensearch-query-builder"
-license = "MIT"
-readme = "README.md"
-keywords = ["opensearch"]
+name = "opensearch_query_builder"
+publish = false
+version = "0.1.0"
 
 [dependencies]
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
+serde = { workspace = true }
+serde_json = { workspace = true }

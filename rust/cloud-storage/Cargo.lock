@@ -6776,7 +6776,7 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.8"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
