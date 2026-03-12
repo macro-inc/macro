@@ -495,5 +495,5 @@ pub async fn convert_db_messages_to_service_concurrent(
         }
     });
 
-    Ok(try_join_all(message_processing_futures).await?)
+    try_join_all(message_processing_futures).await
 }
