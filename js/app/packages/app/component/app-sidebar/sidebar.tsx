@@ -209,52 +209,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             isSlim() && 'flex-col px-2 pb-0 justify-center'
           )}
         >
-          <LogoIcon class="size-6 text-accent opacity-100 group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:size-0" />
-          <div class="flex items-center gap-1">
-            <Show when={isExpanded()}>
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label="Command palette"
-                    hotkeyToken={TOKENS.global.commandMenu}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs"
-                  onClick={handleCommandPaletteClick}
-                >
-                  <CommandIcon />
-                </Button>
-              </Tooltip>
-            </Show>
-            <Show when={!isMobile()}>
-              {/*<Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>*/}
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
-                    hotkeyToken={TOKENS.global.toggleSidebar}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs [&_svg]:size-4"
-                  onClick={() => props.onOpenChange(isSlim())}
-                  onMouseEnter={() => setSidebarBtnHovering(true)}
-                  onMouseLeave={() => setSidebarBtnHovering(false)}
-                >
-                  <AnimatedSidebarIcon
-                    triggerAnimation={sidebarBtnHovering()}
-                  />
-                </Button>
-              </Tooltip>
-            </Show>
-          </div>
+          <LogoIcon class="size-6 text-accent" />
         </div>
 
         <Tooltip
@@ -306,20 +261,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           {/* </div> */}
         </Show>
 
-        <div class="mt-auto w-full px-2">
-          {/*<Button
-            class={cn(
-              'flex items-center justify-start text-sm gap-2 cursor-default',
-              isSlim() ? 'justify-center aspect-square' : 'w-full'
-            )}
-            variant="ghost"
-            size={isSlim() ? 'icon-sm' : 'sm'}
-            onClick={() => openSettings('Shortcuts')}
-          >
-            <KeyboardIcon class="size-4 shrink-0" />
-            <span class={cn(isSlim() ? 'sr-only' : 'block')}>Shortcuts</span>
-          </Button>*/}
-
+        <div class="mt-auto w-full px-2 flex flex-col gap-1">
           <Tooltip
             class="w-full"
             tooltip={
@@ -342,6 +284,63 @@ export const AppSidebar = (props: AppSidebarProps) => {
               <span class={cn(isSlim() ? 'sr-only' : 'block')}>Settings</span>
             </Button>
           </Tooltip>
+
+          <Show when={!isMobile()}>
+            <Tooltip
+              class="w-full"
+              tooltip={
+                <LabelAndHotKey
+                  label="Command palette"
+                  hotkeyToken={TOKENS.global.commandMenu}
+                />
+              }
+            >
+              <Button
+                class={cn(
+                  'flex items-center justify-start text-sm gap-2 cursor-default',
+                  isSlim() ? 'justify-center aspect-square' : 'w-full'
+                )}
+                variant="ghost"
+                size={isSlim() ? 'icon-sm' : 'sm'}
+                onClick={handleCommandPaletteClick}
+              >
+                <CommandIcon class="size-4 shrink-0" />
+                <span class={cn(isSlim() ? 'sr-only' : 'block')}>Command palette</span>
+              </Button>
+            </Tooltip>
+          </Show>
+          <Show when={!isMobile()}>
+            <Tooltip
+              class="w-full"
+              tooltip={
+                <LabelAndHotKey
+                  label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
+                  hotkeyToken={TOKENS.global.toggleSidebar}
+                />
+              }
+            >
+              <Button
+                class={cn(
+                  'flex items-center justify-start text-sm gap-2 cursor-default',
+                  isSlim() ? 'justify-center aspect-square' : 'w-full'
+                )}
+                variant="ghost"
+                size={isSlim() ? 'icon-sm' : 'sm'}
+                onClick={() => props.onOpenChange(isSlim())}
+                onMouseEnter={() => setSidebarBtnHovering(true)}
+                onMouseLeave={() => setSidebarBtnHovering(false)}
+              >
+                <div class="shrink-0 [&_svg]:size-4">
+                  <AnimatedSidebarIcon
+                    triggerAnimation={sidebarBtnHovering()}
+                  />
+                </div>
+                <span class={cn(isSlim() ? 'sr-only' : 'block')}>
+                  {isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
+                </span>
+              </Button>
+            </Tooltip>
+          </Show>
         </div>
       </div>
     </>
