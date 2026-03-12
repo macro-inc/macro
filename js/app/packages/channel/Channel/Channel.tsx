@@ -39,7 +39,6 @@ import { ChannelThread } from '../Thread';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
-import { ActivityTrackerProvider } from '@channel/activity-tracker-context';
 import { useChannelActivity } from '@core/context/channels';
 import {
   invalidateChannelsActivity,
@@ -173,77 +172,75 @@ export function Channel(props: ChannelProps) {
   return (
     <Suspense>
       <StaticMarkdownContext>
-        <ActivityTrackerProvider value={activityTracker}>
-          <ChannelDropZone dragState={dragState}>
-            <Show when={messages().length > 0}>
-              <div class="relative flex-1 min-h-0">
-                <ThreadList
-                  keys={() => messageIndex().keys}
-                  initialScrollTarget={threadListInitialScrollTarget()}
-                  shift={shift}
-                  prepend={threadPaginator.isPrepending}
-                  onScrollNearTop={threadPaginator.shiftPaginate}
-                  onScrollNearBottom={threadPaginator.prependPaginate}
-                  onNavigationReady={setThreadListNavigation}
-                  onScrollStateChange={setThreadListScrollState}
-                >
-                  {(item) => {
-                    const message = () => messageById().get(item.id);
-                    const state = threadManager.getOrCreateThreadState(item.id);
-                    return (
-                      <Show when={message()}>
-                        {(m) => (
-                          <ChannelThread
-                            data={m}
-                            channelId={() => props.channelId}
-                            getMessageActions={getMessageActions}
-                            isExpanded={state.isExpanded}
-                            setIsExpanded={state.setIsExpanded}
-                            isReplying={state.isReplying}
-                            setIsReplying={state.setIsReplying}
-                            replyInputState={state.replyInputState}
-                            setReplyInputState={state.setReplyInputState}
-                            listMeta={listMetaByMessageId()[item.id]}
-                            messageEditor={messageEditor}
-                            threadActions={{
-                              onDismissNewMessages:
-                                activityTracker.dismissNewMessages,
-                            }}
-                          />
-                        )}
-                      </Show>
-                    );
-                  }}
-                </ThreadList>
-                <ScrollToBottomOverlay
-                  navigation={threadListNavigation}
-                  scrollState={threadListScrollState}
-                />
-              </div>
-            </Show>
-            <Suspense>
-              <div class="pb-2 w-full flex justify-center">
-                <ChannelInput
-                  input={{
-                    mode: 'channel',
-                    id: `channel-input-${props.channelId}`,
-                    placeholder: 'Message channel',
-                    isDraggingOverChannel: dragState.isDraggingOverChannel(),
-                    isValidChannelDrag: dragState.isValidChannelDrag(),
-                  }}
-                  attachmentTracker={attachmentTracker}
-                  persistenceKey={makeInputValuePersistenceKey({
-                    channelId: props.channelId,
-                  })}
-                  onReady={(handle) => {
-                    dragState.setAttachFilesToChannel(handle.attachFiles);
-                  }}
-                  onSend={onSend}
-                />
-              </div>
-            </Suspense>
-          </ChannelDropZone>
-        </ActivityTrackerProvider>
+        <ChannelDropZone dragState={dragState}>
+          <Show when={messages().length > 0}>
+            <div class="relative flex-1 min-h-0">
+              <ThreadList
+                keys={() => messageIndex().keys}
+                initialScrollTarget={threadListInitialScrollTarget()}
+                shift={shift}
+                prepend={threadPaginator.isPrepending}
+                onScrollNearTop={threadPaginator.shiftPaginate}
+                onScrollNearBottom={threadPaginator.prependPaginate}
+                onNavigationReady={setThreadListNavigation}
+                onScrollStateChange={setThreadListScrollState}
+              >
+                {(item) => {
+                  const message = () => messageById().get(item.id);
+                  const state = threadManager.getOrCreateThreadState(item.id);
+                  return (
+                    <Show when={message()}>
+                      {(m) => (
+                        <ChannelThread
+                          data={m}
+                          channelId={() => props.channelId}
+                          getMessageActions={getMessageActions}
+                          isExpanded={state.isExpanded}
+                          setIsExpanded={state.setIsExpanded}
+                          isReplying={state.isReplying}
+                          setIsReplying={state.setIsReplying}
+                          replyInputState={state.replyInputState}
+                          setReplyInputState={state.setReplyInputState}
+                          listMeta={listMetaByMessageId()[item.id]}
+                          messageEditor={messageEditor}
+                          threadActions={{
+                            onDismissNewMessages:
+                              activityTracker.dismissNewMessages,
+                          }}
+                        />
+                      )}
+                    </Show>
+                  );
+                }}
+              </ThreadList>
+              <ScrollToBottomOverlay
+                navigation={threadListNavigation}
+                scrollState={threadListScrollState}
+              />
+            </div>
+          </Show>
+          <Suspense>
+            <div class="pb-2 w-full flex justify-center">
+              <ChannelInput
+                input={{
+                  mode: 'channel',
+                  id: `channel-input-${props.channelId}`,
+                  placeholder: 'Message channel',
+                  isDraggingOverChannel: dragState.isDraggingOverChannel(),
+                  isValidChannelDrag: dragState.isValidChannelDrag(),
+                }}
+                attachmentTracker={attachmentTracker}
+                persistenceKey={makeInputValuePersistenceKey({
+                  channelId: props.channelId,
+                })}
+                onReady={(handle) => {
+                  dragState.setAttachFilesToChannel(handle.attachFiles);
+                }}
+                onSend={onSend}
+              />
+            </div>
+          </Suspense>
+        </ChannelDropZone>
       </StaticMarkdownContext>
     </Suspense>
   );

@@ -112,6 +112,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
+                        isNewMessage={isNewMessage}
                       />
                     }
                   >
@@ -122,6 +123,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
+                        isNewMessage={isNewMessage}
                       />
                     </Suspense>
                   </Show>

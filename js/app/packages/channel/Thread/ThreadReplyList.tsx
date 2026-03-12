@@ -8,8 +8,8 @@ import type { ApiThreadReply } from '@service-comms/client';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
-import { useActivityTracker } from '@channel/activity-tracker-context';
 import type { MessageEditor } from '../Channel/create-message-editor';
+import type { NewMessageCheckable } from '../Channel/util';
 
 export function ThreadReplyList(props: {
   channelId: string;
@@ -17,10 +17,10 @@ export function ThreadReplyList(props: {
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
+  isNewMessage?: (message: NewMessageCheckable) => boolean;
 }) {
-  const { isNewMessage } = useActivityTracker();
   const listMetaByReplyId = createMemo(() =>
-    buildThreadReplyListMeta(props.replies, isNewMessage)
+    buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
 
   return (
