@@ -161,7 +161,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             },
             {
               preferNewSplit: e?.shiftKey,
-              mergeHistory: true,
+              mergeHistory: false,
               allowDuplicate: true,
             }
           );
@@ -399,7 +399,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           },
           {
             preferNewSplit: e.shiftKey,
-            mergeHistory: true,
+            mergeHistory: false,
             allowDuplicate: true,
           }
         );
