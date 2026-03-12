@@ -40,9 +40,11 @@ import {
   getChannelMessagesQueryKey,
   type ChannelMessagesData,
 } from '../channel-messages';
+import { channelKeys } from '../keys';
 import {
   optimisticInsertChannelMessage,
   optimisticUpdateChannelMessage,
+  replaceOptimisticMessage,
   rollbackInsertChannelMessage,
   rollbackUpdateChannelMessage,
 } from '../message';
@@ -53,6 +55,7 @@ import {
   rollbackRemoveReaction,
 } from '../reaction';
 import { getThreadRepliesQueryKey } from '../thread-replies';
+import type { GetChannelResponse } from '../types';
 
 function createPaginatedMessage(
   id: string,
@@ -125,6 +128,25 @@ function getChannelMessagesFromCache(
   );
 }
 
+function createLegacyChannelResponse(
+  overrides: Partial<GetChannelResponse> = {}
+): GetChannelResponse {
+  return {
+    channel: {
+      id: 'channel-1',
+      created_at: '2024-01-03T00:00:00.000Z',
+      updated_at: '2024-01-03T00:00:00.000Z',
+    },
+    users: {},
+    messages: [],
+    attachments: [],
+    participants: [],
+    reactions: {},
+    read_state: {},
+    ...overrides,
+  } as GetChannelResponse;
+}
+
 function seedThreadRepliesCache(
   channelId: string,
   messageId: string,
@@ -184,6 +206,61 @@ describe('channel optimistic cache regressions', () => {
 
     expect(getChannelMessagesFromCache('channel-1')?.pages[0].items).toEqual([
       expect.objectContaining({ id: 'existing-msg' }),
+    ]);
+  });
+
+  it('drops optimistic attachments when authoritative ones already exist for the real message id', () => {
+    testQueryClient.setQueryData(
+      channelKeys.withID('channel-1').queryKey,
+      createLegacyChannelResponse({
+        messages: [
+          {
+            id: 'optimistic-msg',
+            channel_id: 'channel-1',
+            sender_id: 'user-2',
+            content: 'Uploading image',
+            created_at: '2024-01-03T00:00:00.000Z',
+            updated_at: '2024-01-03T00:00:00.000Z',
+            deleted_at: undefined,
+            edited_at: undefined,
+          },
+        ],
+        attachments: [
+          {
+            id: 'optimistic-att',
+            channel_id: 'channel-1',
+            message_id: 'optimistic-msg',
+            entity_id: 'image-1',
+            entity_type: 'static/image',
+            created_at: '2024-01-03T00:00:00.000Z',
+          },
+          {
+            id: 'server-att',
+            channel_id: 'channel-1',
+            message_id: 'real-msg',
+            entity_id: 'image-1',
+            entity_type: 'static/image',
+            created_at: '2024-01-03T00:00:01.000Z',
+          },
+        ],
+      })
+    );
+
+    replaceOptimisticMessage({
+      channelId: 'channel-1',
+      optimisticId: 'optimistic-msg',
+      realId: 'real-msg',
+    });
+
+    const cached = testQueryClient.getQueryData<GetChannelResponse>(
+      channelKeys.withID('channel-1').queryKey
+    );
+
+    expect(cached?.messages).toEqual([
+      expect.objectContaining({ id: 'real-msg' }),
+    ]);
+    expect(cached?.attachments).toEqual([
+      expect.objectContaining({ id: 'server-att', message_id: 'real-msg' }),
     ]);
   });
 

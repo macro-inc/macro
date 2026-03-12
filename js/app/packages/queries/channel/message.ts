@@ -278,6 +278,10 @@ export function replaceOptimisticMessage(
 
       if (messageIndex === -1) return prev;
 
+      const hasAuthoritativeAttachments = prev.attachments.some(
+        (attachment) => attachment.message_id === vars.realId
+      );
+
       const updatedMessages = [...prev.messages];
       updatedMessages[messageIndex] = {
         ...updatedMessages[messageIndex],
@@ -287,11 +291,15 @@ export function replaceOptimisticMessage(
       return {
         ...prev,
         messages: updatedMessages,
-        attachments: prev.attachments.map((a) =>
-          a.message_id === vars.optimisticId
-            ? { ...a, message_id: vars.realId }
-            : a
-        ),
+        attachments: hasAuthoritativeAttachments
+          ? prev.attachments.filter(
+              (attachment) => attachment.message_id !== vars.optimisticId
+            )
+          : prev.attachments.map((attachment) =>
+              attachment.message_id === vars.optimisticId
+                ? { ...attachment, message_id: vars.realId }
+                : attachment
+            ),
       };
     }
   );
