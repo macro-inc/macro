@@ -3,9 +3,10 @@
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, RemoveTeamInviteError,
-    RemoveUserFromTeamError, RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite,
-    TeamMember,
+    CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
+    ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+    RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
+    TeamMember, TeamRole, TeamWithMembers,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -106,6 +107,62 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         ignore_team_ids: non_empty::NonEmpty<&[uuid::Uuid]>,
         users: non_empty::NonEmpty<&[MacroUserIdStr<'_>]>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'_>>, TeamError>> + Send;
+
+    /// Gets a team by id with all its members
+    fn get_team_by_id(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send;
+
+    /// Gets all teams for a user
+    fn get_user_teams(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Team>, TeamError>> + Send;
+
+    /// Gets all team invites for a user (by email)
+    fn get_user_team_invites(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<TeamInviteDetails>, TeamError>> + Send;
+
+    /// Gets all invites for a team
+    fn get_team_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<TeamInviteDetails>, TeamError>> + Send;
+
+    /// Gets the name of a team
+    fn get_team_name(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<String, TeamError>> + Send;
+
+    /// Updates a team
+    fn patch_team(
+        &self,
+        team_id: &uuid::Uuid,
+        req: &PatchTeamRequest,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Gets detailed info about a team invite by id
+    fn get_team_invite_details_by_id(
+        &self,
+        invite_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<TeamInviteDetails, TeamError>> + Send;
+
+    /// Updates the last_sent_at field of a team invite
+    fn update_team_invite_last_sent_at(
+        &self,
+        invite_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Gets the role of a user in a team
+    fn get_team_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeamRole>, TeamError>> + Send;
 }
 
 /// The TeamService defines a set of actions to perform on the teams
@@ -167,4 +224,49 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RevokePermissionsForTeamMembersError>> + Send;
+
+    /// Gets a team by id with all its members
+    fn get_team(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send;
+
+    /// Gets all teams for a user
+    fn get_user_teams(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Team>, TeamError>> + Send;
+
+    /// Gets all team invites for the authenticated user
+    fn get_user_invites(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<TeamInviteDetails>, TeamError>> + Send;
+
+    /// Gets all invites for a team
+    fn get_team_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<TeamInviteDetails>, TeamError>> + Send;
+
+    /// Updates a team
+    fn patch_team(
+        &self,
+        team_id: &uuid::Uuid,
+        req: &PatchTeamRequest,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Reinvites a user to a team (rate-limited to 5 min)
+    fn reinvite_to_team(
+        &self,
+        team_invite_id: &uuid::Uuid,
+        invited_by: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<TeamInviteDetails, ReinviteError>> + Send;
+
+    /// Gets the role of a user in a team
+    fn get_team_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeamRole>, TeamError>> + Send;
 }

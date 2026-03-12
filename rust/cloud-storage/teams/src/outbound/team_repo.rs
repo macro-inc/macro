@@ -1,8 +1,9 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        CreateTeamError, InviteUsersToTeamError, RemoveTeamInviteError, RemoveUserFromTeamError,
-        Team, TeamError, TeamInvite, TeamMember, TeamRole,
+        CreateTeamError, InviteUsersToTeamError, PatchTeamRequest, RemoveTeamInviteError,
+        RemoveUserFromTeamError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
+        TeamRole, TeamWithMembers,
     },
     team_repo::TeamRepository,
 };
@@ -627,5 +628,247 @@ impl TeamRepository for TeamRepositoryImpl {
             .collect();
 
         Ok(members)
+    }
+
+    async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
+        let team = sqlx::query!(
+            r#"
+            SELECT id, name, owner_id
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| Team::new(row.id, row.name, row.owner_id))
+        .fetch_one(&self.pool)
+        .await?;
+
+        let members = sqlx::query!(
+            r#"
+            SELECT user_id,
+                team_role as "team_role!: TeamRole"
+            FROM team_user
+            WHERE team_id = $1
+            "#,
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let members = members
+            .into_iter()
+            .filter_map(|row| {
+                MacroUserIdStr::parse_from_str(&row.user_id)
+                    .map(|id| TeamMember {
+                        user_id: id.into_owned(),
+                        role: row.team_role,
+                    })
+                    .ok()
+            })
+            .collect();
+
+        Ok(TeamWithMembers { team, members })
+    }
+
+    async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
+        let teams = sqlx::query!(
+            r#"
+            SELECT t.id, t.name, t.owner_id
+            FROM team t
+            JOIN team_user tu ON t.id = tu.team_id
+            WHERE tu.user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .map(|row| Team::new(row.id, row.name, row.owner_id))
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(teams)
+    }
+
+    async fn get_user_team_invites(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<TeamInviteDetails>, TeamError> {
+        let email = user_id.email_part().lowercase();
+
+        let invites = sqlx::query!(
+            r#"
+            SELECT
+                id,
+                email,
+                team_id,
+                team_role as "team_role!: TeamRole",
+                invited_by,
+                created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                last_sent_at as "last_sent_at!: chrono::DateTime<chrono::Utc>"
+            FROM team_invite
+            WHERE email = $1
+            "#,
+            email.as_ref(),
+        )
+        .map(|row| TeamInviteDetails {
+            id: row.id,
+            email: row.email,
+            team_id: row.team_id,
+            team_role: row.team_role,
+            invited_by: row.invited_by,
+            created_at: row.created_at,
+            last_sent_at: row.last_sent_at,
+        })
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(invites)
+    }
+
+    async fn get_team_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Vec<TeamInviteDetails>, TeamError> {
+        let invites = sqlx::query!(
+            r#"
+            SELECT
+                id,
+                email,
+                team_id,
+                team_role as "team_role!: TeamRole",
+                invited_by,
+                created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                last_sent_at as "last_sent_at!: chrono::DateTime<chrono::Utc>"
+            FROM team_invite
+            WHERE team_id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| TeamInviteDetails {
+            id: row.id,
+            email: row.email,
+            team_id: row.team_id,
+            team_role: row.team_role,
+            invited_by: row.invited_by,
+            created_at: row.created_at,
+            last_sent_at: row.last_sent_at,
+        })
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(invites)
+    }
+
+    async fn get_team_name(&self, team_id: &uuid::Uuid) -> Result<String, TeamError> {
+        let name = sqlx::query!(
+            r#"
+            SELECT name
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .map(|row| row.name)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(name)
+    }
+
+    async fn patch_team(
+        &self,
+        team_id: &uuid::Uuid,
+        req: &PatchTeamRequest,
+    ) -> Result<(), TeamError> {
+        if let Some(name) = req.name.as_ref() {
+            sqlx::query!(
+                r#"
+                UPDATE team
+                SET name = $1
+                WHERE id = $2
+                "#,
+                name,
+                team_id,
+            )
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn get_team_invite_details_by_id(
+        &self,
+        invite_id: &uuid::Uuid,
+    ) -> Result<TeamInviteDetails, TeamError> {
+        let invite = sqlx::query!(
+            r#"
+            SELECT
+                id,
+                email,
+                team_id,
+                team_role as "team_role!: TeamRole",
+                invited_by,
+                created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                last_sent_at as "last_sent_at!: chrono::DateTime<chrono::Utc>"
+            FROM team_invite
+            WHERE id = $1
+            "#,
+            invite_id,
+        )
+        .map(|row| TeamInviteDetails {
+            id: row.id,
+            email: row.email,
+            team_id: row.team_id,
+            team_role: row.team_role,
+            invited_by: row.invited_by,
+            created_at: row.created_at,
+            last_sent_at: row.last_sent_at,
+        })
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => TeamError::TeamInviteDoesNotExist,
+            _ => e.into(),
+        })?;
+
+        Ok(invite)
+    }
+
+    async fn update_team_invite_last_sent_at(
+        &self,
+        invite_id: &uuid::Uuid,
+    ) -> Result<(), TeamError> {
+        sqlx::query!(
+            r#"
+            UPDATE team_invite
+            SET last_sent_at = NOW()
+            WHERE id = $1
+            "#,
+            invite_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_team_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamRole>, TeamError> {
+        let team_role = sqlx::query!(
+            r#"
+            SELECT team_role as "team_role!: TeamRole"
+            FROM team_user
+            WHERE team_id = $1 AND user_id = $2
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .map(|r| r.team_role)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(team_role)
     }
 }
