@@ -187,7 +187,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <div
         class={cn(
-          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content overflow-hidden',
+          'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
@@ -206,25 +206,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <LogoIcon class="size-6 text-accent" />
         </div>
 
-        <Tooltip
-          class="px-2 flex items-center justify-center"
-          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-        >
-          <Button
-            class="rounded-xs justify-start w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2"
-            variant="ghost"
-            size="sm"
-            onClick={handleCreateClick}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            <span class="grow text-left whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-              Create
-            </span>
-            <span class="rounded-sm px-2 py-0.5 text-xs border border-edge-muted whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-              <Hotkey shortcut="C" />
-            </span>
-          </Button>
-        </Tooltip>
+        <div class="px-2">
+          <hr class="border-edge-muted mb-[8px]"/>
+        </div>
 
         <nav>
           <ul class="w-full h-full px-2 flex flex-col gap-1">
@@ -241,6 +225,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </ul>
         </nav>
 
+        <div class="px-2">
+          <hr class="border-edge-muted my-[8px]"/>
+        </div>
+
         <Show when={isExpanded()}>
           <div class="block max-h-[clamp(10%,60%,20rem)]">
             <ChannelsUnreadWidget />
@@ -251,7 +239,48 @@ export const AppSidebar = (props: AppSidebarProps) => {
           {/* </div> */}
         </Show>
 
-        <div class="mt-auto w-full px-2 flex flex-col gap-1">
+        <div class="px-2 mt-auto w-full">
+          <hr class="border-edge-muted mb-[8px]"/>
+        </div>
+
+        <div class=" w-full px-2 flex flex-col gap-1">
+          <Tooltip
+            class="w-full"
+            tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
+          >
+            <Button
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+              variant="ghost"
+              size="sm"
+              onClick={handleCreateClick}
+            >
+              <PlusIcon class="size-4 shrink-0" />
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Create</span>
+            </Button>
+          </Tooltip>
+
+          <Show when={!isMobile()}>
+            <Tooltip
+              class="w-full"
+              tooltip={
+                <LabelAndHotKey
+                  label="Command palette"
+                  hotkeyToken={TOKENS.global.commandMenu}
+                />
+              }
+            >
+              <Button
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+                variant="ghost"
+                size="sm"
+                onClick={handleCommandPaletteClick}
+              >
+                <CommandIcon class="size-4 shrink-0" />
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Command</span>
+              </Button>
+            </Tooltip>
+          </Show>
+
           <Tooltip
             class="w-full"
             tooltip={
@@ -277,28 +306,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               class="w-full"
               tooltip={
                 <LabelAndHotKey
-                  label="Command palette"
-                  hotkeyToken={TOKENS.global.commandMenu}
-                />
-              }
-            >
-              <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
-                variant="ghost"
-                size="sm"
-                onClick={handleCommandPaletteClick}
-              >
-                <CommandIcon class="size-4 shrink-0" />
-                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Command palette</span>
-              </Button>
-            </Tooltip>
-          </Show>
-          <Show when={!isMobile()}>
-            <Tooltip
-              class="w-full"
-              tooltip={
-                <LabelAndHotKey
-                  label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
+                  label={isSlim() ? 'Expand sidebar' : 'Shrink Sidebar'}
                   hotkeyToken={TOKENS.global.toggleSidebar}
                 />
               }
@@ -317,7 +325,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   />
                 </div>
                 <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                  {isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
+                  Sidebar
                 </span>
               </Button>
             </Tooltip>
@@ -359,7 +367,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size="sm"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs w-full',
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full',
         isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
