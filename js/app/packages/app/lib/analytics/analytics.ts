@@ -1,4 +1,4 @@
-import type { AllTrackingEventValues } from '@app/lib/analytics/app-events';
+import type { AppEvents, AppEventNames } from '@app/lib/analytics/app-events';
 import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
@@ -10,9 +10,12 @@ const DEFAULT_ANALYTICS_PROVIDERS = [
   // 'mixpanel',
 ] as const satisfies AnalyticsProvider[];
 
-type EventName = AllTrackingEventValues | (string & {});
+type EventName = AppEventNames | (string & {});
 
-type TrackFn = (event: EventName, data?: Record<string, unknown>) => void;
+type TrackFn = <E extends EventName>(
+  event: E,
+  data?: E extends keyof AppEvents ? AppEvents[E] : Record<string, unknown>
+) => void;
 
 interface UserIdentifyInfo {
   email: string;
@@ -56,7 +59,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     }
   };
 
-  const track = (
+  const track: TrackFn = (
     event: EventName,
     data?: Record<string, unknown>,
     providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
