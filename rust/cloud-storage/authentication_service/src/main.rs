@@ -223,10 +223,13 @@ async fn main() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone(), &stripe_price_id);
 
+    let notification_ingress_service = Arc::new(notification_ingress_service);
+
     let teams_service_impl = TeamServiceImpl::new(
         teams_repo_impl,
         customer_repo_impl,
         user_roles_and_permissions_service.clone(),
+        notification_ingress_service.clone(),
     );
 
     let github_link_service_impl = GithubLinkServiceImpl::new(
@@ -249,7 +252,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             ses_client: Arc::new(ses_client),
-            notification_ingress_service: Arc::new(notification_ingress_service),
+            notification_ingress_service: notification_ingress_service.clone(),
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
             jwt_args,

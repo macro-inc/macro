@@ -24,8 +24,11 @@ describe('Message.Layout', () => {
     const { container } = render(() => (
       <Root message={baseMessage}>
         <Layout>
-          <Slot placement="body">
-            <div>body</div>
+          <Slot placement="content">
+            <div>content</div>
+          </Slot>
+          <Slot placement="footer">
+            <div>footer</div>
           </Slot>
           <Slot placement="actions">
             <div>actions</div>
@@ -50,8 +53,15 @@ describe('Message.Layout', () => {
       )
     ).toContain('grid-area: header');
     expect(
-      container.querySelector('[data-message-slot="body"]')?.getAttribute('style')
-    ).toContain('grid-area: body');
+      container.querySelector('[data-message-slot="content"]')?.getAttribute(
+        'style'
+      )
+    ).toContain('grid-area: content');
+    expect(
+      container.querySelector('[data-message-slot="footer"]')?.getAttribute(
+        'style'
+      )
+    ).toContain('grid-area: footer');
     expect(
       container.querySelector('[data-message-slot="actions"]')?.getAttribute(
         'style'
@@ -59,22 +69,8 @@ describe('Message.Layout', () => {
     ).toContain('grid-area: actions');
     expect(screen.getByText('icon')).toBeTruthy();
     expect(screen.getByText('header')).toBeTruthy();
-    expect(screen.getByText('body')).toBeTruthy();
+    expect(screen.getByText('content')).toBeTruthy();
+    expect(screen.getByText('footer')).toBeTruthy();
     expect(screen.getByText('actions')).toBeTruthy();
-  });
-
-  it('marks editing layouts for editor-specific spacing', () => {
-    const { container } = render(() => (
-      <Root message={baseMessage}>
-        <Layout editing>
-          <Slot placement="body">
-            <div>body</div>
-          </Slot>
-        </Layout>
-      </Root>
-    ));
-
-    expect(container.querySelector('[data-message-layout]')).toBeTruthy();
-    expect(container.querySelector('.\\[\\&_\\[data-message-slot\\=body\\]\\]\\:mt-2')).toBeTruthy();
   });
 });

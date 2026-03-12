@@ -1,7 +1,11 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
-use models_team::{
-    PatchTeamRequest, Team, TeamInvite, TeamInviteUpdate, TeamRole, TeamUpdateOperation, TeamUser,
-    TeamUserUpdate, TeamWithUsers,
+use teams::domain::model::{
+    PatchTeamRequest, Team, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
+};
+use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
+use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
+use teams::inbound::axum_router::{
+    create_team::CreateTeamRequest, invite_to_team::InviteToTeamRequest,
 };
 use user_quota::UserQuota;
 use utoipa::OpenApi;
@@ -12,8 +16,6 @@ use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::InitGithubLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
-use crate::api::team::create_team::CreateTeamRequest;
-use crate::api::team::get_team_invites::TeamInvitesResponse;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
@@ -27,7 +29,7 @@ use crate::api::user::stripe::{
     CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeSessionResponse,
 };
 use crate::api::{
-    email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, team, user,
+    email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -106,18 +108,19 @@ use model::user::{
                 email::verify_email_link::handler,
 
                 /// /team
-                team::create_team::handler,
-                team::delete_team::handler,
-                team::join_team::handler,
-                team::get_team::handler,
-                team::invite_to_team::handler,
-                team::get_team_invites::handler,
-                team::patch_team::handler,
-                team::reject_invitation::handler,
-                team::get_user_invites::handler,
-                team::reinvite_to_team::handler,
-                team::get_user_teams::handler,
-                team::remove_user_from_team::handler,
+                teams::inbound::axum_router::create_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::delete_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::join_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::get_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::invite_to_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::get_team_invites::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::reinvite_to_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
+                teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
 
                 /// /merge
                 merge::create_merge_request::handler,
@@ -165,17 +168,15 @@ use model::user::{
 
                         // Teams
                         TeamRole,
-                        TeamInvite,
-                        TeamUser,
+                        TeamMember,
                         Team,
+                        TeamWithMembers,
+                        TeamInviteDetails,
                         CreateTeamRequest,
-                        TeamWithUsers,
-                        TeamInvitesResponse,
-                        // patch team
-                        TeamUpdateOperation,
-                        TeamUserUpdate,
-                        TeamInviteUpdate,
+                        InviteToTeamRequest,
                         PatchTeamRequest,
+                        TeamTeamInvitesResponse,
+                        UserTeamInvitesResponse,
 
                         // Merge
                         CreateAccountMergeRequest,

@@ -9,7 +9,12 @@ import { Dynamic } from 'solid-js/web';
 
 type SlotElement = 'div' | 'span' | 'button';
 
-export type MessageSlotPlacement = 'icon' | 'header' | 'body' | 'actions';
+export type MessageSlotPlacement =
+  | 'icon'
+  | 'header'
+  | 'content'
+  | 'footer'
+  | 'actions';
 
 type CommonProps = {
   children?: JSX.Element;
@@ -29,8 +34,10 @@ function placementStyle(
       return { 'grid-area': 'icon' };
     case 'header':
       return { 'grid-area': 'header' };
-    case 'body':
-      return { 'grid-area': 'body' };
+    case 'content':
+      return { 'grid-area': 'content' };
+    case 'footer':
+      return { 'grid-area': 'footer' };
     case 'actions':
       return { 'grid-area': 'actions' };
   }

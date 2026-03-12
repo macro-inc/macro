@@ -43,7 +43,7 @@ import type {
   StripeSessionResponse,
   Team,
   TeamInvitesResponse,
-  TeamWithUsers,
+  TeamWithMembers,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -1484,7 +1484,7 @@ export const createTeam = async (
  * @summary Joins a team by accepting an invite.
  */
 export type joinTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1539,7 +1539,7 @@ export const joinTeam = async (
  * @summary Rejects an invitation to join a team.
  */
 export type rejectInvitationResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1720,7 +1720,7 @@ export const getUserInvites = async (
  * @summary Gets a team by ID.
  */
 export type getTeamResponse200 = {
-  data: TeamWithUsers;
+  data: TeamWithMembers;
   status: 200;
 };
 
@@ -1783,7 +1783,7 @@ This will update all team members roles and cancel your subscription for the tea
 This action is **irreversible** and you will not be able to recover the team afterwards.
  */
 export type deleteTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1844,7 +1844,7 @@ export const deleteTeam = async (
  * @summary Updates a team.
  */
 export type patchTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1987,6 +1987,80 @@ export const inviteToTeam = async (
 };
 
 /**
+ * @summary Deletes a team invite from a team.
+ */
+export type deleteTeamInviteHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type deleteTeamInviteHandlerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamInviteHandlerResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamInviteHandlerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamInviteHandlerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamInviteHandlerResponseSuccess =
+  deleteTeamInviteHandlerResponse200 & {
+    headers: Headers;
+  };
+export type deleteTeamInviteHandlerResponseError = (
+  | deleteTeamInviteHandlerResponse400
+  | deleteTeamInviteHandlerResponse401
+  | deleteTeamInviteHandlerResponse404
+  | deleteTeamInviteHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamInviteHandlerResponse =
+  | deleteTeamInviteHandlerResponseSuccess
+  | deleteTeamInviteHandlerResponseError;
+
+export const getDeleteTeamInviteHandlerUrl = (
+  teamId: string,
+  teamInviteId: string
+) => {
+  return `/team/${teamId}/invite/${teamInviteId}`;
+};
+
+export const deleteTeamInviteHandler = async (
+  teamId: string,
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<deleteTeamInviteHandlerResponse> => {
+  const res = await fetch(getDeleteTeamInviteHandlerUrl(teamId, teamInviteId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamInviteHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamInviteHandlerResponse;
+};
+
+/**
  * @summary Gets all invites for a team.
  */
 export type getTeamInvitesResponse200 = {
@@ -2051,7 +2125,7 @@ export const getTeamInvites = async (
  * @summary Regenerates a team invite notifying the user again.
  */
 export type reinviteToTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -2119,7 +2193,7 @@ export const reinviteToTeam = async (
  * @summary Removes a user from a team.
  */
 export type removeUserFromTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -2131,11 +2205,6 @@ export type removeUserFromTeamResponse400 = {
 export type removeUserFromTeamResponse401 = {
   data: ErrorResponse;
   status: 401;
-};
-
-export type removeUserFromTeamResponse429 = {
-  data: ErrorResponse;
-  status: 429;
 };
 
 export type removeUserFromTeamResponse500 = {
@@ -2150,7 +2219,6 @@ export type removeUserFromTeamResponseSuccess =
 export type removeUserFromTeamResponseError = (
   | removeUserFromTeamResponse400
   | removeUserFromTeamResponse401
-  | removeUserFromTeamResponse429
   | removeUserFromTeamResponse500
 ) & {
   headers: Headers;

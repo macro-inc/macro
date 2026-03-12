@@ -1,11 +1,11 @@
-import { For } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import {
   ChannelMessage,
   type MessageActions,
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
-import { InlineMessageEditor } from '../Channel/InlineMessageEditor';
+import { buildThreadReplyListMeta } from './reply-list-meta';
 import type { MessageEditor } from '../Channel/create-message-editor';
 
 export function ThreadReplyList(props: {
@@ -15,6 +15,10 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
 }) {
+  const listMetaByReplyId = createMemo(() =>
+    buildThreadReplyListMeta(props.replies)
+  );
+
   return (
     <For each={props.replies}>
       {(reply) => {
@@ -24,21 +28,13 @@ export function ThreadReplyList(props: {
         });
 
         return (
-          <>
-            {props.messageEditor?.state()?.messageId === reply.id ? (
-              <InlineMessageEditor
-                channelId={props.channelId}
-                message={reply}
-                snapshot={props.messageEditor.state()!.snapshot}
-                messageEditor={props.messageEditor}
-              />
-            ) : (
-              <ChannelMessage
-                message={reply}
-                actions={props.getMessageActions?.(replyMessage())}
-              />
-            )}
-          </>
+          <ChannelMessage
+            channelId={props.channelId}
+            message={reply}
+            actions={props.getMessageActions?.(replyMessage())}
+            listMeta={listMetaByReplyId()[reply.id]}
+            messageEditor={props.messageEditor}
+          />
         );
       }}
     </For>

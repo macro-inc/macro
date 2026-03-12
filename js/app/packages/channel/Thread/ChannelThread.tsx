@@ -5,7 +5,6 @@ import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
-import { InlineMessageEditor } from '../Channel/InlineMessageEditor';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -63,10 +62,6 @@ export function ChannelThread(props: ThreadProps) {
   const expand = () => {
     props.setIsExpanded(true);
   };
-  const activeEditState = () =>
-    props.messageEditor?.state()?.messageId === props.data().id
-      ? props.messageEditor.state()
-      : undefined;
 
   return (
     <Suspense>
@@ -76,24 +71,13 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
-          <Show
-            when={activeEditState()}
-            fallback={
-              <ChannelMessage
-                message={props.data()}
-                actions={props.getMessageActions?.(props.data())}
-              />
-            }
-          >
-            {(editState) => (
-              <InlineMessageEditor
-                channelId={props.channelId()}
-                message={props.data()}
-                snapshot={editState().snapshot}
-                messageEditor={props.messageEditor!}
-              />
-            )}
-          </Show>
+          <ChannelMessage
+            channelId={props.channelId()}
+            message={props.data()}
+            actions={props.getMessageActions?.(props.data())}
+            listMeta={props.listMeta}
+            messageEditor={props.messageEditor}
+          />
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
               <Thread.RailDecorations isReplying={props.isReplying} />

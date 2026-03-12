@@ -2,10 +2,14 @@
 
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
-#[derive(Eq, PartialEq, Debug, Clone, PartialOrd, sqlx::Type, Copy, std::cmp::Ord)]
+#[derive(
+    Eq, PartialEq, Debug, Clone, PartialOrd, sqlx::Type, Copy, std::cmp::Ord, serde::Serialize,
+)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[sqlx(type_name = "\"team_role\"", rename_all = "lowercase")]
 /// Ordered from least to most access top -> bottom
 pub enum TeamRole {
@@ -28,16 +32,57 @@ impl std::fmt::Display for TeamRole {
 }
 
 /// The team member struct
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct TeamMember<'a> {
     /// The user id of the team member
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
 }
 
+/// A team with its members
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct TeamWithMembers {
+    /// The team
+    pub team: Team,
+    /// The members of the team
+    pub members: Vec<TeamMember<'static>>,
+}
+
+/// Detailed information about a team invite
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct TeamInviteDetails {
+    /// The invite id
+    pub id: uuid::Uuid,
+    /// The invited email
+    pub email: String,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The role being invited as
+    pub team_role: TeamRole,
+    /// The user who sent the invitation
+    pub invited_by: String,
+    /// When the invite was created
+    pub created_at: DateTime<Utc>,
+    /// When the invite was last sent
+    pub last_sent_at: DateTime<Utc>,
+}
+
+/// Request to update a team
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamRequest {
+    /// The new name for the team
+    pub name: Option<String>,
+}
+
 /// The Team struct
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
@@ -264,6 +309,20 @@ pub enum JoinTeamError {
     #[error("Underlying user roles and permissions error")]
     /// Underlying user roles and permissions error
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
+}
+
+/// Errors for reinviting a user to a team
+#[derive(Debug, thiserror::Error)]
+pub enum ReinviteError {
+    /// The invite was sent too recently
+    #[error("Too many requests")]
+    TooManyRequests,
+    /// The invite does not exist
+    #[error("Invite not found")]
+    InviteNotFound,
+    /// Storage layer error
+    #[error("Storage layer error {0}")]
+    StorageLayerError(#[from] anyhow::Error),
 }
 
 /// Errors for revoking permissions for team members
