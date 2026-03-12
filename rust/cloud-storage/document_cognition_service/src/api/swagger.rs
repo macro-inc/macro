@@ -19,10 +19,10 @@ use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPre
 
 use ai::types::{ModelMetadata, Provider};
 
+use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::{
     self as chat_inbound, CreateChatRequest, GetChatPermissionsResponse, PatchChatRequest,
 };
-use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 
 use model::{
     chat::{

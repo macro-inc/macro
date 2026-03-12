@@ -68,7 +68,7 @@ pub fn chat_create_router<S: ChatService, Svc: EntityAccessService, T: Send + Sy
         .with_state(state)
 }
 
-/// Build the router for all `/:chat_id` routes.
+/// Build the router for all `/{chat_id}` routes.
 ///
 /// These routes require `ensure_chat_exists` middleware to populate
 /// `ChatBasic` in extensions before the [`ChatAccessLevelExtractor`] runs.
@@ -77,22 +77,22 @@ pub fn chat_id_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync +
 ) -> Router<T> {
     Router::new()
         .route(
-            "/:chat_id",
+            "/{chat_id}",
             get(get_chat_handler::<S, Svc>)
                 .delete(delete_chat_handler::<S, Svc>)
                 .patch(patch_chat_handler::<S, Svc>),
         )
         .route(
-            "/:chat_id/permanent",
+            "/{chat_id}/permanent",
             delete(permanently_delete_chat_handler::<S, Svc>),
         )
-        .route("/:chat_id/copy", post(copy_chat_handler::<S, Svc>))
+        .route("/{chat_id}/copy", post(copy_chat_handler::<S, Svc>))
         .route(
-            "/:chat_id/revert_delete",
+            "/{chat_id}/revert_delete",
             put(revert_delete_handler::<S, Svc>),
         )
         .route(
-            "/:chat_id/permissions",
+            "/{chat_id}/permissions",
             get(get_chat_permissions_handler::<S, Svc>),
         )
         .with_state(state)
@@ -122,7 +122,9 @@ impl From<ChatErr> for ChatHandlerErr {
 impl IntoResponse for ChatHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let (status, msg) = match self {
-            ChatHandlerErr::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
+            ChatHandlerErr::Internal => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            }
             ChatHandlerErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
         };
         (status, msg).into_response()
@@ -192,9 +194,7 @@ pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
     Path(chat_id): Path<String>,
 ) -> Result<Json<GetChatResponse>, ChatHandlerErr> {
     let user_id = match access.entity_access_receipt.auth() {
-        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => {
-            macro_user_id::user_id::MacroUserIdStr(id.clone())
-        }
+        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => id.clone(),
         _ => return Err(ChatHandlerErr::Internal),
     };
 
@@ -283,9 +283,7 @@ pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
     Json(req): Json<PatchChatRequest>,
 ) -> Result<StatusCode, ChatHandlerErr> {
     let user_id = match access.entity_access_receipt.auth() {
-        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => {
-            macro_user_id::user_id::MacroUserIdStr(id.clone())
-        }
+        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => id.clone(),
         _ => return Err(ChatHandlerErr::Internal),
     };
 

@@ -2,13 +2,16 @@ use axum::Extension;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
 use model::response::StringIDResponse;
 use model_user::UserContext;
 use tower::util::ServiceExt;
 
 use super::*;
-use crate::domain::models::{ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::models::{
+    ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs,
+};
 use crate::domain::ports::ChatService;
 use entity_access::domain::models::{AccessError, AccessLevel, EntityPermission, EntityType};
 use entity_access::domain::ports::EntityAccessService;
@@ -206,7 +209,7 @@ struct MockAccessService;
 
 impl EntityAccessService for MockAccessService {
     async fn generate_entity_access_receipt<
-        T: entity_access::domain::models::RequiredAccessLevel,
+        T: entity_access::domain::models::RequiredPermission,
     >(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
@@ -255,6 +258,14 @@ impl EntityAccessService for MockAccessService {
         Ok(EntityPermission::AccessLevel {
             access_level: AccessLevel::Owner,
         })
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(vec![])
     }
 }
 
@@ -354,8 +365,7 @@ async fn create_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn create_chat_without_auth_returns_401() {
-    let router: Router =
-        chat_create_router(ChatRouterState::new(MockService, MockAccessService));
+    let router: Router = chat_create_router(ChatRouterState::new(MockService, MockAccessService));
 
     let req = Request::builder()
         .method("POST")

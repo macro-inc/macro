@@ -60,7 +60,11 @@ impl ChatRepo for PgChatRepo {
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
     ) -> Result<String, ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -155,7 +159,11 @@ impl ChatRepo for PgChatRepo {
         source_chat_id: &str,
         args: CopyChatArgs,
     ) -> Result<String, ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -205,12 +213,12 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn revert_delete(
-        &self,
-        chat_id: &str,
-        project_id: Option<&str>,
-    ) -> Result<(), ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+    async fn revert_delete(&self, chat_id: &str, project_id: Option<&str>) -> Result<(), ChatErr> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
         queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id, project_id)
             .await
             .map_err(to_chat_err)?;
@@ -227,7 +235,11 @@ impl ChatRepo for PgChatRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete(&self, chat_id: &str) -> Result<(), ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
         queries::soft_delete_chat::soft_delete_chat(&mut tx, chat_id)
             .await
             .map_err(to_chat_err)?;
@@ -237,7 +249,11 @@ impl ChatRepo for PgChatRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn permanently_delete(&self, chat_id: &str) -> Result<(), ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
         queries::permanently_delete_chat::permanently_delete_chat(&mut tx, chat_id)
             .await
             .map_err(to_chat_err)?;
@@ -252,7 +268,11 @@ impl ChatRepo for PgChatRepo {
         chat_id: &str,
         args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
-        let mut tx = self.pool.begin().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         queries::patch_chat::patch_chat(
             &mut tx,
