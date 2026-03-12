@@ -218,7 +218,7 @@ where
         .await;
 
         self.queue
-            .publish(queue_messages.with_state_decisions(results))
+            .publish(queue_messages.with_state_decisions(results).collect())
             .await
             .context(SendNotificationError::Other)?;
 
@@ -476,7 +476,7 @@ where
                 })
                 .collect();
 
-        self.queue.publish(messages.into_iter()).await?;
+        self.queue.publish(messages).await?;
 
         Ok(())
     }

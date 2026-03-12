@@ -523,7 +523,7 @@ impl MockQueue {
 impl NotificationQueue for MockQueue {
     async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         let mut published = self.published.lock().unwrap();
         for message in messages {
@@ -545,7 +545,7 @@ impl NotificationQueue for MockQueue {
 impl NotificationQueue for std::sync::Arc<MockQueue> {
     async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         (**self).publish(messages).await
     }
@@ -1778,7 +1778,7 @@ impl EgressTestQueue {
 impl NotificationQueue for EgressTestQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        _messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        _messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         Ok(())
     }

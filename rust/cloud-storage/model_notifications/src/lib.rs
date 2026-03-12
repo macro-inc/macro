@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
 mod device;
+pub mod digest_state;
 mod metadata;
 mod unsubscribe;
 pub use device::*;

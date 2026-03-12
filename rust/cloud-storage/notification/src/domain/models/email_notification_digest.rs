@@ -342,24 +342,47 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
 /// where not all actions have been taken yet.
 pub struct StateMachineDriverA<U, N, O, B> {
     /// adapter which implements [UserExistenceChecker]
-    pub user_checker: U,
+    pub(crate) user_checker: U,
     /// adapter which implements [PushNotificationChecker]
-    pub notification_checker: N,
+    pub(crate) notification_checker: N,
     /// adapter which implements [LastOnlineChecker]
-    pub online_checker: O,
+    pub(crate) online_checker: O,
     /// adapter which allows inserting a notification for bulk digest email
     /// implements [DigestBatcher]
-    pub digest_batcher: B,
+    pub(crate) digest_batcher: B,
     /// the blocklist for notifications which are never forwarded to bulk
-    pub block_list: EmailBlockList,
+    pub(crate) block_list: EmailBlockList,
     /// the allow list for checking if a notification is analagous to an "invite to macro" notification
-    pub invite_list: ExplicitInviteAllowList,
+    pub(crate) invite_list: ExplicitInviteAllowList,
     /// the window of time in which the digest emails are collected for before sending
-    pub digest_window: Duration,
+    pub(crate) digest_window: Duration,
     /// the duration for how recently a user has been online
     /// used to abort sending a bulk email if the user is below the
     /// threshold
-    pub online_duration_threshold: Duration,
+    pub(crate) online_duration_threshold: Duration,
+}
+
+impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
+    /// Create a new instance of self with the default time windows
+    pub fn new_with_defaults(
+        user_checker: U,
+        notification_checker: N,
+        online_checker: O,
+        digest_batcher: B,
+        block_list: EmailBlockList,
+        invite_list: ExplicitInviteAllowList,
+    ) -> Self {
+        Self {
+            user_checker,
+            notification_checker,
+            online_checker,
+            digest_batcher,
+            block_list,
+            invite_list,
+            digest_window: std::time::Duration::from_mins(30),
+            online_duration_threshold: std::time::Duration::from_mins(60),
+        }
+    }
 }
 
 /// the initial decision created during notification ingress

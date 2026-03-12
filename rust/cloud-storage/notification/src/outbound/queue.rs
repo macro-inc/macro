@@ -24,7 +24,7 @@ impl SqsNotificationQueue {
 impl NotificationQueue for SqsNotificationQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let body = serde_json::to_string(&message)?;
@@ -102,7 +102,7 @@ impl FileQueue {
 impl NotificationQueue for FileQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let id = uuid::Uuid::new_v4();

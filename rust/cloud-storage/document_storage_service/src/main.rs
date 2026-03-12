@@ -38,6 +38,9 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
+use model_notifications::digest_state::{
+    common_email_block_list, common_explicit_invite_allow_list,
+};
 use notification::domain::models::email_notification_digest::{
     EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
 };
@@ -228,12 +231,10 @@ async fn main() -> anyhow::Result<()> {
             aws_sdk_sqs::Client::new(&aws_config),
             config.vars.notification_queue.as_ref().to_string(),
         );
-        let state_machine = StateMachineDriverA {
-            user_checker: DbUserExistenceChecker::new(db.clone()),
-            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-                db.clone(),
-            )),
-            online_checker: LastOnlineCheckerImpl::new(
+        let state_machine = StateMachineDriverA::new_with_defaults(
+            DbUserExistenceChecker::new(db.clone()),
+            PushNotificationCheckerImpl::new(DbNotificationRepository::new(db.clone())),
+            LastOnlineCheckerImpl::new(
                 last_online_tracker::domain::services::LastOnlineService::new(
                     last_online_tracker::outbound::time::DefaultTime,
                     last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
@@ -241,14 +242,10 @@ async fn main() -> anyhow::Result<()> {
                     ),
                 ),
             ),
-            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
-            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
-            )
-            .append(),
-            digest_window: std::time::Duration::from_secs(30 * 60),
-            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-        };
+            RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+            common_email_block_list(),
+            common_explicit_invite_allow_list(),
+        );
         NotificationIngressService::new(notification_repository, notification_queue, state_machine)
     };
     let notification_ingress_service = Arc::new(make_notification_ingress());

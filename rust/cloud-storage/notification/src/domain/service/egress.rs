@@ -25,6 +25,7 @@ use crate::domain::ports::{
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_user_id::email::ReadEmailParts;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 use tracing::Level;
@@ -289,9 +290,9 @@ where
         results
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn poll_email_digests<T: NotificationExtEmail>(
-        &self,
+    // #[tracing::instrument(err, skip(self))]
+    async fn poll_email_digests<'a, T: NotificationExtEmail>(
+        &'a self,
         f: fn(DigestBatch) -> Result<T, Report>,
     ) -> Result<ClaimResult<()>, Report> {
         let batch =
@@ -309,14 +310,14 @@ where
             ));
         }
 
-        let recipient = batch.user_id.clone();
-        let email_notif: T = f(batch)?;
+        let recipient: MacroUserIdStr<'static> = batch.user_id.clone();
+        let email_notif = f(batch)?;
         let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
-        let message: QueueMessage<'_, T, ()> =
+        let message: QueueMessage<'static, T, ()> =
             QueueMessage::new(NotificationChannel::Email(email_content));
 
-        self.queue.publish(std::iter::once(message)).await?;
+        self.queue.publish(vec![message]).await?;
 
         Ok(ClaimResult::Ready(()))
     }

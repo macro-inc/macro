@@ -1,4 +1,5 @@
 use crate::domain::models::device::DeviceType;
+use crate::domain::models::queue_message::QueueMessage;
 use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::NotificationReader;
 use crate::domain::service::ingress::{NotificationReaderService, PlatformArnConfig};
@@ -271,7 +272,7 @@ struct MockQueue;
 impl NotificationQueue for MockQueue {
     async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        _: impl Iterator<Item = crate::domain::models::queue_message::QueueMessage<'a, T, U>> + Send,
+        _: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         Ok(())
     }

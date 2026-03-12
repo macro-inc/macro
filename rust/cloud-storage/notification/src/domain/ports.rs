@@ -240,8 +240,8 @@ pub trait NotificationQueue: Send + Sync + 'static {
     /// Publish notifications for async delivery (after DB persistence).
     fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
-    ) -> impl Future<Output = Result<(), Report>> + Send + 'a;
+        messages: Vec<QueueMessage<'a, T, U>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).
     fn receive_messages(&self)

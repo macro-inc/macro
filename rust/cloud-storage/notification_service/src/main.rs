@@ -205,7 +205,7 @@ pub async fn main() -> anyhow::Result<()> {
         tracing::info!("starting digest worker");
         worker
             .run_digests(EmailDigestNotification::new_from_digest_batch)
-            .await;
+            .await
     });
 
     api::setup_and_serve(
