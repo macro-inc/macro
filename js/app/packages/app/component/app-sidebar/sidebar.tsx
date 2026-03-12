@@ -198,7 +198,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         )}
         data-expanded={isExpanded()}
         data-slim={isSlim()}
-
+        style={{'transition': 'max-width ease-in-out 100ms'}}
       >
         <div
           class="flex items-center justify-between py-2 pl-3 pr-2"
