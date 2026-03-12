@@ -167,20 +167,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
       },
     });
 
-    registerHotkey({
-      hotkey: 'g',
-      scopeId: GO_TO_COMMAND_SCOPE,
-      description: 'Reset hotkey state',
-      hide: true,
-      keyDownHandler: () => {
-        // Reset the hotkey
-        if (hotkeyVisible()) {
-          resetHotkeysState();
-        }
-        return false;
-      },
-    });
-
     // Register navigation shortcuts in the global GO_TO command scope
     for (const link of SIDEBAR_LINKS) {
       registerHotkey({
