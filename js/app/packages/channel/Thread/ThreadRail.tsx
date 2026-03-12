@@ -1,16 +1,19 @@
-import { cn } from "@ui/utils/classname";
+import { cn } from '@ui/utils/classname';
 
 interface ThreadRailProps {
-  new?: boolean;
+  newMessage?: boolean;
 }
 
 export function ThreadRail(props: ThreadRailProps) {
   return (
     <div
-      class={cn("pointer-events-none absolute top-0 bottom-0 border-l border-edge-muted/60", props.new && 'border-accent')}
+      class={cn(
+        'pointer-events-none absolute top-0 bottom-0 border-l border-edge-muted',
+        props.newMessage && 'border-accent'
+      )}
       style={{
         left: 'var(--left-of-connector)',
       }}
     />
-  )
+  );
 }

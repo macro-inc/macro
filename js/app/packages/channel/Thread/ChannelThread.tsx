@@ -78,7 +78,7 @@ export function ChannelThread(props: ThreadProps) {
           />
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
-              <Thread.RailDecorations isReplying={props.isReplying} />
+              <Thread.ReplyRailDecorations isReplying={props.isReplying} />
               <Suspense>
                 <Thread.RepliesContainer>
                   <Show

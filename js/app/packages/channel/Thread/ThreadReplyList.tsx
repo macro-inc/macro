@@ -6,6 +6,7 @@ import {
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 import { buildThreadReplyListMeta } from './reply-list-meta';
+import { ThreadRail } from './ThreadRail';
 
 export function ThreadReplyList(props: {
   threadId: string;
@@ -25,11 +26,16 @@ export function ThreadReplyList(props: {
         });
 
         return (
-          <ChannelMessage
-            message={reply}
-            actions={props.getMessageActions?.(replyMessage())}
-            listMeta={listMetaByReplyId()[reply.id]}
-          />
+          <div class="relative">
+            <ThreadRail
+              newMessage={listMetaByReplyId()[reply.id].isNewMessage}
+            />
+            <ChannelMessage
+              message={reply}
+              actions={props.getMessageActions?.(replyMessage())}
+              listMeta={listMetaByReplyId()[reply.id]}
+            />
+          </div>
         );
       }}
     </For>
