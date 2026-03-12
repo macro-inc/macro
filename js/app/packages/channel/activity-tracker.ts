@@ -1,6 +1,9 @@
 import type { DateValue } from '@core/util/date';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import { isNewMessage as isNewMessagePure, type NewMessageCheckable } from './Channel/util';
+import {
+  isNewMessage as isNewMessagePure,
+  type NewMessageCheckable,
+} from './Channel/util';
 
 export type ActivityTracker = {
   openedAt: Accessor<Date>;
