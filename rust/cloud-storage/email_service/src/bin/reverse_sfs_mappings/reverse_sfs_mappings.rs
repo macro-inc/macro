@@ -10,8 +10,9 @@
 //!
 //! ## Optional Environment Variables:
 //! - `LINK_IDS`: Comma-separated list of link_id UUIDs to filter messages by.
+//!   Each link_id is processed independently.
 //! - `BATCH_SIZE`: Number of messages to process per batch (default: 10).
-//! - `OFFSET`: Starting offset for pagination, useful for pause/resume (default: 0).
+//! - `OFFSET`: Starting offset into the ID list, useful for pause/resume (default: 0).
 
 mod config;
 mod process;
@@ -22,11 +23,17 @@ use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
 
+struct Stats {
+    total_messages_scanned: usize,
+    total_messages_updated: usize,
+    total_urls_reversed: usize,
+    total_urls_not_found: usize,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("=== Reverse SFS Mappings ===\n");
 
-    // Initialize and load configuration
     MacroEntrypoint::default().init();
     let config = config::Config::from_env().context("Failed to load configuration")?;
 
@@ -43,7 +50,6 @@ async fn main() -> anyhow::Result<()> {
     }
     println!();
 
-    // Connect to database
     println!("Connecting to the database...");
     let db_pool = PgPoolOptions::new()
         .min_connections(2)
@@ -53,188 +59,247 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to connect to database")?;
     println!("Connected.\n");
 
-    // Debug: print counts to diagnose empty results
-    process::print_debug_info(&db_pool, &config.link_ids).await?;
-
-    // Process messages in batches
     let start = Instant::now();
-    let mut total_messages_scanned: usize = 0;
-    let mut total_messages_updated: usize = 0;
-    let mut total_urls_reversed: usize = 0;
-    let mut total_urls_not_found: usize = 0;
-    let mut current_offset = config.offset;
+    let mut stats = Stats {
+        total_messages_scanned: 0,
+        total_messages_updated: 0,
+        total_urls_reversed: 0,
+        total_urls_not_found: 0,
+    };
 
-    // Fetch the first batch
-    println!(
-        "Fetching batch at offset {} (limit {})...",
-        current_offset, config.batch_size
-    );
-    let mut current_batch = process::fetch_messages_batch(
-        &db_pool,
-        &config.link_ids,
-        current_offset,
-        config.batch_size,
-    )
-    .await?;
+    if let Some(ref link_ids) = config.link_ids {
+        let offset = config.offset as usize;
 
-    loop {
+        let grand_total = process::count_messages(&db_pool, &config.link_ids).await? as usize;
+        println!("Total messages across all link_ids: {}\n", grand_total);
+
+        for (link_idx, &link_id) in link_ids.iter().enumerate() {
+            println!(
+                "=== Link {}/{}: {} ===",
+                link_idx + 1,
+                link_ids.len(),
+                link_id,
+            );
+
+            // Fetch message IDs for this link_id
+            println!("  Fetching message IDs...");
+            let ids = process::fetch_message_ids_for_link(&db_pool, link_id).await?;
+            println!("  {} messages found", ids.len());
+
+            // Apply offset only to the first link_id
+            let skip = if link_idx == 0 { offset } else { 0 };
+            if skip > 0 {
+                println!("  Skipping first {} messages (OFFSET)", skip);
+            }
+            let ids_to_process = &ids[skip.min(ids.len())..];
+
+            process_id_batches(
+                &db_pool,
+                ids_to_process,
+                config.batch_size as usize,
+                grand_total,
+                &mut stats,
+                &start,
+            )
+            .await?;
+
+            println!();
+        }
+    } else {
+        // No link_id filter — fetch all IDs
+        println!("Fetching all message IDs...");
+        let all_ids = process::fetch_all_message_ids(&db_pool).await?;
+        let grand_total = all_ids.len();
+        println!("Total messages to process: {}\n", grand_total);
+
+        let offset = config.offset as usize;
+        if offset > 0 {
+            println!("Skipping first {} messages (OFFSET)\n", offset);
+        }
+        let ids_to_process = &all_ids[offset.min(grand_total)..];
+
+        process_id_batches(
+            &db_pool,
+            ids_to_process,
+            config.batch_size as usize,
+            grand_total,
+            &mut stats,
+            &start,
+        )
+        .await?;
+    }
+
+    let duration = start.elapsed();
+    println!("\n=== Summary ===");
+    println!("Total messages scanned: {}", stats.total_messages_scanned);
+    println!("Total messages updated: {}", stats.total_messages_updated);
+    println!("Total URLs reversed: {}", stats.total_urls_reversed);
+    println!("Total URLs with no mapping: {}", stats.total_urls_not_found);
+    println!("Total time: {:.2?}", duration);
+
+    Ok(())
+}
+
+/// Processes messages in batches by chunking a pre-fetched list of IDs.
+/// Prefetches the next batch while processing the current one.
+async fn process_id_batches(
+    db_pool: &sqlx::PgPool,
+    ids: &[uuid::Uuid],
+    batch_size: usize,
+    grand_total: usize,
+    stats: &mut Stats,
+    start: &Instant,
+) -> anyhow::Result<()> {
+    let chunks: Vec<&[uuid::Uuid]> = ids.chunks(batch_size).collect();
+
+    if chunks.is_empty() {
+        println!("No messages to process.");
+        return Ok(());
+    }
+
+    // Prefetch first batch
+    let mut current_batch = process::fetch_messages_by_ids(db_pool, chunks[0]).await?;
+
+    for (chunk_idx, _chunk) in chunks.iter().enumerate() {
         if current_batch.is_empty() {
-            println!("No more messages to process.");
-            break;
+            println!("No messages returned for batch, skipping.");
+            continue;
         }
 
-        let batch_len = current_batch.len();
-        let is_last_batch = (batch_len as i64) < config.batch_size;
-        let next_offset = current_offset + batch_len as i64;
-
-        total_messages_scanned += batch_len;
-        println!(
-            "Processing {} messages at offset {} (total scanned so far: {})",
-            batch_len, current_offset, total_messages_scanned
-        );
-
-        // Start prefetching the next batch immediately (unless this is the last batch)
-        let next_batch_fut = if !is_last_batch {
-            println!("  Prefetching next batch at offset {} ...", next_offset);
-            Some(process::fetch_messages_batch(
-                &db_pool,
-                &config.link_ids,
-                next_offset,
-                config.batch_size,
+        // Prefetch next batch while processing current
+        let next_batch_fut = if chunk_idx + 1 < chunks.len() {
+            Some(process::fetch_messages_by_ids(
+                db_pool,
+                chunks[chunk_idx + 1],
             ))
         } else {
             None
         };
 
-        // Process the current batch while next batch is being fetched
-        // Collect all SFS URLs across all messages in this batch
-        let mut all_sfs_urls: Vec<String> = Vec::new();
-        let mut messages_with_urls: Vec<(usize, &process::MessageRow, Vec<String>)> = Vec::new();
-
-        for (i, msg) in current_batch.iter().enumerate() {
-            let html = match &msg.body_html_sanitized {
-                Some(h) => h,
-                None => continue,
-            };
-
-            let sfs_urls = process::extract_sfs_urls(html);
-            if sfs_urls.is_empty() {
-                continue;
-            }
-
-            println!("  Message {}: found {} SFS URL(s)", msg.id, sfs_urls.len());
-
-            all_sfs_urls.extend(sfs_urls.clone());
-            messages_with_urls.push((i, msg, sfs_urls));
-        }
-
-        // Bulk lookup all SFS URLs for this batch in one query
-        let mappings = process::lookup_source_urls_bulk(&db_pool, &all_sfs_urls).await?;
-        if !all_sfs_urls.is_empty() {
-            println!(
-                "  Looked up {} SFS URLs, found {} mappings",
-                all_sfs_urls.len(),
-                mappings.len()
-            );
-        }
-
-        // Apply string replacements concurrently across messages using spawn_blocking
-        let mapping_map_owned: std::collections::HashMap<String, String> = mappings
-            .iter()
-            .map(|m| (m.destination.clone(), m.source.clone()))
-            .collect();
-
-        // Collect owned data for the blocking task
-        let replace_inputs: Vec<(uuid::Uuid, String, Vec<String>)> = messages_with_urls
-            .into_iter()
-            .map(|(_i, msg, sfs_urls)| (msg.id, msg.body_html_sanitized.clone().unwrap(), sfs_urls))
-            .collect();
-
-        let replace_results = tokio::task::spawn_blocking(move || {
-            replace_inputs
-                .into_iter()
-                .filter_map(|(id, html, sfs_urls)| {
-                    let mut new_html = html;
-                    let mut urls_reversed = 0usize;
-                    let mut urls_not_found = 0usize;
-
-                    for sfs_url in &sfs_urls {
-                        if let Some(source_url) = mapping_map_owned.get(sfs_url.as_str()) {
-                            println!(
-                                "    Reversing [{}]: {} -> {}",
-                                id,
-                                truncate_url(sfs_url, 80),
-                                truncate_url(source_url, 80)
-                            );
-                            new_html = new_html.replace(sfs_url, source_url);
-                            urls_reversed += 1;
-                        } else {
-                            println!(
-                                "    WARNING [{}]: No mapping found for: {}",
-                                id,
-                                truncate_url(sfs_url, 100)
-                            );
-                            urls_not_found += 1;
-                        }
-                    }
-
-                    if urls_reversed > 0 {
-                        Some((id, new_html, urls_reversed, urls_not_found))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-        })
-        .await
-        .context("String replacement task panicked")?;
-
-        // Bulk update all modified messages in one query
-        if !replace_results.is_empty() {
-            let mut update_ids: Vec<uuid::Uuid> = Vec::with_capacity(replace_results.len());
-            let mut update_htmls: Vec<String> = Vec::with_capacity(replace_results.len());
-
-            for (id, new_html, urls_reversed, urls_not_found) in &replace_results {
-                update_ids.push(*id);
-                update_htmls.push(new_html.clone());
-                total_urls_reversed += urls_reversed;
-                total_urls_not_found += urls_not_found;
-            }
-
-            let rows_affected =
-                process::bulk_update_message_html(&db_pool, &update_ids, &update_htmls).await?;
-            total_messages_updated += rows_affected as usize;
-            println!(
-                "  Bulk updated {} messages ({} rows affected)",
-                replace_results.len(),
-                rows_affected
-            );
-        }
-
-        current_offset = next_offset;
-
-        if is_last_batch {
-            break;
-        }
-
-        // Await the prefetched next batch
-        current_batch = next_batch_fut.unwrap().await?;
+        process_batch(db_pool, &current_batch, stats).await?;
 
         println!(
-            "  Batch done. Next offset: {}. Elapsed: {:.2?}\n",
-            current_offset,
+            "  {}/{} processed | elapsed {:.2?}",
+            stats.total_messages_scanned,
+            grand_total,
             start.elapsed()
         );
+
+        if let Some(fut) = next_batch_fut {
+            current_batch = fut.await?;
+        }
     }
 
-    let duration = start.elapsed();
-    println!("\n=== Summary ===");
-    println!("Total messages scanned: {}", total_messages_scanned);
-    println!("Total messages updated: {}", total_messages_updated);
-    println!("Total URLs reversed: {}", total_urls_reversed);
-    println!("Total URLs with no mapping: {}", total_urls_not_found);
-    println!("Final offset: {}", current_offset);
-    println!("Total time: {:.2?}", duration);
+    Ok(())
+}
+
+/// Processes a single batch: extract SFS URLs, bulk lookup, replace, bulk update.
+async fn process_batch(
+    db_pool: &sqlx::PgPool,
+    batch: &[process::MessageRow],
+    stats: &mut Stats,
+) -> anyhow::Result<()> {
+    let batch_len = batch.len();
+    stats.total_messages_scanned += batch_len;
+
+    // Extract SFS URLs from all messages
+    let mut all_sfs_urls: Vec<String> = Vec::new();
+    let mut messages_with_urls: Vec<(uuid::Uuid, String, Vec<String>)> = Vec::new();
+
+    for msg in batch {
+        let html = match &msg.body_html_sanitized {
+            Some(h) => h,
+            None => continue,
+        };
+
+        let sfs_urls = process::extract_sfs_urls(html);
+        if sfs_urls.is_empty() {
+            continue;
+        }
+
+        all_sfs_urls.extend(sfs_urls.clone());
+        messages_with_urls.push((msg.id, html.clone(), sfs_urls));
+    }
+
+    if messages_with_urls.is_empty() {
+        return Ok(());
+    }
+
+    println!(
+        "  Found {} messages with {} SFS URLs in batch of {}",
+        messages_with_urls.len(),
+        all_sfs_urls.len(),
+        batch_len
+    );
+
+    // Bulk lookup
+    let mappings = process::lookup_source_urls_bulk(db_pool, &all_sfs_urls).await?;
+    let mapping_map_owned: std::collections::HashMap<String, String> = mappings
+        .iter()
+        .map(|m| (m.destination.clone(), m.source.clone()))
+        .collect();
+
+    // String replacements in blocking task
+    let replace_results = tokio::task::spawn_blocking(move || {
+        messages_with_urls
+            .into_iter()
+            .filter_map(|(id, html, sfs_urls)| {
+                let mut new_html = html;
+                let mut urls_reversed = 0usize;
+                let mut urls_not_found = 0usize;
+
+                for sfs_url in &sfs_urls {
+                    if let Some(source_url) = mapping_map_owned.get(sfs_url.as_str()) {
+                        println!(
+                            "    Reversing [{}]: {} -> {}",
+                            id,
+                            truncate_url(sfs_url, 80),
+                            truncate_url(source_url, 80)
+                        );
+                        new_html = new_html.replace(sfs_url, source_url);
+                        urls_reversed += 1;
+                    } else {
+                        println!(
+                            "    WARNING [{}]: No mapping found for: {}",
+                            id,
+                            truncate_url(sfs_url, 100)
+                        );
+                        urls_not_found += 1;
+                    }
+                }
+
+                if urls_reversed > 0 {
+                    Some((id, new_html, urls_reversed, urls_not_found))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .context("String replacement task panicked")?;
+
+    // Bulk update
+    if !replace_results.is_empty() {
+        let mut update_ids: Vec<uuid::Uuid> = Vec::with_capacity(replace_results.len());
+        let mut update_htmls: Vec<String> = Vec::with_capacity(replace_results.len());
+
+        for (id, new_html, urls_reversed, urls_not_found) in &replace_results {
+            update_ids.push(*id);
+            update_htmls.push(new_html.clone());
+            stats.total_urls_reversed += urls_reversed;
+            stats.total_urls_not_found += urls_not_found;
+        }
+
+        let rows_affected =
+            process::bulk_update_message_html(db_pool, &update_ids, &update_htmls).await?;
+        stats.total_messages_updated += rows_affected as usize;
+        println!(
+            "  Bulk updated {} messages ({} rows affected)",
+            replace_results.len(),
+            rows_affected
+        );
+    }
 
     Ok(())
 }
