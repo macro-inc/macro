@@ -6,12 +6,22 @@
  */
 import type { TeamRole } from './teamRole';
 
-export interface TeamInvite {
+/**
+ * Detailed information about a team invite
+ */
+export interface TeamInviteDetails {
+  /** When the invite was created */
   created_at: string;
+  /** The invited email */
   email: string;
+  /** The invite id */
   id: string;
+  /** The user who sent the invitation */
   invited_by: string;
+  /** When the invite was last sent */
   last_sent_at: string;
+  /** The team id */
   team_id: string;
+  /** The role being invited as */
   team_role: TeamRole;
 }
