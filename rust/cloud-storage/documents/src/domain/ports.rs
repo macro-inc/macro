@@ -14,8 +14,8 @@ use model::document::response::{
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
 use super::models::{
-    CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    LocationQueryParams,
+    CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -155,6 +155,15 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_id: &str,
         status: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Set a property value on an entity.
+    fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Service interface for document operations.
@@ -226,4 +235,12 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Create a task document and optionally set property values on it.
+    fn create_task(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        plain_user_id: String,
+        request: CreateTaskRequest,
+    ) -> impl Future<Output = Result<CreateTaskResponse, DocumentError>> + Send;
 }
