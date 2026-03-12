@@ -66,10 +66,7 @@ pub async fn process_upsert_message(
             .context("expected from")?
             .email
             .to_lowercase(),
-        sender_name: message_info
-            .from
-            .as_ref()
-            .and_then(|f| f.name.clone()),
+        sender_name: message_info.from.as_ref().and_then(|f| f.name.clone()),
         reply_to: message_info.reply_to,
         recipients: message_info
             .to
@@ -194,21 +191,13 @@ pub async fn process_upsert_thread_message(
                         .iter()
                         .map(|to| to.email.to_lowercase())
                         .collect(),
-                    recipient_names: message
-                        .to
-                        .iter()
-                        .filter_map(|to| to.name.clone())
-                        .collect(),
+                    recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
                     cc: message
                         .cc
                         .iter()
                         .map(|cc| cc.email.to_lowercase())
                         .collect(),
-                    cc_names: message
-                        .cc
-                        .iter()
-                        .filter_map(|cc| cc.name.clone())
-                        .collect(),
+                    cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
                     bcc: message
                         .bcc
                         .iter()
