@@ -1,16 +1,21 @@
-import { For } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import {
   ChannelMessage,
   type MessageActions,
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
+import { buildThreadReplyListMeta } from './reply-list-meta';
 
 export function ThreadReplyList(props: {
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
 }) {
+  const listMetaByReplyId = createMemo(() =>
+    buildThreadReplyListMeta(props.replies)
+  );
+
   return (
     <For each={props.replies}>
       {(reply) => {
@@ -23,6 +28,7 @@ export function ThreadReplyList(props: {
           <ChannelMessage
             message={reply}
             actions={props.getMessageActions?.(replyMessage())}
+            listMeta={listMetaByReplyId()[reply.id]}
           />
         );
       }}

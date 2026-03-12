@@ -6,6 +6,6 @@
  */
 
 /**
- * The new name of the team
+ * The new name for the team
  */
 export type PatchTeamRequestName = string | null;

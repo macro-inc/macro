@@ -249,6 +249,11 @@ async function createEmailIndex(opensearchClient: Client) {
               index: true,
               doc_values: true,
             },
+            reply_to: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
             recipients: {
               type: 'keyword',
               index: true,
@@ -263,6 +268,22 @@ async function createEmailIndex(opensearchClient: Client) {
               type: 'keyword',
               index: true,
               doc_values: true,
+            },
+            sender_name: {
+              type: 'text',
+              analyzer: 'standard',
+            },
+            recipient_names: {
+              type: 'text',
+              analyzer: 'standard',
+            },
+            cc_names: {
+              type: 'text',
+              analyzer: 'standard',
+            },
+            bcc_names: {
+              type: 'text',
+              analyzer: 'standard',
             },
             labels: {
               type: 'keyword',

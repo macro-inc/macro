@@ -74,6 +74,7 @@ export function ChannelThread(props: ThreadProps) {
           <ChannelMessage
             message={props.data()}
             actions={props.getMessageActions?.(props.data())}
+            listMeta={props.listMeta}
           />
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">

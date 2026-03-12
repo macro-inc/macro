@@ -163,7 +163,14 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
-      <Show when={isMobile() && !virtualKeyboardVisible()}>
+      <Show
+        when={
+          isMobile() &&
+          !virtualKeyboardVisible() &&
+          isAuthenticated() &&
+          !AUTH_URLS.includes(location.pathname)
+        }
+      >
         <MobileDock />
       </Show>
       <Show when={isMobile()}>

@@ -6,8 +6,12 @@
  */
 import type { TeamRole } from './teamRole';
 
-export interface TeamUser {
-  team_id: string;
-  team_role: TeamRole;
+/**
+ * The team member struct
+ */
+export interface TeamMember {
+  /** The role of the team member */
+  role: TeamRole;
+  /** The user id of the team member */
   user_id: string;
 }

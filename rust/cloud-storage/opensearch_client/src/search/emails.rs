@@ -226,12 +226,27 @@ pub(crate) struct EmailIndex {
     pub message_id: uuid::Uuid,
     /// The sender of the email message
     pub sender: String,
+    /// The display name of the sender
+    #[serde(default)]
+    pub sender_name: Option<String>,
+    /// The reply-to address of the email message
+    #[serde(default)]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
+    /// The display names of the recipients
+    #[serde(default)]
+    pub recipient_names: Vec<String>,
     /// The cc of the email message
     pub cc: Vec<String>,
+    /// The display names of the cc contacts
+    #[serde(default)]
+    pub cc_names: Vec<String>,
     /// The bcc of the email message
     pub bcc: Vec<String>,
+    /// The display names of the bcc contacts
+    #[serde(default)]
+    pub bcc_names: Vec<String>,
     /// The labels of the email message
     pub labels: Vec<String>,
     /// The link id of the email message
