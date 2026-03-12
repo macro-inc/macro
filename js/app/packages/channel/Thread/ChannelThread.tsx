@@ -53,6 +53,10 @@ export function ChannelThread(props: ThreadProps) {
     if (replies && !repliesQuery.isLoading) return replies;
     return thread().preview ?? [];
   };
+  const firstReplyIsNewMessage = () => {
+    const first = activeReplies()[0];
+    return first ? isNewMessage(first) : false;
+  };
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
   const collapsedRepliesContainsNewMessages = () =>
@@ -91,7 +95,10 @@ export function ChannelThread(props: ThreadProps) {
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
-              <Thread.ReplyRailDecorations isReplying={props.isReplying} />
+              <Thread.ReplyRailDecorations
+                isReplying={props.isReplying}
+                firstThreadReplyNewMessage={firstReplyIsNewMessage()}
+              />
               <Suspense>
                 <Thread.RepliesContainer>
                   <Show

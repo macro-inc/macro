@@ -9,7 +9,7 @@ import {
 
 type ThreadReplyRailProps = {
   isReplying: Accessor<boolean>;
-  newMessage?: boolean;
+  firstThreadReplyNewMessage?: boolean;
 };
 
 export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
@@ -19,7 +19,7 @@ export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
         <div
           class={cn(
             'absolute text-edge-muted -z-1 w-full h-full',
-            props.newMessage && 'text-accent'
+            props.firstThreadReplyNewMessage && 'text-accent'
           )}
         >
           <svg
