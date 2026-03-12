@@ -46,6 +46,7 @@ import {
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
 import { createMessageEditor } from './create-message-editor';
+import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 
 type ChannelProps = {
   channelId: string;
@@ -130,6 +131,18 @@ export function Channel(props: ChannelProps) {
     },
   });
 
+  const onSend: ChannelInputProps['onSend'] = (snapshot) => {
+    const senderId = userId();
+    if (!senderId) return;
+
+    sendMessageMutation.mutate({
+      channelID: props.channelId,
+      senderId,
+      optimisticId: crypto.randomUUID(),
+      message: buildPostMessageRequest(snapshot),
+    });
+  };
+
   return (
     <Suspense>
       <StaticMarkdownContext>
@@ -197,17 +210,7 @@ export function Channel(props: ChannelProps) {
                 onReady={(handle) => {
                   dragState.setAttachFilesToChannel(handle.attachFiles);
                 }}
-                onSend={(snapshot) => {
-                  const senderId = userId();
-                  if (!senderId) return;
-
-                  sendMessageMutation.mutate({
-                    channelID: props.channelId,
-                    senderId,
-                    optimisticId: crypto.randomUUID(),
-                    message: buildPostMessageRequest(snapshot),
-                  });
-                }}
+                onSend={onSend}
               />
             </div>
           </Suspense>

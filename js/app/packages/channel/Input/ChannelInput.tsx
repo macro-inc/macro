@@ -18,7 +18,7 @@ import type {
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import type { JSX } from 'solid-js';
 
-type ChannelInputProps = InputCallbacks & {
+export type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
