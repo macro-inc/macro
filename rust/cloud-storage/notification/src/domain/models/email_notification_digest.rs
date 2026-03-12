@@ -341,29 +341,28 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
 /// This state machine does not model the entire decision tree because it runs at a place in the program
 /// where not all actions have been taken yet.
 pub struct StateMachineDriverA<U, N, O, B> {
-    /// adapter which implements [UserExistenceChecker]
-    pub(crate) user_checker: U,
-    /// adapter which implements [PushNotificationChecker]
-    pub(crate) notification_checker: N,
-    /// adapter which implements [LastOnlineChecker]
-    pub(crate) online_checker: O,
-    /// adapter which allows inserting a notification for bulk digest email
-    /// implements [DigestBatcher]
-    pub(crate) digest_batcher: B,
-    /// the blocklist for notifications which are never forwarded to bulk
-    pub(crate) block_list: EmailBlockList,
-    /// the allow list for checking if a notification is analagous to an "invite to macro" notification
-    pub(crate) invite_list: ExplicitInviteAllowList,
-    /// the window of time in which the digest emails are collected for before sending
-    pub(crate) digest_window: Duration,
-    /// the duration for how recently a user has been online
-    /// used to abort sending a bulk email if the user is below the
-    /// threshold
-    pub(crate) online_duration_threshold: Duration,
+    /// Adapter which implements [UserExistenceChecker].
+    pub user_checker: U,
+    /// Adapter which implements [PushNotificationChecker].
+    pub notification_checker: N,
+    /// Adapter which implements [LastOnlineChecker].
+    pub online_checker: O,
+    /// Adapter which allows inserting a notification for bulk digest email.
+    /// Implements [DigestBatcher].
+    pub digest_batcher: B,
+    /// The blocklist for notifications which are never forwarded to bulk.
+    pub block_list: EmailBlockList,
+    /// The allow list for checking if a notification is analogous to an "invite to macro" notification.
+    pub invite_list: ExplicitInviteAllowList,
+    /// The window of time in which the digest emails are collected for before sending.
+    pub digest_window: Duration,
+    /// The duration for how recently a user has been online.
+    /// Used to abort sending a bulk email if the user is below the threshold.
+    pub online_duration_threshold: Duration,
 }
 
 impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
-    /// Create a new instance of self with the default time windows
+    /// Create a new instance with the default time windows (30 min digest, 60 min online).
     pub fn new_with_defaults(
         user_checker: U,
         notification_checker: N,

@@ -224,12 +224,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             aws_sdk_sqs::Client::from_conf(sqs_config),
             "test-notification-queue".to_string(),
         );
-        let state_machine = StateMachineDriverA {
-            user_checker: DbUserExistenceChecker::new(pool.clone()),
-            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-                pool.clone(),
-            )),
-            online_checker: LastOnlineCheckerImpl::new(
+        let state_machine = StateMachineDriverA::new_with_defaults(
+            DbUserExistenceChecker::new(pool.clone()),
+            PushNotificationCheckerImpl::new(DbNotificationRepository::new(pool.clone())),
+            LastOnlineCheckerImpl::new(
                 last_online_tracker::domain::services::LastOnlineService::new(
                     last_online_tracker::outbound::time::DefaultTime,
                     last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
@@ -237,14 +235,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     ),
                 ),
             ),
-            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
-            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
-            )
-            .append::<model_notifications::ChannelInviteMetadata>(),
-            digest_window: std::time::Duration::from_secs(30 * 60),
-            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-        };
+            RedisDigestBatcher::new(redis_multiplexed_conn),
+            EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+            ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
+                .append::<model_notifications::ChannelInviteMetadata>(),
+        );
         NotificationIngressService::new(notification_repository, notification_queue, state_machine)
     });
 

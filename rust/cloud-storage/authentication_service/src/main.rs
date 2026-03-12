@@ -183,12 +183,10 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
-    let state_machine = StateMachineDriverA {
-        user_checker: DbUserExistenceChecker::new(db.clone()),
-        notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-            db.clone(),
-        )),
-        online_checker: LastOnlineCheckerImpl::new(
+    let state_machine = StateMachineDriverA::new_with_defaults(
+        DbUserExistenceChecker::new(db.clone()),
+        PushNotificationCheckerImpl::new(DbNotificationRepository::new(db.clone())),
+        LastOnlineCheckerImpl::new(
             last_online_tracker::domain::services::LastOnlineService::new(
                 last_online_tracker::outbound::time::DefaultTime,
                 last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
@@ -196,13 +194,11 @@ async fn main() -> anyhow::Result<()> {
                 ),
             ),
         ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
-        block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-        invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
+        RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
+        EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
+        ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
             .append::<model_notifications::ChannelInviteMetadata>(),
-        digest_window: std::time::Duration::from_secs(30 * 60),
-        online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-    };
+    );
     let notification_ingress_service =
         NotificationIngressService::new(notification_repository, notification_queue, state_machine);
     tracing::trace!("initialized notification ingress service");

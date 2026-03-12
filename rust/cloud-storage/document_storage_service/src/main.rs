@@ -41,9 +41,7 @@ use macro_sha_count_client::Redis;
 use model_notifications::digest_state::{
     common_email_block_list, common_explicit_invite_allow_list,
 };
-use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-};
+use notification::domain::models::email_notification_digest::StateMachineDriverA;
 use notification::domain::service::NotificationIngressService;
 use notification::outbound::{
     digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,

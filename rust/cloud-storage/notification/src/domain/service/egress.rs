@@ -291,8 +291,8 @@ where
     }
 
     // #[tracing::instrument(err, skip(self))]
-    async fn poll_email_digests<'a, T: NotificationExtEmail>(
-        &'a self,
+    async fn poll_email_digests<T: NotificationExtEmail>(
+        &self,
         f: fn(DigestBatch) -> Result<T, Report>,
     ) -> Result<ClaimResult<()>, Report> {
         let batch =
