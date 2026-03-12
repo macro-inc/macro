@@ -45,27 +45,29 @@ describe('Message.Layout', () => {
 
     expect(container.querySelector('[data-message-layout]')).toBeTruthy();
     expect(
-      container.querySelector('[data-message-slot="icon"]')?.getAttribute('style')
+      container
+        .querySelector('[data-message-slot="icon"]')
+        ?.getAttribute('style')
     ).toContain('grid-area: icon');
     expect(
-      container.querySelector('[data-message-slot="header"]')?.getAttribute(
-        'style'
-      )
+      container
+        .querySelector('[data-message-slot="header"]')
+        ?.getAttribute('style')
     ).toContain('grid-area: header');
     expect(
-      container.querySelector('[data-message-slot="content"]')?.getAttribute(
-        'style'
-      )
+      container
+        .querySelector('[data-message-slot="content"]')
+        ?.getAttribute('style')
     ).toContain('grid-area: content');
     expect(
-      container.querySelector('[data-message-slot="footer"]')?.getAttribute(
-        'style'
-      )
+      container
+        .querySelector('[data-message-slot="footer"]')
+        ?.getAttribute('style')
     ).toContain('grid-area: footer');
     expect(
-      container.querySelector('[data-message-slot="actions"]')?.getAttribute(
-        'style'
-      )
+      container
+        .querySelector('[data-message-slot="actions"]')
+        ?.getAttribute('style')
     ).toContain('grid-area: actions');
     expect(screen.getByText('icon')).toBeTruthy();
     expect(screen.getByText('header')).toBeTruthy();

@@ -58,7 +58,9 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         props.messageEditor.update(message(), nextSnapshot)
       }
       onClose={() => props.messageEditor.cancel(message().id)}
-      onSend={(nextSnapshot) => props.messageEditor.save(message(), nextSnapshot)}
+      onSend={(nextSnapshot) =>
+        props.messageEditor.save(message(), nextSnapshot)
+      }
       primaryActions={<EditPrimaryActions />}
     />
   );
