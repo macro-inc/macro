@@ -1,14 +1,14 @@
-import { children, Show, splitProps, type JSX } from "solid-js";
-import { cn } from "@ui/utils/classname";
-import { useInput, useInputCommands } from "./context";
-import { isReplyInput } from "./types";
-import FormatIcon from "@icon/regular/text-aa.svg";
-import TrashIcon from "@icon/regular/trash.svg";
-import PaperclipIcon from "@phosphor-icons/core/regular/paperclip.svg?component-solid";
-import { renderIcon } from "./utils/render-icon";
-import { Button } from "@ui/components/Button";
-import { LabelAndHotKey } from "@core/component/Tooltip";
-import { CHANNEL_FILE_PICKER_ACCEPT } from "./accepted-file-types";
+import { children, Show, splitProps, type JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { useInput, useInputCommands } from './context';
+import { isReplyInput } from './types';
+import FormatIcon from '@icon/regular/text-aa.svg';
+import TrashIcon from '@icon/regular/trash.svg';
+import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import { renderIcon } from './utils/render-icon';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 
 export function InputActionButton(props: {
   label: string;
@@ -22,7 +22,7 @@ export function InputActionButton(props: {
       aria-label={props.label}
       tooltip={<LabelAndHotKey label={props.label} />}
       onClick={(event) => props.onClick?.(event)}
-      classList={{ "bg-active": props.active }}
+      classList={{ 'bg-active': props.active }}
     >
       {props.children}
     </Button>
@@ -32,7 +32,7 @@ export function InputActionButton(props: {
 export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ["class", "children"]);
+  const [local, rest] = splitProps(props, ['class', 'children']);
   const resolved = children(() => local.children);
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -41,17 +41,17 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
   };
 
   const onAttachFiles: JSX.EventHandlerUnion<HTMLInputElement, Event> = (
-    event,
+    event
   ) => {
     const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = "";
+    event.currentTarget.value = '';
     if (files.length === 0) return;
     void commands.attachFiles(files);
   };
 
   return (
     <div
-      class={cn("flex flex-row items-center gap-2", local.class)}
+      class={cn('flex flex-row items-center gap-2', local.class)}
       data-input-primary-actions
       {...rest}
     >
@@ -74,21 +74,21 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
               label="Attach files"
               onClick={() => openAttachPicker()}
             >
-              {renderIcon(PaperclipIcon, "size-5")}
+              {renderIcon(PaperclipIcon, 'size-5')}
             </InputActionButton>
             <InputActionButton
               label="Format"
               active={input().showFormatRibbon}
               onClick={() => commands.toggleFormatRibbon()}
             >
-              {renderIcon(FormatIcon, "size-5")}
+              {renderIcon(FormatIcon, 'size-5')}
             </InputActionButton>
             <Show when={isReplyInput(input())}>
               <InputActionButton
                 label="Delete reply"
                 onClick={() => commands.close()}
               >
-                {renderIcon(TrashIcon, "size-5")}
+                {renderIcon(TrashIcon, 'size-5')}
               </InputActionButton>
             </Show>
           </>

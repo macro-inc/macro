@@ -137,9 +137,7 @@ export function createChannelMessageActions(
           effects.notifyCopyLinkFailure(error);
         }
       },
-      onEdit: canEditDelete
-        ? options.onEdit
-        : undefined,
+      onEdit: canEditDelete ? options.onEdit : undefined,
       onDelete: canEditDelete
         ? () => {
             options.deleteMessage({

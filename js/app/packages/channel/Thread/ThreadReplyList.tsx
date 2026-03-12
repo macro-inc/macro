@@ -6,18 +6,14 @@ import {
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 import { InlineMessageEditor } from '../Channel/InlineMessageEditor';
-import type { InputSnapshot } from '../Input';
-import type { MessageEditState } from './types';
+import type { MessageEditing } from './types';
 
 export function ThreadReplyList(props: {
   channelId: string;
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
-  editState?: MessageEditState;
-  onEditChange?: (message: MessageData, snapshot: InputSnapshot) => void;
-  onEditCancel?: (messageId: string) => void;
-  onEditSave?: (message: MessageData, snapshot: InputSnapshot) => void;
+  editing?: MessageEditing;
 }) {
   return (
     <For each={props.replies}>
@@ -29,17 +25,23 @@ export function ThreadReplyList(props: {
 
         return (
           <>
-            {props.editState?.messageId === reply.id ? (
+            {props.editing?.state()?.messageId === reply.id ? (
               <InlineMessageEditor
                 channelId={props.channelId}
                 message={reply}
-                snapshot={props.editState.snapshot}
-                onChange={(snapshot) =>
-                  props.onEditChange?.(replyMessage(), snapshot)
+                snapshot={
+                  props.editing.state()?.snapshot ?? {
+                    value: '',
+                    mentions: [],
+                    attachments: [],
+                  }
                 }
-                onCancel={() => props.onEditCancel?.(reply.id)}
+                onChange={(snapshot) =>
+                  props.editing?.update(replyMessage(), snapshot)
+                }
+                onCancel={() => props.editing?.cancel(reply.id)}
                 onSave={(snapshot) =>
-                  props.onEditSave?.(replyMessage(), snapshot)
+                  props.editing?.save(replyMessage(), snapshot)
                 }
               />
             ) : (

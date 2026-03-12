@@ -1,15 +1,16 @@
-import TrashIcon from "@icon/regular/trash.svg";
-import FormatIcon from "@icon/regular/text-aa.svg";
+import TrashIcon from '@icon/regular/trash.svg';
+import FormatIcon from '@icon/regular/text-aa.svg';
 import {
   ChannelInput,
   createInputAttachmentTracker,
   useInput,
   useInputCommands,
   type InputSnapshot,
-} from "../Input";
-import { Message, type MessageData } from "../Message";
-import { renderIcon } from "../Input/utils/render-icon";
-import { InputActionButton } from "@channel/Input/PrimaryActions";
+} from '../Input';
+import { Message, type MessageData } from '../Message';
+import { renderIcon } from '../Input/utils/render-icon';
+import { InputActionButton } from '@channel/Input/PrimaryActions';
+import type { MessageEditor } from './create-message-editor';
 
 function EditPrimaryActions() {
   const commands = useInputCommands();
@@ -22,10 +23,10 @@ function EditPrimaryActions() {
         active={input().showFormatRibbon}
         onClick={() => commands.toggleFormatRibbon()}
       >
-        {renderIcon(FormatIcon, "size-5")}
+        {renderIcon(FormatIcon, 'size-5')}
       </InputActionButton>
       <InputActionButton label="Discard Edit" onClick={() => commands.close()}>
-        {renderIcon(TrashIcon, "size-5")}
+        {renderIcon(TrashIcon, 'size-5')}
       </InputActionButton>
     </>
   );
@@ -35,9 +36,7 @@ type InlineMessageEditorProps = {
   channelId: string;
   message: MessageData;
   snapshot: InputSnapshot;
-  onChange: (snapshot: InputSnapshot) => void;
-  onCancel: () => void;
-  onSave: (snapshot: InputSnapshot) => void | Promise<void>;
+  messageEditor: MessageEditor;
 };
 
 export function InlineMessageEditor(props: InlineMessageEditorProps) {
@@ -58,17 +57,21 @@ export function InlineMessageEditor(props: InlineMessageEditorProps) {
             </div>
             <ChannelInput
               input={{
-                mode: "channel",
+                mode: 'channel',
                 id: `edit-message-input-${props.message.id}`,
                 value: props.snapshot.value,
                 attachments: props.snapshot.attachments,
-                placeholder: "Edit message",
+                placeholder: 'Edit message',
               }}
               attachmentTracker={attachmentTracker}
               markdownNamespace={`edit-message-${props.channelId}-${props.message.id}`}
-              onChange={props.onChange}
-              onClose={props.onCancel}
-              onSend={props.onSave}
+              onChange={(snapshot) =>
+                props.messageEditor.update(props.message, snapshot)
+              }
+              onClose={() => props.messageEditor.cancel(props.message.id)}
+              onSend={(snapshot) =>
+                props.messageEditor.save(props.message, snapshot)
+              }
               primaryActions={<EditPrimaryActions />}
             />
           </div>

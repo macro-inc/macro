@@ -64,7 +64,9 @@ export function ChannelThread(props: ThreadProps) {
     props.setIsExpanded(true);
   };
   const activeEditState = () =>
-    props.editState?.()?.messageId === props.data().id ? props.editState?.() : undefined;
+    props.editing?.state()?.messageId === props.data().id
+      ? props.editing.state()
+      : undefined;
 
   return (
     <Suspense>
@@ -88,11 +90,7 @@ export function ChannelThread(props: ThreadProps) {
                 channelId={props.channelId()}
                 message={props.data()}
                 snapshot={editState().snapshot}
-                onChange={(snapshot) =>
-                  props.onEditChange?.(props.data(), snapshot)
-                }
-                onCancel={() => props.onEditCancel?.(props.data().id)}
-                onSave={(snapshot) => props.onEditSave?.(props.data(), snapshot)}
+                messageEditor={props.messageEditor}
               />
             )}
           </Show>
@@ -109,10 +107,7 @@ export function ChannelThread(props: ThreadProps) {
                         threadId={props.data().id}
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
-                        editState={props.editState?.()}
-                        onEditChange={props.onEditChange}
-                        onEditCancel={props.onEditCancel}
-                        onEditSave={props.onEditSave}
+                        editing={props.editing}
                       />
                     }
                   >
@@ -122,10 +117,7 @@ export function ChannelThread(props: ThreadProps) {
                         threadId={props.data().id}
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
-                        editState={props.editState?.()}
-                        onEditChange={props.onEditChange}
-                        onEditCancel={props.onEditCancel}
-                        onEditSave={props.onEditSave}
+                        editing={props.editing}
                       />
                     </Suspense>
                   </Show>

@@ -3,7 +3,13 @@ import {
   type ChannelMessagesData,
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
-import { createMemo, createSignal, Show, Suspense, type Accessor } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Show,
+  Suspense,
+  type Accessor,
+} from 'solid-js';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -120,7 +126,7 @@ export function Channel(props: ChannelProps) {
       state.setIsReplying(true);
     },
     onEdit: ({ message }) => {
-      messageEditor.startEditing(message);
+      messageEditor.start(message);
     },
   });
 
@@ -157,10 +163,7 @@ export function Channel(props: ChannelProps) {
                           replyInputState={state.replyInputState}
                           setReplyInputState={state.setReplyInputState}
                           listMeta={listMetaByMessageId()[item.id]}
-                          editState={messageEditor.editState}
-                          onEditChange={messageEditor.updateSnapshot}
-                          onEditCancel={messageEditor.cancelEditing}
-                          onEditSave={messageEditor.saveEditing}
+                          messageEditor={messageEditor}
                           threadActions={{
                             onDismissNewMessages:
                               activityTracker.dismissNewMessages,
