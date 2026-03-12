@@ -120,6 +120,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Share a document with all members of the user's team.
+    fn share_with_team(
+        &self,
+        user_id: &str,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Port for generating S3 presigned upload URLs.

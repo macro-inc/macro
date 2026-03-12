@@ -705,6 +705,14 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .document_id
             .clone();
 
+        let _ = self
+            .repo
+            .share_with_team(&plain_user_id, &document_id)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to share task with team");
+            });
+
         if let Some(properties) = request.property_values {
             for property_input in properties {
                 let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
