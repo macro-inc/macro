@@ -6,6 +6,7 @@ import type {
 } from '../Message';
 import type { Accessor, Setter } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
+import type { MessageEditor } from '@channel/Channel/create-message-editor';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -20,10 +21,16 @@ export type ThreadState = {
   setReplyInputState: Setter<InputSnapshot | undefined>;
 };
 
+export type MessageEditState = {
+  messageId: string;
+  snapshot: InputSnapshot;
+};
+
 export type ThreadProps = {
   data: Accessor<ApiChannelMessage>;
   channelId: Accessor<string>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
+  messageEditor?: MessageEditor;
 } & ThreadState;

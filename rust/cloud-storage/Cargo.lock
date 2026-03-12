@@ -6776,9 +6776,7 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",

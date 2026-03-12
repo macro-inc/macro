@@ -77,9 +77,11 @@ export function ChannelThread(props: ThreadProps) {
             channelId={props.channelId()}
           >
             <ChannelMessage
+              channelId={props.channelId()}
               message={props.data()}
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
+              messageEditor={props.messageEditor}
             />
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
@@ -91,19 +93,21 @@ export function ChannelThread(props: ThreadProps) {
                     when={!repliesQuery.isLoading && hasFetchedReplies()}
                     fallback={
                       <Thread.ReplyList
+                        channelId={props.channelId()}
                         threadId={props.data().id}
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
-                        channelId={props.channelId()}
+                        messageEditor={props.messageEditor}
                       />
                     }
                   >
                     <Suspense>
                       <Thread.ReplyList
+                        channelId={props.channelId()}
                         threadId={props.data().id}
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
-                        channelId={props.channelId()}
+                        messageEditor={props.messageEditor}
                       />
                     </Suspense>
                   </Show>

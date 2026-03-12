@@ -7,12 +7,14 @@ import {
 import type { ApiThreadReply } from '@service-comms/client';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
+import type { MessageEditor } from '../Channel/create-message-editor';
 
 export function ThreadReplyList(props: {
+  channelId: string;
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
-  channelId: string;
+  messageEditor?: MessageEditor;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies)
@@ -32,9 +34,11 @@ export function ThreadReplyList(props: {
             channelId={props.channelId}
           >
             <ChannelMessage
+              channelId={props.channelId}
               message={reply}
               actions={props.getMessageActions?.(replyMessage())}
               listMeta={listMetaByReplyId()[reply.id]}
+              messageEditor={props.messageEditor}
             />
           </MarkMessaageNotifications>
         );
