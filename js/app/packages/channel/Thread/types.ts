@@ -1,3 +1,4 @@
+import type { ApiChannelMessage } from '@service-comms/client';
 import type {
   ChannelMessageListMeta,
   MessageActions,
