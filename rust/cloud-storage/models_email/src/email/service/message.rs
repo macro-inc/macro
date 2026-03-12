@@ -175,9 +175,10 @@ fn extract_reply_to(headers_json: Option<&JsonValue>) -> Option<String> {
     for header in headers {
         let name = header.get("name")?.as_str()?;
         if name == "Reply-To" {
-            return header.get("value").and_then(|v| v.as_str()).map(|s| {
-                s.to_lowercase()
-            });
+            return header
+                .get("value")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase());
         }
     }
     None
