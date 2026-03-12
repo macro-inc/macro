@@ -1444,7 +1444,7 @@ export function BaseInput(props: {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: () => setIsDragging(true),
+            onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (fileEntries, folderEntries, e) => {
               const editor_ = editor();

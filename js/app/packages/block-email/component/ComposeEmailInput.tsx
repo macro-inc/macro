@@ -229,7 +229,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: () => setIsDragging(true),
+            onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, dirs) => {
               handleFileFolderDrop(files, dirs, (u) =>
