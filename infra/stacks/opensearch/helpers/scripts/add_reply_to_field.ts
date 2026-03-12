@@ -8,7 +8,7 @@ async function addReplyToField(dryRun: boolean) {
 
   console.log('\n' + '='.repeat(60));
   console.log(
-    `Add reply_to field to emails index ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
+    `Add reply_to and contact name fields to emails index ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
   );
   console.log('='.repeat(60));
 
@@ -25,7 +25,7 @@ async function addReplyToField(dryRun: boolean) {
     return;
   }
 
-  console.log('\nAdding reply_to field mapping...');
+  console.log('\nAdding reply_to and contact name field mappings...');
   const mappingUpdate = {
     properties: {
       reply_to: {
@@ -33,11 +33,27 @@ async function addReplyToField(dryRun: boolean) {
         index: true,
         doc_values: true,
       },
+      sender_name: {
+        type: 'text' as const,
+        analyzer: 'standard',
+      },
+      recipient_names: {
+        type: 'text' as const,
+        analyzer: 'standard',
+      },
+      cc_names: {
+        type: 'text' as const,
+        analyzer: 'standard',
+      },
+      bcc_names: {
+        type: 'text' as const,
+        analyzer: 'standard',
+      },
     },
   };
 
   if (dryRun) {
-    console.log('[DRY-RUN] Would add reply_to field mapping');
+    console.log('[DRY-RUN] Would add reply_to and contact name field mappings');
   } else {
     const putMappingResponse = await opensearchClient.indices.putMapping({
       index: EMAIL_INDEX,
@@ -45,9 +61,9 @@ async function addReplyToField(dryRun: boolean) {
     });
 
     if (!putMappingResponse.body.acknowledged) {
-      throw new Error('Failed to add reply_to field mapping');
+      throw new Error('Failed to add field mappings');
     }
-    console.log('✓ reply_to field mapping added');
+    console.log('✓ reply_to and contact name field mappings added');
   }
 
   console.log('\n' + '='.repeat(60));
@@ -58,7 +74,7 @@ async function addReplyToField(dryRun: boolean) {
     console.log('\nTo run for real, set DRY_RUN=false environment variable\n');
   } else {
     console.log(
-      '\n✓ reply_to field has been added to the emails index mapping.'
+      '\n✓ reply_to and contact name fields have been added to the emails index mapping.'
     );
     console.log(
       '✓ To backfill reply_to values, run: cargo run --bin backfill_email_search\n'
