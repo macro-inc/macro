@@ -14,7 +14,8 @@ type EventName = AppEventNames | (string & {});
 
 type TrackFn = <E extends EventName>(
   event: E,
-  data?: E extends keyof AppEvents ? AppEvents[E] : Record<string, unknown>
+  data?: E extends keyof AppEvents ? AppEvents[E] : Record<string, unknown>,
+  providersToSendTo?: AnalyticsProvider[]
 ) => void;
 
 interface UserIdentifyInfo {
