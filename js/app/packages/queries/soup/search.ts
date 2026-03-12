@@ -7,6 +7,7 @@ import { searchClient } from '@service-search/client';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { buildSearchTerms } from './search-utils';
 
 export type SearchSoupQueryArgs = {
   params: {
@@ -31,29 +32,23 @@ export const useSearchSoupQuery = (
 ) => {
   const pageSize = createMemo(() => args().params.page_size);
 
-  const request = createMemo(() => {
-    const body = args().body;
-    return {
-      ...body,
-      query: body.query?.trim(),
-      terms: body.terms?.map((t) => t.trim()),
-    };
-  });
+  const request = createMemo(() => args().body);
 
   const terms = createMemo(() => {
-    const query = request().query;
+    const query = request().query?.trim();
     const hasQuery = query && query.length > 0;
-    const terms = request().terms;
+    const terms = request().terms?.map((t) => t.trim());
     const hasTerms = terms && terms.length > 0;
     if (hasTerms && hasQuery) {
       console.error('Cannot have both query and terms');
       return [];
     }
     if (hasTerms) {
-      return terms;
+      // NOTE: we currently assume that a singleton terms array is a query
+      return terms.length === 1 ? buildSearchTerms(terms[0]) : terms;
     }
     if (hasQuery) {
-      return [query];
+      return buildSearchTerms(query);
     }
     return [];
   });
@@ -78,7 +73,7 @@ export const useSearchSoupQuery = (
         async () =>
           await searchClient.search({
             params: ctx.pageParam,
-            request: { ...request() },
+            request: { ...request(), terms: terms() },
           })
       );
     },
