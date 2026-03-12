@@ -2,50 +2,50 @@ import {
   makeMessageIndex,
   type ChannelMessagesData,
   useChannelMessagesQuery,
-} from "@queries/channel/channel-messages";
+} from '@queries/channel/channel-messages';
 import {
   createMemo,
   createSignal,
   Show,
   Suspense,
   type Accessor,
-} from "solid-js";
+} from 'solid-js';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
   type ThreadListScrollState,
   type ThreadListScrollTarget,
-} from "./ThreadList";
-import { StaticMarkdownContext } from "@core/component/LexicalMarkdown/component/core/StaticMarkdown";
-import { createThreadManager } from "./thread-manager";
-import { createThreadPaginator } from "./thread-paginator";
-import { useUserId } from "@core/context/user";
+} from './ThreadList';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { createThreadManager } from './thread-manager';
+import { createThreadPaginator } from './thread-paginator';
+import { useUserId } from '@core/context/user';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
   useSendMessageMutation,
-} from "@queries/channel/message";
+} from '@queries/channel/message';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
-} from "@queries/channel/reaction";
-import type { DateValue } from "@core/util/date";
-import { buildChannelMessageListMeta } from "./message-list-meta";
-import { ScrollToBottomOverlay } from "./ScrollToBottomOverlay";
-import { ChannelThread } from "../Thread";
-import { ChannelInput, createInputAttachmentTracker } from "../Input";
-import { createChannelMessageActions } from "./create-channel-message-actions";
-import { createActivityTracker } from "@channel/activity-tracker";
-import { useChannelActivity } from "@core/context/channels";
-import { createChannelDragState } from "./create-channel-drag-state";
-import { ChannelDropZone } from "./ChannelDropZone";
-import { buildPostMessageRequest } from "@channel/Input/message-payload";
+} from '@queries/channel/reaction';
+import type { DateValue } from '@core/util/date';
+import { buildChannelMessageListMeta } from './message-list-meta';
+import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
+import { ChannelThread } from '../Thread';
+import { ChannelInput, createInputAttachmentTracker } from '../Input';
+import { createChannelMessageActions } from './create-channel-message-actions';
+import { createActivityTracker } from '@channel/activity-tracker';
+import { useChannelActivity } from '@core/context/channels';
+import { createChannelDragState } from './create-channel-drag-state';
+import { ChannelDropZone } from './ChannelDropZone';
+import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
-} from "@channel/Input/utils/persistence";
-import { createStickyScrollEffect } from "./sticky-scroll";
+} from '@channel/Input/utils/persistence';
+import { createStickyScrollEffect } from './sticky-scroll';
 
 type ChannelProps = {
   channelId: string;
@@ -67,7 +67,7 @@ export function Channel(props: ChannelProps) {
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageId,
+    targetMessageId
   );
 
   const activity = useChannelActivity(props.channelId);
@@ -84,7 +84,7 @@ export function Channel(props: ChannelProps) {
     defaultThreadListTargetFromMessage(targetMessageId());
 
   const messageIndex = createMemo(() =>
-    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined),
+    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
   );
   const messages = createMemo(() => messageIndex().items);
   const messageById = createMemo(() => messageIndex().byId);
@@ -97,7 +97,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const listMetaByMessageId = createMemo(() =>
-    buildChannelMessageListMeta(messages(), activityTracker.isNewMessage),
+    buildChannelMessageListMeta(messages(), activityTracker.isNewMessage)
   );
 
   const attachmentTracker = createInputAttachmentTracker({
@@ -184,9 +184,9 @@ export function Channel(props: ChannelProps) {
             <div class="pb-2 w-full flex justify-center">
               <ChannelInput
                 input={{
-                  mode: "channel",
+                  mode: 'channel',
                   id: `channel-input-${props.channelId}`,
-                  placeholder: "Message channel",
+                  placeholder: 'Message channel',
                   isDraggingOverChannel: dragState.isDraggingOverChannel(),
                   isValidChannelDrag: dragState.isValidChannelDrag(),
                 }}

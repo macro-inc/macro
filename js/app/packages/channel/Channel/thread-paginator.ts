@@ -1,6 +1,6 @@
-import type { UseInfiniteQueryResult } from "@tanstack/solid-query";
-import { createSignal, type Accessor, type Setter } from "solid-js";
-import type { Store } from "solid-js/store";
+import type { UseInfiniteQueryResult } from '@tanstack/solid-query';
+import { createSignal, type Accessor, type Setter } from 'solid-js';
+import type { Store } from 'solid-js/store';
 
 export type ThreadPaginator = {
   isPrepending: Accessor<boolean>;
@@ -12,7 +12,7 @@ export type ThreadPaginator = {
 };
 
 type PaginateDirectionState = {
-  direction: "shift" | "prepend";
+  direction: 'shift' | 'prepend';
   pending: Accessor<boolean>;
   is: Accessor<boolean>;
   setIsPending: Setter<boolean>;
@@ -22,7 +22,7 @@ type PaginateDirectionState = {
 };
 
 function createPaginateDirectionState(
-  direction: "shift" | "prepend",
+  direction: 'shift' | 'prepend'
 ): Store<PaginateDirectionState> {
   const [pending, setIsPending] = createSignal<boolean>(false);
   const [is, setIs] = createSignal<boolean>(false);
@@ -39,20 +39,20 @@ function createPaginateDirectionState(
 }
 
 export function createThreadPaginator<T>(
-  query: UseInfiniteQueryResult<T>,
+  query: UseInfiniteQueryResult<T>
 ): ThreadPaginator {
-  const prependPaginateState = createPaginateDirectionState("prepend");
-  const shiftPaginateState = createPaginateDirectionState("shift");
+  const prependPaginateState = createPaginateDirectionState('prepend');
+  const shiftPaginateState = createPaginateDirectionState('shift');
 
   const paginate = async (state: PaginateDirectionState) => {
     const hasMore = () =>
-      state.direction === "shift" ? query.hasNextPage : query.hasPreviousPage;
+      state.direction === 'shift' ? query.hasNextPage : query.hasPreviousPage;
     const isFetching = () =>
-      state.direction === "shift"
+      state.direction === 'shift'
         ? query.isFetchingNextPage
         : query.isFetchingPreviousPage;
     const paginateFn =
-      state.direction === "shift"
+      state.direction === 'shift'
         ? query.fetchNextPage
         : query.fetchPreviousPage;
 
