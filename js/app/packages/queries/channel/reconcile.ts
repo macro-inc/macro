@@ -6,6 +6,8 @@ import {
   insertTopLevelMessageIntoChannelMessages,
   removeThreadReplyFromChannelMessages,
   removeTopLevelMessageFromChannelMessages,
+  replaceThreadReplyStateInChannelMessages,
+  replaceTopLevelMessageStateInChannelMessages,
   restoreThreadPreviewReplyInChannelMessages,
   restoreTopLevelMessageInChannelMessages,
   replaceThreadReplyIdInChannelMessages,
@@ -25,6 +27,7 @@ import {
   getThreadReplySnapshot,
   insertThreadReply,
   removeThreadReply,
+  replaceThreadReplyState,
   restoreThreadReply,
   replaceThreadReplyId,
   replaceThreadReplyReactions,
@@ -37,6 +40,7 @@ import type {
   Attachment as ApiAttachment,
   CountedReaction,
 } from '@service-comms/generated/models';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
@@ -62,6 +66,13 @@ export type DeleteTargetSnapshot =
       reply?: ThreadReplySnapshot;
       preview?: ThreadPreviewReplySnapshot;
     };
+
+export type TargetMessageState = {
+  content: string;
+  editedAt: string | null | undefined;
+  updatedAt: string;
+  attachments: ApiMessageAttachment[];
+};
 
 export function makeMessageTarget(args: {
   messageId: string;
@@ -336,6 +347,77 @@ export function replaceTargetAttachments(
       prev,
       target.messageId,
       attachments
+    )
+  );
+}
+
+export function getTargetMessageState(
+  channelId: string,
+  target: MessageTarget
+): TargetMessageState | undefined {
+  if (target.kind === 'thread_reply') {
+    const reply =
+      queryClient
+        .getQueryData<Array<ApiThreadReply>>(
+          getThreadRepliesQueryKey(channelId, target.threadId)
+        )
+        ?.find((item) => item.id === target.messageId) ??
+      findThreadPreviewReplySnapshotInChannelMessages(
+        channelId,
+        target.threadId,
+        target.messageId
+      )?.reply;
+
+    if (!reply) return;
+
+    return {
+      content: reply.content,
+      editedAt: reply.edited_at,
+      updatedAt: reply.updated_at,
+      attachments: reply.attachments,
+    };
+  }
+
+  const message = findTopLevelMessageSnapshotInChannelMessages(
+    channelId,
+    target.messageId
+  )?.message;
+  if (!message) return;
+
+  return {
+    content: message.content,
+    editedAt: message.edited_at,
+    updatedAt: message.updated_at,
+    attachments: message.attachments,
+  };
+}
+
+export function replaceTargetMessageState(
+  channelId: string,
+  target: MessageTarget,
+  nextState: TargetMessageState
+) {
+  if (target.kind === 'thread_reply') {
+    queryClient.setQueryData<Array<ApiThreadReply>>(
+      getThreadRepliesQueryKey(channelId, target.threadId),
+      (prev) => replaceThreadReplyState(prev, target.messageId, nextState)
+    );
+    setChannelMessagesData(channelId, (prev) =>
+      replaceThreadReplyStateInChannelMessages(
+        prev,
+        target.threadId,
+        target.messageId,
+        nextState
+      )
+    );
+    return;
+  }
+
+  setChannelMessagesData(channelId, (prev) =>
+    replaceTopLevelMessageStateInChannelMessages(
+      prev,
+      target.messageId,
+      nextState
     )
   );
 }

@@ -42,7 +42,9 @@ import {
 } from '../channel-messages';
 import {
   optimisticInsertChannelMessage,
+  optimisticUpdateChannelMessage,
   rollbackInsertChannelMessage,
+  rollbackUpdateChannelMessage,
 } from '../message';
 import {
   optimisticAddReaction,
@@ -306,6 +308,152 @@ describe('channel optimistic cache regressions', () => {
       getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
         .preview[0].reactions
     ).toEqual([{ emoji: '👍', users: ['user-1'] }]);
+  });
+
+  it('rolls back optimistic top-level edits when only the paginated cache is warm', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('message-1', '2024-01-03T00:00:00.000Z', {
+            content: 'Original body',
+            attachments: [
+              {
+                id: 'attachment-1',
+                entity_id: 'doc-1',
+                entity_type: 'document',
+                created_at: '2024-01-03T00:00:00.000Z',
+              },
+            ],
+          }),
+        ],
+      ])
+    );
+
+    const context = optimisticUpdateChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'message-1',
+      content: 'Edited body',
+      attachment_ids_to_delete: ['attachment-1'],
+    });
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0]).toEqual(
+      expect.objectContaining({
+        content: 'Edited body',
+        attachments: [],
+      })
+    );
+
+    if (context) {
+      rollbackUpdateChannelMessage('channel-1', context);
+    }
+
+    expect(getChannelMessagesFromCache('channel-1')?.pages[0].items[0]).toEqual(
+      expect.objectContaining({
+        content: 'Original body',
+        attachments: [
+          expect.objectContaining({
+            id: 'attachment-1',
+            entity_id: 'doc-1',
+          }),
+        ],
+      })
+    );
+  });
+
+  it('rolls back optimistic thread reply edits when only the thread caches are warm', () => {
+    seedChannelMessagesCache(
+      'channel-1',
+      createChannelMessagesData([
+        [
+          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
+            thread: {
+              preview: [
+                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+                  content: 'Original reply',
+                  attachments: [
+                    {
+                      id: 'attachment-2',
+                      entity_id: 'image-1',
+                      entity_type: 'static_image',
+                      created_at: '2024-01-03T01:00:00.000Z',
+                    },
+                  ],
+                }),
+              ],
+              reply_count: 1,
+              latest_reply_at: '2024-01-03T01:00:00.000Z',
+            },
+          }),
+        ],
+      ])
+    );
+    seedThreadRepliesCache('channel-1', 'parent-1', [
+      createThreadReply('reply-1', '2024-01-03T01:00:00.000Z', {
+        content: 'Original reply',
+        attachments: [
+          {
+            id: 'attachment-2',
+            entity_id: 'image-1',
+            entity_type: 'static_image',
+            created_at: '2024-01-03T01:00:00.000Z',
+          },
+        ],
+      }),
+    ]);
+
+    const context = optimisticUpdateChannelMessage({
+      channelId: 'channel-1',
+      message_id: 'reply-1',
+      content: 'Edited reply',
+      attachment_ids_to_delete: ['attachment-2'],
+    });
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0]).toEqual(
+      expect.objectContaining({
+        content: 'Edited reply',
+        attachments: [],
+      })
+    );
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0]
+    ).toEqual(
+      expect.objectContaining({
+        content: 'Edited reply',
+        attachments: [],
+      })
+    );
+
+    if (context) {
+      rollbackUpdateChannelMessage('channel-1', context);
+    }
+
+    expect(getThreadRepliesFromCache('channel-1', 'parent-1')?.[0]).toEqual(
+      expect.objectContaining({
+        content: 'Original reply',
+        attachments: [
+          expect.objectContaining({
+            id: 'attachment-2',
+            entity_id: 'image-1',
+          }),
+        ],
+      })
+    );
+    expect(
+      getChannelMessagesFromCache('channel-1')?.pages[0].items[0].thread
+        .preview[0]
+    ).toEqual(
+      expect.objectContaining({
+        content: 'Original reply',
+        attachments: [
+          expect.objectContaining({
+            id: 'attachment-2',
+            entity_id: 'image-1',
+          }),
+        ],
+      })
+    );
   });
 
   it('uses distinct query keys for target-message loads', () => {

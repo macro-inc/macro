@@ -24,8 +24,10 @@ import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
 import {
   captureDeleteSnapshotForTarget,
+  getTargetMessageState,
   insertMessageIntoTargetCaches,
   removeMessageFromTargetCaches,
+  replaceTargetMessageState,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
   replaceTargetMessageId,
@@ -47,6 +49,12 @@ function registerMessageNonces(
   }
 }
 
+function normalizeDateValue(
+  value: DateValue | null | undefined
+): string | null | undefined {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
@@ -66,9 +74,11 @@ export type DeleteMessageContext = {
 
 export type UpdateMessageContext = {
   messageId: string;
+  target: ReturnType<typeof resolveMessageTarget>;
   previousContent: string;
   previousEditedAt: DateValue | null | undefined;
   previousUpdatedAt: DateValue;
+  previousAttachments: Attachment[];
 };
 
 function makeOptimisticAttachments(
@@ -414,12 +424,37 @@ export function rollbackDeleteChannelMessage(
  * Returns minimal context: only the previous content and timestamps.
  */
 export function optimisticUpdateChannelMessage(
-  vars: WithChannelId<Pick<ChannelMessage, 'message_id' | 'content'>>
+  vars: WithChannelId<
+    Pick<ChannelMessage, 'message_id' | 'content'> & {
+      attachment_ids_to_delete?: string[];
+    }
+  >
 ): UpdateMessageContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
+    messageId: vars.message_id,
+  });
 
   let context: UpdateMessageContext | undefined;
+  const deletedAttachmentIDs = new Set(vars.attachment_ids_to_delete ?? []);
+  const now = new Date().toISOString();
+
+  const renderedState = getTargetMessageState(vars.channelId, target);
+  if (renderedState) {
+    context = {
+      messageId: vars.message_id,
+      target,
+      previousContent: renderedState.content,
+      previousEditedAt: renderedState.editedAt,
+      previousUpdatedAt: renderedState.updatedAt,
+      previousAttachments: renderedState.attachments.map((attachment) => ({
+        ...attachment,
+        channel_id: vars.channelId,
+        message_id: vars.message_id,
+      })),
+    };
+  }
 
   queryClient.setQueriesData(
     { queryKey },
@@ -431,12 +466,14 @@ export function optimisticUpdateChannelMessage(
 
       context = {
         messageId: vars.message_id,
+        target,
         previousContent: message.content,
         previousEditedAt: message.edited_at,
         previousUpdatedAt: message.updated_at,
+        previousAttachments: prev.attachments.filter(
+          (attachment) => attachment.message_id === vars.message_id
+        ),
       };
-
-      const now = new Date().toISOString();
 
       return {
         ...prev,
@@ -445,9 +482,25 @@ export function optimisticUpdateChannelMessage(
             ? { ...m, content: vars.content, edited_at: now, updated_at: now }
             : m
         ),
+        attachments: prev.attachments.filter(
+          (attachment) =>
+            attachment.message_id !== vars.message_id ||
+            !deletedAttachmentIDs.has(attachment.id)
+        ),
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS && context) {
+    replaceTargetMessageState(vars.channelId, target, {
+      content: vars.content,
+      editedAt: now,
+      updatedAt: now,
+      attachments: context.previousAttachments.filter(
+        (attachment) => !deletedAttachmentIDs.has(attachment.id)
+      ),
+    });
+  }
 
   return context;
 }
@@ -478,9 +531,24 @@ export function rollbackUpdateChannelMessage(
               }
             : m
         ),
+        attachments: [
+          ...prev.attachments.filter(
+            (attachment) => attachment.message_id !== context.messageId
+          ),
+          ...context.previousAttachments,
+        ],
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    replaceTargetMessageState(channelId, context.target, {
+      content: context.previousContent,
+      editedAt: normalizeDateValue(context.previousEditedAt),
+      updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
+      attachments: context.previousAttachments,
+    });
+  }
 }
 
 const { track } = withAnalytics();
@@ -656,6 +724,7 @@ type PatchMessageParams = {
   channelID: string;
   messageID: string;
   content: string;
+  attachmentIDsToDelete?: string[];
 };
 
 type PatchMutationContext = UpdateMessageContext | undefined;
@@ -685,6 +754,7 @@ export function usePatchMessageMutation(
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            attachment_ids_to_delete: vars.attachmentIDsToDelete,
             nonce: patchNonce.use(vars),
           })
       );
@@ -696,12 +766,16 @@ export function usePatchMessageMutation(
       PatchMutationContext
     >(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           patchNonce.prepare(vars);
           return optimisticUpdateChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            attachment_ids_to_delete: vars.attachmentIDsToDelete,
           });
         },
         onError(error, vars, context) {
@@ -714,6 +788,15 @@ export function usePatchMessageMutation(
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
+          if (ENABLE_NEW_CHANNELS) {
+            softInvalidateTargetCaches(
+              vars.channelID,
+              resolveMessageTarget({
+                channelId: vars.channelID,
+                messageId: vars.messageID,
+              })
+            );
+          }
         },
       },
       callbacks

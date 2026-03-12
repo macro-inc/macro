@@ -52,6 +52,8 @@ import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
+import { createMessageEditor } from './create-message-editor';
+import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 
 type ChannelProps = {
   channelId: string;
@@ -105,6 +107,10 @@ export function Channel(props: ChannelProps) {
 
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
+  const messageEditor = createMessageEditor({
+    channelId: () => props.channelId,
+    patchMessage: patchMessageMutation.mutate,
+  });
 
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
     defaultThreadListTargetFromMessage(targetMessageId());
@@ -140,7 +146,6 @@ export function Channel(props: ChannelProps) {
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    patchMessage: patchMessageMutation.mutate,
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
@@ -148,7 +153,22 @@ export function Channel(props: ChannelProps) {
       const state = threadManager.getOrCreateThreadState(ctx.message.id);
       state.setIsReplying(true);
     },
+    onEdit: ({ message }) => {
+      messageEditor.start(message);
+    },
   });
+
+  const onSend: ChannelInputProps['onSend'] = (snapshot) => {
+    const senderId = userId();
+    if (!senderId) return;
+
+    sendMessageMutation.mutate({
+      channelID: props.channelId,
+      senderId,
+      optimisticId: crypto.randomUUID(),
+      message: buildPostMessageRequest(snapshot),
+    });
+  };
 
   return (
     <Suspense>
@@ -184,6 +204,7 @@ export function Channel(props: ChannelProps) {
                             replyInputState={state.replyInputState}
                             setReplyInputState={state.setReplyInputState}
                             listMeta={listMetaByMessageId()[item.id]}
+                            messageEditor={messageEditor}
                             threadActions={{
                               onDismissNewMessages:
                                 activityTracker.dismissNewMessages,
@@ -217,17 +238,7 @@ export function Channel(props: ChannelProps) {
                   onReady={(handle) => {
                     dragState.setAttachFilesToChannel(handle.attachFiles);
                   }}
-                  onSend={(snapshot) => {
-                    const senderId = userId();
-                    if (!senderId) return;
-
-                    sendMessageMutation.mutate({
-                      channelID: props.channelId,
-                      senderId,
-                      optimisticId: crypto.randomUUID(),
-                      message: buildPostMessageRequest(snapshot),
-                    });
-                  }}
+                  onSend={onSend}
                 />
               </div>
             </Suspense>

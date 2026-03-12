@@ -16,13 +16,16 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import type { JSX } from 'solid-js';
 
-type ChannelInputProps = InputCallbacks & {
+export type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
   onReady?: (handle: InputHandle) => void;
+  primaryActions?: JSX.Element;
+  sendAction?: JSX.Element;
 };
 
 export function ChannelInput(props: ChannelInputProps) {
@@ -125,8 +128,8 @@ export function ChannelInput(props: ChannelInputProps) {
           <Input.Attachments kind="media" />
           <Input.Attachments kind="document" />
           <Input.Footer>
-            <Input.PrimaryActions />
-            <Input.SendAction />
+            <Input.PrimaryActions>{props.primaryActions}</Input.PrimaryActions>
+            <Input.SendAction>{props.sendAction}</Input.SendAction>
           </Input.Footer>
         </Input.Layout>
       </Input.DropZone>

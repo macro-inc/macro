@@ -10,7 +10,7 @@ import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 
-function InputActionButton(props: {
+export function InputActionButton(props: {
   label: string;
   onClick?: (event: MouseEvent) => void;
   active?: boolean;

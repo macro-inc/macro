@@ -1,5 +1,6 @@
 import { Root } from './Root';
 import { Layout } from './Layout';
+import { Slot } from './Slot';
 import { SenderName } from './SenderName';
 import { SenderIcon } from './SenderIcon';
 import { Timestamp } from './Timestamp';
@@ -16,6 +17,7 @@ import { ActionMenu } from './ActionMenu';
 export const Message = {
   Root,
   Layout,
+  Slot,
   SenderName,
   SenderIcon,
   Timestamp,

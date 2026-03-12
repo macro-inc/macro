@@ -5,10 +5,10 @@ import {
   type ApiThreadReply,
   type ChannelMessagesPage,
 } from '@service-comms/client';
-import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 import {
@@ -253,12 +253,37 @@ export function replaceTopLevelMessageReactionsInChannelMessages(
 export function replaceTopLevelMessageAttachmentsInChannelMessages(
   data: ChannelMessagesData | undefined,
   messageId: string,
-  attachments: ApiAttachment[]
+  attachments: ApiMessageAttachment[]
 ): ChannelMessagesData | undefined {
   if (!data) return data;
 
   return mapChannelMessagesItems(data, (message) =>
     message.id === messageId ? { ...message, attachments } : message
+  );
+}
+
+export function replaceTopLevelMessageStateInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageId: string,
+  nextState: {
+    content: string;
+    editedAt: string | null | undefined;
+    updatedAt: string;
+    attachments: ApiMessageAttachment[];
+  }
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) =>
+    message.id === messageId
+      ? {
+          ...message,
+          content: nextState.content,
+          edited_at: nextState.editedAt ?? undefined,
+          updated_at: nextState.updatedAt,
+          attachments: nextState.attachments,
+        }
+      : message
   );
 }
 
@@ -383,7 +408,7 @@ export function replaceThreadReplyAttachmentsInChannelMessages(
   data: ChannelMessagesData | undefined,
   threadId: string,
   replyId: string,
-  attachments: ApiAttachment[]
+  attachments: ApiMessageAttachment[]
 ): ChannelMessagesData | undefined {
   if (!data) return data;
 
@@ -394,6 +419,46 @@ export function replaceThreadReplyAttachmentsInChannelMessages(
       if (reply.id !== replyId) return reply;
       didChange = true;
       return { ...reply, attachments };
+    });
+
+    if (!didChange) return message;
+
+    return {
+      ...message,
+      thread: {
+        ...message.thread,
+        preview,
+      },
+    };
+  });
+}
+
+export function replaceThreadReplyStateInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  replyId: string,
+  nextState: {
+    content: string;
+    editedAt: string | null | undefined;
+    updatedAt: string;
+    attachments: ApiMessageAttachment[];
+  }
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) => {
+    if (message.id !== threadId) return message;
+    let didChange = false;
+    const preview = message.thread.preview.map((reply) => {
+      if (reply.id !== replyId) return reply;
+      didChange = true;
+      return {
+        ...reply,
+        content: nextState.content,
+        edited_at: nextState.editedAt ?? undefined,
+        updated_at: nextState.updatedAt,
+        attachments: nextState.attachments,
+      };
     });
 
     if (!didChange) return message;

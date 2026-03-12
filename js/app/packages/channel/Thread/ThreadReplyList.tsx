@@ -9,12 +9,14 @@ import { MarkMessaageNotifications } from '@notifications/components/MarkMessage
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import { useActivityTracker } from '@channel/activity-tracker-context';
+import type { MessageEditor } from '../Channel/create-message-editor';
 
 export function ThreadReplyList(props: {
+  channelId: string;
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
-  channelId: string;
+  messageEditor?: MessageEditor;
 }) {
   const { isNewMessage } = useActivityTracker();
   const listMetaByReplyId = createMemo(() =>
@@ -39,9 +41,11 @@ export function ThreadReplyList(props: {
               channelId={props.channelId}
             >
               <ChannelMessage
+                channelId={props.channelId}
                 message={reply}
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
+                messageEditor={props.messageEditor}
               />
             </MarkMessaageNotifications>
           </div>
