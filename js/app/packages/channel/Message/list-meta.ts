@@ -3,4 +3,5 @@ export type ChannelMessageListMeta = {
   isNewMessage: boolean;
   isFirstNewMessage: boolean;
   previousTopLevelCreatedAt?: string;
+  isGroupedWithPrevious?: boolean;
 };

@@ -1,4 +1,4 @@
-import { For } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import {
   ChannelMessage,
   type MessageActions,
@@ -6,6 +6,7 @@ import {
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { buildThreadReplyListMeta } from './reply-list-meta';
 
 export function ThreadReplyList(props: {
   threadId: string;
@@ -13,6 +14,10 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   channelId: string;
 }) {
+  const listMetaByReplyId = createMemo(() =>
+    buildThreadReplyListMeta(props.replies)
+  );
+
   return (
     <For each={props.replies}>
       {(reply) => {
@@ -29,6 +34,7 @@ export function ThreadReplyList(props: {
             <ChannelMessage
               message={reply}
               actions={props.getMessageActions?.(replyMessage())}
+              listMeta={listMetaByReplyId()[reply.id]}
             />
           </MarkMessaageNotifications>
         );
