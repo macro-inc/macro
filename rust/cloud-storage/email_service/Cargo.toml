@@ -42,6 +42,10 @@ name = "cleanup_unused_sfs"
 path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
 
 [[bin]]
+name = "reverse_sfs_mappings"
+path = "src/bin/reverse_sfs_mappings/reverse_sfs_mappings.rs"
+
+[[bin]]
 name = "email_service_openapi"
 path = "src/openapi.rs"
 
