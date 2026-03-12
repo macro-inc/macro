@@ -46,36 +46,36 @@ export function InlineMessageEditor(props: InlineMessageEditorProps) {
 
   return (
     <Message.Root message={props.message}>
-      <Message.Layout>
-        <div class="flex items-start gap-2">
+      <Message.Layout editing>
+        <Message.Slot placement="icon">
           <Message.SenderIcon />
-          <div class="flex flex-col flex-1 min-w-0 gap-2">
-            <div class="flex items-center gap-2">
-              <Message.SenderName />
-              <Message.EditedIndicator />
-              <Message.Timestamp class="ml-auto" />
-            </div>
-            <ChannelInput
-              input={{
-                mode: 'channel',
-                id: `edit-message-input-${props.message.id}`,
-                value: props.snapshot.value,
-                attachments: props.snapshot.attachments,
-                placeholder: 'Edit message',
-              }}
-              attachmentTracker={attachmentTracker}
-              markdownNamespace={`edit-message-${props.channelId}-${props.message.id}`}
-              onChange={(snapshot) =>
-                props.messageEditor.update(props.message, snapshot)
-              }
-              onClose={() => props.messageEditor.cancel(props.message.id)}
-              onSend={(snapshot) =>
-                props.messageEditor.save(props.message, snapshot)
-              }
-              primaryActions={<EditPrimaryActions />}
-            />
-          </div>
-        </div>
+        </Message.Slot>
+        <Message.Slot placement="header" class="flex items-center gap-2">
+          <Message.SenderName />
+          <Message.EditedIndicator />
+          <Message.Timestamp class="ml-auto" />
+        </Message.Slot>
+        <Message.Slot placement="body">
+          <ChannelInput
+            input={{
+              mode: 'channel',
+              id: `edit-message-input-${props.message.id}`,
+              value: props.snapshot.value,
+              attachments: props.snapshot.attachments,
+              placeholder: 'Edit message',
+            }}
+            attachmentTracker={attachmentTracker}
+            markdownNamespace={`edit-message-${props.channelId}-${props.message.id}`}
+            onChange={(snapshot) =>
+              props.messageEditor.update(props.message, snapshot)
+            }
+            onClose={() => props.messageEditor.cancel(props.message.id)}
+            onSend={(snapshot) =>
+              props.messageEditor.save(props.message, snapshot)
+            }
+            primaryActions={<EditPrimaryActions />}
+          />
+        </Message.Slot>
       </Message.Layout>
     </Message.Root>
   );

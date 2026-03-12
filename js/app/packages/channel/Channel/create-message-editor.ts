@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createSignal, type Accessor } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
 import type { MessageData } from '../Message';
-import type { MessageEditState, MessageEditing } from '../Thread/types';
+import type { MessageEditState } from '../Thread/types';
 import {
   buildMessageEditSnapshot,
   getAttachmentIdsToDelete,

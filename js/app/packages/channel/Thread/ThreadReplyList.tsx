@@ -6,14 +6,14 @@ import {
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
 import { InlineMessageEditor } from '../Channel/InlineMessageEditor';
-import type { MessageEditing } from './types';
+import type { MessageEditor } from '../Channel/create-message-editor';
 
 export function ThreadReplyList(props: {
   channelId: string;
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
-  editing?: MessageEditing;
+  messageEditor?: MessageEditor;
 }) {
   return (
     <For each={props.replies}>
@@ -25,24 +25,12 @@ export function ThreadReplyList(props: {
 
         return (
           <>
-            {props.editing?.state()?.messageId === reply.id ? (
+            {props.messageEditor?.state()?.messageId === reply.id ? (
               <InlineMessageEditor
                 channelId={props.channelId}
                 message={reply}
-                snapshot={
-                  props.editing.state()?.snapshot ?? {
-                    value: '',
-                    mentions: [],
-                    attachments: [],
-                  }
-                }
-                onChange={(snapshot) =>
-                  props.editing?.update(replyMessage(), snapshot)
-                }
-                onCancel={() => props.editing?.cancel(reply.id)}
-                onSave={(snapshot) =>
-                  props.editing?.save(replyMessage(), snapshot)
-                }
+                snapshot={props.messageEditor.state()!.snapshot}
+                messageEditor={props.messageEditor}
               />
             ) : (
               <ChannelMessage

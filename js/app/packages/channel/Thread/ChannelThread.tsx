@@ -64,8 +64,8 @@ export function ChannelThread(props: ThreadProps) {
     props.setIsExpanded(true);
   };
   const activeEditState = () =>
-    props.editing?.state()?.messageId === props.data().id
-      ? props.editing.state()
+    props.messageEditor?.state()?.messageId === props.data().id
+      ? props.messageEditor.state()
       : undefined;
 
   return (
@@ -90,7 +90,7 @@ export function ChannelThread(props: ThreadProps) {
                 channelId={props.channelId()}
                 message={props.data()}
                 snapshot={editState().snapshot}
-                messageEditor={props.messageEditor}
+                messageEditor={props.messageEditor!}
               />
             )}
           </Show>
@@ -107,7 +107,7 @@ export function ChannelThread(props: ThreadProps) {
                         threadId={props.data().id}
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
-                        editing={props.editing}
+                        messageEditor={props.messageEditor}
                       />
                     }
                   >
@@ -117,7 +117,7 @@ export function ChannelThread(props: ThreadProps) {
                         threadId={props.data().id}
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
-                        editing={props.editing}
+                        messageEditor={props.messageEditor}
                       />
                     </Suspense>
                   </Show>

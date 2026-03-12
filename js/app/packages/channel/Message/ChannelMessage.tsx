@@ -10,20 +10,22 @@ export function ChannelMessage(props: ChannelMessageProps) {
   return (
     <Message.Root message={props.message} actions={props.actions}>
       <Message.Layout>
-        <div class="flex items-start gap-2">
+        <Message.Slot placement="icon">
           <Message.SenderIcon />
-          <div class="flex flex-col flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <Message.SenderName />
-              <Message.EditedIndicator />
-              <Message.Timestamp class="ml-auto" />
-            </div>
-            <Message.Content />
-            <Message.Attachments />
-            <Message.Reactions />
-          </div>
-        </div>
-        <Message.ActionMenu />
+        </Message.Slot>
+        <Message.Slot placement="header" class="flex items-center gap-2">
+          <Message.SenderName />
+          <Message.EditedIndicator />
+          <Message.Timestamp class="ml-auto" />
+        </Message.Slot>
+        <Message.Slot placement="body" class="flex flex-col min-w-0">
+          <Message.Content />
+          <Message.Attachments />
+          <Message.Reactions />
+        </Message.Slot>
+        <Message.Slot placement="actions">
+          <Message.ActionMenu />
+        </Message.Slot>
       </Message.Layout>
     </Message.Root>
   );
