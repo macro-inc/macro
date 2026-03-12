@@ -227,11 +227,11 @@ export function EmailCompose(props: EmailComposeProps) {
       );
       return null;
     }
-    // Fail if no body text and no attachments
-    // You can have a draft with attachments and no body text
+    // Fail if no body text, no attachments, and no subject
     if (
       prepared.bodyText.trim() === '' &&
-      form.attachments.list().length === 0
+      form.attachments.list().length === 0 &&
+      !form.subject()?.trim()
     ) {
       return null;
     }
@@ -309,6 +309,13 @@ export function EmailCompose(props: EmailComposeProps) {
   const scheduleDraftSave = debounce(() => {
     void executeSaveDraft();
   }, DRAFT_DEBOUNCE_MS);
+
+  const withDraftSave =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      scheduleDraftSave();
+    };
 
   const onAddAttachments = (attachments: DraftFormAttachment[]) => {
     for (const attachment of attachments) {
@@ -748,11 +755,6 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const isDraftSaving = () => saveDraftMutation.isPending;
 
-  // Used to keep displaying draft status for some time
-  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
-
-  // Used to keep displaying spinner for a short time before switching
-  // to saved state
   const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
@@ -853,17 +855,6 @@ export function EmailCompose(props: EmailComposeProps) {
                     </Show>
                   </Suspense>
                   <div class="flex gap-2 ml-auto">
-                    <Show when={debouncedIsDraftSaving()}>
-                      <div class="flex gap-1 items-center text-ink-muted">
-                        <Show
-                          when={laggedIsDraftSaving()}
-                          fallback={<span>Draft saved</span>}
-                        >
-                          <CircleSpinner class="size-4 animate-spin" />
-                          <span>Saving draft</span>
-                        </Show>
-                      </div>
-                    </Show>
                     <Show when={!isCcVisible()}>
                       <button
                         type="button"
@@ -893,9 +884,9 @@ export function EmailCompose(props: EmailComposeProps) {
                       inputRef={registerRef('directRecipientsSelector')}
                       options={getRecipientOptions}
                       selectedOptions={form.recipients().to}
-                      setSelectedOptions={(next) =>
+                      setSelectedOptions={withDraftSave((next) =>
                         form.setRecipients('to', next)
-                      }
+                      )}
                       placeholder="Macro users or email addresses"
                       focusOnMount={!hasLinkError()}
                       hideBorder
@@ -917,9 +908,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         inputRef={registerRef('ccRecipientsSelector')}
                         options={getRecipientOptions}
                         selectedOptions={form.recipients().cc}
-                        setSelectedOptions={(next) =>
+                        setSelectedOptions={withDraftSave((next) =>
                           form.setRecipients('cc', next)
-                        }
+                        )}
                         placeholder="Macro users or email addresses"
                         hideBorder
                         noBrackets
@@ -934,9 +925,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         inputRef={registerRef('bccRecipientsSelector')}
                         options={getRecipientOptions}
                         selectedOptions={form.recipients().bcc}
-                        setSelectedOptions={(next) =>
+                        setSelectedOptions={withDraftSave((next) =>
                           form.setRecipients('bcc', next)
-                        }
+                        )}
                         placeholder="Macro users or email addresses"
                         hideBorder
                         noBrackets
@@ -993,6 +984,7 @@ export function EmailCompose(props: EmailComposeProps) {
                   onSendTimeChange={handleSendTimeChange}
                   onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
+                  isDraftSaving={laggedIsDraftSaving()}
                   hasDraft={currentDraftID() != null}
                   onDraftDeletePress={deleteDraftAndReset}
                   disabled={hasLinkError() || sendMutation.isPending}

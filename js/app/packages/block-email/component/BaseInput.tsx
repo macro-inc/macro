@@ -578,11 +578,11 @@ export function BaseInput(props: {
       );
       return null;
     }
-    // Fail if no body text and no attachments
-    // You can have a draft with attachments and no body text
+    // Fail if no body text, no attachments, and no subject
     if (
       prepared.bodyText.trim() === '' &&
-      form().attachments.list().length === 0
+      form().attachments.list().length === 0 &&
+      !form().subject()?.trim()
     ) {
       return null;
     }
@@ -701,6 +701,13 @@ export function BaseInput(props: {
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
+
+  const withDraftSave =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      scheduleDraftSave();
+    };
 
   // We are consuming the first change, because it is the initial value
   let firstChangeConsumed = false;
@@ -1128,12 +1135,6 @@ export function BaseInput(props: {
   };
 
   const isDraftSaving = () => saveDraftMutation.isPending;
-
-  // Used to keep displaying draft status for some time
-  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
-
-  // Used to keep displaying spinner for a short time before switching
-  // to saved state
   const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
@@ -1222,7 +1223,9 @@ export function BaseInput(props: {
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
                 selectedOptions={form().recipients().to}
-                setSelectedOptions={(v) => form().setRecipients('to', v)}
+                setSelectedOptions={withDraftSave((v) =>
+                  form().setRecipients('to', v)
+                )}
                 triggerMode="input"
                 hideBorder
               />
@@ -1235,7 +1238,9 @@ export function BaseInput(props: {
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
                   selectedOptions={form().recipients().cc}
-                  setSelectedOptions={(v) => form().setRecipients('cc', v)}
+                  setSelectedOptions={withDraftSave((v) =>
+                    form().setRecipients('cc', v)
+                  )}
                   triggerMode="input"
                   hideBorder
                 />
@@ -1249,7 +1254,9 @@ export function BaseInput(props: {
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
                   selectedOptions={form().recipients().bcc}
-                  setSelectedOptions={(v) => form().setRecipients('bcc', v)}
+                  setSelectedOptions={withDraftSave((v) =>
+                    form().setRecipients('bcc', v)
+                  )}
                   triggerMode="input"
                   hideBorder
                 />
@@ -1284,17 +1291,6 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
             </div>
-          </div>
-        </Show>
-        <Show when={debouncedIsDraftSaving()}>
-          <div class="absolute right-4 top-4 flex gap-1 items-center text-xs text-ink-muted">
-            <Show
-              when={laggedIsDraftSaving()}
-              fallback={<span>Draft saved</span>}
-            >
-              <Spinner class="size-4 animate-spin" />
-              <span>Saving draft</span>
-            </Show>
           </div>
         </Show>
       </div>
@@ -1519,7 +1515,7 @@ export function BaseInput(props: {
                 onSendTimeChange={handleSendTimeChange}
               />
             </Show>
-            <Show when={savedDraftId()}>
+            <Show when={savedDraftId() && !laggedIsDraftSaving()}>
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
@@ -1527,6 +1523,11 @@ export function BaseInput(props: {
               >
                 <Trash class="h-5" />
               </Button>
+            </Show>
+            <Show when={laggedIsDraftSaving()}>
+              <div class="aspect-square p-1 flex items-center justify-center">
+                <Spinner class="size-5 animate-spin text-ink-muted" />
+              </div>
             </Show>
           </div>
 

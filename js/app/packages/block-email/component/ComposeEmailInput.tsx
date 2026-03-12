@@ -63,6 +63,7 @@ type ComposeEmailInputProps = {
   isSubmitting?: boolean;
   hasDraft?: boolean;
   onDraftDeletePress?: VoidFunction;
+  isDraftSaving?: boolean;
   attachments?: DraftFormAttachment[];
   initialHtml?: string;
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
@@ -396,7 +397,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 onSendTimeChange={props.onSendTimeChange}
               />
             </Show>
-            <Show when={props.hasDraft}>
+            <Show when={props.hasDraft && !props.isDraftSaving}>
               <Button
                 onclick={props.onDraftDeletePress}
                 tooltip="Delete draft"
@@ -404,6 +405,11 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               >
                 <Trash />
               </Button>
+            </Show>
+            <Show when={props.isDraftSaving}>
+              <div class="aspect-square p-1 flex items-center justify-center">
+                <Spinner class="size-5 animate-spin text-ink-muted" />
+              </div>
             </Show>
           </div>
 
