@@ -376,6 +376,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <Button
       as="a"
+      draggable={false}
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
