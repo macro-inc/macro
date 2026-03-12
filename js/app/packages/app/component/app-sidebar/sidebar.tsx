@@ -217,10 +217,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
             onClick={handleCreateClick}
           >
             <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 grow text-left">
+            <span class="grow text-left whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
               Create
             </span>
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 rounded-sm px-2 py-0.5 text-xs border border-edge-muted">
+            <span class="rounded-sm px-2 py-0.5 text-xs border border-edge-muted whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
               <Hotkey shortcut="C" />
             </span>
           </Button>
@@ -268,7 +268,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onClick={toggleSettings}
             >
               <GearIcon class="size-4 shrink-0" />
-              <span class={cn(isSlim() ? 'sr-only' : 'block')}>Settings</span>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Settings</span>
             </Button>
           </Tooltip>
 
@@ -289,7 +289,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 onClick={handleCommandPaletteClick}
               >
                 <CommandIcon class="size-4 shrink-0" />
-                <span class={cn(isSlim() ? 'sr-only' : 'block')}>Command palette</span>
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Command palette</span>
               </Button>
             </Tooltip>
           </Show>
@@ -316,7 +316,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                     triggerAnimation={sidebarBtnHovering()}
                   />
                 </div>
-                <span class={cn(isSlim() ? 'sr-only' : 'block')}>
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
                   {isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
                 </span>
               </Button>
@@ -388,7 +388,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
+      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
     </Button>
