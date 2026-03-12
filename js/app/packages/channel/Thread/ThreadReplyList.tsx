@@ -5,6 +5,7 @@ import {
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
+import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import type { MessageEditor } from '../Channel/create-message-editor';
 
@@ -28,13 +29,18 @@ export function ThreadReplyList(props: {
         });
 
         return (
-          <ChannelMessage
+          <MarkMessaageNotifications
+            messageId={reply.id}
             channelId={props.channelId}
-            message={reply}
-            actions={props.getMessageActions?.(replyMessage())}
-            listMeta={listMetaByReplyId()[reply.id]}
-            messageEditor={props.messageEditor}
-          />
+          >
+            <ChannelMessage
+              channelId={props.channelId}
+              message={reply}
+              actions={props.getMessageActions?.(replyMessage())}
+              listMeta={listMetaByReplyId()[reply.id]}
+              messageEditor={props.messageEditor}
+            />
+          </MarkMessaageNotifications>
         );
       }}
     </For>

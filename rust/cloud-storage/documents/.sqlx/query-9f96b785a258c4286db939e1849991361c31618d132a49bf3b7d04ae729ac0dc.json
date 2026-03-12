@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"UserItemAccess\" (\n            \"id\", \"user_id\", \"item_id\", \"item_type\", \"access_level\",\n            \"granted_from_channel_id\", \"created_at\", \"updated_at\"\n        )\n        SELECT\n            u.id,\n            u.user_id,\n            $1 AS item_id,\n            'document' AS item_type,\n            'comment' AS access_level,\n            NULL AS granted_from_channel_id,\n            NOW() AS created_at,\n            NOW() AS updated_at\n        FROM UNNEST($2::uuid[], $3::text[]) AS u(id, user_id)\n        WHERE NOT EXISTS (\n            SELECT 1 FROM \"UserItemAccess\" uia\n            WHERE uia.\"user_id\" = u.user_id\n              AND uia.\"item_id\" = $1\n              AND uia.\"item_type\" = 'document'\n              AND uia.\"granted_from_channel_id\" IS NULL\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f96b785a258c4286db939e1849991361c31618d132a49bf3b7d04ae729ac0dc"
+}

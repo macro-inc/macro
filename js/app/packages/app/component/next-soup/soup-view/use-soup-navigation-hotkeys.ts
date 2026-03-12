@@ -56,6 +56,7 @@ export const useSoupNavigationHotkeys = (
 
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
+      mergeHistory: true,
     });
   };
 

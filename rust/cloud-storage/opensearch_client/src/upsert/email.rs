@@ -12,12 +12,24 @@ pub struct UpsertEmailArgs {
     pub message_id: String,
     /// The sender of the email message
     pub sender: String,
+    /// The display name of the sender
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_name: Option<String>,
+    /// The reply-to address of the email message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
+    /// The display names of the recipients
+    pub recipient_names: Vec<String>,
     /// The cc of the email message
     pub cc: Vec<String>,
+    /// The display names of the cc contacts
+    pub cc_names: Vec<String>,
     /// The bcc of the email message
     pub bcc: Vec<String>,
+    /// The display names of the bcc contacts
+    pub bcc_names: Vec<String>,
     /// The labels of the email message
     pub labels: Vec<String>,
     /// The link id of the email message

@@ -97,13 +97,9 @@ pub async fn handler(
 ) -> Result<Json<AddDraftAttachmentResponse>, AddDraftAttachmentError> {
     validate_request(&ctx, link.id, draft_id, &req).await?;
 
-    let (file_name, file_type) = match FileType::split_suffix_match(req.file_name.as_str()) {
-        Some((file_name, extension)) => {
-            let file_type: Option<FileType> = FileType::from_str(extension).ok();
-            (file_name.to_string(), file_type)
-        }
-        None => (req.file_name, None),
-    };
+    let file_type = FileType::split_suffix_match(req.file_name.as_str())
+        .and_then(|(_, extension)| FileType::from_str(extension).ok());
+    let file_name = req.file_name;
 
     let content_type: ContentType = file_type.into();
 

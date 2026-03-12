@@ -54,122 +54,70 @@ pub struct MessageRow {
     pub body_html_sanitized: Option<String>,
 }
 
-/// Fetches a batch of email messages using OFFSET/LIMIT pagination.
-/// No server-side filtering — HTML parsing is done in the binary.
-/// Retries with a 5s timeout per attempt.
-pub async fn fetch_messages_batch(
-    db: &PgPool,
-    link_ids: &Option<Vec<Uuid>>,
-    offset: i64,
-    limit: i64,
-) -> anyhow::Result<Vec<MessageRow>> {
-    retry_with_timeout("fetch_messages_batch", || async {
-        let rows = if let Some(link_ids) = link_ids {
-            sqlx::query_as::<_, MessageRow>(
-                "SELECT id, body_html_sanitized
-                FROM public.email_messages
-                WHERE link_id = ANY($1)
-                  AND body_html_sanitized IS NOT NULL
-                ORDER BY id
-                OFFSET $2
-                LIMIT $3",
-            )
-            .bind(link_ids)
-            .bind(offset)
-            .bind(limit)
-            .fetch_all(db)
-            .await
-            .context("Failed to fetch messages batch")?
-        } else {
-            sqlx::query_as::<_, MessageRow>(
-                "SELECT id, body_html_sanitized
-                FROM public.email_messages
-                WHERE body_html_sanitized IS NOT NULL
-                ORDER BY id
-                OFFSET $1
-                LIMIT $2",
-            )
-            .bind(offset)
-            .bind(limit)
-            .fetch_all(db)
-            .await
-            .context("Failed to fetch messages batch")?
-        };
-        Ok(rows)
-    })
-    .await
-}
-
-/// Prints debug info about the link_ids and message counts to help diagnose issues.
-pub async fn print_debug_info(db: &PgPool, link_ids: &Option<Vec<Uuid>>) -> anyhow::Result<()> {
-    if let Some(link_ids) = link_ids {
-        let existing_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM public.email_links WHERE id = ANY($1)")
-                .bind(link_ids)
-                .fetch_one(db)
-                .await
-                .context("Failed to count email_links")?;
-        println!(
-            "[DEBUG] email_links matching provided link_ids: {}",
-            existing_count
-        );
-
-        let total_messages: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM public.email_messages WHERE link_id = ANY($1)",
-        )
-        .bind(link_ids)
-        .fetch_one(db)
-        .await
-        .context("Failed to count messages")?;
-        println!(
-            "[DEBUG] Total messages for these link_ids: {}",
-            total_messages
-        );
-
-        let with_html: i64 = sqlx::query_scalar(
+/// Counts messages with non-null body_html_sanitized for the given link_ids (or all if None).
+pub async fn count_messages(db: &PgPool, link_ids: &Option<Vec<Uuid>>) -> anyhow::Result<i64> {
+    let count: i64 = if let Some(link_ids) = link_ids {
+        sqlx::query_scalar(
             "SELECT COUNT(*) FROM public.email_messages WHERE link_id = ANY($1) AND body_html_sanitized IS NOT NULL",
         )
         .bind(link_ids)
         .fetch_one(db)
         .await
-        .context("Failed to count messages with html")?;
-        println!(
-            "[DEBUG] Messages with non-null body_html_sanitized: {}",
-            with_html
-        );
-
-        let with_sfs: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM public.email_messages WHERE link_id = ANY($1) AND body_html_sanitized LIKE '%static-file-service%'",
-        )
-        .bind(link_ids)
-        .fetch_one(db)
-        .await
-        .context("Failed to count messages with sfs")?;
-        println!(
-            "[DEBUG] Messages containing 'static-file-service': {}",
-            with_sfs
-        );
+        .context("Failed to count messages")?
     } else {
-        let total_messages: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM public.email_messages")
-            .fetch_one(db)
-            .await
-            .context("Failed to count messages")?;
-        println!("[DEBUG] Total messages: {}", total_messages);
-
-        let with_html: i64 = sqlx::query_scalar(
+        sqlx::query_scalar(
             "SELECT COUNT(*) FROM public.email_messages WHERE body_html_sanitized IS NOT NULL",
         )
         .fetch_one(db)
         .await
-        .context("Failed to count messages with html")?;
-        println!(
-            "[DEBUG] Messages with non-null body_html_sanitized: {}",
-            with_html
-        );
+        .context("Failed to count messages")?
+    };
+    Ok(count)
+}
+
+/// Fetches all message IDs for a single link_id where body_html_sanitized is not null.
+/// Uses the (link_id) index for filtering.
+pub async fn fetch_message_ids_for_link(db: &PgPool, link_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM public.email_messages WHERE link_id = $1 AND body_html_sanitized IS NOT NULL",
+    )
+    .bind(link_id)
+    .fetch_all(db)
+    .await
+    .context("Failed to fetch message IDs for link_id")?;
+    Ok(ids)
+}
+
+/// Fetches all message IDs where body_html_sanitized is not null (no link_id filter).
+pub async fn fetch_all_message_ids(db: &PgPool) -> anyhow::Result<Vec<Uuid>> {
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM public.email_messages WHERE body_html_sanitized IS NOT NULL",
+    )
+    .fetch_all(db)
+    .await
+    .context("Failed to fetch all message IDs")?;
+    Ok(ids)
+}
+
+/// Fetches messages by their IDs. Uses PK index directly.
+pub async fn fetch_messages_by_ids(db: &PgPool, ids: &[Uuid]) -> anyhow::Result<Vec<MessageRow>> {
+    if ids.is_empty() {
+        return Ok(vec![]);
     }
 
-    println!();
-    Ok(())
+    retry_with_timeout("fetch_messages_by_ids", || async {
+        let rows = sqlx::query_as::<_, MessageRow>(
+            "SELECT id, body_html_sanitized
+            FROM public.email_messages
+            WHERE id = ANY($1)",
+        )
+        .bind(ids)
+        .fetch_all(db)
+        .await
+        .context("Failed to fetch messages by IDs")?;
+        Ok(rows)
+    })
+    .await
 }
 
 /// Extracts all URLs containing "static-file-service" from an HTML string.
@@ -187,7 +135,6 @@ pub struct SfsMapping {
 }
 
 /// Looks up original source URLs for multiple SFS destination URLs in a single query.
-/// Returns a vec of (destination, source) pairs for found mappings.
 /// Retries with a 5s timeout per attempt.
 pub async fn lookup_source_urls_bulk(
     db: &PgPool,
@@ -213,7 +160,6 @@ pub async fn lookup_source_urls_bulk(
 }
 
 /// Bulk updates body_html_sanitized for multiple messages in a single query.
-/// Uses unnest to join arrays of ids and html values.
 /// Retries with a 5s timeout per attempt.
 pub async fn bulk_update_message_html(
     db: &PgPool,
