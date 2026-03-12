@@ -187,7 +187,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <div
         class={cn(
-          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content ease-in-out',
+          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content overflow-hidden',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
@@ -198,30 +198,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
         )}
         data-expanded={isExpanded()}
         data-slim={isSlim()}
-        style={{
-          'transition-property': 'transform, max-width, opacity',
-          'transition-duration': '100ms',
-        }}
+
       >
         <div
-          class={cn(
-            'flex items-center justify-between py-2 pl-3 pr-2',
-            isSlim() && 'flex-col px-2 pb-0 justify-center'
-          )}
+          class="flex items-center justify-between py-2 pl-3 pr-2"
         >
           <LogoIcon class="size-6 text-accent" />
         </div>
 
         <Tooltip
-          class={
-            'group-data-[slim=true]/sidebar:px-0.5 px-2 flex items-center justify-center'
-          }
+          class="px-2 flex items-center justify-center"
           tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
         >
           <Button
-            class={
-              'rounded-xs justify-center group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2'
-            }
+            class="rounded-xs justify-start w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2"
             variant="ghost"
             size="sm"
             onClick={handleCreateClick}
@@ -272,12 +262,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }
           >
             <Button
-              class={cn(
-                'flex items-center justify-start text-sm gap-2 cursor-default',
-                isSlim() ? 'justify-center aspect-square' : 'w-full'
-              )}
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
               variant="ghost"
-              size={isSlim() ? 'icon-sm' : 'sm'}
+              size="sm"
               onClick={toggleSettings}
             >
               <GearIcon class="size-4 shrink-0" />
@@ -296,12 +283,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
               }
             >
               <Button
-                class={cn(
-                  'flex items-center justify-start text-sm gap-2 cursor-default',
-                  isSlim() ? 'justify-center aspect-square' : 'w-full'
-                )}
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
                 variant="ghost"
-                size={isSlim() ? 'icon-sm' : 'sm'}
+                size="sm"
                 onClick={handleCommandPaletteClick}
               >
                 <CommandIcon class="size-4 shrink-0" />
@@ -320,12 +304,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
               }
             >
               <Button
-                class={cn(
-                  'flex items-center justify-start text-sm gap-2 cursor-default',
-                  isSlim() ? 'justify-center aspect-square' : 'w-full'
-                )}
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
                 variant="ghost"
-                size={isSlim() ? 'icon-sm' : 'sm'}
+                size="sm"
                 onClick={() => props.onOpenChange(isSlim())}
                 onMouseEnter={() => setSidebarBtnHovering(true)}
                 onMouseLeave={() => setSidebarBtnHovering(false)}
@@ -376,12 +357,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
     <Button
       as="a"
       variant="ghost"
-      size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
+      size="sm"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
-        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
-        props.sidebarState !== 'slim' && 'w-full'
+        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs w-full',
+        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
