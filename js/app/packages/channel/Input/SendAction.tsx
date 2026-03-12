@@ -32,9 +32,7 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
     >
       <Show
         when={!isBlockedByPending()}
-        fallback={
-          <SpinnerIcon class="size-6 animate-spin cursor-disabled" />
-        }
+        fallback={<SpinnerIcon class="size-6 animate-spin cursor-disabled" />}
       >
         {resolved() ?? (
           <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
