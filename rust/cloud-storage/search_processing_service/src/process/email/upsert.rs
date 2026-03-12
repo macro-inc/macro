@@ -65,6 +65,7 @@ pub async fn process_upsert_message(
             .context("expected from")?
             .email
             .to_lowercase(),
+        reply_to: message_info.reply_to,
         recipients: message_info
             .to
             .iter()
@@ -161,7 +162,8 @@ pub async fn process_upsert_thread_message(
                     user_id: upsert_email_thread_message.macro_user_id.clone(),
                     thread_id: upsert_email_thread_message.thread_id.clone(),
                     subject: message.subject,
-                    sender: message.from.unwrap_or_default().email.to_lowercase(), // All email should have a sender
+                    sender: message.from.unwrap_or_default().email.to_lowercase(),
+                    reply_to: message.reply_to.map(|r| r.to_lowercase()),
                     recipients: message
                         .to
                         .iter()

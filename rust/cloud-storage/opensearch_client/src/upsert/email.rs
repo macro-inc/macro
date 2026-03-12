@@ -12,6 +12,9 @@ pub struct UpsertEmailArgs {
     pub message_id: String,
     /// The sender of the email message
     pub sender: String,
+    /// The reply-to address of the email message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
     /// The cc of the email message

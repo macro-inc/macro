@@ -226,6 +226,9 @@ pub(crate) struct EmailIndex {
     pub message_id: uuid::Uuid,
     /// The sender of the email message
     pub sender: String,
+    /// The reply-to address of the email message
+    #[serde(default)]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
     /// The cc of the email message

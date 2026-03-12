@@ -249,6 +249,11 @@ async function createEmailIndex(opensearchClient: Client) {
               index: true,
               doc_values: true,
             },
+            reply_to: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
             recipients: {
               type: 'keyword',
               index: true,
