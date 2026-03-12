@@ -17,7 +17,6 @@ export function ThreadRow(props: ThreadRowProps) {
   return (
     <div class="w-full flex justify-center">
       <div class="macro-message-width w-full relative">
-        <ThreadRail newMessage={props.listMeta?.isNewMessage} />
         <NewDivider
           listMeta={props.listMeta}
           onDismiss={props.onDismissNewMessages}
@@ -26,7 +25,10 @@ export function ThreadRow(props: ThreadRowProps) {
           createdAt={props.message.created_at}
           listMeta={props.listMeta}
         />
-        {props.children}
+        <div class="relative">
+          <ThreadRail newMessage={props.listMeta?.isNewMessage} />
+          {props.children}
+        </div>
       </div>
     </div>
   );
