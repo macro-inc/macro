@@ -84,7 +84,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import type { ListView } from '@app/constants/list-views';
+import { isListViewID } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -381,10 +381,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
-  const currentView = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' ? (content.id as ListView) : undefined;
-  });
+  const currentView = () => {
+    const { type, id } = panel.handle.content();
+    if (type !== 'component') return;
+    return isListViewID(id) ? id : undefined;
+  };
 
   useSoupViewHotkeys({
     splitId: panel.handle.id,
