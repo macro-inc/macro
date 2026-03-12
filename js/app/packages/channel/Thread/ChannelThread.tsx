@@ -5,6 +5,8 @@ import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
+import type { ApiThreadReply } from '@service-comms/client';
+import { useActivityTracker } from '@channel/activity-tracker-context';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -22,6 +24,7 @@ function sliceIf<T>(
 }
 
 export function ChannelThread(props: ThreadProps) {
+  const { isNewMessage } = useActivityTracker();
   const userId = useUserId();
   const replyUserId = () => userId() ?? props.data().sender_id;
   const macroId = () => tryMacroId(replyUserId());
@@ -51,6 +54,10 @@ export function ChannelThread(props: ThreadProps) {
   };
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+  const collapsedRepliesContainsNewMessages = () =>
+    activeReplies()
+      .slice(DEFAULT_VISIBLE_REPLY_COUNT)
+      .some((reply: ApiThreadReply) => isNewMessage(reply));
   const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
@@ -128,6 +135,7 @@ export function ChannelThread(props: ThreadProps) {
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
                           onClick={expand}
+                          hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />
                       </Show>
                       <Show when={shouldShowReplyButton()}>

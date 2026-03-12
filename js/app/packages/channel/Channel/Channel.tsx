@@ -10,6 +10,7 @@ import {
   Suspense,
   type Accessor,
 } from 'solid-js';
+import { useBeforeLeave } from '@solidjs/router';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -37,6 +38,7 @@ import { ChannelThread } from '../Thread';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
+import { ActivityTrackerProvider } from '@channel/activity-tracker-context';
 import { useChannelActivity } from '@core/context/channels';
 import { createChannelDragState } from './create-channel-drag-state';
 import { ChannelDropZone } from './ChannelDropZone';
@@ -91,7 +93,7 @@ export function Channel(props: ChannelProps) {
   const shift = () => threadPaginator.isShifting();
 
   const activityTracker = createActivityTracker({
-    lastViewedAt: () => activity().viewed_at,
+    lastViewedAt: () => activity()?.viewed_at,
     userId,
   });
 
@@ -126,6 +128,7 @@ export function Channel(props: ChannelProps) {
   return (
     <Suspense>
       <StaticMarkdownContext>
+        <ActivityTrackerProvider value={activityTracker}>
         <ChannelDropZone dragState={dragState}>
           <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
@@ -204,6 +207,7 @@ export function Channel(props: ChannelProps) {
             </div>
           </Suspense>
         </ChannelDropZone>
+        </ActivityTrackerProvider>
       </StaticMarkdownContext>
     </Suspense>
   );

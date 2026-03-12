@@ -7,14 +7,16 @@ import {
 import type { ApiThreadReply } from '@service-comms/client';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
+import { useActivityTracker } from '@channel/activity-tracker-context';
 
 export function ThreadReplyList(props: {
   threadId: string;
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
 }) {
+  const { isNewMessage } = useActivityTracker();
   const listMetaByReplyId = createMemo(() =>
-    buildThreadReplyListMeta(props.replies)
+    buildThreadReplyListMeta(props.replies, isNewMessage)
   );
 
   return (
