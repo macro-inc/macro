@@ -210,7 +210,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
     >
       <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
         <div class="flex items-center group/logo-area w-full">
-          <LogoIcon class="size-6 text-accent transition-opacity duration-75 group-data-[slim=true]/sidebar:opacity-0" />
+          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
+            <LogoIcon class="size-6" />
+          </div>
           <div class="grow-1 shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
