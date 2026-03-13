@@ -55,12 +55,12 @@ export function ToolButton(props: { tool: BlockTool }) {
         props.tool.isActive?.() &&
           'bg-accent/20 hover:bg-accent/30 text-accent-ink'
       )}
+      size="icon-sm"
     >
       <Dynamic
         component={
           props.tool.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
         }
-        class="size-4 shrink-0"
       />
     </Button>
   );
