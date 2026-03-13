@@ -32,11 +32,9 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  Match,
   onMount,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput } from './ComposeEmailInput';
@@ -867,20 +865,20 @@ export function EmailCompose(props: EmailComposeProps) {
         class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
         <Show when={hasLinkError()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span class="text-sm">
-                  You have not connected an email account.
-                </span>
-                <span class="grow" />
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Connect Email"
-                  onClick={connectEmail}
-                />
-              </div>
+          <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+            <div class="flex items-center justify-between gap-2">
+              <Caution class="size-4" />
+              <span class="text-sm">
+                You have not connected an email account.
+              </span>
+              <span class="grow" />
+              <DeprecatedTextButton
+                theme="base"
+                text="Connect Email"
+                onClick={connectEmail}
+              />
             </div>
+          </div>
         </Show>
 
         <div
