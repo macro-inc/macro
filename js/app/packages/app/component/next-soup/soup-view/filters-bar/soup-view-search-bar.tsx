@@ -111,8 +111,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.currentTarget.blur();
               }
             }}
-            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
-            style={{ width: `${inputWidth()}px` }}
+            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full min-w-0 flex-1"
           />
           <Show when={!searchText()}>
             <span class="text-ink-placeholder leading-none pointer-events-none text-sm peer-focus:hidden">
