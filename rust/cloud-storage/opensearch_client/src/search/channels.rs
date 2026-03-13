@@ -95,7 +95,6 @@ impl ChannelMessageQueryBuilder {
 
         Ok(content_bool_query)
     }
-
 }
 
 #[derive(Debug, Default)]

@@ -32,5 +32,4 @@ impl OpensearchClient {
         delete::channel::delete_channel_message_by_id(&self.inner, channel_id, channel_message_id)
             .await
     }
-
 }

@@ -42,7 +42,6 @@ impl DocumentQueryBuilder {
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         self.inner.build_content_bool_query()
     }
-
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

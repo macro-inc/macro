@@ -193,7 +193,6 @@ impl EmailQueryBuilder {
 
         Ok(content_bool_query)
     }
-
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

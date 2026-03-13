@@ -62,10 +62,9 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         let wildcard_pattern = format!("*{}*", last_part_of_term.to_lowercase());
 
         let first_term_query = match query_key {
-            QueryKey::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(
-                field.to_string(),
-                first_part_of_term,
-            )),
+            QueryKey::MatchPhrase => {
+                QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), first_part_of_term))
+            }
             QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
                 MatchPhrasePrefixQuery::new(field.to_string(), first_part_of_term),
             ),
@@ -93,9 +92,10 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         QueryKey::MatchPhrase => {
             QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
         }
-        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new(field.to_string(), term.to_string()),
-        ),
+        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(
+            field.to_string(),
+            term.to_string(),
+        )),
         QueryKey::Regexp => {
             QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
         }

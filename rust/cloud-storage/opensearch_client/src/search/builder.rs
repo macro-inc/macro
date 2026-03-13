@@ -9,8 +9,7 @@ use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
 use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, QueryType, ScriptSort, SortOrder, SortType, Script,
-    ScriptSortType,
+    BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
 };
 
 /// A macro for generating delegation methods that forward calls to an inner field
@@ -271,11 +270,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         match search_on {
             SearchOn::Name => {
-                must_array.push(generate_terms_must_query(
-                    query_key,
-                    keys.title_key,
-                    terms,
-                ));
+                must_array.push(generate_terms_must_query(query_key, keys.title_key, terms));
             }
             SearchOn::Content => {
                 must_array.push(generate_terms_must_query(

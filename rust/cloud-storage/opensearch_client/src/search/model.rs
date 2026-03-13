@@ -250,7 +250,6 @@ pub(crate) struct SearchResponse<T> {
     pub _shards: Shards,
 }
 
-
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoDocument {
     /// The node id of the document.

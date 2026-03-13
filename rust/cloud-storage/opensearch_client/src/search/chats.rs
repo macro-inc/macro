@@ -72,7 +72,6 @@ impl ChatQueryBuilder {
 
         Ok(content_bool_query)
     }
-
 }
 
 #[derive(Debug)]
