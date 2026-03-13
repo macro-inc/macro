@@ -2,13 +2,12 @@ use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
-fn test_build_search_request() -> anyhow::Result<()> {
+fn test_build_bool_query() -> anyhow::Result<()> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("exact")
         .page_size(20)
         .page(1)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["thread1".to_string(), "thread2".to_string()])
         .link_ids(vec!["link1".to_string(), "link2".to_string()])
@@ -17,126 +16,69 @@ fn test_build_search_request() -> anyhow::Result<()> {
         .bcc(vec!["bcc@example.com".to_string()])
         .recipients(vec!["recipient@example.com".to_string()]);
 
-    let result = builder.build_search_request()?;
+    let result = builder.build_bool_query()?;
 
     let expected = serde_json::json!({
-      "from": 20,
-      "size": 20,
-      "collapse": {
-          "field": "entity_id"
-      },
-      "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-      "highlight": EmailSearchConfig::append_owner_highlights(EmailSearchConfig::default_highlight()).to_json(),
-       "query": {
-      "bool": {
-        "filter": [
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+        "bool": {
+            "filter": [
                 {
-                  "terms": {
-                    "entity_id": ["thread1", "thread2"]
-                  }
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"terms": {"entity_id": ["thread1", "thread2"]}},
+                            {"term": {"user_id": "user123"}}
+                        ]
+                    }
+                },
+                {"term": {"_index": "emails_alias"}},
+                {"terms": {"link_id": ["link1", "link2"]}},
+                {
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"wildcard": {"sender": {"case_insensitive": true, "value": "*sender@example.com*"}}}
+                        ]
+                    }
                 },
                 {
-                  "term": {
-                    "user_id": "user123"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "term": {
-              "_index": "emails_alias"
-            }
-          },
-          {
-            "terms": {
-              "link_id": ["link1", "link2"]
-            }
-          },
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
-                {
-                  "wildcard": {
-                    "sender": {
-                      "case_insensitive": true,
-                      "value": "*sender@example.com*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"wildcard": {"cc": {"case_insensitive": true, "value": "*cc@example.com*"}}}
+                        ]
                     }
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+                },
                 {
-                  "wildcard": {
-                    "cc": {
-                      "case_insensitive": true,
-                      "value": "*cc@example.com*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"wildcard": {"bcc": {"case_insensitive": true, "value": "*bcc@example.com*"}}}
+                        ]
                     }
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+                },
                 {
-                  "wildcard": {
-                    "bcc": {
-                      "case_insensitive": true,
-                      "value": "*bcc@example.com*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"wildcard": {"recipients": {"case_insensitive": true, "value": "*recipient@example.com*"}}}
+                        ]
                     }
-                  }
                 }
-              ]
-            }
-          },
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+            ],
+            "must": [
                 {
-                  "wildcard": {
-                    "recipients": {
-                      "case_insensitive": true,
-                      "value": "*recipient@example.com*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"match_phrase": {"content": "test"}}
+                        ]
                     }
-                  }
                 }
-              ]
-            }
-          }
-        ],
-        "must": [
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
-                {
-                  "match_phrase": {
-                    "content": "test"
-                  }
-                }
-              ]
-            }
-          }
-        ],
-      }
-    },
-        });
+            ]
+        }
+    });
 
-    assert_eq!(result.to_json(), expected);
+    assert_eq!(result.build().to_json(), expected);
 
     Ok(())
 }
@@ -148,7 +90,6 @@ fn test_importance_true_excludes_depriority_unless_priority() -> anyhow::Result<
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(true));
 
@@ -179,7 +120,6 @@ fn test_importance_false_filters_to_depriority_only() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(false));
 
@@ -212,7 +152,6 @@ fn test_importance_none_no_importance_filter() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(None);
 
@@ -231,7 +170,6 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(true))
         .exclude_labels(vec!["INBOX".to_string()]);
@@ -261,7 +199,6 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(false))
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);

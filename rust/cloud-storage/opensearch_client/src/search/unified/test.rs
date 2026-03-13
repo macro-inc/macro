@@ -401,18 +401,6 @@ fn test_deserialization() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_fail_on_name_search() {
-    let err = build_unified_search_request(&UnifiedSearchArgs {
-        search_on: SearchOn::Name,
-        ..Default::default()
-    })
-    .err()
-    .unwrap();
-
-    assert_eq!(err, OpensearchClientError::InvalidSearchOn);
-}
-
-#[test]
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let entity_id = uuid::Uuid::new_v4();
     let time = Utc::now();
@@ -432,9 +420,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         page: 1,
         page_size: 20,
         match_type: "exact".to_string(),
-        search_on: SearchOn::Content,
+
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -802,9 +789,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         page: 1,
         page_size: 20,
         match_type: "exact".to_string(),
-        search_on: SearchOn::NameContent,
+
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -851,9 +837,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         page: 1,
         page_size: 20,
         match_type: "exact".to_string(),
-        search_on: SearchOn::Content,
+
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,

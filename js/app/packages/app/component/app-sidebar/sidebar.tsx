@@ -30,7 +30,6 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { TOKENS } from '@core/hotkey/tokens';
-import { Hotkey } from '@core/component/Hotkey';
 
 interface SidebarItem {
   id: ListView;
@@ -187,7 +186,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <div
         class={cn(
-          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content ease-in-out',
+          'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
@@ -198,88 +197,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
         )}
         data-expanded={isExpanded()}
         data-slim={isSlim()}
-        style={{
-          'transition-property': 'transform, max-width, opacity',
-          'transition-duration': '100ms',
-        }}
+        style={{ transition: 'max-width ease-in-out 100ms' }}
       >
-        <div
-          class={cn(
-            'flex items-center justify-between py-2 pl-3 pr-2',
-            isSlim() && 'flex-col px-2 pb-0 justify-center'
-          )}
-        >
-          <LogoIcon class="size-6 text-accent opacity-100 group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:size-0" />
-          <div class="flex items-center gap-1">
-            <Show when={isExpanded()}>
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label="Command palette"
-                    hotkeyToken={TOKENS.global.commandMenu}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs"
-                  onClick={handleCommandPaletteClick}
-                >
-                  <CommandIcon />
-                </Button>
-              </Tooltip>
-            </Show>
-            <Show when={!isMobile()}>
-              {/*<Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>*/}
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
-                    hotkeyToken={TOKENS.global.toggleSidebar}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs [&_svg]:size-4"
-                  onClick={() => props.onOpenChange(isSlim())}
-                  onMouseEnter={() => setSidebarBtnHovering(true)}
-                  onMouseLeave={() => setSidebarBtnHovering(false)}
-                >
-                  <AnimatedSidebarIcon
-                    triggerAnimation={sidebarBtnHovering()}
-                  />
-                </Button>
-              </Tooltip>
-            </Show>
-          </div>
+        <div class="flex items-center justify-between py-2 pl-3 pr-2">
+          <LogoIcon class="size-6 text-accent" />
         </div>
 
-        <Tooltip
-          class={
-            'group-data-[slim=true]/sidebar:px-0.5 px-2 flex items-center justify-center'
-          }
-          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-        >
-          <Button
-            class={
-              'rounded-xs justify-center group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2'
-            }
-            variant="ghost"
-            size="sm"
-            onClick={handleCreateClick}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 grow text-left">
-              Create
-            </span>
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 rounded-sm px-2 py-0.5 text-xs border border-edge-muted">
-              <Hotkey shortcut="C" />
-            </span>
-          </Button>
-        </Tooltip>
+        <div class="px-2">
+          <hr class="border-edge-muted mb-[8px]" />
+        </div>
 
         <nav>
           <ul class="w-full h-full px-2 flex flex-col gap-1">
@@ -296,6 +222,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </ul>
         </nav>
 
+        <div class="px-2">
+          <hr class="border-edge-muted my-[8px]" />
+        </div>
+
         <Show when={isExpanded()}>
           <div class="block max-h-[clamp(10%,60%,20rem)]">
             <ChannelsUnreadWidget />
@@ -306,19 +236,51 @@ export const AppSidebar = (props: AppSidebarProps) => {
           {/* </div> */}
         </Show>
 
-        <div class="mt-auto w-full px-2">
-          {/*<Button
-            class={cn(
-              'flex items-center justify-start text-sm gap-2 cursor-default',
-              isSlim() ? 'justify-center aspect-square' : 'w-full'
-            )}
-            variant="ghost"
-            size={isSlim() ? 'icon-sm' : 'sm'}
-            onClick={() => openSettings('Shortcuts')}
+        <div class="px-2 mt-auto w-full">
+          <hr class="border-edge-muted mb-[8px]" />
+        </div>
+
+        <div class=" w-full px-2 flex flex-col gap-1">
+          <Tooltip
+            class="w-full"
+            tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
           >
-            <KeyboardIcon class="size-4 shrink-0" />
-            <span class={cn(isSlim() ? 'sr-only' : 'block')}>Shortcuts</span>
-          </Button>*/}
+            <Button
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+              variant="ghost"
+              size="sm"
+              onClick={handleCreateClick}
+            >
+              <PlusIcon class="size-4 shrink-0" />
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Create
+              </span>
+            </Button>
+          </Tooltip>
+
+          <Show when={!isMobile()}>
+            <Tooltip
+              class="w-full"
+              tooltip={
+                <LabelAndHotKey
+                  label="Command palette"
+                  hotkeyToken={TOKENS.global.commandMenu}
+                />
+              }
+            >
+              <Button
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+                variant="ghost"
+                size="sm"
+                onClick={handleCommandPaletteClick}
+              >
+                <CommandIcon class="size-4 shrink-0" />
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                  Command
+                </span>
+              </Button>
+            </Tooltip>
+          </Show>
 
           <Tooltip
             class="w-full"
@@ -330,18 +292,47 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }
           >
             <Button
-              class={cn(
-                'flex items-center justify-start text-sm gap-2 cursor-default',
-                isSlim() ? 'justify-center aspect-square' : 'w-full'
-              )}
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
               variant="ghost"
-              size={isSlim() ? 'icon-sm' : 'sm'}
+              size="sm"
               onClick={toggleSettings}
             >
               <GearIcon class="size-4 shrink-0" />
-              <span class={cn(isSlim() ? 'sr-only' : 'block')}>Settings</span>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Settings
+              </span>
             </Button>
           </Tooltip>
+
+          <Show when={!isMobile()}>
+            <Tooltip
+              class="w-full"
+              tooltip={
+                <LabelAndHotKey
+                  label={isSlim() ? 'Expand sidebar' : 'Shrink Sidebar'}
+                  hotkeyToken={TOKENS.global.toggleSidebar}
+                />
+              }
+            >
+              <Button
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+                variant="ghost"
+                size="sm"
+                onClick={() => props.onOpenChange(isSlim())}
+                onMouseEnter={() => setSidebarBtnHovering(true)}
+                onMouseLeave={() => setSidebarBtnHovering(false)}
+              >
+                <div class="shrink-0 [&_svg]:size-4">
+                  <AnimatedSidebarIcon
+                    triggerAnimation={sidebarBtnHovering()}
+                  />
+                </div>
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                  Sidebar
+                </span>
+              </Button>
+            </Tooltip>
+          </Show>
         </div>
       </div>
     </>
@@ -378,12 +369,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
       as="a"
       draggable={false}
       variant="ghost"
-      size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
+      size="sm"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
-        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
-        props.sidebarState !== 'slim' && 'w-full'
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs',
+        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
       onMouseEnter={() => setIsHovering(true)}
@@ -411,7 +400,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
+      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
     </Button>
