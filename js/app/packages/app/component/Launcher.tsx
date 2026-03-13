@@ -245,7 +245,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
-    hotkey: 'c',
+    hotkey: 'n',
     keyDownHandler: () => {
       createBlock({
         blockName: 'canvas',
@@ -636,7 +636,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           Hold{' '}
-          <span class="px-1 py-0.5 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
+          <span class="px-1 py-0.5 my-1 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
             <Hotkey shortcut="shift" />
           </span>
           to launch in new split

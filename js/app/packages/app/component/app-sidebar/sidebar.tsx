@@ -15,7 +15,7 @@ import LogoIcon from '@macro-icons/macro-logo.svg';
 import PlusIcon from '@phosphor-icons/core/bold/plus-bold.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
@@ -217,8 +217,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
         data-slim={isSlim()}
         style={{ transition: 'max-width ease-in-out 100ms' }}
       >
-        <div class="flex items-center justify-between py-2 pl-3 pr-2">
-          <LogoIcon class="size-6 text-accent" />
+        <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
+          <div class="flex items-center group/logo-area w-full">
+            <LogoIcon class="size-6 text-accent transition-opacity duration-75 group-data-[slim=true]/sidebar:opacity-0" />
+            <div class="grow-1 shrink-10 min-w-0" />
+            <Show when={!isMobile()}>
+              <Button
+                class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
+                onClick={() => props.onOpenChange(!isExpanded())}
+                onMouseEnter={() => setSidebarBtnHovering(true)}
+                onMouseLeave={() => setSidebarBtnHovering(false)}
+                tooltip={
+                  <LabelAndHotKey
+                    label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+                    hotkeyToken={TOKENS.global.toggleSidebar}
+                  />
+                }
+              >
+                <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
+              </Button>
+            </Show>
+          </div>
         </div>
 
         <div class="px-2">
@@ -258,52 +277,52 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <hr class="border-edge-muted mb-[8px]" />
         </div>
 
-        <div class=" w-full px-2 flex flex-col gap-1">
-          <Tooltip
-            class="w-full"
-            tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
+        <div class=" w-full px-2 flex flex-col">
+          <Button
+            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+            variant="ghost"
+            tooltip={
+              <LabelAndHotKey
+                label="Create new"
+                hotkeyToken={TOKENS.global.createCommand}
+              />
+            }
+            onClick={handleCreateClick}
           >
-            <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateClick}
-            >
-              <PlusIcon class="size-4 shrink-0" />
-              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                Create
-              </span>
-            </Button>
-          </Tooltip>
+            <PlusIcon class="size-4 shrink-0" />
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              Create
+            </span>
+            <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+              <Hotkey token={TOKENS.global.createCommand} class="flex gap-1" />
+            </div>
+          </Button>
 
           <Show when={!isMobile()}>
-            <Tooltip
-              class="w-full"
+            <Button
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+              variant="ghost"
               tooltip={
                 <LabelAndHotKey
                   label="Command palette"
                   hotkeyToken={TOKENS.global.commandMenu}
                 />
               }
+              onClick={handleCommandPaletteClick}
             >
-              <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-                variant="ghost"
-                size="sm"
-                onClick={handleCommandPaletteClick}
-              >
-                <CommandIcon class="size-4 shrink-0" />
-                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                  Command
-                </span>
-              </Button>
-            </Tooltip>
+              <CommandIcon class="size-4 shrink-0" />
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Command
+              </span>
+              <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+                <Hotkey token={TOKENS.global.commandMenu} class="flex gap-1" />
+              </div>
+            </Button>
           </Show>
 
           <Button
-            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
             variant="ghost"
-            size="sm"
             onClick={toggleSettings}
             tooltip={
               <LabelAndHotKey
@@ -316,7 +335,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
               Settings
             </span>
-            <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+            <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
               <Hotkey token={TOKENS.global.toggleSettings} class="flex gap-1" />
             </div>
           </Button>
@@ -386,9 +405,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
       as="a"
       draggable={false}
       variant="ghost"
-      size="sm"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs',
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
         isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}

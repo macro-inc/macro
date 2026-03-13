@@ -1,6 +1,8 @@
+import { Button as KButton, type ButtonRootProps } from '@kobalte/core/button';
+import type { PolymorphicProps } from '@kobalte/core/polymorphic';
 import { cn } from '@ui/utils/classname';
 import { Tooltip } from 'core/component/Tooltip';
-import { type JSX, type ParentComponent, splitProps } from 'solid-js';
+import { type JSX, splitProps, type ValidComponent } from 'solid-js';
 
 export type ButtonVariant =
   | 'primary'
@@ -13,10 +15,15 @@ export type ButtonVariant =
 
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
-type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
+  T,
+  ButtonRootProps<T>
+> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   tooltip?: JSX.Element;
+  class?: string;
+  children?: JSX.Element;
 };
 
 const variantStyles: Record<ButtonVariant, string> = {
@@ -47,9 +54,13 @@ const sizeStyles: Record<ButtonSize, string> = {
 /**
  * ### The basic button component. When in doubt, use Button.
  *
- * @param props.variant - primary, secondary, tertiary (default), destructive, ghost, or link.
+ * Supports polymorphism via Kobalte's `as` prop — render as any element or component
+ * while retaining button styles and behaviour.
+ *
+ * @param props.variant - primary, secondary, tertiary, destructive, ghost (default), link, or accent.
  * @param props.size - sm, md (default), lg, icon-sm, icon-md, or icon-lg.
  * @param props.tooltip - Optional tooltip content to display when hovering over the button.
+ * @param props.as - Override the rendered element (e.g. `"a"` or a router `<Link>` component).
  *
  * @example
  * <Button variant="primary" disabled>
@@ -57,51 +68,55 @@ const sizeStyles: Record<ButtonSize, string> = {
  * </Button>
  *
  * @example
+ * // Render as an anchor link
+ * <Button as="a" href="/dashboard" variant="secondary">
+ *   Go to Dashboard
+ * </Button>
+ *
+ * @example
  * // Icon button wrapped in Tooltip with Hotkey
  * <Button
  *   variant="primary"
  *   size="icon-md"
- *   tooltip={<LabelAndHotKey label="Save" shortcut='cmd+s' />}
+ *   tooltip={<LabelAndHotKey label="Save" shortcut="cmd+s" />}
  * >
- *    <ClipboardIcon />
+ *   <ClipboardIcon />
  * </Button>
- *
  */
-export const Button: ParentComponent<ButtonProps> = (props) => {
-  const [local, buttonAttributes] = splitProps(props, [
+export const Button = <T extends ValidComponent = 'button'>(
+  props: ButtonProps<T>
+) => {
+  const [local, others] = splitProps(props as ButtonProps<'button'>, [
     'variant',
     'size',
     'class',
     'children',
     'tooltip',
-    'type',
   ]);
 
   const variant = () => local.variant ?? 'ghost';
   const size = () => local.size ?? 'md';
 
-  function MaybeWrapInTooltip(props: { children: JSX.Element }) {
-    if (!local.tooltip) return props.children;
-
-    return <Tooltip tooltip={local.tooltip}>{props.children}</Tooltip>;
+  function MaybeWrapInTooltip(wrapProps: { children: JSX.Element }) {
+    if (!local.tooltip) return wrapProps.children;
+    return <Tooltip tooltip={local.tooltip}>{wrapProps.children}</Tooltip>;
   }
 
   return (
     <MaybeWrapInTooltip>
-      <button
-        type={local.type ?? 'button'}
+      <KButton
         class={cn(
           'relative inline-flex items-center justify-center font-medium leading-none border border-transparent',
-          'disabled:cursor-not-allowed',
+          'data-[disabled]:cursor-not-allowed',
           'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
           variantStyles[variant()],
           sizeStyles[size()],
           local.class
         )}
-        {...buttonAttributes}
+        {...others}
       >
         {local.children}
-      </button>
+      </KButton>
     </MaybeWrapInTooltip>
   );
 };
