@@ -82,6 +82,35 @@ fn compute_next_cursor(
     }
 }
 
+/// Splits search terms by whitespace, preserving double-quoted phrases.
+/// e.g. `["hello world"]` → `["hello", "world"]`
+/// e.g. `[r#""hello world" test"#]` → `["hello world", "test"]`
+fn split_search_terms(terms: &[String]) -> Vec<String> {
+    let joined = terms.join(" ");
+    let mut result = Vec::new();
+    // Regex-free parser: iterate chars, track quoted state
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for c in joined.chars() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            c if c.is_whitespace() && !in_quotes => {
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        result.push(trimmed);
+    }
+    result
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
@@ -158,7 +187,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_projects =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
     let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
-    let is_multi_term = terms.len() > 1;
+    let email_terms = split_search_terms(&terms);
+    let is_email_multi_term = email_terms.len() > 1;
 
     // Await all tasks in parallel
     let (
@@ -250,7 +280,13 @@ pub(in crate::api::search) async fn perform_unified_search(
         collapse,
         search_indices: generate_unified_search_indices(include),
         document_search_args: filter_document_response.clone(),
-        email_search_args: filter_email_response.clone(),
+        email_search_args: {
+            let mut args = filter_email_response.clone();
+            if is_email_multi_term {
+                args.terms_override = Some(email_terms.clone());
+            }
+            args
+        },
         channel_message_search_args: filter_channel_response,
         chat_search_args: filter_chat_response.clone(),
     };
@@ -314,7 +350,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         async {
             // Skip PG email name/subject search for multi-term queries — OpenSearch
             // simple_query_string already covers subject and contact fields.
-            if should_include_emails && !is_multi_term {
+            if should_include_emails && !is_email_multi_term {
                 match search_on {
                     SearchOn::Name | SearchOn::NameContent => {
                         simple_email::search_names(
@@ -339,7 +375,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         async {
             // Skip PG email contact search for multi-term queries — OpenSearch
             // simple_query_string already covers contact fields.
-            if should_include_emails && !is_multi_term {
+            if should_include_emails && !is_email_multi_term {
                 match search_on {
                     SearchOn::NameContent => {
                         simple_email::search_contacts(

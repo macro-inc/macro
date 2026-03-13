@@ -78,8 +78,9 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
 
 impl From<UnifiedSearchArgs> for EmailSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
+        let terms = args.email_search_args.terms_override.unwrap_or(args.terms);
         EmailSearchArgs {
-            terms: args.terms,
+            terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
@@ -157,6 +158,10 @@ pub struct UnifiedEmailSearchArgs {
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
+    /// When set, overrides the default terms for email search.
+    /// This enables multi-field search via simple_query_string
+    /// while other indices use the original single query term.
+    pub terms_override: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]

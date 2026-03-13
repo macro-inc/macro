@@ -156,6 +156,7 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
                 include_labels: self.include_labels.clone(),
                 exclude_labels: self.exclude_labels.clone(),
                 importance: self.importance,
+                terms_override: None,
             })
         }
     }
