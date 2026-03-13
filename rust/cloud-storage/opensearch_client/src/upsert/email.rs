@@ -1,5 +1,6 @@
 use models_opensearch::SearchIndex;
 
+use super::BulkUpsertResult;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting an email message into the opensearch index
@@ -90,4 +91,42 @@ pub(crate) async fn upsert_email_message(
         });
     }
     Ok(())
+}
+
+#[tracing::instrument(skip(client, messages), err)]
+pub(crate) async fn bulk_upsert_email_messages(
+    client: &opensearch::OpenSearch,
+    messages: &[UpsertEmailArgs],
+) -> Result<BulkUpsertResult> {
+    if messages.is_empty() {
+        return Ok(BulkUpsertResult::default());
+    }
+
+    let mut bulk_body = Vec::new();
+
+    for msg in messages {
+        let id = format!("{}:{}", msg.thread_id, msg.message_id);
+
+        let action = serde_json::json!({
+            "index": {
+                "_id": id
+            }
+        });
+
+        bulk_body.push(action.to_string());
+        bulk_body.push(serde_json::to_string(msg).map_err(|e| {
+            OpensearchClientError::DeserializationFailed {
+                details: e.to_string(),
+                method: Some("bulk_upsert_email_messages".to_string()),
+            }
+        })?);
+    }
+
+    super::bulk_upsert_to_index(
+        client,
+        SearchIndex::Emails.as_ref(),
+        bulk_body,
+        "bulk_upsert_email_messages",
+    )
+    .await
 }

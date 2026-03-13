@@ -6,10 +6,12 @@ import {
 import {
   createMemo,
   createSignal,
+  onMount,
   Show,
   Suspense,
   type Accessor,
 } from 'solid-js';
+import { useBeforeLeave } from '@solidjs/router';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -38,6 +40,10 @@ import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
+import {
+  invalidateChannelsActivity,
+  useUpdateChannelsActivityMutation,
+} from '@queries/channel/activity';
 import { createChannelDragState } from './create-channel-drag-state';
 import { ChannelDropZone } from './ChannelDropZone';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
@@ -74,6 +80,26 @@ export function Channel(props: ChannelProps) {
 
   const activity = useChannelActivity(props.channelId);
 
+  const updateActivityMutation = useUpdateChannelsActivityMutation({
+    onSuccess: () => {
+      invalidateChannelsActivity();
+    },
+  });
+
+  onMount(() => {
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
+  });
+
+  useBeforeLeave(() => {
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
+  });
+
   const [threadListNavigation, setThreadListNavigation] =
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
@@ -98,7 +124,7 @@ export function Channel(props: ChannelProps) {
   const shift = () => threadPaginator.isShifting();
 
   const activityTracker = createActivityTracker({
-    lastViewedAt: () => activity().viewed_at,
+    lastViewedAt: () => activity()?.viewed_at,
     userId,
   });
 
@@ -188,6 +214,7 @@ export function Channel(props: ChannelProps) {
                             onDismissNewMessages:
                               activityTracker.dismissNewMessages,
                           }}
+                          isNewMessage={activityTracker.isNewMessage}
                         />
                       )}
                     </Show>

@@ -1,4 +1,4 @@
-import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/filters';
+import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/query-filters';
 import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';

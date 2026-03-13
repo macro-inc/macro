@@ -16,7 +16,8 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import type { JSX } from 'solid-js';
+import { children, Match, Show, Switch, type JSX } from 'solid-js';
+import { isReplyInput } from './types';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -24,12 +25,29 @@ export type ChannelInputProps = InputCallbacks & {
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
   onReady?: (handle: InputHandle) => void;
-  primaryActions?: JSX.Element;
-  sendAction?: JSX.Element;
+  children?: JSX.Element;
 };
+
+function DefaultActions(props: { input: InputData }) {
+  return (
+    <Input.Actions>
+      <Input.Actions.Left>
+        <Input.AttachFilesAction />
+        <Input.ToggleFormatAction />
+        <Show when={isReplyInput(props.input)}>
+          <Input.CloseReplyAction />
+        </Show>
+      </Input.Actions.Left>
+      <Input.Actions.Right>
+        <Input.SendAction />
+      </Input.Actions.Right>
+    </Input.Actions>
+  );
+}
 
 export function ChannelInput(props: ChannelInputProps) {
   const mentionsTracker = createMentionsTracker();
+  const customActions = children(() => props.children);
   const attachmentTracker =
     props.attachmentTracker ??
     createInputAttachmentTracker({
@@ -128,8 +146,12 @@ export function ChannelInput(props: ChannelInputProps) {
           <Input.Attachments kind="media" />
           <Input.Attachments kind="document" />
           <Input.Footer>
-            <Input.PrimaryActions>{props.primaryActions}</Input.PrimaryActions>
-            <Input.SendAction>{props.sendAction}</Input.SendAction>
+            <Switch>
+              <Match when={customActions()}>{(actions) => actions()}</Match>
+              <Match when>
+                <DefaultActions input={inputState.view()} />
+              </Match>
+            </Switch>
           </Input.Footer>
         </Input.Layout>
       </Input.DropZone>

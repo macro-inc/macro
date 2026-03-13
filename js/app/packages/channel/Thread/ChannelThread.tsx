@@ -6,6 +6,7 @@ import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
+import type { ApiThreadReply } from '@service-comms/client';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -50,8 +51,16 @@ export function ChannelThread(props: ThreadProps) {
     if (replies && !repliesQuery.isLoading) return replies;
     return thread().preview ?? [];
   };
+  const firstReplyIsNewMessage = () => {
+    const first = activeReplies()[0];
+    return first ? props.isNewMessage?.(first) : false;
+  };
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+  const collapsedRepliesContainsNewMessages = () =>
+    activeReplies()
+      .slice(DEFAULT_VISIBLE_REPLY_COUNT)
+      .some((reply: ApiThreadReply) => props.isNewMessage?.(reply));
   const collapsedReplyUsers = () => getUniqueReplyUserIds(activeReplies());
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
@@ -86,7 +95,10 @@ export function ChannelThread(props: ThreadProps) {
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
-              <Thread.RailDecorations isReplying={props.isReplying} />
+              <Thread.ReplyRailDecorations
+                isReplying={props.isReplying}
+                firstThreadReplyNewMessage={firstReplyIsNewMessage()}
+              />
               <Suspense>
                 <Thread.RepliesContainer>
                   <Show
@@ -98,6 +110,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={previewReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
+                        isNewMessage={props.isNewMessage}
                       />
                     }
                   >
@@ -108,6 +121,7 @@ export function ChannelThread(props: ThreadProps) {
                         replies={fetchedReplies()}
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
+                        isNewMessage={props.isNewMessage}
                       />
                     </Suspense>
                   </Show>
@@ -140,6 +154,7 @@ export function ChannelThread(props: ThreadProps) {
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
                           onClick={expand}
+                          hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />
                       </Show>
                       <Show when={shouldShowReplyButton()}>

@@ -1,6 +1,5 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::{self, documents::search_documents, model::SearchHit},
     upsert::{self, document::UpsertDocumentArgs},
 };
 
@@ -16,17 +15,8 @@ impl OpensearchClient {
     pub async fn bulk_upsert_documents(
         &self,
         documents: &[UpsertDocumentArgs],
-    ) -> Result<upsert::document::BulkUpsertResult> {
+    ) -> Result<upsert::BulkUpsertResult> {
         upsert::document::bulk_upsert_documents(&self.inner, documents).await
-    }
-
-    /// Searches for documents in the opensearch index
-    #[tracing::instrument(skip(self))]
-    pub async fn search_documents(
-        &self,
-        args: search::documents::DocumentSearchArgs,
-    ) -> Result<Vec<SearchHit>> {
-        search_documents(&self.inner, args).await
     }
 
     /// Deletes a document from the opensearch document index

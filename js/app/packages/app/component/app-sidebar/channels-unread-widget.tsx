@@ -112,8 +112,9 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     <Button
       as={'a'}
       href={`/channel/${props.group.entityId}`}
-      class="flex items-center justify-start gap-3 w-full cursor-default"
+      class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
       variant="ghost"
+      size="sm"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -193,7 +194,7 @@ export const ChannelsUnreadWidget = () => {
           <h1>Unread</h1>
         </header>
 
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-hidden">
           <For each={channelGroups()}>
             {(group) => <ChannelGroupItem group={group} animate={false} />}
           </For>

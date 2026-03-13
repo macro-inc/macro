@@ -7,6 +7,7 @@ import type {
 import type { Accessor, Setter } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
+import type { NewMessageCheckable } from '@channel/Channel/util';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -33,4 +34,5 @@ export type ThreadProps = {
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
+  isNewMessage?: (reply: NewMessageCheckable) => boolean;
 } & ThreadState;

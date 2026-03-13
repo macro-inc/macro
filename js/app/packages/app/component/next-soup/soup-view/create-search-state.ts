@@ -1,8 +1,6 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import {
-  type FilterID,
-  getFileAssociations,
-} from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { getFileAssociations } from '@app/component/next-soup/filters/query-filters';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,

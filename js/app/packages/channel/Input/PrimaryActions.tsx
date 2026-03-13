@@ -5,7 +5,6 @@ import { isReplyInput } from './types';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { renderIcon } from './utils/render-icon';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -74,21 +73,21 @@ export function PrimaryActions(props: JSX.HTMLAttributes<HTMLDivElement>) {
               label="Attach files"
               onClick={() => openAttachPicker()}
             >
-              {renderIcon(PaperclipIcon, 'size-5')}
+              <PaperclipIcon class="size-5" />
             </InputActionButton>
             <InputActionButton
               label="Format"
               active={input().showFormatRibbon}
               onClick={() => commands.toggleFormatRibbon()}
             >
-              {renderIcon(FormatIcon, 'size-5')}
+              <FormatIcon class="size-5" />
             </InputActionButton>
             <Show when={isReplyInput(input())}>
               <InputActionButton
                 label="Delete reply"
                 onClick={() => commands.close()}
               >
-                {renderIcon(TrashIcon, 'size-5')}
+                <TrashIcon class="size-5" />
               </InputActionButton>
             </Show>
           </>

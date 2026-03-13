@@ -7,7 +7,9 @@ import {
 import type { ApiThreadReply } from '@service-comms/client';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
+import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
+import type { NewMessageCheckable } from '../Channel/util';
 
 export function ThreadReplyList(props: {
   channelId: string;
@@ -15,9 +17,10 @@ export function ThreadReplyList(props: {
   replies: Array<ApiThreadReply>;
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
+  isNewMessage?: (message: NewMessageCheckable) => boolean;
 }) {
   const listMetaByReplyId = createMemo(() =>
-    buildThreadReplyListMeta(props.replies)
+    buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
 
   return (
@@ -29,18 +32,23 @@ export function ThreadReplyList(props: {
         });
 
         return (
-          <MarkMessaageNotifications
-            messageId={reply.id}
-            channelId={props.channelId}
-          >
-            <ChannelMessage
-              channelId={props.channelId}
-              message={reply}
-              actions={props.getMessageActions?.(replyMessage())}
-              listMeta={listMetaByReplyId()[reply.id]}
-              messageEditor={props.messageEditor}
+          <div class="relative">
+            <ThreadRail
+              newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
-          </MarkMessaageNotifications>
+            <MarkMessaageNotifications
+              messageId={reply.id}
+              channelId={props.channelId}
+            >
+              <ChannelMessage
+                channelId={props.channelId}
+                message={reply}
+                actions={props.getMessageActions?.(replyMessage())}
+                listMeta={listMetaByReplyId()[reply.id]}
+                messageEditor={props.messageEditor}
+              />
+            </MarkMessaageNotifications>
+          </div>
         );
       }}
     </For>
