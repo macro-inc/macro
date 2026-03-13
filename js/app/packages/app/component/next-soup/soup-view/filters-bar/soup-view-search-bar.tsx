@@ -49,7 +49,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   });
 
   const searchHotkey = registerHotkey({
-    hotkey: ['cmd+f'],
+    hotkey: ['cmd+f', '/'],
     scopeId: panel.splitHotkeyScope,
     description: 'Search',
     keyDownHandler: () => {
