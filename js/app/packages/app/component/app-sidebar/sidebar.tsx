@@ -202,8 +202,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
-        isSlim() &&
-          'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+        isSlim() && 'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
       )}
       data-expanded={isExpanded()}
       data-slim={isSlim()}
@@ -333,9 +332,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onMouseLeave={() => setSidebarBtnHovering(false)}
             >
               <div class="shrink-0 [&_svg]:size-4">
-                <AnimatedSidebarIcon
-                  triggerAnimation={sidebarBtnHovering()}
-                />
+                <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
               </div>
               <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
                 Sidebar
