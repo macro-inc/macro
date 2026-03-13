@@ -6,7 +6,6 @@ use crate::{
     },
 };
 
-use crate::SearchOn;
 use models_opensearch::SearchEntityType;
 use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType};
 
@@ -61,7 +60,6 @@ impl EmailQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
-        fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
@@ -251,7 +249,6 @@ pub struct EmailSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
 }
@@ -268,7 +265,6 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .sender(args.sender)
             .cc(args.cc)
             .bcc(args.bcc)
-            .search_on(args.search_on)
             .recipients(args.recipients)
             .include_labels(args.include_labels)
             .exclude_labels(args.exclude_labels)

@@ -246,7 +246,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         page_size,
         cursor: content_cursor_for_search,
         match_type: match_type.to_string(),
-        search_on: search_on.into(),
         collapse,
         search_indices: generate_unified_search_indices(include),
         document_search_args: filter_document_response.clone(),

@@ -8,7 +8,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page_size(20)
         .page(1)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["chat1".to_string(), "chat2".to_string()])
         .role(vec!["user".to_string(), "assistant".to_string()]);

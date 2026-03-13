@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use models_opensearch::SearchEntityType;
 use models_search_cursor::SearchCursorOption;
-use opensearch_client::{
-    SearchOn,
-    search::unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs},
-};
+use opensearch_client::search::unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs};
 
 fn main() {
     let args = UnifiedSearchArgs {
@@ -14,7 +11,6 @@ fn main() {
         page: 0,
         page_size: 10,
         match_type: "partial".to_string(),
-        search_on: SearchOn::NameContent,
         collapse: false,
         cursor: SearchCursorOption::NotDone(None),
         search_indices: HashSet::from([SearchEntityType::Emails]),

@@ -8,7 +8,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page_size(20)
         .page(1)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["id1".to_string(), "id2".to_string()])
         .thread_ids(vec!["thread1".to_string(), "thread2".to_string()])

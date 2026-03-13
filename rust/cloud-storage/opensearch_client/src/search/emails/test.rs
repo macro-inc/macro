@@ -8,7 +8,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page_size(20)
         .page(1)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["thread1".to_string(), "thread2".to_string()])
         .link_ids(vec!["link1".to_string(), "link2".to_string()])
@@ -91,7 +90,6 @@ fn test_importance_true_excludes_depriority_unless_priority() -> anyhow::Result<
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(true));
 
@@ -122,7 +120,6 @@ fn test_importance_false_filters_to_depriority_only() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(false));
 
@@ -155,7 +152,6 @@ fn test_importance_none_no_importance_filter() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(None);
 
@@ -174,7 +170,6 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(true))
         .exclude_labels(vec!["INBOX".to_string()]);
@@ -204,7 +199,6 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .page_size(10)
         .page(0)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(false)
         .importance(Some(false))
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);

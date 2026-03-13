@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
 use crate::Result;
-use crate::SearchOn;
 use crate::error::OpensearchClientError;
-use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
@@ -103,8 +101,6 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub page_size: u32,
     /// The user id to search for
     pub user_id: String,
-    /// Fields to search on (Name, Content, NameContent). Defaults to Content
-    pub search_on: SearchOn,
     /// Whether to collapse the results to be a single result per ID_KEY
     /// Defaults to false.
     pub collapse: bool,
@@ -124,7 +120,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             page: 0,
             page_size: 10,
             user_id: String::new(),
-            search_on: SearchOn::Content,
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
@@ -149,11 +144,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn user_id(mut self, user_id: &str) -> Self {
         self.user_id = user_id.to_string();
-        self
-    }
-
-    pub fn search_on(mut self, search_on: SearchOn) -> Self {
-        self.search_on = search_on;
         self
     }
 
@@ -213,21 +203,13 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     /// Builds a content bool query
     pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        // We only support searching over content in opensearch now
-        if self.search_on == SearchOn::Name {
-            return Err(OpensearchClientError::InvalidSearchOn);
-        }
-        // FIXES: https://linear.app/macro-eng/issue/BAC-173/sending-invalid-queries-to-opensearch
-        // If we try and build queries with ids only = true and no ids provided we should
-        // error out as it creates an invalid query since we have minimum_should_match = 1.
         if self.ids_only && self.ids.is_empty() {
             return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
         }
 
         let mut access_bool_query = BoolQueryBuilder::new();
 
-        // For name OR content queries, we can build a much more simple bool query
-        let term_must_array: Vec<QueryType<'a>> = self.build_must_term_query(SearchOn::Content)?;
+        let term_must_array: Vec<QueryType<'a>> = self.build_must_term_query()?;
 
         let mut inner_bool_query = BoolQueryBuilder::new();
 
@@ -250,37 +232,17 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         Ok(access_bool_query)
     }
 
-    /// Generates a vec of term queries to be put inside of the bool must query
-    pub fn build_must_term_query<'a>(&'a self, search_on: SearchOn) -> Result<Vec<QueryType<'a>>> {
-        let keys = Keys {
-            title_key: T::TITLE_KEY,
-            content_key: T::CONTENT_KEY,
-        };
-
+    pub fn build_must_term_query<'a>(&'a self) -> Result<Vec<QueryType<'a>>> {
         if self.terms.is_empty() {
             return Err(OpensearchClientError::NoTermsProvided);
         }
 
         let query_key = QueryKey::from_match_type(&self.match_type)?;
 
-        let mut must_array = Vec::new();
-
         let terms: Cow<'_, [&str]> =
             Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
 
-        match search_on {
-            SearchOn::Name => {
-                must_array.push(generate_terms_must_query(query_key, keys.title_key, terms));
-            }
-            SearchOn::Content => {
-                must_array.push(generate_terms_must_query(
-                    query_key,
-                    keys.content_key,
-                    terms,
-                ));
-            }
-            SearchOn::NameContent => unreachable!(),
-        };
+        let must_array = vec![generate_terms_must_query(query_key, T::CONTENT_KEY, terms)];
 
         Ok(must_array)
     }

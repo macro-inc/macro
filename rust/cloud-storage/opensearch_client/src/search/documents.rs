@@ -3,7 +3,6 @@ use crate::{
     search::builder::{SearchQueryBuilder, SearchQueryConfig},
 };
 
-use crate::SearchOn;
 use models_opensearch::SearchEntityType;
 use opensearch_query_builder::BoolQueryBuilder;
 
@@ -33,7 +32,6 @@ impl DocumentQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
-        fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
@@ -63,7 +61,6 @@ pub struct DocumentSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
 }
@@ -76,7 +73,6 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .page(args.page)
             .user_id(&args.user_id)
             .ids(args.document_ids)
-            .search_on(args.search_on)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
     }

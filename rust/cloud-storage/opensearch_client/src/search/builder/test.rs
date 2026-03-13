@@ -90,7 +90,6 @@ fn test_build_contentquery_empty_ids() -> anyhow::Result<()> {
         .page_size(page_size)
         .page(page)
         .user_id(user_id)
-        .search_on(SearchOn::Content)
         .ids(ids.clone())
         .ids_only(false);
 
@@ -104,7 +103,6 @@ fn test_build_contentquery_empty_ids() -> anyhow::Result<()> {
         .page_size(page_size)
         .page(page)
         .user_id(user_id)
-        .search_on(SearchOn::Content)
         .ids(ids.clone())
         .ids_only(true);
 
@@ -131,7 +129,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .page_size(page_size)
         .page(page)
         .user_id(user_id)
-        .search_on(SearchOn::Content)
         .ids(ids.clone());
 
     let query = builder.build_content_bool_query()?;
@@ -169,13 +166,12 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 
     assert_eq!(query.build().to_json(), expected);
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
         .match_type("partial")
         .page_size(page_size)
         .page(page)
         .user_id(user_id)
         .ids_only(true)
-        .search_on(SearchOn::Content)
         .ids(ids.clone());
 
     let query = builder.build_content_bool_query()?;
@@ -207,52 +203,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 
     assert_eq!(query.build().to_json(), expected);
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-        .match_type("partial")
-        .page_size(page_size)
-        .page(page)
-        .user_id(user_id)
-        .ids_only(true)
-        .search_on(SearchOn::NameContent)
-        .ids(ids.clone());
-
-    let query = builder.build_content_bool_query()?;
-
-    let expected = serde_json::json!({
-      "bool": {
-          "must": [
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "should": [
-                  {
-                    "match_phrase_prefix": {
-                      "content": {
-                        "query": "test"
-                      }
-                    }
-                  }
-                ]
-              }
-            },
-          ],
-          "filter": [
-            {
-              "terms": {
-                "entity_id": ["id1", "id2"]
-              }
-            },
-            {
-                "term": {
-                    "_index": "documents",
-                }
-            }
-          ]
-        }
-    });
-
-    assert_eq!(query.build().to_json(), expected);
-
     Ok(())
 }
 
@@ -260,11 +210,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 fn test_build_must_term_query() -> anyhow::Result<()> {
     let terms = vec!["test".to_string()];
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
-        .match_type("exact")
-        .search_on(SearchOn::Content);
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone()).match_type("exact");
 
-    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
+    let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
         "match_phrase": {
@@ -275,26 +223,9 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
     assert_eq!(terms_must_vec.len(), 1);
     assert_eq!(terms_must_vec[0].to_json(), expected);
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
-        .match_type("exact")
-        .search_on(SearchOn::Name);
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone()).match_type("partial");
 
-    let terms_must_vec = builder.build_must_term_query(SearchOn::Name)?;
-
-    let expected = serde_json::json!({
-        "match_phrase": {
-            "test_title": "test"
-        }
-    });
-
-    assert_eq!(terms_must_vec.len(), 1);
-    assert_eq!(terms_must_vec[0].to_json(), expected);
-
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
-        .match_type("partial")
-        .search_on(SearchOn::Content);
-
-    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
+    let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
         "match_phrase_prefix": {
@@ -314,11 +245,9 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
 fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
     let terms = vec!["test1".to_string(), "test2".to_string()];
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
-        .match_type("exact")
-        .search_on(SearchOn::Content);
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone()).match_type("exact");
 
-    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
+    let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -347,11 +276,9 @@ fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
 #[test]
 fn test_build_must_term_query_term_with_short_last_word() -> anyhow::Result<()> {
     let terms = vec!["test Ab".to_string()];
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-        .match_type("partial")
-        .search_on(SearchOn::Content);
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms).match_type("partial");
 
-    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
+    let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
         "bool": {

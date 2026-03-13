@@ -26,7 +26,6 @@ use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use tracing::Instrument;
 
-use crate::SearchOn;
 use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
@@ -47,7 +46,6 @@ pub struct UnifiedSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub search_on: SearchOn,
     pub collapse: bool,
     /// The cursor to use
     pub cursor: SearchCursorOption,
@@ -71,7 +69,6 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
@@ -87,7 +84,6 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: false, // Email is never ids only at the moment
             thread_ids: args.email_search_args.thread_ids,
@@ -111,7 +107,6 @@ impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: true, // channel messages are always ids only
             channel_ids: args.channel_message_search_args.channel_ids,
@@ -130,7 +125,6 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
@@ -355,11 +349,6 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         SearchCursorOption::Done => return Err(OpensearchClientError::SearchWithExhaustedCursor),
     };
 
-    // We don't support name search in opensearch
-    if let SearchOn::Name = args.search_on {
-        return Err(OpensearchClientError::InvalidSearchOn);
-    }
-
     if args.search_indices.is_empty() {
         return Err(OpensearchClientError::EmptySearchIndices);
     }
@@ -385,9 +374,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    // We can only search over channels if we are not explicitly searching by name
-    if args.search_indices.contains(&SearchEntityType::Channels) && args.search_on != SearchOn::Name
-    {
+    if args.search_indices.contains(&SearchEntityType::Channels) {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
