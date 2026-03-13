@@ -4,7 +4,7 @@ use crate::{
         emails::{EmailSearchArgs, search_emails},
         model::SearchHit,
     },
-    upsert::{self, email::UpsertEmailArgs},
+    upsert::{self, BulkUpsertResult, email::UpsertEmailArgs},
 };
 
 impl OpensearchClient {
@@ -12,6 +12,15 @@ impl OpensearchClient {
     #[tracing::instrument(skip(self))]
     pub async fn upsert_email_message(&self, upsert_email_args: &UpsertEmailArgs) -> Result<()> {
         upsert::email::upsert_email_message(&self.inner, upsert_email_args).await
+    }
+
+    /// Bulk upserts email messages into the opensearch index
+    #[tracing::instrument(skip(self, messages))]
+    pub async fn bulk_upsert_email_messages(
+        &self,
+        messages: &[UpsertEmailArgs],
+    ) -> Result<BulkUpsertResult> {
+        upsert::email::bulk_upsert_email_messages(&self.inner, messages).await
     }
 
     pub async fn search_emails(&self, args: EmailSearchArgs) -> Result<Vec<SearchHit>> {

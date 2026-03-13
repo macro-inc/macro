@@ -16,7 +16,7 @@ impl OpensearchClient {
     pub async fn bulk_upsert_documents(
         &self,
         documents: &[UpsertDocumentArgs],
-    ) -> Result<upsert::document::BulkUpsertResult> {
+    ) -> Result<upsert::BulkUpsertResult> {
         upsert::document::bulk_upsert_documents(&self.inner, documents).await
     }
 
