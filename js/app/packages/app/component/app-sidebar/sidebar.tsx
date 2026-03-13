@@ -30,7 +30,6 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { TOKENS } from '@core/hotkey/tokens';
-import { Hotkey } from '@core/component/Hotkey';
 
 interface SidebarItem {
   id: ListView;
@@ -198,16 +197,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
         )}
         data-expanded={isExpanded()}
         data-slim={isSlim()}
-        style={{'transition': 'max-width ease-in-out 100ms'}}
+        style={{ transition: 'max-width ease-in-out 100ms' }}
       >
-        <div
-          class="flex items-center justify-between py-2 pl-3 pr-2"
-        >
+        <div class="flex items-center justify-between py-2 pl-3 pr-2">
           <LogoIcon class="size-6 text-accent" />
         </div>
 
         <div class="px-2">
-          <hr class="border-edge-muted mb-[8px]"/>
+          <hr class="border-edge-muted mb-[8px]" />
         </div>
 
         <nav>
@@ -226,7 +223,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </nav>
 
         <div class="px-2">
-          <hr class="border-edge-muted my-[8px]"/>
+          <hr class="border-edge-muted my-[8px]" />
         </div>
 
         <Show when={isExpanded()}>
@@ -240,7 +237,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </Show>
 
         <div class="px-2 mt-auto w-full">
-          <hr class="border-edge-muted mb-[8px]"/>
+          <hr class="border-edge-muted mb-[8px]" />
         </div>
 
         <div class=" w-full px-2 flex flex-col gap-1">
@@ -255,7 +252,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onClick={handleCreateClick}
             >
               <PlusIcon class="size-4 shrink-0" />
-              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Create</span>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Create
+              </span>
             </Button>
           </Tooltip>
 
@@ -276,7 +275,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 onClick={handleCommandPaletteClick}
               >
                 <CommandIcon class="size-4 shrink-0" />
-                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Command</span>
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                  Command
+                </span>
               </Button>
             </Tooltip>
           </Show>
@@ -297,7 +298,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onClick={toggleSettings}
             >
               <GearIcon class="size-4 shrink-0" />
-              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">Settings</span>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Settings
+              </span>
             </Button>
           </Tooltip>
 
