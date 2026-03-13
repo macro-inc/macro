@@ -66,22 +66,20 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
   const hasMultipleSenders = () => additionalSenderCount() > 0;
 
-  const primarySenderNameParts = useDisplayNameParts(
-    tryMacroId(primarySenderId() ?? '')
-  );
+  const primarySenderNameParts = () =>
+    useDisplayNameParts(tryMacroId(primarySenderId() ?? ''));
 
   const primarySenderFirstName = () => {
-    const firstName = primarySenderNameParts.firstName();
-    return firstName || primarySenderNameParts.fullName();
+    const firstName = primarySenderNameParts().firstName();
+    return firstName || primarySenderNameParts().fullName();
   };
 
-  const secondarySenderNameParts = useDisplayNameParts(
-    tryMacroId(senderIds()[1] ?? '')
-  );
+  const secondarySenderNameParts = () =>
+    useDisplayNameParts(tryMacroId(senderIds()[1] ?? ''));
 
   const secondarySenderFirstName = () => {
-    const firstName = secondarySenderNameParts.firstName();
-    return firstName || secondarySenderNameParts.fullName();
+    const firstName = secondarySenderNameParts().firstName();
+    return firstName || secondarySenderNameParts().fullName();
   };
 
   const description = () => {
@@ -102,7 +100,6 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     if (hasMultipleSenders()) {
       if (senderId) {
         const senderCount = senderIds().length;
-        // Two senders: "13 messages from Peter and Jane"
         if (senderCount === 2) {
           return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} and ${secondarySenderFirstName()}`;
         }
