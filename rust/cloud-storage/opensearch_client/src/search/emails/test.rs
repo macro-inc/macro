@@ -145,15 +145,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         ]
                     }
                 }
-            ],
-            "must": [
-                {
-                    "simple_query_string": {
-                        "query": "(test | test@*)",
-                        "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                        "default_operator": "AND"
-                    }
-                }
             ]
         }
     });
