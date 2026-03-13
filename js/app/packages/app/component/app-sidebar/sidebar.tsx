@@ -19,7 +19,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Button } from '@ui/components/Button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -30,6 +30,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { TOKENS } from '@core/hotkey/tokens';
+import { Hotkey } from '@core/component/Hotkey';
 
 interface SidebarItem {
   id: ListView;
@@ -299,8 +300,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
             </Tooltip>
           </Show>
 
-          <Tooltip
-            class="w-full"
+          <Button
+            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+            variant="ghost"
+            size="sm"
+            onClick={toggleSettings}
             tooltip={
               <LabelAndHotKey
                 label="Settings"
@@ -308,20 +312,16 @@ export const AppSidebar = (props: AppSidebarProps) => {
               />
             }
           >
-            <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-              variant="ghost"
-              size="sm"
-              onClick={toggleSettings}
-            >
-              <GearIcon class="size-4 shrink-0" />
-              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                Settings
-              </span>
-            </Button>
-          </Tooltip>
+            <GearIcon class="size-4 shrink-0" />
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              Settings
+            </span>
+            <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+              <Hotkey token={TOKENS.global.toggleSettings} class="flex gap-1" />
+            </div>
+          </Button>
 
-          <Show when={!isMobile()}>
+          {/*<Show when={!isMobile()}>
             <Tooltip
               class="w-full"
               tooltip={
@@ -349,7 +349,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                 </span>
               </Button>
             </Tooltip>
-          </Show>
+          </Show>*/}
         </div>
       </div>
     </>
