@@ -65,7 +65,6 @@ impl EmailQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
@@ -256,7 +255,6 @@ pub struct EmailSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -278,7 +276,6 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .disable_recency(args.disable_recency)
     }
 }
 

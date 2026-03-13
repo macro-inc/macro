@@ -16,7 +16,6 @@ fn main() {
         match_type: "partial".to_string(),
         search_on: SearchOn::NameContent,
         collapse: false,
-        disable_recency: false,
         cursor: SearchCursorOption::NotDone(None),
         search_indices: HashSet::from([SearchEntityType::Emails]),
         email_search_args: UnifiedEmailSearchArgs::default(),

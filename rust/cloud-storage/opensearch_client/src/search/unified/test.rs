@@ -434,7 +434,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::Content,
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -804,7 +803,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::NameContent,
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -853,7 +851,6 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::Content,
         collapse: true,
-        disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,

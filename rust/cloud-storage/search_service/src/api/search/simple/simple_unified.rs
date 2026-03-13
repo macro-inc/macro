@@ -141,7 +141,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     }
 
     let match_type = req.match_type;
-    let disable_recency = req.disable_recency;
     let include = req.include;
 
     let filters = req.filters.unwrap_or_default();
@@ -249,7 +248,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         match_type: match_type.to_string(),
         search_on: search_on.into(),
         collapse,
-        disable_recency,
         search_indices: generate_unified_search_indices(include),
         document_search_args: filter_document_response.clone(),
         email_search_args: filter_email_response.clone(),

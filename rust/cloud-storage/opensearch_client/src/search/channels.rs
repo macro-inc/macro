@@ -70,7 +70,6 @@ impl ChannelMessageQueryBuilder {
         fn search_on(search_on: SearchOn) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn collapse(collapse: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     /// Builds the main bool query for the index
@@ -113,7 +112,6 @@ pub struct ChannelMessageSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<ChannelMessageSearchArgs> for ChannelMessageQueryBuilder {
@@ -130,7 +128,6 @@ impl From<ChannelMessageSearchArgs> for ChannelMessageQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sender_ids(args.sender_ids)
-            .disable_recency(args.disable_recency)
     }
 }
 

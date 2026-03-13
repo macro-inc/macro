@@ -114,10 +114,6 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids_only: bool,
     /// The ids to search for defaults to an empty vector
     pub ids: Vec<String>,
-    /// If true, disable the recency filter.
-    /// This only applies to the NameContent search_on
-    pub disable_recency: bool,
-
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -133,7 +129,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
-            disable_recency: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -175,11 +170,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn ids(mut self, ids: Vec<String>) -> Self {
         self.ids = ids;
-        self
-    }
-
-    pub fn disable_recency(mut self, disable_recency: bool) -> Self {
-        self.disable_recency = disable_recency;
         self
     }
 

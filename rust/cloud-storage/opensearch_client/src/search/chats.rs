@@ -52,7 +52,6 @@ impl ChatQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -88,7 +87,6 @@ pub struct ChatSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<ChatSearchArgs> for ChatQueryBuilder {
@@ -103,7 +101,6 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
             .search_on(args.search_on)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .disable_recency(args.disable_recency)
     }
 }
 

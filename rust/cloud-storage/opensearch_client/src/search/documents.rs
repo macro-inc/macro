@@ -37,7 +37,6 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
@@ -68,7 +67,6 @@ pub struct DocumentSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -82,7 +80,6 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .search_on(args.search_on)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .disable_recency(args.disable_recency)
     }
 }
 

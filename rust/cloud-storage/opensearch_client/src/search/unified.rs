@@ -49,7 +49,6 @@ pub struct UnifiedSearchArgs {
     pub match_type: String,
     pub search_on: SearchOn,
     pub collapse: bool,
-    pub disable_recency: bool,
     /// The cursor to use
     pub cursor: SearchCursorOption,
     /// The indices to search over
@@ -74,7 +73,6 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            disable_recency: args.disable_recency,
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
         }
@@ -92,7 +90,6 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             search_on: args.search_on,
             collapse: args.collapse,
             ids_only: false, // Email is never ids only at the moment
-            disable_recency: args.disable_recency,
             thread_ids: args.email_search_args.thread_ids,
             link_ids: args.email_search_args.link_ids,
             sender: args.email_search_args.sender,
@@ -117,7 +114,6 @@ impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
             search_on: args.search_on,
             collapse: args.collapse,
             ids_only: true, // channel messages are always ids only
-            disable_recency: args.disable_recency,
             channel_ids: args.channel_message_search_args.channel_ids,
             thread_ids: args.channel_message_search_args.thread_ids,
             mentions: args.channel_message_search_args.mentions,
@@ -136,7 +132,6 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            disable_recency: args.disable_recency,
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
