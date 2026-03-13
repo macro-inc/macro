@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
@@ -37,7 +37,6 @@ pub struct EntityPermissionExtractor<Svc> {
     _marker: PhantomData<Svc>,
 }
 
-#[async_trait]
 impl<S, Svc> FromRequestParts<S> for EntityPermissionExtractor<Svc>
 where
     Arc<Svc>: FromRef<S>,

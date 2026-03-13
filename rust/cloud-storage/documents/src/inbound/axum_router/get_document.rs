@@ -1,4 +1,4 @@
-//! Handler for `GET /documents/:document_id`.
+//! Handler for `GET /documents/{document_id}`.
 
 use axum::{
     Extension, Json,
@@ -14,7 +14,7 @@ use super::{DocumentRouterState, Params};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 
-/// Handler for `GET /documents/:document_id`.
+/// Handler for `GET /documents/{document_id}`.
 ///
 /// Returns document metadata, user access level, and view location.
 #[utoipa::path(

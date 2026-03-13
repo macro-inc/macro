@@ -1,4 +1,4 @@
-import PreviewIcon from '@macro-icons/wide/preview.svg';
+import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -79,8 +79,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
-import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  SoupViewTabs,
+  useApplyPreset,
+} from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { isListViewID } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -170,6 +174,8 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
+  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
+
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
     if (currentPreview) {
@@ -224,10 +230,14 @@ export const SoupView = (props: SoupViewProps) => {
                 <Button
                   variant={soup.previewEntity() ? 'primary' : 'ghost'}
                   size="icon-sm"
-                  class="rounded-xs"
+                  class="rounded-xs [&_svg]:size-4"
                   onClick={togglePreview}
+                  onMouseEnter={() => setPreviewBtnHovering(true)}
+                  onMouseLeave={() => setPreviewBtnHovering(false)}
                 >
-                  <PreviewIcon class="size=6" />
+                  <AnimatedPreviewIcon
+                    triggerAnimation={previewBtnHovering()}
+                  />
                 </Button>
               </Tooltip>
             </SplitHeaderRight>
@@ -370,6 +380,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
+  const { applyTabPreset } = useApplyPreset();
+  const currentView = () => {
+    const { type, id } = panel.handle.content();
+    if (type !== 'component') return;
+    return isListViewID(id) ? id : undefined;
+  };
+
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
@@ -378,6 +395,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
+    currentView,
+    activeTab,
+    applyTabPreset,
   });
 
   // Register previewed entity for auto-attach

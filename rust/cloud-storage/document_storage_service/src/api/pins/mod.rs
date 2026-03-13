@@ -13,8 +13,8 @@ pub(in crate::api) mod reorder_pins;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", get(get_pins::get_pins_handler))
-        .route("/:pinned_item_id", post(add_pin::add_pin_handler))
-        .route("/:pinned_item_id", delete(remove_pin::remove_pin_handler))
+        .route("/{pinned_item_id}", post(add_pin::add_pin_handler))
+        .route("/{pinned_item_id}", delete(remove_pin::remove_pin_handler))
         .route("/", patch(reorder_pins::reorder_pins_handler))
         .layer(axum::middleware::from_fn(
             macro_middleware::auth::ensure_user_exists::handler,

@@ -121,6 +121,7 @@ export type SplitState = {
 export type CreateNewSplitOptions = {
   content?: SplitContent;
   activate?: boolean;
+  allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
 };
 
@@ -761,11 +762,11 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom } = options;
+    const { content, activate, referredFrom, allowDuplicate } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
-    if (isDuplicateSplit(state.splits, initialContent)) {
+    if (!allowDuplicate && isDuplicateSplit(state.splits, initialContent)) {
       const existingSplit = state.splits.find(
         (s) =>
           s.content.type === initialContent.type &&
@@ -1017,6 +1018,7 @@ export function createSplitLayout(
         content,
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
+        allowDuplicate: options.allowDuplicate,
       });
     }
   }

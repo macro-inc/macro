@@ -1,6 +1,6 @@
 use crate::messages;
 use crate::messages::get;
-use anyhow::Context;
+
 use models_email::service::message;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -112,27 +112,15 @@ pub async fn update_message_replying_to_from_headers(
     if let Some(headers) = &message.headers_json
         && let Some(in_reply_to) = extract_in_reply_to(headers)
     {
-        let db_id_replying_to = get::get_message_id_by_global_id(&mut *tx, link_id, &in_reply_to)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to get message id for global id {} for link id {}",
-                    in_reply_to, link_id,
-                )
-            })?;
+        let db_id_replying_to =
+            get::get_message_id_by_global_id(&mut *tx, link_id, &in_reply_to).await?;
 
         // doesn't always exist, because forwarded emails can have In-Reply-To referring to
         // the email that was forwarded, which may or may not exist in db
         if let Some(db_id_replying_to) = db_id_replying_to {
             // Update the message's replying_to_id field
             update_db_message_replying_to_id(tx, link_id, message_db_id, Some(db_id_replying_to))
-                .await
-                .with_context(|| {
-                    format!(
-                        "Failed to update replying_to_id for message {} to {}",
-                        message_db_id, db_id_replying_to
-                    )
-                })?;
+                .await?;
 
             tracing::debug!(
                 message_id = %message_db_id,
@@ -159,13 +147,7 @@ pub async fn update_thread_messages_replying_to(
         thread_db_id,
         link_id,
     )
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to get simple messages for thread id {} for link id {}",
-            thread_db_id, link_id
-        )
-    })?;
+    .await?;
 
     // if there is only one message in the thread, we know it isn't replying to anything
     if simple_messages.len() == 1 {

@@ -41,7 +41,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id/copy",
+            "/{chat_id}/copy",
             post(copy_chat::copy_chat_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -51,12 +51,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id",
+            "/{chat_id}",
             get(get_chat::get_chat_handler)
                 .layer(ServiceBuilder::new().layer(ensure_chat_exists.clone())),
         )
         .route(
-            "/:chat_id/revert_delete",
+            "/{chat_id}/revert_delete",
             put(revert_delete_chat::handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -66,7 +66,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id",
+            "/{chat_id}",
             delete(delete_chat::delete_chat_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -76,7 +76,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id/permanent",
+            "/{chat_id}/permanent",
             delete(delete_chat::permanently_delete_chat_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -86,7 +86,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id",
+            "/{chat_id}",
             patch(patch_chat::patch_chat_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -96,7 +96,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:chat_id/permissions",
+            "/{chat_id}/permissions",
             get(get_chat_permissions::get_chat_permissions_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -106,7 +106,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/history/:chat_id",
+            "/history/{chat_id}",
             get(chat_history::get_chat_history_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(

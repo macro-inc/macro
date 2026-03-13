@@ -176,7 +176,7 @@ async fn cache_images(
 }
 
 // fetches the data from the url, stores it in sfs, and returns a tuple of the source and new urls
-#[tracing::instrument(skip(sfs_client, original_url_str), err)]
+#[tracing::instrument(skip(sfs_client, original_url_str))]
 pub async fn fetch_and_upload_to_sfs(
     sfs_client: StaticFileServiceClient,
     original_url_str: &str,
@@ -192,7 +192,7 @@ pub async fn fetch_and_upload_to_sfs(
 }
 
 // fetches image data from the given URL, returning None for non-HTTP(S) or unparseable URLs
-#[tracing::instrument(skip(original_url_str), err)]
+#[tracing::instrument(skip(original_url_str))]
 async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     let url_to_fetch = match Url::parse(original_url_str) {
         Ok(mut url) => {
@@ -284,7 +284,7 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
 }
 
 // validates image data and uploads it to SFS, returning the new SFS URL
-#[tracing::instrument(skip(sfs_client, original_url_str, image_data), err)]
+#[tracing::instrument(skip(sfs_client, original_url_str, image_data))]
 async fn upload_to_sfs(
     sfs_client: StaticFileServiceClient,
     original_url_str: &str,

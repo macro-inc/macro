@@ -5,7 +5,7 @@ pub mod references;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
-        "/:entity_type/:entity_id/references",
+        "/{entity_type}/{entity_id}/references",
         get(references::handler),
     )
 }

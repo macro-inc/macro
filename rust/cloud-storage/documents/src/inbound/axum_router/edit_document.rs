@@ -1,4 +1,4 @@
-//! Handler for `PATCH /documents/:document_id`.
+//! Handler for `PATCH /documents/{document_id}`.
 
 use axum::{
     Extension, Json,
@@ -25,7 +25,7 @@ pub struct EditDocumentResponse {
     pub data: GenericSuccessResponse,
 }
 
-/// Handler for `PATCH /documents/:document_id`.
+/// Handler for `PATCH /documents/{document_id}`.
 ///
 /// Edits document metadata such as name or project, and modifies
 /// the document's share permissions. Requires edit access to the document,

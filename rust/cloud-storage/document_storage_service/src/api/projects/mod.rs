@@ -33,17 +33,17 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         .route(
-            "/:id/permissions",
+            "/{id}/permissions",
             get(project_permission::get_project_permissions_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id/access_level",
+            "/{id}/access_level",
             get(project_permission::get_project_access_level_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id/content",
+            "/{id}/content",
             get(get_project::get_project_content_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
@@ -87,26 +87,26 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/:id",
+            "/{id}",
             patch(edit_project::edit_project_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id/revert_delete",
+            "/{id}/revert_delete",
             put(revert_delete_project::handler).layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id",
+            "/{id}",
             delete(delete_project::delete_project_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id/permanent",
+            "/{id}/permanent",
             delete(delete_project::permanently_delete_project_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
         .route(
-            "/:id",
+            "/{id}",
             get(get_project::get_project_handler).layer(ensure_project_exists_middleware),
         )
         .route(

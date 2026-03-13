@@ -1,13 +1,9 @@
-import {
-  getTaskAssigneeIds,
-  getTaskStatusOptionId,
-} from '@entity/utils/task-properties';
+import { getTaskAssigneeIds } from '@entity/utils/task-properties';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 
 export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 
 type TaskSubFilters = {
-  statusFilter?: string[];
   assigneeFilter?: string[];
 };
 
@@ -15,12 +11,11 @@ export const matchesTaskSubFilters = (
   taskEntity: TaskEntityWithProperties,
   filters: TaskSubFilters
 ): boolean => {
-  const { statusFilter, assigneeFilter } = filters;
+  const { assigneeFilter } = filters;
 
-  const hasStatusFilter = statusFilter && statusFilter.length > 0;
   const hasAssigneeFilter = assigneeFilter && assigneeFilter.length > 0;
 
-  if (!hasStatusFilter && !hasAssigneeFilter) {
+  if (!hasAssigneeFilter) {
     return true;
   }
 
@@ -28,13 +23,6 @@ export const matchesTaskSubFilters = (
   // Keep them until property data is available so valid search hits aren't dropped.
   if (!taskEntity.properties) {
     return true;
-  }
-
-  if (hasStatusFilter) {
-    const taskStatus = getTaskStatusOptionId(taskEntity);
-    if (!taskStatus || !statusFilter.includes(taskStatus)) {
-      return false;
-    }
   }
 
   if (hasAssigneeFilter) {

@@ -7,7 +7,13 @@ import { EditorShell } from './EditorShell';
 import { Editor } from './Editor';
 import { Attachments } from './Attachments';
 import { Footer } from './Footer';
-import { PrimaryActions } from './PrimaryActions';
+import { Actions } from './Actions';
+import {
+  AttachFilesAction,
+  CloseReplyAction,
+  DiscardDraftAction,
+  ToggleFormatAction,
+} from './InputActions';
 import { SendAction } from './SendAction';
 
 export const Input = {
@@ -20,6 +26,10 @@ export const Input = {
   Editor,
   Attachments,
   Footer,
-  PrimaryActions,
+  Actions,
+  AttachFilesAction,
+  ToggleFormatAction,
+  CloseReplyAction,
+  DiscardDraftAction,
   SendAction,
 };

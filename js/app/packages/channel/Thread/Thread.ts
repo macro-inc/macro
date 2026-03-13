@@ -1,5 +1,5 @@
 import { ThreadRow } from './ThreadRow';
-import { ThreadRailDecorations } from './ThreadRailDecorations';
+import { ThreadReplyRailDecorations } from './ThreadReplyRailDecorations';
 import { ThreadRepliesContainer } from './ThreadRepliesContainer';
 import { ThreadReplyButton } from './ThreadReplyButton';
 import { ThreadReplyList } from './ThreadReplyList';
@@ -11,7 +11,7 @@ import { ThreadActionsFooter } from './ThreadActionsFooter';
 
 export const Thread = {
   Row: ThreadRow,
-  RailDecorations: ThreadRailDecorations,
+  ReplyRailDecorations: ThreadReplyRailDecorations,
   RepliesContainer: ThreadRepliesContainer,
   ReplyButton: ThreadReplyButton,
   ReplyList: ThreadReplyList,

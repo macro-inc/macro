@@ -7,7 +7,7 @@ use axum::routing::patch;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new().route(
-        "/:thread_id",
+        "/{thread_id}",
         patch(edit_thread::edit_thread_handler).layer(axum::middleware::from_fn_with_state(
             state,
             macro_middleware::cloud_storage::thread::ensure_thread_exists::handler,

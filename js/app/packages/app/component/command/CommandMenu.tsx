@@ -40,10 +40,10 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'Dms' },
-  { id: 'notes', label: 'Notes' },
+  { id: 'notes', label: 'Docs' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'documents', label: 'Docs' },
-  { id: 'chats', label: 'Chats' },
+  { id: 'documents', label: 'Files' },
+  { id: 'chats', label: 'Agents' },
   { id: 'projects', label: 'Projects' },
   { id: 'commands', label: 'Commands' },
 ];

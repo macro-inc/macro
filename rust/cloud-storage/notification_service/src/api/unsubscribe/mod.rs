@@ -17,9 +17,12 @@ pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/email", get(unsubscribe_email::handler))
         .route("/", get(get_unsubscribes::handler))
-        .route("/item/:item_type/:item_id", post(unsubscribe_item::handler))
         .route(
-            "/item/:item_type/:item_id",
+            "/item/{item_type}/{item_id}",
+            post(unsubscribe_item::handler),
+        )
+        .route(
+            "/item/{item_type}/{item_id}",
             delete(remove_unsubscribe_item::handler),
         )
         .route(

@@ -92,10 +92,13 @@ async fn main() -> Result<()> {
 
     let connection_manager = create_dynamo_db_connection_manager(dynamodb_client.clone()).await?;
 
-    let last_online_redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let redis_connection = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to create shared redis connection")?;
     let last_online_worker = Arc::new(LastOnlineWorker::new(LastOnlineService::new(
         LastOnlineDefaultTime,
-        RedisLastOnlineRepo::new(last_online_redis_conn),
+        RedisLastOnlineRepo::new(redis_connection.clone()),
     )));
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
@@ -116,6 +119,7 @@ async fn main() -> Result<()> {
     let context = context::ApiContext {
         connection_manager,
         redis_client: Arc::clone(&redis_client),
+        redis_connection,
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
         stream_manager,
         last_online_worker,

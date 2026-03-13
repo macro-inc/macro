@@ -1,4 +1,4 @@
-//! Handler for `GET /documents/:document_id/short_id`.
+//! Handler for `GET /documents/{document_id}/short_id`.
 
 use axum::{
     Json,
@@ -20,7 +20,7 @@ pub struct ShortIdResponse {
     short_id: String,
 }
 
-/// Handler for `GET /documents/:document_id/short_id`.
+/// Handler for `GET /documents/{document_id}/short_id`.
 ///
 /// Returns the short UUID for a document.
 #[utoipa::path(

@@ -106,6 +106,7 @@ pub struct AggregateId<'a> {
 }
 
 impl<'a> AggregateId<'a> {
+    #[allow(dead_code)]
     pub(crate) fn from_event_record<T>(r: &'a EventRecordWithId<'a, T>) -> Result<Self, ParseErr> {
         Ok(AggregateId {
             user_id: MacroUserIdStr::parse_from_str(r.event_record.event.entity.user_id.as_ref())?,
@@ -363,6 +364,7 @@ pub struct FrecencyPageResponse {
 }
 
 impl FrecencyPageResponse {
+    #[allow(dead_code)]
     pub(crate) fn new(iter: impl IntoIterator<Item = AggregateFrecency>) -> Self {
         let results = iter
             .into_iter()

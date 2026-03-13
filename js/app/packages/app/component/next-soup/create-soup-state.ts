@@ -58,7 +58,11 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const filters = createFilterState({
     filters:
-      filterConfigs ?? createSoupFilters(notificationSource, user.userId),
+      filterConfigs ??
+      (createSoupFilters(
+        notificationSource,
+        user.userId
+      ) as FilterConfig<SoupEntity>[]),
     groups: filterGroups ?? SOUP_FILTER_GROUPS,
     initialFilters,
   });

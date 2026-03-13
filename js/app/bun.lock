@@ -128,6 +128,8 @@
         "@solidjs/testing-library": "^0.8.10",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/user-event": "^14.6.1",
+        "@types/facebook-pixel": "^0.0.31",
+        "@types/gtag.js": "^0.0.20",
         "@types/linkify-it": "^5.0.0",
         "@types/lodash": "^4.17.20",
         "@types/node": "^24.8.0",
@@ -1355,7 +1357,11 @@
 
     "@types/estree-jsx": ["@types/estree-jsx@1.0.5", "", { "dependencies": { "@types/estree": "*" } }, "sha512-52CcUVNFyfb1A2ALocQw/Dd1BQFNmSdkuC3BkZ6iqhdMfQz7JWOFRuJFloOzjk+6WijU56m9oKXFAXc7o3Towg=="],
 
+    "@types/facebook-pixel": ["@types/facebook-pixel@0.0.31", "", {}, "sha512-NyfutSDY9Cabk7IUsEMy2pcVPGVVQjsFI3caZkeZvJ9lffz/CZjJA84mUhluTRM/iHjZ96VwBMPORpDSioNeyg=="],
+
     "@types/geojson": ["@types/geojson@7946.0.16", "", {}, "sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg=="],
+
+    "@types/gtag.js": ["@types/gtag.js@0.0.20", "", {}, "sha512-wwAbk3SA2QeU67unN7zPxjEHmPmlXwZXZvQEpbEUQuMCRGgKyE1m6XDuTUA9b6pCGb/GqJmdfMOY5LuDjJSbbg=="],
 
     "@types/hast": ["@types/hast@3.0.4", "", { "dependencies": { "@types/unist": "*" } }, "sha512-WPs+bbQw5aCj+x6laNGWLH3wviHtoCv/P3+otBhbOhJgG8qtpdAMlTCxLtsTWA7LH1Oh/bFCHsBn0TPS5m30EQ=="],
 

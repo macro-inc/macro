@@ -1,5 +1,5 @@
 use axum::{
-    RequestPartsExt, async_trait,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
@@ -89,7 +89,6 @@ fn unauthorized(msg: &'static str) -> Response {
     (StatusCode::UNAUTHORIZED, msg).into_response()
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelId
 where
     S: Send + Sync,
@@ -103,7 +102,6 @@ where
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelParticipants
 where
     S: Send + Sync,
@@ -136,7 +134,6 @@ where
 #[derive(Clone)]
 pub struct ChannelInfoExtractor(pub ChannelInfo);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelInfoExtractor
 where
     S: Send + Sync,
@@ -158,7 +155,6 @@ where
     }
 }
 
-#[async_trait]
 impl<S, U> FromRequestParts<S> for ChannelName<U>
 where
     S: Send + Sync,
@@ -211,11 +207,10 @@ where
             &name_lookup,
         );
 
-        return Ok(ChannelName(channel_name, PhantomData));
+        Ok(ChannelName(channel_name, PhantomData))
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelTypeExtractor
 where
     S: Send + Sync,
@@ -295,7 +290,6 @@ pub async fn get_user_role(
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for UserContextWithRole
 where
     S: Send + Sync,
@@ -337,7 +331,6 @@ where
 #[derive(Clone, Debug)]
 pub struct ChannelMember(pub UserContextWithRole);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelMember
 where
     S: Send + Sync,
@@ -358,7 +351,6 @@ where
 #[derive(Clone, Debug)]
 pub struct ChannelOwner(pub UserContextWithRole);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelOwner
 where
     S: Send + Sync,
@@ -382,7 +374,6 @@ where
 #[allow(dead_code)]
 pub struct ChannelAdmin(pub UserContextWithRole);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ChannelAdmin
 where
     S: Send + Sync,
@@ -406,7 +397,6 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MessageId(pub Uuid);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for MessageId
 where
     S: Send + Sync,
@@ -423,7 +413,6 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MessageSender(pub UserContext);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for MessageSender
 where
     S: Send + Sync,
@@ -457,7 +446,6 @@ pub enum MessageSenderOrAdmin {
     ChannelAdmin(ChannelAdmin),
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for MessageSenderOrAdmin
 where
     S: Send + Sync,
@@ -476,7 +464,6 @@ where
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ParticipantAccess
 where
     S: Send + Sync,

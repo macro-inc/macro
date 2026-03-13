@@ -39,6 +39,7 @@ describe('buildChannelMessageListMeta', () => {
       isNewMessage: false,
       isFirstNewMessage: false,
       previousTopLevelCreatedAt: undefined,
+      isGroupedWithPrevious: false,
     });
     expect(meta.m2.previousTopLevelCreatedAt).toBe('2026-02-20T09:00:00.000Z');
     expect(meta.m3.previousTopLevelCreatedAt).toBe('2026-02-20T10:00:00.000Z');
@@ -61,5 +62,19 @@ describe('buildChannelMessageListMeta', () => {
     expect(meta.m2.isFirstNewMessage).toBe(true);
     expect(meta.m3.isNewMessage).toBe(true);
     expect(meta.m3.isFirstNewMessage).toBe(false);
+  });
+
+  it('derives grouped state from the immediately previous top-level message', () => {
+    const messages = [
+      createMessage('m1', '2026-02-20T09:00:00.000Z'),
+      createMessage('m2', '2026-02-20T09:05:00.000Z'),
+      createMessage('m3', '2026-02-20T09:05:01.000Z'),
+    ];
+
+    const meta = buildChannelMessageListMeta(messages, () => false);
+
+    expect(meta.m1.isGroupedWithPrevious).toBe(false);
+    expect(meta.m2.isGroupedWithPrevious).toBe(true);
+    expect(meta.m3.isGroupedWithPrevious).toBe(true);
   });
 });

@@ -42,9 +42,9 @@ export function HotkeyExample(props: HotkeyExampleProps) {
                       showPlus
                       class="font-mono text-base h-9 min-w-9 px-3 flex items-center justify-center gap-2 border transition-all duration-300"
                       classList={{
-                        "border-accent/75 bg-accent/75 text-panel [font-variation-settings:'wght'_600]":
+                        'border-accent/75 bg-accent/75 text-panel':
                           item.executed(),
-                        "bg-input border-edge-muted text-accent/75 [font-variation-settings:'wght'_400]":
+                        'bg-input border-edge-muted text-accent/75':
                           !item.executed(),
                       }}
                     />

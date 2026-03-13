@@ -1,11 +1,14 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
 import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
+  type ApiChannelMessage,
+  type ApiThreadReply,
   type IdResponse,
   type MessageResponse,
 } from '@service-comms/client';
@@ -19,6 +22,18 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
+import {
+  captureDeleteSnapshotForTarget,
+  getTargetMessageState,
+  insertMessageIntoTargetCaches,
+  removeMessageFromTargetCaches,
+  replaceTargetMessageState,
+  restoreMessageInTargetCaches,
+  softInvalidateTargetCaches,
+  replaceTargetMessageId,
+  resolveMessageTarget,
+  type DeleteTargetSnapshot,
+} from './reconcile';
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -34,26 +49,107 @@ function registerMessageNonces(
   }
 }
 
+function normalizeDateValue(
+  value: DateValue | null | undefined
+): string | null | undefined {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
 
 export type InsertMessageContext = {
   optimisticId: string;
+  target: ReturnType<typeof resolveMessageTarget>;
 };
 
 export type DeleteMessageContext = {
-  deletedMessage: Message;
+  deletedMessage?: Message;
   deletedReactions: CountedReaction[];
   deletedAttachments: Attachment[];
+  target: ReturnType<typeof resolveMessageTarget>;
+  targetSnapshot?: DeleteTargetSnapshot;
 };
 
 export type UpdateMessageContext = {
   messageId: string;
+  target: ReturnType<typeof resolveMessageTarget>;
   previousContent: string;
   previousEditedAt: DateValue | null | undefined;
   previousUpdatedAt: DateValue;
+  previousAttachments: Attachment[];
 };
+
+function makeOptimisticAttachments(
+  channelId: string,
+  optimisticId: string,
+  attachments: PostMessageRequest['attachments'],
+  now: string
+): Attachment[] {
+  return attachments.map((attachment) => ({
+    id: crypto.randomUUID(),
+    channel_id: channelId,
+    created_at: now,
+    message_id: optimisticId,
+    ...attachment,
+  }));
+}
+
+function makeOptimisticTopLevelMessage(
+  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
+  attachments: Attachment[],
+  now: string
+): ApiChannelMessage {
+  return {
+    id: vars.optimisticId,
+    channel_id: vars.channelId,
+    sender_id: vars.senderId,
+    content: vars.content,
+    created_at: now,
+    updated_at: now,
+    deleted_at: undefined,
+    edited_at: undefined,
+    attachments: attachments.map(
+      ({ id, entity_id, entity_type, created_at }) => ({
+        id,
+        entity_id,
+        entity_type,
+        created_at,
+      })
+    ),
+    reactions: [],
+    thread: {
+      preview: [],
+      reply_count: 0,
+      latest_reply_at: null,
+    },
+  };
+}
+
+function makeOptimisticThreadReply(
+  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
+  attachments: Attachment[],
+  now: string
+): ApiThreadReply {
+  return {
+    id: vars.optimisticId,
+    sender_id: vars.senderId,
+    content: vars.content,
+    created_at: now,
+    updated_at: now,
+    edited_at: undefined,
+    attachments: attachments.map(
+      ({ id, entity_id, entity_type, created_at }) => ({
+        id,
+        entity_id,
+        entity_type,
+        created_at,
+      })
+    ),
+    reactions: [],
+  };
+}
 
 /**
  * Optimistically insert a new message into the channel cache.
@@ -65,15 +161,28 @@ export function optimisticInsertChannelMessage(
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
-  let context: InsertMessageContext | undefined;
+  const now = new Date().toISOString();
+  const newAttachments = makeOptimisticAttachments(
+    vars.channelId,
+    vars.optimisticId,
+    vars.attachments,
+    now
+  );
+  const threadId = vars.thread_id ?? undefined;
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
+    messageId: vars.optimisticId,
+    threadId,
+  });
+  const context: InsertMessageContext = {
+    optimisticId: vars.optimisticId,
+    target,
+  };
 
   queryClient.setQueriesData(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
-
-      context = { optimisticId: vars.optimisticId };
-      const now = new Date().toISOString();
 
       const newMessage: Message = {
         id: vars.optimisticId,
@@ -87,14 +196,6 @@ export function optimisticInsertChannelMessage(
         edited_at: undefined,
       };
 
-      const newAttachments: Attachment[] = vars.attachments.map((a) => ({
-        id: crypto.randomUUID(),
-        channel_id: vars.channelId,
-        created_at: new Date().toISOString(),
-        message_id: vars.optimisticId,
-        ...a,
-      }));
-
       return {
         ...prev,
         messages: [...prev.messages, newMessage],
@@ -102,6 +203,24 @@ export function optimisticInsertChannelMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    if (target.kind === 'thread_reply') {
+      const optimisticReply = makeOptimisticThreadReply(
+        vars,
+        newAttachments,
+        now
+      );
+      insertMessageIntoTargetCaches(vars.channelId, target, optimisticReply);
+    } else {
+      const optimisticMessage = makeOptimisticTopLevelMessage(
+        vars,
+        newAttachments,
+        now
+      );
+      insertMessageIntoTargetCaches(vars.channelId, target, optimisticMessage);
+    }
+  }
 
   return context;
 }
@@ -129,6 +248,10 @@ export function rollbackInsertChannelMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    removeMessageFromTargetCaches(channelId, context.target);
+  }
 }
 
 /**
@@ -136,7 +259,11 @@ export function rollbackInsertChannelMessage(
  * Called in mutation onSuccess after server returns the real message.
  */
 export function replaceOptimisticMessage(
-  vars: WithChannelId<{ optimisticId: string; realId: string }>
+  vars: WithChannelId<{
+    optimisticId: string;
+    realId: string;
+    threadId?: string;
+  }>
 ): void {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
 
@@ -151,6 +278,10 @@ export function replaceOptimisticMessage(
 
       if (messageIndex === -1) return prev;
 
+      const hasAuthoritativeAttachments = prev.attachments.some(
+        (attachment) => attachment.message_id === vars.realId
+      );
+
       const updatedMessages = [...prev.messages];
       updatedMessages[messageIndex] = {
         ...updatedMessages[messageIndex],
@@ -160,14 +291,30 @@ export function replaceOptimisticMessage(
       return {
         ...prev,
         messages: updatedMessages,
-        attachments: prev.attachments.map((a) =>
-          a.message_id === vars.optimisticId
-            ? { ...a, message_id: vars.realId }
-            : a
-        ),
+        attachments: hasAuthoritativeAttachments
+          ? prev.attachments.filter(
+              (attachment) => attachment.message_id !== vars.optimisticId
+            )
+          : prev.attachments.map((attachment) =>
+              attachment.message_id === vars.optimisticId
+                ? { ...attachment, message_id: vars.realId }
+                : attachment
+            ),
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    replaceTargetMessageId(
+      vars.channelId,
+      resolveMessageTarget({
+        channelId: vars.channelId,
+        messageId: vars.optimisticId,
+        threadId: vars.threadId,
+      }),
+      vars.realId
+    );
+  }
 }
 
 /**
@@ -175,12 +322,23 @@ export function replaceOptimisticMessage(
  * Returns minimal context: only the deleted message, reactions, and attachments.
  */
 export function optimisticDeleteChannelMessage(
-  vars: WithChannelId<Pick<ChannelMessage, 'message_id'>>
+  vars: WithChannelId<
+    Pick<ChannelMessage, 'message_id'> & { threadId?: string }
+  >
 ): DeleteMessageContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
-  let context: DeleteMessageContext | undefined;
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
+    messageId: vars.message_id,
+    threadId: vars.threadId,
+  });
+  const context: DeleteMessageContext = {
+    deletedReactions: [],
+    deletedAttachments: [],
+    target,
+  };
 
   queryClient.setQueriesData(
     { queryKey },
@@ -192,13 +350,11 @@ export function optimisticDeleteChannelMessage(
       );
       if (!deletedMessage) return prev;
 
-      context = {
-        deletedMessage,
-        deletedReactions: prev.reactions[vars.message_id] ?? [],
-        deletedAttachments: prev.attachments.filter(
-          (a) => a.message_id === vars.message_id
-        ),
-      };
+      context.deletedMessage = deletedMessage;
+      context.deletedReactions = prev.reactions[vars.message_id] ?? [];
+      context.deletedAttachments = prev.attachments.filter(
+        (a) => a.message_id === vars.message_id
+      );
 
       const filteredMessages = prev.messages.filter(
         (m) => m.id !== vars.message_id
@@ -222,6 +378,14 @@ export function optimisticDeleteChannelMessage(
     }
   );
 
+  if (ENABLE_NEW_CHANNELS) {
+    context.targetSnapshot = captureDeleteSnapshotForTarget(
+      vars.channelId,
+      target
+    );
+    removeMessageFromTargetCaches(vars.channelId, target);
+  }
+
   return context;
 }
 
@@ -238,6 +402,7 @@ export function rollbackDeleteChannelMessage(
     { queryKey },
     (prev: GetChannelResponse | undefined) => {
       if (!prev) return prev;
+      if (!context.deletedMessage) return prev;
 
       return {
         ...prev,
@@ -252,6 +417,14 @@ export function rollbackDeleteChannelMessage(
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS && context.targetSnapshot) {
+    restoreMessageInTargetCaches(
+      channelId,
+      context.target,
+      context.targetSnapshot
+    );
+  }
 }
 
 /**
@@ -259,12 +432,37 @@ export function rollbackDeleteChannelMessage(
  * Returns minimal context: only the previous content and timestamps.
  */
 export function optimisticUpdateChannelMessage(
-  vars: WithChannelId<Pick<ChannelMessage, 'message_id' | 'content'>>
+  vars: WithChannelId<
+    Pick<ChannelMessage, 'message_id' | 'content'> & {
+      attachment_ids_to_delete?: string[];
+    }
+  >
 ): UpdateMessageContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
+  const target = resolveMessageTarget({
+    channelId: vars.channelId,
+    messageId: vars.message_id,
+  });
 
   let context: UpdateMessageContext | undefined;
+  const deletedAttachmentIDs = new Set(vars.attachment_ids_to_delete ?? []);
+  const now = new Date().toISOString();
+
+  const renderedState = getTargetMessageState(vars.channelId, target);
+  if (renderedState) {
+    context = {
+      messageId: vars.message_id,
+      target,
+      previousContent: renderedState.content,
+      previousEditedAt: renderedState.editedAt,
+      previousUpdatedAt: renderedState.updatedAt,
+      previousAttachments: renderedState.attachments.map((attachment) => ({
+        ...attachment,
+        channel_id: vars.channelId,
+        message_id: vars.message_id,
+      })),
+    };
+  }
 
   queryClient.setQueriesData(
     { queryKey },
@@ -276,12 +474,14 @@ export function optimisticUpdateChannelMessage(
 
       context = {
         messageId: vars.message_id,
+        target,
         previousContent: message.content,
         previousEditedAt: message.edited_at,
         previousUpdatedAt: message.updated_at,
+        previousAttachments: prev.attachments.filter(
+          (attachment) => attachment.message_id === vars.message_id
+        ),
       };
-
-      const now = new Date().toISOString();
 
       return {
         ...prev,
@@ -290,9 +490,25 @@ export function optimisticUpdateChannelMessage(
             ? { ...m, content: vars.content, edited_at: now, updated_at: now }
             : m
         ),
+        attachments: prev.attachments.filter(
+          (attachment) =>
+            attachment.message_id !== vars.message_id ||
+            !deletedAttachmentIDs.has(attachment.id)
+        ),
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS && context) {
+    replaceTargetMessageState(vars.channelId, target, {
+      content: vars.content,
+      editedAt: now,
+      updatedAt: now,
+      attachments: context.previousAttachments.filter(
+        (attachment) => !deletedAttachmentIDs.has(attachment.id)
+      ),
+    });
+  }
 
   return context;
 }
@@ -323,9 +539,24 @@ export function rollbackUpdateChannelMessage(
               }
             : m
         ),
+        attachments: [
+          ...prev.attachments.filter(
+            (attachment) => attachment.message_id !== context.messageId
+          ),
+          ...context.previousAttachments,
+        ],
       };
     }
   );
+
+  if (ENABLE_NEW_CHANNELS) {
+    replaceTargetMessageState(channelId, context.target, {
+      content: context.previousContent,
+      editedAt: normalizeDateValue(context.previousEditedAt),
+      updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
+      attachments: context.previousAttachments,
+    });
+  }
 }
 
 const { track } = withAnalytics();
@@ -365,7 +596,10 @@ export function useSendMessageMutation(
     },
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           // Register nonces for deduplication when WebSocket events arrive
           registerMessageNonces(
             vars.optimisticId,
@@ -383,6 +617,7 @@ export function useSendMessageMutation(
             channelId: variables.channelID,
             optimisticId: variables.optimisticId,
             realId: data.id,
+            threadId: variables.message.thread_id ?? undefined,
           });
           track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
             channelId: variables.channelID,
@@ -400,6 +635,16 @@ export function useSendMessageMutation(
         },
         onSettled: (_data, _error, variables) => {
           softInvalidateChannelWithID(variables.channelID);
+          if (ENABLE_NEW_CHANNELS) {
+            softInvalidateTargetCaches(
+              variables.channelID,
+              resolveMessageTarget({
+                channelId: variables.channelID,
+                messageId: variables.optimisticId,
+                threadId: variables.message.thread_id ?? undefined,
+              })
+            );
+          }
         },
       },
       callbacks
@@ -407,7 +652,11 @@ export function useSendMessageMutation(
   }));
 }
 
-type DeleteMessageParams = { channelID: string; messageID: string };
+type DeleteMessageParams = {
+  channelID: string;
+  messageID: string;
+  threadID?: string;
+};
 
 type DeleteMutationContext = DeleteMessageContext | undefined;
 
@@ -441,11 +690,15 @@ export function useDeleteMessageMutation(
     },
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           deleteNonce.prepare(vars);
           return optimisticDeleteChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
+            threadId: vars.threadID,
           });
         },
         onError(error, vars, context) {
@@ -458,6 +711,16 @@ export function useDeleteMessageMutation(
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
+          if (ENABLE_NEW_CHANNELS) {
+            softInvalidateTargetCaches(
+              vars.channelID,
+              resolveMessageTarget({
+                channelId: vars.channelID,
+                messageId: vars.messageID,
+                threadId: vars.threadID,
+              })
+            );
+          }
         },
       },
       callbacks
@@ -469,6 +732,7 @@ type PatchMessageParams = {
   channelID: string;
   messageID: string;
   content: string;
+  attachmentIDsToDelete?: string[];
 };
 
 type PatchMutationContext = UpdateMessageContext | undefined;
@@ -498,6 +762,7 @@ export function usePatchMessageMutation(
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            attachment_ids_to_delete: vars.attachmentIDsToDelete,
             nonce: patchNonce.use(vars),
           })
       );
@@ -509,12 +774,16 @@ export function usePatchMessageMutation(
       PatchMutationContext
     >(
       {
-        onMutate: (vars) => {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: channelKeys.withID(vars.channelID).queryKey,
+          });
           patchNonce.prepare(vars);
           return optimisticUpdateChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            attachment_ids_to_delete: vars.attachmentIDsToDelete,
           });
         },
         onError(error, vars, context) {
@@ -527,6 +796,15 @@ export function usePatchMessageMutation(
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
+          if (ENABLE_NEW_CHANNELS) {
+            softInvalidateTargetCaches(
+              vars.channelID,
+              resolveMessageTarget({
+                channelId: vars.channelID,
+                messageId: vars.messageID,
+              })
+            );
+          }
         },
       },
       callbacks

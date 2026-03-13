@@ -2,95 +2,55 @@ use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
-fn test_build_search_request() -> anyhow::Result<()> {
+fn test_build_bool_query() -> anyhow::Result<()> {
     let builder = ChatQueryBuilder::new(vec!["test".to_string()])
         .match_type("exact")
         .page_size(20)
         .page(1)
         .user_id("user123")
-        .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["chat1".to_string(), "chat2".to_string()])
         .role(vec!["user".to_string(), "assistant".to_string()]);
 
-    let result = builder.build_search_request()?;
+    let result = builder.build_bool_query()?;
 
     let expected = serde_json::json!({
-          "from": 20,
-          "size": 20,
-          "collapse": {
-              "field": "entity_id"
-          },
-          "sort": ChatSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-          "highlight": ChatSearchConfig::append_owner_highlights(ChatSearchConfig::default_highlight()).to_json(),
-    "query": {
-      "bool": {
-        "filter": [
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+        "bool": {
+            "filter": [
                 {
-                  "terms": {
-                    "entity_id": ["chat1", "chat2"]
-                  }
-                },
-                {
-                  "term": {
-                    "user_id": "user123"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "term": {
-              "_index": "chats"
-            }
-          },
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
-                {
-                  "wildcard": {
-                    "role": {
-                      "case_insensitive": true,
-                      "value": "*user*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"terms": {"entity_id": ["chat1", "chat2"]}},
+                            {"term": {"user_id": "user123"}}
+                        ]
                     }
-                  }
                 },
+                {"term": {"_index": "chats"}},
                 {
-                  "wildcard": {
-                    "role": {
-                      "case_insensitive": true,
-                      "value": "*assistant*"
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"wildcard": {"role": {"case_insensitive": true, "value": "*user*"}}},
+                            {"wildcard": {"role": {"case_insensitive": true, "value": "*assistant*"}}}
+                        ]
                     }
-                  }
                 }
-              ]
-            }
-          }
-        ],
-        "must": [
-          {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
+            ],
+            "must": [
                 {
-                  "match_phrase": {
-                    "content": "test"
-                  }
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {"match_phrase": {"content": "test"}}
+                        ]
+                    }
                 }
-              ]
-            }
-          }
-        ]
-      }
-    },
-     });
+            ]
+        }
+    });
 
-    assert_eq!(result.to_json(), expected);
+    assert_eq!(result.build().to_json(), expected);
 
     Ok(())
 }

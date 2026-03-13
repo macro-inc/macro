@@ -76,6 +76,7 @@ import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
+import { AnalyticsContextProvider } from '@app/component/analytics-context';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -428,40 +429,42 @@ export function Root() {
   return (
     <MaybeTauriProvider>
       <MetaProvider>
-        <EntityProvider>
-          <UserContextProvider>
-            <QuerySyncProviderWithUserId />
-            <UserInfoSideEffects />
-            <ConfiguredGlobalAppStateProvider>
-              <ChannelsContextProvider>
-                <QuickAccessProvider>
-                  <SearchProvider>
-                    <TabAttachmentsInit />
-                    <ReactiveFavicon />
-                    <Title>{tabTitle()}</Title>
-                    <MacroJump />
-                    <Visor />
-                    <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                      <IsomorphicRouter
-                        transformUrl={transformShortIdInUrlPathname}
-                        root={Layout}
-                        rootPreload={rootPreload}
-                        base={ROUTER_BASE}
-                      >
-                        {{
-                          path: '/',
-                          component: TauriRouteListener,
-                          children: ROUTES,
-                        }}
-                      </IsomorphicRouter>
-                    </SuspenseContextComp>
-                    <ToastRegion />
-                  </SearchProvider>
-                </QuickAccessProvider>
-              </ChannelsContextProvider>
-            </ConfiguredGlobalAppStateProvider>
-          </UserContextProvider>
-        </EntityProvider>
+        <AnalyticsContextProvider>
+          <EntityProvider>
+            <UserContextProvider>
+              <QuerySyncProviderWithUserId />
+              <UserInfoSideEffects />
+              <ConfiguredGlobalAppStateProvider>
+                <ChannelsContextProvider>
+                  <QuickAccessProvider>
+                    <SearchProvider>
+                      <TabAttachmentsInit />
+                      <ReactiveFavicon />
+                      <Title>{tabTitle()}</Title>
+                      <MacroJump />
+                      <Visor />
+                      <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                        <IsomorphicRouter
+                          transformUrl={transformShortIdInUrlPathname}
+                          root={Layout}
+                          rootPreload={rootPreload}
+                          base={ROUTER_BASE}
+                        >
+                          {{
+                            path: '/',
+                            component: TauriRouteListener,
+                            children: ROUTES,
+                          }}
+                        </IsomorphicRouter>
+                      </SuspenseContextComp>
+                      <ToastRegion />
+                    </SearchProvider>
+                  </QuickAccessProvider>
+                </ChannelsContextProvider>
+              </ConfiguredGlobalAppStateProvider>
+            </UserContextProvider>
+          </EntityProvider>
+        </AnalyticsContextProvider>
       </MetaProvider>
     </MaybeTauriProvider>
   );

@@ -7,8 +7,8 @@ export const channelKeys = createQueryKeys('channel', {
   mentions: (channelID: string) => ({
     queryKey: [channelID],
   }),
-  messages: (channelID: string) => ({
-    queryKey: [channelID],
+  messages: (channelID: string, loadAroundMessageId: string | null = null) => ({
+    queryKey: [channelID, { loadAroundMessageId }],
   }),
   attachments: (channelID: string) => ({
     queryKey: [channelID],

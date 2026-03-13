@@ -13,7 +13,7 @@ export const AnimatedFolderIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-folder-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated folder icon</title>
+      {/*<title>Animated folder icon</title>*/}
       <style>{`
         .animated-folder-icon {
           .paper, .folder {

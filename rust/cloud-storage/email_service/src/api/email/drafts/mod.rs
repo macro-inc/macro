@@ -14,18 +14,18 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .merge(draft_router(state.email_service.clone()))
         .nest("/scheduled", scheduled::router())
-        .route("/:id", delete(delete::handler))
-        .route("/:id/attachments", post(add_attachment::handler))
+        .route("/{id}", delete(delete::handler))
+        .route("/{id}/attachments", post(add_attachment::handler))
         .route(
-            "/:id/attachments/:attachment_id",
+            "/{id}/attachments/{attachment_id}",
             delete(remove_attachment::handler),
         )
         .route(
-            "/:id/forwarded-attachments",
+            "/{id}/forwarded-attachments",
             post(add_forwarded_attachment::handler),
         )
         .route(
-            "/:id/forwarded-attachments/:attachment_id",
+            "/{id}/forwarded-attachments/{attachment_id}",
             delete(remove_forwarded_attachment::handler),
         )
         .layer(axum::middleware::from_fn_with_state(

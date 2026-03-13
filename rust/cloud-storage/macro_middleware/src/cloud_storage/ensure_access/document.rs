@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    Extension, RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -19,7 +19,6 @@ pub struct DocumentAccessExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for DocumentAccessExtractor<T>
 where
     T: BuildAccessLevel,

@@ -39,12 +39,6 @@ pub struct UnifiedSearchRequest {
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
     pub match_type: MatchType,
 
-    /// If search_on is set to NameContent, you can disable the recency filter
-    /// by setting to true.
-    #[serde(default)]
-    #[schemars(skip)]
-    pub disable_recency: bool,
-
     /// Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters.
     pub filters: Option<UnifiedSearchFilters>,
 
