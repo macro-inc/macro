@@ -27,17 +27,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
-  let measureSpan: HTMLSpanElement | undefined;
-
-  const [searchFocused, setSearchFocused] = createSignal(false);
-  const [measuredWidth, setMeasuredWidth] = createSignal(0);
-
-  createEffect(() => {
-    if (measureSpan) {
-      measureSpan.textContent = searchText() || '';
-      setMeasuredWidth(measureSpan.scrollWidth);
-    }
-  });
 
   createEffect(() => {
     ref();
@@ -60,13 +49,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   onCleanup(searchHotkey.dispose);
 
-  const MIN_INPUT_WIDTH = 48;
-
-  const inputWidth = () => {
-    if (!searchText() && !searchFocused()) return 0;
-    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
-  };
-
   return (
     <div class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
       <Tooltip
@@ -87,20 +69,11 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           }}
         >
           <SearchIcon class="size-4 shrink-0" />
-          <span
-            ref={(el) => {
-              measureSpan = el;
-            }}
-            class="invisible absolute whitespace-pre"
-            aria-hidden="true"
-          />
           <input
             ref={setRef}
             type="text"
             value={searchText()}
             onInput={(e) => setSearchText(e.currentTarget.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
             onKeyDown={(e) => {
               if (
                 e.key === 'Escape' ||
