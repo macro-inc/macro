@@ -249,7 +249,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
           >
             <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
               variant="ghost"
               size="sm"
               onClick={handleCreateClick}
@@ -270,7 +270,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               }
             >
               <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
                 variant="ghost"
                 size="sm"
                 onClick={handleCommandPaletteClick}
@@ -291,7 +291,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }
           >
             <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
               variant="ghost"
               size="sm"
               onClick={toggleSettings}
@@ -312,7 +312,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
               }
             >
               <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full"
+                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
                 variant="ghost"
                 size="sm"
                 onClick={() => props.onOpenChange(isSlim())}
@@ -367,7 +367,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size="sm"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full',
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs',
         isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
