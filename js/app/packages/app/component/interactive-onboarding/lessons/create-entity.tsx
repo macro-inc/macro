@@ -184,7 +184,6 @@ function CreateEntityDemo() {
             >
               <LauncherInner
                 blocks={sandboxBlocks}
-                modal
                 onClose={() => setLauncherOpen(false)}
               />
             </div>

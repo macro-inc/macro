@@ -132,17 +132,14 @@ export default function InteractiveOnboarding() {
   });
 
   return (
-    <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="Welcome To Macro" />
-      </SplitHeaderLeft>
-      <div
-        ref={shellRef}
-        class="items-center justify-center h-full w-full p-8 grid place-items-center relative bg-panel"
-        tabIndex={-1}
-      >
-        {/* Scoped keyframes */}
-        <style>{`
+    <div
+      ref={shellRef}
+      class="items-center justify-center h-full w-full p-8 grid place-items-center relative"
+      tabIndex={-1}
+    >
+      {/* Scoped keyframes */}
+      <style>{
+        /*css*/ `
         @keyframes onboarding-fade-up {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -151,143 +148,141 @@ export default function InteractiveOnboarding() {
           from { opacity: 0; transform: scale(0.92); }
           to   { opacity: 1; transform: scale(1); }
         }
-      `}</style>
-        <div class="inset-0 absolute text-edge bg-panel opacity-5">
-          <PcNoiseGrid
-            cellSize={30}
-            warp={0}
-            crunch={0.2}
-            freq={0.001}
-            size={[0, 0.3]}
-            rounding={0}
-            fill={0}
-            stroke={1}
-            speed={[0.017, 0.209]}
-          />
-        </div>
-
-        {/* Centered card */}
-        <div class="inset-0 h-full w-full shadow-xl">
-          <ClippedPanel tl active class="size-full">
-            <div class="size-full flex">
-              <Show
-                when={state.currentLesson()}
-                fallback={
-                  <Show when={testMode && state.isFinished()}>
-                    <div
-                      class="flex flex-col items-center justify-center w-full gap-4"
-                      style={{
-                        animation: 'onboarding-scale-in 300ms ease-out both',
-                      }}
-                    >
-                      <p class="text-sm text-ink/60">All lessons complete.</p>
-                      <button
-                        type="button"
-                        class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
-                        onClick={() => window.location.reload()}
-                      >
-                        Replay
-                      </button>
-                    </div>
-                  </Show>
-                }
-              >
-                {(lesson) => (
-                  <>
-                    {/* Left panel — text content (~1/3) */}
-                    <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
-                      {/* Header */}
-                      <div class="px-4 py-8">
-                        <div
-                          class="flex flex-col gap-0.5"
-                          style={headerStyle()}
-                        >
-                          <h2 class="text-2xl font-semibold text-ink">
-                            {lesson().definition.title}
-                          </h2>
-                          <p class="text-xs text-ink-extra-muted font-mono">
-                            {state.currentIndex() + 1} of{' '}
-                            {state.lessons().length}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Body */}
-                      <div class="flex-1 overflow-y-auto px-4 py-4">
-                        <div style={bodyStyle()}>
-                          <p class="text-sm text-ink/60 mb-4">
-                            {lesson().definition.description}
-                          </p>
-                          <Dynamic
-                            component={lesson().definition.content}
-                            onComplete={handleLessonComplete}
-                            isActive={true}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Footer */}
-                      <div class="flex items-center justify-between px-4 py-3 border-t border-ink/10">
-                        <OnboardingProgress
-                          lessons={[...state.lessons()]}
-                          currentIndex={state.currentIndex()}
-                        />
-                        <div class="flex items-center gap-2">
-                          <Show when={!readyToContinue()}>
-                            <button
-                              type="button"
-                              class="px-3 py-1.5 text-xs text-ink/60 hover:text-ink/90 hover:bg-hover/30 rounded transition-colors"
-                              onClick={handleSkip}
-                            >
-                              Skip
-                            </button>
-                          </Show>
-                          <Show when={readyToContinue()}>
-                            <button
-                              type="button"
-                              class="px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent/80 transition-colors flex items-center gap-1.5"
-                              onClick={handleContinue}
-                            >
-                              Continue
-                              <kbd class="text-[10px] opacity-70">
-                                &#8984;&#9166;
-                              </kbd>
-                            </button>
-                          </Show>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right panel — demo (~2/3) */}
-                    <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                      <div style={bodyStyle()} class="w-full h-full">
-                        <Show
-                          when={lesson().definition.demo}
-                          fallback={
-                            <div class="flex items-center justify-center h-full">
-                              <div class="w-32 opacity-10">
-                                <MacroLogo class="fill-ink" />
-                              </div>
-                            </div>
-                          }
-                        >
-                          {(Demo) => (
-                            <Dynamic
-                              component={Demo()}
-                              onComplete={handleLessonComplete}
-                              isActive={true}
-                            />
-                          )}
-                        </Show>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </Show>
-            </div>
-          </ClippedPanel>
-        </div>
+      `
+      }</style>
+      <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+        <PcNoiseGrid
+          cellSize={30}
+          warp={0}
+          crunch={0.2}
+          freq={0.001}
+          size={[0, 0.3]}
+          rounding={0}
+          fill={0}
+          stroke={1}
+          speed={[0.017, 0.209]}
+        />
       </div>
-    </>
+
+      {/* Centered card */}
+      <ClippedPanel
+        active
+        cornerRadius={'4px'}
+        class="bg-panel shadow-lg shadow-[#1112]"
+      >
+        <div class="size-full flex bg-panel">
+          <Show
+            when={state.currentLesson()}
+            fallback={
+              <Show when={testMode && state.isFinished()}>
+                <div
+                  class="flex flex-col items-center justify-center w-full gap-4"
+                  style={{
+                    animation: 'onboarding-scale-in 300ms ease-out both',
+                  }}
+                >
+                  <p class="text-sm text-ink/60">All lessons complete.</p>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
+                    onClick={() => window.location.reload()}
+                  >
+                    Replay
+                  </button>
+                </div>
+              </Show>
+            }
+          >
+            {(lesson) => (
+              <>
+                {/* Left panel — text content (~1/3) */}
+                <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
+                  {/* Header */}
+                  <div class="px-4 py-8">
+                    <div class="flex flex-col gap-0.5" style={headerStyle()}>
+                      <h2 class="text-2xl font-semibold text-ink">
+                        {lesson().definition.title}
+                      </h2>
+                      <p class="text-xs text-ink-extra-muted font-mono">
+                        {state.currentIndex() + 1} of {state.lessons().length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div class="flex-1 overflow-y-auto px-4 py-4">
+                    <div style={bodyStyle()}>
+                      <p class="text-sm text-ink/60 mb-4">
+                        {lesson().definition.description}
+                      </p>
+                      <Dynamic
+                        component={lesson().definition.content}
+                        onComplete={handleLessonComplete}
+                        isActive={true}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div class="flex items-center justify-between px-4 py-3 border-t border-ink/10">
+                    <OnboardingProgress
+                      lessons={[...state.lessons()]}
+                      currentIndex={state.currentIndex()}
+                    />
+                    <div class="flex items-center gap-2">
+                      <Show when={!readyToContinue()}>
+                        <button
+                          type="button"
+                          class="px-3 py-1.5 text-xs text-ink/60 hover:text-ink/90 hover:bg-hover/30 rounded transition-colors"
+                          onClick={handleSkip}
+                        >
+                          Skip
+                        </button>
+                      </Show>
+                      <Show when={readyToContinue()}>
+                        <button
+                          type="button"
+                          class="px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent/80 transition-colors flex items-center gap-1.5"
+                          onClick={handleContinue}
+                        >
+                          Continue
+                          <kbd class="text-[10px] opacity-70">
+                            &#8984;&#9166;
+                          </kbd>
+                        </button>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right panel — demo (~2/3) */}
+                <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
+                  <div style={bodyStyle()} class="w-full h-full">
+                    <Show
+                      when={lesson().definition.demo}
+                      fallback={
+                        <div class="flex items-center justify-center h-full">
+                          <div class="w-32 opacity-10">
+                            <MacroLogo class="fill-ink" />
+                          </div>
+                        </div>
+                      }
+                    >
+                      {(Demo) => (
+                        <Dynamic
+                          component={Demo()}
+                          onComplete={handleLessonComplete}
+                          isActive={true}
+                        />
+                      )}
+                    </Show>
+                  </div>
+                </div>
+              </>
+            )}
+          </Show>
+        </div>
+      </ClippedPanel>
+    </div>
   );
 }

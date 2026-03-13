@@ -126,7 +126,7 @@ const createComponent = async (spec: {
   );
 };
 
-type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
+export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
@@ -437,14 +437,18 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   );
 };
 
-type LauncherInnerProps = {
+export type LauncherInnerProps = {
   onClose: (shouldReturnFocus?: boolean) => void;
+  /** Override the default CREATABLE_BLOCKS with custom blocks (e.g. sandbox blocks) */
+  blocks?: CreatableBlock[];
 };
 
-const LauncherInner = (props: LauncherInnerProps) => {
+export const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
+
+  const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
 
   const [focusedIndex, setFocusedIndex] = createSignal(0);
 
@@ -463,7 +467,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
   const getColumnCount = () => {
     const width = window.innerWidth;
-    const length = CREATABLE_BLOCKS.length;
+    const length = blocks().length;
     if (width >= 1280) {
       if (length >= 8) return 8;
       if (length >= 7) return 7;
@@ -498,7 +502,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  CREATABLE_BLOCKS.forEach((item) => {
+  blocks().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
@@ -585,7 +589,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
-      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
+      blocks()[focusedIndex()]?.keyDownHandler();
       props.onClose();
       return true;
     },
@@ -598,7 +602,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
-      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
+      blocks()[focusedIndex()]?.keyDownHandler();
       props.onClose();
       return true;
     },
@@ -612,7 +616,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     attachHotkeys(ref);
 
     setTimeout(() => {
-      const firstItem = CREATABLE_BLOCKS[0];
+      const firstItem = blocks()[0];
 
       if (firstItem) {
         focusMenuItem(firstItem.label);
@@ -622,7 +626,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
-    const length = CREATABLE_BLOCKS.length;
+    const length = blocks().length;
     if (length >= 8) return 'xl:grid-cols-8';
     if (length >= 7) return 'xl:grid-cols-7';
     if (length >= 6) return 'xl:grid-cols-6';
@@ -649,7 +653,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         )}
         ref={ref}
       >
-        <For each={CREATABLE_BLOCKS}>
+        <For each={blocks()}>
           {(item, index) => (
             <LauncherMenuItem
               creatableBlock={item}
