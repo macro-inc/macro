@@ -3,13 +3,15 @@ use std::borrow::Cow;
 use crate::Result;
 use crate::SearchOn;
 use crate::error::OpensearchClientError;
-use crate::search::model::MacroEm;
 use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
 use models_search_cursor::SearchMethodCursor;
-use opensearch_query_builder::*;
+use opensearch_query_builder::{
+    BoolQueryBuilder, FieldSort, QueryType, ScriptSort, SortOrder, SortType, Script,
+    ScriptSortType,
+};
 
 /// A macro for generating delegation methods that forward calls to an inner field
 /// and return Self to maintain builder pattern chainability.
@@ -44,18 +46,6 @@ macro_rules! delegate_methods {
             }
         )*
     };
-}
-
-/// Creates a highlight field
-pub(crate) fn create_highlight_field<'a>(
-    highlight_type: &'a str,
-    number_of_fragments: u32,
-) -> HighlightField<'a> {
-    HighlightField::new()
-        .highlight_type(highlight_type)
-        .pre_tags(vec![MacroEm::Open.to_string()])
-        .post_tags(vec![MacroEm::Close.to_string()])
-        .number_of_fragments(number_of_fragments)
 }
 
 /// Creates sort vec to sort by the updated_at with entity_id as a tiebreaker.
@@ -97,31 +87,6 @@ pub trait SearchQueryConfig {
     const CONTENT_KEY: &'static str = "content";
     /// The entity index for the search query
     const ENTITY_INDEX: SearchEntityType;
-
-    /// Returns the default sort types that are used on the search query.
-    /// Override this method if you need custom sort logic
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        // Use the updated_at_sort by default
-        updated_at_sort()
-    }
-
-    /// Override this method if you need custom highlight logic
-    fn default_highlight<'a>() -> Highlight<'a> {
-        Highlight::new().require_field_match(true).field(
-            "content",
-            HighlightField::new()
-                .highlight_type("plain")
-                .pre_tags(vec![MacroEm::Open.to_string()])
-                .post_tags(vec![MacroEm::Close.to_string()])
-                .number_of_fragments(500),
-        )
-    }
-
-    /// Override this method if you want to add custom owner highlight fields
-    /// By default, this will add a user_id highlight field
-    fn append_owner_highlights<'a>(highlight: Highlight<'a>) -> Highlight<'a> {
-        highlight.field("user_id", create_highlight_field("plain", 1))
-    }
 }
 
 #[derive(Default)]
@@ -296,102 +261,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         Ok(access_bool_query)
     }
 
-    /// Builds the search request with the provided main bool query
-    /// This will automatically wrap the bool query in a function score if
-    /// SearchOn::NameContent is used
-    pub fn build_search_request<'a>(
-        &'a self,
-        query_object: BoolQuery<'a>,
-    ) -> Result<SearchRequest<'a>> {
-        let mut search_request: SearchRequestBuilder<'a> = SearchRequestBuilder::new();
-
-        // Collapse on the ID_KEY if collapse is true
-        if self.collapse {
-            search_request.collapse(Collapse::new(T::ID_KEY));
-        }
-
-        let mut highlight = match self.search_on {
-            SearchOn::Content => T::default_highlight(),
-            SearchOn::Name => Highlight::new().require_field_match(true).field(
-                T::TITLE_KEY,
-                HighlightField::new()
-                    .highlight_type("plain")
-                    .pre_tags(vec![MacroEm::Open.to_string()])
-                    .post_tags(vec![MacroEm::Close.to_string()])
-                    .number_of_fragments(1),
-            ),
-            SearchOn::NameContent => Highlight::new()
-                .require_field_match(false)
-                .field(
-                    T::TITLE_KEY,
-                    HighlightField::new()
-                        .highlight_type("plain")
-                        .pre_tags(vec![MacroEm::Open.to_string()])
-                        .post_tags(vec![MacroEm::Close.to_string()])
-                        .number_of_fragments(1),
-                )
-                .field(
-                    T::CONTENT_KEY,
-                    HighlightField::new()
-                        .highlight_type("plain")
-                        .pre_tags(vec![MacroEm::Open.to_string()])
-                        .post_tags(vec![MacroEm::Close.to_string()])
-                        .number_of_fragments(1),
-                ),
-        };
-
-        highlight = T::append_owner_highlights(highlight);
-
-        search_request.highlight(highlight);
-        search_request.set_sorts(T::default_sort_types().into());
-
-        search_request.from(self.page * self.page_size);
-        search_request.size(self.page_size);
-
-        let built_query: QueryType = match self.search_on {
-            SearchOn::Name | SearchOn::Content => query_object.into(),
-            SearchOn::NameContent => {
-                if self.disable_recency {
-                    query_object.into()
-                } else {
-                    let mut function_score_query = FunctionScoreQueryBuilder::new();
-
-                    function_score_query.query(query_object.into());
-
-                    function_score_query.function(ScoreFunction {
-                        function: ScoreFunctionType::Gauss(DecayFunction {
-                            field: "updated_at_seconds".into(),
-                            origin: Some("now".into()),
-                            scale: "21d".into(),
-                            offset: Some("3d".into()),
-                            decay: Some(0.5),
-                        }),
-                        filter: None,
-                        weight: Some(1.3),
-                    });
-
-                    function_score_query.boost_mode(BoostMode::Multiply);
-                    function_score_query.score_mode(ScoreMode::Multiply);
-
-                    function_score_query.build().into()
-                }
-            }
-        };
-
-        // We need to add aggregration and tracking to the query if we are searching on NameContent
-        if self.search_on == SearchOn::NameContent && !self.disable_recency {
-            search_request.track_total_hits(true);
-            search_request.add_agg(
-                "total_uniques".to_string(),
-                AggregationType::Cardinality(CardinalityAggregation::new(T::ID_KEY)),
-            );
-        }
-
-        search_request.query(built_query);
-
-        Ok(search_request.build())
-    }
-
     /// Generates a vec of term queries to be put inside of the bool must query
     pub fn build_must_term_query<'a>(&'a self, search_on: SearchOn) -> Result<Vec<QueryType<'a>>> {
         let keys = Keys {
@@ -416,16 +285,13 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                     query_key,
                     keys.title_key,
                     terms,
-                    None,
                 ));
             }
             SearchOn::Content => {
-                // map all terms over content key
                 must_array.push(generate_terms_must_query(
                     query_key,
                     keys.content_key,
                     terms,
-                    None,
                 ));
             }
             SearchOn::NameContent => unreachable!(),

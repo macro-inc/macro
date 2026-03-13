@@ -1,9 +1,5 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::{
-        emails::{EmailSearchArgs, search_emails},
-        model::SearchHit,
-    },
     upsert::{self, BulkUpsertResult, email::UpsertEmailArgs},
 };
 
@@ -21,10 +17,6 @@ impl OpensearchClient {
         messages: &[UpsertEmailArgs],
     ) -> Result<BulkUpsertResult> {
         upsert::email::bulk_upsert_email_messages(&self.inner, messages).await
-    }
-
-    pub async fn search_emails(&self, args: EmailSearchArgs) -> Result<Vec<SearchHit>> {
-        search_emails(&self.inner, args).await
     }
 
     /// Deletes all email messages with the specified thread_id

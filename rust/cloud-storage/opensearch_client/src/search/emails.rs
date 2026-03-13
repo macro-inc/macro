@@ -1,25 +1,14 @@
 use crate::{
     Result, delegate_methods,
-    error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{
-            NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
-            inject_fragment_size, parse_highlight_hit,
-        },
-        query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQuery, BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson,
-};
-
-use crate::search::model::DefaultSearchResponse;
-use serde_json::Value;
+use models_opensearch::SearchEntityType;
+use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType};
 
 pub(crate) struct EmailSearchConfig;
 
@@ -206,16 +195,6 @@ impl EmailQueryBuilder {
         Ok(content_bool_query)
     }
 
-    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
-        // Build the search request with the bool query
-        // This will automatically wrap the bool query in a function score if
-        // SearchOn::NameContent is used
-        let search_request = self
-            .inner
-            .build_search_request(self.build_bool_query()?.build())?;
-
-        Ok(search_request)
-    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -257,13 +236,6 @@ pub(crate) struct EmailIndex {
     pub subject: Option<String>,
     /// The sent at time of the email message
     pub sent_at_seconds: Option<i64>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub(crate) enum EmailNameIndex {
-    Email(Box<EmailIndex>),
-    Name(NameIndex),
 }
 
 pub struct EmailSearchArgs {
@@ -308,102 +280,6 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .ids_only(args.ids_only)
             .disable_recency(args.disable_recency)
     }
-}
-
-impl EmailSearchArgs {
-    pub fn build(self) -> Result<Value> {
-        let builder: EmailQueryBuilder = self.into();
-        let mut json = builder.build_search_request()?.to_json();
-        inject_fragment_size(&mut json, 1000);
-        exclude_source_content(&mut json);
-        Ok(json)
-    }
-}
-
-#[tracing::instrument(skip(client, args), err)]
-pub(crate) async fn search_emails(
-    client: &opensearch::OpenSearch,
-    args: EmailSearchArgs,
-) -> Result<Vec<SearchHit>> {
-    let query_body = args.build()?;
-
-    tracing::trace!("query: {}", query_body);
-
-    let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Emails.as_ref()
-        ]))
-        .body(query_body)
-        .send()
-        .await
-        .map_client_error()
-        .await?;
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
-        })?;
-
-    let result: DefaultSearchResponse<EmailNameIndex> =
-        serde_json::from_slice(&bytes).map_err(|e| {
-            OpensearchClientError::SearchDeserializationFailed {
-                details: e.to_string(),
-                raw_body: String::from_utf8_lossy(&bytes).to_string(),
-            }
-        })?;
-
-    Ok(result
-        .hits
-        .hits
-        .into_iter()
-        .map(|hit| {
-            let highlight = hit
-                .highlight
-                .map(|h| {
-                    parse_highlight_hit(
-                        h,
-                        Keys {
-                            title_key: EmailSearchConfig::TITLE_KEY,
-                            content_key: EmailSearchConfig::CONTENT_KEY,
-                        },
-                    )
-                })
-                .unwrap_or_default();
-
-            match hit.source {
-                EmailNameIndex::Name(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: a.entity_type,
-                    goto: None,
-                    score: hit.score,
-                    highlight,
-                    updated_at: None,
-                },
-                EmailNameIndex::Email(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: SearchEntityType::Emails,
-                    score: hit.score,
-                    highlight,
-                    goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
-                        email_message_id: a.message_id,
-                        bcc: a.bcc,
-                        cc: a.cc,
-                        labels: a.labels,
-                        sent_at: a
-                            .sent_at_seconds
-                            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
-                        sender: a.sender,
-                        recipients: a.recipients,
-                    })),
-                    updated_at: a
-                        .sent_at_seconds
-                        .and_then(|s| chrono::DateTime::from_timestamp(s, 0)),
-                },
-            }
-        })
-        .collect())
 }
 
 #[cfg(test)]
