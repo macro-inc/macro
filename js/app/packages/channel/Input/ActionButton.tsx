@@ -15,6 +15,7 @@ export function InputActionButton(props: {
       tooltip={<LabelAndHotKey label={props.label} />}
       onClick={(event) => props.onClick?.(event)}
       classList={{ 'bg-active': props.active }}
+      size="icon-sm"
     >
       {props.children}
     </Button>

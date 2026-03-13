@@ -1,5 +1,4 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BasicHotkey } from '@core/component/Hotkey';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
@@ -78,6 +77,9 @@ import {
 import { mdStore } from '../signal/markdownBlockData';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Dynamic } from 'solid-js/web';
 
 function VerticalBar() {
   return <div class="w-px mx-1 h-full bg-edge"></div>;
@@ -190,15 +192,22 @@ const InlineFormatButton = (props: {
 }) => {
   const icon = InlineIcons[props.format];
   return (
-    <DeprecatedIconButton
-      tooltip={{ label: props.format, shortcut: InlineShortcuts[props.format] }}
-      icon={icon}
-      theme={props.selection()?.[props.format] ? 'accent' : 'clear'}
+    <Button
+      tooltip={
+        <LabelAndHotKey
+          label={props.format}
+          shortcut={InlineShortcuts[props.format]}
+        />
+      }
+      size="icon-md"
+      variant={props.selection()?.[props.format] ? 'accent' : 'ghost'}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
       disabled={props.buttonIsDisabled()}
-    />
+    >
+      <Dynamic component={icon} />
+    </Button>
   );
 };
 
@@ -239,19 +248,21 @@ export const ElementFormatButton = (props: {
   const name = NodeMenuOptions[props.format]?.label || 'Body';
   const icon = NodeMenuOptions[props.format]?.icon;
   return (
-    <DeprecatedIconButton
-      tooltip={{ label: name }}
-      icon={icon}
-      theme={
+    <Button
+      tooltip={name}
+      size="icon-md"
+      variant={
         props.selection()?.elementsInRange?.has(props.format)
           ? 'accent'
-          : 'clear'
+          : 'ghost'
       }
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
       disabled={props.buttonIsDisabled()}
-    />
+    >
+      <Dynamic component={icon} />
+    </Button>
   );
 };
 
@@ -438,14 +449,15 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
         <DropdownMenu.Trigger>
-          <DeprecatedIconButton
-            icon={TextAA}
-            theme="clear"
-            tooltip={{ label: 'Text Styles' }}
-            showChevron
+          <Button
+            variant="ghost"
+            size="icon-md"
+            tooltip={'Text Styles'}
             disabled={buttonIsDisabled()}
             tabIndex={-1}
-          />
+          >
+            <TextAA />
+          </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenuContent
@@ -501,14 +513,15 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
         <DropdownMenu.Trigger>
-          <DeprecatedIconButton
-            icon={TextAA}
-            theme="clear"
-            tooltip={{ label: 'Text Styles' }}
-            showChevron
+          <Button
+            variant="ghost"
+            size="icon-md"
+            tooltip="Text Styles"
             disabled={props.buttonIsDisabled()}
             tabIndex={-1}
-          />
+          >
+            <TextAA />
+          </Button>
         </DropdownMenu.Trigger>
         <Show when={!props.buttonIsDisabled()}>
           <DropdownMenu.Portal>
@@ -551,14 +564,15 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <DeprecatedIconButton
-          icon={props.icon ?? ThreeDots}
-          theme="clear"
-          tooltip={{ label: props.label ?? 'More Formats' }}
-          showChevron
+        <Button
+          variant="ghost"
+          size="icon-md"
+          tooltip={props.label ?? 'More Formats'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
-        />
+        >
+          <Dynamic component={props.icon ?? ThreeDots} />
+        </Button>
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
@@ -596,14 +610,15 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <DeprecatedIconButton
-          icon={props.icon ?? ThreeDots}
-          theme="clear"
-          tooltip={{ label: props.label ?? 'More Formats' }}
-          showChevron
+        <Button
+          variant="ghost"
+          size="icon-md"
+          tooltip={props.label ?? 'More Formats'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
-        />
+        >
+          <Dynamic component={props.icon ?? ThreeDots} />
+        </Button>
       </DropdownMenu.Trigger>
       <Show when={!buttonIsDisabled()}>
         <DropdownMenu.Portal>
@@ -692,30 +707,32 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             ]}
             buttonIsDisabled={buttonIsDisabled}
           />
-          <DeprecatedIconButton
-            icon={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
-            theme="clear"
+          <Button
+            variant="ghost"
+            size="icon-md"
             onClick={handleLink}
-            tooltip={{
-              label: selection()?.hasLinks ? 'Remove Link' : 'Insert Link',
-            }}
+            tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
-          />
+          >
+            <Dynamic
+              component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+            />
+          </Button>
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
-          <DeprecatedIconButton
-            tooltip={{
-              label: 'Comment',
-            }}
-            theme="clear"
-            icon={ChatTeardrop}
+          <Button
+            variant="ghost"
+            size="icon-md"
+            tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               handleInsertComment();
             }}
             disabled={commentButtonIsDisabled()}
-          />
+          >
+            <ChatTeardrop />
+          </Button>
         </Show>
       </div>
     );
@@ -833,30 +850,32 @@ export function FormatTools(props: { withinPopup?: boolean }) {
 
           {/* ------------ Visible at all breakpoints ----------- */}
           <div class="flex gap-1 h-full">
-            <DeprecatedIconButton
-              icon={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
-              theme="clear"
+            <Button
+              variant="ghost"
+              size="icon-md"
               onClick={handleLink}
-              tooltip={{
-                label: selection()?.hasLinks ? 'Remove Link' : 'Insert Link',
-              }}
+              tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
               disabled={buttonIsDisabled()}
-            />
+            >
+              <Dynamic
+                component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+              />
+            </Button>
             <MediaSelector buttonIsDisabled={buttonIsDisabled} />
             <Show when={ENABLE_MARKDOWN_COMMENTS}>
-              <DeprecatedIconButton
-                tooltip={{
-                  label: 'Comment',
-                }}
-                theme="clear"
-                icon={ChatTeardrop}
+              <Button
+                variant="ghost"
+                size="icon-md"
+                tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   handleInsertComment();
                 }}
                 disabled={commentButtonIsDisabled()}
-              />
+              >
+                <ChatTeardrop />
+              </Button>
             </Show>
             <VerticalBar />
             <DropdownMenu
@@ -864,14 +883,15 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               onOpenChange={setMoreOptionsOpen}
             >
               <DropdownMenu.Trigger>
-                <DeprecatedIconButton
-                  icon={PlusSquare}
-                  theme="clear"
-                  tooltip={{ label: 'More' }}
-                  showChevron
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  tooltip="More"
                   disabled={buttonIsDisabled()}
                   tabIndex={-1}
-                />
+                >
+                  <PlusSquare />
+                </Button>
               </DropdownMenu.Trigger>
               <Show when={!buttonIsDisabled()}>
                 <DropdownMenu.Portal>
@@ -936,19 +956,19 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <div class="w-4"></div>
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment() && !canEdit()}>
-          <DeprecatedIconButton
-            tooltip={{
-              label: 'Comment',
-            }}
-            theme="clear"
-            icon={ChatTeardrop}
+          <Button
+            variant="ghost"
+            size="icon-md"
+            tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               handleInsertComment();
             }}
             disabled={commentButtonIsDisabled()}
-          />
+          >
+            <ChatTeardrop />
+          </Button>
         </Show>
       </>
     );
