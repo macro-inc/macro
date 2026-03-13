@@ -1,6 +1,6 @@
 import { cn } from '@ui/utils/classname';
 import { Tooltip } from 'core/component/Tooltip';
-import { type JSX, type ParentComponent, Show, splitProps } from 'solid-js';
+import { type JSX, type ParentComponent, splitProps } from 'solid-js';
 
 export type ButtonVariant =
   | 'primary'

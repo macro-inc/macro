@@ -260,7 +260,6 @@ export function ComposeTask(props: ComposeTaskProps) {
   const initialState = initializeFromDraft();
   const [title, setTitle] = createSignal(initialState.title);
   const [content, setContent] = createSignal(initialState.content);
-  const [mdContent, setMdContent] = createSignal('');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [attachHotkeys, composeHotkeyScope] = useHotkeyDOMScope(
