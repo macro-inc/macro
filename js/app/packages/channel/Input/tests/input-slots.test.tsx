@@ -43,6 +43,10 @@ vi.mock('@icon/regular/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
+vi.mock('@icon/regular/x.svg', () => ({
+  default: () => <span data-testid="close-icon" />,
+}));
+
 vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));

@@ -3,7 +3,6 @@ import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { JSX } from 'solid-js';
 import { useInput, useInputCommands } from './context';
-import { renderIcon } from './utils/render-icon';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { InputActionButton } from './ActionButton';
 
@@ -37,7 +36,7 @@ export function AttachFilesAction() {
         label="Attach files"
         onClick={() => fileInputRef?.click()}
       >
-        {renderIcon(PaperclipIcon, 'size-5')}
+        <PaperclipIcon class="size-5" />
       </InputActionButton>
     </>
   );
@@ -53,7 +52,7 @@ export function ToggleFormatAction() {
       active={input().showFormatRibbon}
       onClick={() => commands.toggleFormatRibbon()}
     >
-      {renderIcon(FormatIcon, 'size-5')}
+      <FormatIcon class="size-5" />
     </InputActionButton>
   );
 }
@@ -63,7 +62,7 @@ export function CloseReplyAction() {
 
   return (
     <InputActionButton label="Delete reply" onClick={() => commands.close()}>
-      {renderIcon(TrashIcon, 'size-5')}
+      <TrashIcon class="size-5" />
     </InputActionButton>
   );
 }
@@ -73,7 +72,7 @@ export function DiscardDraftAction() {
 
   return (
     <InputActionButton label="Discard Edit" onClick={() => commands.close()}>
-      {renderIcon(TrashIcon, 'size-5')}
+      <TrashIcon class="size-5" />
     </InputActionButton>
   );
 }
