@@ -49,7 +49,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
           },
           {
             "term": {
-              "_index": "emails"
+              "_index": "emails_alias"
             }
           },
           {

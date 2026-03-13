@@ -15,7 +15,6 @@ import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 import XIcon from '@icon/regular/x.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import { renderIcon } from './utils/render-icon';
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
@@ -39,7 +38,7 @@ function RemoveButton(props: {
       }}
       aria-label={`Remove ${props.attachment.name}`}
     >
-      {renderIcon(XIcon, 'text-ink-muted group-hover:text-failure size-3')}
+      <XIcon class="text-ink-muted group-hover:text-failure size-3" />
     </button>
   );
 }
@@ -64,7 +63,7 @@ function MediaAttachmentItem(props: {
             }
             fallback={
               <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-                {renderIcon(SpinnerIcon, 'w-4 h-4 animate-spin')}
+                <SpinnerIcon class="w-4 h-4 animate-spin" />
               </div>
             }
           >
@@ -86,7 +85,7 @@ function DocumentAttachmentItem(props: {
     <div class="group flex items-center px-2 py-1.5 space-x-1.5 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
       <Show
         when={!props.attachment.pending}
-        fallback={renderIcon(SpinnerIcon, 'w-4 h-4 animate-spin')}
+        fallback={<SpinnerIcon class="w-4 h-4 animate-spin" />}
       >
         <EntityIcon
           targetType={props.attachment.iconType ?? 'unknown'}

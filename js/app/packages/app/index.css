@@ -614,10 +614,6 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        /* Need to set opsz here so that it will apply to MD */
-        font-variation-settings: "opsz" 11;
-        font-synthesis: none;
-
         color: var(--color-ink);
     }
 
