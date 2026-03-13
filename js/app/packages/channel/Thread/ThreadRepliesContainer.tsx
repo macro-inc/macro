@@ -4,7 +4,7 @@ import { threadOffsetX } from './utils/thread-rail-geometry';
 export function ThreadRepliesContainer(props: ParentProps) {
   return (
     <div
-      class="flex flex-col w-full pb-3"
+      class="flex flex-col w-full py-2"
       style={{
         'padding-left': threadOffsetX,
       }}

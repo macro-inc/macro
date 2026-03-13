@@ -85,7 +85,7 @@ function RegularMessageLayout(props: {
   messageEditor?: MessageEditor;
 }) {
   return (
-    <Message.Layout>
+    <Message.Layout class='pt-2'>
       <Message.Slot placement="icon">
         <Message.SenderIcon />
       </Message.Slot>
@@ -118,11 +118,11 @@ function GroupedMessageLayout(props: {
   const isEditing = () => isEditingMessage(props.messageEditor, message().id);
 
   return (
-    <Message.Layout class="py-1">
+    <Message.Layout>
       <Message.Slot placement="icon">
         <Message.SenderIcon hidden />
       </Message.Slot>
-      <Message.Slot placement="content" class="mt-0.5">
+      <Message.Slot placement="content">
         <div
           class="flex gap-3 min-w-0"
           classList={{
