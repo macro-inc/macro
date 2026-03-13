@@ -746,12 +746,13 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 :root {
-  --message-padding: .5rem;
+  --message-padding-x: .5rem;
+  --regular-message-padding-t: .5rem;
+  --thread-padding-y: .5rem;
   --thread-shift: 32px;
   --user-icon-width: 36px;
-  --body-padding: 0.5rem;
   --left-of-connector: calc(
-    var(--message-padding) + var(--user-icon-width) / 2
+    var(--message-padding-x) + var(--user-icon-width) / 2
   );
   --left-of-user-icon: calc(
     var(--left-of-connector) - var(--user-icon-width) / 2
@@ -761,7 +762,6 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 @media (min-width: 640px) {
   :root {
     --thread-shift: 40px;
-    --body-padding: 0.5rem;
   }
 }
 

@@ -5,7 +5,11 @@ export function Layout(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <div class={cn('w-full px-2', local.class)} data-message-layout {...rest}>
+    <div
+      class={cn('w-full pr-2 pl-(--message-padding-x)', local.class)}
+      data-message-layout
+      {...rest}
+    >
       <div
         class="grid min-w-0 items-start gap-x-2"
         style={{

@@ -85,7 +85,7 @@ function RegularMessageLayout(props: {
   messageEditor?: MessageEditor;
 }) {
   return (
-    <Message.Layout class="pt-2">
+    <Message.Layout class="pt-(--regular-message-padding-t)">
       <Message.Slot placement="icon">
         <Message.SenderIcon />
       </Message.Slot>
