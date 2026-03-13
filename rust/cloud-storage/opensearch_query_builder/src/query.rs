@@ -156,9 +156,7 @@ impl<'a> QueryType<'a> {
             QueryType::Term(term) => QueryType::Term(term.to_owned()),
             QueryType::Terms(terms) => QueryType::Terms(terms.to_owned()),
             QueryType::WildCard(wildcard) => QueryType::WildCard(wildcard.to_owned()),
-            QueryType::SimpleQueryString(sqs) => {
-                QueryType::SimpleQueryString(sqs.to_owned())
-            }
+            QueryType::SimpleQueryString(sqs) => QueryType::SimpleQueryString(sqs.to_owned()),
         }
     }
 }

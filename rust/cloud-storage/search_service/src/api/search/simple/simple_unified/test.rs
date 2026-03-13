@@ -24,10 +24,7 @@ fn test_split_search_terms_multiple_spaces() {
 
 #[test]
 fn test_split_search_terms_single_word() {
-    assert_eq!(
-        split_search_terms(&["hello".to_string()]),
-        vec!["hello"]
-    );
+    assert_eq!(split_search_terms(&["hello".to_string()]), vec!["hello"]);
 }
 
 #[test]

@@ -156,18 +156,11 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::InvalidPageSize);
     }
 
-    let terms: Vec<String> = match (req.terms.clone(), req.query.clone()) {
-        (Some(terms), _) => terms.into_iter().filter(|t| t.len() >= 3).collect(),
-        (None, Some(query)) if query.len() >= 3 => vec![query],
-        (None, Some(_)) => {
-            return Err(SearchError::InvalidQuerySize);
-        }
-        _ => vec![],
-    };
-
-    if terms.is_empty() {
-        return Err(SearchError::NoQueryOrTermsProvided);
+    let query = req.query.trim().to_string();
+    if query.len() < 3 {
+        return Err(SearchError::InvalidQuerySize);
     }
+    let terms: Vec<String> = vec![query];
 
     let match_type = req.match_type;
     let include = req.include;
@@ -645,7 +638,7 @@ pub async fn handler(
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!(
         user_id = user_context.user_id,
-        terms = ?req.terms,
+        query = ?req.query,
         search_on = ?req.search_on,
         "simple_unified_search"
     );

@@ -13,9 +13,9 @@ export function createUnifiedSearchResource(
   const combined = () => [searchTerm(), cursor()] as const;
   const [signal, , filterError] = makeAbortable();
 
-  return createResource(combined, async ([term, cursorValue]) => {
+  return createResource(combined, async ([query, cursorValue]) => {
     if (!ENABLE_SEARCH_SERVICE) return null;
-    if (term.length < 3) return null;
+    if (query.length < 3) return null;
 
     try {
       const result = await searchClient.search(
@@ -23,7 +23,7 @@ export function createUnifiedSearchResource(
           request: {
             search_on: 'content',
             match_type: 'partial',
-            terms: [term],
+            query,
             filters: {
               channel: {},
               chat: {},
