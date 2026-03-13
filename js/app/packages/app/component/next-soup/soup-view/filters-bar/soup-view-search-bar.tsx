@@ -27,6 +27,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
+  let measureSpan: HTMLSpanElement | undefined;
+
+  const [searchFocused, setSearchFocused] = createSignal(false);
+  const [measuredWidth, setMeasuredWidth] = createSignal(0);
+
+  createEffect(() => {
+    if (measureSpan) {
+      measureSpan.textContent = searchText() || '';
+      setMeasuredWidth(measureSpan.scrollWidth);
+    }
+  });
 
   createEffect(() => {
     ref();
@@ -38,7 +49,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   });
 
   const searchHotkey = registerHotkey({
-    hotkey: ['cmd+f', '/'],
+    hotkey: ['cmd+f'],
     scopeId: panel.splitHotkeyScope,
     description: 'Search',
     keyDownHandler: () => {
@@ -48,6 +59,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   });
 
   onCleanup(searchHotkey.dispose);
+
+  const MIN_INPUT_WIDTH = 48;
+
+  const inputWidth = () => {
+    if (!searchText() && !searchFocused()) return 0;
+    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
+  };
 
   return (
     <div class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2">
@@ -69,11 +87,20 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           }}
         >
           <SearchIcon class="size-4 shrink-0" />
+          <span
+            ref={(el) => {
+              measureSpan = el;
+            }}
+            class="invisible absolute whitespace-pre"
+            aria-hidden="true"
+          />
           <input
             ref={setRef}
             type="text"
             value={searchText()}
             onInput={(e) => setSearchText(e.currentTarget.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             onKeyDown={(e) => {
               if (
                 e.key === 'Escape' ||
@@ -84,7 +111,8 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.currentTarget.blur();
               }
             }}
-            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full min-w-0 flex-1"
+            class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
+            style={{ width: `${inputWidth()}px` }}
           />
           <Show when={!searchText()}>
             <span class="text-ink-placeholder leading-none pointer-events-none text-sm peer-focus:hidden">
