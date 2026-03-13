@@ -291,7 +291,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         access_bool_query.filter(filter_bool_query);
 
         // Only search on the provided index
-        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.index_name()));
 
         Ok(access_bool_query)
     }
