@@ -194,117 +194,87 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   return (
-    <>
-      <Show when={isMobile() && isExpanded()}>
-        <div
-          class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
-          onClick={() => props.onOpenChange(false)}
-        />
-      </Show>
-      <div
-        class={cn(
-          'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
-          isExpanded() &&
-            'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
-          props.sidebarState === 'hidden' &&
-            '-translate-x-full overflow-hidden opacity-0',
+    <div
+      class={cn(
+        'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
+        isExpanded() &&
+          'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+        props.sidebarState === 'hidden' &&
+          '-translate-x-full overflow-hidden opacity-0',
 
-          isSlim() &&
-            'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
-        )}
-        data-expanded={isExpanded()}
-        data-slim={isSlim()}
-        style={{ transition: 'max-width ease-in-out 100ms' }}
-      >
-        <div class="flex items-center justify-between py-2 pl-3 pr-2">
-          <LogoIcon class="size-6 text-accent" />
-        </div>
+        isSlim() &&
+          'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+      )}
+      data-expanded={isExpanded()}
+      data-slim={isSlim()}
+      style={{ transition: 'max-width ease-in-out 100ms' }}
+    >
+      <div class="flex items-center justify-between py-2 pl-3 pr-2">
+        <LogoIcon class="size-6 text-accent" />
+      </div>
 
-        <div class="px-2">
-          <hr class="border-edge-muted mb-[8px]" />
-        </div>
+      <div class="px-2">
+        <hr class="border-edge-muted mb-[8px]" />
+      </div>
 
-        <nav>
-          <ul class="w-full h-full px-2 flex flex-col gap-1">
-            <For each={SIDEBAR_LINKS}>
-              {(link) => (
-                <li class="flex items-center justify-center">
-                  <SidebarLink
-                    {...link}
-                    sidebarState={props.sidebarState ?? 'expanded'}
-                  />
-                </li>
-              )}
-            </For>
-          </ul>
-        </nav>
-
-        <div class="px-2">
-          <hr class="border-edge-muted my-[8px]" />
-        </div>
-
-        <Show when={isExpanded()}>
-          <div class="block max-h-[clamp(10%,60%,20rem)]">
-            <ChannelsUnreadWidget />
-          </div>
-
-          {/* <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto"> */}
-          {/*   <UnreadNotificationsWidget /> */}
-          {/* </div> */}
-        </Show>
-
-        <div class="px-2 mt-auto w-full">
-          <hr class="border-edge-muted mb-[8px]" />
-        </div>
-
-        <div class=" w-full px-2 flex flex-col gap-1">
-          <Tooltip
-            class="w-full"
-            tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-          >
-            <Button
-              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateClick}
-            >
-              <PlusIcon class="size-4 shrink-0" />
-              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                Create
-              </span>
-            </Button>
-          </Tooltip>
-
-          <Show when={!isMobile()}>
-            <Tooltip
-              class="w-full"
-              tooltip={
-                <LabelAndHotKey
-                  label="Command palette"
-                  hotkeyToken={TOKENS.global.commandMenu}
+      <nav>
+        <ul class="w-full h-full px-2 flex flex-col gap-1">
+          <For each={SIDEBAR_LINKS}>
+            {(link) => (
+              <li class="flex items-center justify-center">
+                <SidebarLink
+                  {...link}
+                  sidebarState={props.sidebarState ?? 'expanded'}
                 />
-              }
-            >
-              <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-                variant="ghost"
-                size="sm"
-                onClick={handleCommandPaletteClick}
-              >
-                <CommandIcon class="size-4 shrink-0" />
-                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                  Command
-                </span>
-              </Button>
-            </Tooltip>
-          </Show>
+              </li>
+            )}
+          </For>
+        </ul>
+      </nav>
 
+      <div class="px-2">
+        <hr class="border-edge-muted my-[8px]" />
+      </div>
+
+      <Show when={isExpanded()}>
+        <div class="block max-h-[clamp(10%,60%,20rem)]">
+          <ChannelsUnreadWidget />
+        </div>
+
+        {/* <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto"> */}
+        {/*   <UnreadNotificationsWidget /> */}
+        {/* </div> */}
+      </Show>
+
+      <div class="px-2 mt-auto w-full">
+        <hr class="border-edge-muted mb-[8px]" />
+      </div>
+
+      <div class=" w-full px-2 flex flex-col gap-1">
+        <Tooltip
+          class="w-full"
+          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
+        >
+          <Button
+            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+            variant="ghost"
+            size="sm"
+            onClick={handleCreateClick}
+          >
+            <PlusIcon class="size-4 shrink-0" />
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              Create
+            </span>
+          </Button>
+        </Tooltip>
+
+        <Show when={!isMobile()}>
           <Tooltip
             class="w-full"
             tooltip={
               <LabelAndHotKey
-                label="Settings"
-                hotkeyToken="global.toggleSettings"
+                label="Command palette"
+                hotkeyToken={TOKENS.global.commandMenu}
               />
             }
           >
@@ -312,47 +282,69 @@ export const AppSidebar = (props: AppSidebarProps) => {
               class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
               variant="ghost"
               size="sm"
-              onClick={toggleSettings}
+              onClick={handleCommandPaletteClick}
             >
-              <GearIcon class="size-4 shrink-0" />
+              <CommandIcon class="size-4 shrink-0" />
               <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                Settings
+                Command
               </span>
             </Button>
           </Tooltip>
+        </Show>
 
-          <Show when={!isMobile()}>
-            <Tooltip
-              class="w-full"
-              tooltip={
-                <LabelAndHotKey
-                  label={isSlim() ? 'Expand sidebar' : 'Shrink Sidebar'}
-                  hotkeyToken={TOKENS.global.toggleSidebar}
-                />
-              }
+        <Tooltip
+          class="w-full"
+          tooltip={
+            <LabelAndHotKey
+              label="Settings"
+              hotkeyToken="global.toggleSettings"
+            />
+          }
+        >
+          <Button
+            class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+            variant="ghost"
+            size="sm"
+            onClick={toggleSettings}
+          >
+            <GearIcon class="size-4 shrink-0" />
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              Settings
+            </span>
+          </Button>
+        </Tooltip>
+
+        <Show when={!isMobile()}>
+          <Tooltip
+            class="w-full"
+            tooltip={
+              <LabelAndHotKey
+                label={isSlim() ? 'Expand sidebar' : 'Shrink Sidebar'}
+                hotkeyToken={TOKENS.global.toggleSidebar}
+              />
+            }
+          >
+            <Button
+              class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
+              variant="ghost"
+              size="sm"
+              onClick={() => props.onOpenChange(isSlim())}
+              onMouseEnter={() => setSidebarBtnHovering(true)}
+              onMouseLeave={() => setSidebarBtnHovering(false)}
             >
-              <Button
-                class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs"
-                variant="ghost"
-                size="sm"
-                onClick={() => props.onOpenChange(isSlim())}
-                onMouseEnter={() => setSidebarBtnHovering(true)}
-                onMouseLeave={() => setSidebarBtnHovering(false)}
-              >
-                <div class="shrink-0 [&_svg]:size-4">
-                  <AnimatedSidebarIcon
-                    triggerAnimation={sidebarBtnHovering()}
-                  />
-                </div>
-                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-                  Sidebar
-                </span>
-              </Button>
-            </Tooltip>
-          </Show>
-        </div>
+              <div class="shrink-0 [&_svg]:size-4">
+                <AnimatedSidebarIcon
+                  triggerAnimation={sidebarBtnHovering()}
+                />
+              </div>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+                Sidebar
+              </span>
+            </Button>
+          </Tooltip>
+        </Show>
       </div>
-    </>
+    </div>
   );
 };
 
