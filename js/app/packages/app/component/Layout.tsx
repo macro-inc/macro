@@ -135,7 +135,7 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <Show when={isAuthenticated()}>
+        <Show when={isAuthenticated() && !isMobile()}>
           <AppSidebar
             sidebarState={sidebarState()}
             onOpenChange={(open) => {

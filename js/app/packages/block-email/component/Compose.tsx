@@ -10,7 +10,6 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -33,11 +32,9 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  Match,
   onMount,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput } from './ComposeEmailInput';
@@ -180,8 +177,6 @@ function ComposeFieldRow(props: {
 
 export function EmailCompose(props: EmailComposeProps) {
   const hasPaidAccess = useHasPaidAccess();
-  const { showPaywall } = usePaywallState();
-
   const emailLinksQuery = useEmailLinksQuery();
 
   const [refs, setRefs] = createSignal<EmailComposeElementRefs>({
@@ -869,40 +864,22 @@ export function EmailCompose(props: EmailComposeProps) {
         ref={registerRef('containerRef')}
         class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
-        <Switch>
-          <Match when={hasLinkError()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span class="text-sm">
-                  You have not connected an email account.
-                </span>
-                <span class="grow" />
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Connect Email"
-                  onClick={connectEmail}
-                />
-              </div>
+        <Show when={hasLinkError()}>
+          <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+            <div class="flex items-center justify-between gap-2">
+              <Caution class="size-4" />
+              <span class="text-sm">
+                You have not connected an email account.
+              </span>
+              <span class="grow" />
+              <DeprecatedTextButton
+                theme="base"
+                text="Connect Email"
+                onClick={connectEmail}
+              />
             </div>
-          </Match>
-          <Match when={!hasPaidAccess()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span>You must upgrade to send email.</span>
-                <span class="grow" />
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Upgrade"
-                  onClick={() => {
-                    showPaywall(null);
-                  }}
-                />
-              </div>
-            </div>
-          </Match>
-        </Switch>
+          </div>
+        </Show>
 
         <div
           ref={mobileScrollRef}
