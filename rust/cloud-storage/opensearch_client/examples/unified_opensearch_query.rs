@@ -9,16 +9,16 @@ use opensearch_client::{
 
 fn main() {
     let args = UnifiedSearchArgs {
-        terms: vec!["hello".to_string(), "test".to_string()],
+        terms: vec!["hello re".to_string()],
         user_id: "macro|gab@macro.com".to_string(),
         page: 0,
         page_size: 10,
-        match_type: "exact".to_string(),
+        match_type: "partial".to_string(),
         search_on: SearchOn::NameContent,
         collapse: false,
         disable_recency: false,
         cursor: SearchCursorOption::NotDone(None),
-        search_indices: HashSet::from([SearchEntityType::Documents]),
+        search_indices: HashSet::from([SearchEntityType::Emails]),
         email_search_args: UnifiedEmailSearchArgs::default(),
         ..Default::default()
     };
