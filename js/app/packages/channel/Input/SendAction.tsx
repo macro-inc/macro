@@ -20,10 +20,8 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
       tooltip={<LabelAndHotKey label="Send message" />}
       data-input-action="send"
       disabled={isBlockedByPending()}
-      class={cn(
-        'group transition ease-in-out hover:bg-transparent',
-        local.class
-      )}
+      suppressInteractionStyling
+      class={cn('bg-red! group transition ease-in-out', local.class)}
       onPointerDown={(event) => {
         event.preventDefault();
         void commands.send();
