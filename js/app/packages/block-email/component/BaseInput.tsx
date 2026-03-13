@@ -29,8 +29,8 @@ import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import Plus from '@icon/regular/plus.svg';
-import Quotes from '@icon/bold/quotes-bold.svg';
+import Paperclip from '@icon/regular/paperclip.svg';
+import Quotes from '@icon/regular/quotes.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -124,6 +124,7 @@ import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { stickyGate } from '@core/util/debounce';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import ChevronDown from '@icon/regular/caret-down.svg';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -1239,7 +1240,7 @@ export function BaseInput(props: {
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
-              <Button showChevron>
+              <Button class="p-0 pr-1 gap-0">
                 <Switch>
                   <Match when={effectiveReplyType() === 'reply'}>
                     <Reply class="h-7 p-1" />
@@ -1252,6 +1253,7 @@ export function BaseInput(props: {
                     <Forward class="h-7 p-1" />
                   </Match>
                 </Switch>
+                <ChevronDown class="size-3" />
               </Button>
             </div>
           </DropdownMenu.Trigger>
@@ -1564,7 +1566,7 @@ export function BaseInput(props: {
           </div>
         </div>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
-          <div class="flex flex-row items-center gap-2">
+          <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button
                 ref={(el) =>
@@ -1573,10 +1575,10 @@ export function BaseInput(props: {
                     onSelect: handleAddAttachments,
                   }))
                 }
+                size="icon-sm"
                 tooltip="Attach"
-                class="aspect-square p-1"
               >
-                <Plus class="h-5" />
+                <Paperclip />
               </Button>
             </div>
 
@@ -1585,9 +1587,9 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
               tooltip="Show formatting toolbar"
-              class="aspect-square p-1"
+              size="icon-sm"
             >
-              <TextAa class="h-5" />
+              <TextAa />
             </Button>
 
             <Tooltip
@@ -1596,9 +1598,8 @@ export function BaseInput(props: {
               }
             >
               <KToggleButton
-                class={
-                  'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
-                }
+                as={Button}
+                size="icon-sm"
                 pressed={form().replyAppended()}
                 onChange={() => {
                   const replyingToID = props.replyingTo()?.replying_to_id;
@@ -1621,9 +1622,7 @@ export function BaseInput(props: {
                   });
                 }}
               >
-                <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
-                  <Quotes class="inline size-4" />
-                </div>
+                <Quotes />
               </KToggleButton>
             </Tooltip>
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
@@ -1648,7 +1647,7 @@ export function BaseInput(props: {
             </Show>
           </div>
 
-          <Button
+          <button
             disabled={
               uploadAttachmentMutation.isPending || sendMutation.isPending
             }
@@ -1663,7 +1662,7 @@ export function BaseInput(props: {
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
               </div>
             </Show>
-          </Button>
+          </button>
         </div>
       </div>
     </div>

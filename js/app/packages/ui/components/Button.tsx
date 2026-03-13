@@ -1,4 +1,3 @@
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { cn } from '@ui/utils/classname';
 import { Tooltip } from 'core/component/Tooltip';
 import { type JSX, type ParentComponent, Show, splitProps } from 'solid-js';
@@ -18,33 +17,31 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   tooltip?: JSX.Element;
-  showChevron?: boolean;
-  suppressInteractionStyling?: boolean;
 };
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80',
+    'bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80 disabled:bg-ink-extra-muted',
   secondary:
-    'bg-transparent text-ink border border-edge-muted not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12',
+    'bg-transparent text-ink border border-edge-muted not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12 disabled:opacity-30',
   tertiary:
-    'bg-ink/10 text-ink-muted not-disabled:hover:bg-ink/20 not-disabled:hover:text-ink not-disabled:active:bg-ink/15',
+    'bg-ink/10 text-ink-muted not-disabled:hover:bg-ink/20 not-disabled:hover:text-ink not-disabled:active:bg-ink/15 disabled:opacity-50',
   destructive:
-    'bg-transparent text-failure border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20',
+    'bg-transparent text-failure border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20 disabled:opacity-50',
   ghost:
-    'bg-transparent text-ink-muted not-disabled:hover:bg-ink/10 not-disabled:hover:text-ink not-disabled:active:bg-ink/12',
-  link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80',
+    'bg-transparent text-ink-muted not-disabled:hover:bg-ink/10 not-disabled:hover:text-ink not-disabled:active:bg-ink/12 disabled:opacity-30',
+  link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80 disabled:text-ink-extra-muted',
   accent:
-    'bg-accent text-page not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80',
+    'bg-accent text-page not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-2 py-1 text-xs gap-1',
-  md: 'px-3 py-2 text-sm gap-1.5',
-  lg: 'px-4 py-2.5 text-base gap-2',
-  'icon-sm': 'p-1.5 size-7 [&_svg]:size-3.5',
-  'icon-md': 'p-2 size-9 [&_svg]:size-4',
-  'icon-lg': 'p-2.5 size-11 [&_svg]:size-5',
+  sm: 'p-1 text-xs gap-1',
+  md: 'p-2 text-sm gap-1.5',
+  lg: 'p-2.5 text-base gap-2',
+  'icon-sm': 'p-1 size-7 [&_svg]:size-5',
+  'icon-md': 'p-1.5 size-9 [&_svg]:size-6',
+  'icon-lg': 'p-2 size-11 [&_svg]:size-7',
 };
 
 /**
@@ -53,10 +50,6 @@ const sizeStyles: Record<ButtonSize, string> = {
  * @param props.variant - primary, secondary, tertiary (default), destructive, ghost, or link.
  * @param props.size - sm, md (default), lg, icon-sm, icon-md, or icon-lg.
  * @param props.tooltip - Optional tooltip content to display when hovering over the button.
- * @param props.class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
- * @param props.showChevron - Show an indicator
- * @param props.suppressInteractionStyling - Override the default interaction styling, e.g. hover bg changes
- * @param props.children - Labels, icons, hotkey hints, etc. The body of the button.
  *
  * @example
  * <Button variant="primary" disabled>
@@ -70,7 +63,7 @@ const sizeStyles: Record<ButtonSize, string> = {
  *   size="icon-md"
  *   tooltip={<LabelAndHotKey label="Save" shortcut='cmd+s' />}
  * >
- *   <EntityIcon targetType="pdf" theme='monochrome' size="md" />
+ *    <ClipboardIcon />
  * </Button>
  *
  */
@@ -81,8 +74,6 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     'class',
     'children',
     'tooltip',
-    'showChevron',
-    'suppressInteractionStyling',
     'type',
   ]);
 
@@ -101,20 +92,15 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
         type={local.type ?? 'button'}
         class={cn(
           'relative inline-flex items-center justify-center font-medium leading-none border border-transparent',
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          'disabled:cursor-not-allowed',
           'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
-          !local.suppressInteractionStyling && variantStyles[variant()],
+          variantStyles[variant()],
           sizeStyles[size()],
-          local.showChevron && 'p-0 gap-0 items-stretch',
           local.class
         )}
         {...buttonAttributes}
       >
         {local.children}
-
-        <Show when={!!local.showChevron}>
-          <CaretDown class="flex w-3 hover:bg-panel" />
-        </Show>
       </button>
     </MaybeWrapInTooltip>
   );

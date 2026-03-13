@@ -5,7 +5,6 @@ import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
@@ -383,14 +382,16 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <PaperclipIcon class="h-5" />
               </Button>
             </div>
-            <DeprecatedIconButton
-              theme="base"
-              icon={TextAa}
+            <Button
+              variant="ghost"
+              size="icon-sm"
               disabled={props.disabled}
-              onclick={() => {
+              onClick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
-            />
+            >
+              <TextAa />
+            </Button>
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
               <EmailDateSelector
                 sendTime={props.sendTime}
@@ -413,7 +414,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             </Show>
           </div>
 
-          <Button
+          <button
             disabled={props.isSubmitting || props.disabled}
             onClick={() => {
               handleSend();
@@ -428,7 +429,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
               </div>
             </Show>
-          </Button>
+          </button>
         </Show>
       </div>
     </div>
