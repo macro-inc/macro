@@ -110,6 +110,66 @@ type AppSidebarProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type SidebarHotkeyDeps = {
+  isSlim: () => boolean;
+  onOpenChange: (open: boolean) => void;
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
+};
+
+export const registerSidebarHotkeys = ({
+  isSlim,
+  onOpenChange,
+  openWithSplit,
+}: SidebarHotkeyDeps) => {
+  // Register 'g' as a leader key that activates the global GO_TO command scope
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: 'global',
+    description: 'Go to page',
+    keyDownHandler: () => false,
+    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
+    hide: true,
+    registrationType: 'add',
+  });
+
+  registerHotkey({
+    hotkey: 'cmd+.',
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.toggleSidebar,
+    description: 'Toggle sidebar',
+    runWithInputFocused: true,
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      onOpenChange(isSlim());
+      return true;
+    },
+  });
+
+  // Register navigation shortcuts in the global GO_TO command scope
+  for (const link of SIDEBAR_LINKS) {
+    registerHotkey({
+      hotkey: link.hotkey,
+      scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+      description: `Go to ${link.label}`,
+      keyDownHandler: (e) => {
+        e?.preventDefault();
+        openWithSplit(
+          {
+            type: 'component',
+            id: link.id,
+          },
+          {
+            preferNewSplit: e?.shiftKey,
+            mergeHistory: false,
+            allowDuplicate: true,
+          }
+        );
+        return true;
+      },
+    });
+  }
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
@@ -122,59 +182,16 @@ export const AppSidebar = (props: AppSidebarProps) => {
     setCreateMenuOpen((p) => !p);
   };
 
-  const registerHotkeys = () => {
-    // Register 'g' as a leader key that activates the global GO_TO command scope
-    registerHotkey({
-      hotkey: GO_TO_LEADER_KEY,
-      scopeId: 'global',
-      description: 'Go to page',
-      keyDownHandler: () => false,
-      activateCommandScopeId: GO_TO_COMMAND_SCOPE,
-      hide: true,
-      registrationType: 'add',
+  const registerHotkeys = () =>
+    registerSidebarHotkeys({
+      isSlim,
+      onOpenChange: props.onOpenChange,
+      openWithSplit: layout.openWithSplit,
     });
-
-    registerHotkey({
-      hotkey: 'cmd+.',
-      scopeId: 'global',
-      hotkeyToken: TOKENS.global.toggleSidebar,
-      description: 'Toggle sidebar',
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        props.onOpenChange(isSlim());
-        return true;
-      },
-    });
-
-    // Register navigation shortcuts in the global GO_TO command scope
-    for (const link of SIDEBAR_LINKS) {
-      registerHotkey({
-        hotkey: link.hotkey,
-        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
-        description: `Go to ${link.label}`,
-        keyDownHandler: (e) => {
-          e?.preventDefault();
-          layout.openWithSplit(
-            {
-              type: 'component',
-              id: link.id,
-            },
-            {
-              preferNewSplit: e?.shiftKey,
-              mergeHistory: false,
-              allowDuplicate: true,
-            }
-          );
-          return true;
-        },
-      });
-    }
-  };
-
-  registerHotkeys();
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+  registerHotkeys();
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   return (
