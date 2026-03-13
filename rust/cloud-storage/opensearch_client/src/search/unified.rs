@@ -447,7 +447,7 @@ pub(crate) async fn search_unified(
         .search_indices
         .iter()
         .filter(|i| **i != SearchEntityType::Projects)
-        .map(|i| i.as_ref())
+        .map(|i| i.index_name())
         .collect();
 
     // After we filter out invalid search entities if we have nothing we should return that the cursor is exhausted
