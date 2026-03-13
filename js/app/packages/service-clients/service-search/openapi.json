@@ -271,10 +271,6 @@
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
-              },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
                 "description": "The match type to use when searching"
@@ -527,10 +523,6 @@
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
-              },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
                 "description": "The match type to use when searching"
@@ -725,10 +717,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -972,10 +960,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -1751,10 +1735,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -2887,10 +2867,6 @@
         "properties": {
           "collapse": {
             "type": ["boolean", "null"]
-          },
-          "disable_recency": {
-            "type": "boolean",
-            "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
           },
           "filters": {
             "oneOf": [
