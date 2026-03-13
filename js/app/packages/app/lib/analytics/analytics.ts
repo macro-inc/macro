@@ -30,6 +30,8 @@ interface CreateAnalyticsOptions {
 
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
   const initializeProviders = () => {
+    if (options.disabled) return;
+
     initializeGoogleAnalytics();
     initializeMetaPixel();
   };
