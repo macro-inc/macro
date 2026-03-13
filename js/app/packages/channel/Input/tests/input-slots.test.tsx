@@ -31,8 +31,24 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
 
-vi.mock('../utils/render-icon', () => ({
-  renderIcon: () => null,
+vi.mock('@phosphor-icons/core/regular/paperclip.svg?component-solid', () => ({
+  default: () => <span data-testid="paperclip-icon" />,
+}));
+
+vi.mock('@icon/regular/text-aa.svg', () => ({
+  default: () => <span data-testid="format-icon" />,
+}));
+
+vi.mock('@icon/regular/trash.svg', () => ({
+  default: () => <span data-testid="trash-icon" />,
+}));
+
+vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
+  default: () => <span data-testid="send-icon" />,
+}));
+
+vi.mock('@icon/bold/spinner-gap-bold.svg', () => ({
+  default: () => <span data-testid="spinner-icon" />,
 }));
 
 vi.mock('@core/component/EntityIcon', () => ({
@@ -109,6 +125,10 @@ vi.mock(
     tableCellResizerPlugin: () => () => () => {},
   })
 );
+
+vi.mock('../FormatButtons', () => ({
+  FormatButtons: () => <div data-testid="format-buttons" />,
+}));
 
 import { ChannelInput } from '../ChannelInput';
 import { Root } from '../Root';

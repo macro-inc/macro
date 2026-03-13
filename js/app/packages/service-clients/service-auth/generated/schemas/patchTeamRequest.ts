@@ -7,9 +7,9 @@
 import type { PatchTeamRequestName } from './patchTeamRequestName';
 
 /**
- * The request body to update a team
+ * Request to update a team
  */
 export interface PatchTeamRequest {
-  /** The new name of the team */
+  /** The new name for the team */
   name?: PatchTeamRequestName;
 }

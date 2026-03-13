@@ -4,7 +4,7 @@ use crate::labels::get;
 use crate::parse::db_to_service;
 use crate::parse::db_to_service::map_attachmentless_db_message_to_service;
 use crate::{attachments, contacts, labels, messages};
-use anyhow::Context;
+
 use futures::future::try_join_all;
 use models_email::email::db;
 use models_email::email::service::message::Message;
@@ -495,7 +495,5 @@ pub async fn convert_db_messages_to_service_concurrent(
         }
     });
 
-    try_join_all(message_processing_futures)
-        .await
-        .context("Failed processing messages concurrently")
+    try_join_all(message_processing_futures).await
 }

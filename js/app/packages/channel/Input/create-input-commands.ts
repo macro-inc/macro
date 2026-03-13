@@ -13,6 +13,7 @@ type CreateInputCommandsDeps = {
   setIsSending: (value: boolean) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   reset: () => void;
+  clearComposer?: () => void;
   removeTrackedAttachment: (id: string) => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
@@ -37,6 +38,7 @@ export function createInputCommands(
       try {
         await deps.callbacks.onSend(current);
         deps.reset();
+        deps.clearComposer?.();
         return true;
       } finally {
         deps.setIsSending(false);
@@ -56,6 +58,7 @@ export function createInputCommands(
     close: () => {
       const current = deps.snapshot();
       deps.reset();
+      deps.clearComposer?.();
       deps.callbacks?.onClose?.(current);
     },
     removeAttachment,

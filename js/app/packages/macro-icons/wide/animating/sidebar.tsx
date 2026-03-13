@@ -15,7 +15,7 @@ export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-sidebar-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated sidebar icon</title>
+      {/*<title>Animated sidebar icon</title>*/}
       <defs>
         {/* Clip to frame interior */}
         <clipPath id={clipId}>

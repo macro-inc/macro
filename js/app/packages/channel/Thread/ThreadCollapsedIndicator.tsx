@@ -18,6 +18,7 @@ type ThreadCollapsedIndicatorProps =
     collapsedRepliesCount: number;
     participants: string[];
     latestReplyAt?: string;
+    hasNewMessages?: boolean;
   };
 
 const MAX_VISIBLE_PARTICIPANTS = 4;
@@ -28,6 +29,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     'collapsedRepliesCount',
     'participants',
     'latestReplyAt',
+    'hasNewMessages',
   ]);
   const [hover, setHover] = createSignal(false);
   const visibleParticipants = () =>
@@ -39,7 +41,8 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     <button
       type="button"
       class={cn(
-        'flex flex-row gap-2 items-center text-xs w-fit h-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] border border-edge-muted bg-menu hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none focus:bracket-offset-2',
+        'flex flex-row gap-2 items-center text-xs w-fit h-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] border bg-menu hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none focus:bracket-offset-2',
+        local.hasNewMessages ? 'border-accent' : 'border-edge-muted',
         local.class
       )}
       onMouseEnter={() => {

@@ -135,7 +135,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     });
 
     registerHotkey({
-      hotkey: 'cmd+b',
+      hotkey: 'cmd+.',
       scopeId: 'global',
       hotkeyToken: TOKENS.global.toggleSidebar,
       description: 'Toggle sidebar',
@@ -161,7 +161,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             },
             {
               preferNewSplit: e?.shiftKey,
-              mergeHistory: true,
+              mergeHistory: false,
               allowDuplicate: true,
             }
           );
@@ -376,6 +376,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <Button
       as="a"
+      draggable={false}
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
@@ -399,7 +400,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           },
           {
             preferNewSplit: e.shiftKey,
-            mergeHistory: true,
+            mergeHistory: false,
             allowDuplicate: true,
           }
         );

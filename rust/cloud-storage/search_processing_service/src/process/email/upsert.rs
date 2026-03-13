@@ -62,23 +62,41 @@ pub async fn process_upsert_message(
         subject: message_info.subject,
         sender: message_info
             .from
+            .as_ref()
             .context("expected from")?
             .email
             .to_lowercase(),
+        sender_name: message_info.from.as_ref().and_then(|f| f.name.clone()),
+        reply_to: message_info.reply_to,
         recipients: message_info
             .to
             .iter()
             .map(|to| to.email.to_lowercase())
+            .collect(),
+        recipient_names: message_info
+            .to
+            .iter()
+            .filter_map(|to| to.name.clone())
             .collect(),
         cc: message_info
             .cc
             .iter()
             .map(|cc| cc.email.to_lowercase())
             .collect(),
+        cc_names: message_info
+            .cc
+            .iter()
+            .filter_map(|cc| cc.name.clone())
+            .collect(),
         bcc: message_info
             .bcc
             .iter()
             .map(|bcc| bcc.email.to_lowercase())
+            .collect(),
+        bcc_names: message_info
+            .bcc
+            .iter()
+            .filter_map(|bcc| bcc.name.clone())
             .collect(),
         labels: message_info
             .labels
@@ -161,21 +179,34 @@ pub async fn process_upsert_thread_message(
                     user_id: upsert_email_thread_message.macro_user_id.clone(),
                     thread_id: upsert_email_thread_message.thread_id.clone(),
                     subject: message.subject,
-                    sender: message.from.unwrap_or_default().email.to_lowercase(), // All email should have a sender
+                    sender: message
+                        .from
+                        .as_ref()
+                        .map(|f| f.email.to_lowercase())
+                        .unwrap_or_default(),
+                    sender_name: message.from.as_ref().and_then(|f| f.name.clone()),
+                    reply_to: message.reply_to.map(|r| r.to_lowercase()),
                     recipients: message
                         .to
                         .iter()
                         .map(|to| to.email.to_lowercase())
                         .collect(),
+                    recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
                     cc: message
                         .cc
                         .iter()
                         .map(|cc| cc.email.to_lowercase())
                         .collect(),
+                    cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
                     bcc: message
                         .bcc
                         .iter()
                         .map(|bcc| bcc.email.to_lowercase())
+                        .collect(),
+                    bcc_names: message
+                        .bcc
+                        .iter()
+                        .filter_map(|bcc| bcc.name.clone())
                         .collect(),
                     labels: message
                         .labels

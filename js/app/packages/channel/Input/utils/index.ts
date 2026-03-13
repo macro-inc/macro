@@ -10,4 +10,3 @@ export {
   type UploadDocumentSuccessResult,
 } from './file-helpers';
 export { applyInlineFormat, applyNodeFormat } from './formatting';
-export { renderIcon } from './render-icon';

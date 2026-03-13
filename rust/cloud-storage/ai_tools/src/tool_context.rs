@@ -52,6 +52,15 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
         Ok(())
     }
+    async fn set_entity_property(
+        &self,
+        _user_id: &str,
+        _entity_id: &str,
+        _property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// No-op connection service

@@ -370,6 +370,177 @@
         }
       }
     },
+    "/email/contacts/block": {
+      "post": {
+        "tags": ["Contacts"],
+        "summary": "Block a sender by creating a Gmail filter that sends their emails to trash.",
+        "operationId": "block_sender",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockSenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockSenderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/contacts/block/{email_address}": {
+      "delete": {
+        "tags": ["Contacts"],
+        "summary": "Unblock a sender by removing their block filter from Gmail.",
+        "operationId": "unblock_sender",
+        "parameters": [
+          {
+            "name": "email_address",
+            "in": "path",
+            "description": "The email address of the sender to unblock.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/contacts/blocked": {
+      "get": {
+        "tags": ["Contacts"],
+        "summary": "List all blocked senders for the authenticated user.",
+        "operationId": "list_blocked_senders",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBlockedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/drafts": {
       "post": {
         "tags": ["Drafts"],
@@ -3234,6 +3405,28 @@
         "type": "string",
         "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
       },
+      "BlockSenderRequest": {
+        "type": "object",
+        "description": "Request to block a sender.",
+        "required": ["email_address"],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "The email address of the sender to block."
+          }
+        }
+      },
+      "BlockSenderResponse": {
+        "type": "object",
+        "description": "Response after blocking a sender.",
+        "required": ["filter_id"],
+        "properties": {
+          "filter_id": {
+            "type": "string",
+            "description": "The ID of the filter created in Gmail."
+          }
+        }
+      },
       "CancelBackfillParams": {
         "type": "object",
         "required": ["job_id"],
@@ -3605,6 +3798,20 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ListBlockedResponse": {
+        "type": "object",
+        "description": "Response containing list of blocked email addresses.",
+        "required": ["blocked_emails"],
+        "properties": {
+          "blocked_emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of email addresses that are currently blocked."
           }
         }
       },

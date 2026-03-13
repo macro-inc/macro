@@ -3,7 +3,6 @@ import { cn } from '@ui/utils/classname';
 import { useInput, useInputCommands } from './context';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import { renderIcon } from './utils/render-icon';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 
@@ -33,17 +32,11 @@ export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
     >
       <Show
         when={!isBlockedByPending()}
-        fallback={renderIcon(
-          SpinnerIcon,
-          'size-6 animate-spin cursor-disabled'
-        )}
+        fallback={<SpinnerIcon class="size-6 animate-spin cursor-disabled" />}
       >
         {resolved() ?? (
           <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
-            {renderIcon(
-              ArrowUpIcon,
-              'group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out'
-            )}
+            <ArrowUpIcon class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
           </div>
         )}
       </Show>

@@ -1,6 +1,6 @@
 use crate::parse::db_to_service;
 use crate::{contacts, labels};
-use anyhow::Context;
+
 use futures::future::join_all;
 use models_email::db;
 use models_email::service::message;
@@ -46,17 +46,12 @@ pub async fn get_parsed_search_message_by_id(
 
     let message_ids: Vec<Uuid> = vec![db_message.id];
 
-    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch senders in bulk")?;
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids).await?;
 
-    let recipients_map = contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch recipients in bulk")?;
+    let recipients_map =
+        contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
-    let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch message labels in bulk")?;
+    let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
 
     let sender = db_message
         .from_contact_id
@@ -137,17 +132,12 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
 
-    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch senders in bulk")?;
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids).await?;
 
-    let recipients_map = contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch recipients in bulk")?;
+    let recipients_map =
+        contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
-    let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch message labels in bulk")?;
+    let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
 
     let tasks: Vec<_> = db_messages
         .into_iter()

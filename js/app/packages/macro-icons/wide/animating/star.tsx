@@ -13,7 +13,7 @@ export const AnimatedStarIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-star-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated star icon</title>
+      {/*<title>Animated star icon</title>*/}
       <style>{`
         .animated-star-icon {
           .star-inflate, .star-eye, #${maskId} .inflated-rhombus {

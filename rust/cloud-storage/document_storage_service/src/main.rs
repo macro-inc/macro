@@ -256,11 +256,11 @@ async fn main() -> anyhow::Result<()> {
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
     let notification_service = NotificationServiceImpl::new(make_notification_ingress());
-    let properties_service = PropertiesServiceImpl::new(
+    let properties_service = Arc::new(PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),
         Some(notification_service),
-    );
+    ));
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
@@ -327,7 +327,10 @@ async fn main() -> anyhow::Result<()> {
         cloudfront_config,
         sync_service_client.clone(),
         s3_upload_adapter,
-        TaskPropertiesAdapter(system_properties_service.clone()),
+        TaskPropertiesAdapter {
+            system_properties: system_properties_service.clone(),
+            properties: properties_service.clone(),
+        },
         connection_service,
     ));
 
@@ -380,7 +383,7 @@ async fn main() -> anyhow::Result<()> {
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: system_properties_service.clone(),
-        properties_service: Arc::new(properties_service),
+        properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
         jwt_validation_args,

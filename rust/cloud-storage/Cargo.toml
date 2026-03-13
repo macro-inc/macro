@@ -89,6 +89,7 @@ members = [
   "notification_sandbox",
   "notification_service",
   "opensearch_client",
+  "opensearch_query_builder",
   "organization_retention_handler",
   "organization_retention_trigger",
   "permission",
