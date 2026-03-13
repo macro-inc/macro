@@ -1,11 +1,11 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, SendNotificationRequest,
-    TaggedContent,
+    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
+    request::SendNotificationRequestInternal,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -42,7 +42,7 @@ pub struct APNSTargets<T> {
 }
 
 /// Email notification payload.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmailContent {
     /// The email subject line.
     pub subject: String,
@@ -63,6 +63,7 @@ pub struct EmailNotification<'a> {
     rate_limit_key: RateLimitKey,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct EmailCreateBundle {
     /// The email content (subject and body).
     content: EmailContent,
@@ -152,7 +153,10 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
 }
 
 impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
-    pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
+    pub(crate) fn clone_from_request<U>(
+        id: Uuid,
+        req: &SendNotificationRequestInternal<'a, T, U>,
+    ) -> Self {
         ConnGatewayNotification {
             notif: ConnGatewayInnerNotif {
                 notification_id: id,

@@ -12,7 +12,8 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationStatus,
+    SendNotificationRequestInternal, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
@@ -140,7 +141,9 @@ where
         request: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
     {
-        self.send_notification_impl(request)
+        let notification_id = Uuid::now_v7();
+        // TODO convert from the outer type to the inner type
+        self.send_notification_impl(notification_id, request)
     }
 }
 
@@ -173,7 +176,8 @@ where
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,
-        request: SendNotificationRequest<'a, T, U>,
+        notification_id: Uuid,
+        request: SendNotificationRequestInternal<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         let mut request = self
             .filter_recipients(request)
@@ -184,7 +188,6 @@ where
             return Ok(None);
         }
 
-        let notification_id = Uuid::now_v7();
         let (queue_messages, apns_collapse_key) = self
             .build_queue_message(notification_id, &mut request)
             .await?;
@@ -235,8 +238,8 @@ where
     /// - Unsubscribed from item
     async fn filter_recipients<'a, T, U>(
         &self,
-        req: SendNotificationRequest<'a, T, U>,
-    ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
+        req: SendNotificationRequestInternal<'a, T, U>,
+    ) -> Result<SendNotificationRequestInternal<'a, T, U>, Report> {
         let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
 
         // Fetch all filter data upfront
@@ -259,7 +262,7 @@ where
     async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
         notification_id: Uuid,
-        notification: &mut SendNotificationRequest<'a, T, U>,
+        notification: &mut SendNotificationRequestInternal<'a, T, U>,
     ) -> Result<
         (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
         Report<SendNotificationError>,
@@ -275,7 +278,7 @@ where
         }
 
         // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
-        if let Some(ref mut build_apns) = notification.build_apns {
+        if let Some(build_apns) = notification.build_apns.take() {
             let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
             let device_endpoints = self
                 .repository
@@ -307,15 +310,13 @@ where
                 })
                 .collect();
 
-            if !ios_endpoints.is_empty()
-                && let Some((apns_notif, attributes)) =
-                    build_apns(notification.req.notification.clone(), notification_id)
-            {
-                apns_collapse_key = Some(attributes.collapse_key.clone());
+            if !ios_endpoints.is_empty() {
+                let BuildApnsOutput { notif, attr } = build_apns;
+                apns_collapse_key = Some(attr.collapse_key.clone());
                 messages.push(QueueMessage::new(NotificationChannel::Ios(Box::new(
                     APNSTargets {
-                        notif: apns_notif,
-                        attributes,
+                        notif,
+                        attributes: attr,
                         ios_device_endpoints: ios_endpoints,
                     },
                 ))));
@@ -323,9 +324,9 @@ where
         }
 
         // Email: 1:1 (one message per recipient)
-        if let Some(ref mut build_email) = notification.build_email {
+        if let Some(ref build_email) = notification.build_email {
             for recipient in &notification.req.recipient_ids {
-                let email_content = build_email(&notification.req.notification);
+                let email_content = build_email.clone();
                 messages.push(QueueMessage::new(NotificationChannel::Email(
                     email_content.with_recipient(recipient.clone()),
                 )));
