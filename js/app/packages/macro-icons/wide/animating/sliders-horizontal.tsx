@@ -16,7 +16,7 @@ export const AnimatedSlidersHorizontalIcon = (props: {
       overflow="visible"
       class={`animated-sliders-horizontal-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated sliders horizontal icon</title>
+      {/*<title>Animated sliders horizontal icon</title>*/}
       <style>{`
         @keyframes slide-right {
           0%, 100% { translate: 0; }

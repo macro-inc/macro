@@ -22,7 +22,7 @@ import {
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
 
-const useApplyPreset = () => {
+export const useApplyPreset = () => {
   const soup = useSoup();
   const { setQueryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();

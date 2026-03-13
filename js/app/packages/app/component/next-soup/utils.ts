@@ -260,6 +260,7 @@ export interface OpenEntityOptions {
   openInNewSplit?: boolean;
   location?: SearchLocation;
   splitHandle?: SplitHandle;
+  mergeHistory?: boolean;
 }
 
 /**
@@ -273,7 +274,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, location, splitHandle } = options;
+  const { openInNewSplit, location, splitHandle, mergeHistory } = options;
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
@@ -302,6 +303,7 @@ export const openEntityInSplitFromUnifiedList = async (
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
+      mergeHistory,
     }
   );
 

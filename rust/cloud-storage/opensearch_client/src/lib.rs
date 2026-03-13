@@ -3,11 +3,8 @@ pub mod delete;
 pub mod error;
 pub mod name;
 pub mod search;
-pub mod search_on;
 pub mod unified;
 pub mod upsert;
-
-pub use search_on::SearchOn;
 
 pub mod channel_message;
 pub mod chat;

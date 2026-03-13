@@ -15,7 +15,7 @@ export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-profile-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated profile icon</title>
+      {/*<title>Animated profile icon</title>*/}
       <defs>
         {/* Mask to hide frame behind person */}
         <mask id={frameMaskId} maskUnits="userSpaceOnUse">

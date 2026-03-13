@@ -15,9 +15,6 @@ import type { UnifiedSearchRequestTerms } from './unifiedSearchRequestTerms';
 
 export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;
-  /** If search_on is set to NameContent, you can disable the recency filter
-by setting to true. */
-  disable_recency?: boolean;
   filters?: UnifiedSearchRequestFilters;
   /** Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all. */
   include?: UnifiedSearchIndex[];

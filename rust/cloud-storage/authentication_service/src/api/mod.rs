@@ -29,7 +29,6 @@ mod oauth;
 mod oauth2;
 mod permissions;
 mod session;
-mod team;
 mod user;
 mod webhooks;
 
@@ -95,9 +94,21 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         )
         .nest(
             "/team",
-            team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::tracking::attach_ip_context_handler),
-            )),
+            teams::inbound::axum_router::teams_router(
+                teams::inbound::axum_router::TeamRouterState {
+                    service: state.teams_service.clone(),
+                },
+            )
+            .layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::tracking::attach_ip_context_handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.jwt_args.clone(),
+                        macro_middleware::auth::decode_jwt::handler,
+                    )),
+            ),
         )
         .nest("/jwt", jwt::router(state.jwt_args.clone()))
         .nest("/session", session::router())

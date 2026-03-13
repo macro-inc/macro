@@ -59,7 +59,7 @@ pub async fn backfill_message(
             })
         })?;
 
-    process_message_pre_insert(&ctx.db, &ctx.sfs_client, &mut message).await;
+    process_message_pre_insert(&mut message).await;
 
     // insert message into database
     email_db_client::messages::insert::insert_message(

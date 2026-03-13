@@ -98,7 +98,7 @@ export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
       stroke-width="1.5"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <title>Animated email icon</title>
+      {/*<title>Animated email icon</title>*/}
       <defs>
         {/* Clips out the top-left 1.5×1.5 missing corner (visual coords 0,0 → 1.5,1.5) */}
         <clipPath id={clipId}>

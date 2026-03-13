@@ -181,6 +181,15 @@ impl DocumentService for StubDocumentService {
     ) -> Result<(), DocumentError> {
         Ok(())
     }
+
+    async fn create_task(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _plain_user_id: String,
+        _request: documents::domain::models::CreateTaskRequest,
+    ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
+        unimplemented!()
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.

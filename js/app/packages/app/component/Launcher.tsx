@@ -51,6 +51,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
+import { cn } from '@ui/utils/classname';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -186,7 +187,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
-    hotkey: 'l',
+    hotkey: 'e',
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
@@ -244,7 +245,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
-    hotkey: 'n',
+    hotkey: 'c',
     keyDownHandler: () => {
       createBlock({
         blockName: 'canvas',
@@ -344,11 +345,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   return (
     <button
-      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
-      classList={{
-        '-translate-y-2 text-ink bracket-offset-1': props.focused,
-        'text-ink-extra-muted': !props.focused,
-      }}
+      class={cn(
+        ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
+        `create-menu-${props.creatableBlock.label.toLowerCase()}`,
+        {
+          '-translate-y-2 text-ink bracket-offset-1': props.focused,
+          'text-ink-extra-muted': !props.focused,
+        }
+      )}
       onClick={() => props.creatableBlock.keyDownHandler()}
       onFocus={props.onFocus}
       onMouseEnter={props.onMouseEnter}
@@ -381,12 +385,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>*/}
 
       <div
-        class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
-        classList={{
-          [getIconConfig(props.creatableBlock.blockName).background]: true,
-          'scale-y-0': !props.focused,
-          'scale-y-100': props.focused,
-        }}
+        class={cn(
+          'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
+          getIconConfig(props.creatableBlock.blockName).background,
+          {
+            'scale-y-0': !props.focused,
+            'scale-y-100': props.focused,
+          }
+        )}
       ></div>
 
       <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
@@ -394,29 +400,29 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>
 
       <div
-        class="absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50"
-        classList={{
-          [textFg()]: true,
-        }}
+        class={cn(
+          'absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50',
+          textFg()
+        )}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
-        <div class="text-sm font-bold font-stretch-condensed">
-          {props.creatableBlock.label}
-        </div>
+        <div class="text-sm font-bold">{props.creatableBlock.label}</div>
         <div class="size-3">
           <PixelArrowRight />
         </div>
       </div>
 
       <div
-        class="w-1/3 -translate-y-1 transition-all ease-click duration-200"
-        classList={{
-          [textFg()]: props.focused,
-          'text-edge': !props.focused,
-          'scale-110': props.focused,
-        }}
+        class={cn(
+          'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+          textFg(),
+          {
+            'text-edge': !props.focused,
+            'scale-110': props.focused,
+          }
+        )}
       >
         <Show
           when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
@@ -454,7 +460,22 @@ const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  const moveFocus = (delta: -1 | 1) => {
+  // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
+  const getColumnCount = () => {
+    const width = window.innerWidth;
+    const length = CREATABLE_BLOCKS.length;
+    if (width >= 1280) {
+      if (length >= 8) return 8;
+      if (length >= 7) return 7;
+      if (length >= 6) return 6;
+      if (length >= 5) return 5;
+      return 4;
+    }
+    if (width >= 640) return 4;
+    return 2;
+  };
+
+  const moveFocus = (delta: number) => {
     const tabbableEls = tabbable(ref);
     const activeEl = document.activeElement as FocusableElement | null;
     const activeElIndex = activeEl
@@ -530,6 +551,26 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
+    hotkey: 'arrowup' as ValidHotkey,
+    scopeId: launcherScope,
+    description: 'Navigate Up',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      return moveFocus(-getColumnCount());
+    },
+  });
+
+  registerHotkey({
+    hotkey: 'arrowdown' as ValidHotkey,
+    scopeId: launcherScope,
+    description: 'Navigate Down',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      return moveFocus(getColumnCount());
+    },
+  });
+
+  registerHotkey({
     hotkey: 'escape',
     scopeId: launcherScope,
     description: 'Exit',
@@ -590,16 +631,24 @@ const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div>
+    <div class="bg-menu ring-1 ring-edge-muted rounded-sm">
+      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted/50">
+        <h1 class="font-bold text-ink-muted">Create New</h1>
+        <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
+          Hold{' '}
+          <span class="px-1 py-0.5 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
+            <Hotkey shortcut="shift" />
+          </span>
+          to launch in new split
+        </p>
+      </div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu ring-1 ring-edge-muted rounded-sm suppress-css-brackets"
-        classList={{
-          [gridColsClass()]: true,
-        }}
+        class={cn(
+          'relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never',
+          gridColsClass()
+        )}
         ref={ref}
       >
-        <div class="absolute pointer-events-none size-full inset-0"></div>
-
         <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
@@ -610,9 +659,6 @@ const LauncherInner = (props: LauncherInnerProps) => {
             />
           )}
         </For>
-      </div>
-      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold shift to open in current split
       </div>
     </div>
   );
@@ -630,10 +676,12 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          classList={{
-            'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-          }}
+          class={cn(
+            'fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted',
+            {
+              'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
+            }
+          )}
         >
           <Show when={useJuicedScrim}>
             <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">

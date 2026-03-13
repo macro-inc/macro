@@ -10,7 +10,7 @@ export const AnimatedNoiseIcon = (props: { triggerAnimation?: boolean }) => {
       xmlns="http://www.w3.org/2000/svg"
       class={`animated-noise-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated noise icon</title>
+      {/*<title>Animated noise icon</title>*/}
       <style>{`
         @keyframes grow-shrink {
           0% {

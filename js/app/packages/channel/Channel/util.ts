@@ -2,6 +2,9 @@ import type { DateValue } from '@core/util/date';
 import type { ChannelMessagesData } from '@queries/channel/channel-messages';
 import type { ApiChannelMessage } from '@service-comms/client';
 
+/** Minimal shape needed by isNewMessage — satisfied by both ApiChannelMessage and ApiThreadReply. */
+export type NewMessageCheckable = { created_at: string; sender_id: string };
+
 export function flattenMessages(
   data: ChannelMessagesData | undefined
 ): ApiChannelMessage[] {
@@ -17,7 +20,7 @@ export function flattenMessages(
 }
 
 export function isNewMessage(
-  message: ApiChannelMessage,
+  message: NewMessageCheckable,
   ctx: {
     dismissed: boolean;
     lastViewedAt: DateValue | undefined | null;

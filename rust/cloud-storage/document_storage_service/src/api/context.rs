@@ -106,11 +106,14 @@ type PropertiesService = PropertiesServiceImpl<
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
-pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+pub(crate) struct TaskPropertiesAdapter {
+    pub system_properties: Arc<SystemPropertiesService>,
+    pub properties: Arc<PropertiesService>,
+}
 
 impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
-        self.0
+        self.system_properties
             .attach_task_properties(entity_ids)
             .await
             .map_err(Into::into)
@@ -119,9 +122,32 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
 
-        self.0.update_task_status(task_id, status_option).await?;
+        self.system_properties
+            .update_task_status(task_id, status_option)
+            .await?;
 
         Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
+        self.properties
+            .set_entity_property(
+                user_id,
+                entity_id,
+                models_properties::EntityType::Task,
+                property_definition_id,
+                value,
+            )
+            .await
+            .map_err(Into::into)
     }
 }
 

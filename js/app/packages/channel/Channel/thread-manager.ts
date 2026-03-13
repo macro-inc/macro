@@ -1,6 +1,6 @@
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
-import { createSignal } from 'solid-js';
+import { batch, createSignal, type Setter } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
 
 type ThreadStore = Record<string, ThreadState>;
@@ -9,10 +9,20 @@ export function createThreadManager() {
 
   function initThreadState(threadId: string): ThreadState {
     const [isExpanded, setIsExpanded] = createSignal<boolean>(false);
-    const [isReplying, setIsReplying] = createSignal<boolean>(false);
+    const [isReplying, setIsReplyingRaw] = createSignal<boolean>(false);
     const [replyInputState, setReplyInputState] = createSignal<
       InputSnapshot | undefined
     >();
+
+    /** If you set replying from false -> true this means it must be expanded **/
+    const setIsReplying: Setter<boolean> = (val) => {
+      batch(() => {
+        const next: boolean =
+          typeof val === 'function' ? val(isReplying()) : val;
+        if (next) setIsExpanded(true);
+        setIsReplyingRaw(next);
+      });
+    };
 
     const state: ThreadState = {
       isExpanded,

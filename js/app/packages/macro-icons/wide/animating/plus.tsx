@@ -13,7 +13,7 @@ export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-plus-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated plus icon</title>
+      {/*<title>Animated plus icon</title>*/}
       <style>{`
         @keyframes solid-fade {
           0% { opacity: 1; }

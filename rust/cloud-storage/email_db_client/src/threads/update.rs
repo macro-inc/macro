@@ -1,5 +1,5 @@
 use crate::messages::get::fetch_messages_metadata;
-use anyhow::Context;
+
 use chrono::{DateTime, Utc};
 use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service;
@@ -140,9 +140,7 @@ pub async fn update_thread_metadata(
     thread_db_id: Uuid,
     link_id: Uuid,
 ) -> anyhow::Result<()> {
-    let messages = fetch_messages_metadata(&mut *tx, thread_db_id)
-        .await
-        .context("Failed to get messages for thread")?;
+    let messages = fetch_messages_metadata(&mut *tx, thread_db_id).await?;
 
     // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
     let inbox_visible = messages.iter().any(|message| {
@@ -206,8 +204,7 @@ pub async fn update_thread_metadata(
         latest_outbound_message_ts,
         latest_non_spam_message_ts,
     )
-    .await
-    .context("Failed to update thread timestamps")?;
+    .await?;
 
     Ok(())
 }

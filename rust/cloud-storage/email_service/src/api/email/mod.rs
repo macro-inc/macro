@@ -23,7 +23,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/drafts", drafts::router(state.clone()))
         .nest("/messages", messages::router(state.clone()))
         .nest("/links", links::router())
-        .nest("/contacts", contacts::router())
+        .nest("/contacts", contacts::router(state.clone()))
         .nest("/backfill", backfill::router(state.clone()))
         .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))

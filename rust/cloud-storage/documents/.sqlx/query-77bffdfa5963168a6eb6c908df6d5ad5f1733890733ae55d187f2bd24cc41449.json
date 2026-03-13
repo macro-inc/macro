@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT tu2.user_id\n        FROM team_user tu1\n        JOIN team_user tu2 ON tu1.team_id = tu2.team_id\n        WHERE tu1.user_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "77bffdfa5963168a6eb6c908df6d5ad5f1733890733ae55d187f2bd24cc41449"
+}

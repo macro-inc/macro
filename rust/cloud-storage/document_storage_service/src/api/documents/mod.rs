@@ -7,7 +7,6 @@ use tower::ServiceBuilder;
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod copy_document;
-pub(in crate::api) mod create_task;
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod export_document;
 pub(in crate::api) mod get_batch_preview;
@@ -54,23 +53,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         // NOTE: POST / (create_document) is now served by the documents hex crate router
-        .route(
-            "/create_task",
-            post(create_task::create_task_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::document_handler,
-                    )),
-            ),
-        )
+        // NOTE: POST /create_task is now served by the documents hex crate router
         .route(
             "/initialize_user_documents",
             post(initialize_user_documents::handler).layer(

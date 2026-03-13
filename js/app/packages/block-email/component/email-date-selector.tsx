@@ -1,11 +1,11 @@
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import { DateSelector } from '@block-email/component/date-selector';
 import { Tooltip } from '@core/component/Tooltip';
-import { cn } from '@ui/utils/classname';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
 import IconX from '@icon/regular/x.svg';
+import { Button } from '@ui/components/Button';
 
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
@@ -35,19 +35,12 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 : 'Schedule this email'
             }
           >
-            <div
-              class={cn(
-                'flex items-center p-1 gap-2 hover:bg-surface-4 group-data-[expanded]/date-selector-trigger:bg-surface-4',
-                state.selectedDate &&
-                  'bg-accent/20 text-accent-ink hover:bg-accent/15 group-data-[expanded]/date-selector-trigger:bg-accent/20'
-              )}
-            >
-              <ClockIcon class="size-5" />
+            <Button size="icon-sm">
+              <ClockIcon />
               <Show when={!props.compact && formattedDate()}>
                 <span class="text-sm">{formattedDate()}</span>
                 <Tooltip tooltip="Clear">
                   <div
-                    role="button"
                     tabIndex={0}
                     class="hover:bg-accent/30"
                     onPointerDown={(e) => {
@@ -59,7 +52,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                   </div>
                 </Tooltip>
               </Show>
-            </div>
+            </Button>
           </Tooltip>
         );
       }}

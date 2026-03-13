@@ -2,11 +2,13 @@ import type { UseInfiniteQueryResult } from '@tanstack/solid-query';
 import { createSignal, type Accessor, type Setter } from 'solid-js';
 import type { Store } from 'solid-js/store';
 
-type ThreadPaginator = {
+export type ThreadPaginator = {
   isPrepending: Accessor<boolean>;
   isShifting: Accessor<boolean>;
   prependPaginate: () => Promise<void>;
   shiftPaginate: () => Promise<void>;
+  hasMorePrepend: Accessor<boolean>;
+  hasMoreShifting: Accessor<boolean>;
 };
 
 type PaginateDirectionState = {
@@ -15,6 +17,8 @@ type PaginateDirectionState = {
   is: Accessor<boolean>;
   setIsPending: Setter<boolean>;
   setIs: Setter<boolean>;
+  more: Accessor<boolean>;
+  setMore: Setter<boolean>;
 };
 
 function createPaginateDirectionState(
@@ -22,12 +26,15 @@ function createPaginateDirectionState(
 ): Store<PaginateDirectionState> {
   const [pending, setIsPending] = createSignal<boolean>(false);
   const [is, setIs] = createSignal<boolean>(false);
+  const [more, setMore] = createSignal<boolean>(false);
   return {
     direction,
     pending,
     is,
     setIsPending,
     setIs,
+    more,
+    setMore,
   };
 }
 
@@ -49,6 +56,8 @@ export function createThreadPaginator<T>(
         ? query.fetchNextPage
         : query.fetchPreviousPage;
 
+    state.setMore(hasMore());
+
     if (!hasMore()) return;
     if (isFetching() || state.is()) {
       state.setIsPending(true);
@@ -69,6 +78,8 @@ export function createThreadPaginator<T>(
   };
 
   return {
+    hasMorePrepend: prependPaginateState.more,
+    hasMoreShifting: shiftPaginateState.more,
     isPrepending: prependPaginateState.is,
     isShifting: shiftPaginateState.is,
     prependPaginate: () => paginate(prependPaginateState),

@@ -18,7 +18,6 @@ export function SettingsButton() {
   return (
     <Show when={isSingleSplit()}>
       <Button
-        suppressInteractionStyling
         class="px-0"
         tooltip={
           <LabelAndHotKey

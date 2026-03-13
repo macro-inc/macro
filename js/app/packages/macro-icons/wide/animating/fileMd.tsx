@@ -10,7 +10,7 @@ export const AnimatedFileMdIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-file-md-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated markdown file icon</title>
+      {/*<title>Animated markdown file icon</title>*/}
       <style>{`
         .animated-file-md-icon {
           .lower-l, .lower-extension {

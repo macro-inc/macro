@@ -1,5 +1,6 @@
 use models_opensearch::SearchIndex;
 
+use super::BulkUpsertResult;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting a document into the opensearch index
@@ -31,61 +32,16 @@ pub struct UpsertDocumentArgs {
     pub updated_at_seconds: EpochSeconds,
 }
 
-#[derive(Debug, Default)]
-pub struct BulkUpsertResult {
-    pub successful: usize,
-    pub failed: usize,
-    pub version_conflicts: usize,
-    pub errors: Vec<String>,
-}
-
-fn parse_bulk_response(response: &serde_json::Value) -> BulkUpsertResult {
-    let mut result = BulkUpsertResult::default();
-
-    if let Some(items) = response["items"].as_array() {
-        for item in items {
-            if let Some(index_result) = item["index"].as_object()
-                && let Some(status) = index_result["status"].as_u64()
-            {
-                match status {
-                    200..=299 => result.successful += 1,
-                    409 => {
-                        result.version_conflicts += 1;
-                        result.failed += 1;
-                        if let Some(error) = index_result["error"].as_object()
-                            && let Some(reason) = error["reason"].as_str()
-                        {
-                            result.errors.push(reason.to_string());
-                        }
-                    }
-                    _ => {
-                        result.failed += 1;
-                        if let Some(error) = index_result["error"].as_object()
-                            && let Some(reason) = error["reason"].as_str()
-                        {
-                            result.errors.push(reason.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    result
-}
-
 /// Process a single chunk of documents
 async fn bulk_upsert_single_chunk(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
 ) -> Result<BulkUpsertResult> {
-    // Build bulk request body
     let mut bulk_body = Vec::new();
 
     for doc in documents {
         let id = format!("{}:{}", doc.document_id, doc.node_id);
 
-        // Index action (upsert)
         let action = serde_json::json!({
             "index": {
                 "_id": id
@@ -101,53 +57,13 @@ async fn bulk_upsert_single_chunk(
         })?);
     }
 
-    let response = client
-        .bulk(opensearch::BulkParts::Index(
-            SearchIndex::Documents.as_ref(),
-        ))
-        .body(bulk_body)
-        .refresh(opensearch::params::Refresh::WaitFor) // Ensure consistency
-        .send()
-        .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("bulk_upsert_single_chunk".to_string()),
-        })?;
-
-    let status_code = response.status_code();
-    if !status_code.is_success() {
-        let body =
-            response
-                .text()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("bulk_upsert_single_chunk".to_string()),
-                })?;
-
-        tracing::error!(
-            status_code = ?status_code,
-            body = ?body,
-            "bulk upsert chunk failed"
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            method: Some("bulk_upsert_single_chunk".to_string()),
-        });
-    }
-
-    // Parse response to check for individual errors
-    let response_body: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("bulk_upsert_single_chunk".to_string()),
-            })?;
-
-    let result = parse_bulk_response(&response_body);
+    let result = super::bulk_upsert_to_index(
+        client,
+        SearchIndex::Documents.as_ref(),
+        bulk_body,
+        "bulk_upsert_single_chunk",
+    )
+    .await?;
 
     tracing::trace!(
         chunk_total = documents.len(),
