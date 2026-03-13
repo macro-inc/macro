@@ -41,7 +41,6 @@ impl UnifiedSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedSearchArgs {
-    pub terms: Vec<String>,
     pub user_id: String,
     pub page: u32,
     pub page_size: u32,
@@ -64,7 +63,7 @@ pub struct UnifiedSearchArgs {
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         DocumentSearchArgs {
-            terms: args.terms,
+            terms: args.document_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
@@ -78,9 +77,8 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
 
 impl From<UnifiedSearchArgs> for EmailSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
-        let terms = args.email_search_args.terms_override.unwrap_or(args.terms);
         EmailSearchArgs {
-            terms,
+            terms: args.email_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
@@ -103,7 +101,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
 impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         ChannelMessageSearchArgs {
-            terms: args.terms,
+            terms: args.channel_message_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
@@ -121,7 +119,7 @@ impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
 impl From<UnifiedSearchArgs> for ChatSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         ChatSearchArgs {
-            terms: args.terms,
+            terms: args.chat_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
@@ -136,6 +134,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
+    pub terms: Vec<String>,
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
@@ -143,12 +142,14 @@ pub struct UnifiedChatSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDocumentSearchArgs {
+    pub terms: Vec<String>,
     pub document_ids: Vec<String>,
     pub ids_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
+    pub terms: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -158,14 +159,11 @@ pub struct UnifiedEmailSearchArgs {
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
-    /// When set, overrides the default terms for email search.
-    /// This enables multi-field search via simple_query_string
-    /// while other indices use the original single query term.
-    pub terms_override: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChannelMessageSearchArgs {
+    pub terms: Vec<String>,
     pub channel_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,

@@ -185,10 +185,10 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Await all tasks in parallel
     let (
-        filter_document_response,
-        filter_channel_response,
-        filter_chat_response,
-        filter_email_response,
+        mut filter_document_response,
+        mut filter_channel_response,
+        mut filter_chat_response,
+        mut filter_email_response,
         filter_project_response,
     ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
@@ -223,6 +223,13 @@ pub(in crate::api::search) async fn perform_unified_search(
         )
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+
+    // Set terms on each index's search args
+    // Email gets split terms for multi-field search; other indices get the original query
+    filter_document_response.terms = terms.clone();
+    filter_channel_response.terms = terms.clone();
+    filter_chat_response.terms = terms.clone();
+    filter_email_response.terms = email_terms.clone();
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
@@ -264,7 +271,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let content_cursor_for_search = content_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
-        terms,
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
         page_size,
@@ -273,13 +279,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         collapse,
         search_indices: generate_unified_search_indices(include),
         document_search_args: filter_document_response.clone(),
-        email_search_args: {
-            let mut args = filter_email_response.clone();
-            if is_email_multi_term {
-                args.terms_override = Some(email_terms.clone());
-            }
-            args
-        },
+        email_search_args: filter_email_response.clone(),
         channel_message_search_args: filter_channel_response,
         chat_search_args: filter_chat_response.clone(),
     };
