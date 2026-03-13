@@ -30,6 +30,16 @@ use crate::SearchOn;
 use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
+impl UnifiedSearchArgs {
+    /// Builds the OpenSearch query JSON for this set of search args.
+    pub fn to_query_json(&self) -> Result<serde_json::Value> {
+        let mut json = build_unified_search_request(self)?.to_json();
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
+        Ok(json)
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedSearchArgs {
     pub terms: Vec<String>,

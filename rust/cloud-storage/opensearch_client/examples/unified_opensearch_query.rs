@@ -1,0 +1,28 @@
+use std::collections::HashSet;
+
+use models_opensearch::SearchEntityType;
+use models_search_cursor::SearchCursorOption;
+use opensearch_client::{
+    SearchOn,
+    search::unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs},
+};
+
+fn main() {
+    let args = UnifiedSearchArgs {
+        terms: vec!["hello".to_string(), "test".to_string()],
+        user_id: "macro|gab@macro.com".to_string(),
+        page: 0,
+        page_size: 10,
+        match_type: "exact".to_string(),
+        search_on: SearchOn::NameContent,
+        collapse: false,
+        disable_recency: false,
+        cursor: SearchCursorOption::NotDone(None),
+        search_indices: HashSet::from([SearchEntityType::Documents]),
+        email_search_args: UnifiedEmailSearchArgs::default(),
+        ..Default::default()
+    };
+
+    let query_json = args.to_query_json().expect("failed to build query");
+    println!("{}", serde_json::to_string_pretty(&query_json).unwrap());
+}
