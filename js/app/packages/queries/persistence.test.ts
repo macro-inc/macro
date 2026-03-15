@@ -157,9 +157,9 @@ describe('setupQueryPersistence', () => {
       value: 'persist',
     });
     expect(store.set).toHaveBeenCalledTimes(1);
-    expect((store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey).toEqual(
-      channelKeys.withID('b').queryKey
-    );
+    expect(
+      (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
+    ).toEqual(channelKeys.withID('b').queryKey);
   });
 
   it('restores query data from store on added event', async () => {
