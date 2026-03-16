@@ -105,10 +105,10 @@ pub async fn archived_handler(
         if has_inbox_label(m) == is_archiving {
             message_db_ids.push(m.db_id);
             // Only send provider messages to Gmail (drafts have no provider_id)
-            if let Some(ref pid) = m.provider_id {
-                if !pid.is_empty() {
-                    provider_message_tuples.push((m.db_id, pid.clone()));
-                }
+            if let Some(ref pid) = m.provider_id
+                && !pid.is_empty()
+            {
+                provider_message_tuples.push((m.db_id, pid.clone()));
             }
         }
     }
