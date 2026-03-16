@@ -1,6 +1,6 @@
 import { debouncedDependent } from '@core/util/debounce';
 import type { Accessor } from 'solid-js';
-import { useSearchSoupQuery, validateSearchServiceText } from './search';
+import { useSearchSoupQuery } from './search';
 
 /**
  * Minimal full-text search hook for contexts that just need a query string →
@@ -11,21 +11,15 @@ import { useSearchSoupQuery, validateSearchServiceText } from './search';
 export function useFullTextSearch(query: Accessor<string>) {
   const debouncedQuery = debouncedDependent(query, 300);
 
-  const searchQuery = useSearchSoupQuery(
-    () => ({
-      params: { page_size: 100 },
-      body: {
-        search_on: 'name_content',
-        match_type: 'partial',
-        terms:
-          debouncedQuery().trim().length > 0
-            ? [debouncedQuery().trim()]
-            : undefined,
-        include: [],
-      },
-    }),
-    () => ({ enabled: validateSearchServiceText(debouncedQuery()) })
-  );
+  const searchQuery = useSearchSoupQuery(() => ({
+    params: { page_size: 100 },
+    body: {
+      search_on: 'name_content',
+      match_type: 'partial',
+      query: debouncedQuery(),
+      include: [],
+    },
+  }));
 
   return {
     results: () => searchQuery.data ?? [],

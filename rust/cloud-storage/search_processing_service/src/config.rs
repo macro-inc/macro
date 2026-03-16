@@ -55,7 +55,7 @@ impl Config {
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
         let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
-            .unwrap_or("1".to_string())
+            .unwrap_or("10".to_string())
             .parse::<i32>()
             .unwrap();
 

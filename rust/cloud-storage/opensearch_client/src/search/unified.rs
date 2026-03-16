@@ -26,20 +26,26 @@ use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use tracing::Instrument;
 
-use crate::SearchOn;
 use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
+impl UnifiedSearchArgs {
+    /// Builds the OpenSearch query JSON for this set of search args.
+    pub fn to_query_json(&self) -> Result<serde_json::Value> {
+        let mut json = build_unified_search_request(self)?.to_json();
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
+        Ok(json)
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedSearchArgs {
-    pub terms: Vec<String>,
     pub user_id: String,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub search_on: SearchOn,
     pub collapse: bool,
-    pub disable_recency: bool,
     /// The cursor to use
     pub cursor: SearchCursorOption,
     /// The indices to search over
@@ -57,14 +63,12 @@ pub struct UnifiedSearchArgs {
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         DocumentSearchArgs {
-            terms: args.terms,
+            terms: args.document_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
-            disable_recency: args.disable_recency,
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
         }
@@ -74,15 +78,13 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
 impl From<UnifiedSearchArgs> for EmailSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         EmailSearchArgs {
-            terms: args.terms,
+            terms: args.email_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: false, // Email is never ids only at the moment
-            disable_recency: args.disable_recency,
             thread_ids: args.email_search_args.thread_ids,
             link_ids: args.email_search_args.link_ids,
             sender: args.email_search_args.sender,
@@ -99,15 +101,13 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
 impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         ChannelMessageSearchArgs {
-            terms: args.terms,
+            terms: args.channel_message_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
             ids_only: true, // channel messages are always ids only
-            disable_recency: args.disable_recency,
             channel_ids: args.channel_message_search_args.channel_ids,
             thread_ids: args.channel_message_search_args.thread_ids,
             mentions: args.channel_message_search_args.mentions,
@@ -119,14 +119,12 @@ impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
 impl From<UnifiedSearchArgs> for ChatSearchArgs {
     fn from(args: UnifiedSearchArgs) -> Self {
         ChatSearchArgs {
-            terms: args.terms,
+            terms: args.chat_search_args.terms,
             user_id: args.user_id,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
-            search_on: args.search_on,
             collapse: args.collapse,
-            disable_recency: args.disable_recency,
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
@@ -136,6 +134,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
+    pub terms: Vec<String>,
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
@@ -143,12 +142,14 @@ pub struct UnifiedChatSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDocumentSearchArgs {
+    pub terms: Vec<String>,
     pub document_ids: Vec<String>,
     pub ids_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
+    pub terms: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -162,6 +163,7 @@ pub struct UnifiedEmailSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChannelMessageSearchArgs {
+    pub terms: Vec<String>,
     pub channel_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,
@@ -350,11 +352,6 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         SearchCursorOption::Done => return Err(OpensearchClientError::SearchWithExhaustedCursor),
     };
 
-    // We don't support name search in opensearch
-    if let SearchOn::Name = args.search_on {
-        return Err(OpensearchClientError::InvalidSearchOn);
-    }
-
     if args.search_indices.is_empty() {
         return Err(OpensearchClientError::EmptySearchIndices);
     }
@@ -380,9 +377,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    // We can only search over channels if we are not explicitly searching by name
-    if args.search_indices.contains(&SearchEntityType::Channels) && args.search_on != SearchOn::Name
-    {
+    if args.search_indices.contains(&SearchEntityType::Channels) {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
@@ -455,7 +450,7 @@ pub(crate) async fn search_unified(
         .search_indices
         .iter()
         .filter(|i| **i != SearchEntityType::Projects)
-        .map(|i| i.as_ref())
+        .map(|i| i.index_name())
         .collect();
 
     // After we filter out invalid search entities if we have nothing we should return that the cursor is exhausted

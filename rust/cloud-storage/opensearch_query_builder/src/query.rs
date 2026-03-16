@@ -9,6 +9,7 @@ mod match_phrase_prefix;
 mod match_query;
 mod range;
 mod regexp;
+mod simple_query_string;
 mod term;
 mod terms;
 mod wildcard;
@@ -21,6 +22,7 @@ pub use match_query::*;
 pub use range::*;
 pub use regexp::*;
 use serde_json::Value;
+pub use simple_query_string::*;
 pub use term::*;
 pub use terms::*;
 pub use wildcard::*;
@@ -51,6 +53,8 @@ pub enum QueryType<'a> {
     Terms(TermsQuery<'a>),
     /// Wildcard query
     WildCard(WildcardQuery<'a>),
+    /// Simple query string query
+    SimpleQueryString(SimpleQueryStringQuery<'a>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -66,6 +70,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::Range(range) => range.to_json(),
             QueryType::WildCard(wildcard_query) => wildcard_query.to_json(),
             QueryType::Regexp(regexp_query) => regexp_query.to_json(),
+            QueryType::SimpleQueryString(simple_query_string) => simple_query_string.to_json(),
         }
     }
 }
@@ -121,6 +126,14 @@ impl<'a> QueryType<'a> {
         RangeQueryBuilder::new(field)
     }
 
+    /// Convenience method for creating a simple query string query
+    pub fn simple_query_string(
+        query: impl Into<Cow<'a, str>>,
+        fields: impl IntoIterator<Item = impl Into<Cow<'a, str>>>,
+    ) -> Self {
+        QueryType::SimpleQueryString(SimpleQueryStringQuery::new(query, fields))
+    }
+
     /// Convenience method for starting a function score query
     pub fn function_score() -> FunctionScoreQueryBuilder<'a> {
         FunctionScoreQueryBuilder::new()
@@ -143,6 +156,7 @@ impl<'a> QueryType<'a> {
             QueryType::Term(term) => QueryType::Term(term.to_owned()),
             QueryType::Terms(terms) => QueryType::Terms(terms.to_owned()),
             QueryType::WildCard(wildcard) => QueryType::WildCard(wildcard.to_owned()),
+            QueryType::SimpleQueryString(sqs) => QueryType::SimpleQueryString(sqs.to_owned()),
         }
     }
 }

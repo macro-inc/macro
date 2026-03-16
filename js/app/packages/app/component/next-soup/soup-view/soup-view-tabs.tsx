@@ -2,7 +2,7 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';

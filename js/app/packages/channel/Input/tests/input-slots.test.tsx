@@ -43,6 +43,10 @@ vi.mock('@icon/regular/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
+vi.mock('@icon/regular/x.svg', () => ({
+  default: () => <span data-testid="close-icon" />,
+}));
+
 vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
@@ -133,6 +137,7 @@ vi.mock('../FormatButtons', () => ({
 import { ChannelInput } from '../ChannelInput';
 import { Root } from '../Root';
 import { DropOverlay } from '../DropOverlay';
+import { createInputAttachmentTracker } from '../attachment-tracker';
 import type { InputData } from '../types';
 
 const baseInput: InputData = {
@@ -146,13 +151,13 @@ const baseInput: InputData = {
 };
 
 describe('Input slots', () => {
-  it('wires send and primary action handlers through context', async () => {
+  it('renders the default action composition and wires handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     const onToggleFormatRibbon = vi.fn();
     const onClose = vi.fn();
 
-    render(() =>
+    const { container } = render(() =>
       (() => {
         return (
           <ChannelInput
@@ -164,6 +169,10 @@ describe('Input slots', () => {
         );
       })()
     );
+
+    expect(container.querySelector('[data-input-actions]')).toBeTruthy();
+    expect(container.querySelector('[data-input-actions-left]')).toBeTruthy();
+    expect(container.querySelector('[data-input-actions-right]')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
@@ -177,6 +186,53 @@ describe('Input slots', () => {
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('');
+  });
+
+  it('omits the reply action for channel mode', () => {
+    render(() => <ChannelInput input={baseInput} />);
+
+    expect(screen.queryByRole('button', { name: 'Delete reply' })).toBeNull();
+  });
+
+  it('renders custom action composition from children instead of defaults', () => {
+    render(() => (
+      <ChannelInput input={baseInput}>
+        <div data-testid="custom-actions">custom actions</div>
+      </ChannelInput>
+    ));
+
+    expect(screen.getByTestId('custom-actions')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
+  });
+
+  it('disables send while attachments are pending', () => {
+    render(() =>
+      (() => {
+        const attachmentTracker = createInputAttachmentTracker({
+          initialAttachments: [
+            {
+              id: 'pending-1',
+              name: 'uploading.png',
+              kind: 'image',
+              pending: true,
+            },
+          ],
+        });
+
+        return (
+          <ChannelInput
+            input={baseInput}
+            attachmentTracker={attachmentTracker}
+          />
+        );
+      })()
+    );
+
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true
+    );
   });
 
   it('shows invalid state in drop overlay', () => {

@@ -1,34 +1,6 @@
-import TrashIcon from '@icon/regular/trash.svg';
-import FormatIcon from '@icon/regular/text-aa.svg';
-import {
-  ChannelInput,
-  createInputAttachmentTracker,
-  useInput,
-  useInputCommands,
-} from '../Input';
-import { InputActionButton } from '@channel/Input/PrimaryActions';
+import { Input, ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { MessageEditor } from './create-message-editor';
 import { useMessage } from '../Message';
-
-function EditPrimaryActions() {
-  const commands = useInputCommands();
-  const input = useInput();
-
-  return (
-    <>
-      <InputActionButton
-        label="Format"
-        active={input().showFormatRibbon}
-        onClick={() => commands.toggleFormatRibbon()}
-      >
-        <FormatIcon class="size-5" />
-      </InputActionButton>
-      <InputActionButton label="Discard Edit" onClick={() => commands.close()}>
-        <TrashIcon class="size-5" />
-      </InputActionButton>
-    </>
-  );
-}
 
 type MessageEditorContentProps = {
   channelId: string;
@@ -60,7 +32,16 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
       onSend={(nextSnapshot) =>
         props.messageEditor.save(message(), nextSnapshot)
       }
-      primaryActions={<EditPrimaryActions />}
-    />
+    >
+      <Input.Actions>
+        <Input.Actions.Left>
+          <Input.ToggleFormatAction />
+          <Input.DiscardDraftAction />
+        </Input.Actions.Left>
+        <Input.Actions.Right>
+          <Input.SendAction />
+        </Input.Actions.Right>
+      </Input.Actions>
+    </ChannelInput>
   );
 }

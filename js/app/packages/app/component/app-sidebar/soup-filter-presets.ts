@@ -1,7 +1,5 @@
-import {
-  QUERY_FILTERS,
-  type FilterID,
-} from '@app/component/next-soup/filters/filters';
+import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
   applyInboxQueryFilters,
   applyOtherQueryFilters,

@@ -9,7 +9,6 @@ export {
 export {
   threadOffsetX,
   replyInputOffsetX,
-  replyCenterOffsetX,
   innerRailX,
   innerRailTop,
   getInnerRailBottom,

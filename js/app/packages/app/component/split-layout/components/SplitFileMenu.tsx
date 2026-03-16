@@ -177,8 +177,9 @@ export function SplitFileMenu(props: {
           open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink',
           props.buttonClass
         )}
+        size="icon-sm"
       >
-        <ThreeDots class="size-4 shrink-0" />
+        <ThreeDots />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="bg-menu w-44 p-1 border border-edge mt-2">

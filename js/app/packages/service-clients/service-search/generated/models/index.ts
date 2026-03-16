@@ -201,8 +201,6 @@ export * from './unifiedSearchParams';
 export * from './unifiedSearchRequest';
 export * from './unifiedSearchRequestCollapse';
 export * from './unifiedSearchRequestFilters';
-export * from './unifiedSearchRequestQuery';
-export * from './unifiedSearchRequestTerms';
 export * from './unifiedSearchResponse';
 export * from './unifiedSearchResponseItem';
 export * from './unifiedSearchResponseItemOneOf';

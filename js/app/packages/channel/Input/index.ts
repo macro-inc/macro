@@ -14,7 +14,14 @@ export { EditorShell } from './EditorShell';
 export { Editor } from './Editor';
 export { Attachments } from './Attachments';
 export { Footer } from './Footer';
-export { PrimaryActions } from './PrimaryActions';
+export { Actions } from './Actions';
+export { InputActionButton } from './ActionButton';
+export {
+  AttachFilesAction,
+  ToggleFormatAction,
+  CloseReplyAction,
+  DiscardDraftAction,
+} from './InputActions';
 export { SendAction } from './SendAction';
 export { RibbonButton } from './RibbonButton';
 export { FormatButtons } from './FormatButtons';

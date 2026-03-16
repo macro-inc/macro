@@ -271,10 +271,6 @@
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
-              },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
                 "description": "The match type to use when searching"
@@ -527,10 +523,6 @@
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
               },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
-              },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
                 "description": "The match type to use when searching"
@@ -725,10 +717,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -972,10 +960,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -1751,10 +1735,6 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
-              },
-              "disable_recency": {
-                "type": "boolean",
-                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -2883,14 +2863,10 @@
       },
       "UnifiedSearchRequest": {
         "type": "object",
-        "required": ["match_type"],
+        "required": ["query", "match_type"],
         "properties": {
           "collapse": {
             "type": ["boolean", "null"]
-          },
-          "disable_recency": {
-            "type": "boolean",
-            "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
           },
           "filters": {
             "oneOf": [
@@ -2915,18 +2891,12 @@
             "description": "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
           },
           "query": {
-            "type": ["string", "null"]
+            "type": "string",
+            "description": "The search query string. Must be at least 3 characters."
           },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",
             "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
-          },
-          "terms": {
-            "type": ["array", "null"],
-            "items": {
-              "type": "string"
-            },
-            "description": "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
           }
         }
       },

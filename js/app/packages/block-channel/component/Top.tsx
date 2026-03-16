@@ -111,7 +111,6 @@ export function Top(props: TopProps) {
         <NotificationsButton
           entity={{ id: blockId, type: 'channel' }}
           notificationSource={notificationSource}
-          buttonSize="sm"
         />
       ),
     },

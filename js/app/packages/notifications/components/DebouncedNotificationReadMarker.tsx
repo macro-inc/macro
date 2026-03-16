@@ -138,6 +138,10 @@ export function EmailDebouncedReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
+        markNotificationsForEntityAsRead(props.notificationSource, {
+          type: 'email_thread',
+          id: props.threadId,
+        });
         markSeenMutation.mutate({ threadId: props.threadId });
       }}
     />

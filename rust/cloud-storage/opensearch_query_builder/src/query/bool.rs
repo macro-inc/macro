@@ -153,6 +153,12 @@ impl<'a> BoolQueryBuilder<'a> {
         self
     }
 
+    /// Replace all must queries with a single query
+    pub fn set_must(&mut self, query: QueryType<'a>) -> &mut Self {
+        self.must = Cow::Owned(vec![query]);
+        self
+    }
+
     /// Add a must not query
     pub fn must_not(&mut self, query: QueryType<'a>) -> &mut Self {
         self.must_not.to_mut().push(query);

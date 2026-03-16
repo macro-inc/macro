@@ -223,9 +223,19 @@ pub async fn process_upsert_thread_message(
         }
 
         if !upsert_email_message_args.is_empty() {
-            // TODO: parllelize
-            for message in upsert_email_message_args {
-                opensearch_client.upsert_email_message(&message).await?;
+            let result = opensearch_client
+                .bulk_upsert_email_messages(
+                    &upsert_email_message_args,
+                    upsert_email_thread_message.index_override.as_deref(),
+                )
+                .await?;
+
+            if result.failed > 0 {
+                tracing::warn!(
+                    failed = result.failed,
+                    errors = ?result.errors,
+                    "some email messages failed to upsert"
+                );
             }
         }
 
