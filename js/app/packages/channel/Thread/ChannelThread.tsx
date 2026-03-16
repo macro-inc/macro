@@ -32,6 +32,8 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
 
+  const isSelected = () => props.selectedMessageId?.() === props.data().id;
+
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
     () => props.data().id,
@@ -91,6 +93,8 @@ export function ChannelThread(props: ThreadProps) {
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
               messageEditor={props.messageEditor}
+              highlighted={isSelected()}
+              selectionState={isSelected() ? { isSelected: true } : undefined}
             />
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
