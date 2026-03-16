@@ -1,25 +1,22 @@
-const API_HOST = 'us.i.posthog.com';
-const ASSET_HOST = 'us-assets.i.posthog.com';
+const PROVIDERS: Record<string, string> = {
+  '/ingest/ph': 'us.i.posthog.com',
+};
 
-async function handleStatic(
-  request: Request,
-  pathname: string,
-  ctx: ExecutionContext
-): Promise<Response> {
-  let response = await caches.default.match(request);
-  if (!response) {
-    response = await fetch(`https://${ASSET_HOST}${pathname}`);
-    ctx.waitUntil(caches.default.put(request, response.clone()));
+function getProvider(pathname: string): { apiHost: string; path: string } | null {
+  for (const [prefix, apiHost] of Object.entries(PROVIDERS)) {
+    if (pathname.startsWith(prefix)) {
+      return { apiHost, path: pathname.slice(prefix.length) || '/' };
+    }
   }
-  return response;
+  return null;
 }
 
-async function handleProxy(request: Request, pathWithSearch: string): Promise<Response> {
+async function handleProxy(request: Request, apiHost: string, pathWithSearch: string): Promise<Response> {
   const originHeaders = new Headers(request.headers);
   originHeaders.delete('cookie');
   originHeaders.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '');
 
-  const originRequest = new Request(`https://${API_HOST}${pathWithSearch}`, {
+  const originRequest = new Request(`https://${apiHost}${pathWithSearch}`, {
     method: request.method,
     headers: originHeaders,
     body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : null,
@@ -30,14 +27,14 @@ async function handleProxy(request: Request, pathWithSearch: string): Promise<Re
 }
 
 export default {
-  async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const pathWithSearch = url.pathname + url.search;
+    const provider = getProvider(url.pathname);
 
-    if (url.pathname.startsWith('/static/')) {
-      return handleStatic(request, pathWithSearch, ctx);
+    if (!provider) {
+      return new Response('Not found', { status: 404 });
     }
 
-    return handleProxy(request, pathWithSearch);
+    return handleProxy(request, provider.apiHost, provider.path + url.search);
   },
 };
