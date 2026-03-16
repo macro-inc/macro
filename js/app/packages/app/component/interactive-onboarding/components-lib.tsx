@@ -1,6 +1,22 @@
-import { For } from 'solid-js';
+import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { Hotkey } from '@core/component/Hotkey';
+
+// Maps display strings to the values produced by KeyboardEvent.key (lowercase)
+const DISPLAY_TO_EVENT_KEY: Record<string, string> = {
+  '↓': 'arrowdown',
+  '↑': 'arrowup',
+  '←': 'arrowleft',
+  '→': 'arrowright',
+  esc: 'escape',
+  enter: 'enter',
+  cmd: 'meta',
+};
+
+function displayToEventKey(display: string): string {
+  const lower = display.toLowerCase();
+  return DISPLAY_TO_EVENT_KEY[lower] ?? lower;
+}
 
 interface HotkeyCalloutProps {
   keys: string[];
@@ -11,6 +27,27 @@ interface HotkeyCalloutProps {
 
 export function HotkeyCallout(props: HotkeyCalloutProps) {
   const isLarge = () => (props.size ?? 'lg') === 'lg';
+  const [activeKey, setActiveKey] = createSignal<string | null>(null);
+
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const pressed = e.key.toLowerCase();
+      const match = props.keys.find((k) => displayToEventKey(k) === pressed);
+      if (match) setActiveKey(match);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      const released = e.key.toLowerCase();
+      if (activeKey() && displayToEventKey(activeKey()!) === released) {
+        setActiveKey(null);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, { capture: true });
+    document.addEventListener('keyup', onKeyUp, { capture: true });
+    onCleanup(() => {
+      document.removeEventListener('keydown', onKeyDown, { capture: true });
+      document.removeEventListener('keyup', onKeyUp, { capture: true });
+    });
+  });
 
   return (
     <div
@@ -33,10 +70,13 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
               )}
               <span
                 class={cn(
-                  'rounded-sm border border-edge-muted',
+                  'rounded-sm border border-edge-muted transition-colors',
                   isLarge()
                     ? 'px-2.5 py-1 text-base text-ink'
-                    : 'px-1.5 py-0.5 text-xs text-ink/80'
+                    : 'px-1.5 py-0.5 text-xs text-ink/80',
+                  activeKey() === key
+                    ? 'bg-accent/30 border-accent/40'
+                    : 'bg-hover/50'
                 )}
               >
                 {key}
