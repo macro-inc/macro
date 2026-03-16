@@ -107,7 +107,7 @@ const useSoupNotificationInvalidators = () => {
     'channel',
     (notification) => {
       entityQueryClient.invalidateQueries({
-        queryKey: soupKeys._def,
+        queryKey: soupKeys.items._def,
       });
       invalidateEntityNotifications(notification.entity_id);
     }
@@ -132,7 +132,7 @@ const useSoupNotificationInvalidators = () => {
     (notification) => {
       if (notification.notification_event_type === 'task_assigned') {
         entityQueryClient.invalidateQueries({
-          queryKey: soupKeys._def,
+          queryKey: soupKeys.items._def,
         });
         invalidateEntityNotifications(notification.entity_id);
       }
