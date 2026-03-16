@@ -324,29 +324,31 @@ function NarrowMessageLayout(props: LayoutProps) {
       <Entity.Slot placement="icon" class="flex items-center self-center pr-3">
         <UnreadIndicator class="mx-2 size-2.75" active={props.unread} />
         <div class="relative size-11 shrink-0">
-          <div class="absolute inset-0 grid place-items-center group-hover/narrow:opacity-0 transition-opacity">
-            <Show
-              when={isDirectMessage()}
-              fallback={
-                <div class="size-11 bg-edge-muted rounded-full flex items-center justify-center">
-                  <div class="size-6">
-                    <Entity.Icon
-                      entity={props.entity}
-                      streamState={props.streamState}
-                    />
+          <Show when={!props.checked}>
+            <div class="absolute inset-0 grid place-items-center group-hover/narrow:opacity-0 transition-opacity">
+              <Show
+                when={isDirectMessage()}
+                fallback={
+                  <div class="size-11 bg-edge-muted rounded-full flex items-center justify-center">
+                    <div class="size-6">
+                      <Entity.Icon
+                        entity={props.entity}
+                        streamState={props.streamState}
+                      />
+                    </div>
                   </div>
+                }
+              >
+                <div class="size-11">
+                  <Entity.Icon
+                    entity={props.entity}
+                    streamState={props.streamState}
+                    class="bg-edge-muted text-ink"
+                  />
                 </div>
-              }
-            >
-              <div class="size-11">
-                <Entity.Icon
-                  entity={props.entity}
-                  streamState={props.streamState}
-                  class="bg-edge-muted text-ink"
-                />
-              </div>
-            </Show>
-          </div>
+              </Show>
+            </div>
+          </Show>
           {/* TODO: make multiselect work on mobile */}
           <div
             class={cn(
@@ -584,9 +586,7 @@ export function ListEntity(props: ListEntityProps) {
         <Match when={isWide()}>
           <WideLayout {...layoutProps()} />
         </Match>
-        <Match
-          when={isChannelEntity(props.entity) && !hasNotifications()}
-        >
+        <Match when={isChannelEntity(props.entity) && !hasNotifications()}>
           <NarrowMessageLayout {...layoutProps()} />
         </Match>
         <Match when={true}>

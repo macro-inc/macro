@@ -8,7 +8,6 @@ import { useUserId } from '@core/context/user';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { cn } from '@ui/utils/classname';
 import { PulsingStar } from '../components/PulsingStar';
 import type { ChannelEntity, EntityData } from '../types/entity';
 import { isChannelEntity, isTaskEntity } from '../types/entity';
