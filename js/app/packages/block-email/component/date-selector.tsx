@@ -12,7 +12,6 @@ import {
   createEffect,
   on,
 } from 'solid-js';
-import { isMobile } from '@core/mobile/isMobile';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
@@ -48,7 +47,9 @@ type DateSelectorProps = {
     | ((props: { selectedDate: Date | null }) => JSX.Element);
 };
 
-const DateSelectorPortalWrapper: FlowComponent<{ disabled?: boolean }> = (props) => {
+const DateSelectorPortalWrapper: FlowComponent<{ disabled?: boolean }> = (
+  props
+) => {
   if (props.disabled) return <>{props.children}</>;
   return <Combobox.Portal>{props.children}</Combobox.Portal>;
 };

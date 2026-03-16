@@ -50,7 +50,9 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                   'size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15'
               )}
             >
-              <ClockIcon class={state.selectedDate && isCompact() ? 'text-accent' : ''} />
+              <ClockIcon
+                class={state.selectedDate && isCompact() ? 'text-accent' : ''}
+              />
               <Show when={showExpanded()}>
                 <span class="text-sm">{formattedDate()}</span>
                 <Tooltip tooltip="Clear">
