@@ -26,7 +26,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
   constructor(
     name: string,
     args: SmokeTestRunnerArgs,
-    opts?: pulumi.ComponentResourceOptions,
+    opts?: pulumi.ComponentResourceOptions
   ) {
     super('macro:components:SmokeTestRunner', name, {}, opts);
 
@@ -45,7 +45,12 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
       mostRecent: true,
       owners: ['099720109477'], // Canonical
       filters: [
-        { name: 'name', values: ['ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*'] },
+        {
+          name: 'name',
+          values: [
+            'ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*',
+          ],
+        },
         { name: 'virtualization-type', values: ['hvm'] },
       ],
     });
@@ -59,7 +64,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         description: `GitHub Actions runner: ${name}`,
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupEgressRule(
@@ -71,7 +76,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         ipProtocol: '-1',
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupIngressRule(
@@ -83,7 +88,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         ipProtocol: '-1',
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     // ── IAM ───────────────────────────────────────────────────────────────
@@ -103,7 +108,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         }),
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -112,7 +117,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         role: this.role.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       },
-      { parent: this },
+      { parent: this }
     );
 
     this.instanceProfile = new aws.iam.InstanceProfile(
@@ -122,13 +127,13 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
         role: this.role.name,
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     // ── User Data ─────────────────────────────────────────────────────────
     const userDataScript = fs.readFileSync(
       path.join(__dirname, 'user-data.sh'),
-      'utf-8',
+      'utf-8'
     );
 
     const userData = runnerToken.apply((token) =>
@@ -139,8 +144,8 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
           `export GITHUB_RUNNER_URL="${runnerUrl}"`,
           `export GITHUB_RUNNER_TOKEN="${token}"`,
           `export GITHUB_RUNNER_NAME="${name}-$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"`,
-        ].join('\n'),
-      ),
+        ].join('\n')
+      )
     );
 
     // ── EC2 Instance ──────────────────────────────────────────────────────
@@ -165,7 +170,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
           Name: `${name}-${stack}`,
         },
       },
-      { parent: this },
+      { parent: this }
     );
   }
 }
