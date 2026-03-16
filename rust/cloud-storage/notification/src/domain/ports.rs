@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::models::TaggedContent;
 use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
@@ -80,9 +81,9 @@ pub trait NotificationRepository: Send + Sync + 'static {
     ///
     /// Returns the notification ID if successful, or None if it already exists
     /// (idempotent operation).
-    fn create_notification<'a, T: Notification + Send + Sync>(
+    fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,

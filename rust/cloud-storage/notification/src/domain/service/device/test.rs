@@ -5,6 +5,7 @@ use crate::domain::service::NotificationReader;
 use crate::domain::service::ingress::{NotificationReaderService, PlatformArnConfig};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -95,7 +96,7 @@ impl NotificationRepository for MockNotifRepo {
     {
         unimplemented!()
     }
-    async fn create_notification<'a, T: crate::domain::models::Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         _: crate::domain::models::SendNotificationRequestBuilder<'a, T>,
         _: uuid::Uuid,

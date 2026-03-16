@@ -151,7 +151,7 @@ impl MockRepository {
 struct MockStateMachine;
 
 impl BulkDigestStateMachine for MockStateMachine {
-    async fn ingest<T: Notification + 'static>(
+    async fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         _notif: UserNotificationRow<Arc<T>>,
     ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA<T>, Report>
@@ -176,9 +176,9 @@ impl NotificationRepository for MockRepository {
         Ok(self.unsubscribed_users.clone())
     }
 
-    async fn create_notification<'a, T: Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         _service_sender: &str,
         apns_collapse_key: Option<&str>,
@@ -193,14 +193,14 @@ impl NotificationRepository for MockRepository {
             .push((notification_id, apns_collapse_key.map(String::from)));
         let entity = request.notification_entity.clone().into_owned();
         let sender_id = request.sender_id.as_ref().map(|id| id.clone().into_owned());
-        let notification_metadata = Arc::new(request.notification);
+        let notification_metadata = Arc::new(request.notification.content);
         let rows = request
             .recipient_ids
             .iter()
             .map(|recipient| UserNotificationRow {
                 owner_id: recipient.clone().into_owned(),
                 notification_id,
-                notification_event_type: T::TYPE_NAME.to_string(),
+                notification_event_type: request.notification.tag.as_ref().to_string(),
                 entity: entity.clone(),
                 sent: false,
                 done: false,
@@ -356,9 +356,9 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self).get_unsubscribed_users(item_id, user_ids).await
     }
 
-    async fn create_notification<'a, T: Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,

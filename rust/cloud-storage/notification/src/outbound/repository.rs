@@ -5,7 +5,7 @@ mod test;
 
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder, TaggedContent,
     UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
@@ -16,6 +16,7 @@ use model_entity::EntityType;
 use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
@@ -78,9 +79,9 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
     /// Create a notification record in the database.
     ///
     /// Returns `Some(notification_id)` if created, `None` if it already exists (idempotent).
-    fn create_notification<'a, T: Notification + Send + Sync>(
+    fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
@@ -260,9 +261,9 @@ impl NotificationDbOps for PgPool {
         Ok(result)
     }
 
-    async fn create_notification<'a, T: Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
@@ -273,6 +274,7 @@ impl NotificationDbOps for PgPool {
         let mut tx = self.begin().await?;
 
         let sender_id = request.sender_id.as_ref().map(|id| id.to_string());
+        let typename = request.notification.tag.as_ref();
 
         // Insert notification
         let result = sqlx::query!(
@@ -282,7 +284,7 @@ impl NotificationDbOps for PgPool {
             ON CONFLICT (id) DO NOTHING
             "#,
             notification_id,
-            T::TYPE_NAME,
+            typename,
             request.notification_entity.entity_id.as_ref(),
             entity_type,
             service_name,
@@ -322,7 +324,7 @@ impl NotificationDbOps for PgPool {
         let entity = request.notification_entity.clone().into_owned();
         let sender_id = request.sender_id.as_ref().map(|id| id.clone().into_owned());
 
-        let n = Arc::new(request.notification);
+        let n = Arc::new(request.notification.content);
 
         let rows = request
             .recipient_ids
@@ -330,7 +332,7 @@ impl NotificationDbOps for PgPool {
             .map(|recipient| UserNotificationRow {
                 owner_id: recipient.clone().into_owned(),
                 notification_id,
-                notification_event_type: T::TYPE_NAME.to_string(),
+                notification_event_type: typename.to_string(),
                 entity: entity.clone(),
                 sent: false,
                 done: false,
@@ -780,9 +782,9 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db.get_device_endpoints(user_ids).await
     }
 
-    async fn create_notification<'a, T: Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,

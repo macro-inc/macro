@@ -16,7 +16,7 @@ use crate::domain::models::request::{
     SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, UserNotificationRow,
+    DeviceEndpoint, Notification, NotificationResult, NotificationTypeName, UserNotificationRow,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::SendNotificationError;
@@ -170,7 +170,7 @@ where
     /// 4. Return result (delivery happens async via worker)
     async fn send_notification_impl<
         'a,
-        T: Notification + Clone + 'static,
+        T: Clone + Serialize + Send + Sync + 'static,
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,
@@ -257,7 +257,11 @@ where
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
     ///   Returns `(queue_messages, apns_collapse_key)`.
-    async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
+    async fn build_queue_message<
+        'a,
+        T: Clone + Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
         &self,
         notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
@@ -267,12 +271,13 @@ where
     > {
         let mut messages = Vec::new();
         let mut apns_collapse_key = None;
+        let typename = &notification.req.notification.tag;
 
         // Connection gateway: 1:M (single message for all recipients)
         if notification.send_conn_gateway {
-            messages.push(QueueMessage::new(NotificationChannel::ConnGateway(
+            messages.push(QueueMessage::new_from_conn_gateway(
                 ConnGatewayNotification::clone_from_request(notification_id, notification),
-            )));
+            ));
         }
 
         // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
@@ -311,13 +316,14 @@ where
             if !ios_endpoints.is_empty() {
                 let BuildApnsOutput { notif, attr } = build_apns;
                 apns_collapse_key = Some(attr.collapse_key.clone());
-                messages.push(QueueMessage::new(NotificationChannel::Ios(Box::new(
+                messages.push(QueueMessage::new_from_apns(
                     APNSTargets {
                         notif,
                         attributes: attr,
                         ios_device_endpoints: ios_endpoints,
                     },
-                ))));
+                    typename,
+                ));
             }
         }
 
@@ -325,9 +331,10 @@ where
         if let Some(ref build_email) = notification.build_email {
             for recipient in &notification.req.recipient_ids {
                 let email_content = build_email.clone();
-                messages.push(QueueMessage::new(NotificationChannel::Email(
+                messages.push(QueueMessage::new_from_email(
                     email_content.with_recipient(recipient.clone()),
-                )));
+                    typename,
+                ));
             }
         }
 
@@ -455,23 +462,31 @@ where
                 .into_iter()
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
-                    QueueMessage::new(NotificationChannel::Ios(Box::new(APNSTargets {
-                        notif: APNSPushNotification {
-                            aps: Aps {
-                                content_available: Some(1),
-                                sound: None,
-                                ..Default::default()
+
+                    let notif = ClearPushIdentifier {
+                        identifier: collapse_key.clone(),
+                    };
+
+                    let typename = NotificationTypeName::new_from_notif(&notif);
+
+                    QueueMessage::new_from_apns(
+                        APNSTargets {
+                            notif: APNSPushNotification {
+                                aps: Aps {
+                                    content_available: Some(1),
+                                    sound: None,
+                                    ..Default::default()
+                                },
+                                push_notification_data: notif.clone(),
                             },
-                            push_notification_data: ClearPushIdentifier {
-                                identifier: collapse_key.clone(),
+                            attributes: MessageAttributes {
+                                push_type: PushType::Background,
+                                collapse_key,
                             },
+                            ios_device_endpoints: ios_endpoints.clone(),
                         },
-                        attributes: MessageAttributes {
-                            push_type: PushType::Background,
-                            collapse_key,
-                        },
-                        ios_device_endpoints: ios_endpoints.clone(),
-                    })))
+                        &typename,
+                    )
                 })
                 .collect();
 

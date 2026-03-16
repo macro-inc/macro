@@ -2,7 +2,7 @@
 
 use crate::domain::models::{
     ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-    RecipientExclusion,
+    RecipientExclusion, TaggedContent,
     apple::APNSPushNotification,
     mobile::{self, MessageAttributes},
     queue_message::EmailCreateBundle,
@@ -20,7 +20,6 @@ use uuid::Uuid;
 /// Generic over the notification payload type `T`, which must implement
 /// the `Notification` trait. The event type is derived from `T::TYPE_NAME`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "T: Notification")]
 pub struct SendNotificationRequestBuilder<'a, T> {
     /// The entity associated with this notification (e.g., Channel, Team, Document).
     pub notification_entity: Entity<'a>,
@@ -32,12 +31,26 @@ pub struct SendNotificationRequestBuilder<'a, T> {
     pub recipient_ids: HashSet<MacroUserIdStr<'a>>,
 }
 
-impl<'a, T> SendNotificationRequestBuilder<'a, T> {
+impl<'a, T> SendNotificationRequestBuilder<'a, T>
+where
+    T: Notification,
+{
     /// Convert this builder into a full request with optional delivery customizers.
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
+        let SendNotificationRequestBuilder {
+            notification_entity,
+            notification,
+            sender_id,
+            recipient_ids,
+        } = self;
         SendNotificationRequest {
             uuid_to_write: Uuid::now_v7(),
-            req: self,
+            req: SendNotificationRequestBuilder {
+                notification_entity,
+                notification: TaggedContent::new(notification),
+                sender_id,
+                recipient_ids,
+            },
             build_apns: None,
             build_email: None,
             send_conn_gateway: false,
@@ -55,8 +68,9 @@ pub(crate) struct BuildApnsOutput<U> {
 ///
 /// Created from [`SendNotificationRequestBuilder::into_request`] and can be
 /// customized with APNS and email builders.
+#[derive(Serialize, Deserialize)]
 pub struct SendNotificationRequest<'a, T, U> {
-    pub(crate) req: SendNotificationRequestBuilder<'a, T>,
+    pub(crate) req: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
     /// the uuid that will be written to db as PK
     pub(crate) uuid_to_write: Uuid,
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
@@ -83,6 +97,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 
         let collapse_key = req
             .notification
+            .content
             .collapse_key(&entity)
             .into_hashed()
             .into_inner();
@@ -92,6 +107,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
         };
         let build_apns = req
             .notification
+            .content
             .as_apns(sender.clone(), &entity, uuid_to_write)
             .map(|apns| BuildApnsOutput {
                 notif: apns,
@@ -111,7 +127,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
     /// Add a custom email content builder.
     pub fn with_email(mut self) -> Self {
-        self.build_email = Some(EmailCreateBundle::new(&self.req.notification));
+        self.build_email = Some(EmailCreateBundle::new(&self.req.notification.content));
         self
     }
 }

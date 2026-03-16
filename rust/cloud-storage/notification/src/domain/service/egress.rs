@@ -17,7 +17,7 @@ use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
     EmailNotification, NotificationChannel, QueueMessage,
 };
-use crate::domain::models::{NotificationExtEmail, RateLimitResult};
+use crate::domain::models::{NotificationExtEmail, NotificationTypeName, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitPort, WebSocketSender,
@@ -314,8 +314,10 @@ where
         let email_notif = f(batch)?;
         let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
+        let typename = NotificationTypeName::new_from_notif(&email_notif);
+
         let message: QueueMessage<'static, T, ()> =
-            QueueMessage::new(NotificationChannel::Email(email_content));
+            QueueMessage::new_from_email(email_content, &typename);
 
         self.queue.publish(vec![message]).await?;
 
