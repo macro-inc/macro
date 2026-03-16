@@ -1,13 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import {
-  createEffect,
-  createSignal,
-  Show,
-  Suspense,
-  type Accessor,
-} from 'solid-js';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
+import { Show, Suspense, type Accessor } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
@@ -43,23 +35,6 @@ export function ChannelThread(props: ThreadProps) {
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
-  const [isThreadFocused, setIsThreadFocused] = createSignal(false);
-
-  const [attachReplyHotkeys, replyScope] = useHotkeyDOMScope(
-    'channel-reply-input'
-  );
-
-  registerHotkey({
-    scopeId: replyScope,
-    hotkey: 'escape',
-    hotkeyToken: TOKENS.channel.cancelReply,
-    description: 'Cancel reply',
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      props.setIsReplying(false);
-      return true;
-    },
-  });
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
@@ -86,16 +61,12 @@ export function ChannelThread(props: ThreadProps) {
     keys: () => activeReplies().map((r) => r.id),
   });
 
-  // Clear thread focus when parent message is deselected
-  createEffect(() => {
-    if (!isSelected()) setIsThreadFocused(false);
-  });
+  const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
 
-  createThreadHotkeys({
+  const { attachReplyInputRef } = createThreadHotkeys({
     messageListScopeId: props.messageListScopeId!,
     replySelection,
     isThreadFocused,
-    setIsThreadFocused,
     activeReplies,
     threadId: () => props.data().id,
     getMessageActions: (msg) => props.getMessageActions?.(msg),
@@ -106,6 +77,7 @@ export function ChannelThread(props: ThreadProps) {
     hasReplies,
     expandThread: () => props.setIsExpanded(true),
     isThreadExpanded: props.isExpanded,
+    setIsReplying: (v) => props.setIsReplying(v),
   });
 
   const firstReplyIsNewMessage = () => {
@@ -194,7 +166,7 @@ export function ChannelThread(props: ThreadProps) {
                   </Show>
 
                   <Show when={props.isReplying()}>
-                    <div ref={attachReplyHotkeys}>
+                    <div ref={attachReplyInputRef}>
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}

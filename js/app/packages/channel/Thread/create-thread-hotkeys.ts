@@ -1,4 +1,8 @@
-import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import {
+  createHotkeyGroup,
+  registerHotkey,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { onCleanup, type Accessor } from 'solid-js';
@@ -10,7 +14,6 @@ type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
   replySelection: MessageSelection;
   isThreadFocused: Accessor<boolean>;
-  setIsThreadFocused: (focused: boolean) => void;
   activeReplies: Accessor<Array<ApiThreadReply>>;
   threadId: Accessor<string>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
@@ -21,6 +24,7 @@ type CreateThreadHotkeysOptions = {
   hasReplies: Accessor<boolean>;
   expandThread: () => void;
   isThreadExpanded: Accessor<boolean>;
+  setIsReplying: (replying: boolean) => void;
 };
 
 function scrollReplyIntoView(replyId: string) {
@@ -50,7 +54,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     condition: () => options.isSelected() && options.hasReplies(),
     keyDownHandler: () => {
       options.expandThread();
-      options.setIsThreadFocused(true);
       const id = options.replySelection.selectFirst();
       if (id) {
         requestAnimationFrame(() => scrollReplyIntoView(id));
@@ -74,7 +77,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (id && id !== before) {
         scrollReplyIntoView(id);
       } else {
-        options.setIsThreadFocused(false);
+        // At first reply — exit thread
         options.replySelection.clear();
       }
       return true;
@@ -96,7 +99,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
         scrollReplyIntoView(id);
         return true;
       }
-      options.setIsThreadFocused(false);
+      // Past last reply — exit thread, let parent ArrowDown fire
       options.replySelection.clear();
       return false;
     },
@@ -113,7 +116,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     condition: () => options.isThreadFocused() && options.isThreadExpanded(),
     keyDownHandler: () => {
       options.collapseThread();
-      options.setIsThreadFocused(false);
       options.replySelection.clear();
       return true;
     },
@@ -129,7 +131,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     handlerPriority: HOTKEY_PRIORITY_HIGH,
     condition: options.isThreadFocused,
     keyDownHandler: () => {
-      options.setIsThreadFocused(false);
       options.replySelection.clear();
       return true;
     },
@@ -178,5 +179,24 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
+  // --- Escape: cancel reply input ---
+  const [attachReplyInputRef, replyInputScope] = useHotkeyDOMScope(
+    'channel-reply-input'
+  );
+
+  registerHotkey({
+    scopeId: replyInputScope,
+    hotkey: 'escape',
+    hotkeyToken: TOKENS.channel.cancelReply,
+    description: 'Cancel reply',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      options.setIsReplying(false);
+      return true;
+    },
+  }).withGroup(group);
+
   onCleanup(() => group.dispose());
+
+  return { attachReplyInputRef };
 }
