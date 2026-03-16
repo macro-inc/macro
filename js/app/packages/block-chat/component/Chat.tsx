@@ -40,6 +40,8 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { withAnalytics } from '@coparse/analytics';
+import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
@@ -125,8 +127,11 @@ function ChatInner(props: {
   const { showPaywall } = usePaywallState();
 
   const sendChatMessage = useSendChatMessage();
+  const renameMutation = createRenameDssEntityMutation();
 
   const onSend = createCallback(async (request: ChatSendInput) => {
+    const isFirstMessage = chat.messages().length === 0;
+
     chat.addMessage({
       id: crypto.randomUUID(),
       content: request.content,
@@ -134,6 +139,16 @@ function ChatInner(props: {
       attachments: request.attachments ?? [],
     });
     chat.setWaitingForStream(true);
+
+    if (isFirstMessage) {
+      const name = deriveChatName(request.content);
+      if (name) {
+        renameMutation.mutate({
+          entity: { type: 'chat', id: chat.chatId(), name: '', ownerId: '' },
+          newName: name,
+        });
+      }
+    }
 
     const result = await sendChatMessage({
       ...request,
