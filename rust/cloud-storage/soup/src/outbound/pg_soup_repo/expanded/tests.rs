@@ -4630,6 +4630,7 @@ async fn test_all_filter_types_combined(db: PgPool) -> anyhow::Result<()> {
             owners: vec!["macro|user-1@test.com".to_string()],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
