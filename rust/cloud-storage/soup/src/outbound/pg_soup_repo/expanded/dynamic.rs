@@ -7,7 +7,10 @@ use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
-    EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral, project::ProjectLiteral,
+    EntityFilterAst,
+    chat::ChatLiteral,
+    document::DocumentLiteral,
+    project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -482,7 +485,9 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     // Document top clause (lightweight)
     builder.push(DOCUMENT_TOP_CLAUSE);
     builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
-    builder.push(build_properties_filter(filter_ast.properties_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+    ));
 
     builder.push(" UNION ALL ");
 

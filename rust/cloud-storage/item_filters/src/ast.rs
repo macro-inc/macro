@@ -106,10 +106,8 @@ impl EntityFilterAst {
             email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new),
             channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
                 .map(Arc::new),
-            properties_filter: Vec::<PropertyFilter>::expand_ast(
-                entity_filter.property_filters,
-            )?
-            .map(Arc::new),
+            properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
+                .map(Arc::new),
         }))
     }
 

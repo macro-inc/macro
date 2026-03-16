@@ -58,18 +58,14 @@ impl ExpandFrame<PropertiesLiteral> for Vec<PropertyFilter> {
                         Expr::or,
                     )?;
 
-                let entity_ref_nodes = pf
-                    .entity_ids
-                    .iter()
-                    .cloned()
-                    .expand(
-                        |id| PropertiesLiteral {
-                            property_definition_id: prop_def_id,
-                            entity_type: pf.entity_type.clone(),
-                            value: PropertyMatchValue::EntityRef(id),
-                        },
-                        Expr::or,
-                    );
+                let entity_ref_nodes = pf.entity_ids.iter().cloned().expand(
+                    |id| PropertiesLiteral {
+                        property_definition_id: prop_def_id,
+                        entity_type: pf.entity_type.clone(),
+                        value: PropertyMatchValue::EntityRef(id),
+                    },
+                    Expr::or,
+                );
 
                 Ok([option_nodes, entity_ref_nodes]
                     .into_iter()

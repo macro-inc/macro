@@ -390,6 +390,6 @@ impl IsEmpty for EntityFilters {
             && chat_filters.is_empty()
             && email_filters.is_empty()
             && channel_filters.is_empty()
-            && property_filters.is_empty()
+            && property_filters.iter().all(IsEmpty::is_empty)
     }
 }
