@@ -13,7 +13,6 @@ import {
   Show,
   Suspense,
   Switch,
-  untrack,
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';

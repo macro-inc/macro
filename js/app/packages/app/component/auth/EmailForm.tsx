@@ -6,13 +6,7 @@ import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';
 import { platformFetch } from 'core/util/platformFetch';
-import {
-  createEffect,
-  createSignal,
-  type Setter,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';

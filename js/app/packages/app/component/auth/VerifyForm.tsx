@@ -3,13 +3,7 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { action, useAction, useSubmission } from '@solidjs/router';
-import {
-  createEffect,
-  createSignal,
-  onCleanup,
-  type Setter,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
 import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';

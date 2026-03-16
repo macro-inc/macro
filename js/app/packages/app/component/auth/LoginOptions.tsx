@@ -12,7 +12,7 @@ import { invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
-import { type JSX, type Setter, Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
 
 function LoginOption(props: {
