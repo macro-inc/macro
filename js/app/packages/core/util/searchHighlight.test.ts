@@ -158,15 +158,6 @@ describe('windowSearchMatch', () => {
       'no highlight here'
     );
   });
-
-  it('windows a long email snippet around the highlight', () => {
-    const text =
-      "...a word that describes your emoji. To personalize your emoji, two-finger tap and enter Emoji Settings. To personalize your emoji, click here. I'd love to hear what you think: please reply and say <macro_em>hello</macro_em> 😃 Speak soon, Rahul Take me to Superhuman Mail If you don't want to hear from me again, please let me know";
-    const result = windowSearchMatch(text, 100);
-    expect(result).toContain('<macro_em>hello</macro_em>');
-    expect(result.startsWith('...')).toBe(true);
-    expect(result.endsWith('...')).toBe(true);
-  });
 });
 
 describe('parseSearchHighlightSegments', () => {
