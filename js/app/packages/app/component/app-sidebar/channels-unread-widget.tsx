@@ -21,7 +21,7 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { compareDateAsc } from '@core/util/date';
+import { compareDateDesc } from '@core/util/date';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -220,11 +220,9 @@ export const ChannelsUnreadWidget = () => {
       if (added.length === 0 && kept.length === prev.length) return;
 
       added.sort((a, b) => {
-        const aGroup = groups.get(a)!;
-        const bGroup = groups.get(b)!;
-        const aTime = aGroup.notifications[0]?.created_at;
-        const bTime = bGroup.notifications[0]?.created_at;
-        return compareDateAsc(aTime, bTime);
+        const aTime = groups.get(a)?.notifications[0]?.created_at;
+        const bTime = groups.get(b)?.notifications[0]?.created_at;
+        return compareDateDesc(aTime, bTime);
       });
 
       setOrderedIds([...added, ...kept]);
