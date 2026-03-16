@@ -12,6 +12,7 @@ import {
   createEffect,
   on,
 } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
@@ -43,6 +44,11 @@ type DateSelectorProps = {
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
+};
+
+const DateSelectorPortalWrapper: FlowComponent = (props) => {
+  if (isMobile()) return <>{props.children}</>;
+  return <Combobox.Portal>{props.children}</Combobox.Portal>;
 };
 
 export const DateSelector = (props: DateSelectorProps) => {
@@ -289,7 +295,7 @@ export const DateSelector = (props: DateSelectorProps) => {
         </Combobox.Control>
       </Show>
 
-      <Combobox.Portal>
+      <DateSelectorPortalWrapper>
         <Combobox.Content
           class="w-full max-w-sm bg-dialog text-ink border border-edge-muted"
           on:keydown={handleKeyDown}
@@ -365,7 +371,7 @@ export const DateSelector = (props: DateSelectorProps) => {
             </div>
           </WithCustomDateMode>
         </Combobox.Content>
-      </Combobox.Portal>
+      </DateSelectorPortalWrapper>
     </Combobox>
   );
 };
