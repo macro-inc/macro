@@ -149,7 +149,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       ),
     ];
     if (hasSenderMatch && data.searchQuery) {
-      const queryTerms = data.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+      const queryTerms = data.searchQuery
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
       for (const t of queryTerms) {
         if (!terms.includes(t)) terms.push(t);
       }
