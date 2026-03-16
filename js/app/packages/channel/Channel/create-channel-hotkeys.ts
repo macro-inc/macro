@@ -21,6 +21,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   const [attachInput, inputScope] = useHotkeyDOMScope('channel-input');
 
   let messageListEl: HTMLElement | undefined;
+  let inputEl: HTMLElement | undefined;
 
   const hasSelection = () => !!options.selection.selectedId();
 
@@ -53,6 +54,8 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const id = options.selection.selectNext();
       if (id) {
         options.navigation()?.scrollToId(id, { align: 'nearest' });
+      } else {
+        inputEl?.querySelector<HTMLElement>('[contenteditable]')?.focus();
       }
       return true;
     },
@@ -126,6 +129,9 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       messageListEl = el;
       attachMessageList(el);
     },
-    attachInputRef: (el: HTMLElement) => attachInput(el),
+    attachInputRef: (el: HTMLElement) => {
+      inputEl = el;
+      attachInput(el);
+    },
   };
 }

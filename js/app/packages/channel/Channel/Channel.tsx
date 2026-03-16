@@ -177,7 +177,8 @@ export function Channel(props: ChannelProps) {
     messageById,
     getMessageActions,
     userId,
-    isInputEmpty: () => channelInputSnapshot()?.value.trim().length === 0,
+    isInputEmpty: () =>
+      (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
   });
 
   createStickyScrollEffect({
