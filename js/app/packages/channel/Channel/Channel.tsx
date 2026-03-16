@@ -210,6 +210,7 @@ export function Channel(props: ChannelProps) {
               class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
               ref={attachMessageListRef}
               tabIndex={-1}
+              data-channel-message-list
             >
               <ThreadList
                 keys={() => messageIndex().keys}
