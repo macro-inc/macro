@@ -152,36 +152,62 @@ const FilterChip = (props: {
 };
 
 export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
+  const lastIndex = () => props.filters.length - 1;
+
   return (
     <Show when={props.filters.length > 0}>
-      <div class="flex items-center gap-1.5 flex-wrap px-2 py-1.5 border-b border-edge-muted">
+      <div class="flex items-center gap-1.5 flex-wrap px-2">
         <For each={props.filters}>
-          {(filter) => (
-            <FilterChip
-              filter={filter}
-              onRemove={() =>
-                props.onRemove(filter.categoryId, filter.optionId)
+          {(filter, index) => (
+            // To make sure that the Clear all button never wraps to a new line on its own, we wrap it with the last FilterChip
+            <Show
+              when={props.filters.length > 1 && index() === lastIndex()}
+              fallback={
+                <FilterChip
+                  filter={filter}
+                  onRemove={() =>
+                    props.onRemove(filter.categoryId, filter.optionId)
+                  }
+                  onReplace={(newOptionId) =>
+                    props.onReplace(
+                      filter.categoryId,
+                      filter.optionId,
+                      newOptionId
+                    )
+                  }
+                  isOptionActive={props.isOptionActive}
+                />
               }
-              onReplace={(newOptionId) =>
-                props.onReplace(filter.categoryId, filter.optionId, newOptionId)
-              }
-              isOptionActive={props.isOptionActive}
-            />
+            >
+              <span class="inline-flex items-center gap-1.5">
+                <FilterChip
+                  filter={filter}
+                  onRemove={() =>
+                    props.onRemove(filter.categoryId, filter.optionId)
+                  }
+                  onReplace={(newOptionId) =>
+                    props.onReplace(
+                      filter.categoryId,
+                      filter.optionId,
+                      newOptionId
+                    )
+                  }
+                  isOptionActive={props.isOptionActive}
+                />
+                <button
+                  type="button"
+                  class={cn(
+                    'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md whitespace-nowrap',
+                    'text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors'
+                  )}
+                  onClick={() => props.onClearAll()}
+                >
+                  Clear all
+                </button>
+              </span>
+            </Show>
           )}
         </For>
-
-        <Show when={props.filters.length > 1}>
-          <button
-            type="button"
-            class={cn(
-              'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md',
-              'text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors'
-            )}
-            onClick={() => props.onClearAll()}
-          >
-            Clear all
-          </button>
-        </Show>
       </div>
     </Show>
   );

@@ -4,7 +4,6 @@ import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { createMemo, Match, Switch } from 'solid-js';
-import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
 
@@ -39,16 +38,8 @@ export const SoupFiltersBar = () => {
         </div>
       </Match>
       <Match when={true}>
-        <div class="flex flex-col w-full">
-          <div class="flex items-center gap-2 px-2 py-1.5 border-b border-edge-muted">
-            <SoupViewTabs />
-
-            <div class="flex-1" />
-
-            <UnifiedFilterDropdown />
-            <SoupViewContextSort />
-          </div>
-
+        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
+          <UnifiedFilterDropdown />
           <ActiveFilterChips
             filters={activeFiltersList()}
             onRemove={removeFilter}
@@ -56,6 +47,8 @@ export const SoupFiltersBar = () => {
             onClearAll={resetToTabDefaults}
             isOptionActive={isOptionActive}
           />
+          <div class="flex-1" />
+          <SoupViewContextSort />
         </div>
       </Match>
     </Switch>

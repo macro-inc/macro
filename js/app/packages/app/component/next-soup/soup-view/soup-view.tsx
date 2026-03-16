@@ -81,6 +81,7 @@ import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hoo
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
+  SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { isListViewID } from '@app/constants/list-views';
@@ -218,6 +219,7 @@ export const SoupView = (props: SoupViewProps) => {
                     {props.viewName}
                   </h1>
                 </Show>
+                <SoupViewTabs />
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
