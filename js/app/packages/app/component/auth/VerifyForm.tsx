@@ -11,7 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
-import { ErrorMsg, Input, identifyUser, Stage } from './Shared';
+import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
@@ -34,19 +34,12 @@ const verifyCode = action(async (formData: FormData) => {
     throw new Error('Unable to perform verification.');
   }
 
-  await identifyUser();
-
-  const url = new URL(window.location.href);
-  const searchParams = new URLSearchParams(url.search);
-  const referral = searchParams.get('referral');
-  if (referral) window.location.href = `/app?referral=${referral}`;
-
   return true;
 }, 'verify-code');
 
 const RESEND_TIMER = 45;
 
-export function VerifyForm(props: { setStage: Setter<Stage> }) {
+export function VerifyForm(props: { setStage: (next: Stage) => void }) {
   const [resendError, setResendError] = createSignal<string>();
   const [showResendCode, setShowResendCode] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
@@ -96,7 +89,14 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
   };
 
   createEffect(() => {
-    if (submission.result) props.setStage(Stage.Done);
+    if (submission.result) {
+      props.setStage(Stage.Done);
+
+      const url = new URL(window.location.href);
+      const searchParams = new URLSearchParams(url.search);
+      const referral = searchParams.get('referral');
+      if (referral) window.location.href = `/app?referral=${referral}`;
+    }
   });
 
   const resetEmailCode = useResetEmailCode(props.setStage);

@@ -88,7 +88,7 @@ export const sendEmailCode = action(async (formData: FormData) => {
   return true;
 }, 'passwordless-login');
 
-export function useResetEmailCode(setStage: Setter<Stage>) {
+export function useResetEmailCode(setStage: (next: Stage) => void) {
   const submission = useSubmission(sendEmailCode);
   return createCallback(() => {
     submission.clear();
@@ -96,7 +96,7 @@ export function useResetEmailCode(setStage: Setter<Stage>) {
   });
 }
 
-export function EmailForm(props: { setStage: Setter<Stage> }) {
+export function EmailForm(props: { setStage: (next: Stage) => void }) {
   const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
   const submission = useSubmission(sendEmailCode);
   const [searchParams] = useSearchParams();
