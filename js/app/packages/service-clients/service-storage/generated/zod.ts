@@ -4367,6 +4367,38 @@ export const postItemsSoupBody = zod
       .describe(
         'The project filters used to filter down what projects you search over.'
       ),
+    property_filters: zod
+      .array(
+        zod
+          .object({
+            entity_ids: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "Entity reference IDs to match. Multiple values are OR'd together."
+              ),
+            entity_type: zod
+              .string()
+              .nullish()
+              .describe(
+                'The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types.'
+              ),
+            option_ids: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "Select option UUIDs to match. Multiple values are OR'd together."
+              ),
+            property_definition_id: zod
+              .string()
+              .describe('The UUID of the property definition to filter on.'),
+          })
+          .describe(
+            "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together."
+          )
+      )
+      .optional()
+      .describe('property-based filters applied across entity types'),
   })
   .describe('a bundle of all of the filters for each entity type')
   .and(
