@@ -4670,7 +4670,7 @@ async fn test_property_filter_by_select_option(db: Pool<Postgres>) -> anyhow::Re
     let entity_filters = item_filters::EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
-            entity_type: "DOCUMENT".to_string(),
+            entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
             entity_ids: vec![],
         }],
@@ -4724,7 +4724,7 @@ async fn test_property_filter_by_status_completed(db: Pool<Postgres>) -> anyhow:
     let entity_filters = item_filters::EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: "00000001-0000-0000-0000-000000000002".to_string(), // Status
-            entity_type: "DOCUMENT".to_string(),
+            entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
             entity_ids: vec![],
         }],
@@ -4779,13 +4779,13 @@ async fn test_property_filter_multiple_and(db: Pool<Postgres>) -> anyhow::Result
         property_filters: vec![
             PropertyFilter {
                 property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
-                entity_type: "DOCUMENT".to_string(),
+                entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
                 entity_ids: vec![],
             },
             PropertyFilter {
                 property_definition_id: "00000001-0000-0000-0000-000000000002".to_string(), // Status
-                entity_type: "DOCUMENT".to_string(),
+                entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
                 entity_ids: vec![],
             },
@@ -4839,7 +4839,7 @@ async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()>
     let entity_filters = item_filters::EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
-            entity_type: "DOCUMENT".to_string(),
+            entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000004".to_string()], // Critical
             entity_ids: vec![],
         }],
@@ -4886,7 +4886,7 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
     let entity_filters = item_filters::EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
-            entity_type: "DOCUMENT".to_string(),
+            entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec![
                 "00000001-0000-0000-0003-000000000001".to_string(), // Low
                 "00000001-0000-0000-0003-000000000002".to_string(), // Medium
@@ -4923,6 +4923,129 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
     assert!(
         doc_ids.contains(&Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()),
         "Doc B should match Priority = Low"
+    );
+
+    Ok(())
+}
+
+// Test filtering without entity_type matches across all entity types
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn test_property_filter_without_entity_type(db: Pool<Postgres>) -> anyhow::Result<()> {
+    // Filter for Priority = Low OR Medium without specifying entity_type.
+    // Doc A and Doc B have Priority = Low on DOCUMENT entity_type.
+    // Project A has Priority = Medium on PROJECT entity_type.
+    // With entity_type = None, the filter should match across both entity types.
+    let entity_filters = item_filters::EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
+            entity_type: None, // match across all entity types
+            option_ids: vec![
+                "00000001-0000-0000-0003-000000000001".to_string(), // Low
+                "00000001-0000-0000-0003-000000000002".to_string(), // Medium
+            ],
+            entity_ids: vec![],
+        }],
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        100,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let item_ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // Documents with Priority = Low
+    assert!(
+        item_ids.contains(&Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap()),
+        "Doc A should match Priority = Low (DOCUMENT entity_type)"
+    );
+    assert!(
+        item_ids.contains(&Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()),
+        "Doc B should match Priority = Low (DOCUMENT entity_type)"
+    );
+    // Project with Priority = Medium
+    assert!(
+        item_ids.contains(&Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap()),
+        "Project A should match Priority = Medium (PROJECT entity_type)"
+    );
+
+    Ok(())
+}
+
+// Test that specifying entity_type scopes the filter to only that type
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn test_property_filter_scoped_entity_type(db: Pool<Postgres>) -> anyhow::Result<()> {
+    // Filter for Priority = Medium on PROJECT entity_type only.
+    // Project A has Priority = Medium on PROJECT. Docs do not.
+    // With entity_type = Some("PROJECT"), only projects should match.
+    let entity_filters = item_filters::EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000003".to_string(), // Priority
+            entity_type: Some("PROJECT".to_string()),
+            option_ids: vec!["00000001-0000-0000-0003-000000000002".to_string()], // Medium
+            entity_ids: vec![],
+        }],
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        100,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let project_ids: Vec<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Project(p) => Some(p.id),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        project_ids.len(),
+        1,
+        "Only Project A should match Priority = Medium on PROJECT"
+    );
+    assert_eq!(
+        project_ids[0],
+        Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap()
+    );
+
+    // No documents should match since they only have Priority on DOCUMENT entity_type
+    let doc_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Document(_)))
+        .count();
+    assert_eq!(
+        doc_count, 0,
+        "No documents should match Priority = Medium on PROJECT entity_type"
     );
 
     Ok(())

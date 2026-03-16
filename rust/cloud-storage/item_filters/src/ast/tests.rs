@@ -414,7 +414,7 @@ fn it_expands_single_property_select_option() {
     let f = EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: prop_def_id.to_string(),
-            entity_type: "TASK".to_string(),
+            entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
         }],
@@ -422,18 +422,7 @@ fn it_expands_single_property_select_option() {
     };
 
     let ast_result = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
-    let ast = Arc::into_inner(ast_result.properties_filter.unwrap()).unwrap();
-
-    let json = serde_json::to_value(ast).unwrap();
-    let exp = json!({
-        "l": {
-            "pd": prop_def_id,
-            "et": "TASK",
-            "v": { "so": option_id }
-        }
-    });
-
-    assert_eq!(json, exp);
+    assert!(ast_result.properties_filter.is_some());
 }
 
 #[test]
@@ -444,7 +433,7 @@ fn it_expands_multiple_option_ids_as_or() {
     let f = EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: prop_def_id.to_string(),
-            entity_type: "TASK".to_string(),
+            entity_type: Some("TASK".to_string()),
             option_ids: vec![option_a.to_string(), option_b.to_string()],
             entity_ids: vec![],
         }],
@@ -469,7 +458,7 @@ fn it_expands_entity_ref_filter() {
     let f = EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: prop_def_id.to_string(),
-            entity_type: "TASK".to_string(),
+            entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![entity_id.clone()],
         }],
@@ -501,13 +490,13 @@ fn it_ands_multiple_property_filters() {
         property_filters: vec![
             PropertyFilter {
                 property_definition_id: status_id.to_string(),
-                entity_type: "TASK".to_string(),
+                entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_a.to_string()],
                 entity_ids: vec![],
             },
             PropertyFilter {
                 property_definition_id: priority_id.to_string(),
-                entity_type: "TASK".to_string(),
+                entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_b.to_string()],
                 entity_ids: vec![],
             },
@@ -534,7 +523,7 @@ fn it_ors_mixed_option_and_entity_ref_within_single_filter() {
     let f = EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: prop_def_id.to_string(),
-            entity_type: "TASK".to_string(),
+            entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![entity_id],
         }],
@@ -571,7 +560,7 @@ fn property_filter_with_empty_values_produce_no_ast() {
     let f = EntityFilters {
         property_filters: vec![PropertyFilter {
             property_definition_id: prop_def_id.to_string(),
-            entity_type: "TASK".to_string(),
+            entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![],
         }],
@@ -582,4 +571,63 @@ fn property_filter_with_empty_values_produce_no_ast() {
         EntityFilterAst::new_from_filters(f).unwrap().is_none(),
         "property filter with no values should produce no AST"
     );
+}
+
+#[test]
+fn it_expands_property_filter_without_entity_type() {
+    let prop_def_id = Uuid::new_v4();
+    let option_id = Uuid::new_v4();
+    let f = EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: prop_def_id.to_string(),
+            entity_type: None,
+            option_ids: vec![option_id.to_string()],
+            entity_ids: vec![],
+        }],
+        ..Default::default()
+    };
+
+    let ast_result = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let ast = Arc::into_inner(ast_result.properties_filter.unwrap()).unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "pd": prop_def_id,
+            "v": { "so": option_id }
+        }
+    });
+
+    // entity_type should be absent in serialization when None
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_property_filter_with_entity_type() {
+    let prop_def_id = Uuid::new_v4();
+    let option_id = Uuid::new_v4();
+    let f = EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: prop_def_id.to_string(),
+            entity_type: Some("TASK".to_string()),
+            option_ids: vec![option_id.to_string()],
+            entity_ids: vec![],
+        }],
+        ..Default::default()
+    };
+
+    let ast_result = EntityFilterAst::new_from_filters(f).unwrap().unwrap();
+    let ast = Arc::into_inner(ast_result.properties_filter.unwrap()).unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "pd": prop_def_id,
+            "et": "TASK",
+            "v": { "so": option_id }
+        }
+    });
+
+    // entity_type should be present when Some
+    assert_eq!(json, exp);
 }

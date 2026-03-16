@@ -299,7 +299,9 @@ pub struct PropertyFilter {
     /// The UUID of the property definition to filter on.
     pub property_definition_id: String,
     /// The entity type for the property lookup (e.g., "TASK", "DOCUMENT", "PROJECT").
-    pub entity_type: String,
+    /// When None, matches across all entity types.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<String>,
     /// Select option UUIDs to match. Multiple values are OR'd together.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub option_ids: Vec<String>,

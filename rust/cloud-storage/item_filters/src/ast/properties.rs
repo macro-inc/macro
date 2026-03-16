@@ -26,8 +26,9 @@ pub struct PropertiesLiteral {
     #[serde(rename = "pd")]
     pub property_definition_id: Uuid,
     /// The entity type for the property lookup (e.g., "TASK", "DOCUMENT", "PROJECT").
-    #[serde(rename = "et")]
-    pub entity_type: String,
+    /// When None, matches across all entity types.
+    #[serde(default, rename = "et", skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<String>,
     /// The value to match against.
     #[serde(rename = "v")]
     pub value: PropertyMatchValue,

@@ -434,10 +434,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_properties_filter(
-    ast: Option<&Expr<PropertiesLiteral>>,
-    entity_id_sql: &str,
-) -> String {
+fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>, entity_id_sql: &str) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -460,11 +457,15 @@ fn build_properties_filter(
                     )
                 }
             };
+            let entity_type_clause = match entity_type {
+                Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+                None => String::new(),
+            };
             format!(
                 r#"EXISTS (
                     SELECT 1 FROM entity_properties ep_prop
                     WHERE ep_prop.entity_id = {entity_id_sql}
-                    AND ep_prop.entity_type = '{entity_type}'
+                    {entity_type_clause}
                     AND ep_prop.property_definition_id = '{property_definition_id}'
                     AND {value_predicate}
                 )"#
