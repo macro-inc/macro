@@ -3,11 +3,12 @@
 /// Required environment variables:
 /// - DATABASE_URL
 /// - SEARCH_EVENT_QUEUE
+///
 /// Optional:
 /// - SINCE: ISO 8601 timestamp to only backfill threads updated since that time
-///          e.g. SINCE=2026-03-16T00:00:00Z
+///   e.g. SINCE=2026-03-16T00:00:00Z
 /// - EMAIL_INDEX_OVERRIDE: Override the target OpenSearch index for email upserts
-///          e.g. EMAIL_INDEX_OVERRIDE=emails_v2
+///   e.g. EMAIL_INDEX_OVERRIDE=emails_v2
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
