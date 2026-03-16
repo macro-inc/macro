@@ -18,7 +18,10 @@ use crate::domain::models::request::{
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, NotificationTypeName, UserNotificationRow,
 };
-use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
+use crate::domain::models::queue_message::IngressQueueMessage;
+use crate::domain::ports::{
+    NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
+};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
@@ -342,6 +345,57 @@ where
             QueueMessageNeedsStateMachine::new(messages),
             apns_collapse_key,
         ))
+    }
+
+    /// Process a type-erased notification request from the ingress queue.
+    ///
+    /// This accepts `serde_json::Value` types (deserialized from the ingress
+    /// queue) and calls `send_notification_impl` directly, bypassing the
+    /// `T: Notification` trait bound on the public trait method.
+    pub async fn process_from_queue<'a>(
+        &'a self,
+        request: SendNotificationRequest<'a, serde_json::Value, serde_json::Value>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        self.send_notification_impl(request).await
+    }
+}
+
+/// A lightweight [`NotificationIngress`] implementation that serializes
+/// the request and publishes to an ingress queue.
+///
+/// Callers only need a queue client — no database, Redis, or state-machine
+/// dependencies. A worker in `notification_service` picks up messages from
+/// this queue and processes them through [`NotificationIngressService`].
+///
+/// `send_notification` always returns `Ok(None)` because the actual
+/// processing is deferred to the worker.
+pub struct SqsNotificationIngress<Q> {
+    queue: Q,
+}
+
+impl<Q> SqsNotificationIngress<Q> {
+    /// Create a new queue-backed notification ingress.
+    pub fn new(queue: Q) -> Self {
+        Self { queue }
+    }
+}
+
+impl<Q: NotificationIngressQueue> NotificationIngress for SqsNotificationIngress<Q> {
+    async fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        req: SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let message =
+            IngressQueueMessage::from_request(&req).context(SendNotificationError::Other)?;
+        self.queue
+            .publish(message)
+            .await
+            .context(SendNotificationError::Other)?;
+        Ok(None)
     }
 }
 

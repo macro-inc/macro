@@ -120,15 +120,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
-    use notification::domain::models::email_notification_digest::{
-        EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-    };
-    use notification::domain::service::NotificationIngressService;
-    use notification::outbound::{
-        digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-        push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-        repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-    };
+    use notification::domain::service::SqsNotificationIngress;
+    use notification::outbound::queue::SqsIngressQueue;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -212,36 +205,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
-    let redis_client = redis::Client::open("redis://localhost:6379").unwrap();
-    let redis_multiplexed_conn = redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .unwrap();
-
-    let notification_ingress_service = Arc::new({
-        let notification_repository = DbNotificationRepository::new(pool.clone());
-        let notification_queue = SqsNotificationQueue::new(
-            aws_sdk_sqs::Client::from_conf(sqs_config),
-            "test-notification-queue".to_string(),
-        );
-        let state_machine = StateMachineDriverA::new_with_defaults(
-            DbUserExistenceChecker::new(pool.clone()),
-            PushNotificationCheckerImpl::new(DbNotificationRepository::new(pool.clone())),
-            LastOnlineCheckerImpl::new(
-                last_online_tracker::domain::services::LastOnlineService::new(
-                    last_online_tracker::outbound::time::DefaultTime,
-                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                        redis_multiplexed_conn.clone(),
-                    ),
-                ),
-            ),
-            RedisDigestBatcher::new(redis_multiplexed_conn),
-            EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
-                .append::<model_notifications::ChannelInviteMetadata>(),
-        );
-        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
-    });
+    let ingress_queue = SqsIngressQueue::new(
+        aws_sdk_sqs::Client::from_conf(sqs_config),
+        "test-notification-ingress-queue".to_string(),
+    );
+    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()

@@ -2009,6 +2009,133 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
     );
 }
 
+// ============================================================================
+// Ingress Queue Tests (SqsNotificationIngress + process_from_queue)
+// ============================================================================
+
+/// Mock ingress queue that tracks published messages.
+struct MockIngressQueue {
+    published: Mutex<Vec<crate::domain::models::queue_message::IngressQueueMessage>>,
+}
+
+impl MockIngressQueue {
+    fn new() -> Self {
+        Self {
+            published: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn get_published_count(&self) -> usize {
+        self.published.lock().unwrap().len()
+    }
+}
+
+impl crate::domain::ports::NotificationIngressQueue for MockIngressQueue {
+    async fn publish(
+        &self,
+        message: crate::domain::models::queue_message::IngressQueueMessage,
+    ) -> Result<(), Report> {
+        self.published.lock().unwrap().push(message);
+        Ok(())
+    }
+
+    async fn receive_messages(
+        &self,
+    ) -> Result<Vec<crate::domain::models::queue_message::RawIngressQueueMessage>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+impl crate::domain::ports::NotificationIngressQueue for Arc<MockIngressQueue> {
+    async fn publish(
+        &self,
+        message: crate::domain::models::queue_message::IngressQueueMessage,
+    ) -> Result<(), Report> {
+        (**self).publish(message).await
+    }
+
+    async fn receive_messages(
+        &self,
+    ) -> Result<Vec<crate::domain::models::queue_message::RawIngressQueueMessage>, Report> {
+        (**self).receive_messages().await
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        (**self).delete_message(receipt_handle).await
+    }
+}
+
+#[tokio::test]
+async fn test_sqs_notification_ingress_publishes_to_queue() {
+    use crate::domain::service::SqsNotificationIngress;
+
+    let queue = Arc::new(MockIngressQueue::new());
+    let ingress = SqsNotificationIngress::new(queue.clone());
+
+    let recipient = test_user_id("user@example.com");
+    let request = SendNotificationRequestBuilder {
+        notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        notification: TestNotification {
+            message: "Hello via queue".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([recipient]),
+    }
+    .into_request()
+    .with_conn_gateway();
+
+    let result = ingress.send_notification(request).await.unwrap();
+
+    // SqsNotificationIngress always returns Ok(None)
+    assert!(result.is_none());
+
+    // Verify message was published to the queue
+    assert_eq!(queue.get_published_count(), 1);
+}
+
+#[tokio::test]
+async fn test_process_from_queue_with_value_types() {
+    let queue = Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine);
+
+    let recipient = test_user_id("user@example.com");
+
+    // Build a typed request, then type-erase it through IngressQueueMessage
+    let typed_request = SendNotificationRequestBuilder {
+        notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        notification: TestNotification {
+            message: "Hello from queue".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([recipient.clone()]),
+    }
+    .into_request()
+    .with_conn_gateway();
+
+    let ingress_msg =
+        crate::domain::models::queue_message::IngressQueueMessage::from_request(&typed_request)
+            .unwrap();
+
+    // Process the type-erased request
+    let result = service
+        .process_from_queue(ingress_msg.request)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(result.notified_recipients.contains(&recipient));
+
+    // Verify a queue message was published to the delivery queue
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert!(published[0]["content"]["ConnGateway"].is_object());
+}
+
 impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,

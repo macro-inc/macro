@@ -6615,6 +6615,7 @@ dependencies = [
  "email_validator",
  "http-body-util",
  "itertools 0.14.0",
+ "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
  "macro_cors",

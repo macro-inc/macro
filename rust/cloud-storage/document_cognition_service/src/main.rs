@@ -23,15 +23,8 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-};
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -204,35 +197,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized connection repo");
 
-    let redis_multiplexed_conn = redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .context("failed to get multiplexed redis connection for notification state machine")?;
-
-    let notification_ingress_service = Arc::new({
-        let notification_repository = DbNotificationRepository::new(db.clone());
-        let notification_queue = SqsNotificationQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            config.notification_queue.clone(),
-        );
-        let state_machine = StateMachineDriverA::new_with_defaults(
-            DbUserExistenceChecker::new(db.clone()),
-            PushNotificationCheckerImpl::new(DbNotificationRepository::new(db.clone())),
-            LastOnlineCheckerImpl::new(
-                last_online_tracker::domain::services::LastOnlineService::new(
-                    last_online_tracker::outbound::time::DefaultTime,
-                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                        redis_multiplexed_conn.clone(),
-                    ),
-                ),
-            ),
-            RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
-            EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
-                .append::<model_notifications::ChannelInviteMetadata>(),
-        );
-        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
-    });
+    let ingress_queue = SqsIngressQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
+    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
 
     tracing::info!("initialized notification ingress service");
 

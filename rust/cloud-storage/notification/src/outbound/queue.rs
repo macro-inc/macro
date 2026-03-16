@@ -4,8 +4,10 @@ use aws_sdk_sqs::Client as SqsClient;
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
-use crate::domain::ports::NotificationQueue;
+use crate::domain::models::queue_message::{
+    IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
+};
+use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
 
 /// SQS-backed implementation of the notification queue port.
 #[derive(Clone)]
@@ -158,6 +160,74 @@ impl NotificationQueue for FileQueue {
         if path.exists() {
             tokio::fs::remove_file(&path).await?;
         }
+        Ok(())
+    }
+}
+
+/// SQS-backed implementation of the notification ingress queue port.
+///
+/// Used by [`crate::domain::service::SqsNotificationIngress`] to publish
+/// type-erased notification requests, and by the ingress worker to consume them.
+#[derive(Clone)]
+pub struct SqsIngressQueue {
+    client: SqsClient,
+    queue_url: String,
+}
+
+impl SqsIngressQueue {
+    /// Create a new SQS ingress queue adapter.
+    pub fn new(client: SqsClient, queue_url: String) -> Self {
+        Self { client, queue_url }
+    }
+}
+
+impl NotificationIngressQueue for SqsIngressQueue {
+    async fn publish(&self, message: IngressQueueMessage) -> Result<(), Report> {
+        let body = serde_json::to_string(&message)?;
+        self.client
+            .send_message()
+            .queue_url(&self.queue_url)
+            .message_body(body)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawIngressQueueMessage>, Report> {
+        let result = self
+            .client
+            .receive_message()
+            .queue_url(&self.queue_url)
+            .max_number_of_messages(10)
+            .wait_time_seconds(20)
+            .send()
+            .await?;
+
+        let messages = result
+            .messages
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|msg| {
+                let body_str = msg.body?;
+                let body = serde_json::from_str(&body_str).ok()?;
+                let receipt_handle = msg.receipt_handle?;
+                Some(RawIngressQueueMessage {
+                    body,
+                    receipt_handle,
+                })
+            })
+            .collect();
+
+        Ok(messages)
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        self.client
+            .delete_message()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .send()
+            .await?;
         Ok(())
     }
 }

@@ -2,7 +2,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
 use notification::domain::models::{
-    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;

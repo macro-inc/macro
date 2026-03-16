@@ -11,13 +11,8 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::domain::models::email_notification_digest::StateMachineDriverA;
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -28,21 +23,7 @@ use teams::{
     outbound::team_repo::TeamRepositoryImpl,
 };
 
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
-
-pub(crate) type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
 #[expect(dead_code, reason = "used by utoipa in swagger.rs")]
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<

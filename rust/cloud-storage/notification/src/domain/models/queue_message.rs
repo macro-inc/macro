@@ -391,3 +391,34 @@ pub enum DeliveryFailure {
     #[error("A delivery error occured")]
     Other,
 }
+
+/// Message published to the ingress SQS queue.
+///
+/// Wraps a type-erased [`SendNotificationRequest`] so callers can push
+/// notification requests to a queue without needing database or state-machine
+/// dependencies. A worker in `notification_service` picks up these messages
+/// and processes them through [`crate::domain::service::NotificationIngressService`].
+#[derive(Serialize, Deserialize)]
+pub struct IngressQueueMessage {
+    /// The type-erased notification request.
+    pub request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value>,
+}
+
+impl IngressQueueMessage {
+    /// Type-erase a typed request via serde round-trip.
+    pub fn from_request<T: Serialize, U: Serialize>(
+        req: &SendNotificationRequest<'_, T, U>,
+    ) -> Result<Self, serde_json::Error> {
+        let value = serde_json::to_value(req)?;
+        let request = serde_json::from_value(value)?;
+        Ok(Self { request })
+    }
+}
+
+/// Raw message received from the ingress SQS queue.
+pub struct RawIngressQueueMessage {
+    /// The deserialized ingress queue message body.
+    pub body: IngressQueueMessage,
+    /// The receipt handle for deleting the message after processing.
+    pub receipt_handle: String,
+}

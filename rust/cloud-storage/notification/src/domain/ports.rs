@@ -234,7 +234,9 @@ pub trait EmailSender: Send + Sync + 'static {
 }
 
 use crate::domain::models::push_notification_event::RawPushNotificationEventMessage;
-use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
+use crate::domain::models::queue_message::{
+    DeliverySuccess, IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
+};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
@@ -313,6 +315,30 @@ pub trait PushNotificationEventQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RawPushNotificationEventMessage>, Report>> + Send;
 
     /// Delete a message from the queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for publishing and consuming notification requests on the ingress queue.
+///
+/// This is separate from [`NotificationQueue`] (the delivery queue).
+/// The ingress queue carries type-erased [`IngressQueueMessage`] payloads
+/// that are processed by the ingress worker inside `notification_service`.
+pub trait NotificationIngressQueue: Send + Sync + 'static {
+    /// Publish a notification request to the ingress queue.
+    fn publish(
+        &self,
+        message: IngressQueueMessage,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Receive messages from the ingress queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawIngressQueueMessage>, Report>> + Send;
+
+    /// Delete a message from the ingress queue after successful processing.
     fn delete_message(
         &self,
         receipt_handle: &str,
