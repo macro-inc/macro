@@ -6,37 +6,48 @@ import {
   type EntityData,
 } from '@entity';
 import { useUserId } from '@core/context/user';
-import { createMemo } from 'solid-js';
-import {
-  DEPRIORITY_LABEL_SIGNAL_TOGGLES,
-  PRIORITY_LABEL_SIGNAL_TOGGLES,
-} from '@app/component/next-soup/filters/signal-configs';
 
-/** Labels that indicate priority emails (signal) */
-const PRIORITY_LABELS = createMemo(
-  () =>
-    new Set(
-      PRIORITY_LABEL_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+const PRIORITY_LABELS = [
+  {
+    key: 'CATEGORY_PERSONAL',
+    label: 'Personal',
+    defaultValue: true,
+  },
+  {
+    key: 'SENT',
+    label: 'Sent',
+    defaultValue: true,
+  },
+  {
+    key: 'IMPORTANT',
+    label: 'Important',
+    defaultValue: false,
+  },
+];
 
-/** Labels that indicate depriority emails (noise) */
-const DEPRIORITY_LABELS = createMemo(
-  () =>
-    new Set(
-      DEPRIORITY_LABEL_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+const DEPRIORITY_LABELS = [
+  {
+    key: 'CATEGORY_UPDATES',
+    label: 'Updates',
+    defaultValue: true,
+  },
+  {
+    key: 'CATEGORY_PROMOTIONS',
+    label: 'Promotions',
+    defaultValue: true,
+  },
+  {
+    key: 'CATEGORY_SOCIAL',
+    label: 'Social',
+    defaultValue: true,
+  },
+  {
+    key: 'CATEGORY_FORUMS',
+    label: 'Forums',
+    defaultValue: true,
+  },
+];
 
-// ============================================================================
-// Signal/Noise Configuration
-// ============================================================================
-
-/** Extract label tokens from email labels for matching */
 const getLabelTokens = (
   labels?: Array<{ id?: string; providerLabelId?: string; name?: string }>
 ): string[] => {
@@ -54,20 +65,19 @@ const getLabelTokens = (
 
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
 
-/** Analyze email for priority/depriority indicators */
 function getEmailSignalInfo(entity: EmailEntity): {
   hasPriority: boolean;
   hasDepriority: boolean;
 } {
   const labelTokens = getLabelTokens(entity.labels);
-  const priorityLabels = PRIORITY_LABELS();
-  const depriorityLabels = DEPRIORITY_LABELS();
+  const priorityLabels = PRIORITY_LABELS;
+  const depriorityLabels = DEPRIORITY_LABELS;
 
-  const hasPriorityLabel = labelTokens.some((label) =>
-    priorityLabels.has(label)
+  const hasPriorityLabel = priorityLabels.some((label) =>
+    labelTokens.includes(label.key)
   );
-  const hasDeprioritizingLabel = labelTokens.some((label) =>
-    depriorityLabels.has(label)
+  const hasDeprioritizingLabel = depriorityLabels.some((label) =>
+    labelTokens.includes(label.key)
   );
 
   return {

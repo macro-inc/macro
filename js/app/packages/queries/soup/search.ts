@@ -36,36 +36,17 @@ export const useSearchSoupQuery = (
     return {
       ...body,
       query: body.query?.trim(),
-      terms: body.terms?.map((t) => t.trim()),
     };
   });
 
-  const terms = createMemo(() => {
-    const query = request().query;
-    const hasQuery = query && query.length > 0;
-    const terms = request().terms;
-    const hasTerms = terms && terms.length > 0;
-    if (hasTerms && hasQuery) {
-      console.error('Cannot have both query and terms');
-      return [];
-    }
-    if (hasTerms) {
-      return terms;
-    }
-    if (hasQuery) {
-      return [query];
-    }
-    return [];
-  });
-
-  const validSearchTerms = createMemo(() => {
-    return terms().length > 0 && terms().every(validateSearchServiceText);
+  const validSearch = createMemo(() => {
+    return validateSearchServiceText(request().query);
   });
 
   const enabled = createMemo(() => {
     if (options?.().enabled === false) return false;
 
-    return ENABLE_SEARCH_SERVICE && validSearchTerms();
+    return ENABLE_SEARCH_SERVICE && validSearch();
   });
 
   const mapSearchResponseItem = useSearchResponseItemMapper();
@@ -94,7 +75,7 @@ export const useSearchSoupQuery = (
       };
     },
     select: (data) => {
-      const searchQuery = terms()[0];
+      const searchQuery = request().query;
       return data.pages.flatMap((page) => {
         return page.results
           .map((result) => mapSearchResponseItem(result, searchQuery))

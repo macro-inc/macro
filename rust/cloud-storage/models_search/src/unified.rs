@@ -27,14 +27,11 @@ pub enum UnifiedSearchIndex {
     Projects,
 }
 
-// TODO: query, terms, match_type are common to all requests. consolidate.
+// TODO: query, match_type are common to all requests. consolidate.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
-    #[schemars(skip)]
-    pub query: Option<String>,
-
-    /// Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content.
-    pub terms: Option<Vec<String>>,
+    /// The search query string. Must be at least 3 characters.
+    pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
     pub match_type: MatchType,

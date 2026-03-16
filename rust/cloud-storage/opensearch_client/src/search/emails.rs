@@ -7,7 +7,7 @@ use crate::{
 };
 
 use models_opensearch::SearchEntityType;
-use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType};
+use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
 
 pub(crate) struct EmailSearchConfig;
 
@@ -15,6 +15,41 @@ impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
+}
+
+/// The fields to search across with simple_query_string for email search.
+const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
+    "sender",
+    "reply_to",
+    "recipients",
+    "cc",
+    "bcc",
+    "subject",
+    "content",
+    "sender_name",
+    "recipient_names",
+    "cc_names",
+    "bcc_names",
+];
+
+/// Transforms search terms into a simple_query_string query string.
+/// Single-word terms become `(term | term@*)` so they match both text fields
+/// and keyword email-address fields. Multi-word terms (containing spaces) skip
+/// the `@*` pattern since email addresses never contain spaces.
+/// The email pattern is lowercased because email addresses are case-insensitive.
+/// Terms are ANDed together with `+`.
+fn build_simple_query_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if term.contains(' ') {
+                format!("({})", term)
+            } else {
+                format!("({} | {}@*)", term, term.to_lowercase())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 pub(crate) struct EmailQueryBuilder {
@@ -107,6 +142,18 @@ impl EmailQueryBuilder {
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
+
+        // For multi-term searches, replace the default content-only must clause with a
+        // simple_query_string that searches across all email fields (addresses, names, subject, content)
+        if self.inner.terms.len() > 1 {
+            let query_string = build_simple_query_string(&self.inner.terms);
+            let sqs = SimpleQueryStringQuery::new(
+                query_string,
+                EMAIL_SIMPLE_QUERY_FIELDS.iter().copied(),
+            )
+            .default_operator("AND");
+            content_bool_query.set_must(sqs.into());
+        }
 
         // CUSTOM ATTRIBUTES SECTION
         // If link_ids are provided, add them to the query

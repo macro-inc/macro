@@ -6,7 +6,6 @@ use opensearch_client::search::unified::{UnifiedEmailSearchArgs, UnifiedSearchAr
 
 fn main() {
     let args = UnifiedSearchArgs {
-        terms: vec!["hello re".to_string()],
         user_id: "macro|gab@macro.com".to_string(),
         page: 0,
         page_size: 10,
@@ -14,7 +13,10 @@ fn main() {
         collapse: false,
         cursor: SearchCursorOption::NotDone(None),
         search_indices: HashSet::from([SearchEntityType::Emails]),
-        email_search_args: UnifiedEmailSearchArgs::default(),
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["hello re".to_string()],
+            ..Default::default()
+        },
         ..Default::default()
     };
 
