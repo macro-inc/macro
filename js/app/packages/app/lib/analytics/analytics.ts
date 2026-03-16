@@ -4,12 +4,11 @@ import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
+import { match } from 'ts-pattern';
 
-type AnalyticsProvider = 'ga' | 'meta-pixel' | 'mixpanel' | 'posthog';
+type AnalyticsProvider = 'ga' | 'meta-pixel' | 'posthog';
 
-const DEFAULT_ANALYTICS_PROVIDERS = [
-  // 'mixpanel',
-] as const satisfies AnalyticsProvider[];
+const DEFAULT_ANALYTICS_PROVIDERS: AnalyticsProvider[] = [];
 
 type EventName = AppEventNames | (string & {});
 
@@ -29,14 +28,20 @@ interface CreateAnalyticsOptions {
   disabled?: boolean;
 }
 
+const GA_ID = 'G-52HPEL3FTV';
+
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
   const posthog = usePosthog();
 
   const initializeProviders = () => {
     if (options.disabled) return;
 
-    initializeGoogleAnalytics();
-    initializeMetaPixel();
+    try {
+      initializeGoogleAnalytics();
+      initializeMetaPixel();
+    } catch (e) {
+      console.error('[Analytics] Failed to initialize providers:', e);
+    }
   };
 
   if (options.initializeOnCreate !== false && !options.disabled) {
@@ -50,22 +55,20 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   ) => {
     if (options.disabled) return;
 
-    switch (provider) {
-      case 'ga': {
-        gtag('event', event, data);
-        break;
-      }
-      case 'meta-pixel': {
-        fbq('track', event, data ?? {});
-        break;
-      }
-      case 'mixpanel': {
-        break;
-      }
-      case 'posthog': {
-        posthog.instance.capture(event, data);
-        break;
-      }
+    try {
+      match(provider)
+        .with('ga', () => {
+          gtag('event', event, data);
+        })
+        .with('meta-pixel', () => {
+          fbq('track', event, data ?? {});
+        })
+        .with('posthog', () => {
+          posthog.instance.capture(event, data);
+        })
+        .exhaustive();
+    } catch (e) {
+      console.error(`[Analytics] Failed to send event to ${provider}:`, e);
     }
   };
 
@@ -84,23 +87,46 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (options.disabled) return;
 
-    gtag('config', 'G-52HPEL3FTV', {
-      ...info,
-      user_id: userID,
-    });
+    try {
+      gtag('config', GA_ID, {
+        user_id: userID,
+        ...(info.email && { email: info.email }),
+        ...(info.os && { os: info.os }),
+      });
 
-    posthog.instance.identify(userID, { ...info });
+      fbq('init', '639142540393286', {
+        external_id: userID,
+        em: info.email,
+      });
+
+      posthog.instance.identify(userID, { ...info });
+    } catch (e) {
+      console.error('[Analytics] Failed to identify user:', e);
+    }
+  };
+
+  const reset = () => {
+    if (options.disabled) return;
+
+    try {
+      gtag('config', GA_ID, { user_id: undefined });
+
+      posthog.instance.reset();
+    } catch (e) {
+      console.error('[Analytics] Failed to reset:', e);
+    }
   };
 
   return {
     initializeProviders,
-
     track,
     identify,
+    reset,
   };
 };
 
 export type AnalyticsInterface = {
   track: TrackFn;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
+  reset: () => void;
 };
