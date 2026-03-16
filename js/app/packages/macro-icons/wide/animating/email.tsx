@@ -32,7 +32,10 @@ const p = (d: string) => `path('${d}')`;
 const DURATION = 400;
 const EASING = 'ease-in-out';
 
-export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedEmailIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const clipId = createUniqueId();
   let bodyAEl!: SVGPathElement;
   let bodyBEl!: SVGPathElement;
@@ -97,6 +100,7 @@ export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="currentColor"
       stroke-width="1.5"
       xmlns="http://www.w3.org/2000/svg"
+      class={props.class}
     >
       {/*<title>Animated email icon</title>*/}
       <defs>

@@ -1,4 +1,7 @@
-export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedPlusIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   // Solid plus (Asset 170) switches to pixelated plus (Asset 171) during animation
   // After 0.4s, switches back to solid. Tinker with the pixelated version's animation!
 
@@ -11,7 +14,7 @@ export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-plus-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-plus-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated plus icon</title>*/}
       <style>{`

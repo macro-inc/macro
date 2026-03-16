@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSidebarIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const clipId = createUniqueId();
   const notchMaskId = createUniqueId();
 
@@ -13,7 +16,7 @@ export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-sidebar-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-sidebar-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated sidebar icon</title>*/}
       <defs>
