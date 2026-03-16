@@ -196,8 +196,7 @@ export const ChannelsUnreadWidget = () => {
     );
   });
 
-  const filteredNotifications = () =>
-    filterUnreadNotDone(allNotifications());
+  const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
   const channelGroupsMap = createMemo(() => {
     const open = openChannelIds();
