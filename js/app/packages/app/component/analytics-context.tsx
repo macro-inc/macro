@@ -5,7 +5,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 export const [AnalyticsContextProvider, useAnalytics] =
   createAssertedContextProvider<AnalyticsInterface>('analytics', () => {
     const analytics = createAnalytics({
-      disabled: import.meta.hot != null,
+      disabled: import.meta.env.DEV,
     });
 
     return analytics;

@@ -77,6 +77,7 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { AnalyticsContextProvider } from '@app/component/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -429,42 +430,46 @@ export function Root() {
   return (
     <MaybeTauriProvider>
       <MetaProvider>
-        <AnalyticsContextProvider>
-          <EntityProvider>
-            <UserContextProvider>
-              <QuerySyncProviderWithUserId />
-              <UserInfoSideEffects />
-              <ConfiguredGlobalAppStateProvider>
-                <ChannelsContextProvider>
-                  <QuickAccessProvider>
-                    <SearchProvider>
-                      <TabAttachmentsInit />
-                      <ReactiveFavicon />
-                      <Title>{tabTitle()}</Title>
-                      <MacroJump />
-                      <Visor />
-                      <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                        <IsomorphicRouter
-                          transformUrl={transformShortIdInUrlPathname}
-                          root={Layout}
-                          rootPreload={rootPreload}
-                          base={ROUTER_BASE}
+        <PosthogProvider>
+          <AnalyticsContextProvider>
+            <EntityProvider>
+              <UserContextProvider>
+                <QuerySyncProviderWithUserId />
+                <UserInfoSideEffects />
+                <ConfiguredGlobalAppStateProvider>
+                  <ChannelsContextProvider>
+                    <QuickAccessProvider>
+                      <SearchProvider>
+                        <TabAttachmentsInit />
+                        <ReactiveFavicon />
+                        <Title>{tabTitle()}</Title>
+                        <MacroJump />
+                        <Visor />
+                        <SuspenseContextComp
+                          fallback={<RootSuspenseFallback />}
                         >
-                          {{
-                            path: '/',
-                            component: TauriRouteListener,
-                            children: ROUTES,
-                          }}
-                        </IsomorphicRouter>
-                      </SuspenseContextComp>
-                      <ToastRegion />
-                    </SearchProvider>
-                  </QuickAccessProvider>
-                </ChannelsContextProvider>
-              </ConfiguredGlobalAppStateProvider>
-            </UserContextProvider>
-          </EntityProvider>
-        </AnalyticsContextProvider>
+                          <IsomorphicRouter
+                            transformUrl={transformShortIdInUrlPathname}
+                            root={Layout}
+                            rootPreload={rootPreload}
+                            base={ROUTER_BASE}
+                          >
+                            {{
+                              path: '/',
+                              component: TauriRouteListener,
+                              children: ROUTES,
+                            }}
+                          </IsomorphicRouter>
+                        </SuspenseContextComp>
+                        <ToastRegion />
+                      </SearchProvider>
+                    </QuickAccessProvider>
+                  </ChannelsContextProvider>
+                </ConfiguredGlobalAppStateProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </AnalyticsContextProvider>
+        </PosthogProvider>
       </MetaProvider>
     </MaybeTauriProvider>
   );

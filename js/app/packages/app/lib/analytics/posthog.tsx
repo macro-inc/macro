@@ -22,7 +22,7 @@ const getPosthogHost = () => {
 
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   'PosthogProvider',
-  (props: { disabled?: boolean }) => {
+  () => {
     const instance = new PostHog();
 
     const initialize = () => {
@@ -33,7 +33,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
       });
     };
 
-    if (!props.disabled) {
+    if (!import.meta.env.DEV) {
       initialize();
     }
 
