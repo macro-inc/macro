@@ -704,6 +704,17 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
   pointer-events: none;
 }
 
+/* Message highlight: hover only in mouse mode, keyboard selection only in keyboard mode */
+html[data-modality="mouse"] [data-message]:hover,
+html[data-modality="keyboard"] [data-message][data-highlighted] {
+    @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
+}
+
+html[data-modality="mouse"] [data-message]:hover > .message-accent-bar,
+html[data-modality="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
+    @apply opacity-100;
+}
+
 html[data-modality="keyboard"] input:focus-visible::after,
 html[data-modality="keyboard"] textarea:focus-visible::after,
 html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
