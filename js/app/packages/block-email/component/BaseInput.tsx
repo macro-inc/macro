@@ -96,6 +96,7 @@ import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
   clearEmailBody,
+  hasDraftContent,
   prepareEmailBody,
   prepareMacroBody,
   registerToggleAppendedThread,
@@ -635,11 +636,12 @@ export function BaseInput(props: {
       );
       return null;
     }
-    // Fail if no body text, no attachments, and no subject
     if (
-      prepared.bodyText.trim() === '' &&
-      form().attachments.list().length === 0 &&
-      !form().subject()?.trim()
+      !hasDraftContent(
+        prepared.bodyText,
+        form().subject(),
+        form().attachments.list().length
+      )
     ) {
       return null;
     }
