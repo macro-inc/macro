@@ -434,7 +434,10 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>) -> String {
+fn build_properties_filter(
+    ast: Option<&Expr<PropertiesLiteral>>,
+    entity_id_sql: &str,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -460,7 +463,7 @@ fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>) -> String {
             format!(
                 r#"EXISTS (
                     SELECT 1 FROM entity_properties ep_prop
-                    WHERE ep_prop.entity_id = d.id
+                    WHERE ep_prop.entity_id = {entity_id_sql}
                     AND ep_prop.entity_type = '{entity_type}'
                     AND ep_prop.property_definition_id = '{property_definition_id}'
                     AND {value_predicate}
@@ -487,6 +490,7 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
     builder.push(build_properties_filter(
         filter_ast.properties_filter.as_deref(),
+        "d.id",
     ));
 
     builder.push(" UNION ALL ");
@@ -494,12 +498,20 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     // Chat top clause (lightweight)
     builder.push(CHAT_TOP_CLAUSE);
     builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+        "c.id",
+    ));
 
     builder.push(" UNION ALL ");
 
     // Project top clause (lightweight)
     builder.push(PROJECT_TOP_CLAUSE);
     builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+        "p.id",
+    ));
 
     builder.push(") all_items ");
 
