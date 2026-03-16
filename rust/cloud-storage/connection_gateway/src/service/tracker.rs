@@ -84,7 +84,10 @@ pub async fn track_entity(
 
             ctx.api_context
                 .stream_manager
-                .unsubscribe(ctx.connection_id.to_owned())
+                .unsubscribe(
+                    ctx.connection_id.to_owned(),
+                    data.entity.extra.extra.entity_id.to_string(),
+                )
                 .await?;
         }
         TrackAction::Ping => {
