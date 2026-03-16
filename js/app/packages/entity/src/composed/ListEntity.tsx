@@ -585,7 +585,7 @@ export function ListEntity(props: ListEntityProps) {
           <WideLayout {...layoutProps()} />
         </Match>
         <Match
-          when={isEmailEntity(props.entity) || isChannelEntity(props.entity)}
+          when={isChannelEntity(props.entity) && !hasNotifications()}
         >
           <NarrowMessageLayout {...layoutProps()} />
         </Match>
