@@ -42,6 +42,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 ? `Scheduled for ${formattedDate()}`
                 : 'Schedule this email'
             }
+            hide={showExpanded()}
           >
             <Button
               size="icon-sm"
