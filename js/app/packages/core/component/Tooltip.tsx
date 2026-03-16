@@ -1,6 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
+import { cn } from '@ui/utils/classname';
 import { For, type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
 import { Hotkey } from './Hotkey';
 
@@ -125,7 +126,10 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
 
   return (
     <div
-      class={`flex flex-row items-center space-x-2 ${hasPadding() ? 'px-1' : 'px-0'}`}
+      class={cn(
+        'flex flex-row items-center space-x-2',
+        hasPadding() ? 'px-1' : 'px-0'
+      )}
     >
       <div class="text-xs capitalize">{props.label}</div>
       <Show when={hasSequence()}>
