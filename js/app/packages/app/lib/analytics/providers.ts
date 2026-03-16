@@ -1,3 +1,12 @@
+import posthog from 'posthog-js';
+
+export const initializePosthog = () => {
+  posthog.init('phc_eSQcxAxPf0FAmnCTckz84305pNlMlOdDKciSKkuX0GO', {
+    api_host: 'https://us.i.posthog.com',
+    defaults: '2026-01-30',
+  });
+};
+
 export const initializeGoogleAnalytics = () => {
   const G_ID = 'G-52HPEL3FTV';
 
