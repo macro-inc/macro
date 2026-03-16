@@ -782,9 +782,7 @@ async fn test_importance_true_includes_drafts_with_depriority_label(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn test_importance_true_excludes_trashed_drafts(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn test_importance_true_excludes_trashed_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -976,9 +974,10 @@ async fn test_static_user_label_excludes_trashed(pool: Pool<Postgres>) -> anyhow
     let limit = 50;
     let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
 
-    let results =
-        preview_views::user_label::user_label_preview_cursor(&pool, &link_id, limit, &query, "Work")
-            .await?;
+    let results = preview_views::user_label::user_label_preview_cursor(
+        &pool, &link_id, limit, &query, "Work",
+    )
+    .await?;
 
     let result_ids: std::collections::HashSet<String> =
         results.iter().map(|r| r.id.to_string()).collect();
