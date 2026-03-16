@@ -40,6 +40,8 @@ export interface HotkeyCommand {
   displayPriority?: number;
   // Priority for ordering handler execution. Higher priority handlers run first. Defaults to 0.
   handlerPriority?: HotkeyPriority;
+  // How this command was registered. Used by 'append' to identify replaceable commands.
+  registrationType?: 'add' | 'override' | 'append';
   // If true, hotkey command can be hidden from the UI. It will still run, but will not be displayed.
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
@@ -137,9 +139,11 @@ export interface HotkeyRegistrationOptions {
    * Controls how this handler is added when a handler for the same hotkey already exists.
    * - 'override': Replace existing handler (default behavior)
    * - 'add': Add this handler to the list of handlers for this hotkey
+   * - 'append': Add to list, but replace any previous 'append' handler for the same hotkey in this scope.
+   *   Only one 'append' handler exists per hotkey per scope at a time — the latest one wins.
    * @default 'override'
    */
-  registrationType?: 'add' | 'override';
+  registrationType?: 'add' | 'override' | 'append';
 
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.

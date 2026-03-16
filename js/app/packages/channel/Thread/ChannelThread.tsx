@@ -1,5 +1,11 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { Show, Suspense, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Show,
+  Suspense,
+  type Accessor,
+} from 'solid-js';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { ChannelMessage } from '../Message';
@@ -15,6 +21,8 @@ import {
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
 } from './utils/thread-reply-indicator-helpers';
+import { createMessageSelection } from '../Channel/create-message-selection';
+import { createThreadHotkeys } from './create-thread-hotkeys';
 
 function sliceIf<T>(
   val: Array<T>,
@@ -35,6 +43,7 @@ export function ChannelThread(props: ThreadProps) {
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
+  const [isThreadFocused, setIsThreadFocused] = createSignal(false);
 
   const [attachReplyHotkeys, replyScope] = useHotkeyDOMScope(
     'channel-reply-input'
@@ -71,6 +80,34 @@ export function ChannelThread(props: ThreadProps) {
     if (replies && !repliesQuery.isLoading) return replies;
     return thread().preview ?? [];
   };
+
+  // Thread-local reply selection
+  const replySelection = createMessageSelection({
+    keys: () => activeReplies().map((r) => r.id),
+  });
+
+  // Clear thread focus when parent message is deselected
+  createEffect(() => {
+    if (!isSelected()) setIsThreadFocused(false);
+  });
+
+  createThreadHotkeys({
+    messageListScopeId: props.messageListScopeId!,
+    replySelection,
+    isThreadFocused,
+    setIsThreadFocused,
+    activeReplies,
+    threadId: () => props.data().id,
+    getMessageActions: (msg) => props.getMessageActions?.(msg),
+    userId,
+    parentMessage: props.data,
+    collapseThread: () => props.setIsExpanded(false),
+    isSelected,
+    hasReplies,
+    expandThread: () => props.setIsExpanded(true),
+    isThreadExpanded: props.isExpanded,
+  });
+
   const firstReplyIsNewMessage = () => {
     const first = activeReplies()[0];
     return first ? props.isNewMessage?.(first) : false;
@@ -111,8 +148,12 @@ export function ChannelThread(props: ThreadProps) {
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
               messageEditor={props.messageEditor}
-              highlighted={isSelected()}
-              selectionState={isSelected() ? { isSelected: true } : undefined}
+              highlighted={isSelected() && !isThreadFocused()}
+              selectionState={
+                isSelected() && !isThreadFocused()
+                  ? { isSelected: true }
+                  : undefined
+              }
             />
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
@@ -133,6 +174,8 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
+                        selectedReplyId={replySelection.selectedId}
+                        isThreadFocused={isThreadFocused}
                       />
                     }
                   >
@@ -144,6 +187,8 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
+                        selectedReplyId={replySelection.selectedId}
+                        isThreadFocused={isThreadFocused}
                       />
                     </Suspense>
                   </Show>

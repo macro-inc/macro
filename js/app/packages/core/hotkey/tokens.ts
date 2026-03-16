@@ -215,6 +215,12 @@ export const TOKENS = {
     sendMessage: 'channel.sendMessage',
     clearSelection: 'channel.clearSelection',
     cancelReply: 'channel.cancelReply',
+    threadPreviousReply: 'channel.threadPreviousReply',
+    threadNextReply: 'channel.threadNextReply',
+    threadExit: 'channel.threadExit',
+    threadCollapse: 'channel.threadCollapse',
+    threadReply: 'channel.threadReply',
+    threadEditReply: 'channel.threadEditReply',
   },
 
   // drawer

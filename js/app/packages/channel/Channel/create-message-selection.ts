@@ -8,6 +8,7 @@ export type MessageSelection = {
   selectedId: Accessor<string | undefined>;
   select: (id: string) => void;
   clear: () => void;
+  selectFirst: () => string | undefined;
   selectPrevious: () => string | undefined;
   selectNext: () => string | undefined;
 };
@@ -29,6 +30,14 @@ export function createMessageSelection(
 
   const select = (id: string) => setSelectedId(id);
   const clear = () => setSelectedId(undefined);
+
+  const selectFirst = (): string | undefined => {
+    const keys = options.keys();
+    if (keys.length === 0) return undefined;
+    const first = keys[0];
+    setSelectedId(first);
+    return first;
+  };
 
   const selectPrevious = (): string | undefined => {
     const keys = options.keys();
@@ -65,5 +74,5 @@ export function createMessageSelection(
     return next;
   };
 
-  return { selectedId, select, clear, selectPrevious, selectNext };
+  return { selectedId, select, clear, selectFirst, selectPrevious, selectNext };
 }

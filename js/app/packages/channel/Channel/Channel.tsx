@@ -171,15 +171,16 @@ export function Channel(props: ChannelProps) {
     keys: () => messageIndex().keys,
   });
 
-  const { attachMessageListRef, attachInputRef } = createChannelHotkeys({
-    selection,
-    navigation: threadListNavigation,
-    messageById,
-    getMessageActions,
-    userId,
-    isInputEmpty: () =>
-      (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
-  });
+  const { messageListScopeId, attachMessageListRef, attachInputRef } =
+    createChannelHotkeys({
+      selection,
+      navigation: threadListNavigation,
+      messageById,
+      getMessageActions,
+      userId,
+      isInputEmpty: () =>
+        (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
+    });
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
@@ -187,6 +188,7 @@ export function Channel(props: ChannelProps) {
     messages,
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
     if (!senderId) return;
@@ -243,6 +245,7 @@ export function Channel(props: ChannelProps) {
                           }}
                           isNewMessage={activityTracker.isNewMessage}
                           selectedMessageId={selection.selectedId}
+                          messageListScopeId={messageListScopeId}
                         />
                       )}
                     </Show>

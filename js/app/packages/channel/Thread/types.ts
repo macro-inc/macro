@@ -36,4 +36,5 @@ export type ThreadProps = {
   messageEditor?: MessageEditor;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   selectedMessageId?: Accessor<string | undefined>;
+  messageListScopeId?: string;
 } & ThreadState;
