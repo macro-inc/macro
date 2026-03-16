@@ -20,6 +20,7 @@ import {
 } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateAsc } from '@core/util/date';
 
 function getChannelInfo(notification: UnifiedNotification): {
@@ -184,11 +185,28 @@ export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
-  const filteredNotifications = () => filterUnreadNotDone(allNotifications());
+  const openChannelIds = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return new Set<string>();
+    return new Set(
+      manager
+        .splits()
+        .filter((s) => s.content.type === 'channel')
+        .map((s) => s.content.id)
+    );
+  });
 
-  const channelGroupsMap = createMemo(() =>
-    groupByChannel(filteredNotifications())
-  );
+  const filteredNotifications = () =>
+    filterUnreadNotDone(allNotifications());
+
+  const channelGroupsMap = createMemo(() => {
+    const open = openChannelIds();
+    const groups = groupByChannel(filteredNotifications());
+    for (const id of open) {
+      groups.delete(id);
+    }
+    return groups;
+  });
 
   const [orderedIds, setOrderedIds] = createSignal<string[]>([]);
 
