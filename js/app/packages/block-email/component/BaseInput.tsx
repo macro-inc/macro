@@ -1629,6 +1629,7 @@ export function BaseInput(props: {
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
                 onSendTimeChange={handleSendTimeChange}
+                disablePortal={isMobile()}
               />
             </Show>
             <Show when={savedDraftId() && !laggedIsDraftSaving()}>

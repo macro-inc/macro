@@ -41,13 +41,15 @@ type DateSelectorProps = {
   disablePriorToDate?: Date;
   disableAfterDate?: Date;
   withTime?: boolean;
+  /** Render content inline instead of in a portal (avoids keyboard positioning issues on mobile) */
+  disablePortal?: boolean;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
 };
 
-const DateSelectorPortalWrapper: FlowComponent = (props) => {
-  if (isMobile()) return <>{props.children}</>;
+const DateSelectorPortalWrapper: FlowComponent<{ disabled?: boolean }> = (props) => {
+  if (props.disabled) return <>{props.children}</>;
   return <Combobox.Portal>{props.children}</Combobox.Portal>;
 };
 
@@ -297,7 +299,7 @@ export const DateSelector = (props: DateSelectorProps) => {
         </Combobox.Control>
       </Show>
 
-      <DateSelectorPortalWrapper>
+      <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
           class="w-full max-w-sm bg-dialog text-ink border border-edge-muted"
           on:keydown={handleKeyDown}

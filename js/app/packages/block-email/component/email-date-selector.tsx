@@ -14,6 +14,8 @@ interface EmailDateSelectorProps {
   onSendTimeChange?: (date: Date | null) => void;
   /** Only show the clock icon, no date text or clear button */
   compact?: boolean;
+  /** Render content inline instead of in a portal */
+  disablePortal?: boolean;
 }
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
@@ -26,6 +28,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
       onSelectDate={props.onSendTimeChange}
       disablePriorToDate={new Date()}
       disableAfterDate={addYears(new Date(), 1)}
+      disablePortal={props.disablePortal}
       trigger={(state) => {
         const formattedDate = () => {
           if (!state.selectedDate) return;
