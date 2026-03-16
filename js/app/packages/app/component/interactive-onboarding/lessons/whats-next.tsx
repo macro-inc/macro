@@ -1,4 +1,5 @@
 import { onMount } from 'solid-js';
+import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function WhatsNextContent(props: LessonContentProps) {
@@ -12,37 +13,33 @@ function WhatsNextContent(props: LessonContentProps) {
       >
         You're all set! Here are a few more things you can explore on your own:
       </p>
-      <ul class="flex flex-col gap-2 text-sm text-ink/70 list-disc pl-4">
+      <ul class="flex flex-col gap-3 text-sm text-ink/70">
         <li
           style={{ animation: 'onboarding-fade-up 300ms ease-out 120ms both' }}
         >
-          Press{' '}
-          <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-            Enter
-          </kbd>{' '}
-          to open the focused item.
+          <HotkeyCallout
+            size="sm"
+            keys={['Enter']}
+            label="to open the focused item"
+          />
         </li>
         <li
           style={{ animation: 'onboarding-fade-up 300ms ease-out 200ms both' }}
         >
-          Press{' '}
-          <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-            &#8984;
-          </kbd>
-          +
-          <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-            K
-          </kbd>{' '}
-          to open the command menu and search for anything.
+          <HotkeyCallout
+            size="sm"
+            keys={['⌘', 'K']}
+            label="to open the command menu"
+          />
         </li>
         <li
           style={{ animation: 'onboarding-fade-up 300ms ease-out 280ms both' }}
         >
-          Press{' '}
-          <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-            ?
-          </kbd>{' '}
-          at any time to see all available keyboard shortcuts.
+          <HotkeyCallout
+            size="sm"
+            keys={['?']}
+            label="to see all keyboard shortcuts"
+          />
         </li>
       </ul>
     </div>

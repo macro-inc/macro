@@ -20,6 +20,7 @@ import {
   Show,
 } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
+import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import {
   sandboxEntities,
@@ -101,22 +102,13 @@ function CreateEntityContent(props: LessonContentProps) {
       <Show
         when={launcherOpen()}
         fallback={
-          <p class="text-sm text-ink/70">
-            Press{' '}
-            <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-              c
-            </kbd>{' '}
-            to open the Create menu.
-          </p>
+          <HotkeyCallout keys={['C']} label="to open the Create menu" />
         }
       >
-        <p class="text-sm text-ink/70">
-          Choose what to create. Press{' '}
-          <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">
-            esc
-          </kbd>{' '}
-          to close the menu.
-        </p>
+        <div class="flex flex-col gap-2">
+          <p class="text-sm text-ink/70">Choose what to create.</p>
+          <HotkeyCallout keys={['Esc']} label="to close the menu" />
+        </div>
       </Show>
       <p class="text-xs text-ink/50">
         <Show
@@ -200,5 +192,5 @@ export const createEntityLesson: LessonDefinition = {
   description: 'Use the launcher to create docs, emails, and more.',
   content: CreateEntityContent,
   demo: CreateEntityDemo,
-  order: 0.5,
+  order: 1,
 };

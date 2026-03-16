@@ -15,6 +15,7 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { resetSandbox } from './sandbox/sandbox-store';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
+import { ContinueButton, SkipButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
 import {
   clearCompletedLessons,
@@ -80,7 +81,10 @@ export default function InteractiveOnboarding() {
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell');
 
   onMount(() => {
-    if (shellRef) attachHotkeys(shellRef);
+    if (shellRef) {
+      attachHotkeys(shellRef);
+      shellRef.focus();
+    }
   });
 
   const reg = registerHotkey({
@@ -134,7 +138,7 @@ export default function InteractiveOnboarding() {
   return (
     <div
       ref={shellRef}
-      class="items-center justify-center h-full w-full p-8 grid place-items-center relative"
+      class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -168,9 +172,9 @@ export default function InteractiveOnboarding() {
       <ClippedPanel
         active
         cornerRadius={'4px'}
-        class="bg-panel shadow-lg shadow-[#1112]"
+        class="bg-panel size-full shadow-lg shadow-[#1112]"
       >
-        <div class="size-full flex bg-panel">
+        <div class="size-full flex">
           <Show
             when={state.currentLesson()}
             fallback={
@@ -200,12 +204,9 @@ export default function InteractiveOnboarding() {
                   {/* Header */}
                   <div class="px-4 py-8">
                     <div class="flex flex-col gap-0.5" style={headerStyle()}>
-                      <h2 class="text-2xl font-semibold text-ink">
+                      <h2 class="text-2xl font-bold text-ink">
                         {lesson().definition.title}
                       </h2>
-                      <p class="text-xs text-ink-extra-muted font-mono">
-                        {state.currentIndex() + 1} of {state.lessons().length}
-                      </p>
                     </div>
                   </div>
 
@@ -224,33 +225,22 @@ export default function InteractiveOnboarding() {
                   </div>
 
                   {/* Footer */}
-                  <div class="flex items-center justify-between px-4 py-3 border-t border-ink/10">
-                    <OnboardingProgress
-                      lessons={[...state.lessons()]}
-                      currentIndex={state.currentIndex()}
-                    />
+                  <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
+                    <Show
+                      when={readyToContinue()}
+                      fallback={<SkipButton onClick={handleSkip} />}
+                    >
+                      <ContinueButton onClick={handleContinue} />
+                    </Show>
                     <div class="flex items-center gap-2">
-                      <Show when={!readyToContinue()}>
-                        <button
-                          type="button"
-                          class="px-3 py-1.5 text-xs text-ink/60 hover:text-ink/90 hover:bg-hover/30 rounded transition-colors"
-                          onClick={handleSkip}
-                        >
-                          Skip
-                        </button>
-                      </Show>
-                      <Show when={readyToContinue()}>
-                        <button
-                          type="button"
-                          class="px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent/80 transition-colors flex items-center gap-1.5"
-                          onClick={handleContinue}
-                        >
-                          Continue
-                          <kbd class="text-[10px] opacity-70">
-                            &#8984;&#9166;
-                          </kbd>
-                        </button>
-                      </Show>
+                      <OnboardingProgress
+                        lessons={[...state.lessons()]}
+                        currentIndex={state.currentIndex()}
+                      />
+                      <span class="text-xs text-ink-extra-muted font-mono">
+                        Step {state.currentIndex() + 1} of{' '}
+                        {state.lessons().length}
+                      </span>
                     </div>
                   </div>
                 </div>

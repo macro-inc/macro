@@ -8,6 +8,7 @@ import {
 import { sandboxEntities } from '../sandbox/sandbox-store';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
+import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 const REQUIRED_NAVIGATIONS = 3;
@@ -82,13 +83,8 @@ function NavigateListContent(props: LessonContentProps) {
       tabIndex={0}
       class="flex flex-col gap-3 outline-none"
     >
-      <p class="text-sm text-ink/70">
-        Use{' '}
-        <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">j</kbd>{' '}
-        and{' '}
-        <kbd class="px-1.5 py-0.5 rounded bg-hover/50 font-mono text-xs">k</kbd>{' '}
-        (or arrow keys) to move through the list.
-      </p>
+      <HotkeyCallout keys={['J', 'K']} label="or arrow keys to navigate" />
+      <HotkeyCallout keys={['↑', '↓']} label="also work" />
       <p class="text-xs text-ink/50">
         <Show
           when={!completed()}
@@ -115,9 +111,9 @@ function NavigateListDemo() {
 
 export const navigateListLesson: LessonDefinition = {
   id: 'navigate-list',
-  title: 'Navigate a list',
-  description: 'Use j/k or arrow keys to move through items.',
+  title: 'Macro is built around fast list navigation',
+  description: 'Use [J, K] or [Up, Down] to navigate this list.',
   content: NavigateListContent,
   demo: NavigateListDemo,
-  order: 1,
+  order: 0.5,
 };

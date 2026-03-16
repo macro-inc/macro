@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { LessonDefinition, LessonId, LessonState } from './types';
 
@@ -24,19 +24,18 @@ export function createOnboardingState(options: OnboardingStateOptions) {
 
   const lessons = () => store;
 
-  const currentIndex = createMemo(() => {
+  const currentIndex = () => {
     const idx = store.findIndex((l) => !l.completed && !l.skipped);
     return idx === -1 ? store.length : idx;
-  });
+  };
 
-  const currentLesson = createMemo(() => {
+  const currentLesson = () => {
     const idx = currentIndex();
     return idx < store.length ? store[idx] : undefined;
-  });
+  };
 
-  const isFinished = createMemo(
-    () => store.length > 0 && store.every((l) => l.completed || l.skipped)
-  );
+  const isFinished = () =>
+    store.length > 0 && store.every((l) => l.completed || l.skipped);
 
   const findIndexById = (id: LessonId): number =>
     store.findIndex((l) => l.definition.id === id);

@@ -7,8 +7,8 @@ import { whatsNextLesson } from './whats-next';
 
 export const LESSONS: LessonDefinition[] = [
   welcomeLesson,
-  createEntityLesson,
   navigateListLesson,
+  createEntityLesson,
   whatsNextLesson,
   choosePlanLesson,
 ];
