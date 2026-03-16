@@ -56,6 +56,7 @@ import {
 } from '../utils/notification';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
+import { createElementSize } from '@solid-primitives/resize-observer';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -110,6 +111,20 @@ const getBestContentHitContent = (entity: EntityData) => {
   }
   return hits[bestIdx].content;
 };
+
+function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
+  const size = createElementSize(ref);
+  const [chars, setChars] = createSignal(200);
+  const CHAR_WIDTH_PX = 6; // this is an approximation for text-sm
+
+  createEffect(() => {
+    if (!size.width) return;
+    const charCount = Math.round(size.width / CHAR_WIDTH_PX / 2);
+    setChars(charCount);
+  });
+
+  return chars;
+}
 
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
@@ -171,13 +186,16 @@ function EmailIdentity(props: { entity: EmailEntity }) {
 function EmailSnippet(props: {
   entity: EmailEntity;
   showContentHits: boolean;
+  chars: number;
 }) {
   return (
     <Show
       when={props.showContentHits && getBestContentHitContent(props.entity)}
       fallback={props.entity.snippet}
     >
-      {(content) => <HighlightRender text={windowSearchMatch(content())} />}
+      {(content) => (
+        <HighlightRender text={windowSearchMatch(content(), props.chars)} />
+      )}
     </Show>
   );
 }
@@ -208,6 +226,11 @@ function ChannelMessage(props: {
 }
 
 function NarrowLayout(props: LayoutProps) {
+  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(emailSnippetContainerRef);
+
   return (
     <Entity.Layout
       class="w-full gap-x-2 items-center text-sm pl-0 px-2 grid"
@@ -279,10 +302,14 @@ function NarrowLayout(props: LayoutProps) {
                       <Entity.Title entity={entity()} />
                     </span>
                   </div>
-                  <div class="text-ink/50 font-medium w-full truncate inline-flex items-center">
+                  <div
+                    ref={setEmailSnippetContainerRef}
+                    class="text-ink/50 font-medium w-full truncate inline-flex items-center"
+                  >
                     <EmailSnippet
                       entity={entity()}
                       showContentHits={props.showContentHits}
+                      chars={chars()}
                     />
                   </div>
                 </>
@@ -307,6 +334,11 @@ function NarrowLayout(props: LayoutProps) {
 }
 
 function WideLayout(props: LayoutProps) {
+  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(emailSnippetContainerRef);
+
   return (
     <Entity.Layout
       class={cn(
@@ -354,10 +386,14 @@ function WideLayout(props: LayoutProps) {
                 <span class="truncate">
                   <Entity.Title entity={entity()} />
                 </span>
-                <span class="text-ink/50 font-medium truncate flex-1 inline-flex items-center">
+                <span
+                  ref={setEmailSnippetContainerRef}
+                  class="text-ink/50 font-medium truncate flex-1 inline-flex items-center"
+                >
                   <EmailSnippet
                     entity={entity()}
                     showContentHits={props.showContentHits}
+                    chars={chars()}
                   />
                 </span>
               </>
