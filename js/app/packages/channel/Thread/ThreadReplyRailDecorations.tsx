@@ -1,8 +1,6 @@
 import { cn } from '@ui/utils/classname';
-import { type Accessor, Show } from 'solid-js';
-import {
-  threadConnectorStyle,
-} from './utils/thread-rail-geometry';
+import type { Accessor } from 'solid-js';
+import { threadConnectorStyle } from './utils/thread-rail-geometry';
 
 type ThreadReplyRailProps = {
   isReplying: Accessor<boolean>;
