@@ -36,14 +36,14 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         as={Button}
         variant="tertiary"
         size="sm"
-        class="whitespace-nowrap"
+        class="whitespace-nowrap rounded-xs"
       >
         <SortIcon class="size-3.5" />
         <span class="font-medium">Sort</span>
         <ChevronDownIcon class="size-3" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[140px] p-1">
+        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
           <For each={options()}>
             {(option) => (
               <DropdownMenu.Item

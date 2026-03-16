@@ -1,8 +1,10 @@
 use crate::context::AppState;
 use axum::Router;
-use macro_middleware::auth::{attach_user, initialize_user_context};
 #[allow(unused_imports)]
-pub use message::{BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody};
+pub use connection_gateway_models::{
+    BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody,
+};
+use macro_middleware::auth::{attach_user, initialize_user_context};
 use tower::ServiceBuilder;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;

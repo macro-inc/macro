@@ -7,7 +7,6 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import HamburgerIcon from '@phosphor-icons/core/bold/list-bold.svg?component-solid';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -29,7 +28,6 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
 import { isListViewID } from '@app/constants/list-views';
-import { setSidebarState } from '@app/component/Layout';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -78,8 +76,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        variant="ghost"
-        size="icon-sm"
+        class="p-1 rounded-xs"
         tooltip={
           <LabelAndHotKey
             label={
@@ -114,16 +111,17 @@ function SplitCloseButton() {
   });
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      tooltip={
-        <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
-      }
-      onClick={context.handle.close}
-    >
-      <CloseIcon class="size-4" />
-    </Button>
+    <Show when={layout.manager.splits().length > 1}>
+      <Button
+        class="p-1"
+        tooltip={
+          <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
+        }
+        onClick={context.handle.close}
+      >
+        <CloseIcon class="w-4 h-4" />
+      </Button>
+    </Show>
   );
 }
 
@@ -188,19 +186,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-edge-muted">
         <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
-          <div class="hidden mobile:block">
-            <Button
-              variant="ghost"
-              size="icon-md"
-              onClick={() => {
-                setSidebarState((p) =>
-                  p === 'expanded' ? 'hidden' : 'expanded'
-                );
-              }}
-            >
-              <HamburgerIcon class="size-6" />
-            </Button>
-          </div>
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>

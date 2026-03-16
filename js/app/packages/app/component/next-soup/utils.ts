@@ -27,7 +27,6 @@ import {
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 import { isAfter } from 'date-fns';
-import { isListViewID } from '@app/constants/list-views';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -260,7 +259,8 @@ export const restoreSoupFocus = async (
 export interface OpenEntityOptions {
   openInNewSplit?: boolean;
   location?: SearchLocation;
-  splitHandle: SplitHandle;
+  splitHandle?: SplitHandle;
+  mergeHistory?: boolean;
 }
 
 /**
@@ -274,7 +274,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, location, splitHandle } = options;
+  const { openInNewSplit, location, splitHandle, mergeHistory } = options;
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
@@ -296,18 +296,14 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
-  const activeSplitContentID = splitManager.activeSplit()?.content().id;
-
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom:
-        activeSplitContentID && isListViewID(activeSplitContentID)
-          ? activeSplitContentID
-          : undefined,
+      referredFrom: 'list-view',
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
+      mergeHistory,
     }
   );
 

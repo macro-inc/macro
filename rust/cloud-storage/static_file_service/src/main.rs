@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use anyhow::Context;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;

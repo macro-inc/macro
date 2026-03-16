@@ -1,11 +1,13 @@
 import { partialMatchKey } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
+import { channelKeys } from './channel/keys';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
 import { setupQueryPersistence, type PersistScope } from './persistence';
+import { shouldPersistChannelQuery } from './persistence-scopes';
 
 function createMockStore(): PerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
@@ -43,6 +45,18 @@ function createScope(
 }
 
 describe('setupQueryPersistence', () => {
+  it('allowlists persisted channel query families', () => {
+    expect(shouldPersistChannelQuery(channelKeys.withID('a').queryKey)).toBe(
+      true
+    );
+    expect(
+      shouldPersistChannelQuery(channelKeys.messages('a', null).queryKey)
+    ).toBe(false);
+    expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
+      false
+    );
+  });
+
   it('writes only the changed query on update', () => {
     const queryClient = new QueryClient();
     const store = createMockStore();
@@ -100,6 +114,52 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(['preview', 'x'], { value: 'ignored' });
 
     expect(store.set).not.toHaveBeenCalled();
+  });
+
+  it('does not restore or persist channel message queries', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const scope = createScope(['channel'], store, {
+      shouldPersist: shouldPersistChannelQuery,
+    });
+    const messageQueryKey = [
+      'channel',
+      'a',
+      { loadAroundMessageId: null },
+    ] as const;
+
+    store.entries.set(JSON.stringify(messageQueryKey), {
+      queryHash: JSON.stringify(messageQueryKey),
+      queryKey: messageQueryKey,
+      data: { value: 'from-idb' },
+      dataUpdatedAt: Date.now() - 1000,
+      persistedAt: Date.now() - 1000,
+      buster: 'test',
+    });
+
+    setupQueryPersistence({ queryClient, scopes: [scope] });
+
+    void queryClient.prefetchQuery({
+      queryKey: messageQueryKey,
+      queryFn: () => new Promise(() => {}),
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.get).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(messageQueryKey)).toBeUndefined();
+
+    queryClient.setQueryData(messageQueryKey, { value: 'skip' });
+    expect(store.set).not.toHaveBeenCalled();
+
+    queryClient.setQueryData(channelKeys.withID('b').queryKey, {
+      value: 'persist',
+    });
+    expect(store.set).toHaveBeenCalledTimes(1);
+    expect(
+      (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
+    ).toEqual(channelKeys.withID('b').queryKey);
   });
 
   it('restores query data from store on added event', async () => {

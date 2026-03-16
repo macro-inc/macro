@@ -158,7 +158,6 @@ export function TopBar() {
         <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
           notificationSource={notificationSource}
-          buttonSize="sm"
         />
       ),
     },

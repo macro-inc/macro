@@ -11,7 +11,6 @@ use crate::{
         activity, annotations,
         documents::{
             self,
-            create_task::{CreateTaskRequest, CreateTaskResponse, PropertyInput},
             export_document::ExportDocumentResponse,
             permissions_token::{
                 create_permission_token::DocumentPermissionsTokenResponse,
@@ -33,7 +32,6 @@ use crate::{
         request::{
             documents::{
                 copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                edit::EditDocumentRequestV2,
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
@@ -146,7 +144,7 @@ use utoipa::OpenApi;
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
-        documents::edit_document::edit_document_handler_v2,
+        documents_hex::inbound::axum_router::edit_document_handler,
         documents_hex::inbound::axum_router::delete_document_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
@@ -162,7 +160,7 @@ use utoipa::OpenApi;
         documents::permissions_token::validate_permissions_token::handler,
         documents::revert_delete_document::handler,
         documents::export_document::handler,
-        documents::create_task::create_task_handler,
+        documents_hex::inbound::axum_router::create_task_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -251,9 +249,9 @@ use utoipa::OpenApi;
             CreateDocumentRequest,
             CreateDocumentResponse,
             CreateDocumentResponseData, // Create document
-            CreateTaskRequest,
-            CreateTaskResponse,
-            PropertyInput,
+            documents_hex::domain::models::CreateTaskRequest,
+            documents_hex::domain::models::CreateTaskResponse,
+            documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
             models_properties::shared::EntityReference,
             models_properties::shared::EntityType, // Quick create task
@@ -263,7 +261,8 @@ use utoipa::OpenApi;
             GetDocumentSearchResponse, // Search document
             CopyDocumentRequest,
             CopyDocumentQueryParams, // Copy document
-            EditDocumentRequestV2, // Edit document
+            documents_hex::domain::models::EditDocumentServiceArgs,
+            documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
             GetDocumentProcessingResult,

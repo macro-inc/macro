@@ -2,6 +2,10 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use models_properties::api::requests::SetPropertyValue;
+
+/// SHA256 hash of an empty string — used for empty markdown documents (tasks).
+pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
@@ -64,6 +68,33 @@ pub struct CloudFrontConfig {
     pub browser_cache_expiry_seconds: u64,
 }
 
+/// Arguments for editing a document in the repository.
+pub struct EditDocumentRepoArgs {
+    /// The document ID to edit.
+    pub document_id: String,
+    /// New document name (None = no change).
+    pub document_name: Option<String>,
+    /// New project ID (None = no change, Some("") = remove from project).
+    pub project_id: Option<String>,
+    /// Updated share permissions.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
+/// Arguments for the edit_document service call.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditDocumentServiceArgs {
+    /// The name of the document.
+    pub document_name: Option<String>,
+    /// The new project id of the document.
+    pub project_id: Option<String>,
+    /// Updated share permissions for the document.
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+}
+
 /// Query parameters for the location_v3 endpoint.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct LocationQueryParams {
@@ -71,4 +102,37 @@ pub struct LocationQueryParams {
     pub document_version_id: Option<i64>,
     /// If true, this will return the converted docx url.
     pub get_converted_docx_url: Option<bool>,
+}
+
+/// Property input for setting a property value on a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyInput {
+    /// The property definition ID.
+    pub property_id: String,
+    /// The value to set for the property.
+    pub value: SetPropertyValue,
+}
+
+/// Request body for creating a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTaskRequest {
+    /// The name of the task.
+    pub task_name: String,
+    /// Optional project ID to associate the task with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Optional property values to set on the task.
+    pub property_values: Option<Vec<PropertyInput>>,
+}
+
+/// Response for creating a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTaskResponse {
+    /// The document ID of the created task.
+    pub document_id: String,
 }

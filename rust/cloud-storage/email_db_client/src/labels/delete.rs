@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
@@ -19,7 +18,7 @@ where
     }
 
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let result = sqlx::query!(

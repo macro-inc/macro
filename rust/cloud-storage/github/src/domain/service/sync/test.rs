@@ -9,6 +9,7 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
 use document_sub_type::DocumentSubType;
+use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
     models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
     ports::DocumentService,
@@ -170,6 +171,24 @@ impl DocumentService for StubDocumentService {
             status: status.to_string(),
         });
         Ok(())
+    }
+
+    async fn edit_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _document_basic: DocumentBasic,
+        _request: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn create_task(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _plain_user_id: String,
+        _request: documents::domain::models::CreateTaskRequest,
+    ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
+        unimplemented!()
     }
 }
 

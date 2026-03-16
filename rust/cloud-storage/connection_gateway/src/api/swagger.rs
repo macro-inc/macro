@@ -1,10 +1,11 @@
 use super::entities;
 use super::message;
-use super::message::{BatchSendMessageBody, SendMessageBody, SendMessageResponse};
 use crate::model::connection::StoredConnectionEntity;
-use crate::model::sender::MessageReceipt;
 use crate::model::tracking::TrackAction;
 use crate::model::websocket::{ToWebsocketMessage, TrackEntityMessage};
+use connection_gateway_models::{
+    BatchSendMessageBody, MessageReceipt, SendMessageBody, SendMessageResponse,
+};
 use model::response::{GenericErrorResponse, StringIDResponse};
 use model_entity::{Entity, EntityType};
 use models_bulk_upload::UploadFolderStatusUpdate;

@@ -1,7 +1,7 @@
 use super::*;
-use connection_gateway_client::model::connection::StoredConnectionEntity;
-use connection_gateway_client::model::tracking::{EntityConnection, UserEntityConnection};
-use connection_gateway_client::service::connection::ConnectionRepo;
+use connection_gateway::model::connection::StoredConnectionEntity;
+use connection_gateway::model::tracking::{EntityConnection, UserEntityConnection};
+use connection_gateway::service::connection::ConnectionRepo;
 use std::sync::Arc;
 use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
@@ -272,7 +272,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         s3_upload_adapter,
         ai_tools::NoOpTaskProperties,
-        pool.clone(),
+        ai_tools::NoOpConnectionService,
     );
     let entity_access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
         entity_access::outbound::PgAccessRepository::new(pool.clone()),

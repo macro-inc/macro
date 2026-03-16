@@ -4,8 +4,12 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamInvite } from './teamInvite';
+import type { TeamInviteDetails } from './teamInviteDetails';
 
+/**
+ * Response containing a list of team invites
+ */
 export interface TeamInvitesResponse {
-  invites: TeamInvite[];
+  /** The invites */
+  invites: TeamInviteDetails[];
 }

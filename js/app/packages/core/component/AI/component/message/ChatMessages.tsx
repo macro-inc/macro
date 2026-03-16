@@ -141,19 +141,6 @@ export function ChatMessages(props: ChatMessagesProps) {
     return message;
   };
 
-  const generatingAfterToolCall = () => {
-    const streamAccessor = streamTuple?.[0];
-    if (!streamAccessor) return;
-    const stream = streamAccessor();
-    if (!stream || stream.isDone()) return;
-    const message = asChatMessage(stream.data());
-    if (!message || typeof message.content === 'string') return;
-    const last = message.content.at(-1);
-    if (!last) return;
-    if (last.type === 'toolCallResponseJson') return true;
-    return;
-  };
-
   const isStream = () => {
     const streamSignal = streamTuple?.[0];
     if (!streamSignal) return false;
@@ -391,12 +378,7 @@ export function ChatMessages(props: ChatMessagesProps) {
                 );
               }}
             </Show>
-            {/* this works for most cases */}
-            <Show
-              when={
-                !generatingMessage() && (isStream() || chat.waitingForStream())
-              }
-            >
+            <Show when={isStream() || chat.waitingForStream()}>
               <OnMount
                 onShow={() =>
                   scrollToBottom(isNearBottom() ? 'instant' : 'smooth')
@@ -404,12 +386,6 @@ export function ChatMessages(props: ChatMessagesProps) {
               >
                 <PulsingStar kind="streamIndicator" animate />
               </OnMount>
-            </Show>
-            {/*
-              This shows a spinner after a tool call
-            */}
-            <Show when={generatingAfterToolCall()}>
-              <PulsingStar kind="streamIndicator" animate />
             </Show>
           </div>
         </Show>

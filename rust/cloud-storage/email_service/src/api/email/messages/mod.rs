@@ -24,5 +24,5 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             state.email_service,
             crate::api::middleware::link::attach_link_context,
         ))
-        .route("/:id", get(get::handler))
+        .route("/{id}", get(get::handler))
 }

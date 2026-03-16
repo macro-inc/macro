@@ -26,7 +26,7 @@ export const SoupEntityContextMenu: FlowComponent<
       <ContextMenu.Portal>
         <Show when={props.entity}>
           {(selectedEntity) => (
-            <ContextMenuContent mobileFullScreen>
+            <ContextMenuContent mobileFullScreen class="text-xs text-ink-muted">
               <Show when={isMobile()}>
                 <InlineEntity entity={selectedEntity()} />
                 <MenuSeparator />

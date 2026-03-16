@@ -5,7 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The body of a send message request.
+ */
 export interface SendMessageBody {
+  /** the message to send */
   message: unknown;
+  /** the type of the message we are sending */
   message_type: string;
 }

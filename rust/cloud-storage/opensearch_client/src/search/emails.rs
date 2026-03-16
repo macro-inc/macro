@@ -1,25 +1,13 @@
 use crate::{
     Result, delegate_methods,
-    error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{
-            NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
-            inject_fragment_size, parse_highlight_hit,
-        },
-        query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
-use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQuery, BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson,
-};
-
-use crate::search::model::DefaultSearchResponse;
-use serde_json::Value;
+use models_opensearch::SearchEntityType;
+use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
 
 pub(crate) struct EmailSearchConfig;
 
@@ -27,6 +15,41 @@ impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
+}
+
+/// The fields to search across with simple_query_string for email search.
+const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
+    "sender",
+    "reply_to",
+    "recipients",
+    "cc",
+    "bcc",
+    "subject",
+    "content",
+    "sender_name",
+    "recipient_names",
+    "cc_names",
+    "bcc_names",
+];
+
+/// Transforms search terms into a simple_query_string query string.
+/// Single-word terms become `(term | term@*)` so they match both text fields
+/// and keyword email-address fields. Multi-word terms (containing spaces) skip
+/// the `@*` pattern since email addresses never contain spaces.
+/// The email pattern is lowercased because email addresses are case-insensitive.
+/// Terms are ANDed together with `+`.
+fn build_simple_query_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if term.contains(' ') {
+                format!("({})", term)
+            } else {
+                format!("({} | {}@*)", term, term.to_lowercase())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 pub(crate) struct EmailQueryBuilder {
@@ -72,11 +95,9 @@ impl EmailQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
-        fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
@@ -121,6 +142,18 @@ impl EmailQueryBuilder {
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
+
+        // For multi-term searches, replace the default content-only must clause with a
+        // simple_query_string that searches across all email fields (addresses, names, subject, content)
+        if self.inner.terms.len() > 1 {
+            let query_string = build_simple_query_string(&self.inner.terms);
+            let sqs = SimpleQueryStringQuery::new(
+                query_string,
+                EMAIL_SIMPLE_QUERY_FIELDS.iter().copied(),
+            )
+            .default_operator("AND");
+            content_bool_query.set_must(sqs.into());
+        }
 
         // CUSTOM ATTRIBUTES SECTION
         // If link_ids are provided, add them to the query
@@ -205,17 +238,6 @@ impl EmailQueryBuilder {
 
         Ok(content_bool_query)
     }
-
-    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
-        // Build the search request with the bool query
-        // This will automatically wrap the bool query in a function score if
-        // SearchOn::NameContent is used
-        let search_request = self
-            .inner
-            .build_search_request(self.build_bool_query()?.build())?;
-
-        Ok(search_request)
-    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -226,12 +248,27 @@ pub(crate) struct EmailIndex {
     pub message_id: uuid::Uuid,
     /// The sender of the email message
     pub sender: String,
+    /// The display name of the sender
+    #[serde(default)]
+    pub sender_name: Option<String>,
+    /// The reply-to address of the email message
+    #[serde(default)]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
+    /// The display names of the recipients
+    #[serde(default)]
+    pub recipient_names: Vec<String>,
     /// The cc of the email message
     pub cc: Vec<String>,
+    /// The display names of the cc contacts
+    #[serde(default)]
+    pub cc_names: Vec<String>,
     /// The bcc of the email message
     pub bcc: Vec<String>,
+    /// The display names of the bcc contacts
+    #[serde(default)]
+    pub bcc_names: Vec<String>,
     /// The labels of the email message
     pub labels: Vec<String>,
     /// The link id of the email message
@@ -242,13 +279,6 @@ pub(crate) struct EmailIndex {
     pub subject: Option<String>,
     /// The sent at time of the email message
     pub sent_at_seconds: Option<i64>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub(crate) enum EmailNameIndex {
-    Email(Box<EmailIndex>),
-    Name(NameIndex),
 }
 
 pub struct EmailSearchArgs {
@@ -266,10 +296,8 @@ pub struct EmailSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -284,111 +312,13 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .sender(args.sender)
             .cc(args.cc)
             .bcc(args.bcc)
-            .search_on(args.search_on)
             .recipients(args.recipients)
             .include_labels(args.include_labels)
             .exclude_labels(args.exclude_labels)
             .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .disable_recency(args.disable_recency)
     }
-}
-
-impl EmailSearchArgs {
-    pub fn build(self) -> Result<Value> {
-        let builder: EmailQueryBuilder = self.into();
-        let mut json = builder.build_search_request()?.to_json();
-        inject_fragment_size(&mut json, 1000);
-        exclude_source_content(&mut json);
-        Ok(json)
-    }
-}
-
-#[tracing::instrument(skip(client, args), err)]
-pub(crate) async fn search_emails(
-    client: &opensearch::OpenSearch,
-    args: EmailSearchArgs,
-) -> Result<Vec<SearchHit>> {
-    let query_body = args.build()?;
-
-    tracing::trace!("query: {}", query_body);
-
-    let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Emails.as_ref()
-        ]))
-        .body(query_body)
-        .send()
-        .await
-        .map_client_error()
-        .await?;
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
-        })?;
-
-    let result: DefaultSearchResponse<EmailNameIndex> =
-        serde_json::from_slice(&bytes).map_err(|e| {
-            OpensearchClientError::SearchDeserializationFailed {
-                details: e.to_string(),
-                raw_body: String::from_utf8_lossy(&bytes).to_string(),
-            }
-        })?;
-
-    Ok(result
-        .hits
-        .hits
-        .into_iter()
-        .map(|hit| {
-            let highlight = hit
-                .highlight
-                .map(|h| {
-                    parse_highlight_hit(
-                        h,
-                        Keys {
-                            title_key: EmailSearchConfig::TITLE_KEY,
-                            content_key: EmailSearchConfig::CONTENT_KEY,
-                        },
-                    )
-                })
-                .unwrap_or_default();
-
-            match hit.source {
-                EmailNameIndex::Name(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: a.entity_type,
-                    goto: None,
-                    score: hit.score,
-                    highlight,
-                    updated_at: None,
-                },
-                EmailNameIndex::Email(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: SearchEntityType::Emails,
-                    score: hit.score,
-                    highlight,
-                    goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
-                        email_message_id: a.message_id,
-                        bcc: a.bcc,
-                        cc: a.cc,
-                        labels: a.labels,
-                        sent_at: a
-                            .sent_at_seconds
-                            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
-                        sender: a.sender,
-                        recipients: a.recipients,
-                    })),
-                    updated_at: a
-                        .sent_at_seconds
-                        .and_then(|s| chrono::DateTime::from_timestamp(s, 0)),
-                },
-            }
-        })
-        .collect())
 }
 
 #[cfg(test)]

@@ -1,9 +1,8 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl,
-    inbound::axum_router::ChannelsRouterState,
-    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -11,6 +10,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use comms_service::CommsHandlerState;
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::ports::TaskPropertiesPort;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -103,11 +106,14 @@ type PropertiesService = PropertiesServiceImpl<
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
-pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+pub(crate) struct TaskPropertiesAdapter {
+    pub system_properties: Arc<SystemPropertiesService>,
+    pub properties: Arc<PropertiesService>,
+}
 
 impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
-        self.0
+        self.system_properties
             .attach_task_properties(entity_ids)
             .await
             .map_err(Into::into)
@@ -116,17 +122,44 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
 
-        self.0.update_task_status(task_id, status_option).await?;
+        self.system_properties
+            .update_task_status(task_id, status_option)
+            .await?;
 
         Ok(())
     }
+
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
+        self.properties
+            .set_entity_property(
+                user_id,
+                entity_id,
+                models_properties::EntityType::Task,
+                property_definition_id,
+                value,
+            )
+            .await
+            .map_err(Into::into)
+    }
 }
 
-/// Type alias for the documents router state.
-pub(crate) type DocumentsState = DocumentRouterState<
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
-    EntityAccessService,
+pub(crate) type DocumentService = DocumentServiceImpl<
+    PgDocumentRepo,
+    S3UploadUrlAdapter,
+    TaskPropertiesAdapter,
+    ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
 >;
+
+/// Type alias for the documents router state.
+pub(crate) type DocumentsState = DocumentRouterState<DocumentService, EntityAccessService>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -137,15 +170,11 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
-    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
-
-/// Type alias for the document service used by the github sync service.
-pub(crate) type GithubDocumentService =
-    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>;
+    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, EntityAccessService>;
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
-    GithubSyncServiceImpl<GithubDocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
+    GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

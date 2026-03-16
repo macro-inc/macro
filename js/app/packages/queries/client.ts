@@ -1,7 +1,6 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { createPerQueryIDBStore } from './persistence/per-query-idb';
-import { partialMatchKey } from '@tanstack/query-core';
 import { createPersistenceKey, setupQueryPersistence } from './persistence';
+import { createQueryPersistenceScopes } from './persistence-scopes';
 import { initSoupNormalizer } from './soup/cache';
 
 export const queryClient = new QueryClient({
@@ -25,24 +24,7 @@ try {
 
 setupQueryPersistence({
   queryClient,
-  scopes: [
-    {
-      store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('channels', 1),
-      }),
-      maxAge: { value: 7, unit: 'd' },
-      buster,
-      shouldPersist: (key) => partialMatchKey(key, ['channel']),
-    },
-    {
-      store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('email-threads', 1),
-      }),
-      maxAge: { value: 7, unit: 'd' },
-      buster,
-      shouldPersist: (key) => partialMatchKey(key, ['email', 'threadMessages']),
-    },
-  ],
+  scopes: createQueryPersistenceScopes(buster),
 });
 
 // Subscribe to query cache events for automatic normalization of soup entities

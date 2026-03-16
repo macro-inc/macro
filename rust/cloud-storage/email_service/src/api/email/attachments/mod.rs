@@ -9,8 +9,8 @@ pub(crate) mod get_document_id;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .route("/:id", get(get::handler))
-        .route("/:id/document_id", get(get_document_id::handler))
+        .route("/{id}", get(get::handler))
+        .route("/{id}/document_id", get(get_document_id::handler))
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(

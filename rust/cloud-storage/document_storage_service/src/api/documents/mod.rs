@@ -1,15 +1,13 @@
 use super::{context::ApiContext, middleware};
 use axum::{
     Router,
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, post, put},
 };
 use tower::ServiceBuilder;
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod copy_document;
-pub(in crate::api) mod create_task;
 pub(in crate::api) mod delete_document;
-pub(in crate::api) mod edit_document;
 pub(in crate::api) mod export_document;
 pub(in crate::api) mod get_batch_preview;
 pub(in crate::api) mod get_document;
@@ -55,23 +53,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         // NOTE: POST / (create_document) is now served by the documents hex crate router
-        .route(
-            "/create_task",
-            post(create_task::create_task_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::document_handler,
-                    )),
-            ),
-        )
+        // NOTE: POST /create_task is now served by the documents hex crate router
         .route(
             "/initialize_user_documents",
             post(initialize_user_documents::handler).layer(
@@ -92,26 +74,26 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         .route(
-            "/:document_id/permissions",
+            "/{document_id}/permissions",
             get(get_document_permissions::get_document_permissions_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/location",
+            "/{document_id}/location",
             get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
         )
-        // NOTE: /:document_id/location_v3 is now served by the documents hex crate router
+        // NOTE: /{document_id}/location_v3 is now served by the documents hex crate router
         .route(
-            "/:document_id/text",
+            "/{document_id}/text",
             get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/:document_version_id/key",
+            "/{document_id}/{document_version_id}/key",
             get(get_document_key::get_document_key_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/copy",
+            "/{document_id}/copy",
             post(copy_document::copy_document_handler).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
@@ -128,57 +110,53 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     )),
             ),
         )
-        // NOTE: GET /:document_id is now served by the documents hex crate router
+        // NOTE: GET /{document_id} is now served by the documents hex crate router
         .route(
-            "/:document_id/views",
+            "/{document_id}/views",
             get(get_document_views::get_document_views_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/export",
+            "/{document_id}/export",
             get(export_document::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/:document_version_id",
+            "/{document_id}/{document_version_id}",
             get(get_document_version::handler).layer(ensure_document_exists_middleware.clone()),
         )
+        // NOTE: PATCH /{document_id} (edit_document) is now served by the documents hex crate router
         .route(
-            "/:document_id",
-            patch(edit_document::edit_document_handler)
-                .layer(ensure_document_exists_middleware.clone()),
-        )
-        .route(
-            "/:document_id",
+            "/{document_id}",
             put(save_document::save_document_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/presave/:document_id",
+            "/presave/{document_id}",
             #[allow(deprecated, reason = "allow presave_document_handler")]
             put(pre_save::presave_document_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/simple_save",
+            "/{document_id}/simple_save",
             put(simple_save::handler).layer(ensure_document_exists_middleware.clone()),
         )
-        // NOTE: DELETE /:document_id is now served by the documents hex crate router
+        // NOTE: DELETE /{document_id} is now served by the documents hex crate router
         .route(
-            "/:document_id/permanent",
+            "/{document_id}/permanent",
             delete(delete_document::permanently_delete_document_handler)
                 .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/revert_delete",
+            "/{document_id}/revert_delete",
             put(revert_delete_document::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
-            "/:document_id/processing",
+            "/{document_id}/processing",
             get(get_document_processing_result::handler).layer(ensure_document_exists_middleware),
         )
         .with_state(state)
         .route(
-            "/:document_id/processing/:job_id",
+            "/{document_id}/processing/{job_id}",
             get(job_processing_result::job_processing_result_handler),
         )
         .route(

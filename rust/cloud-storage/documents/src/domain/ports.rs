@@ -13,7 +13,10 @@ use model::document::response::{
 };
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
-use super::models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
+use super::models::{
+    CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+};
 
 /// Repository for accessing document data from the database.
 ///
@@ -98,9 +101,30 @@ pub trait DocumentRepo: Send + Sync + 'static {
         job_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Edit a document's metadata and share permissions in a single transaction.
+    ///
+    /// Updates: Document name, project ID, share permissions, and user item access.
+    fn edit_document(
+        &self,
+        args: EditDocumentRepoArgs,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Update a project's `updatedAt` timestamp.
+    fn update_project_modified(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete a document by ID (used for error cleanup).
     fn delete_document_by_id(
         &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Share a document with all members of the user's team.
+    fn share_with_team(
+        &self,
+        user_id: &str,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
@@ -137,6 +161,15 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         &self,
         entity_id: &str,
         status: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Set a property value on an entity.
+    fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -192,10 +225,29 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
+    /// Edit a document's metadata and share permissions.
+    ///
+    /// Validates permissions, updates the document, sends invalidation event,
+    /// and updates project modified timestamp.
+    fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
     /// Updates the tasks status to what is provided
     fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Create a task document and optionally set property values on it.
+    fn create_task(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        plain_user_id: String,
+        request: CreateTaskRequest,
+    ) -> impl Future<Output = Result<CreateTaskResponse, DocumentError>> + Send;
 }

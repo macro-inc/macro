@@ -124,7 +124,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id), err)]
+#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
@@ -397,8 +397,21 @@ fn stream_and_save_message(
         };
 
         let mut is_first_token = false;
+        let idle_timeout = std::time::Duration::from_secs(3 * 60);
 
-        while let Some(response) = ai_stream.next().await {
+        while let Some(response) = match tokio::time::timeout(idle_timeout, ai_stream.next()).await {
+            Ok(item) => item,
+            Err(_) => {
+                tracing::error!("AI stream idle timeout: no token received within {idle_timeout:?}");
+                let stream_error = StreamError::InternalError {
+                    stream_id: stream_id.clone(),
+                };
+                if let Ok(json) = serde_json::to_value(&stream_error) {
+                    yield json;
+                }
+                None
+            }
+        } {
             tracing::trace!("{:#?}", response);
 
             // Log time to first token
@@ -523,6 +536,6 @@ fn stream_and_save_message(
     ctx_outer.stream_repo.clone().from_async_stream(
         durable_stream_id,
         Box::pin(payload_stream),
-        None,
+        Some(std::time::Duration::from_secs(30 * 60)),
     );
 }

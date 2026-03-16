@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use crate::cloud_storage::ensure_access::{
     AccessLevelErr, BuildAccessLevel, get_users_access_level_v2,
 };
-use axum::async_trait;
 use axum::extract::FromRef;
 use axum::http::request::Parts;
 use axum::{
@@ -26,7 +25,6 @@ pub struct HistoryAccessExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for HistoryAccessExtractor<T>
 where
     T: BuildAccessLevel,

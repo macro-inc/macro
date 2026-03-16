@@ -71,7 +71,7 @@ impl CommsServiceClient {
             .map_err(|e| {
                 ClientError::Generic(anyhow::anyhow!(
                     "unable to parse response from get_channels_external: {}",
-                    e.to_string()
+                    e
                 ))
             })?;
 
@@ -101,7 +101,7 @@ impl CommsServiceClient {
             .map_err(|e| {
                 ClientError::Generic(anyhow::anyhow!(
                     "unable to parse response from get_channel_metadata_external: {}",
-                    e.to_string()
+                    e
                 ))
             })?;
 
@@ -147,7 +147,7 @@ impl CommsServiceClient {
             .map_err(|e| {
                 ClientError::Generic(anyhow::anyhow!(
                     "unable to parse response from get_channel_transcript_external: {}",
-                    e.to_string()
+                    e
                 ))
             })?;
 

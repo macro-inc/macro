@@ -12,7 +12,7 @@ export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
       xmlns="http://www.w3.org/2000/svg"
       class={`animated-signal-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated signal icon</title>
+      {/*<title>Animated signal icon</title>*/}
       <style>{`
         @keyframes move-left {
           0% {
@@ -52,7 +52,7 @@ export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
             transform: translate(0, 0);
           }
           100% {
-            transform: translate(-9.5px, 0);
+            transform: translate(-9.37px, 0);
           }
         }
         @keyframes disappear-reappear {

@@ -69,7 +69,7 @@ impl From<EmailErr> for UpdateThreadLabelError {
     }
 }
 
-/// Create the thread labels router with a `PATCH /:id/labels` handler.
+/// Create the thread labels router with a `PATCH /{id}/labels` handler.
 pub fn thread_labels_router<S, T, G>() -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
@@ -78,7 +78,7 @@ where
     EmailRouterState<T>: axum::extract::FromRef<S>,
     GmailTokenState<G>: axum::extract::FromRef<S>,
 {
-    Router::new().route("/:id/labels", patch(update_thread_labels_handler::<T, G>))
+    Router::new().route("/{id}/labels", patch(update_thread_labels_handler::<T, G>))
 }
 
 /// Add or remove a label from all messages in a thread.

@@ -47,7 +47,7 @@ impl SQSWorker {
             delete_message::delete_message(&self.inner, &self.queue_url, receipt_handle).await?;
         } else {
             tracing::warn!("no receipt handle found for message");
-            return Err(anyhow::anyhow!("no receipt handle found for message"));
+            anyhow::bail!("no receipt handle found for message");
         }
         Ok(())
     }

@@ -112,8 +112,9 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     <Button
       as={'a'}
       href={`/channel/${props.group.entityId}`}
-      class="flex items-center justify-start gap-3 w-full"
+      class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
       variant="ghost"
+      size="sm"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -187,19 +188,18 @@ export const ChannelsUnreadWidget = () => {
   });
 
   return (
-    <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-      <header class="text-xs font-medium text-ink-muted tracking-wide">
-        <h1>Unread</h1>
-      </header>
+    <Show when={channelGroups().length > 0}>
+      <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
+        <header class="text-xs font-medium text-ink-muted ml-3">
+          <h1>Unread</h1>
+        </header>
 
-      <div class="flex-1 overflow-y-auto">
-        <For
-          each={channelGroups()}
-          fallback={<span class="text-ink/80 text-xs">No unread messages</span>}
-        >
-          {(group) => <ChannelGroupItem group={group} animate={false} />}
-        </For>
-      </div>
-    </section>
+        <div class="flex-1 overflow-hidden">
+          <For each={channelGroups()}>
+            {(group) => <ChannelGroupItem group={group} animate={false} />}
+          </For>
+        </div>
+      </section>
+    </Show>
   );
 };

@@ -250,18 +250,6 @@ pub(crate) struct SearchResponse<T> {
     pub _shards: Shards,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct NameIndex {
-    /// The entity id
-    pub entity_id: uuid::Uuid,
-    /// The entity type
-    pub entity_type: SearchEntityType,
-    /// The name of the entity
-    pub name: String,
-    /// The creator of the entity
-    pub user_id: String,
-}
-
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoDocument {
     /// The node id of the document.

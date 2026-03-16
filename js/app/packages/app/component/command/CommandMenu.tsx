@@ -40,10 +40,10 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'Dms' },
-  { id: 'notes', label: 'Notes' },
+  { id: 'notes', label: 'Docs' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'documents', label: 'Docs' },
-  { id: 'chats', label: 'Chats' },
+  { id: 'documents', label: 'Files' },
+  { id: 'chats', label: 'Agents' },
   { id: 'projects', label: 'Projects' },
   { id: 'commands', label: 'Commands' },
 ];
@@ -52,7 +52,7 @@ const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
-function getBlockNameForEntity(
+export function getBlockNameForEntity(
   item: CommandMenuItem
 ): BlockName | BlockAlias | undefined {
   if (isEntityItem(item)) {
@@ -604,25 +604,28 @@ function CategoryFilterTabs() {
           CommandState.setSelectedIndex(0);
         }
       }}
-      class="border-b border-edge-muted/50"
     >
-      <Tabs.List class="flex items-center px-2 py-1.5">
-        <For each={CATEGORIES}>
-          {(category) => (
-            <Tabs.Trigger
-              value={category.id}
-              class={cn(
-                'px-2 py-1 text-xs border first:border-l-1 border-l-0 border-edge-muted/50 font-semibold',
-                CommandState.categoryFilter() === category.id
-                  ? 'text-ink pattern bg-edge-muted'
-                  : 'text-ink-muted/70 hover:text-ink hover:bg-hover'
+      <Tabs.List class="p-1.5">
+        <div class="text-sm rounded-xs overflow-clip border border-edge-muted inline-block">
+          <div class="flex">
+            <For each={CATEGORIES}>
+              {(category) => (
+                <Tabs.Trigger
+                  value={category.id}
+                  class={cn(
+                    'border-r-1 border-edge-muted last:border-r-0',
+                    'relative text-ink-muted/70 px-2.5 py-1 text-xs font-medium block hover:bg-ink/6 hover:text-ink',
+                    CommandState.categoryFilter() === category.id &&
+                      'text-ink bg-edge/50'
+                  )}
+                  tabIndex={-1}
+                >
+                  {category.label}
+                </Tabs.Trigger>
               )}
-              tabIndex={-1}
-            >
-              {category.label}
-            </Tabs.Trigger>
-          )}
-        </For>
+            </For>
+          </div>
+        </div>
       </Tabs.List>
     </Tabs>
   );

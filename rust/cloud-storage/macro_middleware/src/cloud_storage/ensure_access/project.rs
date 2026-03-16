@@ -1,7 +1,7 @@
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
@@ -19,7 +19,6 @@ pub struct ProjectAccessLevelExtractor<T> {
     desired: PhantomData<T>,
 }
 
-#[async_trait]
 impl<T, S> FromRequestParts<S> for ProjectAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,
@@ -131,7 +130,6 @@ impl<T, V> ProjectBodyAccessLevelExtractor<T, V> {
     }
 }
 
-#[async_trait]
 impl<T, S, V> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V>
 where
     T: BuildAccessLevel,

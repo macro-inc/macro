@@ -1,5 +1,6 @@
+#![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::NoOpTaskProperties;
+use ai_tools::{NoOpConnectionService, NoOpTaskProperties};
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -197,11 +198,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized stream repo");
 
     let connection_manager =
-        connection_gateway_client::service::dynamodb::create_dynamo_db_connection_manager(
-            dynamodb_client,
-        )
-        .await
-        .context("failed to create connection manager")?;
+        connection_gateway::service::dynamodb::create_dynamo_db_connection_manager(dynamodb_client)
+            .await
+            .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
 
@@ -271,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client.clone(),
         s3_upload_adapter,
         NoOpTaskProperties,
-        db.clone(),
+        NoOpConnectionService,
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();

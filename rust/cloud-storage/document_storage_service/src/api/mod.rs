@@ -241,6 +241,6 @@ fn api_router(state: ApiContext) -> Router {
         )
         .with_state(state);
     Router::new()
-        .nest("/:version", internal_router.clone())
+        .nest("/{version}", internal_router.clone())
         .merge(internal_router)
 }

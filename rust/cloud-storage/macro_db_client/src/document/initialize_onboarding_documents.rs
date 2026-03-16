@@ -65,9 +65,7 @@ pub async fn create_onboarding_documents(
         .iter()
         .any(|(_, file_type)| file_type == FileType::Docx.as_str())
     {
-        return Err(anyhow::Error::msg(
-            "docx is not supported for onboarding documents",
-        ));
+        anyhow::bail!("docx is not supported for onboarding documents");
     }
 
     let document_values = document_names

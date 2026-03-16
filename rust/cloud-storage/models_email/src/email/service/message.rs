@@ -38,6 +38,7 @@ pub struct ParsedSearchMessage {
     pub thread_db_id: Uuid,
     pub subject: Option<String>,
     pub from: Option<ContactInfo>,
+    pub reply_to: Option<String>,
     pub to: Vec<ContactInfo>,
     pub cc: Vec<ContactInfo>,
     pub bcc: Vec<ContactInfo>,
@@ -143,6 +144,7 @@ impl From<MessageWithBodyReplyless> for ParsedMessage {
 
 impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
     fn from(msg: MessageWithBodyReplyless) -> Self {
+        let reply_to = extract_reply_to(msg.inner.headers_json.as_ref());
         Self {
             body_parsed_linkless: get_body_parsed_linkless_for_message(&msg),
             db_id: msg.inner.db_id,
@@ -150,6 +152,7 @@ impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
             thread_db_id: msg.inner.thread_db_id,
             subject: msg.inner.subject,
             from: msg.inner.from,
+            reply_to,
             to: msg.inner.to,
             cc: msg.inner.cc,
             bcc: msg.inner.bcc,
@@ -165,6 +168,20 @@ impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
             internal_date_ts: msg.inner.internal_date_ts,
         }
     }
+}
+
+fn extract_reply_to(headers_json: Option<&JsonValue>) -> Option<String> {
+    let headers = headers_json?.as_array()?;
+    for header in headers {
+        let name = header.get("name")?.as_str()?;
+        if name == "Reply-To" {
+            return header
+                .get("value")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase());
+        }
+    }
+    None
 }
 
 /// determine if a message is an inbound message for use in latest_inbound_message_ts

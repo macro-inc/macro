@@ -49,18 +49,11 @@ connection tracking.
 
 ### MacroDB Schema Changes
 
-The schema for MacroDB is defined in `macro-api/database/schema.prisma` Prisma schema file.
-After making changes to the schema, run `just create-migration` from the `macro-api/database` folder to generate a
-migration file.
-You will need to supply a name for the migration as an argument to the command. This will apply the migration to the
-locally running database.
-Afterwards, run `just setup_macrodb` in `macro-api/cloud-storage` and `just prepare_db` in
-`macro-api/cloud-storage/macro_db_client`
-to update the .sqlx and migrations directory for Rust macro_db_client.
+DB migration files are located in `rust/cloud-storage/macro_db_client`. Use the `/dump-schema` skill to dump the current Postgres schema for reference.
 If you are still getting migration errors after running `just setup_macrodb`, you may need to run `just force_drop_db`
 in `macro-api/cloud-storage/macro_db_client` to drop the database and re-create it
-with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that when you are reading the database columsn, the
-names are camelCased and not snake_cased (refer to the `schema.prisma` file for the actual column names).
+with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that when you are reading the database columns, the
+names are camelCased and not snake_cased (use `/dump-schema` or check the migration files for actual column names).
 So you need to cast as the snake_cased version of the column name when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
 Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in

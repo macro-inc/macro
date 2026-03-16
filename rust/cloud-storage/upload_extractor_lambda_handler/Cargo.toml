@@ -13,7 +13,7 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
 chrono = { workspace = true }
-connection_gateway = { path = "../connection_gateway" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 dynamodb_client = { path = "../dynamodb_client" }
 futures = { workspace = true }
@@ -37,4 +37,4 @@ walkdir = "2.3.2"
 zip = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["connection_gateway", "openssl"]
+ignored = ["connection_gateway_client", "openssl"]

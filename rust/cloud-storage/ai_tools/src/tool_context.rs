@@ -3,6 +3,7 @@ use comms::{
     domain::service::ChannelServiceImpl,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
+use connection::domain::ports::ConnectionService;
 use documents::{
     domain::ports::TaskPropertiesPort,
     inbound::toolset::DocumentToolContext,
@@ -51,6 +52,28 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
         Ok(())
     }
+    async fn set_entity_property(
+        &self,
+        _user_id: &str,
+        _entity_id: &str,
+        _property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// No-op connection service
+#[derive(Clone)]
+pub struct NoOpConnectionService;
+
+impl ConnectionService for NoOpConnectionService {
+    async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
+        &self,
+        _invalidation_event: connection::domain::models::InvalidationEvent<'a, T>,
+    ) -> Result<(), connection::domain::models::ConnectionError> {
+        Ok(())
+    }
 }
 
 /// Type alias for the document service implementation used by AI tools
@@ -58,6 +81,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     PgDocumentRepo,
     S3UploadUrlAdapter,
     NoOpTaskProperties,
+    NoOpConnectionService,
 >;
 
 /// Type alias for the entity access service implementation

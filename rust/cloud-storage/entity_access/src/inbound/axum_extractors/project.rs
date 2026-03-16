@@ -4,13 +4,13 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, RequestExt, RequestPartsExt, async_trait,
+    Extension, Json, RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
 use serde::de::DeserializeOwned;
 
-use super::{ExtractorError, InternalUser, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -29,16 +29,15 @@ use model_user::axum_extractor::OptionalMacroUserExtractor;
 ///
 /// - Project context must be loaded (BasicProject in extensions)
 #[derive(Debug)]
-pub struct ProjectAccessLevelExtractor<T: RequiredAccessLevel, Svc> {
+pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
     _marker: PhantomData<(T, Svc)>,
 }
 
-#[async_trait]
 impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -95,7 +94,7 @@ where
                         entity_id: project_context.id.clone(),
                         entity_type: EntityType::Project,
                     },
-                    auth: EntityAccessAuth::Authenticated(user_id.clone().0),
+                    auth: EntityAccessAuth::Authenticated(user_id.clone()),
                     entity_permission: EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
@@ -112,22 +111,22 @@ where
             ));
         }
 
-        let required_level = T::required_level();
-        // Check access based on auth state
-        let access_level: AccessLevel = match macro_user_id.as_ref() {
-            Some(macro_user_id) => service
-                .check_access(
-                    Some(macro_user_id),
-                    &project_context.id,
-                    EntityType::Project,
-                    required_level,
-                )
-                .await
-                .map_err(ExtractorError::from)?,
-            None => service
-                .check_public_access(&project_context.id, EntityType::Project, required_level)
-                .await
-                .map_err(ExtractorError::from)?,
+        let access_level = match service
+            .get_access_level(
+                macro_user_id.as_deref(),
+                &project_context.id,
+                EntityType::Project,
+            )
+            .await
+            .map_err(ExtractorError::from)?
+        {
+            Some(access_level) => access_level,
+            None => return Err(ExtractorError::Unauthorized),
+        };
+
+        let permission = EntityPermission::AccessLevel { access_level };
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
         };
 
         Ok(Self {
@@ -137,9 +136,9 @@ where
                     entity_type: EntityType::Project,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: EntityPermission::AccessLevel { access_level },
+                entity_permission: permission,
                 _marker: PhantomData,
             },
             _marker: PhantomData,
@@ -197,7 +196,7 @@ impl ProjectOrParentId {
 ///
 /// Downstream consumers also use the body (which is an antipattern) so we need to keep the value around.
 #[derive(Debug)]
-pub enum ProjectBodyAccessLevelExtractor<T: RequiredAccessLevel, V, Svc> {
+pub enum ProjectBodyAccessLevelExtractor<T: RequiredPermission, V, Svc> {
     /// A project was found in the body and access was validated.
     FoundProject {
         /// The project ID that was found.
@@ -218,7 +217,7 @@ pub enum ProjectBodyAccessLevelExtractor<T: RequiredAccessLevel, V, Svc> {
     },
 }
 
-impl<T: RequiredAccessLevel, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
+impl<T: RequiredPermission, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     /// Extract the body from this extractor.
     pub fn into_inner(self) -> V {
         match self {
@@ -228,10 +227,9 @@ impl<T: RequiredAccessLevel, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> 
     }
 }
 
-#[async_trait]
 impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
-    T: RequiredAccessLevel,
+    T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
@@ -292,22 +290,18 @@ where
             });
         }
 
-        let required_level = T::required_level();
-        // Check access based on auth state
-        let access_level: AccessLevel = match macro_user_id.as_ref() {
-            Some(macro_user_id) => service
-                .check_access(
-                    Some(macro_user_id),
-                    project.id(),
-                    EntityType::Project,
-                    required_level,
-                )
-                .await
-                .map_err(ExtractorError::from)?,
-            None => service
-                .check_public_access(project.id(), EntityType::Project, required_level)
-                .await
-                .map_err(ExtractorError::from)?,
+        let access_level = match service
+            .get_access_level(macro_user_id.as_deref(), project.id(), EntityType::Project)
+            .await
+            .map_err(ExtractorError::from)?
+        {
+            Some(access_level) => access_level,
+            None => return Err(ExtractorError::Unauthorized),
+        };
+
+        let permission = EntityPermission::AccessLevel { access_level };
+        if !permission.satisfies::<T>() {
+            return Err(ExtractorError::Unauthorized);
         };
 
         Ok(Self::FoundProject {
@@ -317,9 +311,9 @@ where
                     entity_type: EntityType::Project,
                 },
                 auth: macro_user_id
-                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .map(EntityAccessAuth::Authenticated)
                     .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: EntityPermission::AccessLevel { access_level },
+                entity_permission: permission,
                 _marker: PhantomData,
             },
             project,

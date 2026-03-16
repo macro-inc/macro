@@ -3,14 +3,17 @@
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use connection::domain::models::{InvalidationEvent, InvalidationReason};
+use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{
@@ -22,24 +25,31 @@ use model::document::{
     build_cloud_storage_bucket_document_key,
 };
 use model::response::PresignedUrl;
-use sqlx::PgPool;
 use tracing;
 
-use super::models::{CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
+use super::models::{
+    CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
+    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
+};
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
 /// The concrete document service implementation.
-pub struct DocumentServiceImpl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> {
+pub struct DocumentServiceImpl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+> {
     repo: R,
     cloudfront_config: CloudFrontConfig,
     sync_service_client: sync_service_client::SyncServiceClient,
     upload_url_service: U,
     task_properties_service: T,
-    db: PgPool,
+    connection_service: C,
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
-    DocumentServiceImpl<R, U, T>
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
+    DocumentServiceImpl<R, U, T, C>
 {
     /// Create a new document service.
     pub fn new(
@@ -48,7 +58,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
         sync_service_client: sync_service_client::SyncServiceClient,
         upload_url_service: U,
         task_properties_service: T,
-        db: PgPool,
+        connection_service: C,
     ) -> Self {
         Self {
             repo,
@@ -56,7 +66,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
             sync_service_client,
             upload_url_service,
             task_properties_service,
-            db,
+            connection_service,
         }
     }
 
@@ -196,7 +206,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
             .collect();
 
         if shas.len() != presigned_urls.len() {
-            return Err(anyhow!("unable to generate presigned urls"));
+            anyhow::bail!("unable to generate presigned urls");
         }
 
         Ok(LocationResponseData::PresignedUrls(presigned_urls))
@@ -269,8 +279,8 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort>
     }
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> DocumentService
-    for DocumentServiceImpl<R, U, T>
+impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
+    DocumentService for DocumentServiceImpl<R, U, T, C>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -394,20 +404,27 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        match entity_access_receipt.auth() {
-            EntityAccessAuth::Authenticated(macro_user_id) => {
-                macro_project_utils::update_project_modified(
-                    &self.db,
-                    macro_project_utils::ProjectModifiedArgs {
-                        project_id,
-                        old_project_id: None::<String>,
-                        user_id: macro_user_id.as_ref().to_string(),
-                    },
-                )
-                .await;
-            }
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => (),
+        if let Some(project_id) = &project_id
+            && !project_id.is_empty()
+        {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
         }
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Deleted,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
 
         Ok(())
     }
@@ -524,16 +541,13 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
                 DocumentError::Internal(anyhow!("unable to convert document metadata"))
             })?;
 
-        // Update project modified timestamp (fire-and-forget)
-        macro_project_utils::update_project_modified(
-            &self.db,
-            macro_project_utils::ProjectModifiedArgs {
-                project_id,
-                old_project_id: None,
-                user_id: user_id.as_ref().to_string(),
-            },
-        )
-        .await;
+        // Update project modified timestamp
+        if let Some(project_id) = &project_id {
+            let project_id_str = project_id.to_string();
+            let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
 
         // Attach task properties if creating a task
         if document_response_metadata.sub_type == Some(DocumentSubType::Task) {
@@ -556,6 +570,81 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
         })
     }
 
+    #[tracing::instrument(err, skip(self, document_context, args))]
+    async fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        // Check owner-only restrictions for authenticated users
+        if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
+            entity_access_receipt.entity_permission()
+        {
+            if args.project_id.is_some()
+                && *access_level
+                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
+            }
+
+            if args.share_permission.is_some()
+                && *access_level
+                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
+            }
+        }
+
+        // Clean the document name (remove file extension if present)
+        let document_name = args
+            .document_name
+            .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
+
+        self.repo
+            .edit_document(EditDocumentRepoArgs {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                document_name,
+                project_id: args.project_id.clone(),
+                share_permission: args.share_permission,
+            })
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        // Update project modified timestamps
+        if let Some(old_project_id) = &document_context.project_id
+            && !old_project_id.is_empty()
+        {
+            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
+            );
+        }
+        if let Some(project_id) = &args.project_id
+            && !project_id.is_empty()
+        {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        // Send invalidation event
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Content,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self))]
     async fn update_task_status(
         &self,
@@ -565,6 +654,91 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
         self.task_properties_service
             .update_task_status(&entity_access_receipt.entity().entity_id, status)
             .await
-            .map_err(DocumentError::Internal)
+            .map_err(DocumentError::Internal)?;
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Metadata,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, request))]
+    async fn create_task(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        plain_user_id: String,
+        request: CreateTaskRequest,
+    ) -> Result<CreateTaskResponse, DocumentError> {
+        let response_data = self
+            .create_document(
+                user_id.clone(),
+                CreateDocumentRepoArgs {
+                    id: None,
+                    sha: EMPTY_SHA256.to_string(),
+                    document_name: request.task_name,
+                    user_id,
+                    file_type: Some(FileType::Md),
+                    project_id: request.project_id,
+                    email_attachment_id: None,
+                    created_at: None,
+                    is_task: true,
+                    skip_history: false,
+                },
+                None,
+            )
+            .await?;
+
+        let document_id = response_data
+            .document_response
+            .document_metadata
+            .document_id
+            .clone();
+
+        let _ = self
+            .repo
+            .share_with_team(&plain_user_id, &document_id)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to share task with team");
+            });
+
+        if let Some(properties) = request.property_values {
+            for property_input in properties {
+                let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                    tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                    continue;
+                };
+
+                let _ = self
+                    .task_properties_service
+                    .set_entity_property(
+                        &plain_user_id,
+                        &document_id,
+                        property_uuid,
+                        Some(property_input.value.clone()),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::warn!(
+                            property_id=?property_uuid,
+                            error=?e,
+                            "failed to set property on task, continuing"
+                        );
+                    });
+            }
+        }
+
+        Ok(CreateTaskResponse { document_id })
     }
 }

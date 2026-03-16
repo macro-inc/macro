@@ -1,28 +1,27 @@
-use crate::model::message::UniqueMessage;
-use crate::{
-    context::AppState,
-    model::{message::Message, sender::MessageReceipt},
-    service::sender::send_message_to_entity,
-};
-use anyhow::Result;
+use crate::{context::AppState, model::message::Message, service::sender::send_message_to_entity};
 use axum::{
     Json as JsonResponse, Router,
     extract::{Json, Path, State},
     http::StatusCode,
     routing::post,
 };
+use connection_gateway_models::{
+    BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
+};
 use futures::future::try_join_all;
 use macro_middleware::auth;
 use model_entity::Entity;
 use std::time::Instant;
-use utoipa::ToSchema;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/send/:entity_type/:entity_id", post(send_message_handler))
+        .route(
+            "/send/{entity_type}/{entity_id}",
+            post(send_message_handler),
+        )
         .route("/batch_send", post(batch_send_message_handler))
         .route(
             "/batch_send_unique",
@@ -33,17 +32,6 @@ where
             auth::internal_access::handler,
         ))
         .with_state(state)
-}
-
-#[derive(serde::Serialize, Debug, ToSchema)]
-pub struct SendMessageResponse {
-    pub receipts: Vec<MessageReceipt>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct SendMessageBody {
-    pub message: serde_json::Value,
-    pub message_type: String,
 }
 
 #[utoipa::path(
@@ -67,6 +55,8 @@ pub async fn send_message_handler(
     Path(entity): Path<Entity<'static>>,
     Json(body): Json<SendMessageBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
+    let redis_connection = ctx.context.redis_connection.clone();
+
     let res = send_message_to_entity(
         &ctx,
         &entity,
@@ -74,6 +64,7 @@ pub async fn send_message_handler(
             message_type: body.message_type.clone(),
             data: body.message.to_string(),
         },
+        redis_connection,
     )
     .await
     .map_err(|e| {
@@ -88,16 +79,6 @@ pub async fn send_message_handler(
         StatusCode::OK,
         JsonResponse(SendMessageResponse { receipts: res }),
     ))
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct BatchSendMessageBody<'a> {
-    /// the message to send
-    pub message: serde_json::Value,
-    /// all entities to send the message to
-    pub entities: Vec<Entity<'a>>,
-    /// the type of the message we are sending
-    pub message_type: String,
 }
 
 #[utoipa::path(
@@ -116,7 +97,10 @@ pub async fn batch_send_message_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let now = Instant::now();
 
+    let redis_connection = ctx.context.redis_connection.clone();
+
     let all_receipts = try_join_all(body.entities.iter().map(|entity| {
+        let redis_connection = redis_connection.clone();
         send_message_to_entity(
             &ctx,
             entity,
@@ -124,6 +108,7 @@ pub async fn batch_send_message_handler(
                 message_type: body.message_type.clone(),
                 data: body.message.to_string(),
             },
+            redis_connection,
         )
     }))
     .await
@@ -145,11 +130,6 @@ pub async fn batch_send_message_handler(
     ))
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, ToSchema)]
-pub struct BatchSendUniqueMessagesBody {
-    pub messages: Vec<UniqueMessage>,
-}
-
 // Send unique (different) messages to multiple entities
 #[utoipa::path(
     post,
@@ -168,7 +148,10 @@ pub async fn batch_send_unique_messages_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let now = Instant::now();
 
+    let redis_connection = ctx.context.redis_connection.clone();
+
     let all_receipts = try_join_all(body.messages.iter().map(|message| {
+        let redis_connection = redis_connection.clone();
         send_message_to_entity(
             &ctx,
             &message.entity,
@@ -176,6 +159,7 @@ pub async fn batch_send_unique_messages_handler(
                 message_type: message.message_type.clone(),
                 data: message.message_content.to_string(),
             },
+            redis_connection,
         )
     }))
     .await

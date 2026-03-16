@@ -2,7 +2,7 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -81,8 +81,6 @@ export function useFilterRefinements() {
     soup,
     queryFilters,
     setQueryFilters,
-    statusFilter,
-    setStatusFilter,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,
@@ -134,8 +132,7 @@ export function useFilterRefinements() {
 
     const hasQueryFilterDiff = !deepEqual(queryFilters(), preset.queryFilters);
 
-    const hasSubFilters =
-      statusFilter().length > 0 || assigneeFilter().length > 0;
+    const hasSubFilters = assigneeFilter().length > 0;
 
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
@@ -217,7 +214,6 @@ export function useFilterRefinements() {
     batch(() => {
       soup.filters.set(preset.clientFilters);
       setQueryFilters(preset.queryFilters);
-      setStatusFilter([]);
       setAssigneeFilter([]);
     });
   };

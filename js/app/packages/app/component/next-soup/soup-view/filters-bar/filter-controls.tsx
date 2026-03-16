@@ -8,18 +8,17 @@ import { createMemo, Show } from 'solid-js';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { useContacts } from '@queries/contacts/contacts';
+import { filterMap } from '@core/util/list';
 import { useUserId } from '@core/context/user';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { TASK_STATUS_OPTIONS } from '@entity';
 import { useProjectsQuery } from '@queries/storage/projects';
 import {
   getFileAssociations,
   QUERY_FILTERS_BASE,
-} from '@app/component/next-soup/filters/filters';
+} from '@app/component/next-soup/filters/query-filters';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -30,32 +29,55 @@ import {
   type Option,
 } from './filter-primitives';
 import { useFilterOptions } from './use-filter-options';
+import { useQuickAccess } from '@core/context/quickAccess';
+import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs';
 
 export const AssigneeFilter = () => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
-  const contacts = useContacts();
+  const { useList } = useQuickAccess();
+  const contacts = useList('person');
   const userId = useUserId();
 
   const assigneeOptions = createMemo((): Option[] => {
     const currentUserId = userId();
+
     const noAssigneeOption: Option = {
       value: NO_ASSIGNEE,
       label: 'No Assignee',
       icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
     };
-    const contactOptions = contacts().map((contact) => ({
-      value: contact.id,
-      label:
-        contact.id === currentUserId
-          ? contact.name
-            ? `${contact.name} (me)`
-            : 'Me'
-          : contact.name || contact.id,
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
-    return [noAssigneeOption, ...contactOptions];
+
+    let me: Option | undefined;
+
+    const otherContactOptions = filterMap(
+      contacts(),
+      (contact): Option | undefined => {
+        const opt: Option = {
+          value: contact.id,
+          label:
+            contact.id === currentUserId
+              ? `${contact.data.name || 'Me'} (me)`
+              : contact.data.name || contact.id,
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="xs"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        };
+
+        if (contact.id === currentUserId) {
+          me = opt;
+          return undefined;
+        }
+
+        return opt;
+      }
+    );
+
+    return [noAssigneeOption, ...(me ? [me] : []), ...otherContactOptions];
   });
 
   const activeAssignee = createMemo((): Option[] => {
@@ -75,6 +97,7 @@ export const AssigneeFilter = () => {
       active={activeAssignee()}
       onChange={handleAssigneeChange}
       placeholder="Search assignees..."
+      virtualized
     />
   );
 };
@@ -274,6 +297,7 @@ export const FolderFilter = (props: FolderFilterProps) => {
         active={activeProjectFilter()}
         onChange={handleProjectChange}
         placeholder="Search folders..."
+        virtualized
       />
     </Show>
   );
@@ -325,30 +349,34 @@ export const DocumentFolderFilter = () => {
   return <FolderFilter target="document" label="Folder" />;
 };
 
-export const TaskStatusFilter = () => {
-  const { statusFilter, setStatusFilter } = useSoupView();
+const STATUS_FILTER_PROPERTY_ID = {
+  'task-not-started': PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  'task-in-progress': PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  'task-in-review': PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  'task-completed': PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+  'task-canceled': PROPERTY_OPTION_IDS.STATUS.CANCELED,
+} satisfies Record<(typeof TASK_STATUS_FILTERS)[number]['id'], string>;
 
-  const statusOptions: Option[] = TASK_STATUS_OPTIONS.map((o) => ({
-    value: o.value,
-    label: o.label,
-    icon: () => <PropertyValueIcon optionId={o.value} class="size-3.5" />,
+export const TaskStatusFilter = () => {
+  const statusOptions = TASK_STATUS_FILTERS.map((o) => ({
+    value: o.id,
+    label: o.label ?? 'Unknown status',
+    icon: () => (
+      <PropertyValueIcon
+        optionId={STATUS_FILTER_PROPERTY_ID[o.id]}
+        class="size-3.5"
+      />
+    ),
   }));
 
-  const activeStatus = createMemo((): Option[] => {
-    const current = statusFilter();
-    return statusOptions.filter((o) => current.includes(o.value));
-  });
-
-  const handleStatusChange = (options: Option[]) => {
-    setStatusFilter(options.map((o) => o.value));
-  };
+  const status = useFilterOptions(statusOptions, { target: 'or' });
 
   return (
     <FilterSelect
       label="Status"
       options={statusOptions}
-      active={activeStatus()}
-      onChange={handleStatusChange}
+      active={status.active()}
+      onChange={status.onChange}
     />
   );
 };
@@ -488,16 +516,27 @@ export const FoldersFilter = () => {
 
 export const FromSenderFilter = () => {
   const { setQueryFilters, queryFilters } = useSoupView();
-  const contacts = useContacts();
+  const { useList } = useQuickAccess();
+  const contacts = useList('person');
 
   const senderOptions = createMemo((): Option[] => {
-    return contacts().map((contact) => ({
-      value: contact.email ?? contact.id,
-      label: contact.name || contact.email || contact.id,
-      icon: () => (
-        <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
-      ),
-    }));
+    return filterMap(contacts(), (contact): Option | undefined => {
+      const value = contact.data.email ?? contact.id;
+      if (!value) return undefined;
+
+      return {
+        value,
+        label: contact.data.name || contact.data.email || contact.id,
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="xs"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+    });
   });
 
   const activeSenderFilter = createMemo((): Option[] => {
@@ -529,6 +568,7 @@ export const FromSenderFilter = () => {
         active={activeSenderFilter()}
         onChange={handleSenderChange}
         placeholder="Search contacts..."
+        virtualized
       />
     </Show>
   );

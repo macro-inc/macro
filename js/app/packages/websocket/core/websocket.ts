@@ -699,7 +699,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       return;
     }
 
-    if (this.isClosing()) {
+    if (
+      this.isClosing() ||
+      this._underlyingWebsocket.readyState === this._underlyingWebsocket.CLOSED
+    ) {
       this.handleEvent(
         WebsocketEvent.Close,
         new CloseEvent('closed websocket by heartbeat, already closing')

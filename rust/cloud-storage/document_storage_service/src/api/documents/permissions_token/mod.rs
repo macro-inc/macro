@@ -9,7 +9,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route("/validate", post(validate_permissions_token::handler))
         .route(
-            "/:document_id",
+            "/{document_id}",
             post(create_permission_token::handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),

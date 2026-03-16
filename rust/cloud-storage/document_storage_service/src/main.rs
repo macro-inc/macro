@@ -9,9 +9,8 @@ use crate::{
 };
 use anyhow::Context;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl,
-    inbound::axum_router::ChannelsRouterState,
-    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -19,6 +18,10 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
+use connection::{
+    domain::service::ConnectionServiceImpl,
+    outbound::connection_gateway_client::ConnectionGatewayImpl,
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
@@ -253,11 +256,11 @@ async fn main() -> anyhow::Result<()> {
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
     let notification_service = NotificationServiceImpl::new(make_notification_ingress());
-    let properties_service = PropertiesServiceImpl::new(
+    let properties_service = Arc::new(PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),
         Some(notification_service),
-    );
+    ));
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
@@ -313,13 +316,22 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
+
+    let connection_service = ConnectionServiceImpl::new(
+        entity_access_service.clone(),
+        Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone())),
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
         s3_upload_adapter,
-        TaskPropertiesAdapter(system_properties_service.clone()),
-        db.clone(),
+        TaskPropertiesAdapter {
+            system_properties: system_properties_service.clone(),
+            properties: properties_service.clone(),
+        },
+        connection_service,
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -340,6 +352,14 @@ async fn main() -> anyhow::Result<()> {
         document_service.clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    // Create the SQS worker for delete document processing before config is moved
+    let delete_document_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.document_delete_queue.as_ref().to_string(),
+        config.queue_max_messages,
+        config.queue_wait_time_seconds,
     );
 
     let api_context = ApiContext {
@@ -363,7 +383,7 @@ async fn main() -> anyhow::Result<()> {
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: system_properties_service.clone(),
-        properties_service: Arc::new(properties_service),
+        properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
         jwt_validation_args,
@@ -375,14 +395,27 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service,
-            access_service: entity_access_service,
+            access_service: entity_access_service.clone(),
             pool: db.clone(),
         },
         channels_state: ChannelsRouterState::new(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
-            PgChannelAccessCheck::new(db.clone()),
+            (*entity_access_service).clone(),
         ),
     };
+
+    // Spawn the delete document worker
+    let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
+        worker: Arc::new(delete_document_worker),
+        db: db.clone(),
+        s3_client: api_context.s3_client.clone(),
+        redis_client: api_context.redis_client.clone(),
+        sync_service_client: api_context.sync_service_client.clone(),
+    };
+
+    tokio::spawn(async move {
+        service::delete_document_worker::run_worker(delete_worker_ctx).await;
+    });
 
     api::setup_and_serve(api_context).await?;
 

@@ -51,7 +51,8 @@ export function MediaButtons(props: MediaButtonsProps) {
       <Show when={props.enlarge}>
         <Dialog.Trigger
           as={Button}
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          class="size-8 p-0"
+          variant="ghost"
           tooltip="View full screen"
           on:mousedown={(e: MouseEvent) => {
             e.preventDefault();
@@ -64,7 +65,8 @@ export function MediaButtons(props: MediaButtonsProps) {
       </Show>
       <Show when={props.newTab && !isMobile()}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          class="size-8 p-0"
+          variant="ghost"
           tooltip="Open in new tab"
           on:mousedown={(e: MouseEvent) => {
             e.preventDefault();
@@ -77,7 +79,8 @@ export function MediaButtons(props: MediaButtonsProps) {
       </Show>
       <Show when={props.delete}>
         <Button
-          class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
+          class="size-8 p-0"
+          variant="ghost"
           tooltip="Remove"
           on:mousedown={(e: MouseEvent) => {
             e.preventDefault();
@@ -92,7 +95,7 @@ export function MediaButtons(props: MediaButtonsProps) {
   );
 
   return (
-    <div class="absolute bg-menu top-2 right-2 flex flex-row">
+    <div class="absolute bg-menu top-2 right-2 flex flex-row rounded-xs p-1">
       <Show when={!collapsed()}>
         <ButtonContent />
       </Show>

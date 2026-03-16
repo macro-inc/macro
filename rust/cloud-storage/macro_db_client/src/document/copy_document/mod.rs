@@ -163,7 +163,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         Some(sha) => sha.as_str(),
         None => {
             tracing::error!("unable to copy pdf document, sha is missing");
-            return Err(anyhow::Error::msg("unable to copy document"));
+            anyhow::bail!("unable to copy document");
         }
     };
 
