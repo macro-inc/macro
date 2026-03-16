@@ -6,6 +6,8 @@ import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
 import IconX from '@icon/regular/x.svg';
 import { Button } from '@ui/components/Button';
+import { isMobile } from '@core/mobile/isMobile';
+import { cn } from '@ui/utils/classname';
 
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
@@ -16,6 +18,8 @@ interface EmailDateSelectorProps {
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
 ) => {
+  const isCompact = () => props.compact || isMobile();
+
   return (
     <DateSelector
       selectedDate={props.sendTime}
@@ -27,6 +31,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
           if (!state.selectedDate) return;
           return format(state.selectedDate, 'MMM d, yyyy  h:mm a');
         };
+        const showExpanded = () => !isCompact() && !!formattedDate();
         return (
           <Tooltip
             tooltip={
@@ -35,9 +40,15 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 : 'Schedule this email'
             }
           >
-            <Button size="icon-sm">
-              <ClockIcon />
-              <Show when={!props.compact && formattedDate()}>
+            <Button
+              size="icon-sm"
+              class={cn(
+                showExpanded() &&
+                  'size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15'
+              )}
+            >
+              <ClockIcon class={state.selectedDate && isCompact() ? 'text-accent' : ''} />
+              <Show when={showExpanded()}>
                 <span class="text-sm">{formattedDate()}</span>
                 <Tooltip tooltip="Clear">
                   <div

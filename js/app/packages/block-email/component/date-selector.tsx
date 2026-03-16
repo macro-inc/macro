@@ -180,12 +180,14 @@ export const DateSelector = (props: DateSelectorProps) => {
     setSelectedOption(option);
     if (!option) {
       props.onSelectDate?.(null);
+      onOpenChange(false);
       return;
     }
 
     const dateValue = option.date;
 
     props.onSelectDate?.(dateValue);
+    onOpenChange(false);
   };
 
   const options = createMemo(() => {
@@ -399,6 +401,7 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
           <span class="text-xs font-medium">{currentDateDisplay()}</span>
         </div>
         <button
+          onPointerDown={(e: PointerEvent) => e.preventDefault()}
           onClick={props.onClear}
           class="text-xs text-ink-muted hover:text-ink underline"
         >
@@ -459,6 +462,11 @@ const DateSelectorItem: Component<
         props.item.rawValue.type === 'select-custom' &&
           'border-t border-edge-muted'
       )}
+      onPointerDown={(e: PointerEvent) => {
+        // Prevent default to stop input blur on mobile, which would close the
+        // combobox before the selection click event fires.
+        e.preventDefault();
+      }}
     >
       <Combobox.ItemIndicator class="hidden" />
       <div class="flex items-center gap-2 flex-1 min-w-0">
