@@ -214,6 +214,7 @@ export const TOKENS = {
     focusInput: 'channel.focusInput',
     sendMessage: 'channel.sendMessage',
     clearSelection: 'channel.clearSelection',
+    cancelReply: 'channel.cancelReply',
   },
 
   // drawer

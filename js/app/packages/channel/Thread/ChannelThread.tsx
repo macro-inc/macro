@@ -1,5 +1,7 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import { Show, Suspense, type Accessor } from 'solid-js';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
@@ -33,6 +35,22 @@ export function ChannelThread(props: ThreadProps) {
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
+
+  const [attachReplyHotkeys, replyScope] = useHotkeyDOMScope(
+    'channel-reply-input'
+  );
+
+  registerHotkey({
+    scopeId: replyScope,
+    hotkey: 'escape',
+    hotkeyToken: TOKENS.channel.cancelReply,
+    description: 'Cancel reply',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      props.setIsReplying(false);
+      return true;
+    },
+  });
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
@@ -131,19 +149,21 @@ export function ChannelThread(props: ThreadProps) {
                   </Show>
 
                   <Show when={props.isReplying()}>
-                    <Show when={!hasReplies()}>
-                      <Thread.ReplyAuthor
-                        userId={replyUserId()}
-                        displayName={displayName()}
+                    <div ref={attachReplyHotkeys}>
+                      <Show when={!hasReplies()}>
+                        <Thread.ReplyAuthor
+                          userId={replyUserId()}
+                          displayName={displayName()}
+                        />
+                      </Show>
+                      <Thread.ReplyInput
+                        channelId={props.channelId()}
+                        messageId={props.data().id}
+                        replyInputState={props.replyInputState}
+                        setReplyInputState={props.setReplyInputState}
+                        setIsReplying={props.setIsReplying}
                       />
-                    </Show>
-                    <Thread.ReplyInput
-                      channelId={props.channelId()}
-                      messageId={props.data().id}
-                      replyInputState={props.replyInputState}
-                      setReplyInputState={props.setReplyInputState}
-                      setIsReplying={props.setIsReplying}
-                    />
+                    </div>
                   </Show>
 
                   <Show
