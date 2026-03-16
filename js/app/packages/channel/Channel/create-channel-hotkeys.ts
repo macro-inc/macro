@@ -31,7 +31,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     return options.messageById().get(id);
   };
 
-  // --- ArrowUp ---
   registerHotkey({
     scopeId: messageListScope,
     hotkey: 'arrowup',
@@ -46,7 +45,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     },
   });
 
-  // --- ArrowDown ---
   registerHotkey({
     scopeId: messageListScope,
     hotkey: 'arrowdown',
@@ -63,7 +61,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     },
   });
 
-  // --- Enter: reply ---
   registerHotkey({
     scopeId: messageListScope,
     hotkey: 'enter',
@@ -79,7 +76,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     },
   });
 
-  // --- Edit ---
   registerHotkey({
     scopeId: messageListScope,
     hotkey: 'e',
@@ -99,7 +95,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     },
   });
 
-  // --- Escape ---
   registerHotkey({
     scopeId: messageListScope,
     hotkey: 'escape',
@@ -112,7 +107,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     },
   });
 
-  // --- Input scope: ArrowUp from empty input ---
   registerHotkey({
     scopeId: inputScope,
     hotkey: 'arrowup',

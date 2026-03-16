@@ -43,7 +43,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     return { ...reply, thread_id: options.threadId() } as MessageData;
   };
 
-  // --- ArrowRight: enter thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'arrowright',
@@ -62,7 +61,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
-  // --- ArrowUp in thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'arrowup',
@@ -77,14 +75,12 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (id && id !== before) {
         scrollReplyIntoView(id);
       } else {
-        // At first reply — exit thread
         options.replySelection.clear();
       }
       return true;
     },
   }).withGroup(group);
 
-  // --- ArrowDown in thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'arrowdown',
@@ -99,13 +95,11 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
         scrollReplyIntoView(id);
         return true;
       }
-      // Past last reply — exit thread, let parent ArrowDown fire
       options.replySelection.clear();
       return false;
     },
   }).withGroup(group);
 
-  // --- ArrowLeft: collapse thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'arrowleft',
@@ -121,7 +115,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
-  // --- Escape: exit thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'escape',
@@ -136,7 +129,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
-  // --- Enter: reply to thread ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'enter',
@@ -153,7 +145,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
-  // --- e: edit own reply ---
   registerHotkey({
     scopeId: scope,
     hotkey: 'e',
@@ -179,7 +170,6 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     },
   }).withGroup(group);
 
-  // --- Escape: cancel reply input ---
   const [attachReplyInputRef, replyInputScope] = useHotkeyDOMScope(
     'channel-reply-input'
   );
