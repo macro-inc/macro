@@ -125,11 +125,5 @@ pub(crate) async fn bulk_upsert_email_messages(
 
     let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
 
-    super::bulk_upsert_to_index(
-        client,
-        index,
-        bulk_body,
-        "bulk_upsert_email_messages",
-    )
-    .await
+    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_email_messages").await
 }

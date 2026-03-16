@@ -66,13 +66,11 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("Failed to get thread ids with macro user id")?
             }
-            None => {
-                email_db_client::threads::get::get_paginated_thread_ids_with_macro_user_id(
-                    &db, limit, offset,
-                )
-                .await
-                .context("Failed to get thread ids with macro user id")?
-            }
+            None => email_db_client::threads::get::get_paginated_thread_ids_with_macro_user_id(
+                &db, limit, offset,
+            )
+            .await
+            .context("Failed to get thread ids with macro user id")?,
         };
 
         if thread_and_macro_user_ids.is_empty() {
