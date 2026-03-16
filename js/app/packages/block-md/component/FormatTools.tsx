@@ -199,8 +199,8 @@ const InlineFormatButton = (props: {
           shortcut={InlineShortcuts[props.format]}
         />
       }
-      size="icon-md"
-      variant={props.selection()?.[props.format] ? 'accent' : 'ghost'}
+      size="icon-sm"
+      variant={props.selection()?.[props.format] ? 'tertiary' : 'ghost'}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -250,10 +250,11 @@ export const ElementFormatButton = (props: {
   return (
     <Button
       tooltip={name}
-      size="icon-md"
+      size="icon-sm"
+      class="rounded-xs"
       variant={
         props.selection()?.elementsInRange?.has(props.format)
-          ? 'accent'
+          ? 'tertiary'
           : 'ghost'
       }
       onClick={(e: MouseEvent | KeyboardEvent) =>
@@ -451,7 +452,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         <DropdownMenu.Trigger>
           <Button
             variant="ghost"
-            size="icon-md"
+            size="icon-sm"
+            class="rounded-xs"
             tooltip={'Text Styles'}
             disabled={buttonIsDisabled()}
             tabIndex={-1}
@@ -515,7 +517,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         <DropdownMenu.Trigger>
           <Button
             variant="ghost"
-            size="icon-md"
+            size="icon-sm"
+            class="rounded-xs"
             tooltip="Text Styles"
             disabled={props.buttonIsDisabled()}
             tabIndex={-1}
@@ -566,7 +569,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
       <DropdownMenu.Trigger>
         <Button
           variant="ghost"
-          size="icon-md"
+          size="icon-sm"
+          class="rounded-xs"
           tooltip={props.label ?? 'More Formats'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
@@ -612,7 +616,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
       <DropdownMenu.Trigger>
         <Button
           variant="ghost"
-          size="icon-md"
+          size="icon-sm"
+          class="rounded-xs"
           tooltip={props.label ?? 'More Formats'}
           disabled={buttonIsDisabled()}
           tabIndex={-1}
@@ -662,6 +667,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <div class="flex h-full gap-1">
         <Show when={canEdit()}>
+          <ElementFormatButton
+            format="paragraph"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              nodeFormat('paragraph');
+            }}
+            buttonIsDisabled={buttonIsDisabled}
+            selection={selection}
+          />
           <ElementFormatMenu
             elements={['heading1', 'heading2', 'heading3']}
             icon={TextH}
@@ -709,7 +724,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           />
           <Button
             variant="ghost"
-            size="icon-md"
+            size="icon-sm"
+            class="rounded-xs"
             onClick={handleLink}
             tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
@@ -722,7 +738,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
           <Button
             variant="ghost"
-            size="icon-md"
+            size="icon-sm"
+            class="rounded-xs"
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
@@ -852,7 +869,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <div class="flex gap-1 h-full">
             <Button
               variant="ghost"
-              size="icon-md"
+              size="icon-sm"
+              class="rounded-xs"
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
               disabled={buttonIsDisabled()}
@@ -865,7 +883,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             <Show when={ENABLE_MARKDOWN_COMMENTS}>
               <Button
                 variant="ghost"
-                size="icon-md"
+                size="icon-sm"
+                class="rounded-xs"
                 tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
@@ -885,7 +904,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               <DropdownMenu.Trigger>
                 <Button
                   variant="ghost"
-                  size="icon-md"
+                  size="icon-sm"
+                  class="rounded-xs"
                   tooltip="More"
                   disabled={buttonIsDisabled()}
                   tabIndex={-1}
@@ -958,7 +978,8 @@ export function FormatTools(props: { withinPopup?: boolean }) {
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment() && !canEdit()}>
           <Button
             variant="ghost"
-            size="icon-md"
+            size="icon-sm"
+            class="rounded-xs"
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
