@@ -124,7 +124,7 @@ export function windowSearchMatch(text: string, chars: number): string {
         break;
       }
     }
-    line = '...' + line.slice(cutIndex);
+    line = line.slice(cutIndex);
   }
 
   // Trim from end to keep total length reasonable
@@ -144,7 +144,7 @@ export function windowSearchMatch(text: string, chars: number): string {
           break;
         }
       }
-      line = line.slice(0, endCut) + '...';
+      line = line.slice(0, endCut);
     }
   }
 
