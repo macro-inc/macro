@@ -323,9 +323,9 @@ function NarrowMessageLayout(props: LayoutProps) {
     >
       <Entity.Slot placement="icon" class="flex items-center self-center pr-3">
         <UnreadIndicator class="mx-2 size-2.75" active={props.unread} />
-        <div class="relative size-11 shrink-0">
+        <div class="relative size-11 shrink-0 group">
           <Show when={!props.checked}>
-            <div class="absolute inset-0 grid place-items-center group-hover/narrow:opacity-0 transition-opacity">
+            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
               <Show
                 when={isDirectMessage()}
                 fallback={
@@ -352,7 +352,7 @@ function NarrowMessageLayout(props: LayoutProps) {
           {/* TODO: make multiselect work on mobile */}
           <div
             class={cn(
-              'absolute inset-0 grid place-items-center opacity-0 group-hover/narrow:opacity-100 transition-opacity',
+              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
               { 'opacity-100': props.checked }
             )}
           >
