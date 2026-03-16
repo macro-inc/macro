@@ -204,7 +204,7 @@ export function Channel(props: ChannelProps) {
         <ChannelDropZone dragState={dragState}>
           <Show when={messages().length > 0}>
             <div
-              class="relative flex-1 min-h-0 suppress-css-brackets"
+              class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
               ref={attachMessageListRef}
               tabIndex={-1}
             >
