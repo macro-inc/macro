@@ -70,7 +70,15 @@ VALUES
 
     -- Thread 9: Draft in TRASH - tests that importance=true excludes trashed drafts
     ('20000009-0000-0000-0000-000000000009', 'thread9', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-     false, false, NULL, NULL, '2024-01-07 02:00:00+00', NOW(), NOW());
+     false, false, NULL, NULL, '2024-01-07 02:00:00+00', NOW(), NOW()),
+
+    -- Thread 10: Starred message in TRASH - tests that starred view excludes trashed messages
+    ('20000010-0000-0000-0000-000000000010', 'thread10', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, '2024-01-06 01:00:00+00', NULL, '2024-01-06 01:00:00+00', NOW(), NOW()),
+
+    -- Thread 11: User label "Work" message in TRASH - tests that user label view excludes trashed messages
+    ('20000011-0000-0000-0000-000000000011', 'thread11', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, NULL, NULL, '2024-01-05 00:00:00+00', NOW(), NOW());
 
 -- Insert test messages
 INSERT INTO email_messages (
@@ -132,7 +140,19 @@ VALUES
     ('30000009-0000-0000-0000-000000000009', '20000009-0000-0000-0000-000000000009',
      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg9', '40000004-0000-0000-0000-000000000004',
      'Trashed Draft', 'A draft that was moved to trash', '2024-01-07 02:00:00+00',
-     true, false, false, false, NOW(), NOW());
+     true, false, false, false, NOW(), NOW()),
+
+    -- Message 10: Starred message in TRASH from john@example.com
+    ('30000010-0000-0000-0000-000000000010', '20000010-0000-0000-0000-000000000010',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg10', '40000001-0000-0000-0000-000000000001',
+     'Trashed Starred', 'A starred message that was moved to trash', '2024-01-06 01:00:00+00',
+     false, false, true, false, NOW(), NOW()),
+
+    -- Message 11: User label "Work" message in TRASH from jane@example.com
+    ('30000011-0000-0000-0000-000000000011', '20000011-0000-0000-0000-000000000011',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg11', '40000002-0000-0000-0000-000000000002',
+     'Trashed Work Email', 'A work email that was moved to trash', '2024-01-05 00:00:00+00',
+     false, false, false, false, NOW(), NOW());
 
 -- Insert message recipients
 INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
@@ -163,7 +183,13 @@ VALUES
     ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO'),
 
     -- Message 9: To john@example.com
-    ('30000009-0000-0000-0000-000000000009', '40000001-0000-0000-0000-000000000001', 'TO');
+    ('30000009-0000-0000-0000-000000000009', '40000001-0000-0000-0000-000000000001', 'TO'),
+
+    -- Message 10: To alice@example.com
+    ('30000010-0000-0000-0000-000000000010', '40000004-0000-0000-0000-000000000004', 'TO'),
+
+    -- Message 11: To bob@example.com
+    ('30000011-0000-0000-0000-000000000011', '40000003-0000-0000-0000-000000000003', 'TO');
 
 -- Insert message-label relationships
 INSERT INTO email_message_labels (message_id, label_id)
@@ -203,4 +229,10 @@ VALUES
     ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009'),
     -- Message 9 (thread 9): DRAFT + TRASH (trashed draft → excluded from importance=true)
     ('30000009-0000-0000-0000-000000000009', '10000005-0000-0000-0000-000000000005'),
-    ('30000009-0000-0000-0000-000000000009', '10000006-0000-0000-0000-000000000006');
+    ('30000009-0000-0000-0000-000000000009', '10000006-0000-0000-0000-000000000006'),
+    -- Message 10 (thread 10): STARRED + TRASH (trashed starred → excluded from starred view)
+    ('30000010-0000-0000-0000-000000000010', '10000004-0000-0000-0000-000000000004'),
+    ('30000010-0000-0000-0000-000000000010', '10000006-0000-0000-0000-000000000006'),
+    -- Message 11 (thread 11): Work + TRASH (trashed user label → excluded from user label view)
+    ('30000011-0000-0000-0000-000000000011', '10000007-0000-0000-0000-000000000007'),
+    ('30000011-0000-0000-0000-000000000011', '10000006-0000-0000-0000-000000000006');
