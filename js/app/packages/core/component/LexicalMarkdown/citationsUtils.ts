@@ -20,6 +20,7 @@ const createDocumentMentionXML = (documentId: string) => {
     }
     return jsonToXML('m-document-mention', {
       documentId,
+      blockName: 'md',
       documentName: '',
       blockParams: {},
     });
