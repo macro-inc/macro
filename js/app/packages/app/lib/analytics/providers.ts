@@ -1,8 +1,19 @@
 import posthog from 'posthog-js';
 
+const POSTHOG_KEY = 'phc_eSQcxAxPf0FAmnCTckz84305pNlMlOdDKciSKkuX0GO';
+
+// Use proxy in production to avoid ad blockers, direct connection in development
+const getPosthogHost = () => {
+  if (import.meta.env.MODE === 'development') {
+    return 'https://us.i.posthog.com';
+  }
+  return 'https://analytics-proxy.macroverse.workers.dev';
+};
+
 export const initializePosthog = () => {
-  posthog.init('phc_eSQcxAxPf0FAmnCTckz84305pNlMlOdDKciSKkuX0GO', {
-    api_host: 'https://us.i.posthog.com',
+  posthog.init(POSTHOG_KEY, {
+    api_host: getPosthogHost(),
+    ui_host: 'https://us.posthog.com', // Keep UI host for session recordings link
     defaults: '2026-01-30',
   });
 };
