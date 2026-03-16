@@ -1,15 +1,11 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import {
-  createHotkeyGroup,
-  registerHotkey,
-  useHotkeyDOMScope,
-} from '@core/hotkey/hotkeys';
 import { sandboxEntities } from '../sandbox/sandbox-store';
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
+import { useListNavigation } from '../use-list-navigation';
 
 const REQUIRED_NAVIGATIONS = 3;
 
@@ -33,58 +29,29 @@ function NavigateListContent(props: LessonContentProps) {
   const [navCount, setNavCount] = createSignal(0);
   const [completed, setCompleted] = createSignal(false);
 
-  let containerRef: HTMLDivElement | undefined;
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-navigate');
-
-  const group = createHotkeyGroup();
-
-  onMount(() => {
-    if (containerRef) {
-      attachHotkeys(containerRef);
-      containerRef.focus();
-    }
-
-    const handleNav = (direction: 'down' | 'up') => {
-      soup.navigate[direction]();
-      setNavCount((c) => {
-        const next = c + 1;
-        if (next >= REQUIRED_NAVIGATIONS && !completed()) {
-          setCompleted(true);
-          props.onComplete();
-        }
-        return next;
-      });
-      return true;
-    };
-
-    registerHotkey({
-      scopeId,
-      hotkey: ['j', 'arrowdown'],
-      description: 'Navigate down',
-      keyDownHandler: () => handleNav('down'),
-    }).withGroup(group);
-
-    registerHotkey({
-      scopeId,
-      hotkey: ['k', 'arrowup'],
-      description: 'Navigate up',
-      keyDownHandler: () => handleNav('up'),
-    }).withGroup(group);
+  useListNavigation(soup, props.scopeId, () => {
+    setNavCount((c) => {
+      const next = c + 1;
+      if (next >= REQUIRED_NAVIGATIONS && !completed()) {
+        setCompleted(true);
+        props.onComplete();
+      }
+      return next;
+    });
   });
 
   onCleanup(() => {
-    group.dispose();
     setSharedSoup(undefined);
   });
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={0}
-      class="flex flex-col gap-3 outline-none"
-    >
-      <HotkeyCallout keys={['J', 'K']} label="or arrow keys to navigate" />
-      <HotkeyCallout keys={['↑', '↓']} label="also work" />
+    <div class="flex flex-col gap-3">
+      <HotkeyCallout
+        keys={['J', '↓']}
+        separator="or"
+        label="Move to next item"
+      />
+      <HotkeyCallout keys={['K', '↑']} separator="or" label="Move back up" />
       <p class="text-xs text-ink/50">
         <Show
           when={!completed()}
@@ -111,9 +78,9 @@ function NavigateListDemo() {
 
 export const navigateListLesson: LessonDefinition = {
   id: 'navigate-list',
-  title: 'Macro is built around fast list navigation',
-  description: 'Use [J, K] or [Up, Down] to navigate this list.',
+  title: 'The List',
   content: NavigateListContent,
   demo: NavigateListDemo,
   order: 0.5,
+  skippable: true,
 };

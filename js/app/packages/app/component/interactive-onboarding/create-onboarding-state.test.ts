@@ -8,7 +8,7 @@ const NoopContent = (_props: LessonContentProps) => null;
 const createTestLesson = (id: string, order?: number): LessonDefinition => ({
   id,
   title: `Lesson ${id}`,
-  description: `Description for ${id}`,
+  subtitle: `Description for ${id}`,
   content: NoopContent,
   order,
 });

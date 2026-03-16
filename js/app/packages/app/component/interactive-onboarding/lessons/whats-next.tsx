@@ -49,7 +49,7 @@ function WhatsNextContent(props: LessonContentProps) {
 export const whatsNextLesson: LessonDefinition = {
   id: 'whats-next',
   title: "What's next",
-  description: 'A few tips before you dive in.',
+  subtitle: 'A few tips before you dive in.',
   content: WhatsNextContent,
   order: 10,
 };

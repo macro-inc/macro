@@ -40,7 +40,7 @@ function ChoosePlanDemo(props: LessonContentProps) {
 export const choosePlanLesson: LessonDefinition = {
   id: 'choose-plan',
   title: 'Choose your plan',
-  description: 'Pick the plan that works for you.',
+  subtitle: 'Pick the plan that works for you.',
   content: ChoosePlanContent,
   demo: ChoosePlanDemo,
   order: 20,

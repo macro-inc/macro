@@ -1,7 +1,7 @@
 import { Entity } from '@entity/entity';
 import type { EntityData } from '@entity';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import { For } from 'solid-js';
+import { createEffect, For } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
 interface OnboardingEntityListProps {
@@ -10,15 +10,27 @@ interface OnboardingEntityListProps {
 
 export function OnboardingEntityList(props: OnboardingEntityListProps) {
   return (
-    <div class="flex flex-col w-full" role="listbox">
+    <div
+      class="flex flex-col w-full h-full scrollbar-hidden overflow-scroll"
+      role="listbox"
+    >
       <For each={props.soup.data()}>
         {(entity) => {
           const isFocused = () => props.soup.focus.id() === entity.id;
+          let rowRef: HTMLDivElement | undefined;
+
+          createEffect(() => {
+            if (isFocused()) {
+              rowRef?.scrollIntoView({ block: 'nearest' });
+            }
+          });
+
           return (
             <Entity.Root
+              ref={rowRef}
               entity={entity as EntityData}
               class={cn(
-                'w-full min-h-10 flex items-center gap-2 px-3 text-sm transition-colors',
+                'relative w-full min-h-10 flex items-center gap-2 px-3 text-sm font-semibold',
                 {
                   'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
                     isFocused(),

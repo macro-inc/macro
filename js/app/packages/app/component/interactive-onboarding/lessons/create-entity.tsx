@@ -5,11 +5,7 @@ import {
   CREATABLE_BLOCKS,
   type CreatableBlock,
 } from '@app/component/Launcher';
-import {
-  createHotkeyGroup,
-  registerHotkey,
-  useHotkeyDOMScope,
-} from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
 import {
   createEffect,
@@ -19,6 +15,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { useListNavigation } from '../use-list-navigation';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
@@ -58,17 +55,11 @@ function CreateEntityContent(props: LessonContentProps) {
   });
 
   let containerRef: HTMLDivElement | undefined;
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-create');
   const group = createHotkeyGroup();
 
   onMount(() => {
-    if (containerRef) {
-      attachHotkeys(containerRef);
-      containerRef.focus();
-    }
-
     registerHotkey({
-      scopeId,
+      scopeId: props.scopeId,
       hotkey: 'c',
       description: 'Open Create menu',
       keyDownHandler: () => {
@@ -124,13 +115,15 @@ function CreateEntityContent(props: LessonContentProps) {
   );
 }
 
-function CreateEntityDemo() {
+function CreateEntityDemo(props: LessonContentProps) {
   const soup = createSoupState({
     initialData: sandboxEntities(),
     wrapNavigation: true,
   });
 
   setSharedSoup(soup);
+
+  useListNavigation(soup, props.scopeId);
 
   // Keep soup synced with sandbox store
   createEffect(() => {
@@ -189,7 +182,7 @@ function CreateEntityDemo() {
 export const createEntityLesson: LessonDefinition = {
   id: 'create-entity',
   title: 'Create an entity',
-  description: 'Use the launcher to create docs, emails, and more.',
+  subtitle: 'Use the launcher to create docs, emails, and more.',
   content: CreateEntityContent,
   demo: CreateEntityDemo,
   order: 1,

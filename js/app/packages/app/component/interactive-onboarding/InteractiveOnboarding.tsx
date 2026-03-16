@@ -22,8 +22,7 @@ import {
   loadCompletedLessons,
   saveCompletedLesson,
 } from './persistence';
-import { SplitHeaderLeft } from '../split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '../split-layout/components/SplitLabel';
+
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 
@@ -43,6 +42,9 @@ export default function InteractiveOnboarding() {
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
+  const [continueLabel, setContinueLabel] = createSignal<string | undefined>(
+    undefined
+  );
   const [lessonKey, setLessonKey] = createSignal(0);
 
   const navigateAway = () => {
@@ -51,7 +53,8 @@ export default function InteractiveOnboarding() {
     });
   };
 
-  const handleLessonComplete = () => {
+  const handleLessonComplete = (buttonLabel?: string) => {
+    setContinueLabel(buttonLabel);
     setReadyToContinue(true);
   };
 
@@ -64,6 +67,7 @@ export default function InteractiveOnboarding() {
       saveCompletedLesson(current.definition.id);
     }
     setReadyToContinue(false);
+    setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
   };
 
@@ -72,6 +76,7 @@ export default function InteractiveOnboarding() {
     if (current) {
       state.skipLesson(current.definition.id);
       setReadyToContinue(false);
+      setContinueLabel(undefined);
       setLessonKey((k) => k + 1);
     }
   };
@@ -101,7 +106,20 @@ export default function InteractiveOnboarding() {
     },
   });
 
+  const skipReg = registerHotkey({
+    scopeId,
+    hotkey: 'escape',
+    description: 'Skip',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      if (!state.currentLesson()?.definition.skippable) return false;
+      handleSkip();
+      return true;
+    },
+  });
+
   onCleanup(() => reg.dispose());
+  onCleanup(() => skipReg.dispose());
   onCleanup(() => resetSandbox());
 
   createEffect(
@@ -169,110 +187,118 @@ export default function InteractiveOnboarding() {
       </div>
 
       {/* Centered card */}
-      <ClippedPanel
-        active
-        cornerRadius={'4px'}
-        class="bg-panel size-full shadow-lg shadow-[#1112]"
-      >
-        <div class="size-full flex">
-          <Show
-            when={state.currentLesson()}
-            fallback={
-              <Show when={testMode && state.isFinished()}>
-                <div
-                  class="flex flex-col items-center justify-center w-full gap-4"
-                  style={{
-                    animation: 'onboarding-scale-in 300ms ease-out both',
-                  }}
-                >
-                  <p class="text-sm text-ink/60">All lessons complete.</p>
-                  <button
-                    type="button"
-                    class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
-                    onClick={() => window.location.reload()}
+      <div class="size-full max-w-[1200px] max-h-[800px]">
+        <ClippedPanel
+          cornerRadius={'4px'}
+          class="bg-panel size-full shadow-lg shadow-[#1111]"
+        >
+          <div class="size-full flex">
+            <Show
+              when={state.currentLesson()}
+              fallback={
+                <Show when={testMode && state.isFinished()}>
+                  <div
+                    class="flex flex-col items-center justify-center w-full gap-4"
+                    style={{
+                      animation: 'onboarding-scale-in 300ms ease-out both',
+                    }}
                   >
-                    Replay
-                  </button>
-                </div>
-              </Show>
-            }
-          >
-            {(lesson) => (
-              <>
-                {/* Left panel — text content (~1/3) */}
-                <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
-                  {/* Header */}
-                  <div class="px-4 py-8">
-                    <div class="flex flex-col gap-0.5" style={headerStyle()}>
-                      <h2 class="text-2xl font-bold text-ink">
-                        {lesson().definition.title}
-                      </h2>
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div class="flex-1 overflow-y-auto px-4 py-4">
-                    <div style={bodyStyle()}>
-                      <p class="text-sm text-ink/60 mb-4">
-                        {lesson().definition.description}
-                      </p>
-                      <Dynamic
-                        component={lesson().definition.content}
-                        onComplete={handleLessonComplete}
-                        isActive={true}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
-                    <Show
-                      when={readyToContinue()}
-                      fallback={<SkipButton onClick={handleSkip} />}
+                    <p class="text-sm text-ink/60">All lessons complete.</p>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-sm bg-accent text-white rounded hover:bg-accent/80 transition-colors"
+                      onClick={() => window.location.reload()}
                     >
-                      <ContinueButton onClick={handleContinue} />
-                    </Show>
-                    <div class="flex items-center gap-2">
-                      <OnboardingProgress
-                        lessons={[...state.lessons()]}
-                        currentIndex={state.currentIndex()}
-                      />
-                      <span class="text-xs text-ink-extra-muted font-mono">
-                        Step {state.currentIndex() + 1} of{' '}
-                        {state.lessons().length}
-                      </span>
-                    </div>
+                      Replay
+                    </button>
                   </div>
-                </div>
+                </Show>
+              }
+            >
+              {(lesson) => (
+                <>
+                  {/* Left panel — text content (~1/3) */}
+                  <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
+                    {/* Header */}
+                    <div class="p-4">
+                      <div class="flex flex-col gap-0.5" style={headerStyle()}>
+                        <h2 class="text-4xl font-bold text-ink-muted mt-2">
+                          {lesson().definition.title}
+                        </h2>
+                      </div>
+                    </div>
 
-                {/* Right panel — demo (~2/3) */}
-                <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                  <div style={bodyStyle()} class="w-full h-full">
-                    <Show
-                      when={lesson().definition.demo}
-                      fallback={
-                        <div class="flex items-center justify-center h-full">
-                          <div class="w-32 opacity-10">
-                            <MacroLogo class="fill-ink" />
-                          </div>
-                        </div>
-                      }
-                    >
-                      {(Demo) => (
+                    {/* Body */}
+                    <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
+                      <div style={bodyStyle()}>
+                        <Show when={lesson().definition.subtitle}>
+                          <p class="text-sm text-ink/60 mb-4">
+                            {lesson().definition.subtitle}
+                          </p>
+                        </Show>
                         <Dynamic
-                          component={Demo()}
+                          component={lesson().definition.content}
                           onComplete={handleLessonComplete}
                           isActive={true}
+                          scopeId={scopeId}
                         />
-                      )}
-                    </Show>
+                      </div>
+                      <div class="mt-auto pt-4 flex flex-col gap-2">
+                        <ContinueButton
+                          onClick={handleContinue}
+                          label={continueLabel()}
+                          ghost={!readyToContinue()}
+                        />
+                        <Show when={lesson().definition.skippable}>
+                          <SkipButton onClick={handleSkip} />
+                        </Show>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
+                      <div class="flex items-center justify-between gap-2">
+                        <OnboardingProgress
+                          lessons={[...state.lessons()]}
+                          currentIndex={state.currentIndex()}
+                        />
+                        <span class="text-xs text-ink-extra-muted/50 font-mono">
+                          {state.currentIndex() + 1} / {state.lessons().length}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
-          </Show>
-        </div>
-      </ClippedPanel>
+
+                  {/* Right panel — demo (~2/3) */}
+                  <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
+                    <div style={bodyStyle()} class="w-full h-full">
+                      <Show
+                        when={lesson().definition.demo}
+                        fallback={
+                          <div class="flex items-center justify-center h-full">
+                            <div class="w-full m-12 opacity-10">
+                              <MacroLogo class="fill-ink" />
+                            </div>
+                          </div>
+                        }
+                      >
+                        {(Demo) => (
+                          <Dynamic
+                            component={Demo()}
+                            onComplete={handleLessonComplete}
+                            isActive={true}
+                            scopeId={scopeId}
+                          />
+                        )}
+                      </Show>
+                    </div>
+                  </div>
+                </>
+              )}
+            </Show>
+          </div>
+        </ClippedPanel>
+      </div>
     </div>
   );
 }
