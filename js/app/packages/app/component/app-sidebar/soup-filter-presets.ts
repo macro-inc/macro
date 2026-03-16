@@ -39,15 +39,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         queryFilters: {
           ...applyInboxQueryFilters({}),
-          emailView: 'all',
+          emailView: 'inbox',
         },
         clientFilters: { and: ['signal', 'not-done'] },
-        emailView: 'all',
       }),
       noise: () => ({
         queryFilters: {
           ...applyOtherQueryFilters({}),
-          emailView: 'all',
+          emailView: 'inbox',
         },
         clientFilters: { and: ['noise', 'not-done'] },
       }),

@@ -776,6 +776,49 @@ async fn test_importance_true_includes_drafts_with_depriority_label(
     Ok(())
 }
 
+// Thread 9 is a draft with the TRASH label.
+// Even though is_draft=true would normally make it important, the TRASH label should exclude it.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_importance_true_excludes_trashed_drafts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Thread 9 is a draft with TRASH label — should be excluded even though is_draft=true
+    assert!(
+        !result_ids.contains("20000009-0000-0000-0000-000000000009"),
+        "importance=true should exclude trashed draft thread 9"
+    );
+
+    // Thread 3 is a normal draft (no TRASH) — should still be included
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "importance=true should still include non-trashed draft thread 3"
+    );
+
+    // Thread 8 is a draft with CATEGORY_UPDATES but no TRASH — should still be included
+    assert!(
+        result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "importance=true should still include non-trashed draft thread 8"
+    );
+
+    Ok(())
+}
+
 // Thread 8 is a draft with CATEGORY_UPDATES (depriority label).
 // DRAFT is a priority label, so it should NOT appear in importance=false results.
 #[sqlx::test(

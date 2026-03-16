@@ -66,7 +66,11 @@ VALUES
 
     -- Thread 8: Draft with depriority label (CATEGORY_UPDATES) - tests that DRAFT priority overrides depriority
     ('20000008-0000-0000-0000-000000000008', 'thread8', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-     false, false, NULL, NULL, '2024-01-08 03:00:00+00', NOW(), NOW());
+     false, false, NULL, NULL, '2024-01-08 03:00:00+00', NOW(), NOW()),
+
+    -- Thread 9: Draft in TRASH - tests that importance=true excludes trashed drafts
+    ('20000009-0000-0000-0000-000000000009', 'thread9', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, NULL, NULL, '2024-01-07 02:00:00+00', NOW(), NOW());
 
 -- Insert test messages
 INSERT INTO email_messages (
@@ -122,6 +126,12 @@ VALUES
     ('30000008-0000-0000-0000-000000000008', '20000008-0000-0000-0000-000000000008',
      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg8', '40000003-0000-0000-0000-000000000003',
      'Draft With Updates Label', 'Draft that also has a depriority label', '2024-01-08 03:00:00+00',
+     true, false, false, false, NOW(), NOW()),
+
+    -- Message 9: Draft in TRASH from alice@example.com
+    ('30000009-0000-0000-0000-000000000009', '20000009-0000-0000-0000-000000000009',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg9', '40000004-0000-0000-0000-000000000004',
+     'Trashed Draft', 'A draft that was moved to trash', '2024-01-07 02:00:00+00',
      true, false, false, false, NOW(), NOW());
 
 -- Insert message recipients
@@ -150,7 +160,10 @@ VALUES
     ('30000007-0000-0000-0000-000000000007', '40000003-0000-0000-0000-000000000003', 'CC'),
 
     -- Message 8: To alice@example.com
-    ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO');
+    ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO'),
+
+    -- Message 9: To john@example.com
+    ('30000009-0000-0000-0000-000000000009', '40000001-0000-0000-0000-000000000001', 'TO');
 
 -- Insert message-label relationships
 INSERT INTO email_message_labels (message_id, label_id)
@@ -187,4 +200,7 @@ VALUES
     ('30000007-0000-0000-0000-000000000007', '10000010-0000-0000-0000-000000000010'),
     -- Message 8 (thread 8): DRAFT + CATEGORY_UPDATES (draft with depriority label → important because DRAFT is priority)
     ('30000008-0000-0000-0000-000000000008', '10000005-0000-0000-0000-000000000005'),
-    ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009');
+    ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009'),
+    -- Message 9 (thread 9): DRAFT + TRASH (trashed draft → excluded from importance=true)
+    ('30000009-0000-0000-0000-000000000009', '10000005-0000-0000-0000-000000000005'),
+    ('30000009-0000-0000-0000-000000000009', '10000006-0000-0000-0000-000000000006');
