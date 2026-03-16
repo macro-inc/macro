@@ -224,7 +224,10 @@ pub async fn process_upsert_thread_message(
 
         if !upsert_email_message_args.is_empty() {
             let result = opensearch_client
-                .bulk_upsert_email_messages(&upsert_email_message_args)
+                .bulk_upsert_email_messages(
+                    &upsert_email_message_args,
+                    upsert_email_thread_message.index_override.as_deref(),
+                )
                 .await?;
 
             if result.failed > 0 {

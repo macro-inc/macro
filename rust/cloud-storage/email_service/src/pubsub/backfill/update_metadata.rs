@@ -84,6 +84,7 @@ pub async fn update_thread_metadata(
     let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
         thread_id: p.thread_db_id.clone().to_string(),
         macro_user_id: link.macro_id.to_string(),
+        index_override: None,
     });
 
     ctx.sqs_client
