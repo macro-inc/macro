@@ -13,7 +13,7 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
@@ -34,15 +34,14 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      variant="ghost"
-      size="icon-sm"
+      class="p-1"
       tooltip={
         <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
       }
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <CaretLeft class="size-4" />
+      <CaretLeft class="h-4" />
     </Button>
   );
 }
@@ -52,8 +51,6 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      variant="ghost"
-      size="icon-sm"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -62,9 +59,12 @@ function SplitForwardButton() {
       }
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn(isMobile() && !context.handle.canGoForward() && 'hidden')}
+      class={cn(
+        'p-1',
+        isMobile() && !context.handle.canGoForward() && 'hidden'
+      )}
     >
-      <CaretRight class="size-4" />
+      <CaretRight class="h-4" />
     </Button>
   );
 }
@@ -90,9 +90,9 @@ function SplitSpotlightButton() {
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? (
-          <CollapseIcon class="size-4" />
+          <CollapseIcon class="h-4" />
         ) : (
-          <ExpandIcon class="size-4" />
+          <ExpandIcon class="h-4" />
         )}
       </Button>
     </Show>
@@ -142,9 +142,10 @@ function _SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          variant="ghost"
-          size="icon-sm"
-          class={cn(preview() && 'bg-accent/20 text-accent')}
+          class="p-1"
+          classList={{
+            'bg-accent/20 text-accent': preview(),
+          }}
           tooltip={
             <LabelAndHotKey
               label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
@@ -154,7 +155,7 @@ function _SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon class="size-4" />
+          <SplitIcon class="h-4" />
         </Button>
       </div>
     </Show>
@@ -180,11 +181,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0"
+      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-edge-muted">
+      <div class="absolute inset-0 flex justify-start items-center bg-panel">
         <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />

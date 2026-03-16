@@ -40,7 +40,6 @@ export const SoupFiltersBar = () => {
       </Match>
       <Match when={true}>
         <div class="flex flex-col w-full">
-          {/* Top row: Tabs on left, Filter + Sort on right */}
           <div class="flex items-center gap-2 px-2 py-1.5 border-b border-edge-muted">
             <SoupViewTabs />
 
@@ -50,7 +49,6 @@ export const SoupFiltersBar = () => {
             <SoupViewContextSort />
           </div>
 
-          {/* Active filters row - only shown when there are active filters */}
           <ActiveFilterChips
             filters={activeFiltersList()}
             onRemove={removeFilter}

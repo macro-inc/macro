@@ -39,7 +39,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         class="whitespace-nowrap rounded-xs"
       >
         <SortIcon class="size-3.5" />
-        <span class="font-medium">Sort</span>
+        {/*<span class="font-medium">Sort</span>*/}
         <ChevronDownIcon class="size-3" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
