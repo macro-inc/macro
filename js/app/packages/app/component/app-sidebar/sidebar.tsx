@@ -27,7 +27,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { ROUTER_BASE } from '@app/constants/routerBase';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
 
@@ -272,6 +272,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <Button
           class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
           variant="ghost"
+          tooltipPlacement="right"
           tooltip={
             <LabelAndHotKey
               label="Create new"
@@ -292,6 +293,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <Button
           class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
           variant="ghost"
+          tooltipPlacement="right"
           tooltip={
             <LabelAndHotKey
               label="Command palette"
@@ -312,11 +314,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <Button
           class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
           variant="ghost"
+          tooltipPlacement="right"
           onClick={toggleSettings}
           tooltip={
             <LabelAndHotKey
               label="Settings"
-              hotkeyToken="global.toggleSettings"
+              hotkeyToken={TOKENS.global.toggleSettings}
             />
           }
         >
@@ -360,14 +363,24 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
   return (
     <Button
-      as="a"
+      as="button"
       draggable={false}
       variant="ghost"
       class={cn(
         'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
         isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
-      href={`${ROUTER_BASE}/component${props.href}`}
+      tooltipPlacement="right"
+      tooltip={
+        <LabelAndHotKey
+          label={`Go to ${props.label}`}
+          hotkeySequence={
+            props.standaloneHotkey
+              ? [{ shortcut: props.hotkey }]
+              : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
+          }
+        />
+      }
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={(e) => {
