@@ -1,10 +1,9 @@
 import type { AppEvents, AppEventNames } from '@app/lib/analytics/app-events';
+import { usePosthog } from '@app/lib/analytics/posthog';
 import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
-  initializePosthog,
 } from '@app/lib/analytics/providers';
-import posthog from 'posthog-js';
 
 type AnalyticsProvider = 'ga' | 'meta-pixel' | 'mixpanel' | 'posthog';
 
@@ -31,12 +30,13 @@ interface CreateAnalyticsOptions {
 }
 
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
+  const posthog = usePosthog();
+
   const initializeProviders = () => {
     if (options.disabled) return;
 
     initializeGoogleAnalytics();
     initializeMetaPixel();
-    initializePosthog();
   };
 
   if (options.initializeOnCreate !== false && !options.disabled) {
@@ -63,7 +63,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
         break;
       }
       case 'posthog': {
-        posthog.capture(event, data);
+        posthog.instance.capture(event, data);
         break;
       }
     }
@@ -89,7 +89,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
       user_id: userID,
     });
 
-    posthog.identify(userID, { ...info });
+    posthog.instance.identify(userID, { ...info });
   };
 
   return {
