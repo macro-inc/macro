@@ -144,7 +144,7 @@ pub enum InterruptionLevel {
 }
 
 /// A complete APNS push notification with custom data.
-#[derive(Clone, Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct APNSPushNotification<T> {
     /// The APNS payload.

@@ -550,14 +550,14 @@ impl NotificationExtIos for ChannelInviteMetadata {
         NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -583,13 +583,13 @@ impl NotificationExtIos for AiResponseMetadata {
         NotifCollapseKey::new(&self.message_id)
     }
 
-    fn into_apns<'a>(
-        self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        alert_apns(&self, sender_id, notification_id, None).ok()
+        alert_apns(self, sender_id, notification_id, None).ok()
     }
 }
 
@@ -600,14 +600,14 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
         NotifCollapseKey::new(&self.message_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -618,14 +618,14 @@ impl NotificationExtIos for ChannelMentionMetadata {
         NotifCollapseKey::new(&self.message_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -636,14 +636,14 @@ impl NotificationExtIos for ChannelReplyMetadata {
         NotifCollapseKey::new(&self.message_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -655,14 +655,14 @@ impl NotificationExtIos for DocumentMentionMetadata {
         NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -701,14 +701,14 @@ impl NotificationExtIos for TaskAssignedMetadata {
         NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
 
@@ -747,13 +747,13 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
         NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
-    fn into_apns<'a>(
-        mut self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let profile_pic = self.sender_profile_picture_url.take();
-        alert_apns(&self, sender_id, notification_id, profile_pic).ok()
+        let profile_pic = self.sender_profile_picture_url.clone();
+        alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }

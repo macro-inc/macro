@@ -5,7 +5,7 @@ use crate::domain::models::{
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
-    request::SendNotificationRequestInternal,
+    request::SendNotificationRequest,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -153,10 +153,7 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
 }
 
 impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
-    pub(crate) fn clone_from_request<U>(
-        id: Uuid,
-        req: &SendNotificationRequestInternal<'a, T, U>,
-    ) -> Self {
+    pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
         ConnGatewayNotification {
             notif: ConnGatewayInnerNotif {
                 notification_id: id,

@@ -36,6 +36,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     /// Convert this builder into a full request with optional delivery customizers.
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
         SendNotificationRequest {
+            uuid_to_write: Uuid::now_v7(),
             req: self,
             build_apns: None,
             build_email: None,
@@ -43,8 +44,6 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
         }
     }
 }
-
-type BuildApns<T, U> = Box<dyn FnMut(T, uuid::Uuid) -> Option<BuildApnsOutput<U>> + Send>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct BuildApnsOutput<U> {
@@ -57,16 +56,6 @@ pub(crate) struct BuildApnsOutput<U> {
 /// Created from [`SendNotificationRequestBuilder::into_request`] and can be
 /// customized with APNS and email builders.
 pub struct SendNotificationRequest<'a, T, U> {
-    pub(crate) req: SendNotificationRequestBuilder<'a, T>,
-    /// define how to turn t into an APNSPushNotitication T to be sent to ios
-    pub(crate) build_apns: Option<BuildApns<T, U>>,
-    /// define how to turn T into an email content to be sent as an email
-    pub(crate) build_email: Option<EmailCreateBundle>,
-    /// connection gateway accepts arbitrary json so we just ask if its enabled or not
-    pub(crate) send_conn_gateway: bool,
-}
-
-pub struct SendNotificationRequestInternal<'a, T, U> {
     pub(crate) req: SendNotificationRequestBuilder<'a, T>,
     /// the uuid that will be written to db as PK
     pub(crate) uuid_to_write: Uuid,
@@ -85,27 +74,34 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             req,
             build_apns: _,
             build_email,
+            uuid_to_write,
             send_conn_gateway,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
         let entity = req.notification_entity.clone().into_owned();
 
+        let collapse_key = req
+            .notification
+            .collapse_key(&entity)
+            .into_hashed()
+            .into_inner();
+        let attrs = MessageAttributes {
+            push_type: mobile::PushType::Alert,
+            collapse_key,
+        };
+        let build_apns = req
+            .notification
+            .as_apns(sender.clone(), &entity, uuid_to_write)
+            .map(|apns| BuildApnsOutput {
+                notif: apns,
+                attr: attrs,
+            });
+
         SendNotificationRequest {
             req,
-            build_apns: Some(Box::new(move |notif: T, notification_id: uuid::Uuid| {
-                let collapse_key = notif.collapse_key(&entity).into_hashed().into_inner();
-                let attrs = MessageAttributes {
-                    push_type: mobile::PushType::Alert,
-                    collapse_key,
-                };
-                let apns = notif.into_apns(sender.clone(), &entity, notification_id)?;
-
-                Some(BuildApnsOutput {
-                    notif: apns,
-                    attr: attrs,
-                })
-            })),
+            uuid_to_write,
+            build_apns,
             build_email,
             send_conn_gateway,
         }
@@ -128,7 +124,7 @@ impl<'a, T: Notification, U> SendNotificationRequest<'a, T, U> {
     }
 }
 
-impl<'a, T, U> SendNotificationRequestInternal<'a, T, U> {
+impl<'a, T, U> SendNotificationRequest<'a, T, U> {
     pub(crate) fn update_recipients(
         mut self,
         muted_users: HashSet<MacroUserIdStr<'a>>,

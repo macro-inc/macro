@@ -243,8 +243,8 @@ pub trait NotificationExtIos: Notification {
     /// Build the collapse key for this push notification.
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey;
     /// Convert this notification into an APNS push notification.
-    fn into_apns<'a>(
-        self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         entity: &Entity<'_>,
         notification_id: uuid::Uuid,

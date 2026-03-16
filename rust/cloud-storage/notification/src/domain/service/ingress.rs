@@ -13,10 +13,10 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::request::{
     BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationStatus,
-    SendNotificationRequestInternal, UpdateNotificationsRequest,
+    SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
+    DeviceEndpoint, Notification, NotificationResult, UserNotificationRow,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::SendNotificationError;
@@ -141,9 +141,7 @@ where
         request: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
     {
-        let notification_id = Uuid::now_v7();
-        // TODO convert from the outer type to the inner type
-        self.send_notification_impl(notification_id, request)
+        self.send_notification_impl(request)
     }
 }
 
@@ -176,9 +174,9 @@ where
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,
-        notification_id: Uuid,
-        request: SendNotificationRequestInternal<'a, T, U>,
+        request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let notification_id = request.uuid_to_write;
         let mut request = self
             .filter_recipients(request)
             .await
@@ -238,8 +236,8 @@ where
     /// - Unsubscribed from item
     async fn filter_recipients<'a, T, U>(
         &self,
-        req: SendNotificationRequestInternal<'a, T, U>,
-    ) -> Result<SendNotificationRequestInternal<'a, T, U>, Report> {
+        req: SendNotificationRequest<'a, T, U>,
+    ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
         let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
 
         // Fetch all filter data upfront
@@ -262,7 +260,7 @@ where
     async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
         notification_id: Uuid,
-        notification: &mut SendNotificationRequestInternal<'a, T, U>,
+        notification: &mut SendNotificationRequest<'a, T, U>,
     ) -> Result<
         (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
         Report<SendNotificationError>,
