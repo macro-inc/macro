@@ -124,7 +124,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id), err)]
+#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
