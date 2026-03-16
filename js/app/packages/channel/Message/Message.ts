@@ -13,6 +13,7 @@ import { EditedIndicator } from './EditedIndicator';
 import { HoverActions } from './HoverActions';
 import { MessageFlag } from './MessageFlag';
 import { ActionMenu } from './ActionMenu';
+import { MediaPreview } from './MediaPreview';
 
 export const Message = {
   Root,
@@ -30,4 +31,5 @@ export const Message = {
   HoverActions,
   MessageFlag,
   ActionMenu,
+  MediaPreview,
 };
