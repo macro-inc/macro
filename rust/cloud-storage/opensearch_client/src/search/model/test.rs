@@ -113,10 +113,7 @@ fn find_tag_aware_byte_offset_skips_tags() {
     let s = "ab<macro_em>cd</macro_em>ef";
     let offset = find_tag_aware_byte_offset(s, 4);
     let remaining = &s[offset..];
-    assert_eq!(
-        remaining.replace(OPEN_TAG, "").replace(CLOSE_TAG, ""),
-        "ef"
-    );
+    assert_eq!(remaining.replace(OPEN_TAG, "").replace(CLOSE_TAG, ""), "ef");
 }
 
 #[test]
