@@ -1,9 +1,6 @@
 import { cn } from '@ui/utils/classname';
 import { type Accessor, Show } from 'solid-js';
 import {
-  getInnerRailBottom,
-  innerRailTop,
-  innerRailX,
   threadConnectorStyle,
 } from './utils/thread-rail-geometry';
 
