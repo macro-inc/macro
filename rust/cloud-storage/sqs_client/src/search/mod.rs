@@ -97,11 +97,9 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::ExtractEmailMessage(message)
             | SearchQueueMessage::RemoveEmailMessage(message) => message.message_id.clone(),
             SearchQueueMessage::ExtractEmailThreadMessage(message) => message.thread_id.clone(),
-            SearchQueueMessage::ExtractEmailThreadBatch(message) => message
-                .thread_ids
-                .first()
-                .cloned()
-                .unwrap_or_default(),
+            SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+                message.thread_ids.first().cloned().unwrap_or_default()
+            }
             SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
             SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
             SearchQueueMessage::RemoveChannelMessage(message) => {
