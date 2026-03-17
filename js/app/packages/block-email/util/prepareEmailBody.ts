@@ -488,6 +488,23 @@ export function prepareEmailBody(
   return { bodyHtml, bodyText, mentions };
 }
 
+/**
+ * Returns true if the draft has meaningful user content worth saving.
+ * Auto-filled reply/forward subjects alone don't count.
+ */
+export function hasDraftContent(
+  bodyText: string,
+  subject: string | undefined,
+  attachmentCount: number
+): boolean {
+  const hasBody = bodyText.trim() !== '';
+  const hasAttachments = attachmentCount > 0;
+  const trimmedSubject = subject?.trim() ?? '';
+  const hasSubject = trimmedSubject.length > 0;
+  const subjectIsAutoFilled = /^(Re|Fwd?):/i.test(trimmedSubject);
+  return hasBody || hasAttachments || (hasSubject && !subjectIsAutoFilled);
+}
+
 export function prepareMacroBody(bodyMacro: string): string {
   // Remove macro-quote blocks from the markdown string
   // We want these in the HTML, but not in body_macro

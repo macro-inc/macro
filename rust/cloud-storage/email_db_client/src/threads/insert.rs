@@ -1,7 +1,7 @@
 use crate::messages::replying_to_id::update_thread_messages_replying_to;
 use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, messages, parse};
-use anyhow::Context;
+
 use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::thread;
 use sqlx::types::Uuid;
@@ -32,8 +32,7 @@ pub async fn insert_thread_and_messages(
 
         let recipients =
             contacts::upsert_message::parse_and_upsert_message_contacts(pool, link_id, addresses)
-                .await
-                .context("Failed to insert address ids")?;
+                .await?;
 
         // can't be null bc we are getting the message from gmail api directly
         recipient_map.insert(message.provider_id.clone().unwrap(), recipients);
@@ -43,9 +42,7 @@ pub async fn insert_thread_and_messages(
 
     let result = async {
         // Insert thread
-        let thread_id = insert_thread(&mut *tx, &service_thread, link_id)
-            .await
-            .context("Failed to insert thread")?;
+        let thread_id = insert_thread(&mut *tx, &service_thread, link_id).await?;
 
         // Insert all messages
         for mut message in service_thread.messages.clone() {
@@ -59,17 +56,14 @@ pub async fn insert_thread_and_messages(
                 recipient_map.remove(provider_id).unwrap(),
                 false,
             )
-            .await
-            .context("Failed to insert message")?;
+            .await?;
         }
 
         // Now that messages have been inserted, we can set replying_to_ids of messages for threads
         // with more than one message. If a thread only has one message, we know it will have no
         // messages replying to other messages and thus no replying_to_ids.
         if service_thread.messages.len() > 1 {
-            update_thread_messages_replying_to(&mut tx, thread_id, link_id)
-                .await
-                .context("Failed to update messages replying_to_ids")?;
+            update_thread_messages_replying_to(&mut tx, thread_id, link_id).await?;
         }
 
         Ok(thread_id)

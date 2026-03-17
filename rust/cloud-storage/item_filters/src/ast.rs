@@ -3,11 +3,13 @@
 
 use crate::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
+    PropertyFilter,
     ast::{
         channel::{ChannelLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         email::EmailLiteral,
         project::ProjectLiteral,
+        properties::PropertiesLiteral,
     },
 };
 use document::DocumentLiteral;
@@ -27,6 +29,8 @@ pub mod document;
 pub mod email;
 /// contains the ast literal value for projects
 pub mod project;
+/// contains the ast literal value for property-based filtering
+pub mod properties;
 
 #[cfg(test)]
 mod tests;
@@ -82,6 +86,9 @@ pub struct EntityFilterAst {
     /// the filters taht should be applied to the channel entity
     #[serde(default, rename = "chanf")]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied based on entity properties
+    #[serde(default, rename = "propf")]
+    pub properties_filter: LiteralTree<PropertiesLiteral>,
 }
 
 impl EntityFilterAst {
@@ -99,6 +106,8 @@ impl EntityFilterAst {
             email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new),
             channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
                 .map(Arc::new),
+            properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
+                .map(Arc::new),
         }))
     }
 
@@ -111,6 +120,7 @@ impl EntityFilterAst {
             chat_filter: None,
             email_filter: None,
             channel_filter: None,
+            properties_filter: None,
         }
     }
 }
@@ -123,11 +133,13 @@ impl IsEmpty for EntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            properties_filter,
         } = self;
         document_filter.is_none()
             && project_filter.is_none()
             && chat_filter.is_none()
             && email_filter.is_none()
             && channel_filter.is_none()
+            && properties_filter.is_none()
     }
 }

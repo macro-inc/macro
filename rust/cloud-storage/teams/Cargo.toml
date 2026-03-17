@@ -4,21 +4,52 @@ name = "teams"
 publish = false
 version = "0.1.0"
 
+[features]
+axum = ["dep:axum", "dep:model-error-response", "dep:model_user", "dep:utoipa"]
+default = ["axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "ports"]
+outbound = ["dep:sqlx", "ports"]
+ports = [
+  "dep:model-entity",
+  "dep:model_notifications",
+  "dep:notification",
+  "dep:tokio",
+]
+
 [dependencies]
+# Core
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
   "runtime-tokio-hyper",
 ] }
+chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }
-sqlx = { workspace = true }
+roles_and_permissions = { path = "../roles_and_permissions" }
+serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-roles_and_permissions = { path = "../roles_and_permissions" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+utoipa = { workspace = true, optional = true }
+
+# Notification dependencies (for ports)
+model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+notification = { path = "../notification", optional = true, default-features = false }
+
+# Outbound dependencies
+sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

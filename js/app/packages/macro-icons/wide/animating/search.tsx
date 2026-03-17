@@ -13,7 +13,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-search-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated search icon</title>
+      {/*<title>Animated search icon</title>*/}
       <defs>
         {/* Clip path for the reflection - matches the glass circle */}
         <clipPath id={clipId}>

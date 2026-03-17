@@ -538,8 +538,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.handle.isPopover()}>
-          <Button onMouseDown={handleClose} tabIndex={-1}>
-            <XIcon class="size-4" />
+          <Button onMouseDown={handleClose} tabIndex={-1} size="icon-sm">
+            <XIcon />
           </Button>
         </Show>
         <div class="flex items-center gap-2 flex-1">
@@ -547,15 +547,15 @@ export function ComposeTask(props: ComposeTaskProps) {
             Create Task
           </span>
         </div>
-        <Show when={title() || content()}>
-          <Button
-            onMouseDown={handleClearDraft}
-            tabIndex={-1}
-            tooltip="Clear Draft"
-          >
-            <TrashIcon class="size-4" />
-          </Button>
-        </Show>
+        <Button
+          onMouseDown={handleClearDraft}
+          tabIndex={-1}
+          tooltip="Clear Draft"
+          size="icon-sm"
+          disabled={!(content().trim() || title())}
+        >
+          <TrashIcon />
+        </Button>
       </div>
       <div class="border-b border-edge-muted/50" />
       <div class="p-2 flex-1 min-h-0 flex flex-col">
@@ -641,8 +641,9 @@ export function ComposeTask(props: ComposeTaskProps) {
         />
         <Button
           onClick={handleCreateTask}
-          class="border border-edge-muted pr-1"
+          class="px-3 pr-2"
           disabled={title().trim().length === 0 || isCreating()}
+          variant="secondary"
         >
           <Show
             when={isCreating()}

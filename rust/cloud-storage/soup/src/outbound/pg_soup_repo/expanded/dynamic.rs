@@ -7,7 +7,11 @@ use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
-    EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral, project::ProjectLiteral,
+    EntityFilterAst,
+    chat::ChatLiteral,
+    document::DocumentLiteral,
+    project::ProjectLiteral,
+    properties::{PropertiesLiteral, PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
@@ -430,6 +434,51 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
+fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>, entity_id_sql: &str) -> String {
+    let Some(expr) = ast else {
+        return String::new();
+    };
+    let formatting = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+        filter_ast::ExprFrame::Literal(PropertiesLiteral {
+            property_definition_id,
+            entity_type,
+            value,
+        }) => {
+            let value_predicate = match value {
+                PropertyMatchValue::SelectOption(option_id) => {
+                    format!("ep_prop.values->'value' ? '{option_id}'")
+                }
+                PropertyMatchValue::EntityRef(entity_id) => {
+                    format!(
+                        "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
+                    )
+                }
+            };
+            let entity_type_clause = match entity_type {
+                Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+                None => String::new(),
+            };
+            format!(
+                r#"EXISTS (
+                    SELECT 1 FROM entity_properties ep_prop
+                    WHERE ep_prop.entity_id = {entity_id_sql}
+                    {entity_type_clause}
+                    AND ep_prop.property_definition_id = '{property_definition_id}'
+                    AND {value_predicate}
+                )"#
+            )
+        }
+    });
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
 fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -440,18 +489,30 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     // Document top clause (lightweight)
     builder.push(DOCUMENT_TOP_CLAUSE);
     builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+        "d.id",
+    ));
 
     builder.push(" UNION ALL ");
 
     // Chat top clause (lightweight)
     builder.push(CHAT_TOP_CLAUSE);
     builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+        "c.id",
+    ));
 
     builder.push(" UNION ALL ");
 
     // Project top clause (lightweight)
     builder.push(PROJECT_TOP_CLAUSE);
     builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+    builder.push(build_properties_filter(
+        filter_ast.properties_filter.as_deref(),
+        "p.id",
+    ));
 
     builder.push(") all_items ");
 

@@ -1,10 +1,4 @@
-import {
-  type Accessor,
-  type JSX,
-  createSignal,
-  createEffect,
-  on,
-} from 'solid-js';
+import { type Accessor, type JSX, createSignal } from 'solid-js';
 import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 
@@ -49,15 +43,16 @@ export type ThreadListScrollState = {
   viewportSize: number;
 };
 
-type ThreadListProps<T extends { id: string }> = {
-  data: Accessor<T[]>;
-  children: (item: T) => JSX.Element;
+type ThreadListProps = {
+  keys: Accessor<string[]>;
+  children: (item: { id: string }) => JSX.Element;
   initialScrollTarget?: ThreadListScrollTarget;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
   onScrollStateChange?: (state: ThreadListScrollState) => void;
   shift?: Accessor<boolean>;
+  prepend?: Accessor<boolean>;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -78,13 +73,6 @@ export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
-
-export function shouldStickToBottomOnDataChange(
-  isNearBottom: boolean,
-  shift?: Accessor<boolean>
-): boolean {
-  return isNearBottom && !(shift?.() ?? false);
-}
 
 export function isExplicitScrollDown(
   delta: number,
@@ -124,9 +112,7 @@ function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
   }
 }
 
-export function ThreadList<T extends { id: string }>(
-  props: ThreadListProps<T>
-) {
+export function ThreadList(props: ThreadListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [didInitialScroll, setDidInitialScroll] = createSignal(false);
@@ -147,8 +133,8 @@ export function ThreadList<T extends { id: string }>(
   };
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
-    const items = props.data();
-    const maxIndex = items.length - 1;
+    const keys = props.keys();
+    const maxIndex = keys.length - 1;
     if (maxIndex < 0) return -1;
 
     switch (target.tag) {
@@ -159,7 +145,7 @@ export function ThreadList<T extends { id: string }>(
       case 'index':
         return clamp(target.index, 0, maxIndex);
       case 'id': {
-        const idx = items.findIndex((item) => item.id === target.id);
+        const idx = keys.indexOf(target.id);
         return idx === -1 ? -1 : idx;
       }
     }
@@ -176,7 +162,7 @@ export function ThreadList<T extends { id: string }>(
   };
 
   const getCurrentIndex = (handle: VirtualizerHandle): number => {
-    const itemCount = props.data().length;
+    const itemCount = props.keys().length;
     if (!itemCount) return -1;
     return clamp(handle.findItemIndex(handle.scrollOffset), 0, itemCount - 1);
   };
@@ -253,21 +239,6 @@ export function ThreadList<T extends { id: string }>(
       });
     });
   }
-
-  createEffect(
-    on(
-      () => props.data().length,
-      () => {
-        const handle = virtualHandle();
-        if (!handle || !didInitialScroll()) return;
-        if (shouldStickToBottomOnDataChange(isNearBottom(), props.shift)) {
-          requestAnimationFrame(() => {
-            scrollToTarget(handle, { tag: 'bottom', align: 'end' });
-          });
-        }
-      }
-    )
-  );
 
   const handleScroll = () => {
     const handle = virtualHandle();
@@ -359,11 +330,11 @@ export function ThreadList<T extends { id: string }>(
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
-        data={props.data()}
+        data={props.keys()}
         onScroll={handleScroll}
         shift={props.shift?.() ?? false}
       >
-        {(item) => props.children(item)}
+        {(key) => props.children({ id: key })}
       </Virtualizer>
     </div>
   );

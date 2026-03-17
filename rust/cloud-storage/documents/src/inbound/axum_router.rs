@@ -2,15 +2,16 @@
 //!
 //! Provides routes:
 //! - `POST /` — create a new document
-//! - `GET /:document_id` — get document metadata
-//! - `GET /:document_id/location_v3` — get document content location (presigned URL)
-//! - `GET /:document_id/short_id` — get document short ID
-//! - `DELETE /:document_id` — soft-delete a document
+//! - `GET /{document_id}` — get document metadata
+//! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
+//! - `GET /{document_id}/short_id` — get document short ID
+//! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
 mod tests;
 
 mod create_document;
+mod create_task;
 mod delete_document;
 mod edit_document;
 mod get_document;
@@ -37,6 +38,7 @@ use crate::domain::ports::DocumentService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use create_document::*;
+pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
 pub use get_document::*;
@@ -106,17 +108,17 @@ where
     // Routes that need ensure_document_exists middleware
     let document_id_routes = Router::new()
         .route(
-            "/:document_id",
+            "/{document_id}",
             axum::routing::get(get_document_handler::<T, Svc>)
                 .patch(edit_document_handler::<T, Svc>)
                 .delete(delete_document_handler::<T, Svc>),
         )
         .route(
-            "/:document_id/location_v3",
+            "/{document_id}/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
         .route(
-            "/:document_id/short_id",
+            "/{document_id}/short_id",
             axum::routing::get(get_short_id_handler::<T, Svc>),
         )
         .layer(middleware::from_fn_with_state(
@@ -127,6 +129,10 @@ where
     Router::new()
         .merge(document_id_routes)
         .route("/", axum::routing::post(create_document_handler::<T, Svc>))
+        .route(
+            "/create_task",
+            axum::routing::post(create_task_handler::<T, Svc>),
+        )
         .with_state(state)
 }
 

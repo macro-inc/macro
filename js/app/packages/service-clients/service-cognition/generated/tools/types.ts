@@ -894,7 +894,7 @@ export interface ReadThread {
    */
   ids: string[];
   /**
-   * A local datetime of the earliest message to include in a channel transcript ex: 2025-11-25 12:00:09 EST, only applicable to channels
+   * A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels
    */
   messagesSince: string | null;
 }

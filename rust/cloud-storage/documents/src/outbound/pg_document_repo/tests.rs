@@ -293,3 +293,246 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     assert!(result.is_public);
     assert_eq!(result.public_access_level, Some("edit".to_string()));
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.share_with_team("macro|user@user.com", "document-one")
+        .await
+        .unwrap();
+
+    // All 3 team members should have access rows
+    let rows = sqlx::query!(
+        r#"
+        SELECT "user_id", "access_level"::text as "access_level"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+        ORDER BY "user_id"
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(rows.len(), 3);
+
+    // Owner row should still be 'owner' (not downgraded)
+    let owner_row = rows
+        .iter()
+        .find(|r| r.user_id == "macro|user@user.com")
+        .unwrap();
+    assert_eq!(owner_row.access_level, Some("owner".to_string()));
+
+    // Teammates should have 'comment' access
+    let t1 = rows
+        .iter()
+        .find(|r| r.user_id == "macro|teammate1@user.com")
+        .unwrap();
+    assert_eq!(t1.access_level, Some("comment".to_string()));
+
+    let t2 = rows
+        .iter()
+        .find(|r| r.user_id == "macro|teammate2@user.com")
+        .unwrap();
+    assert_eq!(t2.access_level, Some("comment".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_no_op_when_user_not_on_team(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // teammate1 is on a team, but let's use a user that isn't on any team
+    // We'll use a non-existent user id to simulate no team membership
+    repo.share_with_team("macro|no-team@user.com", "document-one")
+        .await
+        .unwrap();
+
+    // Only the pre-existing owner row should exist
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(count, 1); // just the owner row from fixtures
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // Call twice — second call should be a no-op
+    repo.share_with_team("macro|user@user.com", "document-one")
+        .await
+        .unwrap();
+    repo.share_with_team("macro|user@user.com", "document-one")
+        .await
+        .unwrap();
+
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(count, 3); // owner + 2 teammates, no duplicates
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_preserves_channel_granted_access(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // Give teammate1 access via a channel before team sharing
+    let channel_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO "UserItemAccess"
+            ("id", "user_id", "item_id", "item_type", "access_level",
+             "granted_from_channel_id", "created_at", "updated_at")
+        VALUES ($1, $2, 'document-one', 'document', 'edit', $3, NOW(), NOW())
+        "#,
+        uuid::Uuid::now_v7(),
+        "macro|teammate1@user.com",
+        channel_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.share_with_team("macro|user@user.com", "document-one")
+        .await
+        .unwrap();
+
+    // teammate1 should have both: channel-granted edit + team-shared comment
+    let rows = sqlx::query!(
+        r#"
+        SELECT "access_level"::text as "access_level", "granted_from_channel_id"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+          AND "user_id" = 'macro|teammate1@user.com'
+        ORDER BY "granted_from_channel_id" NULLS LAST
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].access_level, Some("edit".to_string()));
+    assert_eq!(rows[0].granted_from_channel_id, Some(channel_id));
+    assert_eq!(rows[1].access_level, Some("comment".to_string()));
+    assert!(rows[1].granted_from_channel_id.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // Give teammate1 direct (non-channel) edit access before team sharing
+    sqlx::query!(
+        r#"
+        INSERT INTO "UserItemAccess"
+            ("id", "user_id", "item_id", "item_type", "access_level",
+             "granted_from_channel_id", "created_at", "updated_at")
+        VALUES ($1, $2, 'document-one', 'document', 'edit', NULL, NOW(), NOW())
+        "#,
+        uuid::Uuid::now_v7(),
+        "macro|teammate1@user.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.share_with_team("macro|user@user.com", "document-one")
+        .await
+        .unwrap();
+
+    // teammate1 should still have just their original edit row, not a second comment row
+    let rows = sqlx::query!(
+        r#"
+        SELECT "access_level"::text as "access_level"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+          AND "user_id" = 'macro|teammate1@user.com'
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].access_level, Some("edit".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // A teammate (not the owner) triggers the share — should still find the
+    // same team and share with all members including the owner.
+    repo.share_with_team("macro|teammate1@user.com", "document-one")
+        .await
+        .unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT "user_id", "access_level"::text as "access_level"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one' AND "item_type" = 'document'
+        ORDER BY "user_id"
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    // Owner keeps their original owner row (no duplicate), teammates get comment
+    assert_eq!(rows.len(), 3);
+
+    let owner = rows
+        .iter()
+        .find(|r| r.user_id == "macro|user@user.com")
+        .unwrap();
+    assert_eq!(owner.access_level, Some("owner".to_string()));
+
+    let t1 = rows
+        .iter()
+        .find(|r| r.user_id == "macro|teammate1@user.com")
+        .unwrap();
+    assert_eq!(t1.access_level, Some("comment".to_string()));
+
+    let t2 = rows
+        .iter()
+        .find(|r| r.user_id == "macro|teammate2@user.com")
+        .unwrap();
+    assert_eq!(t2.access_level, Some("comment".to_string()));
+}

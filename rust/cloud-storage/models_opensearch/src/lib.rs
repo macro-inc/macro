@@ -14,6 +14,7 @@ pub enum SearchIndex {
     /// The document index
     Documents,
     /// The email index
+    #[strum(serialize = "emails_alias")]
     Emails,
     /// The project index
     Projects,
@@ -47,6 +48,20 @@ pub enum SearchEntityType {
     Emails,
     /// The project index
     Projects,
+}
+
+impl SearchEntityType {
+    /// Returns the index name to use for OpenSearch queries.
+    /// This may differ from the enum's string representation when using aliases.
+    pub fn index_name(&self) -> &'static str {
+        match self {
+            Self::Channels => "channels",
+            Self::Chats => "chats",
+            Self::Documents => "documents",
+            Self::Emails => "emails_alias",
+            Self::Projects => "projects",
+        }
+    }
 }
 
 impl From<SearchEntityType> for SearchIndex {

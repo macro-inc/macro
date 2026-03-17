@@ -47,7 +47,7 @@ type TypedInnerSearchResult =
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
   | { results: DocumentSearchResult[]; type: 'md' }
   | { results: ChannelSearchResult[]; type: 'channel' }
-  | { results: EmailSearchResult[]; type: 'email' };
+  | { results: EmailSearchResult[]; type: 'email'; searchQuery?: string };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   let contentHitData: ContentHitData[] = [];
@@ -140,6 +140,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 
   let senderHighlightTerms: string[] | null = null;
   if (data.type === 'email') {
+    const hasSenderMatch = data.results.some((r) => r.highlight.sender);
     const terms = [
       ...new Set(
         data.results
@@ -147,6 +148,15 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           .filter(Boolean)
       ),
     ];
+    if (hasSenderMatch && data.searchQuery) {
+      const queryTerms = data.searchQuery
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+      for (const t of queryTerms) {
+        if (!terms.includes(t)) terms.push(t);
+      }
+    }
     senderHighlightTerms = terms.length > 0 ? terms : null;
   }
 
@@ -207,6 +217,7 @@ export const useSearchResponseItemMapper = () => {
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
+          searchQuery,
         });
 
         const name = result.name ?? blockNameToDefaultFile('email');

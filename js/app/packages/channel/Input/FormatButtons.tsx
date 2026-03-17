@@ -11,7 +11,6 @@ import type {
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { TextFormatType } from 'lexical';
-import { renderIcon } from './utils/render-icon';
 import { RibbonButton } from './RibbonButton';
 
 type FormatButtonsProps = {
@@ -28,28 +27,28 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={props.selectionState()?.bold}
         onClick={() => props.onInlineFormat('bold')}
       >
-        {renderIcon(TextBoldIcon, 'size-5')}
+        <TextBoldIcon class="size-5" />
       </RibbonButton>
       <RibbonButton
         label="Italic"
         active={props.selectionState()?.italic}
         onClick={() => props.onInlineFormat('italic')}
       >
-        {renderIcon(TextItalicIcon, 'size-5')}
+        <TextItalicIcon class="size-5" />
       </RibbonButton>
       <RibbonButton
         label="Strikethrough"
         active={props.selectionState()?.strikethrough}
         onClick={() => props.onInlineFormat('strikethrough')}
       >
-        {renderIcon(TextStrikethroughIcon, 'size-5')}
+        <TextStrikethroughIcon class="size-5" />
       </RibbonButton>
       <RibbonButton
         label="Code"
         active={props.selectionState()?.code}
         onClick={() => props.onInlineFormat('code')}
       >
-        {renderIcon(TextCodeIcon, 'size-5')}
+        <TextCodeIcon class="size-5" />
       </RibbonButton>
       <div class="w-px h-5 bg-edge-muted" />
       <RibbonButton
@@ -57,21 +56,21 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={props.selectionState()?.elementsInRange.has('list-bullet')}
         onClick={() => props.onNodeFormat('list-bullet')}
       >
-        {renderIcon(ListBulletsIcon, 'size-5')}
+        <ListBulletsIcon class="size-5" />
       </RibbonButton>
       <RibbonButton
         label="Numbered list"
         active={props.selectionState()?.elementsInRange.has('list-number')}
         onClick={() => props.onNodeFormat('list-number')}
       >
-        {renderIcon(ListNumbersIcon, 'size-5')}
+        <ListNumbersIcon class="size-5" />
       </RibbonButton>
       <RibbonButton
         label="Checklist"
         active={props.selectionState()?.elementsInRange.has('list-check')}
         onClick={() => props.onNodeFormat('list-check')}
       >
-        {renderIcon(ListChecksIcon, 'size-5')}
+        <ListChecksIcon class="size-5" />
       </RibbonButton>
     </>
   );

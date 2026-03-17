@@ -1,4 +1,5 @@
 import type { ApiMessage } from '@service-email/generated/schemas';
+import { emailToMacroId } from '@core/user';
 import { getFirstName } from './name';
 
 /**
@@ -30,6 +31,14 @@ export function getSenderDisplayName(
     return getFirstName(from.name);
   }
   return from.email ?? 'Unknown';
+}
+
+/**
+ * Convert the message sender email to a macro id for user tooling.
+ */
+export function getSenderMacroId(message: ApiMessage): string | undefined {
+  const senderEmail = message.from?.email;
+  return senderEmail ? emailToMacroId(senderEmail) : undefined;
 }
 
 interface Recipient {

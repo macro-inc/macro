@@ -110,11 +110,29 @@
         }
       }
     },
-    "/unsubscribe/item/:item_type/:item_id": {
+    "/unsubscribe/item/{item_type}/{item_id}": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_item"],
         "summary": "Unsubscribes a user from a given item for notifications.",
         "operationId": "unsubscribe_item",
+        "parameters": [
+          {
+            "name": "item_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -152,6 +170,24 @@
         "tags": ["unsubscribe::remove_unsubscribe_item"],
         "summary": "Removes a unsubscribe item for a user.",
         "operationId": "remove_unsubscribe_item",
+        "parameters": [
+          {
+            "name": "item_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",

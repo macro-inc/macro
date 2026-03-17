@@ -32,6 +32,34 @@ pub async fn get_paginated_thread_ids_with_macro_user_id(
     Ok(result)
 }
 
+/// gets a list of thread ids with the macro user id, filtered to threads updated since a given timestamp.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_paginated_thread_ids_with_macro_user_id_since(
+    pool: &PgPool,
+    thread_limit: i64,
+    thread_offset: i64,
+    since: chrono::DateTime<chrono::Utc>,
+) -> anyhow::Result<Vec<(Uuid, String)>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT t.id, l.macro_id
+        FROM email_threads t
+        JOIN email_links l ON t.link_id = l.id
+        WHERE t.updated_at >= $3
+        ORDER BY t.latest_inbound_message_ts DESC NULLS LAST
+        LIMIT $1 OFFSET $2
+        "#,
+        thread_limit,
+        thread_offset,
+        since
+    )
+    .map(|row| (row.id, row.macro_id))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(result)
+}
+
 /// get the ids of the latest-updated threads for the user.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_latest_thread_ids_paginated(

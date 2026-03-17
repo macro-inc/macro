@@ -1,4 +1,5 @@
 import { isOk } from '@core/util/maybeResult';
+import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,
   type NotificationEvent,
@@ -91,6 +92,33 @@ function usePushNotifications(
     }
     setRegistrationResult(undefined);
   }
+
+  // On launch, once permission status resolves, check if the APNS token has rotated.
+  // iOS returns the same token if valid, or a new one if it has rotated.
+  whenSettled(
+    systemPermission,
+    (perm) => {
+      if (perm.status !== 'granted') return;
+      const storedToken = registrationResult()?.token;
+      if (!storedToken) return;
+
+      registerForRemoteNotifications()
+        .then((freshResult) => {
+          if (freshResult.token && freshResult.token !== storedToken) {
+            // Best-effort unregister the old token
+            notificationServiceClient.unregisterDevice({
+              deviceType,
+              token: storedToken,
+            });
+            setRegistrationResult(freshResult);
+            // tokenToSend() emits the new value, triggering the createResource fetcher
+            // to register the new token with the backend.
+          }
+        })
+        .catch(console.error);
+    },
+    console.error
+  );
 
   createEffect(() => {
     if (!registrationResult()?.success || !onPushNotification) return;

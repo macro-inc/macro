@@ -44,6 +44,14 @@ pub(crate) type NotificationIngressType = NotificationIngressService<
     StateMachine,
 >;
 
+#[expect(dead_code, reason = "used by utoipa in swagger.rs")]
+pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
+    teams::outbound::team_repo::TeamRepositoryImpl,
+    teams::outbound::customer_repo::CustomerRepositoryImpl,
+    UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+    NotificationIngressType,
+>;
+
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
 
@@ -71,6 +79,7 @@ pub(crate) struct ApiContext {
             TeamRepositoryImpl,
             CustomerRepositoryImpl,
             UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            NotificationIngressType,
         >,
     >,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,

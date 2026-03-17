@@ -1,21 +1,13 @@
 use crate::{
     Result, delegate_methods,
-    error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{
-            DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit,
-            exclude_source_content, inject_fragment_size, parse_highlight_hit,
-        },
-        query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
-use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{BoolQueryBuilder, SearchRequest, ToOpenSearchJson};
-use serde_json::Value;
+use models_opensearch::SearchEntityType;
+use opensearch_query_builder::BoolQueryBuilder;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
@@ -25,13 +17,6 @@ pub(crate) struct ChatIndex {
     pub role: String,
     pub title: String,
     pub updated_at_seconds: Option<i64>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub(crate) enum ChatNameIndex {
-    Name(NameIndex),
-    Chat(ChatIndex),
 }
 
 pub(crate) struct ChatSearchConfig;
@@ -62,11 +47,9 @@ impl ChatQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
-        fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
-        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -87,17 +70,6 @@ impl ChatQueryBuilder {
 
         Ok(content_bool_query)
     }
-
-    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
-        let bool_query = self.build_bool_query()?;
-
-        // Build the search request with the bool query
-        // This will automatically wrap the bool query in a function score if
-        // SearchOn::NameContent is used
-        let search_request = self.inner.build_search_request(bool_query.build())?;
-
-        Ok(search_request)
-    }
 }
 
 #[derive(Debug)]
@@ -109,10 +81,8 @@ pub struct ChatSearchArgs {
     pub page_size: u32,
     pub match_type: String,
     pub role: Vec<String>,
-    pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
-    pub disable_recency: bool,
 }
 
 impl From<ChatSearchArgs> for ChatQueryBuilder {
@@ -124,96 +94,9 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
             .user_id(&args.user_id)
             .ids(args.chat_ids)
             .role(args.role)
-            .search_on(args.search_on)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .disable_recency(args.disable_recency)
     }
-}
-
-impl ChatSearchArgs {
-    pub fn build(self) -> Result<Value> {
-        let builder: ChatQueryBuilder = self.into();
-        let mut json = builder.build_search_request()?.to_json();
-        inject_fragment_size(&mut json, 1000);
-        exclude_source_content(&mut json);
-        Ok(json)
-    }
-}
-
-#[tracing::instrument(skip(client, args), err)]
-pub(crate) async fn search_chats(
-    client: &opensearch::OpenSearch,
-    args: ChatSearchArgs,
-) -> Result<Vec<SearchHit>> {
-    let query_body = args.build()?;
-
-    let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
-        .body(query_body)
-        .send()
-        .await
-        .map_client_error()
-        .await?;
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| OpensearchClientError::HttpBytesError {
-            details: e.to_string(),
-        })?;
-
-    let result: DefaultSearchResponse<ChatNameIndex> =
-        serde_json::from_slice(&bytes).map_err(|e| {
-            OpensearchClientError::SearchDeserializationFailed {
-                details: e.to_string(),
-                raw_body: String::from_utf8_lossy(&bytes).to_string(),
-            }
-        })?;
-
-    Ok(result
-        .hits
-        .hits
-        .into_iter()
-        .map(|hit| {
-            let highlight = hit
-                .highlight
-                .map(|h| {
-                    parse_highlight_hit(
-                        h,
-                        Keys {
-                            title_key: ChatSearchConfig::TITLE_KEY,
-                            content_key: ChatSearchConfig::CONTENT_KEY,
-                        },
-                    )
-                })
-                .unwrap_or_default();
-
-            match hit.source {
-                ChatNameIndex::Name(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: a.entity_type,
-                    score: hit.score,
-                    highlight,
-                    goto: None,
-                    updated_at: None,
-                },
-                ChatNameIndex::Chat(a) => SearchHit {
-                    entity_id: a.entity_id,
-                    entity_type: SearchEntityType::Chats,
-                    score: hit.score,
-                    highlight,
-                    goto: Some(SearchGotoContent::Chats(SearchGotoChat {
-                        chat_message_id: a.chat_message_id,
-                        role: a.role,
-                    })),
-                    updated_at: None,
-                },
-            }
-        })
-        .collect())
 }
 
 #[cfg(test)]

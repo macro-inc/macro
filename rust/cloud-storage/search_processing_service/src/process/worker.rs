@@ -31,13 +31,13 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                             if messages.is_empty() {
                                 continue;
                             }
-                            let result = futures::stream::iter(messages.iter())
-                                .then(|message| {
+                            let result = futures::stream::iter(messages.into_iter())
+                                .map(|message| {
                                     let ctx = ctx.clone();
                                     async move {
                                         let result = tokio::time::timeout(
                                             std::time::Duration::from_secs(300), // 5 minutes
-                                            process::process_message(&ctx, message)
+                                            process::process_message(&ctx, &message)
                                         ).await;
 
                                         match result {
@@ -53,6 +53,7 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                                         }
                                     }
                                 })
+                                .buffer_unordered(10)
                                 .collect::<Vec<Result<(), (String, anyhow::Error)>>>()
                                 .await;
 

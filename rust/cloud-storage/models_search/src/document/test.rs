@@ -17,11 +17,10 @@ fn test_document_search_request_json_serialization() {
         }),
         search_on: SearchOn::Content,
         collapse: None,
-        disable_recency: false,
     };
 
     let json = serde_json::to_string(&request).expect("Failed to serialize to JSON");
-    let expected = r#"{"query":"test query","terms":["term1","term2"],"match_type":"exact","disable_recency":false,"file_types":["pdf","docx"],"search_on":"content"}"#;
+    let expected = r#"{"query":"test query","terms":["term1","term2"],"match_type":"exact","file_types":["pdf","docx"],"search_on":"content"}"#;
 
     assert_eq!(json, expected);
 }
@@ -92,7 +91,6 @@ fn test_document_search_request_round_trip() {
         }),
         search_on: SearchOn::Content,
         collapse: None,
-        disable_recency: false,
     };
 
     let json = serde_json::to_string(&original).expect("Failed to serialize");

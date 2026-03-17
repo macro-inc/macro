@@ -92,7 +92,7 @@ pub async fn archived_handler(
             .await?;
 
     let mut message_db_ids = Vec::new();
-    let mut message_provider_ids = Vec::new();
+    let mut provider_message_tuples: Vec<(Uuid, String)> = Vec::new();
 
     // if we are archiving the thread, any messages with the INBOX label are affected. and vice versa
     let has_inbox_label = |m: &Message| {
@@ -104,8 +104,12 @@ pub async fn archived_handler(
     for m in messages.iter() {
         if has_inbox_label(m) == is_archiving {
             message_db_ids.push(m.db_id);
-            // should always exist
-            message_provider_ids.push(m.provider_id.clone().unwrap_or_default());
+            // Only send provider messages to Gmail (drafts have no provider_id)
+            if let Some(ref pid) = m.provider_id
+                && !pid.is_empty()
+            {
+                provider_message_tuples.push((m.db_id, pid.clone()));
+            }
         }
     }
 
@@ -181,16 +185,12 @@ pub async fn archived_handler(
         (vec![system_labels::INBOX.to_string()], Vec::new())
     };
 
-    let message_tuples = message_db_ids
-        .into_iter()
-        .zip(message_provider_ids)
-        .collect();
-
     tokio::spawn(async move {
+        // Only send provider messages to Gmail (drafts are already updated in DB)
         let (success_ids, failed_ids) = gmail_client_clone
             .batch_modify_labels(
                 &gmail_access_token_clone,
-                message_tuples,
+                provider_message_tuples,
                 labels_to_add,
                 labels_to_remove,
             )

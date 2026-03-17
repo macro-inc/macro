@@ -35,7 +35,6 @@ pub struct MacroUserExtractor {
     pub user_context: UserContext,
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for MacroUserExtractor
 where
     S: Send + Sync,
@@ -68,7 +67,6 @@ pub struct OptionalMacroUserExtractor {
     pub user_context: UserContext,
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for OptionalMacroUserExtractor
 where
     S: Send + Sync,

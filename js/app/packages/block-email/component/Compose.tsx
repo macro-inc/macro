@@ -10,7 +10,6 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -29,14 +28,13 @@ import {
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import {
+  type Accessor,
   createMemo,
   createSignal,
   type JSX,
-  Match,
   onMount,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput } from './ComposeEmailInput';
@@ -53,6 +51,7 @@ import {
 } from '@lexical-core';
 import {
   clearEmailBody,
+  hasDraftContent,
   prepareEmailBody,
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
@@ -66,7 +65,10 @@ import {
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
-import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import {
+  type EmailRecipient,
+  useMaybeEmailContext,
+} from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import { stickyGate } from '@core/util/debounce';
@@ -119,10 +121,54 @@ type EmailComposeProps = {
   draftID?: string;
 };
 
-function ComposeFieldRow(props: { label: string; children: JSX.Element }) {
+type RecipientFieldId = 'to' | 'cc' | 'bcc';
+
+type DragState = {
+  recipient: EmailRecipient;
+  sourceField: RecipientFieldId;
+};
+
+function ComposeFieldRow(props: {
+  label: string;
+  children: JSX.Element;
+  fieldId?: RecipientFieldId;
+  dragState?: Accessor<DragState | null>;
+  onRecipientDrop?: (
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => void;
+}) {
+  const [isDragOver, setIsDragOver] = createSignal(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    const drag = props.dragState?.();
+    if (!drag || !props.fieldId || drag.sourceField === props.fieldId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const drag = props.dragState?.();
+    if (!drag || !props.fieldId || drag.sourceField === props.fieldId) return;
+    props.onRecipientDrop?.(drag.recipient, drag.sourceField);
+  };
+
   return (
-    <div class="flex items-baseline gap-2 border-b border-edge-muted focus-within:border-accent">
-      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+    <div
+      class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent"
+      classList={{ 'border-accent bg-accent/10': isDragOver() }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div class="text-sm w-7 shrink-0 text-ink-placeholder/70">
         {props.label}
       </div>
       <div class="flex-1">{props.children}</div>
@@ -132,8 +178,6 @@ function ComposeFieldRow(props: { label: string; children: JSX.Element }) {
 
 export function EmailCompose(props: EmailComposeProps) {
   const hasPaidAccess = useHasPaidAccess();
-  const { showPaywall } = usePaywallState();
-
   const emailLinksQuery = useEmailLinksQuery();
 
   const [refs, setRefs] = createSignal<EmailComposeElementRefs>({
@@ -227,11 +271,12 @@ export function EmailCompose(props: EmailComposeProps) {
       );
       return null;
     }
-    // Fail if no body text and no attachments
-    // You can have a draft with attachments and no body text
     if (
-      prepared.bodyText.trim() === '' &&
-      form.attachments.list().length === 0
+      !hasDraftContent(
+        prepared.bodyText,
+        form.subject(),
+        form.attachments.list().length
+      )
     ) {
       return null;
     }
@@ -309,6 +354,13 @@ export function EmailCompose(props: EmailComposeProps) {
   const scheduleDraftSave = debounce(() => {
     void executeSaveDraft();
   }, DRAFT_DEBOUNCE_MS);
+
+  const withDraftSave =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      scheduleDraftSave();
+    };
 
   const onAddAttachments = (attachments: DraftFormAttachment[]) => {
     for (const attachment of attachments) {
@@ -746,13 +798,48 @@ export function EmailCompose(props: EmailComposeProps) {
     return fromDraft ?? destinationOptions();
   };
 
+  const [recipientDragState, setRecipientDragState] =
+    createSignal<DragState | null>(null);
+
+  const handleChipDragStart = (
+    field: RecipientFieldId,
+    recipient: EmailRecipient,
+    e: DragEvent
+  ) => {
+    if (!e.dataTransfer) return;
+    setRecipientDragState({ recipient, sourceField: field });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  };
+
+  const handleChipDragEnd = () => {
+    setRecipientDragState(null);
+  };
+
+  const handleRecipientDrop = (
+    targetField: RecipientFieldId,
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => {
+    // Remove from source
+    const sourceList = form.recipients()[sourceField];
+    form.setRecipients(
+      sourceField,
+      sourceList.filter((r) => r.id !== recipient.id)
+    );
+    // Add to target (avoid duplicates)
+    const targetList = form.recipients()[targetField];
+    if (!targetList.some((r) => r.id === recipient.id)) {
+      form.setRecipients(targetField, [...targetList, recipient]);
+    }
+    // Auto-show cc/bcc if dropping into them
+    if (targetField === 'cc') setShowCc(true);
+    if (targetField === 'bcc') setShowBcc(true);
+    scheduleDraftSave();
+  };
+
   const isDraftSaving = () => saveDraftMutation.isPending;
 
-  // Used to keep displaying draft status for some time
-  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
-
-  // Used to keep displaying spinner for a short time before switching
-  // to saved state
   const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
@@ -779,40 +866,22 @@ export function EmailCompose(props: EmailComposeProps) {
         ref={registerRef('containerRef')}
         class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
-        <Switch>
-          <Match when={hasLinkError()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span class="text-sm">
-                  You have not connected an email account.
-                </span>
-                <span class="grow" />
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Connect Email"
-                  onClick={connectEmail}
-                />
-              </div>
+        <Show when={hasLinkError()}>
+          <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+            <div class="flex items-center justify-between gap-2">
+              <Caution class="size-4" />
+              <span class="text-sm">
+                You have not connected an email account.
+              </span>
+              <span class="grow" />
+              <DeprecatedTextButton
+                theme="base"
+                text="Connect Email"
+                onClick={connectEmail}
+              />
             </div>
-          </Match>
-          <Match when={!hasPaidAccess()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span>You must upgrade to send email.</span>
-                <span class="grow" />
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Upgrade"
-                  onClick={() => {
-                    showPaywall(null);
-                  }}
-                />
-              </div>
-            </div>
-          </Match>
-        </Switch>
+          </div>
+        </Show>
 
         <div
           ref={mobileScrollRef}
@@ -853,17 +922,6 @@ export function EmailCompose(props: EmailComposeProps) {
                     </Show>
                   </Suspense>
                   <div class="flex gap-2 ml-auto">
-                    <Show when={debouncedIsDraftSaving()}>
-                      <div class="flex gap-1 items-center text-ink-muted">
-                        <Show
-                          when={laggedIsDraftSaving()}
-                          fallback={<span>Draft saved</span>}
-                        >
-                          <CircleSpinner class="size-4 animate-spin" />
-                          <span>Saving draft</span>
-                        </Show>
-                      </div>
-                    </Show>
                     <Show when={!isCcVisible()}>
                       <button
                         type="button"
@@ -888,19 +946,30 @@ export function EmailCompose(props: EmailComposeProps) {
                 </div>
 
                 <div class="flex flex-col gap-2">
-                  <ComposeFieldRow label="To">
+                  <ComposeFieldRow
+                    label="To"
+                    fieldId="to"
+                    dragState={recipientDragState}
+                    onRecipientDrop={(recipient, sourceField) =>
+                      handleRecipientDrop('to', recipient, sourceField)
+                    }
+                  >
                     <RecipientSelector
                       inputRef={registerRef('directRecipientsSelector')}
                       options={getRecipientOptions}
                       selectedOptions={form.recipients().to}
-                      setSelectedOptions={(next) =>
+                      setSelectedOptions={withDraftSave((next) =>
                         form.setRecipients('to', next)
-                      }
+                      )}
                       placeholder="Macro users or email addresses"
                       focusOnMount={!hasLinkError()}
                       hideBorder
                       noBrackets
                       disabled={hasLinkError()}
+                      onChipDragStart={(option, e) =>
+                        handleChipDragStart('to', option, e)
+                      }
+                      onChipDragEnd={handleChipDragEnd}
                     />
                     <Show when={withValidationError('no_recipient')}>
                       {(err) => (
@@ -912,35 +981,57 @@ export function EmailCompose(props: EmailComposeProps) {
                   </ComposeFieldRow>
 
                   <Show when={isCcVisible()}>
-                    <ComposeFieldRow label="Cc">
+                    <ComposeFieldRow
+                      label="Cc"
+                      fieldId="cc"
+                      dragState={recipientDragState}
+                      onRecipientDrop={(recipient, sourceField) =>
+                        handleRecipientDrop('cc', recipient, sourceField)
+                      }
+                    >
                       <RecipientSelector
                         inputRef={registerRef('ccRecipientsSelector')}
                         options={getRecipientOptions}
                         selectedOptions={form.recipients().cc}
-                        setSelectedOptions={(next) =>
+                        setSelectedOptions={withDraftSave((next) =>
                           form.setRecipients('cc', next)
-                        }
+                        )}
                         placeholder="Macro users or email addresses"
                         hideBorder
                         noBrackets
                         disabled={hasLinkError()}
+                        onChipDragStart={(option, e) =>
+                          handleChipDragStart('cc', option, e)
+                        }
+                        onChipDragEnd={handleChipDragEnd}
                       />
                     </ComposeFieldRow>
                   </Show>
 
                   <Show when={isBccVisible()}>
-                    <ComposeFieldRow label="Bcc">
+                    <ComposeFieldRow
+                      label="Bcc"
+                      fieldId="bcc"
+                      dragState={recipientDragState}
+                      onRecipientDrop={(recipient, sourceField) =>
+                        handleRecipientDrop('bcc', recipient, sourceField)
+                      }
+                    >
                       <RecipientSelector
                         inputRef={registerRef('bccRecipientsSelector')}
                         options={getRecipientOptions}
                         selectedOptions={form.recipients().bcc}
-                        setSelectedOptions={(next) =>
+                        setSelectedOptions={withDraftSave((next) =>
                           form.setRecipients('bcc', next)
-                        }
+                        )}
                         placeholder="Macro users or email addresses"
                         hideBorder
                         noBrackets
                         disabled={hasLinkError()}
+                        onChipDragStart={(option, e) =>
+                          handleChipDragStart('bcc', option, e)
+                        }
+                        onChipDragEnd={handleChipDragEnd}
                       />
                     </ComposeFieldRow>
                   </Show>
@@ -993,6 +1084,7 @@ export function EmailCompose(props: EmailComposeProps) {
                   onSendTimeChange={handleSendTimeChange}
                   onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
+                  isDraftSaving={laggedIsDraftSaving()}
                   hasDraft={currentDraftID() != null}
                   onDraftDeletePress={deleteDraftAndReset}
                   disabled={hasLinkError() || sendMutation.isPending}

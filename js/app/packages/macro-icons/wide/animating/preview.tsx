@@ -12,7 +12,7 @@ export const AnimatedPreviewIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-preview-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated preview icon</title>
+      {/*<title>Animated preview icon</title>*/}
       <style>{`
         @keyframes pupil-look {
           0% { transform: translateX(0); animation-timing-function: ease-out; }

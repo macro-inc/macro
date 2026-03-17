@@ -7,11 +7,11 @@
 import type { SetPropertyValue } from './setPropertyValue';
 
 /**
- * Property input for setting a property value on the task
+ * Property input for setting a property value on a task.
  */
 export interface PropertyInput {
-  /** The property definition ID */
+  /** The property definition ID. */
   propertyId: string;
-  /** The value to set for the property */
+  /** The value to set for the property. */
   value: SetPropertyValue;
 }

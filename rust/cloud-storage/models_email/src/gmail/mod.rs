@@ -1,5 +1,6 @@
 pub mod contacts;
 pub mod error;
+pub mod filters;
 pub mod history;
 pub mod inbox_sync;
 pub mod labels;

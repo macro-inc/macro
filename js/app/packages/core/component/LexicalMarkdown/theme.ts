@@ -148,9 +148,9 @@ export function createTheme(
 export const aiChatTheme = createTheme(
   {
     heading: {
-      h1: 'text-2xl font-bold mt-5',
-      h2: 'text-xl font-bold mt-4',
-      h3: 'text-l font-bold mt-3',
+      h1: 'text-2xl font-semibold mb-5',
+      h2: 'text-xl font-semibold mb-4',
+      h3: 'text-l font-semibold mb-3',
       h4: 'text-base font-medium',
       h5: 'text-base font-medium',
       h6: 'text-base font-medium',
@@ -228,7 +228,7 @@ export const searchContentHitMarkdownTheme = createTheme({
   root: `${theme.root} pr-[2px] cursor-default overflow-x-auto`,
 });
 
-export const searchContentHitTwoLineClampMarkdownTheme = createTheme({
+export const twoLineClampMarkdownTheme = createTheme({
   ...unifiedListMarkdownTheme,
   root: `${theme.root} pr-[2px] cursor-default`,
   paragraph: 'md-p text-[1em] line-clamp-2',

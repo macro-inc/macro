@@ -14,7 +14,7 @@ export const AnimatedSlidersIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-sliders-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated sliders icon</title>
+      {/*<title>Animated sliders icon</title>*/}
       <style>{`
         @keyframes v-slide-left {
           0%, 100% { transform: translateY(0); }

@@ -8,7 +8,7 @@
 mod test;
 
 use axum::{
-    Router, async_trait,
+    Router,
     extract::{FromRequest, Request, State},
     response::Redirect,
 };
@@ -75,7 +75,6 @@ pub async fn install_sync_handler<T: GithubSyncService>(
 /// [`ValidatedGithubWebhookEvent`].
 pub struct GithubWebhookEventExtractor(pub ValidatedGithubWebhookEvent);
 
-#[async_trait]
 impl<T> FromRequest<GithubSyncRouterState<T>> for GithubWebhookEventExtractor
 where
     T: GithubSyncService,

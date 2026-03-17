@@ -10,7 +10,7 @@ export const AnimatedChatIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-chat-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated chat icon</title>
+      {/*<title>Animated chat icon</title>*/}
       <style>{`
         @keyframes dot-bounce {
           0% {
