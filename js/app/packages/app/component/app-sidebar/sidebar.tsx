@@ -388,8 +388,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
       draggable={false}
       variant="ghost"
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
-        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 text-ink-extra-muted',
+        isActive() && 'bg-ink/5 not-disabled:hover:bg-ink/10 text-ink'
       )}
       tooltipPlacement="right"
       tooltip={
@@ -431,17 +431,26 @@ const SidebarLink = (props: SidebarLinkProps) => {
         {props.label}
       </span>
 
-      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-2 py-0.5 -my-1 group-data-[slim=true]/sidebar:invisible">
-        <div class="flex gap-1">
-          <Show when={!props.standaloneHotkey}>
-            <Hotkey shortcut={GO_TO_LEADER_KEY} />
-            <Hotkey shortcut={props.hotkey} />
-          </Show>
-          <Show when={props.standaloneHotkey}>
-            <Hotkey shortcut={props.hotkey} />
-          </Show>
+      <Show when={isHovering()}>
+        <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
+          <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
+            <Show when={!props.standaloneHotkey}>
+              <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey shortcut={GO_TO_LEADER_KEY} />
+              </div>
+              then
+              <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey shortcut={props.hotkey} />
+              </div>
+            </Show>
+            <Show when={props.standaloneHotkey}>
+              <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                <Hotkey shortcut={props.hotkey} />
+              </div>
+            </Show>
+          </div>
         </div>
-      </div>
+      </Show>
     </Button>
   );
 };
