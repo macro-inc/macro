@@ -235,6 +235,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hotkey: 'cmd+k',
     condition: () => !CommandState.isOpen(),
     keyDownHandler: (e) => {
+      console.log('## CMD K - soup view');
       e?.preventDefault();
       const multiSelectEntities = soup.selection.selected();
 

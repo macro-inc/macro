@@ -1,12 +1,15 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
+import { useEntityActionHotkeys } from '@app/component/next-soup/actions';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { activeElement } from '@app/signal/focus';
+import { CommandState } from '../command';
 import { Resize } from '@core/component/Resize';
+import { useQuickAccess } from '@core/context/quickAccess';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
-import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -382,6 +385,48 @@ function SplitPanel(props: SplitPanelProps) {
 
   const nextSoup = createSoupState({
     initialFilters: ['explicit-noise'],
+  });
+
+  const quickAccess = useQuickAccess();
+  const getBlockEntity = () => {
+    const content = props.handle.content();
+    if (content.type === 'component') return undefined;
+    const item = quickAccess.getById(content.id);
+    if (item && item.kind === 'entity') return item.data;
+    return undefined;
+  };
+
+  // Register entity action hotkeys at split scope for block views
+  useEntityActionHotkeys({
+    scopeId: splitHotkeyScope,
+    soup: nextSoup,
+    splitHandle: props.handle,
+    condition: () => getBlockEntity() !== undefined,
+    getEntityFallback: getBlockEntity,
+  });
+
+  // Override cmd+k at split scope to open entity action mode for block views
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'cmd+k',
+    description: () =>
+      CommandState.isOpen() ? 'Close command menu' : 'Open command menu',
+    condition: () => !CommandState.isOpen() && getBlockEntity() !== undefined,
+    keyDownHandler: (e) => {
+      console.log('##CMD K - split');
+      e?.preventDefault();
+      const entity = getBlockEntity();
+      if (entity) {
+        CommandState.openForEntityAction([entity]);
+      } else {
+        CommandState.toggle();
+      }
+      return true;
+    },
+    displayPriority: 10,
+    handlerPriority: 1,
+    hide: CommandState.isOpen,
+    runWithInputFocused: true,
   });
 
   return (

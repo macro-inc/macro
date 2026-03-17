@@ -76,7 +76,7 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
-import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
@@ -364,16 +364,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-  });
-
-  // Property editor
-  const propertyHotkeys = usePropertyEditorHotkeys({
-    scopeId: scopeId(),
-    soup,
-  });
-
-  onCleanup(() => {
-    propertyHotkeys.disposeHotkeys();
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)

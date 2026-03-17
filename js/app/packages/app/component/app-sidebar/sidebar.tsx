@@ -410,16 +410,14 @@ const SidebarLink = (props: SidebarLinkProps) => {
         {props.label}
       </span>
 
-      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-2 py-0.5 -my-1 group-data-[slim=true]/sidebar:invisible">
         <div class="flex gap-1">
           <Show when={!props.standaloneHotkey}>
-            <>
-              <Hotkey shortcut={GO_TO_LEADER_KEY} lowercase />
-              <Hotkey shortcut={props.hotkey} lowercase />
-            </>
+            <Hotkey shortcut={GO_TO_LEADER_KEY} />
+            <Hotkey shortcut={props.hotkey} />
           </Show>
           <Show when={props.standaloneHotkey}>
-            <Hotkey shortcut={props.hotkey} lowercase />
+            <Hotkey shortcut={props.hotkey} />
           </Show>
         </div>
       </div>
