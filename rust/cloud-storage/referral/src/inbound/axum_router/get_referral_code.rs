@@ -1,4 +1,4 @@
-//! Handler for `GET /referral-code`.
+//! Handler for `GET /code`.
 
 use axum::{Json, extract::State};
 use model_user::axum_extractor::MacroUserExtractor;
@@ -13,7 +13,7 @@ use crate::domain::ports::ReferralService;
 #[utoipa::path(
     tag = "referral",
     get,
-    path = "/referral-code",
+    path = "/referral/code",
     operation_id = "get_referral_code",
     responses(
         (status = 200, body = ReferralCode),

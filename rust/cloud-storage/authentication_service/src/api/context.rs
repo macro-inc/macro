@@ -18,6 +18,10 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
+};
 use teams::{
     domain::team_service::TeamServiceImpl, outbound::customer_repo::CustomerRepositoryImpl,
     outbound::team_repo::TeamRepositoryImpl,
@@ -32,6 +36,9 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
 >;
+
+pub(crate) type ReferralServiceType =
+    ReferralServiceImpl<PgReferralRepo, StripeDiscountClient>;
 
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
@@ -64,6 +71,7 @@ pub(crate) struct ApiContext {
         >,
     >,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
+    pub referral_service: Arc<ReferralServiceType>,
 }
 
 env_var! {

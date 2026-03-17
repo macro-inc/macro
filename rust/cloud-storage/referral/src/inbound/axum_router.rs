@@ -1,7 +1,7 @@
 //! Axum router for referral endpoints.
 //!
 //! Provides routes:
-//! - `GET /referral-code` — get the authenticated user's referral code
+//! - `GET /code` — get the authenticated user's referral code
 
 #[cfg(test)]
 mod test;
@@ -59,7 +59,7 @@ where
 {
     Router::new()
         .route(
-            "/referral-code",
+            "/code",
             axum::routing::get(get_referral_code_handler::<T>),
         )
         .with_state(state)

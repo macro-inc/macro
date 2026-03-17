@@ -59,7 +59,7 @@ async fn test_get_referral_code_success() {
     let app = build_router(service);
 
     let request = axum::http::Request::builder()
-        .uri("/referral-code")
+        .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
         .unwrap();
@@ -81,7 +81,7 @@ async fn test_get_referral_code_internal_error() {
     let app = build_router(service);
 
     let request = axum::http::Request::builder()
-        .uri("/referral-code")
+        .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
         .unwrap();
@@ -103,7 +103,7 @@ async fn test_get_referral_code_unauthenticated() {
     let app: axum::Router = referral_router(state);
 
     let request = axum::http::Request::builder()
-        .uri("/referral-code")
+        .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
         .unwrap();

@@ -604,6 +604,7 @@ dependencies = [
  "openssl",
  "rand 0.9.0",
  "redis",
+ "referral",
  "remote_env_var",
  "reqwest",
  "roles_and_permissions",

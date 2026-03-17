@@ -28,6 +28,11 @@ use teams::{
     outbound::{customer_repo::CustomerRepositoryImpl, team_repo::TeamRepositoryImpl},
 };
 
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
+};
+
 use crate::api::context::{
     ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
     MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
@@ -214,6 +219,11 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    let referral_service = ReferralServiceImpl::new(
+        PgReferralRepo::new(db.clone()),
+        StripeDiscountClient::new(stripe_client.clone(), 500),
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
@@ -239,6 +249,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::default(),
                 environment: config.environment,
