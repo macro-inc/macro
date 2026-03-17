@@ -25,6 +25,8 @@ export interface DocumentFilters {
   /** A list of project ids to search within. Examples: ['project1'].
 filtering. Empty to ignore project filtering. */
   project_ids?: string[];
+  /** Filter by document sub type. Examples: ['task']. Empty to search all sub types. */
+  sub_types?: string[];
   /** Task-specific filters that only apply to task subtype documents. */
   task_filters?: TaskFilters;
 }
