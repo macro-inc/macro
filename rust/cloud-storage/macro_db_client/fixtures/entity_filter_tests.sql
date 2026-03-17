@@ -15,7 +15,7 @@ INSERT INTO public.macro_user (id, username, email, stripe_customer_id)
 VALUES ('00000000-0000-0000-0000-000000000001', 'testuser1', 'user@test.com', 'stripe_mu_1')
 ON CONFLICT DO NOTHING;
 INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
-VALUES ('macro|user-1@test.com', 'user@test.com', 'stripe_id_1', 1, '00000000-0000-0000-0000-000000000001')
+VALUES ('macro|user-1@test.com', 'user@test.com', 'stripe_id_1', 1, '00000000-0000-0000-0000-000000000001');
 
 ---------------------------------
 --  PROJECT HIERARCHY SETUP with UUIDs
