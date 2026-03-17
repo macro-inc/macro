@@ -81,7 +81,7 @@ impl ReferralRepo for PgReferralRepo {
         .await?;
 
         let tracking_id = macro_uuid::generate_uuid_v7();
-        sqlx::query!("INSERT INTO referral_tracking (id, referrer_id, referred_id, created_at) VALUES ($1, $2, $3, NOW())", &tracking_id, &referrer_id, &referred_id).execute(&self.pool).await?;
+        sqlx::query!("INSERT INTO referral_tracking (id, referrer_id, referred_id, status, created_at) VALUES ($1, $2, $3, 'incomplete', NOW())", &tracking_id, &referrer_id, &referred_id).execute(&self.pool).await?;
 
         Ok(())
     }

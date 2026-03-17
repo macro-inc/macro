@@ -4,6 +4,7 @@ CREATE TABLE public.referral_tracking
     id                 UUID                     NOT NULL,
     referrer_id        UUID                     NOT NULL,
     referred_id        UUID                     NOT NULL,
+    status             TEXT                     NOT NULL,
     created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
 
     CONSTRAINT referral_tracking_pkey PRIMARY KEY (id)
