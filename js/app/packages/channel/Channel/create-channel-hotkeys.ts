@@ -1,6 +1,7 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { Accessor } from 'solid-js';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import type { ThreadListNavigation } from './ThreadList';
 import type { MessageSelection } from './create-message-selection';
 import type { ApiChannelMessage } from '@service-comms/client';
@@ -22,6 +23,12 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
 
   let messageListEl: HTMLElement | undefined;
   let inputEl: HTMLElement | undefined;
+
+  useSubscribeToKeypress(() => {
+    if (messageListEl && messageListEl.dataset.channelNav !== 'keyboard') {
+      messageListEl.dataset.channelNav = 'keyboard';
+    }
+  });
 
   const hasSelection = () => !!options.selection.selectedId();
 

@@ -18,19 +18,12 @@ export function Root(props: RootProps) {
     'highlighted',
   ]);
 
-  const onMouseMove = () => {
-    if (document.documentElement.dataset.modality !== 'mouse') {
-      document.documentElement.dataset.modality = 'mouse';
-    }
-  };
-
   return (
     <div
       class={cn('group/message relative', local.class)}
       data-message
       data-message-id={local.message.id}
       data-highlighted={local.highlighted ? '' : undefined}
-      onMouseMove={onMouseMove}
       {...rest}
     >
       <div class="absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 message-accent-bar" />

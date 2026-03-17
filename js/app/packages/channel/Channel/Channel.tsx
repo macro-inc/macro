@@ -211,6 +211,13 @@ export function Channel(props: ChannelProps) {
               ref={attachMessageListRef}
               tabIndex={-1}
               data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
+              }}
             >
               <ThreadList
                 keys={() => messageIndex().keys}
