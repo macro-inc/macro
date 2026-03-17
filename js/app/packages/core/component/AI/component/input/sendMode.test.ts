@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  getSendModeFromEnterKeyEvent,
-  shouldOpenChatSplit,
-} from './sendMode';
+import { getSendModeFromEnterKeyEvent, shouldOpenChatSplit } from './sendMode';
 
 describe('chat send mode', () => {
   test('uses foreground mode for plain enter', () => {
