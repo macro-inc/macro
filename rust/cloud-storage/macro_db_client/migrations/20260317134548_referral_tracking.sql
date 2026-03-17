@@ -13,5 +13,5 @@ CREATE INDEX idx_referral_tracking_referrer_id
   ON referral_tracking (referrer_id);
 
 
-CREATE INDEX idx_referral_tracking_referred_id
+CREATE UNIQUE INDEX idx_referral_tracking_referred_id
   ON referral_tracking (referred_id);
