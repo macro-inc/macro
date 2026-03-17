@@ -141,7 +141,7 @@ VALUES
 
 -- Email attachments linked to some documents via document_email
 -- doc-in-A and doc-in-B are email attachments; doc-in-C, doc-in-D, standalone, isolated are NOT
-INSERT INTO public.email_attachments (id, message_id, filename, mime_type, size)
+INSERT INTO public.email_attachments (id, message_id, filename, mime_type, size_bytes)
 VALUES
     ('ea000001-0000-0000-0000-000000000001', 'ea000001-0000-0000-0000-000000000099', 'attachment1.pdf', 'application/pdf', 1024),
     ('ea000001-0000-0000-0000-000000000002', 'ea000001-0000-0000-0000-000000000099', 'attachment2.pdf', 'application/pdf', 2048);
