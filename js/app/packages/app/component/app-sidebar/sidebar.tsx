@@ -259,10 +259,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <div class="block max-h-[clamp(10%,60%,20rem)]">
           <ChannelsUnreadWidget />
         </div>
-
-        {/* <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto"> */}
-        {/*   <UnreadNotificationsWidget /> */}
-        {/* </div> */}
       </Show>
 
       <div class="px-2 mt-auto w-full">
