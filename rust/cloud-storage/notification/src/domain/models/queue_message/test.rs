@@ -94,6 +94,7 @@ fn test_ingress_queue_message_round_trip() {
     assert!(deserialized.request.send_conn_gateway);
     assert_eq!(deserialized.request.req.recipient_ids.len(), 1);
     assert_eq!(
-        deserialized.request.req.notification.content["msg"], "hello"
+        deserialized.request.req.notification.content["msg"],
+        "hello"
     );
 }

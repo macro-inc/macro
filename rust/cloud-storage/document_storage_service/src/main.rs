@@ -218,7 +218,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized notification ingress service");
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress::new(ingress_queue));
+    let notification_service =
+        NotificationServiceImpl::new(SqsNotificationIngress::new(ingress_queue));
     let properties_service = Arc::new(PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),

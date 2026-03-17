@@ -7,8 +7,9 @@ use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::queue_message::IngressQueueMessage;
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, NotificationChannel, QueueMessage,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, QueueMessage,
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
@@ -18,7 +19,6 @@ use crate::domain::models::request::{
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, NotificationTypeName, UserNotificationRow,
 };
-use crate::domain::models::queue_message::IngressQueueMessage;
 use crate::domain::ports::{
     NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
 };

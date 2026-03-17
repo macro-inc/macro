@@ -65,7 +65,10 @@ impl NotificationRepository for MockNotifRepo {
     }
     async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        _: crate::domain::models::SendNotificationRequestBuilder<'a, crate::domain::models::TaggedContent<T>>,
+        _: crate::domain::models::SendNotificationRequestBuilder<
+            'a,
+            crate::domain::models::TaggedContent<T>,
+        >,
         _: uuid::Uuid,
         _: &str,
         _: Option<&str>,

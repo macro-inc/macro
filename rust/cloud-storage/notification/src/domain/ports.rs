@@ -20,10 +20,9 @@ use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationExtEmail, NotificationIdAndCollapseKey,
-    RateLimitConfig, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
-    UserNotificationRow, android::FCMMessage, apple::APNSPushNotification,
-    mobile::MessageAttributes,
+    DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey, RateLimitConfig,
+    RateLimitKey, RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
+    android::FCMMessage, apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).

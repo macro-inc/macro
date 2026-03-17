@@ -164,8 +164,8 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let redis_client_for_github = redis::Client::open(config.redis_uri.as_str())
-        .context("failed to create redis client")?;
+    let redis_client_for_github =
+        redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
     let redis_multiplexed_conn = redis_client_for_github
         .get_multiplexed_async_connection()
         .await
