@@ -230,6 +230,7 @@ const FilesTabs = () => {
         list={[
           { value: 'owned', label: 'Owned' },
           { value: 'shared', label: 'Shared' },
+          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}

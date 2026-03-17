@@ -4208,6 +4208,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        is_email_attachment: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both.'
+          ),
         notification_filters: zod
           .object({
             done: zod
