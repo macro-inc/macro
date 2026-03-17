@@ -9,6 +9,8 @@
 ///   e.g. SINCE=2026-03-16T00:00:00Z
 /// - EMAIL_INDEX_OVERRIDE: Override the target OpenSearch index for email upserts
 ///   e.g. EMAIL_INDEX_OVERRIDE=emails_v2
+/// - BATCH_SIZE: Number of threads per SQS batch message (default: 50)
+///   e.g. BATCH_SIZE=100
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
@@ -38,6 +40,11 @@ async fn main() -> anyhow::Result<()> {
         .transpose()?;
 
     let index_override = std::env::var("EMAIL_INDEX_OVERRIDE").ok();
+
+    let batch_size: usize = std::env::var("BATCH_SIZE")
+        .unwrap_or("50".to_string())
+        .parse()
+        .context("BATCH_SIZE must be a valid number")?;
 
     if let Some(ref index) = index_override {
         println!("Index override: {}", index);
@@ -94,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
             .into_iter()
             .flat_map(|(macro_user_id, thread_ids)| {
                 thread_ids
-                    .chunks(50)
+                    .chunks(batch_size)
                     .map(|chunk| {
                         SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
                             thread_ids: chunk.to_vec(),
