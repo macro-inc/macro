@@ -70,7 +70,6 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
@@ -106,9 +105,8 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'channel',
     (notification) => {
-      entityQueryClient.invalidateQueries({
-        queryKey: soupKeys._def,
-      });
+      refetchSoupEntity(notification.entity_id, 'channel');
+      invalidateSoupEntity(notification.entity_id);
       invalidateEntityNotifications(notification.entity_id);
     }
   );
@@ -131,9 +129,8 @@ const useSoupNotificationInvalidators = () => {
     'document',
     (notification) => {
       if (notification.notification_event_type === 'task_assigned') {
-        entityQueryClient.invalidateQueries({
-          queryKey: soupKeys._def,
-        });
+        refetchSoupEntity(notification.entity_id, 'document');
+        invalidateSoupEntity(notification.entity_id);
         invalidateEntityNotifications(notification.entity_id);
       }
     }

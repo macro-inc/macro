@@ -153,6 +153,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 csv = "1"
+dateparser = "0.2.1"
 dashmap = "6.1.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"

@@ -1,6 +1,14 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { UnifiedNotification } from '@notifications/types';
-import { For, Show, createSignal, createMemo, onMount } from 'solid-js';
+import {
+  For,
+  Show,
+  createSignal,
+  createMemo,
+  createEffect,
+  on,
+  onMount,
+} from 'solid-js';
 import {
   EntityIcon,
   type EntityWithValidIcon,
@@ -12,6 +20,8 @@ import {
 } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { compareDateDesc } from '@core/util/date';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -175,16 +185,55 @@ export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
+  const openChannelIds = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return new Set<string>();
+    return new Set(
+      manager
+        .splits()
+        .filter((s) => s.content.type === 'channel')
+        .map((s) => s.content.id)
+    );
+  });
+
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
-  const channelGroups = createMemo(() => {
+  const channelGroupsMap = createMemo(() => {
+    const open = openChannelIds();
     const groups = groupByChannel(filteredNotifications());
-    // Convert to array and sort by most recent notification
-    return Array.from(groups.values()).sort((a, b) => {
-      const aTime = new Date(a.notifications[0]?.created_at ?? 0).getTime();
-      const bTime = new Date(b.notifications[0]?.created_at ?? 0).getTime();
-      return bTime - aTime;
-    });
+    for (const id of open) {
+      groups.delete(id);
+    }
+    return groups;
+  });
+
+  const [orderedIds, setOrderedIds] = createSignal<string[]>([]);
+
+  createEffect(
+    on(channelGroupsMap, (groups) => {
+      const currentIds = new Set(groups.keys());
+      const prev = orderedIds();
+      const kept = prev.filter((id) => currentIds.has(id));
+      const keptSet = new Set(kept);
+      const added = [...currentIds].filter((id) => !keptSet.has(id));
+
+      if (added.length === 0 && kept.length === prev.length) return;
+
+      added.sort((a, b) => {
+        const aTime = groups.get(a)?.notifications[0]?.created_at;
+        const bTime = groups.get(b)?.notifications[0]?.created_at;
+        return compareDateDesc(aTime, bTime);
+      });
+
+      setOrderedIds([...added, ...kept]);
+    })
+  );
+
+  const channelGroups = createMemo(() => {
+    const groups = channelGroupsMap();
+    return orderedIds()
+      .map((id) => groups.get(id))
+      .filter((g): g is ChannelGroup => g != null);
   });
 
   return (

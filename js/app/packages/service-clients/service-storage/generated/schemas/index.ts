@@ -442,6 +442,8 @@ export * from './projectType';
 export * from './projectUpdatedAt';
 export * from './propertyDefinition';
 export * from './propertyDefinitionSpecificEntityType';
+export * from './propertyFilter';
+export * from './propertyFilterEntityType';
 export * from './propertyInput';
 export * from './propertyOwner';
 export * from './propertyOwnerOneOf';

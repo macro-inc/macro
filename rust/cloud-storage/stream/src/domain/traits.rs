@@ -43,7 +43,7 @@ pub trait StreamManager: Send + Sync + 'static {
     /// `sender_id` uniquely identifies the subscriber (e.g. a connection, not a user).
     async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream>;
     /// Cancel the subscription for the given sender, stopping its stream.
-    async fn unsubscribe(&self, sender_id: String) -> Result<()>;
+    async fn unsubscribe(&self, sender_id: String, entity_id: String) -> Result<()>;
     /// access to the lower-level repo api
     fn repo(&self) -> Arc<dyn StreamRepo>;
 }

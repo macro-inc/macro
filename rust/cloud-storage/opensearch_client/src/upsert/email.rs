@@ -97,6 +97,7 @@ pub(crate) async fn upsert_email_message(
 pub(crate) async fn bulk_upsert_email_messages(
     client: &opensearch::OpenSearch,
     messages: &[UpsertEmailArgs],
+    index_override: Option<&str>,
 ) -> Result<BulkUpsertResult> {
     if messages.is_empty() {
         return Ok(BulkUpsertResult::default());
@@ -122,11 +123,7 @@ pub(crate) async fn bulk_upsert_email_messages(
         })?);
     }
 
-    super::bulk_upsert_to_index(
-        client,
-        SearchIndex::Emails.as_ref(),
-        bulk_body,
-        "bulk_upsert_email_messages",
-    )
-    .await
+    let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
+
+    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_email_messages").await
 }

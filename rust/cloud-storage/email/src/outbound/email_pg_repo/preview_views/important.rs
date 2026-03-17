@@ -39,6 +39,14 @@ pub(crate) async fn important_preview_cursor(
                    m.from_name
             FROM email_messages m
             WHERE m.link_id = $1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM email_message_labels ml
+                  JOIN email_labels l ON ml.label_id = l.id
+                  WHERE ml.message_id = m.id
+                    AND l.name = 'TRASH'
+                    AND l.link_id = $1
+              )
               AND EXISTS (
                   SELECT 1
                   FROM email_message_labels ml
@@ -66,6 +74,14 @@ pub(crate) async fn important_preview_cursor(
             FROM email_messages m
             WHERE m.link_id = $1
               AND m.is_draft = TRUE
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM email_message_labels ml
+                  JOIN email_labels l ON ml.label_id = l.id
+                  WHERE ml.message_id = m.id
+                    AND l.name = 'TRASH'
+                    AND l.link_id = $1
+              )
         ),
         AllImportantThreads AS (
             -- From all qualifying messages, get the single most recent one per thread.
