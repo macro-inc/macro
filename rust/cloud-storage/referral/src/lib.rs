@@ -1,6 +1,6 @@
-//! Referall hexagonal architecture crate.
+//! Referral hexagonal architecture crate.
 //!
-//! Encapsulates document CRUD operations using a ports-and-adapters pattern.
+//! Encapsulates referral CRUD operations using a ports-and-adapters pattern.
 //!
 //! # Architecture
 //!

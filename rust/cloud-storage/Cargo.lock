@@ -7885,6 +7885,7 @@ name = "referral"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stripe",
  "axum",
  "axum-extra",
  "chrono",
@@ -7892,6 +7893,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "mockall",
  "model-error-response",
  "model_user",
  "serde",
