@@ -4,6 +4,7 @@ use macro_uuid::ShortUuidConverter;
 
 /// Wrapper for the referral code to make it type safe
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct ReferralCode(pub(crate) String);
 
 /// Errors that can occur during referral operations.
