@@ -96,8 +96,7 @@ export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
         .catch(() => {});
     } else {
       // ── Reverse morphs ────────────────────────────────────────────────────
-      const isActive = (a: Animation) =>
-        a.playState === 'running' || a.playState === 'pending';
+      const isActive = (a: Animation) => a.playState === 'running';
 
       for (const a of morphAnims.filter((a) => !isActive(a))) cancelAnim(a);
       const running = morphAnims.filter(isActive);
@@ -123,7 +122,7 @@ export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
       // reverse() uses the animation's own keyframes — no commitStyles needed,
       // so no inline opacity can be stranded under rapid trigger cycles.
       if (cutoutAnim) {
-        const inDelayPhase = (cutoutAnim.currentTime ?? 0) < DURATION; // delay === DURATION
+        const inDelayPhase = Number(cutoutAnim.currentTime ?? 0) < DURATION; // delay === DURATION
         if (inDelayPhase) {
           // fill:'both' is holding opacity:0; just cancel.
           cutoutAnim.finished.catch(() => {});
