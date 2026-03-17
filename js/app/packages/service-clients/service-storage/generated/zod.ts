@@ -4237,6 +4237,12 @@ export const postItemsSoupBody = zod
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           ),
+        sub_types: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
+          ),
         task_filters: zod
           .object({
             include_cbm_atm_nc: zod

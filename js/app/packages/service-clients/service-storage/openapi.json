@@ -6323,6 +6323,13 @@
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           },
+          "sub_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
+          },
           "task_filters": {
             "$ref": "#/components/schemas/TaskFilters",
             "description": "Task-specific filters that only apply to task subtype documents."
