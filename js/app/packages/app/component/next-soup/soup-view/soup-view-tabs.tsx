@@ -2,12 +2,14 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
+import { runCreateAction } from '@app/component/Launcher';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
+import { isListViewID, type ListView } from '@app/constants/list-views';
+import { getListViewCreateActionId } from '@app/component/list-view-create';
 import { useUserContext } from '@core/context/user';
 import {
   batch,
@@ -15,12 +17,14 @@ import {
   For,
   Match,
   type ParentComponent,
+  Show,
   Switch,
 } from 'solid-js';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
+import { Button } from '@ui/components/Button';
 
 export const useApplyPreset = () => {
   const soup = useSoup();
@@ -60,42 +64,63 @@ export const useApplyPreset = () => {
 export const SoupViewTabs = () => {
   const panel = useSplitPanelOrThrow();
 
-  const component = createMemo(() => {
+  const listView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
 
     if (content.type !== 'component') return;
 
-    return content.id;
+    return isListViewID(content.id) ? content.id : undefined;
   });
 
-  const isComponentListView = (listView: ListView) => {
-    return component() === listView;
+  const isComponentListView = (view: ListView) => {
+    return listView() === view;
   };
 
+  const createActionId = createMemo(() => {
+    const view = listView();
+    if (!view) return;
+    return getListViewCreateActionId(view);
+  });
+
   return (
-    <Switch>
-      <Match when={isComponentListView('inbox')}>
-        <InboxTabs />
-      </Match>
-      <Match when={isComponentListView('agents')}>
-        <AgentsTabs />
-      </Match>
-      <Match when={isComponentListView('mail')}>
-        <MailTabs />
-      </Match>
-      <Match when={isComponentListView('documents')}>
-        <DocumentsTabs />
-      </Match>
-      <Match when={isComponentListView('tasks')}>
-        <TasksTabs />
-      </Match>
-      <Match when={isComponentListView('channels')}>
-        <ChannelsTabs />
-      </Match>
-      <Match when={isComponentListView('files')}>
-        <FilesTabs />
-      </Match>
-    </Switch>
+    <div class="flex items-center gap-2">
+      <Switch>
+        <Match when={isComponentListView('inbox')}>
+          <InboxTabs />
+        </Match>
+        <Match when={isComponentListView('agents')}>
+          <AgentsTabs />
+        </Match>
+        <Match when={isComponentListView('mail')}>
+          <MailTabs />
+        </Match>
+        <Match when={isComponentListView('documents')}>
+          <DocumentsTabs />
+        </Match>
+        <Match when={isComponentListView('tasks')}>
+          <TasksTabs />
+        </Match>
+        <Match when={isComponentListView('channels')}>
+          <ChannelsTabs />
+        </Match>
+        <Match when={isComponentListView('files')}>
+          <FilesTabs />
+        </Match>
+      </Switch>
+
+      <Show when={createActionId()}>
+        {(actionId) => (
+          <Button
+            variant="secondary"
+            size="sm"
+            class="rounded-xs whitespace-nowrap"
+            onClick={() => runCreateAction(actionId())}
+          >
+            + New
+          </Button>
+        )}
+      </Show>
+    </div>
   );
 };
 

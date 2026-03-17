@@ -11,10 +11,15 @@ import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import SplitIcon from '@macro-icons/new-split.svg';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
-import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import {
+  LIST_VIEW_ID,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
@@ -27,6 +32,8 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenu } from '@kobalte/core/context-menu';
 
 import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
@@ -181,6 +188,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
     setCreateMenuOpen((p) => !p);
   };
 
+  const canCreateNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? true;
+
+  const handleNewSplitClick = () => {
+    const manager = globalSplitManager();
+    if (!manager || !manager.canAppendSplit()) return;
+
+    manager.createNewSplit({
+      content: {
+        type: 'component',
+        id: LIST_VIEW_ID.inbox,
+      },
+      activate: true,
+      allowDuplicate: true,
+      referredFrom: 'sidebar',
+    });
+  };
+
   const registerHotkeys = () =>
     registerSidebarHotkeys({
       isSlim,
@@ -303,6 +328,28 @@ export const AppSidebar = (props: AppSidebarProps) => {
           tooltipPlacement="right"
           tooltip={
             <LabelAndHotKey
+              label="Create new split"
+              hotkeyToken={TOKENS.global.createNewSplit}
+            />
+          }
+          onClick={handleNewSplitClick}
+          disabled={!canCreateNewSplit()}
+        >
+          <SplitIcon class="size-4 shrink-0" />
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            New Split
+          </span>
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={TOKENS.global.createNewSplit} class="flex gap-1" />
+          </div>
+        </Button>
+
+        <Button
+          class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+          variant="ghost"
+          tooltipPlacement="right"
+          tooltip={
+            <LabelAndHotKey
               label="Command palette"
               hotkeyToken={TOKENS.global.commandMenu}
             />
@@ -368,68 +415,110 @@ const SidebarLink = (props: SidebarLinkProps) => {
     return activeContent?.id === props.id;
   };
 
+  const content = () =>
+    ({
+      type: 'component',
+      id: props.id,
+    }) as const;
+
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? true;
+
+  const openInCurrentSplit = () =>
+    layout.openWithSplit(content(), {
+      allowDuplicate: true,
+      mergeHistory: false,
+      referredFrom: 'sidebar',
+    });
+
+  const openInNewSplit = () => {
+    const manager = globalSplitManager();
+    if (!manager || !manager.canAppendSplit()) return;
+
+    manager.createNewSplit({
+      content: content(),
+      activate: true,
+      allowDuplicate: true,
+      referredFrom: 'sidebar',
+    });
+  };
+
+  const openFullscreen = () => {
+    const split = openInCurrentSplit();
+    split?.toggleSpotlight(true);
+  };
+
   return (
-    <Button
-      as="button"
-      draggable={false}
-      variant="ghost"
-      class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
-        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
-      )}
-      tooltipPlacement="right"
-      tooltip={
-        <LabelAndHotKey
-          label={`Go to ${props.label}`}
-          hotkeySequence={
-            props.standaloneHotkey
-              ? [{ shortcut: props.hotkey }]
-              : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
+    <ContextMenu>
+      <ContextMenu.Trigger class="w-full">
+        <Button
+          as="button"
+          draggable={false}
+          variant="ghost"
+          class={cn(
+            'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
+            isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
+          )}
+          tooltipPlacement="right"
+          tooltip={
+            <LabelAndHotKey
+              label={`Go to ${props.label}`}
+              hotkeySequence={
+                props.standaloneHotkey
+                  ? [{ shortcut: props.hotkey }]
+                  : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
+              }
+            />
           }
-        />
-      }
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-      onClick={(e) => {
-        // Middle mouse handling
-        if (e.button === 1) return;
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
+          onClick={(e) => {
+            // Middle mouse handling
+            if (e.button === 1) return;
 
-        e.preventDefault();
-        layout.openWithSplit(
-          {
-            type: 'component',
-            id: props.id,
-          },
-          {
-            preferNewSplit: e.shiftKey,
-            mergeHistory: false,
-            allowDuplicate: true,
-          }
-        );
-      }}
-    >
-      <Show when={props.icon}>
-        <div class="shrink-0 [&_svg]:size-4">
-          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-        </div>
-      </Show>
-      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-        {props.label}
-      </span>
+            e.preventDefault();
+            layout.openWithSplit(content(), {
+              preferNewSplit: e.shiftKey,
+              mergeHistory: false,
+              allowDuplicate: true,
+              referredFrom: 'sidebar',
+            });
+          }}
+        >
+          <Show when={props.icon}>
+            <div class="shrink-0 [&_svg]:size-4">
+              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+            </div>
+          </Show>
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            {props.label}
+          </span>
 
-      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
-        <div class="flex gap-1">
-          <Show when={!props.standaloneHotkey}>
-            <>
-              <Hotkey shortcut={GO_TO_LEADER_KEY} lowercase />
-              <Hotkey shortcut={props.hotkey} lowercase />
-            </>
-          </Show>
-          <Show when={props.standaloneHotkey}>
-            <Hotkey shortcut={props.hotkey} lowercase />
-          </Show>
-        </div>
-      </div>
-    </Button>
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <div class="flex gap-1">
+              <Show when={!props.standaloneHotkey}>
+                <Hotkey shortcut={GO_TO_LEADER_KEY} lowercase />
+                <Hotkey shortcut={props.hotkey} lowercase />
+              </Show>
+              <Show when={props.standaloneHotkey}>
+                <Hotkey shortcut={props.hotkey} lowercase />
+              </Show>
+            </div>
+          </div>
+        </Button>
+      </ContextMenu.Trigger>
+
+      <ContextMenu.Portal>
+        <ContextMenuContent class="text-xs text-ink-muted">
+          <MenuItem
+            text="Open in new split"
+            onClick={openInNewSplit}
+            disabled={!canOpenInNewSplit()}
+          />
+          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
   );
 };
