@@ -11,9 +11,9 @@ TRUNCATE TABLE public."User", public."Project", public."Document", public."Share
 -- Users
 ------------------------------------------------------------
 INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
-VALUES ('a1111111-1111-1111-1111-111111111111', 'user_thread', 'user_thread@test.com', 'stripe_placeholder'),
-       ('a2222222-2222-2222-2222-222222222222', 'user_none', 'user_none@test.com', 'stripe_placeholder'),
-       ('a3333333-3333-3333-3333-333333333333', 'user_both', 'user_both@test.com', 'stripe_placeholder');
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user_thread', 'user_thread@test.com', 'stripe_user_thread'),
+       ('a2222222-2222-2222-2222-222222222222', 'user_none', 'user_none@test.com', 'stripe_user_none'),
+       ('a3333333-3333-3333-3333-333333333333', 'user_both', 'user_both@test.com', 'stripe_user_both');
 INSERT INTO public."User" ("id", "email", "macro_user_id")
 VALUES ('user-thread-access', 'user_thread@test.com', 'a1111111-1111-1111-1111-111111111111'),   -- Has thread access only
        ('user-no-access', 'user_none@test.com', 'a2222222-2222-2222-2222-222222222222'),          -- Has no access at all
