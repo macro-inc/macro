@@ -333,8 +333,19 @@ export default function IconGallery() {
                         width: `${iconSize()}px`,
                         height: `${iconSize()}px`,
                       }}
-                      onClick={() => triggerAnimation(pair.name)}
-                      title="Click to animate"
+                      onMouseEnter={() =>
+                        setAnimationTriggers((prev) => ({
+                          ...prev,
+                          [pair.name]: true,
+                        }))
+                      }
+                      onMouseLeave={() =>
+                        setAnimationTriggers((prev) => ({
+                          ...prev,
+                          [pair.name]: false,
+                        }))
+                      }
+                      title="Hover to animate"
                     >
                       <pair.animated
                         triggerAnimation={animationTriggers()[pair.name]}
