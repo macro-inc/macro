@@ -27,7 +27,8 @@ pub struct Params {
         operation_id = "passwordless_callback",
         params(
             ("code" = String, Path, description = "Code"),
-            ("email" = String, Query, description = "Email")
+            ("email" = String, Query, description = "Email"),
+            ("referral_code" = String, Query, description = "Referral code")
         ),
         responses(
             (status = 200, body = UserTokensResponse),

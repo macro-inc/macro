@@ -24,6 +24,16 @@ impl ReferralService for MockReferralService {
         }
     }
 
+    async fn track_referral<'a>(
+        &self,
+        _referred_user_id: &macro_user_id::user_id::MacroUserId<
+            macro_user_id::lowercased::Lowercase<'a>,
+        >,
+        _referral_code: &ReferralCode,
+    ) -> Result<(), ReferralError> {
+        Ok(())
+    }
+
     async fn process_referral<'a>(
         &self,
         _referred_user_id: &macro_user_id::user_id::MacroUserId<

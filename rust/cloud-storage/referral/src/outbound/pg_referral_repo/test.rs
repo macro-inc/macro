@@ -177,3 +177,106 @@ async fn test_track_referral_nonexistent_referred_user(pool: Pool<Postgres>) {
 
     assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_complete_referral(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool.clone());
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+    let code = referrer_referral_code();
+
+    // First track the referral
+    repo.track_referral(&referred_user_id.0, &code)
+        .await
+        .unwrap();
+
+    // Then complete it
+    repo.complete_referral(&referred_user_id.0, &code)
+        .await
+        .unwrap();
+
+    // Verify the status was updated
+    let row = sqlx::query!("SELECT status FROM referral_tracking LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(row.status, "complete");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_complete_referral_invalid_code(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+    let code = ReferralCode("!!!invalid!!!".to_string());
+
+    let result = repo.complete_referral(&referred_user_id.0, &code).await;
+
+    assert!(result.is_err());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_complete_referral_nonexistent_referrer(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+
+    let converter = ShortUuidConverter::default();
+    let fake_uuid = uuid::Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let code = ReferralCode(converter.from_uuid(&fake_uuid));
+
+    let result = repo.complete_referral(&referred_user_id.0, &code).await;
+
+    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_complete_referral_nonexistent_referred_user(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|nobody@test.com")
+        .unwrap()
+        .into_owned();
+    let code = referrer_referral_code();
+
+    let result = repo.complete_referral(&referred_user_id.0, &code).await;
+
+    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_complete_referral_not_tracked(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+    let code = referrer_referral_code();
+
+    // Complete without tracking first — no rows exist to update
+    let result = repo.complete_referral(&referred_user_id.0, &code).await;
+
+    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+}

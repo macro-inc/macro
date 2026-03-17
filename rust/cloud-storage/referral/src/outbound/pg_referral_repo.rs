@@ -87,6 +87,49 @@ impl ReferralRepo for PgReferralRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn complete_referral<'a>(
+        &self,
+        referred_user_id: &MacroUserId<Lowercase<'a>>,
+        referral_code: &ReferralCode,
+    ) -> Result<(), Self::Err> {
+        let referrer_id =
+            referral_code_to_uuid(referral_code).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        // make sure this user exists
+        sqlx::query!(
+            "SELECT 1 as exists FROM macro_user WHERE id = $1",
+            &referrer_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let referred_id = sqlx::query!(
+            r#"SELECT macro_user_id FROM "User" WHERE id = $1"#,
+            referred_user_id.as_ref()
+        )
+        .map(|s| s.macro_user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let result = sqlx::query!(
+            r#"
+            UPDATE referral_tracking
+            SET status = 'complete'
+            WHERE referrer_id = $1 and referred_id = $2"#,
+            &referrer_id,
+            &referred_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_referrers_customer_id(
         &self,
         referral_code: &ReferralCode,

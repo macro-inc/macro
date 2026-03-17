@@ -38,6 +38,19 @@ impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImp
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn track_referral<'a>(
+        &self,
+        referred_user_id: &MacroUserId<Lowercase<'a>>,
+        referral_code: &ReferralCode,
+    ) -> Result<(), ReferralError> {
+        self.repo
+            .track_referral(referred_user_id, referral_code)
+            .await
+            .map_err(|e| ReferralError::Internal(e.into()))?;
+        todo!()
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn process_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
@@ -52,7 +65,7 @@ impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImp
             .map_err(|e| ReferralError::Internal(e.into()))?;
 
         self.repo
-            .track_referral(referred_user_id, referral_code)
+            .complete_referral(referred_user_id, referral_code)
             .await
             .map_err(|e| ReferralError::Internal(e.into()))?;
 
