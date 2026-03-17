@@ -32,6 +32,7 @@ import {
 } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -98,6 +99,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -176,6 +178,7 @@ export const SoupView = (props: SoupViewProps) => {
   });
 
   const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
+  const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
 
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
@@ -213,35 +216,78 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
-              <div class="h-full flex gap-3 items-center">
+              <div
+                class={cn('h-full flex gap-3 items-center', {
+                  'shrink-0': !narrowSearchExpanded(),
+                  'flex-1 min-w-0': narrowSearchExpanded(),
+                })}
+              >
                 <Show when={!isMobile()}>
-                  <h1 class="font-medium text-ink-muted select-none text-sm">
+                  <h1 class="font-medium text-ink-muted select-none text-sm shrink-0">
                     {props.viewName}
                   </h1>
                 </Show>
-                <SoupViewTabs />
+                <Show when={!narrowSearchExpanded()}>
+                  <SoupViewTabs />
+                </Show>
+                <Show when={narrowSearchExpanded()}>
+                  <div class="flex-1 min-w-0">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus
+                      onDismiss={() => setNarrowSearchExpanded(false)}
+                    />
+                  </div>
+                </Show>
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <div class="w-52">
-                <SoupSearchbar variant="filled" />
-              </div>
-              <Tooltip
-                tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-              >
-                <Button
-                  variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                  size="icon-sm"
-                  class="rounded-xs [&_svg]:size-4"
-                  onClick={togglePreview}
-                  onMouseEnter={() => setPreviewBtnHovering(true)}
-                  onMouseLeave={() => setPreviewBtnHovering(false)}
+              <CollapsibleHeaderItem
+                id="search"
+                priority={0}
+                onCollapsedChange={(isCollapsed) => {
+                  if (!isCollapsed) setNarrowSearchExpanded(false);
+                }}
+                expanded={
+                  <div class="w-52">
+                    <SoupSearchbar variant="filled" />
+                  </div>
+                }
+                collapsed={
+                  <Show when={!narrowSearchExpanded()}>
+                    <Tooltip
+                      tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="rounded-xs"
+                        onClick={() => setNarrowSearchExpanded(true)}
+                      >
+                        <SearchIcon class="size-4" />
+                      </Button>
+                    </Tooltip>
+                  </Show>
+                }
+              />
+              <Show when={!narrowSearchExpanded()}>
+                <Tooltip
+                  tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
                 >
-                  <AnimatedPreviewIcon
-                    triggerAnimation={previewBtnHovering()}
-                  />
-                </Button>
-              </Tooltip>
+                  <Button
+                    variant={soup.previewEntity() ? 'primary' : 'ghost'}
+                    size="icon-sm"
+                    class="rounded-xs [&_svg]:size-4"
+                    onClick={togglePreview}
+                    onMouseEnter={() => setPreviewBtnHovering(true)}
+                    onMouseLeave={() => setPreviewBtnHovering(false)}
+                  >
+                    <AnimatedPreviewIcon
+                      triggerAnimation={previewBtnHovering()}
+                    />
+                  </Button>
+                </Tooltip>
+              </Show>
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>

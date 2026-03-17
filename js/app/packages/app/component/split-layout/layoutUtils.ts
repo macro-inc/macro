@@ -2,8 +2,20 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createMemo, useContext } from 'solid-js';
-import { SplitLayoutContext, SplitPanelContext } from './context';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  onCleanup,
+  type Setter,
+  type Signal,
+  useContext,
+} from 'solid-js';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type CollapsibleItemInput,
+} from './context';
 import type {
   SplitContent,
   SplitContentType,
@@ -143,4 +155,27 @@ export function createIsActiveSplitContentMemo(
     const content = activeSplit()?.content();
     return content?.type === contentType && content.id === id;
   });
+}
+
+export function useRegisterCollapsibleHeaderItem(
+  input: CollapsibleItemInput
+): Signal<boolean> {
+  const [collapsed, setCollapsedInner] = createSignal(false);
+  const setCollapsed: Setter<boolean> = (
+    next?: boolean | ((prev: boolean) => boolean)
+  ) => {
+    const value =
+      typeof next === 'function' ? next(collapsed()) : (next ?? false);
+    setCollapsedInner(value as boolean);
+    input.onCollapsedChange?.(value as boolean);
+    return value as boolean;
+  };
+  const ctx = useSplitPanelOrThrow();
+  const cleanup = ctx.headerCollapser.register({
+    ...input,
+    collapsed,
+    setCollapsed,
+  });
+  onCleanup(cleanup);
+  return [collapsed, setCollapsed];
 }

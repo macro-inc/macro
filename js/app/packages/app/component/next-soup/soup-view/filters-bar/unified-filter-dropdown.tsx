@@ -4,7 +4,6 @@ import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
 import {
   type Accessor,
   createMemo,

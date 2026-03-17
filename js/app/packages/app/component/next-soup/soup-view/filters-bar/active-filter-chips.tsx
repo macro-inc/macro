@@ -198,7 +198,7 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                   type="button"
                   class={cn(
                     'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md whitespace-nowrap',
-                    'text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors'
+                    'text-ink-muted hover:text-ink hover:bg-hover transition-colors'
                   )}
                   onClick={() => props.onClearAll()}
                 >

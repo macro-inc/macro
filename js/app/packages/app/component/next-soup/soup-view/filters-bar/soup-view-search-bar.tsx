@@ -13,6 +13,7 @@ type SearchbarVariant = 'filled' | 'secondary';
 interface SoupSearchbarProps {
   variant?: SearchbarVariant;
   autoFocus?: boolean;
+  onDismiss?: () => void;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -109,6 +110,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               ) {
                 e.preventDefault();
                 e.currentTarget.blur();
+                if (e.key === 'Escape') props.onDismiss?.();
               }
             }}
             class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
@@ -124,7 +126,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               <Hotkey shortcut="cmd+f" />
             </div>
           </Show>
-          <Show when={searchText()}>
+          <Show when={searchText() || props.onDismiss}>
             <button
               type="button"
               class="ml-auto size-4 shrink-0 hover:opacity-60"
@@ -132,6 +134,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setSearchText('');
+                props.onDismiss?.();
               }}
             >
               <XIcon class="size-4" />
