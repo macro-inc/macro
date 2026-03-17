@@ -9,8 +9,16 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { getListViewCreateActionId } from '@app/component/list-view-create';
+import {
+  type ListViewCreateActionId,
+  type ListViewCreateOptionId,
+  getListViewCreateOptions,
+} from '@app/component/list-view-create';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { useUserContext } from '@core/context/user';
+import { openFilePicker } from '@core/util/upload';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import {
   batch,
   createMemo,
@@ -20,11 +28,24 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
 import { Button } from '@ui/components/Button';
+
+const useCurrentListView = () => {
+  const panel = useSplitPanelOrThrow();
+
+  return createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+
+    if (content.type !== 'component') return;
+
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+};
 
 export const useApplyPreset = () => {
   const soup = useSoup();
@@ -62,65 +83,103 @@ export const useApplyPreset = () => {
 };
 
 export const SoupViewTabs = () => {
-  const panel = useSplitPanelOrThrow();
-
-  const listView = createMemo<ListView | undefined>(() => {
-    const content = panel.handle.content();
-
-    if (content.type !== 'component') return;
-
-    return isListViewID(content.id) ? content.id : undefined;
-  });
+  const listView = useCurrentListView();
 
   const isComponentListView = (view: ListView) => {
     return listView() === view;
   };
 
-  const createActionId = createMemo(() => {
+  return (
+    <Switch>
+      <Match when={isComponentListView('inbox')}>
+        <InboxTabs />
+      </Match>
+      <Match when={isComponentListView('agents')}>
+        <AgentsTabs />
+      </Match>
+      <Match when={isComponentListView('mail')}>
+        <MailTabs />
+      </Match>
+      <Match when={isComponentListView('documents')}>
+        <DocumentsTabs />
+      </Match>
+      <Match when={isComponentListView('tasks')}>
+        <TasksTabs />
+      </Match>
+      <Match when={isComponentListView('channels')}>
+        <ChannelsTabs />
+      </Match>
+      <Match when={isComponentListView('files')}>
+        <FilesTabs />
+      </Match>
+    </Switch>
+  );
+};
+
+export const SoupViewCreateButton = () => {
+  const listView = useCurrentListView();
+  const handleFileUpload = useHandleFileUpload();
+  const options = createMemo(() => {
     const view = listView();
-    if (!view) return;
-    return getListViewCreateActionId(view);
+    if (!view) return [];
+    return getListViewCreateOptions(view);
   });
 
-  return (
-    <div class="flex items-center gap-2">
-      <Switch>
-        <Match when={isComponentListView('inbox')}>
-          <InboxTabs />
-        </Match>
-        <Match when={isComponentListView('agents')}>
-          <AgentsTabs />
-        </Match>
-        <Match when={isComponentListView('mail')}>
-          <MailTabs />
-        </Match>
-        <Match when={isComponentListView('documents')}>
-          <DocumentsTabs />
-        </Match>
-        <Match when={isComponentListView('tasks')}>
-          <TasksTabs />
-        </Match>
-        <Match when={isComponentListView('channels')}>
-          <ChannelsTabs />
-        </Match>
-        <Match when={isComponentListView('files')}>
-          <FilesTabs />
-        </Match>
-      </Switch>
+  const primaryOption = createMemo(() => options()[0]);
 
-      <Show when={createActionId()}>
-        {(actionId) => (
-          <Button
-            variant="secondary"
-            size="sm"
-            class="rounded-xs whitespace-nowrap"
-            onClick={() => runCreateAction(actionId())}
-          >
-            + New
-          </Button>
-        )}
-      </Show>
-    </div>
+  const handleSelect = (optionId: ListViewCreateOptionId) => {
+    if (optionId === 'import') {
+      openFilePicker({ multiple: true }, async (files) => {
+        await handleFileUpload(files, false);
+      });
+      return;
+    }
+
+    runCreateAction(optionId as ListViewCreateActionId);
+  };
+
+  return (
+    <Show when={primaryOption()}>
+      {(option) => (
+        <Show
+          when={options().length > 1}
+          fallback={
+            <Button
+              variant="secondary"
+              size="sm"
+              class="rounded-xs whitespace-nowrap px-3"
+              onClick={() => handleSelect(option().id)}
+            >
+              {option().label}
+            </Button>
+          }
+        >
+          <DropdownMenu placement="bottom-start" gutter={4}>
+            <DropdownMenu.Trigger
+              as={Button}
+              variant="secondary"
+              size="sm"
+              class="rounded-xs whitespace-nowrap px-3"
+            >
+              <span>{option().label}</span>
+              <ChevronDownIcon class="size-3" />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenuContent class="z-action-menu min-w-[160px]">
+                <For each={options()}>
+                  {(item) => (
+                    <MenuItem
+                      text={item.label}
+                      onClick={() => handleSelect(item.id)}
+                    />
+                  )}
+                </For>
+              </DropdownMenuContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu>
+        </Show>
+      )}
+    </Show>
   );
 };
 

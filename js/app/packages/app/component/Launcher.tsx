@@ -147,6 +147,22 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'canvas':
+      createBlock({
+        blockName: 'canvas',
+        loading: true,
+        createFn: async () => {
+          const result = await createCanvasFileFromJsonString({
+            json: JSON.stringify({ nodes: [], edges: [] }),
+            title: 'New Canvas',
+          });
+          if ('error' in result) return;
+          const [_, id] = ok(result.documentId);
+          return id;
+        },
+        shouldInsert,
+      });
+      return;
     case 'task':
       createComponent({
         componentId: 'task-compose',
@@ -280,18 +296,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.canvasNewSplit,
     hotkey: 'n',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'canvas',
-        loading: true,
-        createFn: async () => {
-          const result = await createCanvasFileFromJsonString({
-            json: JSON.stringify({ nodes: [], edges: [] }),
-            title: 'New Canvas',
-          });
-          if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
-        },
+      runCreateAction('canvas', {
         shouldInsert: pressedKeys().has('shift'),
       });
       return true;
