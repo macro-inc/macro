@@ -13,15 +13,15 @@ use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsIngressQueue;
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
+};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
 use teams::{
     domain::team_service::TeamServiceImpl, outbound::customer_repo::CustomerRepositoryImpl,
     outbound::team_repo::TeamRepositoryImpl,
@@ -37,8 +37,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     NotificationIngressType,
 >;
 
-pub(crate) type ReferralServiceType =
-    ReferralServiceImpl<PgReferralRepo, StripeDiscountClient>;
+pub(crate) type ReferralServiceType = ReferralServiceImpl<PgReferralRepo, StripeDiscountClient>;
 
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
