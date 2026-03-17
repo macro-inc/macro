@@ -45,6 +45,7 @@ import {
   createEffect,
   createSignal,
   For,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -445,6 +446,9 @@ const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
+  let shiftRippleRef: HTMLSpanElement | undefined;
+
+  const shiftHeld = () => pressedKeys().has('shift');
 
   const [focusedIndex, setFocusedIndex] = createSignal(0);
 
@@ -607,6 +611,18 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift' && !e.repeat && shiftRippleRef) {
+        shiftRippleRef.classList.remove('rippling');
+        void shiftRippleRef.offsetWidth; // reflow to restart animation
+        shiftRippleRef.classList.add('rippling');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
+  onMount(() => {
     if (!ref) return;
 
     attachHotkeys(ref);
@@ -635,9 +651,26 @@ const LauncherInner = (props: LauncherInnerProps) => {
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted/50">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
+          <style>{`
+            @keyframes shift-ripple {
+              0%   { transform: scale(1); opacity: 0.6; }
+              100% { transform: scale(2.2); opacity: 0; }
+            }
+            .shift-ripple.rippling {
+              animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+            }
+          `}</style>
           Hold{' '}
-          <span class="px-1 py-0.5 my-1 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
-            <Hotkey shortcut="shift" />
+          <span class="relative inline-grid place-items-center my-1">
+            <span
+              ref={shiftRippleRef}
+              class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none"
+            />
+            <span
+              class={`px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150 ${shiftHeld() ? 'ring-accent text-accent bg-accent/10' : 'ring-edge-muted'}`}
+            >
+              <Hotkey shortcut="shift" />
+            </span>
           </span>
           to launch in new split
         </p>
