@@ -3,12 +3,10 @@
 mod google_analytics;
 mod meta_conversions;
 mod noop;
-mod posthog;
 
 pub use google_analytics::GoogleAnalyticsProvider;
 pub use meta_conversions::MetaConversionsProvider;
 pub use noop::NoopProvider;
-pub use posthog::PostHogProvider;
 
 use crate::AnalyticsError;
 

@@ -3,7 +3,6 @@ use super::*;
 #[tokio::test]
 async fn test_noop_client() {
     let client = AnalyticsClient::noop();
-    assert!(!client.posthog().is_configured());
     assert!(!client.google_analytics().is_configured());
     assert!(!client.meta().is_configured());
 }
@@ -58,10 +57,6 @@ async fn test_track_subscription_missing_value() {
 #[test]
 fn test_client_with_all_providers() {
     let client = AnalyticsClient::new(AnalyticsClientConfig {
-        posthog: Some(PostHogConfig {
-            api_key: "test_key".to_string(),
-            host: Some("https://custom.posthog.com".to_string()),
-        }),
         google_analytics: Some(GoogleAnalyticsConfig {
             measurement_id: "G-XXXXXX".to_string(),
             api_secret: "secret".to_string(),
@@ -73,7 +68,6 @@ fn test_client_with_all_providers() {
         }),
     });
 
-    assert!(client.posthog().is_configured());
     assert!(client.google_analytics().is_configured());
     assert!(client.meta().is_configured());
 }

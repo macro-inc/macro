@@ -6,24 +6,12 @@ mod events;
 mod providers;
 
 pub use error::AnalyticsError;
-pub use providers::{
-    AnalyticsProvider, GoogleAnalyticsProvider, MetaConversionsProvider, NoopProvider,
-    PostHogProvider,
-};
+pub use providers::{AnalyticsProvider, GoogleAnalyticsProvider, MetaConversionsProvider, NoopProvider};
 
 use events::{PurchaseEvent, RefundEvent};
 
 use serde::Serialize;
 use std::sync::Arc;
-
-/// Configuration for PostHog provider.
-#[derive(Clone, Debug)]
-pub struct PostHogConfig {
-    /// PostHog API key
-    pub api_key: String,
-    /// PostHog host URL (defaults to cloud if None)
-    pub host: Option<String>,
-}
 
 /// Configuration for Google Analytics provider.
 #[derive(Clone, Debug)]
@@ -48,8 +36,6 @@ pub struct MetaConfig {
 /// Configuration for the analytics client.
 #[derive(Clone, Debug, Default)]
 pub struct AnalyticsClientConfig {
-    /// PostHog configuration (optional)
-    pub posthog: Option<PostHogConfig>,
     /// Google Analytics configuration (optional)
     pub google_analytics: Option<GoogleAnalyticsConfig>,
     /// Meta Conversions API configuration (optional)
@@ -101,7 +87,6 @@ impl<P: AnalyticsProvider> ProviderHandle<P> {
 /// Analytics client with access to multiple providers.
 #[derive(Clone)]
 pub struct AnalyticsClient {
-    posthog: ProviderHandle<PostHogProvider>,
     google_analytics: ProviderHandle<GoogleAnalyticsProvider>,
     meta: ProviderHandle<MetaConversionsProvider>,
 }
@@ -109,15 +94,6 @@ pub struct AnalyticsClient {
 impl AnalyticsClient {
     /// Creates a new analytics client with the given configuration.
     pub fn new(config: AnalyticsClientConfig) -> Self {
-        let posthog = ProviderHandle {
-            provider: config.posthog.map(|c| {
-                Arc::new(match c.host {
-                    Some(host) => PostHogProvider::new(c.api_key, host),
-                    None => PostHogProvider::new_cloud(c.api_key),
-                })
-            }),
-        };
-
         let google_analytics = ProviderHandle {
             provider: config
                 .google_analytics
@@ -135,7 +111,6 @@ impl AnalyticsClient {
         };
 
         Self {
-            posthog,
             google_analytics,
             meta,
         }
@@ -144,11 +119,6 @@ impl AnalyticsClient {
     /// Creates a no-op analytics client (no providers configured).
     pub fn noop() -> Self {
         Self::new(AnalyticsClientConfig::default())
-    }
-
-    /// Returns the PostHog provider handle.
-    pub fn posthog(&self) -> &ProviderHandle<PostHogProvider> {
-        &self.posthog
     }
 
     /// Returns the Google Analytics provider handle.
