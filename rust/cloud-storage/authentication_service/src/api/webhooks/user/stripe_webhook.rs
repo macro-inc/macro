@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::context::ApiContext;
-use analytics_client::{
-    GaPurchaseEvent, GaRefundEvent, MetaCancelSubscriptionEvent, MetaPurchaseEvent,
-};
+
 use anyhow::Context;
 use axum::{
     body::Bytes,
@@ -269,85 +267,18 @@ async fn handle_customer_subscription_event(
         )
         .await?;
 
-    // Emit analytics events to conversion tracking providers (GA and Meta)
-    match event_type {
-        EventType::CustomerSubscriptionCreated => {
-            // Only track if subscription is actually active (not incomplete)
-            if matches!(subscription_status, "active" | "trialing") {
-                if let (Some(value_cents), Some(currency)) =
-                    (subscription_value, &subscription_currency)
-                {
-                    let value_dollars = value_cents as f64 / 100.0;
-                    let currency = currency.to_uppercase();
-
-                    ctx.analytics_client
-                        .google_analytics()
-                        .track(
-                            email.as_ref(),
-                            "purchase",
-                            GaPurchaseEvent {
-                                transaction_id: subscription_id.to_string(),
-                                value: value_dollars,
-                                currency: currency.clone(),
-                            },
-                        )
-                        .await
-                        .inspect_err(
-                            |e| tracing::warn!(error=?e, "failed to track purchase to GA"),
-                        )?;
-
-                    ctx.analytics_client
-                        .meta()
-                        .track(
-                            email.as_ref(),
-                            "Purchase",
-                            MetaPurchaseEvent {
-                                value: value_dollars,
-                                currency,
-                                order_id: Some(subscription_id.to_string()),
-                                content_name: Some("subscription".to_string()),
-                            },
-                        )
-                        .await
-                        .inspect_err(
-                            |e| tracing::warn!(error=?e, "failed to track Purchase to Meta"),
-                        )?;
-                }
-            }
-        }
-        EventType::CustomerSubscriptionDeleted => {
-            ctx.analytics_client
-                .google_analytics()
-                .track(
-                    email.as_ref(),
-                    "refund",
-                    GaRefundEvent {
-                        transaction_id: subscription_id.to_string(),
-                        value: subscription_value.map(|v| v as f64 / 100.0),
-                        currency: subscription_currency.as_ref().map(|c| c.to_uppercase()),
-                    },
-                )
-                .await
-                .inspect_err(|e| tracing::warn!(error=?e, "failed to track refund to GA"))?;
-
-            ctx.analytics_client
-                .meta()
-                .track(
-                    email.as_ref(),
-                    "CancelSubscription",
-                    MetaCancelSubscriptionEvent {
-                        subscription_id: subscription_id.to_string(),
-                        value: subscription_value.map(|v| v as f64 / 100.0),
-                        currency: subscription_currency.as_ref().map(|c| c.to_uppercase()),
-                    },
-                )
-                .await
-                .inspect_err(
-                    |e| tracing::warn!(error=?e, "failed to track CancelSubscription to Meta"),
-                )?;
-        }
-        _ => {}
-    }
+    // Track conversion events to GA and Meta
+    ctx.analytics_client
+        .track_stripe_subscription(
+            email.as_ref(),
+            subscription_id,
+            subscription_value,
+            subscription_currency.as_deref(),
+            subscription_status,
+            matches!(event_type, EventType::CustomerSubscriptionCreated),
+        )
+        .await
+        .inspect_err(|e| tracing::warn!(error=?e, "failed to track subscription"))?;
 
     Ok(())
 }
@@ -371,84 +302,36 @@ async fn handle_team_subscription_event(
     }
 
     match subscription_status {
-        // Subscription is active, we do not need to do anything.
-        // Perhaps eventually we would have a "paused" status on the team we'd want to update
         "active" => {
-            if matches!(event_type, EventType::CustomerSubscriptionCreated) {
-                if let (Some(value_cents), Some(curr)) = (value, &currency) {
-                    let value_dollars = value_cents as f64 / 100.0;
-                    let currency = curr.to_uppercase();
-
-                    ctx.analytics_client
-                        .google_analytics()
-                        .track(
-                            email,
-                            "purchase",
-                            GaPurchaseEvent {
-                                transaction_id: subscription_id.to_string(),
-                                value: value_dollars,
-                                currency: currency.clone(),
-                            },
-                        )
-                        .await
-                        .inspect_err(
-                            |e| tracing::warn!(error=?e, "failed to track team purchase to GA"),
-                        )?;
-
-                    ctx.analytics_client
-                        .meta()
-                        .track(
-                            email,
-                            "Purchase",
-                            MetaPurchaseEvent {
-                                value: value_dollars,
-                                currency,
-                                order_id: Some(subscription_id.to_string()),
-                                content_name: Some("team_subscription".to_string()),
-                            },
-                        )
-                        .await
-                        .inspect_err(
-                            |e| tracing::warn!(error=?e, "failed to track team Purchase to Meta"),
-                        )?;
-                }
-            }
+            ctx.analytics_client
+                .track_stripe_subscription(
+                    email,
+                    subscription_id,
+                    value,
+                    currency.as_deref(),
+                    subscription_status,
+                    matches!(event_type, EventType::CustomerSubscriptionCreated),
+                )
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to track team subscription"))?;
             Ok(())
         }
-        // If the stripe subscription is somehow cancelled, we need to remove roles from the team
-        // members.
         "canceled" | "past_due" | "paused" | "unpaid" => {
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
 
-            if matches!(event_type, EventType::CustomerSubscriptionDeleted) {
-                ctx.analytics_client
-                    .google_analytics()
-                    .track(
-                        email,
-                        "refund",
-                        GaRefundEvent {
-                            transaction_id: subscription_id.to_string(),
-                            value: value.map(|v| v as f64 / 100.0),
-                            currency: currency.as_ref().map(|c| c.to_uppercase()),
-                        },
-                    )
-                    .await
-                    .inspect_err(
-                        |e| tracing::warn!(error=?e, "failed to track team refund to GA"),
-                    )?;
-
-                ctx.analytics_client
-                    .meta()
-                    .track(email, "CancelSubscription", MetaCancelSubscriptionEvent {
-                        subscription_id: subscription_id.to_string(),
-                        value: value.map(|v| v as f64 / 100.0),
-                        currency: currency.as_ref().map(|c| c.to_uppercase()),
-                    })
-                    .await
-                    .inspect_err(|e| tracing::warn!(error=?e, "failed to track team CancelSubscription to Meta"))?;
-            }
+            ctx.analytics_client
+                .track_stripe_subscription(
+                    email,
+                    subscription_id,
+                    value,
+                    currency.as_deref(),
+                    subscription_status,
+                    false,
+                )
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to track team subscription"))?;
             Ok(())
         }
         _ => {

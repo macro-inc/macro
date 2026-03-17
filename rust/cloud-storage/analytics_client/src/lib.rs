@@ -1,62 +1,19 @@
 #![deny(missing_docs)]
-//! Analytics client for tracking product analytics events.
-//!
-//! This crate provides an analytics client that can send events to multiple
-//! providers (PostHog, Google Analytics, Meta Conversions API).
-//!
-//! # Example
-//!
-//! ```ignore
-//! use analytics_client::{
-//!     AnalyticsClient, AnalyticsClientConfig, MetaPurchaseEvent, MetaUserData,
-//! };
-//!
-//! let client = AnalyticsClient::new(AnalyticsClientConfig {
-//!     posthog: Some(PostHogConfig {
-//!         api_key: "pk_xxx".to_string(),
-//!         host: None,
-//!     }),
-//!     google_analytics: Some(GoogleAnalyticsConfig {
-//!         measurement_id: "G-XXXXXX".to_string(),
-//!         api_secret: "secret".to_string(),
-//!     }),
-//!     meta: Some(MetaConfig {
-//!         pixel_id: "123456".to_string(),
-//!         access_token: "token".to_string(),
-//!         test_event_code: None,
-//!     }),
-//! });
-//!
-//! // Send to a specific provider
-//! client.posthog().track("user@example.com", "page_view", event).await?;
-//!
-//! // Send to all providers
-//! client.track_all("user@example.com", "some_event", event).await?;
-//!
-//! // For Meta, use the type-safe event structs to ensure required fields
-//! let meta_event = MetaPurchaseEvent {
-//!     user_data: MetaUserData::with_email("user@example.com"),
-//!     value: 9.99,
-//!     currency: "USD".to_string(),
-//!     order_id: Some("sub_123".to_string()),
-//!     content_name: Some("subscription".to_string()),
-//! };
-//! client.meta().track("user@example.com", "purchase", meta_event).await?;
-//! ```
+//! Analytics client for tracking events to multiple providers.
 
 mod error;
 mod events;
 mod providers;
 
 pub use error::AnalyticsError;
-pub use events::{AnalyticsEvent, SubscriptionCancelledEvent, SubscriptionCreatedEvent};
 pub use providers::{
-    AnalyticsProvider, GaPurchaseEvent, GaRefundEvent, GoogleAnalyticsProvider,
-    MetaCancelSubscriptionEvent, MetaConversionsProvider, MetaLeadEvent, MetaPurchaseEvent,
-    NoopProvider, PostHogProvider,
+    AnalyticsProvider, GoogleAnalyticsProvider, MetaConversionsProvider, NoopProvider,
+    PostHogProvider,
 };
 
-use std::collections::HashMap;
+use events::{PurchaseEvent, RefundEvent};
+
+use serde::Serialize;
 use std::sync::Arc;
 
 /// Configuration for PostHog provider.
@@ -99,7 +56,7 @@ pub struct AnalyticsClientConfig {
     pub meta: Option<MetaConfig>,
 }
 
-/// A handle to a specific provider that may or may not be configured.
+/// A handle to a provider that may or may not be configured.
 #[derive(Clone)]
 pub struct ProviderHandle<P> {
     provider: Option<Arc<P>>,
@@ -111,51 +68,31 @@ impl<P: AnalyticsProvider> ProviderHandle<P> {
         self.provider.is_some()
     }
 
-    /// Tracks an event if the provider is configured.
-    /// Returns Ok(()) if the provider is not configured (no-op).
-    #[tracing::instrument(skip(self, event), err)]
-    pub async fn track<E: AnalyticsEvent>(
+    /// Tracks an event. No-op if provider is not configured.
+    pub async fn track(
         &self,
         distinct_id: &str,
         event_name: &str,
-        event: E,
+        event: impl Serialize,
     ) -> Result<(), AnalyticsError> {
         if let Some(ref provider) = self.provider {
-            let properties = event.into_properties();
+            let properties = serde_json::to_value(event)?;
             provider.track(distinct_id, event_name, properties).await
         } else {
-            tracing::debug!(event_name, "provider not configured, skipping");
             Ok(())
         }
     }
 
-    /// Tracks an event with raw properties if the provider is configured.
-    #[tracing::instrument(skip(self, properties), err)]
-    pub async fn track_raw(
-        &self,
-        distinct_id: &str,
-        event_name: &str,
-        properties: HashMap<String, serde_json::Value>,
-    ) -> Result<(), AnalyticsError> {
-        if let Some(ref provider) = self.provider {
-            provider.track(distinct_id, event_name, properties).await
-        } else {
-            tracing::debug!(event_name, "provider not configured, skipping");
-            Ok(())
-        }
-    }
-
-    /// Identifies a user if the provider is configured.
-    #[tracing::instrument(skip(self, properties), err)]
+    /// Identifies a user. No-op if provider is not configured.
     pub async fn identify(
         &self,
         distinct_id: &str,
-        properties: HashMap<String, serde_json::Value>,
+        properties: impl Serialize,
     ) -> Result<(), AnalyticsError> {
         if let Some(ref provider) = self.provider {
+            let properties = serde_json::to_value(properties)?;
             provider.identify(distinct_id, properties).await
         } else {
-            tracing::debug!("provider not configured, skipping identify");
             Ok(())
         }
     }
@@ -174,18 +111,17 @@ impl AnalyticsClient {
     pub fn new(config: AnalyticsClientConfig) -> Self {
         let posthog = ProviderHandle {
             provider: config.posthog.map(|c| {
-                let provider = match c.host {
+                Arc::new(match c.host {
                     Some(host) => PostHogProvider::new(c.api_key, host),
                     None => PostHogProvider::new_cloud(c.api_key),
-                };
-                Arc::new(provider)
+                })
             }),
         };
 
         let google_analytics = ProviderHandle {
-            provider: config.google_analytics.map(|c| {
-                Arc::new(GoogleAnalyticsProvider::new(c.measurement_id, c.api_secret))
-            }),
+            provider: config
+                .google_analytics
+                .map(|c| Arc::new(GoogleAnalyticsProvider::new(c.measurement_id, c.api_secret))),
         };
 
         let meta = ProviderHandle {
@@ -225,80 +161,50 @@ impl AnalyticsClient {
         &self.meta
     }
 
-    /// Tracks an event to all configured providers.
+    /// Tracks a Stripe subscription event to GA and Meta.
     ///
-    /// Continues sending to remaining providers even if one fails.
-    /// Returns the last error if any provider failed.
-    #[tracing::instrument(skip(self, event), err)]
-    pub async fn track_all<E: AnalyticsEvent + Clone>(
+    /// Automatically determines whether to track a purchase or refund based on
+    /// the subscription status and whether it's a new subscription.
+    ///
+    /// - `is_new`: true if this is a CustomerSubscriptionCreated event
+    /// - `status`: the subscription status (e.g., "active", "trialing", "canceled")
+    pub async fn track_stripe_subscription(
         &self,
-        distinct_id: &str,
-        event_name: &str,
-        event: E,
+        email: &str,
+        subscription_id: &str,
+        value_cents: Option<i64>,
+        currency: Option<&str>,
+        status: &str,
+        is_new: bool,
     ) -> Result<(), AnalyticsError> {
-        let mut last_error: Option<AnalyticsError> = None;
+        let (Some(value_cents), Some(currency)) = (value_cents, currency) else {
+            return Ok(());
+        };
 
-        if let Err(e) = self
-            .posthog
-            .track(distinct_id, event_name, event.clone())
-            .await
-        {
-            tracing::warn!(error = ?e, "PostHog tracking failed");
-            last_error = Some(e);
+        match (status, is_new) {
+            ("active" | "trialing", true) => {
+                let event = PurchaseEvent {
+                    transaction_id: subscription_id.to_string(),
+                    value: value_cents as f64 / 100.0,
+                    currency: currency.to_uppercase(),
+                    content_name: None,
+                };
+                self.google_analytics.track(email, "purchase", &event).await?;
+                self.meta.track(email, "Purchase", &event).await?;
+            }
+            ("canceled", _) => {
+                let event = RefundEvent {
+                    transaction_id: subscription_id.to_string(),
+                    value: Some(value_cents as f64 / 100.0),
+                    currency: Some(currency.to_uppercase()),
+                };
+                self.google_analytics.track(email, "refund", &event).await?;
+                self.meta.track(email, "CancelSubscription", &event).await?;
+            }
+            _ => {}
         }
 
-        if let Err(e) = self
-            .google_analytics
-            .track(distinct_id, event_name, event.clone())
-            .await
-        {
-            tracing::warn!(error = ?e, "Google Analytics tracking failed");
-            last_error = Some(e);
-        }
-
-        if let Err(e) = self.meta.track(distinct_id, event_name, event).await {
-            tracing::warn!(error = ?e, "Meta Conversions tracking failed");
-            last_error = Some(e);
-        }
-
-        match last_error {
-            Some(e) => Err(e),
-            None => Ok(()),
-        }
-    }
-
-    /// Identifies a user to all configured providers.
-    #[tracing::instrument(skip(self, properties), err)]
-    pub async fn identify_all(
-        &self,
-        distinct_id: &str,
-        properties: HashMap<String, serde_json::Value>,
-    ) -> Result<(), AnalyticsError> {
-        let mut last_error: Option<AnalyticsError> = None;
-
-        if let Err(e) = self.posthog.identify(distinct_id, properties.clone()).await {
-            tracing::warn!(error = ?e, "PostHog identify failed");
-            last_error = Some(e);
-        }
-
-        if let Err(e) = self
-            .google_analytics
-            .identify(distinct_id, properties.clone())
-            .await
-        {
-            tracing::warn!(error = ?e, "Google Analytics identify failed");
-            last_error = Some(e);
-        }
-
-        if let Err(e) = self.meta.identify(distinct_id, properties).await {
-            tracing::warn!(error = ?e, "Meta Conversions identify failed");
-            last_error = Some(e);
-        }
-
-        match last_error {
-            Some(e) => Err(e),
-            None => Ok(()),
-        }
+        Ok(())
     }
 }
 
