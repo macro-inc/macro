@@ -97,12 +97,14 @@ export default function GlobalShortcuts() {
   const { openWithSplit } = useSplitLayout();
 
   const createNewSplit = () => {
-    const active = globalSplitManager()?.activeSplit()?.content();
-    openWithSplit(active ?? { type: 'component', id: 'inbox' }, {
-      referredFrom: 'hotkey',
-      allowDuplicate: true,
-      preferNewSplit: true,
-    });
+    openWithSplit(
+      { type: 'component', id: 'inbox' },
+      {
+        referredFrom: 'hotkey',
+        allowDuplicate: true,
+        preferNewSplit: true,
+      }
+    );
     return true;
   };
 
