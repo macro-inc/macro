@@ -51,9 +51,9 @@ pub trait DiscountClient: Send + Sync + 'static {
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
     /// Applies the discount to the referrer
-    fn apply_discount<'a>(
+    fn apply_discount(
         &self,
-        referrer_customer_id: &'a str,
+        referrer_customer_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 

@@ -93,17 +93,17 @@ pub async fn handler(
 
     tracing::trace!("redirect url {redirect_url}");
 
-    if let Some(state) = state.as_ref() {
-        if let Some(referral_code) = state.referral_code.as_ref() {
-            let user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args)
-                .map_err(|_| InnerErr::InvalidJwtError.into_response())?;
+    if let Some(state) = state.as_ref()
+        && let Some(referral_code) = state.referral_code.as_ref()
+    {
+        let user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args)
+            .map_err(|_| InnerErr::InvalidJwtError.into_response())?;
 
-            let _ = ctx
-                .referral_service
-                .track_referral(&user_id, &ReferralCode(referral_code.clone()))
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
-        }
+        let _ = ctx
+            .referral_service
+            .track_referral(&user_id, &ReferralCode(referral_code.clone()))
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
     }
 
     // Set cookies
