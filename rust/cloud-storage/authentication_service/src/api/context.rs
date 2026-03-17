@@ -22,14 +22,9 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
-use teams::{
-    domain::team_service::TeamServiceImpl, outbound::customer_repo::CustomerRepositoryImpl,
-    outbound::team_repo::TeamRepositoryImpl,
-};
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
-#[expect(dead_code, reason = "used by utoipa in swagger.rs")]
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -61,14 +56,7 @@ pub(crate) struct ApiContext {
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
-    pub teams_service: Arc<
-        TeamServiceImpl<
-            TeamRepositoryImpl,
-            CustomerRepositoryImpl,
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
-            NotificationIngressType,
-        >,
-    >,
+    pub teams_service: Arc<TeamsServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub referral_service: Arc<ReferralServiceType>,
 }
