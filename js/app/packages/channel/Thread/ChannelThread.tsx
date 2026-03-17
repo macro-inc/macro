@@ -91,6 +91,7 @@ export function ChannelThread(props: ThreadProps) {
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
               messageEditor={props.messageEditor}
+              highlighted={props.highlighted}
             />
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>

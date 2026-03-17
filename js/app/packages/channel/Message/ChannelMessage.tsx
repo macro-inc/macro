@@ -12,6 +12,7 @@ type ChannelMessageProps = {
   actions?: MessageActions;
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
+  highlighted?: boolean;
 };
 
 function isEditingMessage(
@@ -152,7 +153,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
-    <Message.Root message={props.message} actions={props.actions}>
+    <Message.Root
+      message={props.message}
+      actions={props.actions}
+      highlighted={props.highlighted}
+    >
       <Switch>
         <Match when={isGrouped()}>
           <GroupedMessageLayout

@@ -1,4 +1,5 @@
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
+import ClipboardIcon from '@icon/regular/clipboard.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import PlusIcon from '@icon/regular/plus.svg';
@@ -13,7 +14,12 @@ import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'edit' | 'delete';
+type ActionId =
+  | 'reply'
+  | 'copy-link'
+  | 'copy-target-payload'
+  | 'edit'
+  | 'delete';
 
 type ActionItem = {
   id: ActionId;
@@ -77,6 +83,12 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+    },
+    {
+      id: 'copy-target-payload',
+      label: 'Copy Target Payload',
+      icon: ClipboardIcon,
+      onClick: actions?.onCopyTargetPayload,
     },
     {
       id: 'edit',

@@ -35,4 +35,5 @@ export type ThreadProps = {
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
+  highlighted?: boolean;
 } & ThreadState;

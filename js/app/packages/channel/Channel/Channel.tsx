@@ -54,11 +54,14 @@ import {
 import { createStickyScrollEffect } from './sticky-scroll';
 import { createMessageEditor } from './create-message-editor';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
+import { createTargetMessageController } from './create-target-message-controller';
+import { DebugGoToMessage } from './DebugGoToMessage';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   lastViewedAt?: DateValue | null;
+  debug?: boolean;
 };
 
 export function Channel(props: ChannelProps) {
@@ -68,15 +71,27 @@ export function Channel(props: ChannelProps) {
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
+  const [threadListNavigation, setThreadListNavigation] =
+    createSignal<ThreadListNavigation>();
+  const [threadListScrollState, setThreadListScrollState] =
+    createSignal<ThreadListScrollState>();
 
-  const [targetMessageId, _setTargetMessageId] = createSignal<
-    string | undefined
-  >(props.targetMessageId);
+  const targetMessageController = createTargetMessageController({
+    channelId: () => props.channelId,
+    initialTargetMessageId: props.targetMessageId,
+    messageKeys: () => messageIndex().keys,
+    navigation: threadListNavigation,
+  });
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageId
+    targetMessageController.loadAroundMessageId
   );
+  const messageIndex = createMemo(() =>
+    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
+  );
+  const messages = createMemo(() => messageIndex().items);
+  const messageById = createMemo(() => messageIndex().byId);
 
   const activity = useChannelActivity(props.channelId);
 
@@ -100,11 +115,6 @@ export function Channel(props: ChannelProps) {
     });
   });
 
-  const [threadListNavigation, setThreadListNavigation] =
-    createSignal<ThreadListNavigation>();
-  const [threadListScrollState, setThreadListScrollState] =
-    createSignal<ThreadListScrollState>();
-
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
@@ -113,13 +123,9 @@ export function Channel(props: ChannelProps) {
   });
 
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
-    defaultThreadListTargetFromMessage(targetMessageId());
-
-  const messageIndex = createMemo(() =>
-    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
-  );
-  const messages = createMemo(() => messageIndex().items);
-  const messageById = createMemo(() => messageIndex().byId);
+    defaultThreadListTargetFromMessage(
+      targetMessageController.activeTargetMessageId()
+    );
 
   const shift = () => threadPaginator.isShifting();
 
@@ -146,6 +152,7 @@ export function Channel(props: ChannelProps) {
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
+    debug: () => props.debug === true,
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
@@ -160,10 +167,11 @@ export function Channel(props: ChannelProps) {
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
-    hasMoreBelow: () => threadPaginator.hasMoreShifting(),
+    hasMoreBelow: () => threadPaginator.hasMorePrepend(),
     messages,
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
     if (!senderId) return;
@@ -180,6 +188,13 @@ export function Channel(props: ChannelProps) {
     <Suspense>
       <StaticMarkdownContext>
         <ChannelDropZone dragState={dragState}>
+          <Show when={props.debug}>
+            <DebugGoToMessage
+              onSubmit={(messageId) => {
+                targetMessageController.goToMessage(messageId);
+              }}
+            />
+          </Show>
           <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
               <ThreadList
@@ -202,6 +217,10 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
+                          highlighted={
+                            m().id ===
+                            targetMessageController.highlightedMessageId()
+                          }
                           isExpanded={state.isExpanded}
                           setIsExpanded={state.setIsExpanded}
                           isReplying={state.isReplying}
