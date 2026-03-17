@@ -1,4 +1,5 @@
 import { useIsNestedBlock } from '@core/block';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { Show } from 'solid-js';
 import { CodeMarkdown } from './CodeMarkdown';
@@ -7,6 +8,7 @@ import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 export default function BlockCode() {
+  useBlockEntityCommands();
   const isNestedBlock = useIsNestedBlock();
 
   return (

@@ -232,6 +232,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: () => {
       return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
+    hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
     condition: () => !CommandState.isOpen(),
     keyDownHandler: (e) => {
