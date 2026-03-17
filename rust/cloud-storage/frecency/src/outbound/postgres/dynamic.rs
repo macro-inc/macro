@@ -180,6 +180,9 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             build_task_include_cbm_atm_nc_clause("fa.entity_id")
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
+            format!("dt.sub_type = '{st}'")
+        }
     });
     if formatting.is_empty() {
         String::new()

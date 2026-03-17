@@ -160,7 +160,7 @@ export function SplitlikeContainer(
         </Show>
 
         <div
-          class="@container/split flex flex-col min-h-0 bracket-never bg-panel"
+          class="@container/split flex flex-col min-h-0 bracket-never bg-panel rounded-sm overflow-hidden"
           classList={{
             'fixed inset-[4rem] z-modal isolate': props.spotlight(),
             'size-full': !props.spotlight(),

@@ -17,15 +17,18 @@ use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
     EmailNotification, NotificationChannel, QueueMessage,
 };
-use crate::domain::models::{NotificationExtEmail, RateLimitResult};
+use crate::domain::models::{NotificationExtEmail, NotificationTypeName, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitPort, WebSocketSender,
 };
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
+use macro_user_id::email::ReadEmailParts;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.
 pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
@@ -95,6 +98,7 @@ where
     /// on failure. Returns a list of results for each delivery attempt.
     ///
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
+    #[tracing::instrument(ret, level = Level::INFO, skip(self))]
     pub async fn deliver_notification(
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
@@ -200,7 +204,7 @@ where
     ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
         let (config, key) = email.rate_limit();
 
-        match self.rate_limiter.check_and_increment(key, config).await {
+        match self.rate_limiter.check(key, config).await {
             Ok(RateLimitResult::Exceeded(exceeded)) => {
                 return Err(report!(exceeded).context(DeliveryFailure::RateLimit));
             }
@@ -210,10 +214,25 @@ where
             Err(e) => return Err(e.context(DeliveryFailure::Other)),
         }
 
+        let recipient = email.to();
         self.email
-            .send_email(email.to().clone(), &email.content)
+            .send_email(recipient.clone(), &email.content)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error = ?e,
+                    recipient = %recipient,
+                    subject = %email.content.subject,
+                    "Email delivery failed"
+                );
+            })
+            .context(DeliveryFailure::Other)?;
+
+        self.rate_limiter
+            .increment(key, config)
             .await
             .context(DeliveryFailure::Other)?;
+
         Ok(DeliverySuccess::Email)
     }
 }
@@ -286,29 +305,36 @@ where
         results
     }
 
-    #[tracing::instrument(err, skip(self))]
+    // #[tracing::instrument(err, skip(self))]
     async fn poll_email_digests<T: NotificationExtEmail>(
         &self,
         f: fn(DigestBatch) -> Result<T, Report>,
     ) -> Result<ClaimResult<()>, Report> {
-        let batch = match self.digest_batcher.claim_ready_digest().await? {
-            ClaimResult::Ready(batch) => batch,
-            v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
-        };
+        let batch =
+            match tokio::time::timeout(DELIVERY_TIMEOUT, self.digest_batcher.claim_ready_digest())
+                .await
+                .context("Dequeing redis batch exceeded timeout")??
+            {
+                ClaimResult::Ready(batch) => batch,
+                v @ ClaimResult::Empty | v @ ClaimResult::Wait(_) => return Ok(v.map(|_| ())),
+            };
 
-        let recipient = batch.user_id.clone();
-        let email_notif: T = f(batch)?;
+        if batch.user_id.email_part().domain_part() != "macro.com" {
+            return Err(report!(
+                "Sending digest for non-macro user is currently disabled"
+            ));
+        }
+
+        let recipient: MacroUserIdStr<'static> = batch.user_id.clone();
+        let email_notif = f(batch)?;
         let email_content = EmailCreateBundle::new(&email_notif).with_recipient(recipient);
 
-        let message: QueueMessage<'_, T, ()> =
-            QueueMessage::new(NotificationChannel::Email(email_content));
+        let typename = NotificationTypeName::new_from_notif(&email_notif);
 
-        self.queue
-            .publish(std::iter::once(message))
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to queue digest email");
-            })?;
+        let message: QueueMessage<'static, T, ()> =
+            QueueMessage::new_from_email(email_content, &typename);
+
+        self.queue.publish(vec![message]).await?;
 
         Ok(ClaimResult::Ready(()))
     }

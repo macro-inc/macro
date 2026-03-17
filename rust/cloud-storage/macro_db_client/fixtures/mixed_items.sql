@@ -8,14 +8,24 @@ INSERT INTO public."Organization" ("id",
                                                      'Test Organization',
                                                      'PILOT');
 
+INSERT INTO public."macro_user" ("id",
+                                 "username",
+                                 "email",
+                                 "stripe_customer_id") (SELECT 'a1111111-1111-1111-1111-111111111111',
+                                                               'user@user.com',
+                                                               'user@user.com',
+                                                               'stripe_id');
+
 -- Insert user
 INSERT INTO public."User" ("id",
                            "email",
                            "stripeCustomerId",
-                           "organizationId") (SELECT 'macro|user@user.com',
+                           "organizationId",
+                           "macro_user_id") (SELECT 'macro|user@user.com',
                                                      'user@user.com',
                                                      'stripe_id',
-                                                     1);
+                                                     1,
+                                                     'a1111111-1111-1111-1111-111111111111');
 
 -- Create project
 INSERT INTO public."Project" ("id",

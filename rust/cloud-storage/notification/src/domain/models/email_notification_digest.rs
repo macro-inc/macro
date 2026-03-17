@@ -9,7 +9,7 @@
 
 use crate::domain::{
     models::{
-        Notification, UserNotificationRow,
+        Notification, NotificationTypeName, UserNotificationRow,
         email_notification_digest::ports::{
             DigestBatcher, LastOnlineChecker, MessageId, MessageReceiptRepo,
             NotificationSendChecker, PushNotificationChecker, UserExistenceChecker,
@@ -97,8 +97,8 @@ impl NotificationSetBuilder for NotificationSet {
 }
 
 impl NotificationSet {
-    fn is_member<T: Notification>(&self) -> bool {
-        self.0.contains(&T::TYPE_NAME)
+    fn is_member(&self, typename: &NotificationTypeName) -> bool {
+        self.0.contains(typename.as_ref())
     }
 }
 
@@ -164,11 +164,11 @@ impl EmailBlockList {
     ///
     /// Returns [`Decision::DontSend`] if the notification type is blocked,
     /// or [`Decision::Next`] with an [`AllowedNotification`] to continue the flow.
-    pub fn notification_is_allowed<T: Notification>(
+    pub fn notification_is_allowed<T>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> Either<AllowedNotification<T>, DontSend> {
-        match self.0.is_member::<T>() {
+        match self.0.is_member(&notif.dangerous_get_typename()) {
             true => Either::Right(DontSend(())),
             false => Either::Left(AllowedNotification { inner: notif }),
         }
@@ -194,7 +194,7 @@ pub struct AccountDoesNotExist<T> {
     prev: AllowedNotification<T>,
 }
 
-impl<T: Notification> AllowedNotification<T> {
+impl<T> AllowedNotification<T> {
     /// Check if the notification recipient has a Macro account.
     ///
     /// Returns [`AccountExists`] if the user has an account (check push settings next),
@@ -230,7 +230,7 @@ impl NotificationSetBuilder for ExplicitInviteAllowList {
 
 /// type alias for the data returned from [AccountDoesNotExist::batch_or_single_send]
 pub type EmailSendDecision<T> = Either<SingleSend<T>, BatchSend<T>>;
-impl<T: Notification> AccountDoesNotExist<T> {
+impl<T> AccountDoesNotExist<T> {
     /// Decide whether to send immediately or batch for digest.
     ///
     /// Returns [`EmailSendDecision::SingleSend`] for explicit invite notifications,
@@ -239,7 +239,10 @@ impl<T: Notification> AccountDoesNotExist<T> {
         self,
         invite_list: &ExplicitInviteAllowList,
     ) -> EmailSendDecision<UserNotificationRow<Arc<T>>> {
-        match invite_list.0.is_member::<T>() {
+        match invite_list
+            .0
+            .is_member(&self.prev.inner.dangerous_get_typename())
+        {
             true => EmailSendDecision::Left(SingleSend(self.prev.inner)),
             false => EmailSendDecision::Right(BatchSend(self.prev.inner)),
         }
@@ -279,7 +282,7 @@ pub struct PushNotificationsDisabled<T> {
     prev: AccountExists<T>,
 }
 
-impl<T: Notification> AccountExists<T> {
+impl<T: Serialize> AccountExists<T> {
     /// Check if the user has push notifications enabled.
     ///
     /// Returns [`PushNotificationsEnabled`] to check if push was delivered,
@@ -304,7 +307,7 @@ impl<T: Notification> AccountExists<T> {
     }
 }
 
-impl<T: Notification> PushNotificationsDisabled<T> {
+impl<T> PushNotificationsDisabled<T> {
     /// check if the user has been logged in more recently than the threshold for notifications
     /// If the user has been online within the time window then we do not send email notifications.
     /// If the user has not been online within the threshold then we queue the notification for batch delivery
@@ -331,7 +334,7 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
     /// Given an input notification, drive the state machine to an initial decision.
     ///
     /// See [`StateMachineDecisionA`] for the possible outcomes.
-    fn ingest<T: Notification + 'static>(
+    fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send;
@@ -341,25 +344,47 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
 /// This state machine does not model the entire decision tree because it runs at a place in the program
 /// where not all actions have been taken yet.
 pub struct StateMachineDriverA<U, N, O, B> {
-    /// adapter which implements [UserExistenceChecker]
+    /// Adapter which implements [UserExistenceChecker].
     pub user_checker: U,
-    /// adapter which implements [PushNotificationChecker]
+    /// Adapter which implements [PushNotificationChecker].
     pub notification_checker: N,
-    /// adapter which implements [LastOnlineChecker]
+    /// Adapter which implements [LastOnlineChecker].
     pub online_checker: O,
-    /// adapter which allows inserting a notification for bulk digest email
-    /// implements [DigestBatcher]
+    /// Adapter which allows inserting a notification for bulk digest email.
+    /// Implements [DigestBatcher].
     pub digest_batcher: B,
-    /// the blocklist for notifications which are never forwarded to bulk
+    /// The blocklist for notifications which are never forwarded to bulk.
     pub block_list: EmailBlockList,
-    /// the allow list for checking if a notification is analagous to an "invite to macro" notification
+    /// The allow list for checking if a notification is analogous to an "invite to macro" notification.
     pub invite_list: ExplicitInviteAllowList,
-    /// the window of time in which the digest emails are collected for before sending
+    /// The window of time in which the digest emails are collected for before sending.
     pub digest_window: Duration,
-    /// the duration for how recently a user has been online
-    /// used to abort sending a bulk email if the user is below the
-    /// threshold
+    /// The duration for how recently a user has been online.
+    /// Used to abort sending a bulk email if the user is below the threshold.
     pub online_duration_threshold: Duration,
+}
+
+impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
+    /// Create a new instance with the default time windows (30 min digest, 60 min online).
+    pub fn new_with_defaults(
+        user_checker: U,
+        notification_checker: N,
+        online_checker: O,
+        digest_batcher: B,
+        block_list: EmailBlockList,
+        invite_list: ExplicitInviteAllowList,
+    ) -> Self {
+        Self {
+            user_checker,
+            notification_checker,
+            online_checker,
+            digest_batcher,
+            block_list,
+            invite_list,
+            digest_window: std::time::Duration::from_mins(30),
+            online_duration_threshold: std::time::Duration::from_mins(60),
+        }
+    }
 }
 
 /// the initial decision created during notification ingress
@@ -389,7 +414,7 @@ where
     /// given an input notification, drive the state machine to an initial decision about the notification.
     /// This attempts to handle as many cases internally as possible although the caller is responsible for picking up certain decisions.
     /// See [StateMachineInitialDecision] for more info.
-    pub async fn ingest<T: Notification>(
+    pub async fn ingest<T: Serialize>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> Result<StateMachineDecisionA<T>, Report> {
@@ -434,7 +459,7 @@ where
         })
     }
 
-    async fn inner_store_batch<T: Notification>(
+    async fn inner_store_batch<T: Serialize>(
         &self,
         batch: BatchSend<UserNotificationRow<Arc<T>>>,
     ) -> Result<BatchSend<()>, Report> {
@@ -456,7 +481,7 @@ where
     O: LastOnlineChecker,
     B: DigestBatcher,
 {
-    fn ingest<T: Notification + 'static>(
+    fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send {

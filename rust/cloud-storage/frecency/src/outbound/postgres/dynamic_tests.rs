@@ -543,15 +543,30 @@ async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
 
     // Ensure owner row exists for foreign keys from Document.owner.
+    let macro_user_uuid = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO "User" ("id", "email")
-        VALUES ($1, $2)
+        INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+        VALUES ($1, 'test', $2, 'stripe_test')
+        ON CONFLICT ("id") DO NOTHING
+        "#,
+    )
+    .bind(macro_user_uuid)
+    .bind("test@example.com")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" ("id", "email", "macro_user_id")
+        VALUES ($1, $2, $3)
         ON CONFLICT ("id") DO NOTHING
         "#,
     )
     .bind(test_user_id.as_ref())
     .bind("test@example.com")
+    .bind(macro_user_uuid)
     .execute(&pool)
     .await
     .unwrap();

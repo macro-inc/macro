@@ -93,6 +93,10 @@ pub struct DocumentFilters {
     /// Task-specific filters that only apply to task subtype documents.
     #[serde(default, skip_serializing_if = "TaskFilters::is_empty")]
     pub task_filters: TaskFilters,
+
+    /// Filter by document sub type. Examples: ['task']. Empty to search all sub types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sub_types: Vec<String>,
 }
 
 impl IsEmpty for DocumentFilters {
@@ -105,6 +109,7 @@ impl IsEmpty for DocumentFilters {
             importance,
             notification_filters,
             task_filters,
+            sub_types,
         } = self;
         file_types.is_empty()
             && document_ids.is_empty()
@@ -113,6 +118,7 @@ impl IsEmpty for DocumentFilters {
             && importance.is_none()
             && notification_filters.is_empty()
             && task_filters.is_empty()
+            && sub_types.is_empty()
     }
 }
 

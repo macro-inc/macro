@@ -5051,3 +5051,129 @@ async fn test_property_filter_scoped_entity_type(db: Pool<Postgres>) -> anyhow::
 
     Ok(())
 }
+
+// Test filtering documents by sub_type = task
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_by_document_sub_type_task(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            sub_types: vec!["task".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut task_doc_count = 0;
+    let mut non_task_doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(doc) => {
+                if doc.sub_type.is_some() {
+                    task_doc_count += 1;
+                } else {
+                    non_task_doc_count += 1;
+                }
+            }
+            SoupItem::Chat(_) => chat_count += 1,
+            SoupItem::Project(_) => project_count += 1,
+            _ => unimplemented!("unexpected item type"),
+        }
+    }
+
+    // 3 accessible task documents: doc-in-A, doc-in-B, doc-in-C
+    assert_eq!(task_doc_count, 3, "Should get 3 task documents");
+    // No non-task documents should be returned since sub_type filter is applied
+    assert_eq!(non_task_doc_count, 0, "Should get 0 non-task documents");
+    // Chats and projects are unaffected by document filters
+    assert!(chat_count > 0, "Should still get chats");
+    assert!(project_count > 0, "Should still get projects");
+
+    Ok(())
+}
+
+// Test filtering documents by sub_type combined with file_type
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_by_sub_type_and_file_type(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for task documents that are also PDFs
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            sub_types: vec!["task".to_string()],
+            file_types: vec!["pdf".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let doc_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Document(_)))
+        .count();
+
+    // doc-in-A (task, pdf) and doc-in-B (task, pdf) match; doc-in-C is task but md
+    assert_eq!(
+        doc_count, 2,
+        "Should get 2 documents that are both tasks and PDFs"
+    );
+
+    for item in &items {
+        if let SoupItem::Document(doc) = item {
+            assert!(doc.sub_type.is_some(), "All docs should be tasks");
+            assert_eq!(
+                doc.file_type.as_deref(),
+                Some("pdf"),
+                "All docs should be PDFs"
+            );
+        }
+    }
+
+    Ok(())
+}

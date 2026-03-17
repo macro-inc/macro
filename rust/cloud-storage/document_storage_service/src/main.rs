@@ -38,15 +38,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
-use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-};
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -217,45 +210,16 @@ async fn main() -> anyhow::Result<()> {
     );
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let redis_multiplexed_conn = redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .context("failed to get multiplexed redis connection for state machine")?;
-
-    let make_notification_ingress = || {
-        let notification_repository = DbNotificationRepository::new(db.clone());
-        let notification_queue = SqsNotificationQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            config.vars.notification_queue.as_ref().to_string(),
-        );
-        let state_machine = StateMachineDriverA {
-            user_checker: DbUserExistenceChecker::new(db.clone()),
-            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-                db.clone(),
-            )),
-            online_checker: LastOnlineCheckerImpl::new(
-                last_online_tracker::domain::services::LastOnlineService::new(
-                    last_online_tracker::outbound::time::DefaultTime,
-                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                        redis_multiplexed_conn.clone(),
-                    ),
-                ),
-            ),
-            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
-            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
-            )
-            .append::<model_notifications::ChannelInviteMetadata>(),
-            digest_window: std::time::Duration::from_secs(30 * 60),
-            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-        };
-        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
-    };
-    let notification_ingress_service = Arc::new(make_notification_ingress());
+    let ingress_queue = SqsIngressQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
+    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue.clone()));
     tracing::trace!("initialized notification ingress service");
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service = NotificationServiceImpl::new(make_notification_ingress());
+    let notification_service =
+        NotificationServiceImpl::new(SqsNotificationIngress::new(ingress_queue));
     let properties_service = Arc::new(PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),

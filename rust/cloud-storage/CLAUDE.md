@@ -260,15 +260,18 @@ Place tests in a separate `test.rs` file within the same module directory, rathe
 - Implementation: `foo/mod.rs` or `foo.rs`
 - Tests: `foo/test.rs`
 
+Note: You do NOT need to convert a file module (`foo.rs`) into a directory module (`foo/mod.rs`) to add tests.
+Rust supports `foo.rs` alongside a `foo/` directory — just create `foo/test.rs` and it works as a submodule of `foo.rs`.
+
 **Example structure:**
 ```
 src/
+  user.rs       # Contains: mod test;  (with #[cfg(test)]) + implementation
   user/
-    mod.rs      # Contains: mod test;  (with #[cfg(test)])
     test.rs     # Contains: use super::*; and test functions
 ```
 
-**In `mod.rs`:**
+**In `user.rs`:**
 ```rust
 #[cfg(test)]
 mod test;

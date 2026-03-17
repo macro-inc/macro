@@ -21,7 +21,7 @@ pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimit
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
 #[derive(Debug, Clone)]
@@ -139,20 +139,43 @@ impl<T> UserNotificationRow<T> {
             sender_id,
         })
     }
+
+    /// create a notification typename from this row.
+    /// This is dangerous because the compiler cannot assert that the T: Notification
+    pub(crate) fn dangerous_get_typename(&self) -> NotificationTypeName {
+        NotificationTypeName(Cow::Owned(self.notification_event_type.clone()))
+    }
+}
+
+/// newtype wrapper for the the typename of a Notification
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(transparent)]
+pub(crate) struct NotificationTypeName(Cow<'static, str>);
+
+impl NotificationTypeName {
+    pub(crate) fn new_from_notif<T: Notification>(_v: &T) -> Self {
+        NotificationTypeName(Cow::Borrowed(T::TYPE_NAME))
+    }
+}
+
+impl AsRef<str> for NotificationTypeName {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
 }
 
 /// A notification metadata value tagged with the notification event type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaggedContent<T> {
-    tag: String,
-    content: T,
+    pub(crate) tag: NotificationTypeName,
+    pub(crate) content: T,
 }
 
 impl<T: Notification> TaggedContent<Arc<T>> {
     /// create a new value from a notification T
     pub fn new_arc(val: Arc<T>) -> Self {
         TaggedContent {
-            tag: T::TYPE_NAME.to_string(),
+            tag: NotificationTypeName::new_from_notif(&*val),
             content: val,
         }
     }
@@ -162,7 +185,7 @@ impl<T: Notification> TaggedContent<T> {
     /// create a new value from a notification T
     pub fn new(val: T) -> Self {
         TaggedContent {
-            tag: T::TYPE_NAME.to_string(),
+            tag: NotificationTypeName::new_from_notif(&val),
             content: val,
         }
     }
@@ -175,7 +198,10 @@ impl UserNotificationRow<serde_json::Value> {
     /// [`UserNotificationRow::into_json`].
     pub fn into_tagged(self) -> UserNotificationRow<TaggedContent<serde_json::Value>> {
         let tag = self.notification_event_type.clone();
-        self.map(|v| TaggedContent { tag, content: v })
+        self.map(|v| TaggedContent {
+            tag: NotificationTypeName(Cow::Owned(tag)),
+            content: v,
+        })
     }
 }
 
@@ -220,7 +246,7 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
 }
 
 /// Trait that all notification types must implement.
-pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
+pub trait Notification: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
 }
@@ -243,8 +269,8 @@ pub trait NotificationExtIos: Notification {
     /// Build the collapse key for this push notification.
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey;
     /// Convert this notification into an APNS push notification.
-    fn into_apns<'a>(
-        self,
+    fn as_apns<'a>(
+        &self,
         sender_id: Option<MacroUserIdStr<'a>>,
         entity: &Entity<'_>,
         notification_id: uuid::Uuid,

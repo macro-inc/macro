@@ -10,9 +10,9 @@ import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
-import PlusIcon from '@phosphor-icons/core/bold/plus-bold.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
@@ -192,6 +192,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isSlim = () => props.sidebarState === 'slim';
   registerHotkeys();
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
+  const [createBtnHovering, setCreateBtnHovering] = createSignal(false);
 
   return (
     <div
@@ -280,8 +281,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           }
           onClick={handleCreateClick}
+          onMouseEnter={() => setCreateBtnHovering(true)}
+          onMouseLeave={() => setCreateBtnHovering(false)}
         >
-          <PlusIcon class="size-4 shrink-0" />
+          <div
+            class={`size-4 shrink-0 transition-colors duration-300 ${createBtnHovering() ? 'text-accent' : ''}`}
+          >
+            <AnimatedPlusIcon triggerAnimation={createBtnHovering()} />
+          </div>
           <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
             Create
           </span>

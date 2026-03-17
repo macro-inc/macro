@@ -9,10 +9,7 @@ import {
   on,
   onMount,
 } from 'solid-js';
-import {
-  EntityIcon,
-  type EntityWithValidIcon,
-} from '@core/component/EntityIcon';
+import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   isChannelNotification,
@@ -149,12 +146,9 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         <Show
           when={props.group.isDM && props.group.latestSenderId}
           fallback={
-            <EntityIcon
-              targetType={
-                (props.group.channelType ?? 'channel') as EntityWithValidIcon
-              }
-              size="xs"
-            />
+            <div class="size-4 text-ink-muted">
+              <ChannelIcon />
+            </div>
           }
         >
           <UserIcon
