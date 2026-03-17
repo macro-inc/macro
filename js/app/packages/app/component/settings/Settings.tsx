@@ -200,17 +200,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <div class="border border-edge-muted rounded-xs inline-flex overflow-hidden">
                       <For each={settingsTabs()}>
                         {({ value, label }, i) => {
-                          const isActive = createMemo(() => value === activeTabId());
                           return (
                             <Tabs.Trigger
                               value={value}
                               tabIndex={-1}
                               data-value={value}
-                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 hover:bg-ink/10 hover:text-ink"
-                              classList={{
-                                'text-ink bg-ink/7': isActive(),
-                                'text-ink-muted': !isActive(),
-                              }}
+                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 text-ink-muted data-[selected]:text-ink data-[selected]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[selected]:hover:bg-ink/20"
                             >
                               <span class="flex items-center gap-1.5">
                                 <span>{label}</span>

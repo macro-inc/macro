@@ -5,11 +5,17 @@ TRUNCATE TABLE public."User", public."Project", public."Chat", public."SharePerm
 -- user-1: The primary user we will test against, has many explicit permissions.
 -- user-2: Has some overlapping explicit permissions to test user scoping.
 -- user-public-access-only: Has no explicit permissions, to test reliance on public access.
-INSERT INTO public."User" ("id", "email")
-VALUES ('user-1', 'user1@test.com'),
-       ('user-2', 'user2@test.com'),
-       ('user-3', 'user3@test.com'),
-       ('user-public-access-only', 'user4@test.com');
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_user1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2@test.com', 'user2@test.com', 'stripe_user2'),
+       ('a3333333-3333-3333-3333-333333333333', 'user3@test.com', 'user3@test.com', 'stripe_user3'),
+       ('a4444444-4444-4444-4444-444444444444', 'user4@test.com', 'user4@test.com', 'stripe_user4');
+
+INSERT INTO public."User" ("id", "email", "macro_user_id")
+VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'),
+       ('user-2', 'user2@test.com', 'a2222222-2222-2222-2222-222222222222'),
+       ('user-3', 'user3@test.com', 'a3333333-3333-3333-3333-333333333333'),
+       ('user-public-access-only', 'user4@test.com', 'a4444444-4444-4444-4444-444444444444');
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent.
 INSERT INTO public."Project" ("id", "name", "userId", "parentId")

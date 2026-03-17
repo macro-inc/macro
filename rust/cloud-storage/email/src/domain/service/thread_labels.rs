@@ -48,22 +48,28 @@ where
             return Err(EmailErr::EmptyProviderLabelId);
         }
 
+        // Separate draft messages (no provider_id) from provider messages.
+        // Drafts only exist locally so we update their labels in the DB directly.
+        // Provider messages need a Gmail API call first.
+        let mut draft_ids = Vec::new();
+        let mut provider_messages = Vec::new();
+        for msg in &messages {
+            match &msg.provider_id {
+                Some(id) if !id.is_empty() => provider_messages.push(msg),
+                _ => draft_ids.push(msg.db_id),
+            }
+        }
+
         // Fan out Gmail API calls with limited concurrency.
         // Take a reference to the modifier outside the loop so each future
         // only borrows the modifier (not all of `self`), allowing true
         // concurrent polling via buffer_unordered.
         const MAX_CONCURRENT: usize = 10;
         let modifier = &self.gmail_label_modifier;
-        let mut join_handles = Vec::with_capacity(messages.len());
-        for msg in &messages {
+        let mut join_handles = Vec::with_capacity(provider_messages.len());
+        for msg in &provider_messages {
             let db_id = msg.db_id;
-            // don't modify messages without provider_ids (drafts)
-            let provider_msg_id = match &msg.provider_id {
-                Some(id) if !id.is_empty() => id.clone(),
-                _ => {
-                    continue;
-                }
-            };
+            let provider_msg_id = msg.provider_id.clone().unwrap();
             let plid = provider_label_id.clone();
             let token = access_token.to_owned();
             let (to_add, to_remove) = if add {
@@ -84,7 +90,8 @@ where
             .collect()
             .await;
 
-        let mut successful_ids = Vec::new();
+        // Draft messages are always successful (no Gmail call needed)
+        let mut successful_ids = draft_ids;
         let mut failed_ids = Vec::new();
 
         for (msg_id, result) in results {

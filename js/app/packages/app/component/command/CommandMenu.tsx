@@ -40,10 +40,10 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'Dms' },
-  { id: 'notes', label: 'Notes' },
+  { id: 'notes', label: 'Docs' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'documents', label: 'Docs' },
-  { id: 'chats', label: 'Chats' },
+  { id: 'documents', label: 'Files' },
+  { id: 'chats', label: 'Agents' },
   { id: 'projects', label: 'Projects' },
   { id: 'commands', label: 'Commands' },
 ];
@@ -612,11 +612,7 @@ function CategoryFilterTabs() {
               {(category) => (
                 <Tabs.Trigger
                   value={category.id}
-                  class={cn(
-                    'relative text-ink-muted px-2 py-1 text-xs font-medium block hover:text-ink hover:bg-ink/10 transition-colors duration-150 border-r border-edge-muted last:border-r-0',
-                    CommandState.categoryFilter() === category.id &&
-                      'text-ink bg-ink/7'
-                  )}
+                  class="relative text-ink-muted px-2 py-1 text-xs font-medium block data-[selected]:text-ink data-[selected]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[selected]:hover:bg-ink/20 transition-colors duration-150 border-r border-edge-muted last:border-r-0"
                   tabIndex={-1}
                 >
                   {category.label}

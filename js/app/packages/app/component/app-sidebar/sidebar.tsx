@@ -10,25 +10,24 @@ import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
-import PlusIcon from '@phosphor-icons/core/bold/plus-bold.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Button } from '@ui/components/Button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { ROUTER_BASE } from '@app/constants/routerBase';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
 
@@ -110,6 +109,66 @@ type AppSidebarProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type SidebarHotkeyDeps = {
+  isSlim: () => boolean;
+  onOpenChange: (open: boolean) => void;
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
+};
+
+export const registerSidebarHotkeys = ({
+  isSlim,
+  onOpenChange,
+  openWithSplit,
+}: SidebarHotkeyDeps) => {
+  // Register 'g' as a leader key that activates the global GO_TO command scope
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: 'global',
+    description: 'Go to page',
+    keyDownHandler: () => false,
+    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
+    hide: true,
+    registrationType: 'add',
+  });
+
+  registerHotkey({
+    hotkey: 'cmd+.',
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.toggleSidebar,
+    description: 'Toggle sidebar',
+    runWithInputFocused: true,
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      onOpenChange(isSlim());
+      return true;
+    },
+  });
+
+  // Register navigation shortcuts in the global GO_TO command scope
+  for (const link of SIDEBAR_LINKS) {
+    registerHotkey({
+      hotkey: link.hotkey,
+      scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+      description: `Go to ${link.label}`,
+      keyDownHandler: (e) => {
+        e?.preventDefault();
+        openWithSplit(
+          {
+            type: 'component',
+            id: link.id,
+          },
+          {
+            preferNewSplit: e?.shiftKey,
+            mergeHistory: false,
+            allowDuplicate: true,
+          }
+        );
+        return true;
+      },
+    });
+  }
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
@@ -122,229 +181,165 @@ export const AppSidebar = (props: AppSidebarProps) => {
     setCreateMenuOpen((p) => !p);
   };
 
-  const registerHotkeys = () => {
-    // Register 'g' as a leader key that activates the global GO_TO command scope
-    registerHotkey({
-      hotkey: GO_TO_LEADER_KEY,
-      scopeId: 'global',
-      description: 'Go to page',
-      keyDownHandler: () => false,
-      activateCommandScopeId: GO_TO_COMMAND_SCOPE,
-      hide: true,
-      registrationType: 'add',
+  const registerHotkeys = () =>
+    registerSidebarHotkeys({
+      isSlim,
+      onOpenChange: props.onOpenChange,
+      openWithSplit: layout.openWithSplit,
     });
-
-    registerHotkey({
-      hotkey: 'cmd+b',
-      scopeId: 'global',
-      hotkeyToken: TOKENS.global.toggleSidebar,
-      description: 'Toggle sidebar',
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        props.onOpenChange(isSlim());
-        return true;
-      },
-    });
-
-    // Register navigation shortcuts in the global GO_TO command scope
-    for (const link of SIDEBAR_LINKS) {
-      registerHotkey({
-        hotkey: link.hotkey,
-        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
-        description: `Go to ${link.label}`,
-        keyDownHandler: (e) => {
-          e?.preventDefault();
-          layout.openWithSplit(
-            {
-              type: 'component',
-              id: link.id,
-            },
-            {
-              preferNewSplit: e?.shiftKey,
-              mergeHistory: true,
-              allowDuplicate: true,
-            }
-          );
-          return true;
-        },
-      });
-    }
-  };
-
-  registerHotkeys();
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+  registerHotkeys();
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
+  const [createBtnHovering, setCreateBtnHovering] = createSignal(false);
 
   return (
-    <>
-      <Show when={isMobile() && isExpanded()}>
-        <div
-          class="absolute z-modal-overlay pattern-panel pattern-diagonal-4 w-screen h-full inset-0 mask-l-from-0 pointer-events-[all] transition-opacity opacity-100"
-          onClick={() => props.onOpenChange(false)}
-        />
-      </Show>
-      <div
-        class={cn(
-          'group/sidebar h-full py-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content ease-in-out',
-          isExpanded() &&
-            'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
-          props.sidebarState === 'hidden' &&
-            '-translate-x-full overflow-hidden opacity-0',
+    <div
+      class={cn(
+        'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
+        isExpanded() &&
+          'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+        props.sidebarState === 'hidden' &&
+          '-translate-x-full overflow-hidden opacity-0',
 
-          isSlim() &&
-            'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
-        )}
-        data-expanded={isExpanded()}
-        data-slim={isSlim()}
-        style={{
-          'transition-property': 'transform, max-width, opacity',
-          'transition-duration': '100ms',
-        }}
-      >
-        <div
-          class={cn(
-            'flex items-center justify-between py-2 pl-3 pr-2',
-            isSlim() && 'flex-col px-2 pb-0 justify-center'
-          )}
-        >
-          <LogoIcon class="size-6 text-accent opacity-100 group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:size-0" />
-          <div class="flex items-center gap-1">
-            <Show when={isExpanded()}>
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label="Command palette"
-                    hotkeyToken={TOKENS.global.commandMenu}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs"
-                  onClick={handleCommandPaletteClick}
-                >
-                  <CommandIcon />
-                </Button>
-              </Tooltip>
-            </Show>
-            <Show when={!isMobile()}>
-              {/*<Tooltip tooltip={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}>*/}
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label={isSlim() ? 'Expand sidebar' : 'Shrink sidebar'}
-                    hotkeyToken={TOKENS.global.toggleSidebar}
-                  />
-                }
-              >
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  class="rounded-xs [&_svg]:size-4"
-                  onClick={() => props.onOpenChange(isSlim())}
-                  onMouseEnter={() => setSidebarBtnHovering(true)}
-                  onMouseLeave={() => setSidebarBtnHovering(false)}
-                >
-                  <AnimatedSidebarIcon
-                    triggerAnimation={sidebarBtnHovering()}
-                  />
-                </Button>
-              </Tooltip>
-            </Show>
+        isSlim() && 'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+      )}
+      data-expanded={isExpanded()}
+      data-slim={isSlim()}
+      style={{ transition: 'max-width ease-in-out 100ms' }}
+    >
+      <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
+        <div class="flex items-center group/logo-area w-full">
+          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
+            <LogoIcon class="size-6" />
           </div>
-        </div>
-
-        <Tooltip
-          class={
-            'group-data-[slim=true]/sidebar:px-0.5 px-2 flex items-center justify-center'
-          }
-          tooltip={<LabelAndHotKey label="Create new" shortcut="c" />}
-        >
+          <div class="grow-1 shrink-10 min-w-0" />
           <Button
-            class={
-              'rounded-xs justify-center group-data-[expanded=true]/sidebar:justify-start group-data-[expanded=true]/sidebar:w-full font-bold text-sm ring-1 ring-edge-muted p-1.5 flex gap-2'
-            }
-            variant="ghost"
-            size="sm"
-            onClick={handleCreateClick}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 grow text-left">
-              Create
-            </span>
-            <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0 rounded-sm px-2 py-0.5 text-xs border border-edge-muted">
-              <Hotkey shortcut="C" />
-            </span>
-          </Button>
-        </Tooltip>
-
-        <nav>
-          <ul class="w-full h-full px-2 flex flex-col gap-1">
-            <For each={SIDEBAR_LINKS}>
-              {(link) => (
-                <li class="flex items-center justify-center">
-                  <SidebarLink
-                    {...link}
-                    sidebarState={props.sidebarState ?? 'expanded'}
-                  />
-                </li>
-              )}
-            </For>
-          </ul>
-        </nav>
-
-        <Show when={isExpanded()}>
-          <div class="block max-h-[clamp(10%,60%,20rem)]">
-            <ChannelsUnreadWidget />
-          </div>
-
-          {/* <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto"> */}
-          {/*   <UnreadNotificationsWidget /> */}
-          {/* </div> */}
-        </Show>
-
-        <div class="mt-auto w-full px-2">
-          {/*<Button
-            class={cn(
-              'flex items-center justify-start text-sm gap-2 cursor-default',
-              isSlim() ? 'justify-center aspect-square' : 'w-full'
-            )}
-            variant="ghost"
-            size={isSlim() ? 'icon-sm' : 'sm'}
-            onClick={() => openSettings('Shortcuts')}
-          >
-            <KeyboardIcon class="size-4 shrink-0" />
-            <span class={cn(isSlim() ? 'sr-only' : 'block')}>Shortcuts</span>
-          </Button>*/}
-
-          <Tooltip
-            class="w-full"
+            class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
+            onClick={() => props.onOpenChange(!isExpanded())}
+            onMouseEnter={() => setSidebarBtnHovering(true)}
+            onMouseLeave={() => setSidebarBtnHovering(false)}
             tooltip={
               <LabelAndHotKey
-                label="Settings"
-                hotkeyToken="global.toggleSettings"
+                label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+                hotkeyToken={TOKENS.global.toggleSidebar}
               />
             }
           >
-            <Button
-              class={cn(
-                'flex items-center justify-start text-sm gap-2 cursor-default',
-                isSlim() ? 'justify-center aspect-square' : 'w-full'
-              )}
-              variant="ghost"
-              size={isSlim() ? 'icon-sm' : 'sm'}
-              onClick={toggleSettings}
-            >
-              <GearIcon class="size-4 shrink-0" />
-              <span class={cn(isSlim() ? 'sr-only' : 'block')}>Settings</span>
-            </Button>
-          </Tooltip>
+            <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
+          </Button>
         </div>
       </div>
-    </>
+
+      <div class="px-2">
+        <hr class="border-edge-muted mb-[8px]" />
+      </div>
+
+      <nav>
+        <ul class="w-full h-full px-2 flex flex-col gap-1">
+          <For each={SIDEBAR_LINKS}>
+            {(link) => (
+              <li class="flex items-center justify-center">
+                <SidebarLink
+                  {...link}
+                  sidebarState={props.sidebarState ?? 'expanded'}
+                />
+              </li>
+            )}
+          </For>
+        </ul>
+      </nav>
+
+      <div class="px-2">
+        <hr class="border-edge-muted my-[8px]" />
+      </div>
+
+      <Show when={isExpanded()}>
+        <div class="block max-h-[clamp(10%,60%,20rem)]">
+          <ChannelsUnreadWidget />
+        </div>
+
+        {/* <div class="block max-h-[clamp(10%,60%,20rem)] mt-auto"> */}
+        {/*   <UnreadNotificationsWidget /> */}
+        {/* </div> */}
+      </Show>
+
+      <div class="px-2 mt-auto w-full">
+        <hr class="border-edge-muted mb-[8px]" />
+      </div>
+
+      <div class=" w-full px-2 flex flex-col">
+        <Button
+          class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+          variant="ghost"
+          tooltipPlacement="right"
+          tooltip={
+            <LabelAndHotKey
+              label="Create new"
+              hotkeyToken={TOKENS.global.createCommand}
+            />
+          }
+          onClick={handleCreateClick}
+          onMouseEnter={() => setCreateBtnHovering(true)}
+          onMouseLeave={() => setCreateBtnHovering(false)}
+        >
+          <div
+            class={`size-4 shrink-0 transition-colors duration-300 ${createBtnHovering() ? 'text-accent' : ''}`}
+          >
+            <AnimatedPlusIcon triggerAnimation={createBtnHovering()} />
+          </div>
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            Create
+          </span>
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={TOKENS.global.createCommand} class="flex gap-1" />
+          </div>
+        </Button>
+
+        <Button
+          class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+          variant="ghost"
+          tooltipPlacement="right"
+          tooltip={
+            <LabelAndHotKey
+              label="Command palette"
+              hotkeyToken={TOKENS.global.commandMenu}
+            />
+          }
+          onClick={handleCommandPaletteClick}
+        >
+          <CommandIcon class="size-4 shrink-0" />
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            Command
+          </span>
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={TOKENS.global.commandMenu} class="flex gap-1" />
+          </div>
+        </Button>
+
+        <Button
+          class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+          variant="ghost"
+          tooltipPlacement="right"
+          onClick={toggleSettings}
+          tooltip={
+            <LabelAndHotKey
+              label="Settings"
+              hotkeyToken={TOKENS.global.toggleSettings}
+            />
+          }
+        >
+          <GearIcon class="size-4 shrink-0" />
+          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+            Settings
+          </span>
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={TOKENS.global.toggleSettings} class="flex gap-1" />
+          </div>
+        </Button>
+      </div>
+    </div>
   );
 };
 
@@ -375,16 +370,24 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
   return (
     <Button
-      as="a"
+      as="button"
+      draggable={false}
       variant="ghost"
-      size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default rounded-xs',
-        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'size-8 justify-center aspect-square',
-        props.sidebarState !== 'slim' && 'w-full'
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1',
+        isActive() && 'bg-ink/7 not-disabled:hover:bg-ink/15 text-ink'
       )}
-      href={`${ROUTER_BASE}/component${props.href}`}
+      tooltipPlacement="right"
+      tooltip={
+        <LabelAndHotKey
+          label={`Go to ${props.label}`}
+          hotkeySequence={
+            props.standaloneHotkey
+              ? [{ shortcut: props.hotkey }]
+              : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
+          }
+        />
+      }
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={(e) => {
@@ -399,7 +402,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           },
           {
             preferNewSplit: e.shiftKey,
-            mergeHistory: true,
+            mergeHistory: false,
             allowDuplicate: true,
           }
         );
@@ -410,9 +413,23 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
         </div>
       </Show>
-      <span class="opacity-100 group-data-[slim=true]/sidebar:sr-only group-data-[slim=true]/sidebar:opacity-0">
+      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
+
+      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+        <div class="flex gap-1">
+          <Show when={!props.standaloneHotkey}>
+            <>
+              <Hotkey shortcut={GO_TO_LEADER_KEY} lowercase />
+              <Hotkey shortcut={props.hotkey} lowercase />
+            </>
+          </Show>
+          <Show when={props.standaloneHotkey}>
+            <Hotkey shortcut={props.hotkey} lowercase />
+          </Show>
+        </div>
+      </div>
     </Button>
   );
 };

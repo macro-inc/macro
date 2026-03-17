@@ -70,7 +70,6 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
@@ -79,8 +78,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
-import { SoupViewTabs } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  SoupViewTabs,
+  useApplyPreset,
+} from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { isListViewID } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -102,9 +105,8 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'channel',
     (notification) => {
-      entityQueryClient.invalidateQueries({
-        queryKey: soupKeys._def,
-      });
+      refetchSoupEntity(notification.entity_id, 'channel');
+      invalidateSoupEntity(notification.entity_id);
       invalidateEntityNotifications(notification.entity_id);
     }
   );
@@ -127,9 +129,8 @@ const useSoupNotificationInvalidators = () => {
     'document',
     (notification) => {
       if (notification.notification_event_type === 'task_assigned') {
-        entityQueryClient.invalidateQueries({
-          queryKey: soupKeys._def,
-        });
+        refetchSoupEntity(notification.entity_id, 'document');
+        invalidateSoupEntity(notification.entity_id);
         invalidateEntityNotifications(notification.entity_id);
       }
     }
@@ -376,6 +377,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
+  const { applyTabPreset } = useApplyPreset();
+  const currentView = () => {
+    const { type, id } = panel.handle.content();
+    if (type !== 'component') return;
+    return isListViewID(id) ? id : undefined;
+  };
+
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
@@ -384,6 +392,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
+    currentView,
+    activeTab,
+    applyTabPreset,
   });
 
   // Register previewed entity for auto-attach

@@ -1,3 +1,5 @@
+use crate::domain::models::Notification;
+
 use super::*;
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -119,9 +121,9 @@ async fn test_create_notification(pool: Pool<Postgres>) {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
-        notification: TestNotification {
+        notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
-        },
+        }),
         sender_id: None,
         recipient_ids: std::collections::HashSet::from([recipient.clone()]),
     };
@@ -380,9 +382,9 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
-        notification: TestNotification {
+        notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
-        },
+        }),
         sender_id: None,
         recipient_ids: std::collections::HashSet::from([recipient.clone()]),
     };
@@ -390,9 +392,9 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     // First creation should succeed
     let request2 = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
-        notification: TestNotification {
+        notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
-        },
+        }),
         sender_id: None,
         recipient_ids: std::collections::HashSet::from([recipient.clone()]),
     };

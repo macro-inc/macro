@@ -4,7 +4,6 @@ import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
@@ -71,6 +70,8 @@ import {
   useContext,
 } from 'solid-js';
 import { FormatTools } from './FormatTools';
+import { Button } from '@ui/components/Button';
+import { Dynamic } from 'solid-js/web';
 
 const MENU_ID = 'markdown-popup';
 
@@ -377,7 +378,7 @@ export function MarkdownPopup(props: {
     return (
       <>
         <div
-          class="gap-1 flex flex-row items-center flex-nowrap"
+          class="gap-1 flex flex-row items-center flex-nowrap p-0"
           ref={buttonRowRef}
         >
           {/*<Show
@@ -407,24 +408,23 @@ export function MarkdownPopup(props: {
             <FormatTools withinPopup />
           </Show>
           <Show when={shouldShowCheckboxToTaskButton()}>
-            <DeprecatedTextButton
-              width={'w-12'}
-              theme="clear"
-              icon={isConverting() ? LoadingIcon : CheckSquareIcon}
-              text={isConverting() ? 'Converting...' : 'Tasks'}
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={handleConvertToTasks}
               disabled={isConverting()}
-            />
+            >
+              <Dynamic
+                component={isConverting() ? LoadingIcon : CheckSquareIcon}
+                class="size-4"
+              />
+              {isConverting() ? 'Converting...' : 'Tasks'}
+            </Button>
           </Show>
-          <DeprecatedTextButton
-            width={'w-12'}
-            theme="clear"
-            icon={
-              locationCopied()
-                ? () => <CheckIcon class="text-success size-4" />
-                : LinkIcon
-            }
-            text={locationCopied() ? 'Copied' : 'Share'}
+          <Button
+            size="sm"
+            class="px-2 text-xs rounded-xs py-1.5"
+            variant="ghost"
             onClick={async () => {
               const location = editor.read(() =>
                 $getLocationUrl('md', blockId)
@@ -434,7 +434,13 @@ export function MarkdownPopup(props: {
               setLocationCopied(true);
               setTimeout(() => setLocationCopied(false), 2000);
             }}
-          />
+          >
+            <Dynamic
+              component={locationCopied() ? CheckIcon : LinkIcon}
+              class={locationCopied() ? 'text-success-ink size-4' : 'size-4'}
+            />
+            Share
+          </Button>
         </div>
 
         <Show when={!completion() && completionType() === 'rewrite'}>

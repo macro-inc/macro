@@ -6,11 +6,19 @@ use rootcause::Report;
 pub struct NoOpRateLimiter;
 
 impl RateLimitPort for NoOpRateLimiter {
-    async fn check_and_increment(
+    async fn check(
         &self,
         _key: &RateLimitKey,
         _config: &RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         Ok(RateLimitResult::Allowed { current_count: 0 })
+    }
+
+    async fn increment(
+        &self,
+        _key: &RateLimitKey,
+        _config: &RateLimitConfig,
+    ) -> Result<u64, Report> {
+        Ok(0)
     }
 }

@@ -93,18 +93,26 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
             SqlFragment::raw(
                 r#"(
-                m.is_draft = TRUE
-                OR EXISTS (
+                NOT EXISTS (
                     SELECT 1 FROM email_message_labels ml
                     JOIN email_labels l ON ml.label_id = l.id
                     WHERE ml.message_id = m.id
-                    AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                    AND l.name = 'TRASH'
                 )
-                OR NOT EXISTS (
-                    SELECT 1 FROM email_message_labels ml
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE ml.message_id = m.id
-                    AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                AND (
+                    m.is_draft = TRUE
+                    OR EXISTS (
+                        SELECT 1 FROM email_message_labels ml
+                        JOIN email_labels l ON ml.label_id = l.id
+                        WHERE ml.message_id = m.id
+                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                    )
+                    OR NOT EXISTS (
+                        SELECT 1 FROM email_message_labels ml
+                        JOIN email_labels l ON ml.label_id = l.id
+                        WHERE ml.message_id = m.id
+                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                    )
                 )
             )"#,
             )

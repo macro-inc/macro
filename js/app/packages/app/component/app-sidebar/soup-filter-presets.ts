@@ -1,7 +1,5 @@
-import {
-  QUERY_FILTERS,
-  type FilterID,
-} from '@app/component/next-soup/filters/filters';
+import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
   applyInboxQueryFilters,
   applyOtherQueryFilters,
@@ -41,15 +39,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         queryFilters: {
           ...applyInboxQueryFilters({}),
-          emailView: 'all',
+          emailView: 'inbox',
         },
         clientFilters: { and: ['signal', 'not-done'] },
-        emailView: 'all',
       }),
       noise: () => ({
         queryFilters: {
           ...applyOtherQueryFilters({}),
-          emailView: 'all',
+          emailView: 'inbox',
         },
         clientFilters: { and: ['noise', 'not-done'] },
       }),

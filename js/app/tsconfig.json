@@ -44,7 +44,9 @@
       "vite-plugin-solid-svg/types-component-solid",
       "vite/client",
       "vite-plugin-solid-svg/types",
-      "wicg-file-system-access"
+      "wicg-file-system-access",
+      "@types/gtag.js",
+      "@types/facebook-pixel"
     ],
     "composite": true,
     "incremental": true,

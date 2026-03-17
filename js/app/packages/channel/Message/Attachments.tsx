@@ -1,7 +1,4 @@
-import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
-import { VideoPreview } from '@core/component/VideoPreview';
 import {
   isStaticAttachmentType,
   STATIC_IMAGE,
@@ -12,6 +9,7 @@ import type { ApiMessageAttachment } from '@service-storage/generated/schemas/ap
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { useMessage } from './context';
+import { MediaPreview } from './MediaPreview';
 
 type AttachmentsProps = {
   class?: string;
@@ -85,7 +83,7 @@ export function Attachments(props: AttachmentsProps) {
         <Show when={buckets().videoAttachments.length > 0}>
           <For each={buckets().videoAttachments}>
             {(attachment) => (
-              <VideoPreview id={attachment.entity_id} variant="dynamic" />
+              <MediaPreview kind="video" id={attachment.entity_id} />
             )}
           </For>
         </Show>
@@ -94,16 +92,16 @@ export function Attachments(props: AttachmentsProps) {
           <div class="flex not-first:mt-2">
             <Switch>
               <Match when={buckets().imageAttachments.length === 1}>
-                <ImagePreview
+                <MediaPreview
+                  kind="single-image"
                   image={imagePreviewData()[0]!}
-                  variant="dynamic"
                 />
               </Match>
               <Match when={buckets().imageAttachments.length > 1}>
-                <ImageGalleryPreview
+                <MediaPreview
+                  kind="image-gallery"
                   images={imagePreviewData()}
                   attachmentIds={imageAttachmentIds()}
-                  variant="dynamic"
                 />
               </Match>
             </Switch>

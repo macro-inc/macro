@@ -10,7 +10,7 @@ export const AnimatedFileCodeIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-file-code-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated code file icon</title>
+      {/*<title>Animated code file icon</title>*/}
       <style>{`
         @keyframes underline-move {
           0% {

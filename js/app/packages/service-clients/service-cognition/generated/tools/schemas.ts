@@ -482,7 +482,9 @@ export const ReadThread = z
       'project',
     ]),
     ids: z.array(z.string()),
-    messagesSince: z.union([z.string().datetime({ offset: true }), z.null()]),
+    messagesSince: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .default(null),
   })
   .strict();
 

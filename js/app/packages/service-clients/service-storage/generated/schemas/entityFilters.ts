@@ -9,6 +9,7 @@ import type { ChatFilters } from './chatFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
 import type { ProjectFilters } from './projectFilters';
+import type { PropertyFilter } from './propertyFilter';
 
 /**
  * a bundle of all of the filters for each entity type
@@ -24,4 +25,6 @@ export interface EntityFilters {
   email_filters?: EmailFilters;
   /** the bundled [ProjectFilters] */
   project_filters?: ProjectFilters;
+  /** property-based filters applied across entity types */
+  property_filters?: PropertyFilter[];
 }

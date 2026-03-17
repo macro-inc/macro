@@ -3,11 +3,20 @@ import type {
   CountedReaction,
   Message as ApiMessage,
 } from '@service-comms/generated/models';
+import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
+import type { ApiThreadReply } from '@service-comms/client';
 import type { GetChannelResponse } from './types';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
+import {
+  insertMessageIntoTargetCaches,
+  replaceTargetAttachments,
+  replaceTargetReactions,
+  softInvalidateTargetCaches,
+  resolveMessageTarget,
+} from './reconcile';
 
 /**
  * Websocket payload types
@@ -61,12 +70,72 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
           messages: [...prev.messages, payload],
         };
       });
+
+      if (ENABLE_NEW_CHANNELS) {
+        const threadId = payload.thread_id;
+        if (threadId) {
+          const reply: ApiThreadReply = {
+            id: payload.id,
+            sender_id: payload.sender_id,
+            content: payload.content,
+            created_at: payload.created_at,
+            updated_at: payload.updated_at,
+            edited_at: payload.edited_at,
+            attachments: [],
+            reactions: [],
+          };
+          insertMessageIntoTargetCaches(
+            payload.channel_id,
+            resolveMessageTarget({
+              channelId: payload.channel_id,
+              messageId: payload.id,
+              threadId,
+            }),
+            reply
+          );
+        } else {
+          insertMessageIntoTargetCaches(
+            payload.channel_id,
+            resolveMessageTarget({
+              channelId: payload.channel_id,
+              messageId: payload.id,
+            }),
+            {
+              id: payload.id,
+              channel_id: payload.channel_id,
+              sender_id: payload.sender_id,
+              content: payload.content,
+              created_at: payload.created_at,
+              updated_at: payload.updated_at,
+              deleted_at: payload.deleted_at,
+              edited_at: payload.edited_at,
+              attachments: [],
+              reactions: [],
+              thread: {
+                preview: [],
+                reply_count: 0,
+                latest_reply_at: null,
+              },
+            }
+          );
+        }
+      }
     } catch (error) {
       console.error('Failed to update message cache from websocket:', error);
     }
   }
 
   softInvalidateChannelWithID(payload.channel_id);
+  if (ENABLE_NEW_CHANNELS) {
+    softInvalidateTargetCaches(
+      payload.channel_id,
+      resolveMessageTarget({
+        channelId: payload.channel_id,
+        messageId: payload.id,
+        threadId: payload.thread_id ?? undefined,
+      })
+    );
+  }
 }
 
 /**
@@ -94,12 +163,27 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
           },
         };
       });
+
+      if (ENABLE_NEW_CHANNELS) {
+        const target = resolveMessageTarget({
+          channelId: payload.channel_id,
+          messageId: payload.message_id,
+        });
+        replaceTargetReactions(payload.channel_id, target, payload.reactions);
+      }
     } catch (error) {
       console.error('Failed to update reaction cache from websocket:', error);
     }
   }
 
   softInvalidateChannelWithID(payload.channel_id);
+  if (ENABLE_NEW_CHANNELS) {
+    const target = resolveMessageTarget({
+      channelId: payload.channel_id,
+      messageId: payload.message_id,
+    });
+    softInvalidateTargetCaches(payload.channel_id, target);
+  }
 }
 
 /**
@@ -113,27 +197,49 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
     ChannelNonceKeys.ATTACHMENT,
     payload.nonce
   );
+  const target = ENABLE_NEW_CHANNELS
+    ? resolveMessageTarget({
+        channelId: payload.channel_id,
+        messageId: payload.message_id,
+      })
+    : undefined;
 
-  if (isExternalUpdate) {
-    try {
-      const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-      queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-        if (!prev) return prev;
+  try {
+    const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+      if (!prev) return prev;
 
-        const existingIds = new Set(prev.attachments.map((a) => a.id));
-        const newAttachments = payload.attachments.filter(
-          (a) => !existingIds.has(a.id)
-        );
+      const remainingAttachments = prev.attachments.filter(
+        (attachment) => attachment.message_id !== payload.message_id
+      );
+      const nextAttachments = isExternalUpdate
+        ? [
+            ...remainingAttachments,
+            ...payload.attachments.filter(
+              (attachment) =>
+                !remainingAttachments.some(
+                  (existingAttachment) =>
+                    existingAttachment.id === attachment.id
+                )
+            ),
+          ]
+        : [...remainingAttachments, ...payload.attachments];
 
-        return {
-          ...prev,
-          attachments: [...prev.attachments, ...newAttachments],
-        };
-      });
-    } catch (error) {
-      console.error('Failed to update attachment cache from websocket:', error);
+      return {
+        ...prev,
+        attachments: nextAttachments,
+      };
+    });
+
+    if (ENABLE_NEW_CHANNELS && target) {
+      replaceTargetAttachments(payload.channel_id, target, payload.attachments);
     }
+  } catch (error) {
+    console.error('Failed to update attachment cache from websocket:', error);
   }
 
   softInvalidateChannelWithID(payload.channel_id);
+  if (ENABLE_NEW_CHANNELS) {
+    softInvalidateTargetCaches(payload.channel_id, target);
+  }
 }

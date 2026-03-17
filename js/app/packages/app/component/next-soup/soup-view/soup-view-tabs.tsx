@@ -2,7 +2,7 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -22,7 +22,7 @@ import {
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
 
-const useApplyPreset = () => {
+export const useApplyPreset = () => {
   const soup = useSoup();
   const { setQueryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
@@ -274,7 +274,7 @@ export const SegmentedControl: ParentComponent<
                   class="border-r border-edge-muted last:border-r-0"
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-2 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/7 transition-colors duration-150 block hover:text-ink hover:bg-ink/10">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-2 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[checked]:hover:bg-ink/20 transition-colors duration-150 block">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>

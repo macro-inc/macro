@@ -1,5 +1,6 @@
 use models_opensearch::SearchIndex;
 
+use super::BulkUpsertResult;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting an email message into the opensearch index
@@ -12,12 +13,24 @@ pub struct UpsertEmailArgs {
     pub message_id: String,
     /// The sender of the email message
     pub sender: String,
+    /// The display name of the sender
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_name: Option<String>,
+    /// The reply-to address of the email message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
     /// The recipients of the email message
     pub recipients: Vec<String>,
+    /// The display names of the recipients
+    pub recipient_names: Vec<String>,
     /// The cc of the email message
     pub cc: Vec<String>,
+    /// The display names of the cc contacts
+    pub cc_names: Vec<String>,
     /// The bcc of the email message
     pub bcc: Vec<String>,
+    /// The display names of the bcc contacts
+    pub bcc_names: Vec<String>,
     /// The labels of the email message
     pub labels: Vec<String>,
     /// The link id of the email message
@@ -78,4 +91,39 @@ pub(crate) async fn upsert_email_message(
         });
     }
     Ok(())
+}
+
+#[tracing::instrument(skip(client, messages), err)]
+pub(crate) async fn bulk_upsert_email_messages(
+    client: &opensearch::OpenSearch,
+    messages: &[UpsertEmailArgs],
+    index_override: Option<&str>,
+) -> Result<BulkUpsertResult> {
+    if messages.is_empty() {
+        return Ok(BulkUpsertResult::default());
+    }
+
+    let mut bulk_body = Vec::new();
+
+    for msg in messages {
+        let id = format!("{}:{}", msg.thread_id, msg.message_id);
+
+        let action = serde_json::json!({
+            "index": {
+                "_id": id
+            }
+        });
+
+        bulk_body.push(action.to_string());
+        bulk_body.push(serde_json::to_string(msg).map_err(|e| {
+            OpensearchClientError::DeserializationFailed {
+                details: e.to_string(),
+                method: Some("bulk_upsert_email_messages".to_string()),
+            }
+        })?);
+    }
+
+    let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
+
+    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_email_messages").await
 }

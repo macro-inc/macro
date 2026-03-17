@@ -13,6 +13,8 @@ export const TOKENS = {
       '7': 'soup.tabs.7',
       '8': 'soup.tabs.8',
       '9': 'soup.tabs.9',
+      next: 'soup.tabs.next',
+      prev: 'soup.tabs.prev',
     },
   },
 

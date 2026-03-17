@@ -10,7 +10,7 @@ export const AnimatedChannelIcon = (props: { triggerAnimation?: boolean }) => {
       overflow="visible"
       class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated channel icon</title>
+      {/*<title>Animated channel icon</title>*/}
       <style>{`
         @keyframes head-bounce {
           0% {

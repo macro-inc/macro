@@ -588,7 +588,7 @@ export function BaseInput(props: BaseInputProps) {
           <Button
             ref={setAttachMenuAnchorRef}
             // We use onPointerDown here to integrate correctly with attach menu onMouseDown behavior.
-            onPointerDown={(e) => {
+            onPointerDown={(e: PointerEvent) => {
               e.preventDefault();
               e.stopPropagation();
               setShowAttachMenu((prev) => !prev);

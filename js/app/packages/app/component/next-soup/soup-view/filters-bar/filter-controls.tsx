@@ -14,12 +14,11 @@ import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { TASK_STATUS_OPTIONS } from '@entity';
 import { useProjectsQuery } from '@queries/storage/projects';
 import {
   getFileAssociations,
   QUERY_FILTERS_BASE,
-} from '@app/component/next-soup/filters/filters';
+} from '@app/component/next-soup/filters/query-filters';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -31,6 +30,7 @@ import {
 } from './filter-primitives';
 import { useFilterOptions } from './use-filter-options';
 import { useQuickAccess } from '@core/context/quickAccess';
+import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs';
 
 export const AssigneeFilter = () => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
@@ -349,30 +349,34 @@ export const DocumentFolderFilter = () => {
   return <FolderFilter target="document" label="Folder" />;
 };
 
-export const TaskStatusFilter = () => {
-  const { statusFilter, setStatusFilter } = useSoupView();
+const STATUS_FILTER_PROPERTY_ID = {
+  'task-not-started': PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  'task-in-progress': PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  'task-in-review': PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  'task-completed': PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+  'task-canceled': PROPERTY_OPTION_IDS.STATUS.CANCELED,
+} satisfies Record<(typeof TASK_STATUS_FILTERS)[number]['id'], string>;
 
-  const statusOptions: Option[] = TASK_STATUS_OPTIONS.map((o) => ({
-    value: o.value,
-    label: o.label,
-    icon: () => <PropertyValueIcon optionId={o.value} class="size-3.5" />,
+export const TaskStatusFilter = () => {
+  const statusOptions = TASK_STATUS_FILTERS.map((o) => ({
+    value: o.id,
+    label: o.label ?? 'Unknown status',
+    icon: () => (
+      <PropertyValueIcon
+        optionId={STATUS_FILTER_PROPERTY_ID[o.id]}
+        class="size-3.5"
+      />
+    ),
   }));
 
-  const activeStatus = createMemo((): Option[] => {
-    const current = statusFilter();
-    return statusOptions.filter((o) => current.includes(o.value));
-  });
-
-  const handleStatusChange = (options: Option[]) => {
-    setStatusFilter(options.map((o) => o.value));
-  };
+  const status = useFilterOptions(statusOptions, { target: 'or' });
 
   return (
     <FilterSelect
       label="Status"
       options={statusOptions}
-      active={activeStatus()}
-      onChange={handleStatusChange}
+      active={status.active()}
+      onChange={status.onChange}
     />
   );
 };

@@ -7,6 +7,7 @@ import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
 import { Tooltip } from './Tooltip';
 import { UserTooltip } from './UserTooltip';
+import { cn } from '@ui/utils/classname';
 
 export type UserIconProps = {
   isDeleted?: boolean;
@@ -16,6 +17,7 @@ export type UserIconProps = {
   // TODO: remove imageUrl. not actively used.
   imageURL?: string;
   fetchUrl?: boolean;
+  class?: string;
 } & ({ id: string; email?: never } | { email: string; id?: never });
 
 export type SizeClass = {
@@ -73,9 +75,9 @@ export function UserIcon(props: UserIconProps) {
         };
       case 'fill':
         return {
-          container: 'w-full h-full',
+          container: 'w-full h-full @container',
           icon: 'w-full h-full',
-          text: 'text-[min(85%,3rem)] leading-none',
+          text: 'text-[min(calc(50cqw),3rem)] leading-none',
         };
     }
   });
@@ -100,7 +102,11 @@ export function UserIcon(props: UserIconProps) {
   const icon = createMemo(() => (
     <div
       onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
-      class={`${sizeClasses().container} shrink-0 rounded-full bg-ink-extra-muted text-panel`}
+      class={cn(
+        'shrink-0 rounded-full bg-ink-extra-muted text-panel',
+        sizeClasses().container,
+        props.class
+      )}
     >
       <Switch>
         <Match when={props.isDeleted}>

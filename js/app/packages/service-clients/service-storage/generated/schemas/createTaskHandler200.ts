@@ -6,9 +6,9 @@
  */
 
 /**
- * Response for create_task
+ * Response for creating a task.
  */
 export type CreateTaskHandler200 = {
-  /** The document id of the created task */
+  /** The document ID of the created task. */
   documentId: string;
 };

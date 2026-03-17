@@ -65,11 +65,16 @@ pub(crate) async fn drafts_preview_cursor(
                 END AS effective_ts
             FROM (
                 -- This sub-subquery efficiently finds the latest draft timestamp for every thread.
-                SELECT thread_id, MAX(updated_at) as latest_draft_ts
-                FROM email_messages
+                SELECT m.thread_id, MAX(m.updated_at) as latest_draft_ts
+                FROM email_messages m
                 -- we only display macro drafts, not drafts created in gmail
-                WHERE link_id = $1 AND is_draft = TRUE AND internal_date_ts IS NULL
-                GROUP BY thread_id
+                WHERE m.link_id = $1 AND m.is_draft = TRUE AND m.internal_date_ts IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_message_labels ml
+                      JOIN email_labels l ON ml.label_id = l.id
+                      WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = $1
+                  )
+                GROUP BY m.thread_id
             ) ldpt
             JOIN email_threads t ON ldpt.thread_id = t.id
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
@@ -97,6 +102,11 @@ pub(crate) async fn drafts_preview_cursor(
               AND m.is_draft = TRUE
               -- we only display macro drafts, not drafts created in gmail
               AND m.internal_date_ts IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  JOIN email_labels l ON ml.label_id = l.id
+                  WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = t.link_id
+              )
             ORDER BY m.updated_at DESC
             LIMIT 1
         ) AS lmp

@@ -14,7 +14,8 @@ import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
-import { markdownToPlainText } from '@lexical-core/utils/parsers';
+import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
@@ -63,27 +64,26 @@ function SoupChatInputInner() {
     },
   });
 
-  function deriveChatName(userQuery: string): string | undefined {
-    const MAX_LENGTH = 80;
-    const plainText = markdownToPlainText(userQuery);
-    const firstLine = plainText
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)[0];
-    return firstLine ? firstLine.slice(0, MAX_LENGTH) : undefined;
-  }
+  const renameMutation = createRenameDssEntityMutation();
 
   const handleSend = async (request: ChatSendInput) => {
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat
-    const name = deriveChatName(request.content);
-
-    const response = await cognitionApiServiceClient.createChat({ name });
+    const response = await cognitionApiServiceClient.createChat({});
     if (isErr(response)) {
       return;
     }
     const [, { id: chatId }] = response;
+
+    // Rename via mutation for optimistic cache updates (history, preview, soup)
+    const name = deriveChatName(request.content);
+    if (name) {
+      renameMutation.mutate({
+        entity: { type: 'chat', id: chatId, name: '', ownerId: '' },
+        newName: name,
+      });
+    }
 
     if (backgroundSend) {
       // Send the message in the background without navigating

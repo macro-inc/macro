@@ -50,6 +50,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

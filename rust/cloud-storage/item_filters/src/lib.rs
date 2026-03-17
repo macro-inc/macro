@@ -93,6 +93,10 @@ pub struct DocumentFilters {
     /// Task-specific filters that only apply to task subtype documents.
     #[serde(default, skip_serializing_if = "TaskFilters::is_empty")]
     pub task_filters: TaskFilters,
+
+    /// Filter by document sub type. Examples: ['task']. Empty to search all sub types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sub_types: Vec<String>,
 }
 
 impl IsEmpty for DocumentFilters {
@@ -105,6 +109,7 @@ impl IsEmpty for DocumentFilters {
             importance,
             notification_filters,
             task_filters,
+            sub_types,
         } = self;
         file_types.is_empty()
             && document_ids.is_empty()
@@ -113,6 +118,7 @@ impl IsEmpty for DocumentFilters {
             && importance.is_none()
             && notification_filters.is_empty()
             && task_filters.is_empty()
+            && sub_types.is_empty()
     }
 }
 
@@ -287,6 +293,35 @@ impl IsEmpty for ChannelFilters {
     }
 }
 
+/// A single property-based filter condition.
+///
+/// Each filter targets a specific property definition on entities of a given type,
+/// matching against select option UUIDs or entity reference IDs.
+/// Multiple values within a single filter are OR'd together.
+/// Multiple filters are AND'd together.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct PropertyFilter {
+    /// The UUID of the property definition to filter on.
+    pub property_definition_id: String,
+    /// The entity type for the property lookup (e.g., "TASK", "DOCUMENT", "PROJECT").
+    /// When None, matches across all entity types.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<String>,
+    /// Select option UUIDs to match. Multiple values are OR'd together.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub option_ids: Vec<String>,
+    /// Entity reference IDs to match. Multiple values are OR'd together.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entity_ids: Vec<String>,
+}
+
+impl IsEmpty for PropertyFilter {
+    fn is_empty(&self) -> bool {
+        self.option_ids.is_empty() && self.entity_ids.is_empty()
+    }
+}
+
 /// The project filters used to filter down what projects you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -342,6 +377,9 @@ pub struct EntityFilters {
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
+    /// property-based filters applied across entity types
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub property_filters: Vec<PropertyFilter>,
 }
 
 impl IsEmpty for EntityFilters {
@@ -352,6 +390,7 @@ impl IsEmpty for EntityFilters {
             chat_filters,
             channel_filters,
             email_filters,
+            property_filters,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
@@ -359,5 +398,6 @@ impl IsEmpty for EntityFilters {
             && chat_filters.is_empty()
             && email_filters.is_empty()
             && channel_filters.is_empty()
+            && property_filters.iter().all(IsEmpty::is_empty)
     }
 }

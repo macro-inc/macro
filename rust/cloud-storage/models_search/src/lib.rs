@@ -29,16 +29,6 @@ pub enum SearchOn {
     NameContent,
 }
 
-impl From<SearchOn> for opensearch_client::SearchOn {
-    fn from(value: SearchOn) -> Self {
-        match value {
-            SearchOn::Name => opensearch_client::SearchOn::Name,
-            SearchOn::Content => opensearch_client::SearchOn::Content,
-            SearchOn::NameContent => opensearch_client::SearchOn::NameContent,
-        }
-    }
-}
-
 #[derive(
     Serialize, Deserialize, Debug, ToSchema, Copy, Clone, EnumString, Display, PartialEq, JsonSchema,
 )]

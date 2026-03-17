@@ -1,8 +1,6 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import {
-  type FilterID,
-  getFileAssociations,
-} from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { getFileAssociations } from '@app/component/next-soup/filters/query-filters';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
@@ -122,14 +120,14 @@ export const createSearchState = ({
 
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
-      const terms = debouncedSearchForService();
+      const query = debouncedSearchForService();
       const include = unifiedSearchIncludeArray();
       const filters = searchFilters();
 
       return {
         search_on: 'name_content',
         match_type: 'partial',
-        terms: terms.length > 0 ? [terms] : undefined,
+        query,
         include,
         filters,
       };

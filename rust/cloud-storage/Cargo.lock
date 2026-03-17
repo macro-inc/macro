@@ -98,6 +98,7 @@ dependencies = [
  "comms",
  "connection",
  "cool_asserts",
+ "dateparser",
  "documents",
  "email",
  "email_service_client",
@@ -111,6 +112,7 @@ dependencies = [
  "models_email",
  "models_pagination",
  "models_permissions",
+ "models_properties",
  "models_search",
  "rand 0.9.0",
  "schemars",
@@ -735,9 +737,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.15.4"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b7b6141e96a8c160799cc2d5adecd5cbbe5054cb8c7c4af53da0f83bb7ad256"
+checksum = "94bffc006df10ac2a68c83692d734a465f8ee6c5b384d8545a636f81d858f4bf"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -745,9 +747,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c34dda4df7017c8db52132f0f8a2e0f8161649d15723ed63fc00c82d0f2081a"
+checksum = "4321e568ed89bb5a7d291a7f37997c2c0df89809d7b6d12062c81ddb54aa782e"
 dependencies = [
  "cc",
  "cmake",
@@ -2616,6 +2618,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dateparser"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2ef451feee09ae5ecd8a02e738bd9adee9266b8fa9b44e22d3ce968d8694238"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "deflate64"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3052,6 +3066,7 @@ dependencies = [
  "model_file_type",
  "model_user",
  "models_permissions",
+ "models_properties",
  "reqwest",
  "schemars",
  "serde",
@@ -3394,6 +3409,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "macro_user_id",
  "model_notifications",
  "notification",
  "rootcause",
@@ -5147,6 +5163,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "document_sub_type",
  "either",
  "filter_ast",
  "macro_user_id",
@@ -5495,6 +5512,12 @@ checksum = "31e24f1ad8321ca0e8a1e0ac13f23cb668e6f5466c2c57319f6a5cf1cc8e3b1c"
 dependencies = [
  "linked-hash-map",
 ]
+
+[[package]]
+name = "lru-slab"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "lzma-rs"
@@ -6137,6 +6160,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -6588,9 +6612,11 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "email_formatting",
  "email_validator",
  "http-body-util",
  "itertools 0.14.0",
+ "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
  "macro_cors",
@@ -6774,9 +6800,7 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -7571,13 +7595,14 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.9"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2fe5ef3495d7d2e377ff17b1a8ce2ee2ec2a18cde8b6ad6619d65d0701c135d"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "bytes",
- "getrandom 0.2.15",
- "rand 0.8.5",
+ "getrandom 0.3.1",
+ "lru-slab",
+ "rand 0.9.0",
  "ring",
  "rustc-hash 2.1.1",
  "rustls 0.23.36",
@@ -9694,15 +9719,24 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stripe",
+ "axum",
+ "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
  "non_empty",
+ "notification",
  "roles_and_permissions",
+ "serde",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 

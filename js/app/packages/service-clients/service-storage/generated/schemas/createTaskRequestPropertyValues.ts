@@ -7,6 +7,6 @@
 import type { PropertyInput } from './propertyInput';
 
 /**
- * Optional property values to set on the task
+ * Optional property values to set on the task.
  */
 export type CreateTaskRequestPropertyValues = PropertyInput[] | null;

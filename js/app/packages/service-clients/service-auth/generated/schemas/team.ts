@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The Team struct
+ */
 export interface Team {
   id: string;
   name: string;
