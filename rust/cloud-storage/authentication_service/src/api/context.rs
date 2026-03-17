@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
@@ -83,6 +84,7 @@ pub(crate) struct ApiContext {
         >,
     >,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
+    pub analytics_client: Arc<AnalyticsClient>,
 }
 
 env_var! {

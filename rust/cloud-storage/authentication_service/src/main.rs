@@ -1,4 +1,7 @@
 #![recursion_limit = "256"]
+use analytics_client::{
+    AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
+};
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -213,6 +216,41 @@ async fn main() -> anyhow::Result<()> {
     .search_event_queue(&config.search_event_queue);
     tracing::trace!("initialized sqs client");
 
+    // Initialize analytics client with configured providers
+    let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
+        posthog: config.posthog_api_key.as_ref().map(|api_key| {
+            tracing::info!("configuring PostHog analytics");
+            PostHogConfig {
+                api_key: api_key.clone(),
+                host: config.posthog_host.clone(),
+            }
+        }),
+        google_analytics: config
+            .ga_measurement_id
+            .as_ref()
+            .zip(config.ga_api_secret.as_ref())
+            .map(|(measurement_id, api_secret)| {
+                tracing::info!("configuring Google Analytics");
+                GoogleAnalyticsConfig {
+                    measurement_id: measurement_id.clone(),
+                    api_secret: api_secret.clone(),
+                }
+            }),
+        meta: config
+            .meta_pixel_id
+            .as_ref()
+            .zip(config.meta_access_token.as_ref())
+            .map(|(pixel_id, access_token)| {
+                tracing::info!("configuring Meta Conversions API");
+                MetaConfig {
+                    pixel_id: pixel_id.clone(),
+                    access_token: access_token.clone(),
+                    test_event_code: config.meta_test_event_code.clone(),
+                }
+            }),
+    });
+    tracing::trace!("initialized analytics client");
+
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
     let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
@@ -276,6 +314,7 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
+            analytics_client: Arc::new(analytics_client),
         },
         config.port,
     )
