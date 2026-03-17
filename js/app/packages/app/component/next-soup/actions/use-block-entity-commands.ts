@@ -27,10 +27,9 @@ import {
 } from './index';
 
 /**
- * scoped to the current block's hotkey scope.
- *
- * Must be called within a Block context (i.e. inside DocumentBlockContainer / BlockContainer).
- * Uses createEffect to defer registration until BlockContainer has set blockHotkeyScopeSignal.
+ * Common manipulations scoped to the current block's hotkey scope.
+ * Note: several of these do not register with an actual hot key so that they
+ * can be found by the command menu.
  */
 export const useBlockEntityCommands = () => {
   const blockId = useBlockId();
@@ -71,18 +70,13 @@ export const useBlockEntityCommands = () => {
     return undefined;
   };
 
-  const getEntities = (): EntityData[] => {
-    const entity = getEntity();
-    return entity ? [entity] : [];
-  };
-
   const openPropertyEditorIfSelected = (
     mode: 'selector' | 'direct' = 'selector',
     property?: Property | PropertyDefinitionDomain
   ) => {
-    const entities = getEntities();
-    if (entities.length > 0) {
-      openPropertyEditor(entities, mode, property);
+    const entity = getEntity();
+    if (entity) {
+      openPropertyEditor([entity], mode, property);
     }
   };
 
@@ -92,40 +86,37 @@ export const useBlockEntityCommands = () => {
 
     const group = createHotkeyGroup();
 
-    const markDoneReg = registerHotkey({
+    registerHotkey({
       scopeId,
       description: 'Mark done',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!entities.some(markDone.canExecute)) return false;
-        markDone.execute(entities);
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!markDone.canExecute(entity)) return false;
+        markDone.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.some(markDone.canExecute);
+        const entity = getEntity();
+        return entity !== undefined && markDone.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
-    });
+    }).withGroup(group);
 
     registerHotkey({
       scopeId,
-      description: () => {
-        const count = getEntities().length;
-        return count > 1 ? 'Delete items' : 'Delete item';
-      },
+      description: 'Delete item',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!entities.every(deleteAction.canExecute)) return false;
-        deleteAction.execute(entities);
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!deleteAction.canExecute(entity)) return false;
+        deleteAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.length > 0 && entities.every(deleteAction.canExecute);
+        const entity = getEntity();
+        return entity !== undefined && deleteAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -135,44 +126,35 @@ export const useBlockEntityCommands = () => {
       hotkey: ['r'],
       hotkeyToken: TOKENS.entity.action.rename,
       scopeId,
-      description: () => {
-        const count = getEntities().length;
-        return count > 1 ? 'Rename items' : 'Rename item';
-      },
+      description: 'Rename item',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!entities.every(renameAction.canExecute)) return false;
-        renameAction.execute(entities);
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!renameAction.canExecute(entity)) return false;
+        renameAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.length > 0 && entities.every(renameAction.canExecute);
+        const entity = getEntity();
+        return entity !== undefined && renameAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Duplicate - 'cmd+d'
     registerHotkey({
-      hotkey: ['cmd+d'],
-      hotkeyToken: TOKENS.entity.action.copy,
       scopeId,
-      description: () => {
-        const count = getEntities().length;
-        return count > 1 ? 'Duplicate items' : 'Duplicate item';
-      },
+      description: 'Duplicate item',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!entities.some(copyAction.canExecute)) return false;
-        copyAction.execute(entities);
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!copyAction.canExecute(entity)) return false;
+        copyAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.some(copyAction.canExecute);
+        const entity = getEntity();
+        return entity !== undefined && copyAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -183,20 +165,18 @@ export const useBlockEntityCommands = () => {
       hotkey: ['m'],
       hotkeyToken: TOKENS.entity.action.moveToFolder,
       scopeId,
-      description: () => {
-        const count = getEntities().length;
-        return count > 1 ? 'Move items to folder' : 'Move to folder';
-      },
-      keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!entities.some(moveToProjectAction.canExecute)) return false;
-        moveToProjectAction.execute(entities);
+      description: 'Move to folder',
+      keyDownHandler: (e) => {
+        const entity = getEntity();
+        if (!entity) return false;
+        e?.AT_TARGET;
+        if (!moveToProjectAction.canExecute(entity)) return false;
+        moveToProjectAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.some(moveToProjectAction.canExecute);
+        const entity = getEntity();
+        return entity !== undefined && moveToProjectAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -209,17 +189,18 @@ export const useBlockEntityCommands = () => {
       scopeId,
       description: 'Copy link',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!copyLinkAction.canExecute(entities[0])) return false;
-        copyLinkAction.execute(entities);
+        const entity = getEntity();
+        if (!entity) return true;
+        if (!copyLinkAction.canExecute(entity)) return true;
+        copyLinkAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.length === 1 && copyLinkAction.canExecute(entities[0]);
+        const entity = getEntity();
+        return entity !== undefined && copyLinkAction.canExecute(entity);
       },
       displayPriority: 10,
+      runWithInputFocused: true,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
@@ -230,17 +211,15 @@ export const useBlockEntityCommands = () => {
       scopeId,
       description: 'Copy branch name',
       keyDownHandler: () => {
-        const entities = getEntities();
-        if (entities.length === 0) return false;
-        if (!copyBranchNameAction.canExecute(entities[0])) return false;
-        copyBranchNameAction.execute(entities);
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!copyBranchNameAction.canExecute(entity)) return false;
+        copyBranchNameAction.execute([entity]);
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return (
-          entities.length === 1 && copyBranchNameAction.canExecute(entities[0])
-        );
+        const entity = getEntity();
+        return entity !== undefined && copyBranchNameAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -257,8 +236,8 @@ export const useBlockEntityCommands = () => {
         return true;
       },
       condition: () => {
-        const entities = getEntities();
-        return entities.length > 0 && entities.every(isTaskEntity);
+        const entity = getEntity();
+        return entity !== undefined && isTaskEntity(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -275,11 +254,9 @@ export const useBlockEntityCommands = () => {
         return true;
       },
       condition: () => {
-        const entities = getEntities();
+        const entity = getEntity();
         return (
-          entities.length > 0 &&
-          entities.every(isTaskEntity) &&
-          Boolean(priority())
+          entity !== undefined && isTaskEntity(entity) && Boolean(priority())
         );
       },
       displayPriority: 10,
@@ -297,11 +274,9 @@ export const useBlockEntityCommands = () => {
         return true;
       },
       condition: () => {
-        const entities = getEntities();
+        const entity = getEntity();
         return (
-          entities.length > 0 &&
-          entities.every(isTaskEntity) &&
-          Boolean(assignees())
+          entity !== undefined && isTaskEntity(entity) && Boolean(assignees())
         );
       },
       displayPriority: 10,
@@ -319,11 +294,9 @@ export const useBlockEntityCommands = () => {
         return true;
       },
       condition: () => {
-        const entities = getEntities();
+        const entity = getEntity();
         return (
-          entities.length > 0 &&
-          entities.every(isTaskEntity) &&
-          Boolean(status())
+          entity !== undefined && isTaskEntity(entity) && Boolean(status())
         );
       },
       displayPriority: 10,
@@ -357,7 +330,6 @@ export const useBlockEntityCommands = () => {
     });
 
     onCleanup(() => {
-      markDoneReg.dispose();
       cmdKReg.dispose();
       group.dispose();
     });
