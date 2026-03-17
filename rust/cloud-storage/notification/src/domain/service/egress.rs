@@ -204,7 +204,7 @@ where
     ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
         let (config, key) = email.rate_limit();
 
-        match self.rate_limiter.check_and_increment(key, config).await {
+        match self.rate_limiter.check(key, config).await {
             Ok(RateLimitResult::Exceeded(exceeded)) => {
                 return Err(report!(exceeded).context(DeliveryFailure::RateLimit));
             }
@@ -214,10 +214,25 @@ where
             Err(e) => return Err(e.context(DeliveryFailure::Other)),
         }
 
+        let recipient = email.to();
         self.email
-            .send_email(email.to().clone(), &email.content)
+            .send_email(recipient.clone(), &email.content)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error = ?e,
+                    recipient = %recipient,
+                    subject = %email.content.subject,
+                    "Email delivery failed"
+                );
+            })
+            .context(DeliveryFailure::Other)?;
+
+        self.rate_limiter
+            .increment(key, config)
             .await
             .context(DeliveryFailure::Other)?;
+
         Ok(DeliverySuccess::Email)
     }
 }

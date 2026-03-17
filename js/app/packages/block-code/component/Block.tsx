@@ -1,4 +1,5 @@
 import { useIsNestedBlock } from '@core/block';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockMetadataSignal } from '@core/signal/load';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -12,6 +13,7 @@ import { TopBar } from './TopBar';
 export type CodeBlockMode = 'code' | 'render';
 
 export default function BlockCode() {
+  useBlockEntityCommands();
   const isNestedBlock = useIsNestedBlock();
   const blockMetadata = blockMetadataSignal.get;
   const isHtmlFile = createMemo(() =>

@@ -1,4 +1,4 @@
-import GearIcon from '@phosphor-icons/core/regular/gear.svg?component-solid';
+import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
@@ -12,9 +12,9 @@ import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import SplitIcon from '@macro-icons/new-split.svg';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
-import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import {
   LIST_VIEW_ID,
   LIST_VIEW_PATHS,
@@ -218,6 +218,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   registerHotkeys();
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
   const [createBtnHovering, setCreateBtnHovering] = createSignal(false);
+  const [commandBtnHovering, setCommandBtnHovering] = createSignal(false);
+  const [settingsBtnHovering, setSettingsBtnHovering] = createSignal(false);
 
   return (
     <div
@@ -355,8 +357,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           }
           onClick={handleCommandPaletteClick}
+          onMouseEnter={() => setCommandBtnHovering(true)}
+          onMouseLeave={() => setCommandBtnHovering(false)}
         >
-          <CommandIcon class="size-4 shrink-0" />
+          <div
+            class={`size-4 shrink-0 transition-colors duration-300 ${commandBtnHovering() ? 'text-accent' : ''}`}
+          >
+            <AnimatedCommandIcon triggerAnimation={commandBtnHovering()} />
+          </div>
           <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
             Command
           </span>
@@ -370,6 +378,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
           variant="ghost"
           tooltipPlacement="right"
           onClick={toggleSettings}
+          onMouseEnter={() => setSettingsBtnHovering(true)}
+          onMouseLeave={() => setSettingsBtnHovering(false)}
           tooltip={
             <LabelAndHotKey
               label="Settings"
@@ -377,7 +387,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           }
         >
-          <GearIcon class="size-4 shrink-0" />
+          <div
+            class={`size-4 shrink-0 transition-colors duration-300 ${settingsBtnHovering() ? 'text-accent' : ''}`}
+          >
+            <AnimatedGearIcon triggerAnimation={settingsBtnHovering()} />
+          </div>
           <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
             Settings
           </span>

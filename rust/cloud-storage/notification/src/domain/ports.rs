@@ -50,15 +50,24 @@ pub trait NotificationSender: Send + Sync + 'static {
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
-    /// Check if the action is allowed and increment the counter.
+    /// Check if the action is allowed without incrementing the counter.
     ///
     /// The `RateLimitKey` is a hashed value - callers control what gets rate
     /// limited by constructing the key from relevant data.
-    fn check_and_increment(
+    fn check(
         &self,
         key: &RateLimitKey,
         config: &RateLimitConfig,
     ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
+
+    /// Increment the rate limit counter for a key.
+    ///
+    /// Should only be called after a successful action.
+    fn increment(
+        &self,
+        key: &RateLimitKey,
+        config: &RateLimitConfig,
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
 }
 
 /// Port for notification persistence operations.
