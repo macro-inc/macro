@@ -1,8 +1,14 @@
--- Test users
-INSERT INTO "User" (id, email, name)
+-- Test macro_users
+INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 VALUES
-    ('macro|user1@test.com', 'user1@test.com', 'Test User 1'),
-    ('macro|user2@test.com', 'user2@test.com', 'Test User 2');
+    ('b1111111-1111-1111-1111-111111111111', 'user1', 'user1@test.com', 'stripe_id_1'),
+    ('b2222222-2222-2222-2222-222222222222', 'user2', 'user2@test.com', 'stripe_id_2');
+
+-- Test users
+INSERT INTO "User" (id, email, name, macro_user_id)
+VALUES
+    ('macro|user1@test.com', 'user1@test.com', 'Test User 1', 'b1111111-1111-1111-1111-111111111111'),
+    ('macro|user2@test.com', 'user2@test.com', 'Test User 2', 'b2222222-2222-2222-2222-222222222222');
 
 -- Email links (email account connections for each user)
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
