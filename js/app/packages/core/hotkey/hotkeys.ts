@@ -23,7 +23,6 @@ import {
 } from './state';
 import {
   HOTKEY_PRIORITY_DEFAULT,
-  HOTKEY_PRIORITY_HIGH,
   type HotkeyCommand,
   type HotkeyGroup,
   type HotkeyRegistrationOptions,
@@ -222,12 +221,7 @@ export function registerHotkey(
     activateCommandScopeId: commandScopeId,
     runWithInputFocused: runWithInputFocused ?? false,
     displayPriority: displayPriority ?? 0,
-    handlerPriority:
-      handlerPriority ??
-      (registrationType === 'append'
-        ? HOTKEY_PRIORITY_HIGH
-        : HOTKEY_PRIORITY_DEFAULT),
-    registrationType,
+    handlerPriority: handlerPriority ?? HOTKEY_PRIORITY_DEFAULT,
     hide,
     icon,
     tags,
@@ -266,12 +260,6 @@ export function registerHotkey(
         const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
         if (registrationType === 'add') {
           scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
-        } else if (registrationType === 'append') {
-          // Replace any previous 'append' command, keep all others
-          const filtered = existingHandlers.filter(
-            (c) => c.registrationType !== 'append'
-          );
-          scopeNode.hotkeyCommands.set(h, [...filtered, command]);
         } else {
           // Override: replace with single-element array
           scopeNode.hotkeyCommands.set(h, [command]);
