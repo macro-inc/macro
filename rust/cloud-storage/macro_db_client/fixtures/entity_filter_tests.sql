@@ -10,9 +10,14 @@ INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Organization', 'PILOT')
 ON CONFLICT DO NOTHING;
 
+-- Insert macro_user
+INSERT INTO public.macro_user (id, username, email, stripe_customer_id)
+VALUES ('00000000-0000-0000-0000-000000000001', 'testuser1', 'user@test.com', 'stripe_mu_1')
+ON CONFLICT DO NOTHING;
+
 -- Insert user
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('macro|user-1@test.com', 'user@test.com', 'stripe_id_1', 1)
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('macro|user-1@test.com', 'user@test.com', 'stripe_id_1', 1, '00000000-0000-0000-0000-000000000001')
 ON CONFLICT DO NOTHING;
 
 ---------------------------------
