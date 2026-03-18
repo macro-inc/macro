@@ -178,7 +178,9 @@ function BasePathComponent() {
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={isNativeMobilePlatform() ? '/login' : '/signup'} />
+        <Navigate
+          href={`${isNativeMobilePlatform() ? '/login' : '/signup'}${window.location.search}`}
+        />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />

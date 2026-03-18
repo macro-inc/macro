@@ -12,8 +12,10 @@ use axum::{
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
+use macro_auth::middleware::decode_jwt::decode_macro_access_token_allow_expired;
 use maud::{DOCTYPE, Markup, html};
 use model::response::ErrorResponse;
+use referral::domain::{models::ReferralCode, ports::ReferralService};
 use reqwest::{Url, header::CONTENT_TYPE};
 use serde::Deserialize;
 use serde_utils::JsonEncoded;
@@ -38,12 +40,13 @@ pub(crate) struct OAuthCbParams {
         operation_id = "oauth_redirect",
         responses(
             (status = 200),
-            (status = 400, body=String),
-            (status = 401, body=String),
-            (status = 500, body=String),
+            (status = 400, body=ErrorResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
         )
     )]
 #[tracing::instrument(skip(ctx, cookies, params))]
+#[axum::debug_handler]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     cookies: Cookies,
@@ -74,11 +77,34 @@ pub async fn handler(
             .map_err(InnerErr::MacroCacheErr)
     };
 
-    let redirect_url = get_redirect_url(params, write_db)
+    let state: Option<SsoState> = if let Some(state) = params.state {
+        Some(
+            state
+                .decode()
+                .map_err(|e| InnerErr::Serde(e).into_response())?,
+        )
+    } else {
+        None
+    };
+
+    let redirect_url = get_redirect_url(&state, write_db)
         .await
         .map_err(IntoResponse::into_response)?;
 
     tracing::trace!("redirect url {redirect_url}");
+
+    if let Some(state) = state.as_ref()
+        && let Some(referral_code) = state.referral_code.as_ref()
+    {
+        let user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args)
+            .map_err(|_| InnerErr::InvalidJwtError.into_response())?;
+
+        let _ = ctx
+            .referral_service
+            .track_referral(&user_id, &ReferralCode(referral_code.clone()))
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
+    }
 
     // Set cookies
     cookies.add(create_access_token_cookie(&access_token));
@@ -91,6 +117,8 @@ pub async fn handler(
 enum InnerErr {
     #[error("{0}")]
     Serde(#[from] serde_json::Error),
+    #[error("invalid jwt")]
+    InvalidJwtError,
     #[error("Macro Cache Err {0}")]
     MacroCacheErr(anyhow::Error),
     #[error("Failed to parse url {0}")]
@@ -100,6 +128,13 @@ enum InnerErr {
 impl IntoResponse for InnerErr {
     fn into_response(self) -> Response {
         match self {
+            InnerErr::InvalidJwtError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to deserialize jwt",
+                }),
+            )
+                .into_response(),
             InnerErr::Serde(_error) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -132,19 +167,20 @@ struct SessionCode(String);
 
 #[tracing::instrument(ret, err, skip(write_db))]
 async fn get_redirect_url(
-    params: OAuthCbParams,
+    state: &Option<SsoState>,
     write_db: impl AsyncFnOnce(&SessionCode) -> Result<(), InnerErr>,
 ) -> Result<Url, InnerErr> {
-    let Some(state) = params.state else {
+    let Some(state) = state else {
         return Ok(default_redirect_url());
     };
-
-    let state = state.decode()?;
 
     // Generate the session code if necessary
     let session_code = state.is_mobile.then(generate_session_code).map(SessionCode);
     let res = update_url_with_session_code(
-        state.original_url.unwrap_or_else(default_redirect_url),
+        state
+            .original_url
+            .clone()
+            .unwrap_or_else(default_redirect_url),
         session_code.as_ref(),
         write_db,
     )

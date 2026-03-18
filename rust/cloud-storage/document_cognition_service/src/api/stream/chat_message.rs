@@ -124,7 +124,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
@@ -378,7 +378,7 @@ fn stream_and_save_message(
         {
             Ok(stream) => stream,
             Err(e) => {
-                tracing::error!(error=?e, "failed to create AI stream");
+                tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to create AI stream");
                 let stream_error = match e {
                     ai::types::AiError::ContextWindowExceeded => {
                         StreamError::ModelContextOverflow {
@@ -402,7 +402,7 @@ fn stream_and_save_message(
         while let Some(response) = match tokio::time::timeout(idle_timeout, ai_stream.next()).await {
             Ok(item) => item,
             Err(_) => {
-                tracing::error!("AI stream idle timeout: no token received within {idle_timeout:?}");
+                tracing::error!(chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "AI stream idle timeout: no token received within {idle_timeout:?}");
                 let stream_error = StreamError::InternalError {
                     stream_id: stream_id.clone(),
                 };
@@ -466,7 +466,7 @@ fn stream_and_save_message(
                     }
                 }
                 Err(e) => {
-                    tracing::error!(error=?e, "error in AI stream");
+                    tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
                     // Map error type to appropriate StreamError
                     let stream_error = match e {
                         ai::types::AiError::ContextWindowExceeded => {
@@ -516,7 +516,7 @@ fn stream_and_save_message(
         )
         .await
         {
-            tracing::error!(error=?err, "failed to store conversation messages");
+            tracing::error!(error=?err, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to store conversation messages");
         }
 
         // Summarize and send notification in a background task

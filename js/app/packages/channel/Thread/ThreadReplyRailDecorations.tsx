@@ -1,11 +1,6 @@
 import { cn } from '@ui/utils/classname';
-import { type Accessor, Show } from 'solid-js';
-import {
-  getInnerRailBottom,
-  innerRailTop,
-  innerRailX,
-  threadConnectorStyle,
-} from './utils/thread-rail-geometry';
+import type { Accessor } from 'solid-js';
+import { threadConnectorStyle } from './utils/thread-rail-geometry';
 
 type ThreadReplyRailProps = {
   isReplying: Accessor<boolean>;
@@ -27,28 +22,17 @@ export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
             fill="none"
             viewBox="0 0 24 18"
             width="100%"
-            height="100%"
           >
             <path
               stroke="currentColor"
               vector-effect="non-scaling-stroke"
-              d="M0 0.5 24 17.5"
+              d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
             />
           </svg>
         </div>
       </div>
       {/* THIS IS A HACKY ELEMENT POSITIONED TO BLOCK THE STUB END OF THE RAIL THAT POKE UP ABOVE THE USER ICON */}
-      <div class="pointer-events-none absolute bg-panel left-[calc(var(--left-of-connector)+var(--thread-shift))] top-0 min-h-[var(--message-padding)] min-w-4 -translate-x-1/2 z-1" />
-      <Show when={props.isReplying()}>
-        <div
-          class="pointer-events-none absolute bottom-0 -z-1 border-l border-[blue]"
-          style={{
-            left: innerRailX,
-            top: innerRailTop,
-            bottom: getInnerRailBottom(props.isReplying()),
-          }}
-        />
-      </Show>
+      <div class="pointer-events-none absolute bg-panel left-[calc(var(--left-of-connector)+var(--thread-shift))] top-(--regular-message-padding-t) min-h-[var(--message-padding-x)] min-w-4 -translate-x-1/2 z-0" />
     </>
   );
 }

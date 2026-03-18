@@ -2,7 +2,7 @@
  * Utilities for extracting information from search highlight content
  * that contains <macro_em> tags marking matched terms.
  */
-import { Index } from 'solid-js';
+import { For } from 'solid-js';
 
 const INVISIBLE_CHARS_RE =
   /(?:[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF\u00AD\u2800-\u28FF]|\u034F)+/g;
@@ -103,7 +103,7 @@ export function highlightTermsInText(text: string, terms: string[]): string {
  * @param text - Content with <macro_em> tags
  * @param chars - Max visible characters to show on each side of the highlight
  */
-export function windowSearchMatch(text: string, chars: number = 200): string {
+export function windowSearchMatch(text: string, chars: number): string {
   let line = stripInvisibleChars(text);
 
   const macroOpen = '<macro_em>';
@@ -124,7 +124,7 @@ export function windowSearchMatch(text: string, chars: number = 200): string {
         break;
       }
     }
-    line = '...' + line.slice(cutIndex);
+    line = line.slice(cutIndex);
   }
 
   // Trim from end to keep total length reasonable
@@ -144,7 +144,7 @@ export function windowSearchMatch(text: string, chars: number = 200): string {
           break;
         }
       }
-      line = line.slice(0, endCut) + '...';
+      line = line.slice(0, endCut);
     }
   }
 
@@ -175,15 +175,15 @@ export function parseSearchHighlightSegments(
 export function HighlightRender(props: { text: string }) {
   return (
     <span>
-      <Index each={parseSearchHighlightSegments(props.text)}>
+      <For each={parseSearchHighlightSegments(props.text)}>
         {(segment) =>
-          segment().highlight ? (
-            <span class="md-mark search-match">{segment().text}</span>
+          segment.highlight ? (
+            <span class="md-mark search-match">{segment.text}</span>
           ) : (
-            segment().text
+            segment.text
           )
         }
-      </Index>
+      </For>
     </span>
   );
 }

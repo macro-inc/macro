@@ -1,8 +1,13 @@
-INSERT INTO "User" (id, email)
-VALUES ('macro|test@macro.com', 'test@macro.com'),
-       ('macro|test2@macro.com', 'test2@macro.com'),
-       ('macro|test3@macro.com', 'test3@macro.com'),
-       ('macro|test4@macro.com', 'test4@macro.com');
+INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'test', 'test@macro.com', 'stripe_test'),
+       ('a2222222-2222-2222-2222-222222222222', 'test2', 'test2@macro.com', 'stripe_test2'),
+       ('a3333333-3333-3333-3333-333333333333', 'test3', 'test3@macro.com', 'stripe_test3'),
+       ('a4444444-4444-4444-4444-444444444444', 'test4', 'test4@macro.com', 'stripe_test4');
+INSERT INTO "User" (id, email, macro_user_id)
+VALUES ('macro|test@macro.com', 'test@macro.com', 'a1111111-1111-1111-1111-111111111111'),
+       ('macro|test2@macro.com', 'test2@macro.com', 'a2222222-2222-2222-2222-222222222222'),
+       ('macro|test3@macro.com', 'test3@macro.com', 'a3333333-3333-3333-3333-333333333333'),
+       ('macro|test4@macro.com', 'test4@macro.com', 'a4444444-4444-4444-4444-444444444444');
 
 INSERT INTO team (id, name, owner_id)
 VALUES ('11111111-1111-1111-1111-111111111111', 'team1', 'macro|test@macro.com');

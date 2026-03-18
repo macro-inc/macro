@@ -125,7 +125,8 @@ const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
   .getOutput('sfsDeleteQueueName')
   .apply((name) => name as string);
 
-const { notificationQueueName, notificationQueueArn } = getMacroNotify();
+const { notificationIngressQueueName, notificationIngressQueueArn } =
+  getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
   vpc: coparse_api_vpc,
@@ -245,7 +246,7 @@ const secretKeyArns = [
 ];
 
 const queueArns = [
-  notificationQueueArn,
+  notificationIngressQueueArn,
   inboxSyncQueueArn,
   inboxSyncRetryQueueArn,
   linkManagerQueueArn,
@@ -392,7 +393,7 @@ const containerEnvVars = [
   },
   {
     name: 'NOTIFICATION_QUEUE',
-    value: pulumi.interpolate`${notificationQueueName}`,
+    value: pulumi.interpolate`${notificationIngressQueueName}`,
   },
   {
     name: 'JWT_SECRET_KEY',

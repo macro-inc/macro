@@ -46,6 +46,16 @@ fn test_build_message_email_filter_importance_true_includes_drafts() {
 }
 
 #[test]
+fn test_build_message_email_filter_importance_true_excludes_trash() {
+    let expr = Expr::Literal(EmailLiteral::Importance(true));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("l.name = 'TRASH'"));
+    assert!(debug.contains("NOT EXISTS"));
+}
+
+#[test]
 fn test_build_message_email_filter_recipient() {
     let email = Email::Complete(
         EmailStr::parse_from_str("recipient@example.com")

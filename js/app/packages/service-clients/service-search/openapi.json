@@ -647,6 +647,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_email_attachment": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by document notification state."
@@ -664,6 +668,13 @@
               "type": "string"
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "sub_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
           },
           "task_filters": {
             "$ref": "#/components/schemas/TaskFilters",

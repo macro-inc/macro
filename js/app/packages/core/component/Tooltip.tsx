@@ -1,7 +1,8 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
-import { type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { For, type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
 import { Hotkey } from './Hotkey';
 
 const TOOLTIP_DELAY = 250;
@@ -104,19 +105,54 @@ export const NullTooltip = (props: ParentProps<{}>) => {
   );
 };
 
+export type HotkeySequenceStep = {
+  token?: HotkeyToken;
+  shortcut?: string;
+};
+
 export type LabelAndHotKeyProps = {
   label: string;
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
+  hotkeySequence?: HotkeySequenceStep[];
 };
 
 export function LabelAndHotKey(props: LabelAndHotKeyProps) {
+  const hasSingleHotkey = () =>
+    !props.hotkeySequence && (!!props.hotkeyToken || !!props.shortcut);
+  const hasSequence = () =>
+    !!props.hotkeySequence && props.hotkeySequence.length > 0;
+  const hasPadding = () => !hasSingleHotkey() && !hasSequence();
+
   return (
     <div
-      class={`flex flex-row items-center space-x-2 ${props.hotkeyToken || props.shortcut ? 'px-0' : 'px-1'}`}
+      class={cn(
+        'flex flex-row items-center space-x-2',
+        hasPadding() ? 'px-1' : 'px-0'
+      )}
     >
       <div class="text-xs capitalize">{props.label}</div>
-      <Show when={props.hotkeyToken || props.shortcut}>
+      <Show when={hasSequence()}>
+        <div class="flex items-center gap-1 ml-auto">
+          <For each={props.hotkeySequence}>
+            {(step, ndx) => (
+              <>
+                <div class="text-[0.625rem] rounded-sm border border-edge-muted px-1.5 py-0.25">
+                  <Hotkey
+                    token={step.token}
+                    shortcut={step.shortcut}
+                    class="flex gap-1"
+                  />
+                </div>
+                <Show when={ndx() < (props.hotkeySequence ?? []).length - 1}>
+                  <span class="text-ink-extra-muted">then</span>
+                </Show>
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
+      <Show when={hasSingleHotkey()}>
         <div class="text-[0.625rem] rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })

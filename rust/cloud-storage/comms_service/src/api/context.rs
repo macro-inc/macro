@@ -8,32 +8,13 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
-use notification_hex::domain::models::email_notification_digest::StateMachineDriverA;
-use notification_hex::domain::service::NotificationIngressService;
-use notification_hex::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification_hex::domain::service::SqsNotificationIngress;
+use notification_hex::outbound::queue::SqsIngressQueue;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use std::sync::Arc;
 
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
-
-pub type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
+pub type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
 env_var! {
     #[derive(Clone)]

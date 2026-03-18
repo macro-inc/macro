@@ -19,7 +19,6 @@ import FileHtml from '@icon/duotone/file-html-duotone.svg';
 import FileMd from '@icon/duotone/file-md-duotone.svg';
 import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
-import Channel from '@icon/duotone/hash-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
@@ -44,7 +43,6 @@ import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
 import WideVideo from '@macro-icons/wide/video.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -95,7 +93,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Webpage',
   },
   channel: {
-    icon: Channel,
+    icon: WideChannel,
     foreground: 'text-default',
     background: 'bg-default-bg',
     prettyName: 'Channel',
@@ -113,7 +111,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Organization Channel',
   },
   private: {
-    icon: ThreeUsersIcon,
+    icon: WideChannel,
     foreground: 'text-default',
     background: 'bg-default-bg',
     prettyName: 'Private Channel',
@@ -259,7 +257,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   channel: WideChannel,
   public: GlobeIcon,
   organization: Building,
-  private: ThreeUsersIcon,
+  private: WideChannel,
   direct_message: WideChat,
   email: WideEmail,
   code: WideFileCode,

@@ -70,17 +70,17 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
-import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
-import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
+  SoupViewCreateButton,
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
@@ -108,9 +108,8 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'channel',
     (notification) => {
-      entityQueryClient.invalidateQueries({
-        queryKey: soupKeys._def,
-      });
+      refetchSoupEntity(notification.entity_id, 'channel');
+      invalidateSoupEntity(notification.entity_id);
       invalidateEntityNotifications(notification.entity_id);
     }
   );
@@ -133,9 +132,8 @@ const useSoupNotificationInvalidators = () => {
     'document',
     (notification) => {
       if (notification.notification_event_type === 'task_assigned') {
-        entityQueryClient.invalidateQueries({
-          queryKey: soupKeys._def,
-        });
+        refetchSoupEntity(notification.entity_id, 'document');
+        invalidateSoupEntity(notification.entity_id);
         invalidateEntityNotifications(notification.entity_id);
       }
     }
@@ -203,6 +201,7 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
                   <SoupViewTabs />
+                  <SoupViewCreateButton />
                 </Show>
                 <Show when={narrowSearchExpanded()}>
                   <div class="flex-1 min-w-0">
@@ -371,16 +370,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-  });
-
-  // Property editor
-  const propertyHotkeys = usePropertyEditorHotkeys({
-    scopeId: scopeId(),
-    soup,
-  });
-
-  onCleanup(() => {
-    propertyHotkeys.disposeHotkeys();
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)

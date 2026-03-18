@@ -704,6 +704,17 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
   pointer-events: none;
 }
 
+/* Channel message highlight: hover only in mouse nav, keyboard selection only in keyboard nav */
+[data-channel-nav="mouse"] [data-message]:hover,
+[data-channel-nav="keyboard"] [data-message][data-highlighted] {
+    @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
+}
+
+[data-channel-nav="mouse"] [data-message]:hover > .message-accent-bar,
+[data-channel-nav="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
+    @apply opacity-100;
+}
+
 html[data-modality="keyboard"] input:focus-visible::after,
 html[data-modality="keyboard"] textarea:focus-visible::after,
 html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
@@ -746,12 +757,13 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 :root {
-  --message-padding: .5rem;
+  --message-padding-x: .5rem;
+  --regular-message-padding-t: .5rem;
+  --thread-padding-y: .5rem;
   --thread-shift: 32px;
   --user-icon-width: 36px;
-  --body-padding: 0.5rem;
   --left-of-connector: calc(
-    var(--message-padding) + var(--user-icon-width) / 2
+    var(--message-padding-x) + var(--user-icon-width) / 2
   );
   --left-of-user-icon: calc(
     var(--left-of-connector) - var(--user-icon-width) / 2
@@ -761,7 +773,6 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 @media (min-width: 640px) {
   :root {
     --thread-shift: 40px;
-    --body-padding: 0.5rem;
   }
 }
 

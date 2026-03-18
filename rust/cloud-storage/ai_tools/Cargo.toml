@@ -13,6 +13,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 chrono.workspace = true
+dateparser.workspace = true
 comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",

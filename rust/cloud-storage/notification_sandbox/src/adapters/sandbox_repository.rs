@@ -1,12 +1,14 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
+use notification::domain::models::TaggedContent;
 use notification::domain::models::{
-    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
 use notification::outbound::repository::DbNotificationRepository;
 use rootcause::Report;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -52,9 +54,9 @@ impl NotificationRepository for SandboxNotificationRepository {
         self.inner.get_unsubscribed_users(item_id, user_ids).await
     }
 
-    async fn create_notification<'a, T: Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,

@@ -175,7 +175,8 @@ const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
 
-const { notificationQueueName, notificationQueueArn } = getMacroNotify();
+const { notificationIngressQueueName, notificationIngressQueueArn } =
+  getMacroNotify();
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
 // aws secretsmanager delete-secret --secret-id ${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME} --force-delete-without-recovery
@@ -266,7 +267,7 @@ const cloudStorageService = new CloudStorageService(
     queueArns: [
       searchEventQueueArn,
       deleteDocumentHandler.queue.arn,
-      notificationQueueArn,
+      notificationIngressQueueArn,
       contactsQueueArn,
     ],
     vpc: coparse_api_vpc,
@@ -370,7 +371,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'NOTIFICATION_QUEUE',
-        value: pulumi.interpolate`${notificationQueueName}`,
+        value: pulumi.interpolate`${notificationIngressQueueName}`,
       },
       {
         name: 'SEARCH_EVENT_QUEUE',

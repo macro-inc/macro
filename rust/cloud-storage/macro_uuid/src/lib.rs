@@ -12,6 +12,7 @@ pub fn string_to_uuid(s: &str) -> Result<Uuid> {
 // Flickr's base58 alphabet as used in short-uuid
 const FLICKR_BASE58: &str = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
+#[derive(Clone)]
 pub struct ShortUuidConverter {
     alphabet: String,
     base: u128,

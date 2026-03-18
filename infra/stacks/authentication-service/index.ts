@@ -170,7 +170,8 @@ const fusionAuthClusterName: pulumi.Output<string> = fusionAuthStack
   .getOutput('fusionAuthClusterName')
   .apply((fusionAuthClusterName) => fusionAuthClusterName as string);
 
-const { notificationQueueName, notificationQueueArn } = getMacroNotify();
+const { notificationIngressQueueName, notificationIngressQueueArn } =
+  getMacroNotify();
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
@@ -187,7 +188,7 @@ const service = new AuthenticationService('authentication-service', {
   isPrivate: false,
   healthCheckPath: '/health',
   tags,
-  queueArns: [notificationQueueArn, searchEventQueueArn],
+  queueArns: [notificationIngressQueueArn, searchEventQueueArn],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },
     {
@@ -265,7 +266,7 @@ const service = new AuthenticationService('authentication-service', {
     },
     {
       name: 'NOTIFICATION_QUEUE',
-      value: pulumi.interpolate`${notificationQueueName}`,
+      value: pulumi.interpolate`${notificationIngressQueueName}`,
     },
     {
       name: 'SEARCH_EVENT_QUEUE',

@@ -264,7 +264,6 @@ export function createEmailFormState(
 
   const setSendTime = (date: Date | null) => {
     setState('sendTime', date ?? undefined);
-    callDirty();
   };
 
   const callDirty = () => {

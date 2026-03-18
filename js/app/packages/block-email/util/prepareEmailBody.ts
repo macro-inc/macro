@@ -388,6 +388,22 @@ function convertMentionsToLinks(root: ParentNode) {
   return mentions;
 }
 
+function applyMediaScale(container: Element) {
+  const mediaElements = container.querySelectorAll<HTMLElement>(
+    'img[data-scale], video[data-scale]'
+  );
+  mediaElements.forEach((el) => {
+    const scale = parseFloat(el.getAttribute('data-scale') || '1');
+    if (scale === 1) return;
+    const width = parseInt(el.getAttribute('width') || '0', 10);
+    const height = parseInt(el.getAttribute('height') || '0', 10);
+    if (width > 0)
+      el.setAttribute('width', Math.round(width * scale).toString());
+    if (height > 0)
+      el.setAttribute('height', Math.round(height * scale).toString());
+  });
+}
+
 function flattenConsecutiveParagraphs(container: Element) {
   const paragraphs = container.querySelectorAll('p');
   const groups = [];
@@ -467,6 +483,9 @@ export function prepareEmailBody(
 
   flattenConsecutiveParagraphs(parsed.body);
 
+  // Apply image scale to width/height attributes so the recipient sees the resized dimensions
+  applyMediaScale(parsed.body);
+
   // Convert Macro document mentions to HTML links in the parsed DOM
   const mentions = convertMentionsToLinks(parsed.body);
 
@@ -486,6 +505,23 @@ export function prepareEmailBody(
   const bodyText = parsed.body.firstChild?.textContent ?? '';
 
   return { bodyHtml, bodyText, mentions };
+}
+
+/**
+ * Returns true if the draft has meaningful user content worth saving.
+ * Auto-filled reply/forward subjects alone don't count.
+ */
+export function hasDraftContent(
+  bodyText: string,
+  subject: string | undefined,
+  attachmentCount: number
+): boolean {
+  const hasBody = bodyText.trim() !== '';
+  const hasAttachments = attachmentCount > 0;
+  const trimmedSubject = subject?.trim() ?? '';
+  const hasSubject = trimmedSubject.length > 0;
+  const subjectIsAutoFilled = /^(Re|Fwd?):/i.test(trimmedSubject);
+  return hasBody || hasAttachments || (hasSubject && !subjectIsAutoFilled);
 }
 
 export function prepareMacroBody(bodyMacro: string): string {

@@ -40,7 +40,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set deployment matrix
         id: set-matrix
         run: |
@@ -68,7 +68,7 @@ jobs:
       matrix:
         service: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get project name
         id: project-name

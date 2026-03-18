@@ -776,6 +776,47 @@ async fn test_importance_true_includes_drafts_with_depriority_label(
     Ok(())
 }
 
+// Thread 9 is a draft with the TRASH label.
+// Even though is_draft=true would normally make it important, the TRASH label should exclude it.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_importance_true_excludes_trashed_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Thread 9 is a draft with TRASH label — should be excluded even though is_draft=true
+    assert!(
+        !result_ids.contains("20000009-0000-0000-0000-000000000009"),
+        "importance=true should exclude trashed draft thread 9"
+    );
+
+    // Thread 3 is a normal draft (no TRASH) — should still be included
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "importance=true should still include non-trashed draft thread 3"
+    );
+
+    // Thread 8 is a draft with CATEGORY_UPDATES but no TRASH — should still be included
+    assert!(
+        result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "importance=true should still include non-trashed draft thread 8"
+    );
+
+    Ok(())
+}
+
 // Thread 8 is a draft with CATEGORY_UPDATES (depriority label).
 // DRAFT is a priority label, so it should NOT appear in importance=false results.
 #[sqlx::test(
@@ -822,6 +863,134 @@ async fn test_importance_false_excludes_drafts(pool: Pool<Postgres>) -> anyhow::
         results.len(),
         2,
         "Only non-draft depriority threads should appear"
+    );
+
+    Ok(())
+}
+
+// ── Static view TRASH exclusion tests ───────────────────────────────
+
+// Static important query should exclude trashed drafts (thread 9) and trashed important messages.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_static_important_excludes_trashed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let limit = 50;
+    let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+
+    let results =
+        preview_views::important::important_preview_cursor(&pool, &link_id, limit, &query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        !result_ids.contains("20000009-0000-0000-0000-000000000009"),
+        "Static important query should exclude trashed draft thread 9"
+    );
+
+    // Non-trashed drafts should still be included
+    assert!(
+        result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "Should still include non-trashed draft thread 3"
+    );
+    assert!(
+        result_ids.contains("20000005-0000-0000-0000-000000000005"),
+        "Should still include important thread 5"
+    );
+
+    Ok(())
+}
+
+// Static starred query should exclude trashed starred messages (thread 10).
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_static_starred_excludes_trashed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let limit = 50;
+    let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+
+    let results =
+        preview_views::starred::starred_preview_cursor(&pool, &link_id, limit, &query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        !result_ids.contains("20000010-0000-0000-0000-000000000010"),
+        "Starred view should exclude trashed starred thread 10"
+    );
+
+    // Non-trashed starred should still be included
+    assert!(
+        result_ids.contains("20000004-0000-0000-0000-000000000004"),
+        "Should still include non-trashed starred thread 4"
+    );
+
+    Ok(())
+}
+
+// Static drafts query should exclude trashed drafts (thread 9).
+// Note: drafts view only shows macro drafts (internal_date_ts IS NULL),
+// so thread 9 (which has internal_date_ts set) won't appear regardless.
+// Thread 3 and 8 have internal_date_ts set too, so the drafts view fixture
+// data doesn't have macro-style drafts with TRASH. This test verifies the
+// query doesn't break and still returns expected results.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_static_drafts_excludes_trashed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let limit = 50;
+    let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+
+    let results =
+        preview_views::draft::drafts_preview_cursor(&pool, &link_id, limit, &query).await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Thread 9 is a trashed draft — should be excluded
+    assert!(
+        !result_ids.contains("20000009-0000-0000-0000-000000000009"),
+        "Drafts view should exclude trashed draft thread 9"
+    );
+
+    Ok(())
+}
+
+// Static user label query should exclude trashed messages with that label (thread 11).
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_static_user_label_excludes_trashed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let limit = 50;
+    let query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+
+    let results = preview_views::user_label::user_label_preview_cursor(
+        &pool, &link_id, limit, &query, "Work",
+    )
+    .await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        !result_ids.contains("20000011-0000-0000-0000-000000000011"),
+        "User label view should exclude trashed thread 11"
+    );
+
+    // Non-trashed "Work" label should still be included
+    assert!(
+        result_ids.contains("20000006-0000-0000-0000-000000000006"),
+        "Should still include non-trashed Work thread 6"
     );
 
     Ok(())
