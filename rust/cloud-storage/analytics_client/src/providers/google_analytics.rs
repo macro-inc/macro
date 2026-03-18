@@ -37,7 +37,6 @@ impl AnalyticsProvider for GoogleAnalyticsProvider {
 
         let payload = serde_json::json!({
             "client_id": distinct_id,
-            "user_id": distinct_id,
             "events": [{
                 "name": event_name,
                 "params": properties,
@@ -81,7 +80,6 @@ impl AnalyticsProvider for GoogleAnalyticsProvider {
 
         let payload = serde_json::json!({
             "client_id": distinct_id,
-            "user_id": distinct_id,
             "user_properties": user_properties,
             "events": [{ "name": "user_identify", "params": {} }],
         });
