@@ -8,7 +8,7 @@ mod providers;
 pub use error::AnalyticsError;
 pub use providers::{AnalyticsProvider, GoogleAnalyticsProvider, MetaConversionsProvider, NoopProvider};
 
-use events::{PurchaseEvent, RefundEvent};
+use events::{StripeSubscriptionCancelledEvent, StripeSubscriptionCreatedEvent};
 
 use serde::Serialize;
 use std::sync::Arc;
@@ -153,20 +153,19 @@ impl AnalyticsClient {
 
         match (status, is_new) {
             ("active" | "trialing", true) => {
-                let event = PurchaseEvent {
+                let event = StripeSubscriptionCreatedEvent {
                     transaction_id: subscription_id.to_string(),
                     value: value_cents as f64 / 100.0,
                     currency: currency.to_uppercase(),
-                    content_name: None,
                 };
                 self.google_analytics.track(email, "purchase", &event).await?;
                 self.meta.track(email, "Purchase", &event).await?;
             }
             ("canceled", _) => {
-                let event = RefundEvent {
+                let event = StripeSubscriptionCancelledEvent {
                     transaction_id: subscription_id.to_string(),
-                    value: Some(value_cents as f64 / 100.0),
-                    currency: Some(currency.to_uppercase()),
+                    value: value_cents as f64 / 100.0,
+                    currency: currency.to_uppercase(),
                 };
                 self.google_analytics.track(email, "refund", &event).await?;
                 self.meta.track(email, "CancelSubscription", &event).await?;
