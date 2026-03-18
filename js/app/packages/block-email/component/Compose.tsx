@@ -23,7 +23,6 @@ import {
 import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
-  useScheduleMessageMutation,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
@@ -81,7 +80,6 @@ import { unwrap } from 'solid-js/store';
 import { emailClient } from '@service-email/client';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -592,20 +590,6 @@ export function EmailCompose(props: EmailComposeProps) {
     },
   });
 
-  const scheduleMessageMutation = useScheduleMessageMutation({
-    onSuccess: () => {
-      toast.success('Email scheduled');
-
-      replaceSplit({
-        content: { type: 'component', id: LIST_VIEW_ID.mail },
-        mergeHistory: true,
-      });
-    },
-    onError: () => {
-      toast.failure('Failed to schedule email');
-    },
-  });
-
   const onSubmit = async () => {
     setValidationError(null);
 
@@ -682,26 +666,8 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const sendTime = form.sendTime();
-
-    if (sendTime) {
-      // Just in case, always get a fresh save of the draft so we don't miss any information
-      const draftID = await executeSaveDraft();
-
-      if (!draftID) {
-        console.error('No draft');
-        toast.failure('Failed to schedule message', 'Draft required');
-        cleanupWatermark();
-        return;
-      }
-
-      scheduleMessageMutation.mutate({
-        draftID,
-        sendTime,
-        threadID: saveDraftMutation.data?.draft.thread_db_id ?? undefined,
-      });
-
-      cleanupWatermark();
+    // Failsafe: don't send if a scheduled send time is set
+    if (form.sendTime()) {
       return;
     }
 

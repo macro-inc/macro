@@ -46,7 +46,6 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import {
-  useScheduleMessageMutation,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
@@ -843,15 +842,6 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
-  const scheduleMessageMutation = useScheduleMessageMutation({
-    onSuccess: () => {
-      toast.success('Email scheduled');
-    },
-    onError: () => {
-      toast.failure('Failed to schedule email');
-    },
-  });
-
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
 
@@ -956,22 +946,8 @@ export function BaseInput(props: {
 
     const currentDraftID = savedDraftId();
 
-    const sendTime = form().sendTime();
-
-    if (sendTime) {
-      if (!currentDraftID) {
-        console.error('No draft');
-        toast.failure('Failed to schedule message', 'Draft required');
-        cleanupWatermark();
-        return;
-      }
-
-      scheduleMessageMutation.mutate({
-        draftID: currentDraftID,
-        sendTime,
-        threadID: currentThread?.db_id,
-      });
-
+    // Failsafe: don't send if a scheduled send time is set
+    if (form().sendTime()) {
       cleanupWatermark();
       return;
     }
@@ -1072,6 +1048,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
+          if (form().sendTime()) return false;
           sendEmail();
           return true;
         },
@@ -1085,6 +1062,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
+          if (form().sendTime()) return false;
           sendEmail(true);
           return true;
         },
@@ -1650,22 +1628,24 @@ export function BaseInput(props: {
             </Show>
           </div>
 
-          <button
-            disabled={
-              uploadAttachmentMutation.isPending || sendMutation.isPending
-            }
-            onClick={() => sendEmail()}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-          >
-            <Show
-              when={!sendMutation.isPending}
-              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+          <Tooltip tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}>
+            <button
+              disabled={
+                uploadAttachmentMutation.isPending || sendMutation.isPending || !!form().sendTime()
+              }
+              onClick={() => sendEmail()}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
             >
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-              </div>
-            </Show>
-          </button>
+              <Show
+                when={!sendMutation.isPending}
+                fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+              >
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                </div>
+              </Show>
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
