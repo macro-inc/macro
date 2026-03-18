@@ -10,6 +10,7 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { withAnalytics } from '@coparse/analytics';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
@@ -23,6 +24,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockTextSignal } from '@core/signal/load';
 import {
@@ -47,6 +49,7 @@ export const TopBar: Component<{
   mode: CodeBlockMode;
   onModeChange: (mode: CodeBlockMode) => void;
 }> = (props) => {
+  const isAuth = useIsAuthenticated();
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
@@ -82,6 +85,7 @@ export const TopBar: Component<{
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}

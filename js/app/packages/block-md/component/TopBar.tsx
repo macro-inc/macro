@@ -22,6 +22,7 @@ import {
   showCommentsPreference,
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsButton } from '@core/component/NotificationsModal';
@@ -35,6 +36,7 @@ import {
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit } from '@core/signal/permissions';
@@ -62,6 +64,7 @@ import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 
 export function TopBar() {
+  const isAuth = useIsAuthenticated();
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -154,6 +157,7 @@ export function TopBar() {
       label: 'Notifications',
       icon: Bell,
       action: notificationsControl.toggle,
+      condition: () => !!isAuth(),
       buttonComponent: () => (
         <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
@@ -165,6 +169,7 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}
