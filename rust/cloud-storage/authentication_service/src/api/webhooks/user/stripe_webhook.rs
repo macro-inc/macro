@@ -391,11 +391,12 @@ fn track_stripe_subscription(
 
             match (status.as_str(), is_new) {
                 ("active" | "trialing", true) => {
-                    if let Some(ga_client_id) = ga_client_id {
-                        if let Err(e) = client.track_ga(&ga_client_id, "purchase", &event).await {
-                            tracing::warn!(error = ?e, "failed to track GA purchase event");
-                        }
+                    if let Some(ga_client_id) = ga_client_id
+                        && let Err(e) = client.track_ga(&ga_client_id, "purchase", &event).await
+                    {
+                        tracing::warn!(error = ?e, "failed to track GA purchase event");
                     }
+
                     if let Err(e) = client
                         .track_meta(
                             "Purchase",
@@ -410,11 +411,12 @@ fn track_stripe_subscription(
                     }
                 }
                 ("canceled", _) => {
-                    if let Some(ga_client_id) = ga_client_id {
-                        if let Err(e) = client.track_ga(&ga_client_id, "refund", &event).await {
-                            tracing::warn!(error = ?e, "failed to track GA refund event");
-                        }
+                    if let Some(ga_client_id) = ga_client_id
+                        && let Err(e) = client.track_ga(&ga_client_id, "refund", &event).await
+                    {
+                        tracing::warn!(error = ?e, "failed to track GA refund event");
                     }
+
                     if let Err(e) = client
                         .track_meta(
                             "CancelSubscription",
