@@ -342,9 +342,15 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     compact
                   />
                 </Show>
-                <Tooltip tooltip={props.sendTime ? 'Send time is scheduled' : undefined}>
+                <Tooltip
+                  tooltip={
+                    props.sendTime ? 'Send time is scheduled' : undefined
+                  }
+                >
                   <Button
-                    disabled={props.isSubmitting || props.disabled || !!props.sendTime}
+                    disabled={
+                      props.isSubmitting || props.disabled || !!props.sendTime
+                    }
                     onClick={() => {
                       handleSend();
                     }}
@@ -418,9 +424,13 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             </Show>
           </div>
 
-          <Tooltip tooltip={props.sendTime ? 'Send time is scheduled' : undefined}>
+          <Tooltip
+            tooltip={props.sendTime ? 'Send time is scheduled' : undefined}
+          >
             <button
-              disabled={props.isSubmitting || props.disabled || !!props.sendTime}
+              disabled={
+                props.isSubmitting || props.disabled || !!props.sendTime
+              }
               onClick={() => {
                 handleSend();
               }}
@@ -428,7 +438,9 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             >
               <Show
                 when={!props.isSubmitting}
-                fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
                   <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />

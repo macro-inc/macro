@@ -1642,17 +1642,23 @@ export function BaseInput(props: {
             </Show>
           </div>
 
-          <Tooltip tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}>
+          <Tooltip
+            tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}
+          >
             <button
               disabled={
-                uploadAttachmentMutation.isPending || sendMutation.isPending || !!form().sendTime()
+                uploadAttachmentMutation.isPending ||
+                sendMutation.isPending ||
+                !!form().sendTime()
               }
               onClick={() => sendEmail()}
               class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
             >
               <Show
                 when={!sendMutation.isPending}
-                fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
                   <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
