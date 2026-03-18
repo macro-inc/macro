@@ -47,9 +47,7 @@ export function TopBar(props: {
     const nextEntity = (() => {
       if (!soup) return undefined;
       const currentIndex = soup.focus.index();
-      return (
-        soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1)
-      );
+      return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
     })();
 
     const handle = trashEmails([thread.db_id]);
@@ -60,16 +58,21 @@ export function TopBar(props: {
       openEntityInSplitFromUnifiedList(nextEntity, {});
     }
 
-    const toastId = toast.success('Moved to Trash', undefined, {
-      text: 'Undo',
-      onClick: () => {
-        if (toastId != null) toast.dismiss(toastId);
-        handle.undo().then(
-          () => toast.success('Restored from Trash'),
-          () => toast.failure('Failed to restore from Trash')
-        );
+    const toastId = toast.success(
+      'Moved to Trash',
+      undefined,
+      {
+        text: 'Undo',
+        onClick: () => {
+          if (toastId != null) toast.dismiss(toastId);
+          handle.undo().then(
+            () => toast.success('Restored from Trash'),
+            () => toast.failure('Failed to restore from Trash')
+          );
+        },
       },
-    }, 10_000);
+      10_000
+    );
 
     handle.done.catch(() => {
       toast.failure('Failed to move to Trash');
@@ -81,9 +84,7 @@ export function TopBar(props: {
       label: 'Done',
       icon: CheckIcon,
       action: () => {
-        const command = getActiveCommandByToken(
-          TOKENS.entity.action.markDone
-        );
+        const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
         if (command) {
           runCommand(command);
         } else {
