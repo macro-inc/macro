@@ -1,5 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
@@ -79,6 +77,7 @@ import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
+import { useAnalytics } from '@app/component/analytics-context';
 
 false && clickOutside;
 
@@ -172,7 +171,6 @@ interface ShareModalProps {
 
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
-  const { track } = withAnalytics();
   const isBlockContext = isInBlock();
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -276,7 +274,6 @@ export function ShareModal(props: ShareModalProps) {
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
     navigate(`/channel/${channelId}`);
-    track(TrackingEvents.SHARE.CLOSE);
     props.setIsSharePermOpen(false); // Close the dialog after navigation
   });
 
@@ -734,6 +731,8 @@ export function ShareButton(props: ShareButtonProps) {
     : (props.itemType as BlockName | BlockAlias);
   const blockId = isBlockContext ? useBlockId() : props.id;
 
+  const analytics = useAnalytics();
+
   onMount(() => {
     if (!isBlockContext) return;
     const blockScopeId = blockHotkeyScopeSignal.get;
@@ -742,7 +741,7 @@ export function ShareButton(props: ShareButtonProps) {
         if (!isAuthenticated()) {
           openLoginModal();
         } else {
-          track(TrackingEvents.SHARE.OPEN);
+          analytics.track('share_menu_open', { blockType });
           setIsSharePermOpen(true);
         }
         return true;
@@ -765,9 +764,10 @@ export function ShareButton(props: ShareButtonProps) {
     );
   };
 
-  const { track } = withAnalytics();
-
   const copyLink = createCallback(() => {
+    analytics.track('copy_share_link', {
+      blockType,
+    });
     if (props.copyLink) {
       return props.copyLink();
     }
@@ -833,7 +833,7 @@ export function ShareButton(props: ShareButtonProps) {
               if (!isAuthenticated()) {
                 openLoginModal();
               } else {
-                track(TrackingEvents.SHARE.OPEN);
+                analytics.track('share_menu_open', { blockType });
                 setIsSharePermOpen(true);
               }
             }}
@@ -883,7 +883,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   const isAuthenticated = useIsAuthenticated();
   const blockType = useBlockAliasedName();
   const blockId = useBlockId();
-  const { track } = withAnalytics();
+  const analytics = useAnalytics();
 
   onMount(() => {
     const blockScopeId = blockHotkeyScopeSignal.get;
@@ -892,7 +892,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         if (!isAuthenticated()) {
           openLoginModal();
         } else {
-          track(TrackingEvents.SHARE.OPEN);
+          analytics.track('share_menu_open', { blockType });
           shareCtx.open();
         }
         return true;
@@ -962,7 +962,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
             if (!isAuthenticated()) {
               openLoginModal();
             } else {
-              track(TrackingEvents.SHARE.OPEN);
+              analytics.track('share_menu_open', { blockType });
               shareCtx.open();
             }
           }}

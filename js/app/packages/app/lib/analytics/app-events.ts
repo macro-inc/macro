@@ -13,9 +13,10 @@ export type AppEvents = {
   sidebar_click: Record<string, unknown>;
   notifications_toggled: Record<string, unknown>;
 
-  references_panel_open: Record<string, unknown>;
-  notifications_panel_open: Record<string, unknown>;
-  properties_panel_open: Record<string, unknown>;
+  references_panel_open: { blockType: string };
+  notifications_panel_open: { blockType: string };
+  properties_panel_open: { blockType: string };
+  share_menu_open: { blockType: string };
 
   copy_share_link: Record<string, unknown>;
   download: Record<string, unknown>;
