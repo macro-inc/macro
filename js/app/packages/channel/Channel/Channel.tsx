@@ -88,18 +88,26 @@ export function Channel(props: ChannelProps) {
   });
 
   
-  // START BLOCK 
+  // START BLOCK COMPATIBILITY 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
       const threadId = params[URL_PARAMS.thread] as string | undefined;
       const messageId = params[URL_PARAMS.message] as string | undefined;
-      if (messageId) {
-        targetMessageController.goToMessage(threadId ? threadId : messageId, threadId ? messageId : threadId);
+
+      // For compotibility the naming is  a little strange here.
+      // New channels index by top level message and then spertately handle replies.
+      // If we have a threadId that is actually the top level message and the reply is the message id.
+      const topLevelMessageId = threadId ? threadId: messageId;
+      const messageReplyId = threadId ? messageId: threadId;
+
+
+      if (topLevelMessageId) {
+        targetMessageController.goToMessage(topLevelMessageId, messageReplyId);
       }
     },
   });
-  // END BLOCK
+  // END BLOCK COMPATIBILITY
 
 
   const messagesQuery = useChannelMessagesQuery(
