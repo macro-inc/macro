@@ -1,9 +1,11 @@
 use crate::domain::models::device::DeviceType;
+use crate::domain::models::queue_message::QueueMessage;
 use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
 use crate::domain::service::NotificationReader;
 use crate::domain::service::ingress::{NotificationReaderService, PlatformArnConfig};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -94,9 +96,12 @@ impl NotificationRepository for MockNotifRepo {
     {
         unimplemented!()
     }
-    async fn create_notification<'a, T: crate::domain::models::Notification + Send + Sync>(
+    async fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        _: crate::domain::models::SendNotificationRequestBuilder<'a, T>,
+        _: crate::domain::models::SendNotificationRequestBuilder<
+            'a,
+            crate::domain::models::TaggedContent<T>,
+        >,
         _: uuid::Uuid,
         _: &str,
         _: Option<&str>,
@@ -271,7 +276,7 @@ struct MockQueue;
 impl NotificationQueue for MockQueue {
     async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        _: impl Iterator<Item = crate::domain::models::queue_message::QueueMessage<'a, T, U>> + Send,
+        _: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         Ok(())
     }

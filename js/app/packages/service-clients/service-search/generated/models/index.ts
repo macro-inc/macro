@@ -53,6 +53,7 @@ export * from './chatSearchResponseItemWithMetadataAllOf';
 export * from './chatSearchResponseItemWithMetadataAllOfMetadata';
 export * from './documentFilters';
 export * from './documentFiltersImportance';
+export * from './documentFiltersIsEmailAttachment';
 export * from './documentMetadata';
 export * from './documentMetadataDeletedAt';
 export * from './documentMetadataProjectId';

@@ -34,9 +34,12 @@ INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Organization', 'PILOT')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('macro|user-1@test.com', 'user1@test.com', 'stripe_id_1', 1),
-       ('macro|user-2@test.com', 'user2@test.com', 'stripe_id_2', 1)
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1', 'user1@test.com', 'stripe_id_1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2', 'user2@test.com', 'stripe_id_2');
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('macro|user-1@test.com', 'user1@test.com', 'stripe_id_1', 1, 'a1111111-1111-1111-1111-111111111111'),
+       ('macro|user-2@test.com', 'user2@test.com', 'stripe_id_2', 1, 'a2222222-2222-2222-2222-222222222222')
 ON CONFLICT DO NOTHING;
 
 ---------------------------------

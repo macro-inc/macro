@@ -6,6 +6,7 @@ import {
   useIsNestedBlock,
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
 import { isErr } from '@core/util/maybeResult';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
@@ -75,6 +76,7 @@ export type BlockCanvasProps = {
 };
 
 export default function BlockCanvas(props: BlockCanvasProps) {
+  useBlockEntityCommands();
   const documentId = useBlockId();
   const isNestedBlock = useIsNestedBlock();
   const nestedContext = useBlockNestedContext<'canvas'>();

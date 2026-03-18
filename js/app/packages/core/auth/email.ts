@@ -13,7 +13,14 @@ function emailAuthUrl(params: EmailAuthParams) {
   const idpName = params.idpName ?? GOOGLE_GMAIL_IDP;
   const returnUrl = `${window.location.origin}${params.returnPath ?? ROUTER_BASE}`;
 
-  return `${SERVER_HOSTS['auth-service']}/login/sso?idp_name=${idpName}&original_url=${returnUrl}`;
+  const url = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
+  url.searchParams.set('idp_name', idpName);
+  url.searchParams.set('original_url', returnUrl);
+  const referral_code = new URL(window.location.href).searchParams.get(
+    'referral_code'
+  );
+  if (referral_code) url.searchParams.set('referral_code', referral_code);
+  return url.toString();
 }
 
 export function redirectToEmailAuth(params: EmailAuthParams) {

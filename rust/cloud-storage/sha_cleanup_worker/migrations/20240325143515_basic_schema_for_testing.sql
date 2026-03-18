@@ -3,11 +3,20 @@
 -- Changes here WILL NOT ever make it into the dev/production db.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+CREATE TABLE "macro_user" (
+    "id"                 UUID PRIMARY KEY,
+    "username"           TEXT UNIQUE NOT NULL,
+    "email"              TEXT UNIQUE NOT NULL,
+    "stripe_customer_id" TEXT UNIQUE NOT NULL
+);
+
 CREATE TABLE "User" (
     "id"               TEXT PRIMARY KEY,
     "email"            TEXT UNIQUE NOT NULL,
     "name"             TEXT,
-    "stripeCustomerId" TEXT UNIQUE
+    "stripeCustomerId" TEXT UNIQUE,
+    "macro_user_id"    UUID NOT NULL,
+    FOREIGN KEY ("macro_user_id") REFERENCES "macro_user"("id")
 );
 
 CREATE TABLE "Permission" (

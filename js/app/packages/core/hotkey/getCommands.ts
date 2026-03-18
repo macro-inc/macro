@@ -13,6 +13,8 @@ type sortAndFilterOptions = {
   hideCommandsWithoutHotkeys?: boolean;
   // shows only commands from the specified scope, not from all scopes
   limitToCurrentScope?: boolean;
+  // skips the runWithInputFocused filter — use for the command menu where all commands should be shown regardless of input focus
+  ignoreInputFocused?: boolean;
 };
 
 // This is reactive on active scope (if scope not specified), activeElement, and commmand conditions.
@@ -88,7 +90,8 @@ const filterCommands = (displayOptions: sortAndFilterOptions) => {
     return (
       (command.hotkeys || !displayOptions.hideCommandsWithoutHotkeys) &&
       (!command.condition || command.condition()) &&
-      (!isEditableInput(activeElement() as HTMLElement) ||
+      (displayOptions.ignoreInputFocused ||
+        !isEditableInput(activeElement() as HTMLElement) ||
         command.runWithInputFocused) &&
       hideValue !== true
     );

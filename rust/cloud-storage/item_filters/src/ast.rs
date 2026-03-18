@@ -62,6 +62,9 @@ pub enum ExpandErr {
     /// invalid macro user id
     #[error(transparent)]
     MacroIdErr(#[from] macro_user_id::error::ParseErr),
+    /// unknown document sub type
+    #[error(transparent)]
+    DocumentSubTypeErr(#[from] strum::ParseError),
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree

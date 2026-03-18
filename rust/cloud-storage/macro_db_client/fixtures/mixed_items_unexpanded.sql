@@ -12,8 +12,12 @@ SET session_replication_role = 'replica';
 INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Org', 'PILOT')
 ON CONFLICT DO NOTHING;
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 1);
+
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user@user.com', 'user@user.com', 'stripe_id');
+
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 1, 'a1111111-1111-1111-1111-111111111111');
 
 -- Item Creation with distinct timestamp orders
 -- Project: Newest created, Oldest updated, Middle viewed

@@ -10,8 +10,11 @@
 -- Disable foreign key constraints temporarily
 SET session_replication_role = 'replica';
 
-INSERT INTO public."User" ("id", "email", "stripeCustomerId")
-VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id');
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user@user.com', 'user@user.com', 'stripe_id');
+
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "macro_user_id")
+VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 'a1111111-1111-1111-1111-111111111111');
 
 -- Task with Status = "Completed"
 INSERT INTO public."Document" ("id", "name", "fileType", "owner", "createdAt", "updatedAt")

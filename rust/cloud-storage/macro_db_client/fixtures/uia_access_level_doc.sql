@@ -1,9 +1,13 @@
 -- Create two users.
 -- 'user-1' is the primary user we will test against.
 -- 'user-2' has some overlapping permissions to ensure our queries correctly filter by user.
-INSERT INTO public."User" ("id", "email")
-VALUES ('user-1', 'user1@test.com'),
-       ('user-2', 'user2@test.com');
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_user1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2@test.com', 'user2@test.com', 'stripe_user2');
+
+INSERT INTO public."User" ("id", "email", "macro_user_id")
+VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'),
+       ('user-2', 'user2@test.com', 'a2222222-2222-2222-2222-222222222222');
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent.
 -- Also create an unrelated project to ensure it's not picked up by the query.

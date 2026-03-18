@@ -64,43 +64,31 @@ impl RedisRateLimitOps for redis::Client {
 }
 
 impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLimitAdapter<R> {
-    async fn check_and_increment(
+    async fn check(
         &self,
         key: &RateLimitKey,
         config: &RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         let key_str = format!("rtl:{}", key.to_hex_string());
-        let expiry_seconds = config.window.as_secs();
 
-        // Get current count
         let current_count = self.redis.get_count(&key_str).await?.unwrap_or(0);
 
-        // Check if already exceeded
         if current_count >= config.max_count {
-            return Ok(RateLimitResult::Exceeded(RateLimitExceeded {
+            Ok(RateLimitResult::Exceeded(RateLimitExceeded {
                 key: key_str,
                 current_count,
                 max_count: config.max_count,
-            }));
-        }
-
-        // Increment and set expiry
-        let new_count = self
-            .redis
-            .increment_with_expiry(&key_str, expiry_seconds)
-            .await?;
-
-        // Check again after increment (in case of race condition)
-        if new_count > config.max_count {
-            Ok(RateLimitResult::Exceeded(RateLimitExceeded {
-                key: key_str,
-                current_count: new_count,
-                max_count: config.max_count,
             }))
         } else {
-            Ok(RateLimitResult::Allowed {
-                current_count: new_count,
-            })
+            Ok(RateLimitResult::Allowed { current_count })
         }
+    }
+
+    async fn increment(&self, key: &RateLimitKey, config: &RateLimitConfig) -> Result<u64, Report> {
+        let key_str = format!("rtl:{}", key.to_hex_string());
+        let expiry_seconds = config.window.as_secs();
+        self.redis
+            .increment_with_expiry(&key_str, expiry_seconds)
+            .await
     }
 }

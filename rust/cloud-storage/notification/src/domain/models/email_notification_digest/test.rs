@@ -193,11 +193,11 @@ fn test_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("test@example.com").unwrap()
 }
 
-fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<Arc<T>> {
+fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificationRow<Arc<T>> {
     UserNotificationRow {
         owner_id: test_user_id(),
         notification_id: uuid::Uuid::now_v7(),
-        notification_event_type: "test".to_string(),
+        notification_event_type: T::TYPE_NAME.to_string(),
         entity: EntityType::Document.with_entity_str("doc_123"),
         sent: false,
         done: false,

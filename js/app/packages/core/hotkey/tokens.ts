@@ -213,6 +213,14 @@ export const TOKENS = {
     focusNextMessage: 'channel.focusNextMessage',
     focusInput: 'channel.focusInput',
     sendMessage: 'channel.sendMessage',
+    clearSelection: 'channel.clearSelection',
+    cancelReply: 'channel.cancelReply',
+    threadPreviousReply: 'channel.threadPreviousReply',
+    threadNextReply: 'channel.threadNextReply',
+    threadExit: 'channel.threadExit',
+    threadCollapse: 'channel.threadCollapse',
+    threadReply: 'channel.threadReply',
+    threadEditReply: 'channel.threadEditReply',
   },
 
   // drawer

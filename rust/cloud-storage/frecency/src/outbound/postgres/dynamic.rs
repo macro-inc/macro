@@ -180,6 +180,17 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             build_task_include_cbm_atm_nc_clause("fa.entity_id")
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
+            format!("dt.sub_type = '{st}'")
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(true)) => {
+            r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = fa.entity_id)"#
+                .to_string()
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(false)) => {
+            r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = fa.entity_id)"#
+                .to_string()
+        }
     });
     if formatting.is_empty() {
         String::new()

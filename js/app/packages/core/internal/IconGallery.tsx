@@ -322,7 +322,7 @@ export default function IconGallery() {
                     >
                       <pair.static />
                     </div>
-                    <span class="text-[8px] text-muted">static</span>
+                    <span class="mt-2 text-[8px] text-muted">static</span>
                   </div>
                   {/* Animated version */}
                   <div class="flex flex-col items-center">
@@ -333,18 +333,29 @@ export default function IconGallery() {
                         width: `${iconSize()}px`,
                         height: `${iconSize()}px`,
                       }}
-                      onClick={() => triggerAnimation(pair.name)}
-                      title="Click to animate"
+                      onMouseEnter={() =>
+                        setAnimationTriggers((prev) => ({
+                          ...prev,
+                          [pair.name]: true,
+                        }))
+                      }
+                      onMouseLeave={() =>
+                        setAnimationTriggers((prev) => ({
+                          ...prev,
+                          [pair.name]: false,
+                        }))
+                      }
+                      title="Hover to animate"
                     >
                       <pair.animated
                         triggerAnimation={animationTriggers()[pair.name]}
                       />
                     </div>
-                    <div class="flex items-center gap-1">
+                    <div class="mt-2 flex items-center gap-1">
                       <span class="text-[8px] text-muted">animated</span>
                       <button
                         onClick={() => triggerAnimation(pair.name)}
-                        class="flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-current text-muted hover:text-ink"
+                        class="flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
                         title="Play animation"
                       >
                         <svg
@@ -383,7 +394,7 @@ export default function IconGallery() {
                 >
                   <icon.component />
                 </div>
-                <span class="mt-1.5 text-[8px] text-muted">{icon.name}</span>
+                <span class="mt-2 text-[8px] text-muted">{icon.name}</span>
               </div>
             )}
           </For>

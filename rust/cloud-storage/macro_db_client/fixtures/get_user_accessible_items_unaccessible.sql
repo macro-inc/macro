@@ -10,10 +10,14 @@ SET session_replication_role = 'replica';
 INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Org', 'PILOT')
 ON CONFLICT DO NOTHING;
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('user-1', 'user1@test.com', 'stripe_1', 1), -- The owner
-       ('user-2', 'user2@test.com', 'stripe_2', 1), -- The user with shared access
-       ('user-3', 'user3@test.com', 'stripe_3', 1);
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2@test.com', 'user2@test.com', 'stripe_2'),
+       ('a3333333-3333-3333-3333-333333333333', 'user3@test.com', 'user3@test.com', 'stripe_3');
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('user-1', 'user1@test.com', 'stripe_1', 1, 'a1111111-1111-1111-1111-111111111111'), -- The owner
+       ('user-2', 'user2@test.com', 'stripe_2', 1, 'a2222222-2222-2222-2222-222222222222'), -- The user with shared access
+       ('user-3', 'user3@test.com', 'stripe_3', 1, 'a3333333-3333-3333-3333-333333333333');
 -- The isolated user (test subject)
 
 -- === Project Hierarchy (owned by user-1) ===
