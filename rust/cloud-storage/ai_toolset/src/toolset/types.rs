@@ -1,5 +1,5 @@
 //! types
-use super::tool_object::{AsyncToolObject, ValidationError};
+use super::tool_object::{AsyncToolObject, UserTool, ValidationError};
 use crate::RequestContext;
 use crate::{AsyncTool, ToolResult};
 use axum::extract::FromRef;
@@ -62,7 +62,10 @@ impl ToolSchema {
 #[derive(Default)]
 pub struct ToolSet<T> {
     /// The tools in this toolset, keyed by name.
+    /// This includes type-erased user tools
     pub tools: HashMap<String, T>,
+    /// Non type-erased user tools
+    pub user_tools: HashMap<String, T>,
 }
 
 impl<T> ToolSet<T> {
@@ -70,6 +73,7 @@ impl<T> ToolSet<T> {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            user_tools: HashMap::new(),
         }
     }
 }
@@ -115,6 +119,25 @@ where
             self.tools.insert(tool_object.name.clone(), tool_object);
             Ok(self)
         }
+    }
+
+    /// Adds a user tool to the toolset
+    /// A user tool isn't executed automatically by default
+    pub fn add_user_tool<T, ToolContext>(mut self) -> Result<Self, ToolSetCreationError>
+    where
+        ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
+        T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
+        T::Output: Serialize + JsonSchema + 'static,
+    {
+        let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
+            .map_err(ToolSetCreationError::Validation)?;
+        if self.user_tools.contains_key(&tool_object.name) {
+            return Err(ToolSetCreationError::NameConflict(tool_object.name.clone()));
+        } else {
+            self.user_tools
+                .insert(tool_object.name.clone(), tool_object);
+        }
+        self.add_tool::<UserTool<T>, ToolContext>()
     }
 
     /// Attempts to call a tool by name with the given JSON input.
