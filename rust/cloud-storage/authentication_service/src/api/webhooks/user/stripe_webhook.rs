@@ -178,11 +178,14 @@ async fn handle_customer_subscription_event(
             subscription_id,
             subscription_status,
             &team_id,
-            event_type,
-            ga_client_id.clone(),
-            email.as_ref(),
-            subscription_value,
-            subscription_currency,
+            SubscriptionTrackingData {
+                ga_client_id: ga_client_id.clone(),
+                email: email.as_ref().to_string(),
+                value_cents: subscription_value,
+                currency: subscription_currency,
+                status: subscription_status.to_string(),
+                is_new: matches!(event_type, EventType::CustomerSubscriptionCreated),
+            },
         )
         .await;
     }
@@ -278,13 +281,15 @@ async fn handle_customer_subscription_event(
     // Track conversion events to GA and Meta (fire-and-forget)
     track_stripe_subscription(
         ctx.analytics_client.clone(),
-        ga_client_id,
-        email.as_ref().to_string(),
-        subscription_id.to_string(),
-        subscription_value,
-        subscription_currency,
-        subscription_status.to_string(),
-        matches!(event_type, EventType::CustomerSubscriptionCreated),
+        subscription_id,
+        SubscriptionTrackingData {
+            ga_client_id,
+            email: email.as_ref().to_string(),
+            value_cents: subscription_value,
+            currency: subscription_currency,
+            status: subscription_status.to_string(),
+            is_new: matches!(event_type, EventType::CustomerSubscriptionCreated),
+        },
     );
 
     Ok(())
@@ -293,17 +298,13 @@ async fn handle_customer_subscription_event(
 /// Handles team subscription events.
 /// NOTE: We use strs here because there is a mismatch between stripe crate and
 /// stripe_webhook crate for these types. *sigh*
-#[tracing::instrument(skip(ctx), err, ret)]
+#[tracing::instrument(skip(ctx, tracking_data), err, ret)]
 async fn handle_team_subscription_event(
     ctx: &ApiContext,
     subscription_id: &str,
     subscription_status: &str,
     team_id: &uuid::Uuid,
-    event_type: EventType,
-    ga_client_id: Option<String>,
-    email: &str,
-    value: Option<i64>,
-    currency: Option<String>,
+    tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     if subscription_status == "trialing" {
         anyhow::bail!("unexpected trialing status for team subscription");
@@ -311,16 +312,7 @@ async fn handle_team_subscription_event(
 
     match subscription_status {
         "active" => {
-            track_stripe_subscription(
-                ctx.analytics_client.clone(),
-                ga_client_id,
-                email.to_string(),
-                subscription_id.to_string(),
-                value,
-                currency,
-                subscription_status.to_string(),
-                matches!(event_type, EventType::CustomerSubscriptionCreated),
-            );
+            track_stripe_subscription(ctx.analytics_client.clone(), subscription_id, tracking_data);
             Ok(())
         }
         "canceled" | "past_due" | "paused" | "unpaid" => {
@@ -330,13 +322,11 @@ async fn handle_team_subscription_event(
 
             track_stripe_subscription(
                 ctx.analytics_client.clone(),
-                ga_client_id,
-                email.to_string(),
-                subscription_id.to_string(),
-                value,
-                currency,
-                subscription_status.to_string(),
-                false,
+                subscription_id,
+                SubscriptionTrackingData {
+                    is_new: false,
+                    ..tracking_data
+                },
             );
             Ok(())
         }
@@ -346,7 +336,6 @@ async fn handle_team_subscription_event(
     }
 }
 
-/// Event data for stripe subscription tracking.
 #[derive(Debug, Clone, Serialize)]
 struct SubscriptionEvent {
     transaction_id: String,
@@ -354,22 +343,27 @@ struct SubscriptionEvent {
     currency: String,
 }
 
-/// Tracks a Stripe subscription event to GA and Meta (fire-and-forget).
-#[tracing::instrument(skip(client, email), fields(subscription_id, email = %email, status, is_new))]
-fn track_stripe_subscription(
-    client: std::sync::Arc<AnalyticsClient>,
+#[derive(Debug, Clone)]
+struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
     email: String,
-    subscription_id: String,
     value_cents: Option<i64>,
     currency: Option<String>,
     status: String,
     is_new: bool,
+}
+
+/// Tracks a Stripe subscription event to GA and Meta (fire-and-forget).
+#[tracing::instrument(skip(client, data), fields(subscription_id, email = %data.email, status = %data.status, is_new = data.is_new))]
+fn track_stripe_subscription(
+    client: std::sync::Arc<AnalyticsClient>,
+    subscription_id: &str,
+    data: SubscriptionTrackingData,
 ) {
-    let Some(value_cents) = value_cents else {
+    let Some(value_cents) = data.value_cents else {
         return;
     };
-    let Some(currency) = currency else {
+    let Some(currency) = data.currency else {
         return;
     };
 
@@ -379,6 +373,8 @@ fn track_stripe_subscription(
         "track_stripe_subscription_task"
     );
 
+    let subscription_id = subscription_id.to_string();
+
     tokio::spawn(
         async move {
             let event = SubscriptionEvent {
@@ -386,13 +382,13 @@ fn track_stripe_subscription(
                 value: value_cents as f64 / 100.0,
                 currency: currency.to_uppercase(),
             };
-            let user_data = MetaUserData::with_email(&email);
+            let user_data = MetaUserData::with_email(&data.email);
             let event_id = Some(subscription_id.as_str());
 
-            match (status.as_str(), is_new) {
+            match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {
-                    if let Some(ga_client_id) = ga_client_id
-                        && let Err(e) = client.track_ga(&ga_client_id, "purchase", &event).await
+                    if let Some(ref ga_client_id) = data.ga_client_id
+                        && let Err(e) = client.track_ga(ga_client_id, "purchase", &event).await
                     {
                         tracing::warn!(error = ?e, "failed to track GA purchase event");
                     }
@@ -411,8 +407,8 @@ fn track_stripe_subscription(
                     }
                 }
                 ("canceled", _) => {
-                    if let Some(ga_client_id) = ga_client_id
-                        && let Err(e) = client.track_ga(&ga_client_id, "refund", &event).await
+                    if let Some(ref ga_client_id) = data.ga_client_id
+                        && let Err(e) = client.track_ga(ga_client_id, "refund", &event).await
                     {
                         tracing::warn!(error = ?e, "failed to track GA refund event");
                     }
