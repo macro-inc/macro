@@ -356,6 +356,7 @@ export const authServiceClient = {
       userId: data.userId,
       hasTrialed: data.hasTrialed,
       aiDataConsent: data.aiDataConsent,
+      referralCode: data.referralCode,
     }));
   },
 

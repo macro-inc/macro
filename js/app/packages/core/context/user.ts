@@ -32,6 +32,7 @@ type UserContextValue = {
   hasChromeExt: Accessor<boolean | undefined>;
   hasTrialed: Accessor<boolean | undefined>;
   aiDataConsent: Accessor<boolean>;
+  referralCode: Accessor<string | undefined>;
 };
 
 export const [UserContextProvider, useUserContext] =
@@ -62,6 +63,7 @@ export const [UserContextProvider, useUserContext] =
     const hasChromeExt = createMemo(() => userInfo()?.hasChromeExt);
     const hasTrialed = createMemo(() => userInfo()?.hasTrialed);
     const aiDataConsent = createMemo(() => userInfo()?.aiDataConsent ?? false);
+    const referralCode = createMemo(() => userInfo()?.referralCode);
 
     return {
       userInfo,
@@ -77,6 +79,7 @@ export const [UserContextProvider, useUserContext] =
       hasChromeExt,
       hasTrialed,
       aiDataConsent,
+      referralCode,
     };
   });
 
@@ -127,4 +130,8 @@ export function useUserInfo() {
 
 export function useAiDataConsent() {
   return useUserContext().aiDataConsent;
+}
+
+export function useReferralCode() {
+  return useUserContext().referralCode;
 }
