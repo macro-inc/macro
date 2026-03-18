@@ -79,6 +79,9 @@ import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
+import { Button } from '@ui/components/Button';
+import { Dynamic } from 'solid-js/web';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
 false && clickOutside;
 
@@ -535,13 +538,9 @@ export function ShareModal(props: ShareModalProps) {
             <div class="shrink-0 flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
-                  <DeprecatedIconButton
-                    tooltip={{ label: 'Close' }}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Button tooltip="Close" variant="ghost" size="icon-sm">
+                    <CloseIcon />
+                  </Button>
                 </Dialog.CloseButton>
                 <Dialog.Title>{`Share: ${props.name}`}</Dialog.Title>
               </div>
@@ -670,14 +669,14 @@ export function ShareModal(props: ShareModalProps) {
                   Public Link
                 </div>
                 <div class="flex items-center p-3 justify-between">
-                  <DeprecatedTextButton
-                    onClick={() => copyPublicLink()}
-                    text="Copy Link"
-                    height="h-[22px]"
-                    icon={IconLink}
-                    theme="accent"
-                    outline
-                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    class="flex items-center gap-1 rounded-xs px-2"
+                  >
+                    <IconLink class="size-4" />
+                    Copy Link
+                  </Button>
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     hideNoAccess={props.itemType === 'chat'}
@@ -690,191 +689,6 @@ export function ShareModal(props: ShareModalProps) {
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
-  );
-}
-interface ShareButtonProps {
-  userPermissions: Permissions; // user permissions are in service-storage/cognition V2 are unified @sharePermissionV2.ts
-  copyLink?: () => void; // some blocks have their own copy link function e.g. canvas copies current (x,y) position
-  name: string; // document name or chat name
-  id: string; // document id or chat id
-  itemType: ItemType;
-  owner?: string;
-}
-
-export function ShareButton(props: ShareButtonProps) {
-  const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
-  const isBlockContext = isInBlock();
-  const [fallbackPermissionsResource] = createResource(
-    () => {
-      if (isBlockContext || !props.id) return;
-      return { id: props.id, itemType: props.itemType };
-    },
-    async (source) => {
-      if (!source) return;
-      const { id, itemType } = source;
-      if (itemType === 'chat') {
-        return cognitionApiServiceClient.getChatPermissions({ id });
-      } else if (itemType === 'document') {
-        return storageServiceClient.getDocumentPermissions({ document_id: id });
-      } else if (itemType === 'project') {
-        if (id === 'trash') {
-          return;
-        }
-        return storageServiceClient.projects.getPermissions({ id });
-      }
-    },
-    { initialValue: undefined }
-  );
-  const permissionsResource = isBlockContext
-    ? permissionsBlockResource[0]
-    : fallbackPermissionsResource;
-  const isAuthenticated = useIsAuthenticated();
-  const blockType = isBlockContext
-    ? useBlockAliasedName()
-    : (props.itemType as BlockName | BlockAlias);
-  const blockId = isBlockContext ? useBlockId() : props.id;
-
-  onMount(() => {
-    if (!isBlockContext) return;
-    const blockScopeId = blockHotkeyScopeSignal.get;
-    registerHotkey({
-      keyDownHandler: () => {
-        if (!isAuthenticated()) {
-          openLoginModal();
-        } else {
-          track(TrackingEvents.SHARE.OPEN);
-          setIsSharePermOpen(true);
-        }
-        return true;
-      },
-      hotkeyToken: TOKENS.block.share,
-      runWithInputFocused: true,
-      scopeId: blockScopeId(),
-      description: 'Share',
-      hotkey: 'cmd+s',
-    });
-  });
-
-  const defaultUrl = () => {
-    return buildSimpleEntityUrl(
-      {
-        id: blockId ?? '',
-        type: blockType,
-      },
-      {}
-    );
-  };
-
-  const { track } = withAnalytics();
-
-  const copyLink = createCallback(() => {
-    if (props.copyLink) {
-      return props.copyLink();
-    }
-
-    navigator.clipboard.writeText(defaultUrl());
-    toast.success(
-      'Link copied to clipboard.',
-      'Sending this link in a Macro message will automatically update permissions to include recipients.'
-    );
-  });
-
-  const ShareLinkAction = createMemo(() => {
-    return {
-      action: (e: MouseEvent | KeyboardEvent) => {
-        e.stopPropagation();
-        copyLink();
-      },
-      icon: IconLink,
-    };
-  });
-
-  const shareAccessLevelText = createMemo(() => {
-    const maybeResult = permissionsResource.latest;
-    if (!maybeResult || isErr(maybeResult)) {
-      return '';
-    }
-    const [, sharePermission] = maybeResult;
-    if (sharePermission.isPublic) {
-      return 'Public';
-    }
-    if (sharePermission.channelSharePermissions?.length) {
-      return 'Shared';
-    }
-    return 'Just me';
-  });
-
-  return (
-    <>
-      <div class="border-1 border-edge-muted flex ml-1 items-stretch">
-        <Tooltip
-          tooltip={
-            <div>
-              {match(shareAccessLevelText())
-                .when(
-                  (level) => level === 'Public',
-                  () => 'Anyone with the link can access this item'
-                )
-                .when(
-                  (level) => level === 'Shared',
-                  () => 'Shared with specific people or channels'
-                )
-                .when(
-                  (level) => level === 'Just me',
-                  () => 'Only you can access this item'
-                )
-                .otherwise(() => 'This item has been shared with you')}
-            </div>
-          }
-        >
-          <button
-            class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
-            onClick={() => {
-              if (!isAuthenticated()) {
-                openLoginModal();
-              } else {
-                track(TrackingEvents.SHARE.OPEN);
-                setIsSharePermOpen(true);
-              }
-            }}
-          >
-            <Switch fallback={<IconShared class="size-4" />}>
-              <Match when={shareAccessLevelText() === 'Public'}>
-                <IconGlobe class="size-4" />
-              </Match>
-              <Match when={shareAccessLevelText() === 'Shared'}>
-                <IconUsers class="size-4" />
-              </Match>
-              <Match when={shareAccessLevelText() === 'Just me'}>
-                <IconEyeSlash class="size-4" />
-              </Match>
-            </Switch>
-            SHARE
-          </button>
-        </Tooltip>
-
-        <div class="w-[1px] bg-edge-muted" />
-
-        <DeprecatedIconButton
-          tooltip={{ label: 'Copy Share Link' }}
-          onClick={ShareLinkAction().action}
-          icon={ShareLinkAction().icon}
-          theme="clear"
-          size="sm"
-        />
-      </div>
-
-      <ShareModal
-        setIsSharePermOpen={setIsSharePermOpen}
-        userPermissions={props.userPermissions}
-        isSharePermOpen={isSharePermOpen()}
-        itemType={props.itemType}
-        owner={props.owner}
-        name={props.name}
-        blockAlias={blockType}
-        id={props.id}
-      />
-    </>
   );
 }
 
@@ -957,7 +771,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         }
       >
         <button
-          class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
+          class="text-xs hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -978,19 +792,21 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
               <IconEyeSlash class="size-4" />
             </Match>
           </Switch>
-          SHARE
+          Share
         </button>
       </Tooltip>
 
       <div class="w-[1px] bg-edge-muted" />
 
-      <DeprecatedIconButton
-        tooltip={{ label: 'Copy Share Link' }}
+      <Button
+        tooltip="Copy Share Link"
         onClick={ShareLinkAction().action}
-        icon={ShareLinkAction().icon}
-        theme="clear"
-        size="sm"
-      />
+        variant="ghost"
+        size="icon-sm"
+        class="p-1"
+      >
+        <Dynamic component={ShareLinkAction().icon} />
+      </Button>
     </div>
   );
 }
@@ -1083,15 +899,14 @@ export function ShareOptions(props: {
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger disabled={props.disabled}>
-        <DeprecatedTextButton
-          text={currentValueText()}
+        <Button
           disabled={props.disabled}
-          width="w-[67px]"
-          height="22px"
-          theme="base"
-          showChevron
-          left
-        />
+          class="w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1"
+          variant="secondary"
+        >
+          {currentValueText()}
+          <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenuContent>
