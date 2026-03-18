@@ -34,7 +34,6 @@ export default function BlockChannel(props: BlockChannelProps) {
     return (
       <NewChannel
         channelId={channelId}
-        debug={true}
         // targetMessageId="019b47e2-d61d-7cef-a7a3-b192c0df2f7f"
       />
     );

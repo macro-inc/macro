@@ -43,8 +43,6 @@ type ChannelMessageActionEffects = {
   copyToClipboard: (text: string) => Promise<void>;
   notifyCopyLinkSuccess: () => void;
   notifyCopyLinkFailure: (error: unknown) => void;
-  notifyCopyTargetPayloadSuccess: () => void;
-  notifyCopyTargetPayloadFailure: (error: unknown) => void;
 };
 
 export type CreateChannelMessageActionsOptions = {
@@ -53,15 +51,10 @@ export type CreateChannelMessageActionsOptions = {
   deleteMessage: (input: DeleteMessageInput) => void;
   addReaction: (input: AddReactionInput) => void;
   removeReaction: (input: RemoveReactionInput) => void;
-  debug?: Accessor<boolean>;
   onReply?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   effects?: Partial<ChannelMessageActionEffects>;
 };
-
-export function buildTargetMessagePayload(messageId: string): string {
-  return JSON.stringify({ targetMessageId: messageId });
-}
 
 function createDefaultEffects(): ChannelMessageActionEffects {
   return {
@@ -77,13 +70,6 @@ function createDefaultEffects(): ChannelMessageActionEffects {
     notifyCopyLinkFailure: (error) => {
       console.error('failed to copy link', error);
       toast.failure('Failed to copy link');
-    },
-    notifyCopyTargetPayloadSuccess: () => {
-      toast.success('Target payload copied to clipboard');
-    },
-    notifyCopyTargetPayloadFailure: (error) => {
-      console.error('failed to copy target payload', error);
-      toast.failure('Failed to copy target payload');
     },
   };
 }
@@ -151,18 +137,6 @@ export function createChannelMessageActions(
           effects.notifyCopyLinkFailure(error);
         }
       },
-      onCopyTargetPayload: options.debug?.()
-        ? async () => {
-            try {
-              await effects.copyToClipboard(
-                buildTargetMessagePayload(message.id)
-              );
-              effects.notifyCopyTargetPayloadSuccess();
-            } catch (error) {
-              effects.notifyCopyTargetPayloadFailure(error);
-            }
-          }
-        : undefined,
       onEdit: canEditDelete ? options.onEdit : undefined,
       onDelete: canEditDelete
         ? () => {

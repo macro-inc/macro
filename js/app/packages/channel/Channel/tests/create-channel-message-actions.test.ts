@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageData } from '../../Message';
-import {
-  buildTargetMessagePayload,
-  createChannelMessageActions,
-} from '../create-channel-message-actions';
+import { createChannelMessageActions } from '../create-channel-message-actions';
 
 type ActionMessage = MessageData & { thread_id?: string | null };
 
@@ -24,7 +21,6 @@ function buildMessage(overrides?: Partial<ActionMessage>): ActionMessage {
 function buildHarness(input?: {
   userId?: string | undefined;
   channelId?: string;
-  debug?: boolean;
   onReply?: Parameters<typeof createChannelMessageActions>[0]['onReply'];
   onEdit?: Parameters<typeof createChannelMessageActions>[0]['onEdit'];
   effects?: Parameters<typeof createChannelMessageActions>[0]['effects'];
@@ -36,7 +32,6 @@ function buildHarness(input?: {
   const getMessageActions = createChannelMessageActions({
     channelId: () => input?.channelId ?? 'channel-1',
     userId: () => input?.userId,
-    debug: () => input?.debug ?? false,
     deleteMessage,
     addReaction,
     removeReaction,
@@ -105,36 +100,5 @@ describe('createChannelMessageActions', () => {
 
     expect(onEdit).toHaveBeenCalledOnce();
     expect(onEdit).toHaveBeenCalledWith({ message });
-  });
-
-  it('copies the target payload when debug actions are enabled', async () => {
-    const copyToClipboard = vi.fn().mockResolvedValue(undefined);
-    const notifyCopyTargetPayloadSuccess = vi.fn();
-    const notifyCopyTargetPayloadFailure = vi.fn();
-    const harness = buildHarness({
-      debug: true,
-      effects: {
-        copyToClipboard,
-        notifyCopyTargetPayloadSuccess,
-        notifyCopyTargetPayloadFailure,
-      },
-    });
-    const message = buildMessage({ id: 'message-debug' });
-    const actions = harness.getMessageActions(message);
-
-    await actions.onCopyTargetPayload?.({ message });
-
-    expect(copyToClipboard).toHaveBeenCalledWith(
-      buildTargetMessagePayload('message-debug')
-    );
-    expect(notifyCopyTargetPayloadSuccess).toHaveBeenCalledOnce();
-    expect(notifyCopyTargetPayloadFailure).not.toHaveBeenCalled();
-  });
-
-  it('does not expose target payload copying when debug actions are disabled', () => {
-    const harness = buildHarness({ debug: false });
-    const actions = harness.getMessageActions(buildMessage());
-
-    expect(actions.onCopyTargetPayload).toBeUndefined();
   });
 });

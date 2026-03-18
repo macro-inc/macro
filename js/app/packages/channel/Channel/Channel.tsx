@@ -55,7 +55,6 @@ import { createStickyScrollEffect } from './sticky-scroll';
 import { createMessageEditor } from './create-message-editor';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import { createTargetMessageController } from './create-target-message-controller';
-import { DebugGoToMessage } from './DebugGoToMessage';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -65,7 +64,6 @@ type ChannelProps = {
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
-  debug?: boolean;
 };
 
 export function Channel(props: ChannelProps) {
@@ -173,7 +171,6 @@ export function Channel(props: ChannelProps) {
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    debug: () => props.debug === true,
     deleteMessage: deleteMessageMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
@@ -209,13 +206,6 @@ export function Channel(props: ChannelProps) {
     <Suspense>
       <StaticMarkdownContext>
         <ChannelDropZone dragState={dragState}>
-          <Show when={props.debug}>
-            <DebugGoToMessage
-              onSubmit={(messageId) => {
-                targetMessageController.goToMessage(messageId);
-              }}
-            />
-          </Show>
           <Show when={messages().length > 0}>
             <div class="relative flex-1 min-h-0">
               <ThreadList
