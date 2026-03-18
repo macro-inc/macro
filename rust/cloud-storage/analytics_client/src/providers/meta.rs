@@ -93,6 +93,7 @@ impl MetaProvider {
     /// - `action_source`: Where the conversion originated
     /// - `event_id`: Optional deduplication ID (recommended for server events)
     /// - `custom_data`: Additional event data (will be serialized to JSON)
+    #[tracing::instrument(skip(self, user_data, custom_data), err)]
     pub async fn track(
         &self,
         event_name: &str,

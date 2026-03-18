@@ -21,6 +21,7 @@ impl GoogleAnalyticsProvider {
     }
 
     /// Tracks an event to GA4.
+    #[tracing::instrument(skip(self, params), err)]
     pub async fn track(
         &self,
         client_id: &str,

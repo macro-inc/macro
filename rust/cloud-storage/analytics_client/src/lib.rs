@@ -74,6 +74,7 @@ impl AnalyticsClient {
     /// Tracks an event to Google Analytics.
     ///
     /// Returns `Ok(())` if GA is not configured (no-op).
+    #[tracing::instrument(skip(self, params), err)]
     pub async fn track_ga(
         &self,
         client_id: &str,
@@ -95,6 +96,7 @@ impl AnalyticsClient {
     /// - `action_source`: Where the conversion originated
     /// - `event_id`: Optional deduplication ID (recommended for server events)
     /// - `custom_data`: Additional event data
+    #[tracing::instrument(skip(self, user_data, custom_data), err)]
     pub async fn track_meta(
         &self,
         event_name: &str,
