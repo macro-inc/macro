@@ -27,7 +27,7 @@ impl DiscountClient for StripeDiscountClient {
     type Err = anyhow::Error;
 
     #[tracing::instrument(skip(self), err)]
-    async fn apply_discount<'a>(&self, referrer_customer_id: &'a str) -> Result<(), Self::Err> {
+    async fn apply_discount(&self, referrer_customer_id: &str) -> Result<(), Self::Err> {
         let customer_id: stripe::CustomerId = referrer_customer_id
             .parse()
             .context("invalid stripe customer id format")?;
