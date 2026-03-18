@@ -68,6 +68,21 @@ pub enum RateLimitResult {
     Exceeded(RateLimitExceeded),
 }
 
+/// The return value from the rate limit service
+pub struct RateLimitTicket {
+    pub(crate) result: RateLimitResult,
+    pub(crate) key: RateLimitKey,
+    pub(crate) config: RateLimitConfig,
+}
+
+impl std::ops::Deref for RateLimitTicket {
+    type Target = RateLimitResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.result
+    }
+}
+
 /// Error returned when a rate limit is exceeded.
 #[derive(Debug, Error)]
 #[error(
