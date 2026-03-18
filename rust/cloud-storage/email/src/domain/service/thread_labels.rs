@@ -152,15 +152,14 @@ where
                     .map(|m| m.db_id)
                     .collect();
 
-                if !draft_message_ids.is_empty() {
-                    if let Err(e) = self
+                if !draft_message_ids.is_empty()
+                    && let Err(e) = self
                         .email_repo
                         .delete_scheduled_messages_batch(&draft_message_ids, link.id)
                         .await
-                    {
-                        let err = anyhow::Error::from(e);
-                        tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
-                    }
+                {
+                    let err = anyhow::Error::from(e);
+                    tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
                 }
             }
         }
