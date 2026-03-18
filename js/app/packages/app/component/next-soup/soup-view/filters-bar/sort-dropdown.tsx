@@ -1,8 +1,8 @@
 import { type Component, For, Show } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@icon/regular/check.svg';
-import SortIcon from '@icon/regular/sort-ascending.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import SortIcon from '@macro-icons/wide/sort.svg';
 import type {
   SortOption,
   SystemSortOption,
@@ -34,12 +34,11 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
     >
       <DropdownMenu.Trigger
         as={Button}
-        variant="tertiary"
+        variant="secondary"
         size="sm"
-        class="whitespace-nowrap rounded-xs"
+        class="whitespace-nowrap rounded-xs [&_svg]:size-4"
       >
-        <SortIcon class="size-4" />
-        {/*<span class="font-medium">Sort</span>*/}
+        <SortIcon />
         <ChevronDownIcon class="size-4" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

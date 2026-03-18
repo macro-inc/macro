@@ -4,6 +4,7 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import XIcon from '@icon/regular/x.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import type { FilterOption } from './unified-filter-dropdown';
+import { Button } from '@ui/components/Button';
 
 export type ActiveFilter = {
   categoryLabel: string;
@@ -43,15 +44,16 @@ const FilterChip = (props: {
   return (
     <div
       class={cn(
-        'inline-flex items-center text-xs rounded-md',
-        'bg-ink/8 text-ink-muted border border-edge-muted',
+        'flex text-xs rounded-xs',
+        'bg-ink/10 text-ink-muted border border-edge-muted',
+        'group',
         'transition-colors'
       )}
     >
       <Show
         when={hasOptions()}
         fallback={
-          <span class="inline-flex items-center gap-1.5 pl-2 pr-1 py-0.5">
+          <span class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1">
             <Show when={props.filter.icon}>
               {(icon) => (
                 <span class="size-3 flex items-center justify-center shrink-0">
@@ -68,8 +70,8 @@ const FilterChip = (props: {
         <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
           <DropdownMenu.Trigger
             class={cn(
-              'inline-flex items-center gap-1.5 pl-2 pr-1 py-0.5 rounded-l-md',
-              'hover:bg-ink/12 hover:text-ink transition-colors cursor-default'
+              'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
+              'hover:text-ink hover:bg-edge-muted'
             )}
           >
             <Show when={props.filter.icon}>
@@ -85,13 +87,13 @@ const FilterChip = (props: {
           </DropdownMenu.Trigger>
 
           <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[160px] p-1">
+            <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
               <For each={props.filter.categoryOptions}>
                 {(option) => {
                   const active = () => props.isOptionActive(option.id);
                   return (
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
+                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
                       onSelect={() => {
                         if (!active()) {
                           props.onReplace(option.id);
@@ -138,8 +140,8 @@ const FilterChip = (props: {
       <button
         type="button"
         class={cn(
-          'inline-flex items-center justify-center px-1 py-0.5 rounded-r-md',
-          'hover:bg-ink/12 hover:text-ink transition-colors'
+          'px-1 min-h-full',
+          'hover:bg-edge-muted hover:text-ink transition-colors'
         )}
         onClick={(e) => {
           e.stopPropagation();
@@ -187,16 +189,17 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
                   }
                   isOptionActive={props.isOptionActive}
                 />
-                <button
-                  type="button"
+                <Button
                   class={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md whitespace-nowrap',
-                    'text-ink-muted hover:text-ink hover:bg-hover transition-colors'
+                    'rounded-xs whitespace-nowrap'
+                    // 'text-ink-muted hover:text-ink hover:bg-hover transition-colors'
                   )}
+                  size="sm"
+                  variant="ghost"
                   onClick={() => props.onClearAll()}
                 >
                   Clear all
-                </button>
+                </Button>
               </span>
             </Show>
           )}

@@ -13,7 +13,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import SlidersIcon from '@icon/regular/sliders-horizontal.svg';
+import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
@@ -362,7 +362,7 @@ const SearchableFilterSubmenu = (props: {
 
   return (
     <DropdownMenu.Sub gutter={4}>
-      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5">
+      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </DropdownMenu.SubTrigger>
@@ -370,10 +370,10 @@ const SearchableFilterSubmenu = (props: {
       <DropdownMenu.Portal>
         <DropdownMenu.SubContent
           ref={handleSubContentMount}
-          class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[200px] p-1"
+          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] p-1"
         >
           {/* Search input */}
-          <div class="flex items-center gap-2 px-2 py-1 border-b border-edge-muted mb-1">
+          <div class="flex items-center gap-2 px-2 py-2 border-b border-edge-muted mb-2">
             <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
             <input
               ref={inputRef}
@@ -399,8 +399,8 @@ const SearchableFilterSubmenu = (props: {
                   <button
                     type="button"
                     class={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs transition-colors cursor-pointer',
-                      highlighted() ? 'bg-ink/10' : 'hover:bg-ink/5'
+                      'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors',
+                      highlighted() ? 'bg-hover' : 'hover:bg-hover'
                     )}
                     onClick={() => props.onToggle(option.id)}
                     onMouseEnter={() => setHighlightedIndex(index())}
@@ -507,29 +507,34 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView()}>
       <DropdownMenu open={open()} onOpenChange={setOpen}>
-        <DropdownMenu.Trigger as={Button} variant="tertiary" size="sm">
-          <SlidersIcon class="size-3.5" />
+        <DropdownMenu.Trigger
+          as={Button}
+          variant="secondary"
+          size="sm"
+          class="rounded-xs [&_svg]:size-4"
+        >
+          <SlidersHorizontalIcon />
           <span class="font-medium">Filter</span>
         </DropdownMenu.Trigger>
 
         <DropdownMenu.Portal>
-          <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[180px] p-1">
+          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
             <For each={categories()}>
               {(category) => (
                 <DropdownMenu.Sub gutter={4}>
-                  <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5">
+                  <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
                     <span class="text-ink">{category.label}</span>
                     <CaretRightIcon class="size-3 text-ink-muted" />
                   </DropdownMenu.SubTrigger>
 
                   <DropdownMenu.Portal>
-                    <DropdownMenu.SubContent class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[160px] p-1">
+                    <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
                       <For each={category.options}>
                         {(option) => {
                           const active = () => isOptionActive(option.id);
                           return (
                             <DropdownMenu.Item
-                              class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-pointer"
+                              class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
                               onSelect={() => toggleFilter(option.id)}
                               closeOnSelect={!category.multiple}
                             >

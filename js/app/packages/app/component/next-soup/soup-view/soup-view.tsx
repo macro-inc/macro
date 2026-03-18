@@ -84,7 +84,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, ListView } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -174,6 +174,18 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
+  const component = createMemo(() => {
+    const content = panel.handle.content();
+
+    if (content.type !== 'component') return;
+
+    return content.id;
+  });
+
+  const isComponentListView = (listView: ListView) => {
+    return component() === listView;
+  };
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
 
   return (
@@ -215,34 +227,37 @@ export const SoupView = (props: SoupViewProps) => {
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <CollapsibleHeaderItem
-                id="search"
-                priority={0}
-                onCollapsedChange={(isCollapsed) => {
-                  if (!isCollapsed) setNarrowSearchExpanded(false);
-                }}
-                expanded={
-                  <div class="w-52">
-                    <SoupSearchbar variant="filled" />
-                  </div>
-                }
-                collapsed={
-                  <Show when={!narrowSearchExpanded()}>
-                    <Tooltip
-                      tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        class="rounded-xs"
-                        onClick={() => setNarrowSearchExpanded(true)}
+              <Show when={!isComponentListView('search')}>
+                <CollapsibleHeaderItem
+                  id="search"
+                  priority={0}
+                  onCollapsedChange={(isCollapsed) => {
+                    if (!isCollapsed) setNarrowSearchExpanded(false);
+                  }}
+                  expanded={
+                    <div class="w-52">
+                      <SoupSearchbar variant="secondary" />
+                    </div>
+                  }
+                  collapsed={
+                    <Show when={!narrowSearchExpanded()}>
+                      <Tooltip
+                        tooltip={
+                          <LabelAndHotKey label="Search" shortcut="⌘F" />
+                        }
                       >
-                        <SearchIcon class="size-4" />
-                      </Button>
-                    </Tooltip>
-                  </Show>
-                }
-              />
+                        <Button
+                          variant="ghost"
+                          class="p-1 rounded-xs"
+                          onClick={() => setNarrowSearchExpanded(true)}
+                        >
+                          <SearchIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </Show>
+                  }
+                />
+              </Show>
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>

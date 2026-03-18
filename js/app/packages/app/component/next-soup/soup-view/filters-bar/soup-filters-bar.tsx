@@ -85,7 +85,7 @@ export const SoupFiltersBar = () => {
             <Button
               variant={soup.previewEntity() ? 'primary' : 'ghost'}
               size="sm"
-              class="rounded-xs [&_svg]:size-4"
+              class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
               onClick={togglePreview}
               onMouseEnter={() => setPreviewBtnHovering(true)}
               onMouseLeave={() => setPreviewBtnHovering(false)}
