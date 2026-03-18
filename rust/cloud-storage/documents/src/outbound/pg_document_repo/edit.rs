@@ -74,7 +74,13 @@ pub(super) async fn update_share_permission(
 
     // Handle channel share permission changes
     if let Some(channel_perms) = &share_permission.channel_share_permissions {
-        update_channel_share_permissions(transaction, document_id, &share_permission_id, channel_perms).await?;
+        update_channel_share_permissions(
+            transaction,
+            document_id,
+            &share_permission_id,
+            channel_perms,
+        )
+        .await?;
     }
 
     Ok(())
