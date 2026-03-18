@@ -368,7 +368,7 @@ function SplitPanel(props: SplitPanelProps) {
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapser = createHeaderCollapser(
-    layoutRefs,
+    () => layoutRefs.headerLeft,
     () => panelSize.width
   );
 

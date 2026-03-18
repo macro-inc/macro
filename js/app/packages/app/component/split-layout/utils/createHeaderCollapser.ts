@@ -3,19 +3,17 @@ import { createStore, produce } from 'solid-js/store';
 import type { CollapsibleRegistration, HeaderCollapser } from '../context';
 
 /**
- * Returns the actual rendered content width of headerLeft's children.
+ * Returns the actual rendered content width of a container's children.
  *
- * headerLeft is a flex-grow container, so scrollWidth === offsetWidth when
- * content fits — it doesn't tell us how much free space there is. Instead,
- * we traverse its DOM children. SplitHeaderLeft portals content using a
- * wrapper div with `style.display = 'contents'`, so we skip those transparent
- * wrappers and sum the offsetWidth of their real children.
+ * Layout-transparent wrapper elements
+ * (e.g. Portal divs with `display: contents`) are skipped and their real
+ * children are measured directly.
  */
-function getContentWidth(headerLeft: HTMLDivElement): number {
+function getContentWidth(container: HTMLElement): number {
   let itemTotal = 0;
   let itemCount = 0;
-  for (const child of Array.from(headerLeft.children) as HTMLElement[]) {
-    if (child.style.display === 'contents') {
+  for (const child of Array.from(container.children) as HTMLElement[]) {
+    if (getComputedStyle(child).display === 'contents') {
       for (const inner of Array.from(child.children) as HTMLElement[]) {
         itemTotal += inner.offsetWidth;
         itemCount++;
@@ -26,7 +24,7 @@ function getContentWidth(headerLeft: HTMLDivElement): number {
     }
   }
   // Include padding and flex gap so spare matches scrollWidth-based overflow detection.
-  const style = getComputedStyle(headerLeft);
+  const style = getComputedStyle(container);
   const paddingLeft = parseFloat(style.paddingLeft) || 0;
   const paddingRight = parseFloat(style.paddingRight) || 0;
   const gap = parseFloat(style.columnGap) || 0;
@@ -36,7 +34,7 @@ function getContentWidth(headerLeft: HTMLDivElement): number {
 }
 
 export function createHeaderCollapser(
-  layoutRefs: { headerLeft?: HTMLDivElement },
+  getContainer: Accessor<HTMLElement | undefined>,
   panelSizeWidth: Accessor<number | null | undefined>
 ): HeaderCollapser {
   const [items, setItems] = createStore<CollapsibleRegistration[]>([]);
@@ -45,7 +43,7 @@ export function createHeaderCollapser(
   let observer: ResizeObserver | null = null;
 
   const evaluate = () => {
-    const headerLeft = layoutRefs.headerLeft;
+    const headerLeft = getContainer();
     if (!headerLeft) return;
 
     // Attach ResizeObserver lazily on first call when headerLeft exists
@@ -89,7 +87,7 @@ export function createHeaderCollapser(
         // element's current footprint (the icon button that will disappear on uncollapse).
         const collapsedWidth = collapsedWidths.get(item.id) ?? 0;
         const needed = naturalWidth - collapsedWidth;
-        // headerLeft is flex-grow so scrollWidth === offsetWidth when no overflow —
+        // The container is flex-grow so scrollWidth === offsetWidth when no overflow —
         // measure the actual rendered content width instead.
         const contentWidth = getContentWidth(headerLeft);
         const spare = headerLeft.offsetWidth - contentWidth;

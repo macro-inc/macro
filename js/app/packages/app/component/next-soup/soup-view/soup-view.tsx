@@ -1,4 +1,3 @@
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -69,7 +68,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
@@ -177,32 +176,7 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-
-  const togglePreview = () => {
-    const currentPreview = soup.previewEntity();
-    if (currentPreview) {
-      soup.setPreviewEntity(undefined);
-      return;
-    }
-
-    const focused = soup.focus.id();
-
-    if (!focused) return;
-
-    soup.setPreviewEntity(focused);
-  };
-
-  registerHotkey({
-    hotkey: 'space',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Toggle preview',
-    keyDownHandler: () => {
-      togglePreview();
-      return true;
-    },
-  });
 
   return (
     <SplitPanelContext.Provider
@@ -270,24 +244,6 @@ export const SoupView = (props: SoupViewProps) => {
                   </Show>
                 }
               />
-              <Show when={!narrowSearchExpanded()}>
-                <Tooltip
-                  tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-                >
-                  <Button
-                    variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                    size="icon-sm"
-                    class="rounded-xs [&_svg]:size-4"
-                    onClick={togglePreview}
-                    onMouseEnter={() => setPreviewBtnHovering(true)}
-                    onMouseLeave={() => setPreviewBtnHovering(false)}
-                  >
-                    <AnimatedPreviewIcon
-                      triggerAnimation={previewBtnHovering()}
-                    />
-                  </Button>
-                </Tooltip>
-              </Show>
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
