@@ -1,4 +1,7 @@
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
+import {
+  EXCLUDE,
+  QUERY_FILTERS,
+} from '@app/component/next-soup/filters/query-filters';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import {
   applyInboxQueryFilters,
@@ -38,20 +41,25 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       signal: () => ({
         queryFilters: {
-          ...applyInboxQueryFilters({}),
+          ...applyInboxQueryFilters({
+            document_filters: { is_email_attachment: false },
+          }),
           emailView: 'inbox',
         },
         clientFilters: { and: ['signal', 'not-done'] },
       }),
       noise: () => ({
         queryFilters: {
-          ...applyOtherQueryFilters({}),
+          ...applyOtherQueryFilters({
+            document_filters: { is_email_attachment: false },
+          }),
           emailView: 'inbox',
         },
         clientFilters: { and: ['noise', 'not-done'] },
       }),
       all: () => ({
         queryFilters: {
+          document_filters: { is_email_attachment: false },
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
@@ -200,6 +208,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...QUERY_FILTERS.file,
             document_filters: {
               ...QUERY_FILTERS.file.document_filters,
+              is_email_attachment: false,
               owners: [ctx.userId],
             },
             project_filters: { owners: [ctx.userId] },
@@ -208,8 +217,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         };
       },
       shared: () => ({
-        queryFilters: QUERY_FILTERS.file,
+        queryFilters: {
+          ...QUERY_FILTERS.file,
+          document_filters: {
+            ...QUERY_FILTERS.file.document_filters,
+            is_email_attachment: false,
+          },
+        },
         clientFilters: { and: ['file-folder', 'shared-entity'] },
+      }),
+      attachments: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.file,
+          document_filters: {
+            is_email_attachment: true,
+          },
+          project_filters: { project_ids: EXCLUDE },
+        },
+        clientFilters: { and: ['file-folder'] },
       }),
       all: () => ({
         queryFilters: {

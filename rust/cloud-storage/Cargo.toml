@@ -96,6 +96,7 @@ members = [
   "properties",
   "properties_db_client",
   "properties_service",
+  "referral",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",

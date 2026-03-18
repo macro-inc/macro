@@ -20,24 +20,13 @@ export function Root(props: RootProps) {
 
   return (
     <div
-      class={cn(
-        'group/message relative hover:bg-accent/5 hover:outline-1 hover:outline-accent/20 hover:outline-offset-[-1px]',
-        local.class,
-        {
-          'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
-            local.highlighted,
-        }
-      )}
+      class={cn('group/message relative', local.class)}
       data-message
       data-message-id={local.message.id}
+      data-highlighted={local.highlighted ? '' : undefined}
       {...rest}
     >
-      <div
-        class={cn(
-          'absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 group-hover/message:opacity-100',
-          { 'opacity-100': local.highlighted }
-        )}
-      />
+      <div class="absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 message-accent-bar" />
       <MessageProvider value={() => local.message}>
         <MessageActionsProvider value={local.actions}>
           {props.children}

@@ -5,15 +5,8 @@ use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-};
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -176,40 +169,11 @@ async fn main() -> anyhow::Result<()> {
         })
         .context("failed to connect to redis")?;
 
-    let redis_multiplexed_conn = redis_inner_client
-        .get_multiplexed_async_connection()
-        .await
-        .context("failed to get multiplexed redis connection for state machine")?;
-
-    let state_machine = StateMachineDriverA {
-        user_checker: DbUserExistenceChecker::new(db.clone()),
-        notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-            db.clone(),
-        )),
-        online_checker: LastOnlineCheckerImpl::new(
-            last_online_tracker::domain::services::LastOnlineService::new(
-                last_online_tracker::outbound::time::DefaultTime,
-                last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                    redis_multiplexed_conn.clone(),
-                ),
-            ),
-        ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
-        block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-        invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
-            .append::<model_notifications::ChannelInviteMetadata>(),
-        digest_window: std::time::Duration::from_secs(30 * 60),
-        online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-    };
-
-    let notification_ingress_service = Arc::new(NotificationIngressService::new(
-        DbNotificationRepository::new(db.clone()),
-        SqsNotificationQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            config.notification_queue.clone(),
-        ),
-        state_machine,
-    ));
+    let ingress_queue = SqsIngressQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
+    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
 
     let redis_client = email_service::util::redis::RedisClient::new(
         redis_inner_client,

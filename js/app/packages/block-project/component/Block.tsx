@@ -4,6 +4,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -37,6 +38,7 @@ false && fileSelector;
 const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
 
 const Block: Component = () => {
+  useBlockEntityCommands();
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);

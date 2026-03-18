@@ -9,6 +9,7 @@ import { showTabBarSignal } from '@block-pdf/signal/placeables';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, leading } from '@solid-primitives/scheduled';
@@ -67,6 +68,7 @@ function onKeyPress(e: KeyboardEvent) {
 }
 
 export default function BlockPdf() {
+  useBlockEntityCommands();
   const isNestedBlock = useIsNestedBlock();
   const showTabBar = showTabBarSignal.get;
 

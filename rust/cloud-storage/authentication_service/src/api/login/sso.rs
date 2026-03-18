@@ -13,11 +13,12 @@ use utoipa::ToSchema;
 #[cfg(test)]
 mod tests;
 
-#[derive(serde::Serialize, serde::Deserialize, ToSchema, Debug, Default)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, ToSchema, Debug, Default)]
 pub struct SsoState {
     #[schema(value_type = Option<String>)]
     pub original_url: Option<Url>,
     pub is_mobile: bool,
+    pub referral_code: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -30,6 +31,8 @@ pub(crate) struct LoginQueryParams {
     original_url: Option<UrlEncoded<Url>>,
     #[serde(default)]
     is_mobile: bool,
+    /// Optional referral code
+    referral_code: Option<String>,
 }
 
 /// Initiates an SSO login
@@ -43,6 +46,7 @@ pub(crate) struct LoginQueryParams {
             ("login_hint" = String, Query, description = "**OPTIONAL**. The user's email."),
             ("original_url" = String, Query, description = "**OPTIONAL**. The original url you came from."),
             ("is_mobile" = String, Query, description = "**OPTIONAL**. If the authentication request is from a mobile device."),
+            ("referral_code" = String, Query, description = "**OPTIONAL**. If the user opened a link with a referral code."),
         ),
         responses(
             (status = 200),
@@ -61,6 +65,7 @@ pub async fn handler(
         login_hint,
         original_url,
         is_mobile,
+        referral_code,
     }) = query;
 
     if idp_name.is_none() && idp_id.is_none() {
@@ -124,10 +129,13 @@ pub async fn handler(
     let state = SsoState {
         is_mobile,
         original_url: original_url.map(|x| x.0),
+        referral_code,
     };
 
     // Only include state if it has a value
-    let sso_state = (state.is_mobile || state.original_url.is_some()).then_some(state);
+    let sso_state =
+        (state.is_mobile || state.original_url.is_some() || state.referral_code.is_some())
+            .then_some(state);
 
     // Generate code
     let sso_url = ctx

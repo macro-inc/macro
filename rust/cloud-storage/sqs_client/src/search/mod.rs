@@ -4,7 +4,7 @@ use crate::{
         channel::{ChannelMessageUpdate, RemoveChannelMessage},
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, SearchExtractorMessage},
-        email::{EmailLinkMessage, EmailMessage, EmailThreadMessage},
+        email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
     },
 };
 use anyhow::Context;
@@ -76,6 +76,7 @@ pub enum SearchQueueMessage {
     RemoveEmailMessage(EmailMessage),
     ExtractEmailThreadMessage(EmailThreadMessage),
     RemoveEmailLink(EmailLinkMessage),
+    ExtractEmailThreadBatch(EmailThreadBatchMessage),
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
     RemoveChannelMessage(RemoveChannelMessage),
@@ -96,6 +97,9 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::ExtractEmailMessage(message)
             | SearchQueueMessage::RemoveEmailMessage(message) => message.message_id.clone(),
             SearchQueueMessage::ExtractEmailThreadMessage(message) => message.thread_id.clone(),
+            SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+                message.thread_ids.first().cloned().unwrap_or_default()
+            }
             SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
             SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
             SearchQueueMessage::RemoveChannelMessage(message) => {
@@ -125,6 +129,7 @@ impl SearchQueueMessage {
             SearchQueueMessage::ExtractEmailMessage(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveEmailMessage(_) => Operation::Remove,
             SearchQueueMessage::ExtractEmailThreadMessage(_) => Operation::ExtractText,
+            SearchQueueMessage::ExtractEmailThreadBatch(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveEmailLink(_) => Operation::Remove,
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
