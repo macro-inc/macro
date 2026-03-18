@@ -49,6 +49,21 @@ impl DBClient {
         document_text_parts::insert_pdf_references(self.inner.clone(), references, document_id)
             .await
     }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn get_document_file_type(
+        &self,
+        document_id: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            r#"SELECT "fileType" as "file_type" FROM "Documents" WHERE "documentId" = $1"#,
+        )
+        .bind(document_id)
+        .fetch_optional(&self.inner)
+        .await?;
+
+        Ok(row.and_then(|r| r.0))
+    }
 }
 
 #[cfg(test)]

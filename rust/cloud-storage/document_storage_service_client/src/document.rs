@@ -40,6 +40,11 @@ impl DocumentStorageServiceClient {
         Ok(doc_data)
     }
 
+    pub async fn get_document_file_type(&self, document_id: &str) -> Result<Option<String>> {
+        let document_basic = self.get_document_basic(document_id).await?;
+        Ok(document_basic.and_then(|d| d.file_type))
+    }
+
     pub async fn get_document_basic(&self, document_id: &str) -> Result<Option<DocumentBasic>> {
         let res = self
             .client

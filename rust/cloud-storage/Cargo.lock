@@ -8571,6 +8571,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "aws_lambda_events",
+ "document_storage_service_client",
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
