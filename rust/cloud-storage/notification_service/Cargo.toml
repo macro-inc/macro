@@ -26,6 +26,7 @@ aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+email_formatting = { path = "../email_formatting" }
 email_validator = { path = "../email_validator" }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
@@ -46,6 +47,7 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type" }
+last_online_tracker = { path = "../last_online_tracker" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }
 models_comms = { path = "../models_comms" }

@@ -7,6 +7,7 @@ pub mod get_chat;
 pub mod get_chat_permissions;
 pub mod patch_chat;
 pub mod revert_delete_chat;
+pub mod tool;
 
 use super::context::ApiContext;
 use axum::{
@@ -98,6 +99,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/{chat_id}/permissions",
             get(get_chat_permissions::get_chat_permissions_handler).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::ensure_user_exists::handler,
+                    ))
+                    .layer(ensure_chat_exists.clone()),
+            ),
+        )
+        .nest(
+            "/{chat_id}/tool",
+            tool::router().layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
                         macro_middleware::auth::ensure_user_exists::handler,

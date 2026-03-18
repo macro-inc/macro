@@ -122,10 +122,6 @@ pub(crate) fn generate_terms_must_query<'a>(
     field: &'a str,
     terms: impl Into<Cow<'a, [&'a str]>>,
 ) -> QueryType<'a> {
-    let mut terms_must_query = BoolQueryBuilder::new();
-
-    terms_must_query.minimum_should_match(1);
-
     let terms = terms.into();
 
     // Map terms to queries
@@ -140,19 +136,20 @@ pub(crate) fn generate_terms_must_query<'a>(
         })
         .collect();
 
-    // If we only have 1 query returned, we can just return that singular query
-    // to go into the main bool must
     if queries.len() == 1 {
         return queries[0].clone();
     }
 
-    // Otherwise, we need to add all the queries to a new bool should in order to properly search
-    // over multiple terms
+    // Use OR (should) across terms because document content is split across
+    // multiple OpenSearch nodes. AND filtering happens post-collapse at the
+    // application layer.
+    let mut terms_should_query = BoolQueryBuilder::new();
+    terms_should_query.minimum_should_match(1);
     for query in queries {
-        terms_must_query.should(query);
+        terms_should_query.should(query);
     }
 
-    terms_must_query.build().into()
+    terms_should_query.build().into()
 }
 
 #[cfg(test)]

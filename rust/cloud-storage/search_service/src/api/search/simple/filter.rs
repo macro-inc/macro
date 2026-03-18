@@ -51,6 +51,7 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
             Ok(UnifiedDocumentSearchArgs {
                 document_ids: filter_document_response.document_ids,
                 ids_only: filter_document_response.ids_only,
+                ..Default::default()
             })
         }
     }
@@ -81,6 +82,7 @@ impl FilterVariantToSearchArgs for item_filters::ChannelFilters {
                 thread_ids: self.thread_ids.clone(),
                 mentions: self.mentions.clone(),
                 sender_ids: self.sender_ids.clone(),
+                ..Default::default()
             })
         }
     }
@@ -105,6 +107,7 @@ impl FilterVariantToSearchArgs for item_filters::ChatFilters {
                 chat_ids: filter_chat_response.chat_ids,
                 ids_only: filter_chat_response.ids_only,
                 role: self.role.clone(),
+                ..Default::default()
             })
         }
     }
@@ -147,8 +150,6 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
             Ok(UnifiedEmailSearchArgs::default())
         } else {
             Ok(UnifiedEmailSearchArgs {
-                thread_ids: vec![],
-                link_ids: vec![],
                 sender: self.senders.clone(),
                 cc: self.cc.clone(),
                 bcc: self.bcc.clone(),
@@ -156,6 +157,7 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
                 include_labels: self.include_labels.clone(),
                 exclude_labels: self.exclude_labels.clone(),
                 importance: self.importance,
+                ..Default::default()
             })
         }
     }

@@ -44,7 +44,7 @@ pub async fn handler(
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
     tracing::info!(
         user_id = user_context.user_id,
-        terms = ?req.terms,
+        query = ?req.query,
         search_on = ?req.search_on,
         "unified_search"
     );

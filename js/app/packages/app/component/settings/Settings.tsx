@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -19,8 +19,6 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
-
-const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -51,76 +49,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
 
-  let scrollRef!: HTMLDivElement;
-  let scrollCleanup: (() => void) | undefined;
-  const [leftOpacity, setLeftOpacity] = createSignal(0);
-  const [rightOpacity, setRightOpacity] = createSignal(0);
-  const [indicatorStyle, setIndicatorStyle] = createSignal({
-    left: 0,
-    width: 0,
-  });
-
-  const updateClipIndicators = () => {
-    if (!scrollRef) return;
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef;
-
-    const leftAmount = Math.min(scrollLeft, SCROLL_THRESHOLD);
-    setLeftOpacity(leftAmount / SCROLL_THRESHOLD);
-
-    const maxScroll = scrollWidth - clientWidth;
-    const remainingScroll = maxScroll - scrollLeft;
-    const rightAmount = Math.min(remainingScroll, SCROLL_THRESHOLD);
-    setRightOpacity(rightAmount / SCROLL_THRESHOLD);
-  };
-
-  const updateIndicatorPosition = (element: HTMLElement) => {
-    if (!scrollRef || !element) return;
-    const listRect = scrollRef.getBoundingClientRect();
-    const tabRect = element.getBoundingClientRect();
-    setIndicatorStyle({
-      left: tabRect.left - listRect.left + scrollRef.scrollLeft,
-      width: tabRect.width,
-    });
-  };
-
-  function setupScrollListeners(element: HTMLDivElement) {
-    function listener(e: WheelEvent) {
-      e.preventDefault();
-      const { deltaX, deltaY } = e;
-      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
-      element.scrollLeft += delta;
-      updateClipIndicators();
-    }
-    element.addEventListener('wheel', listener);
-    element.addEventListener('scroll', updateClipIndicators);
-    updateClipIndicators();
-    return () => {
-      element.removeEventListener('wheel', listener);
-      element.removeEventListener('scroll', updateClipIndicators);
-    };
-  }
-
-  onCleanup(() => {
-    if (scrollCleanup) {
-      scrollCleanup();
-    }
-  });
-
-  onMount(() => {
-    setTimeout(() => {
-      const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
-      if(activeTab){updateIndicatorPosition(activeTab)}
-    }, 0);
-  });
-
   createEffect(() => {
     if (settingsOpen()){
       setTimeout(() => {
-        const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
-        if(activeTab){
-          updateIndicatorPosition(activeTab);
-          updateClipIndicators();
-        }
         // Focus the settings container to activate the hotkey scope
         settingsContainerRef?.focus();
       }, 10);
@@ -238,7 +169,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         spotlight={spotlight}
         tr={!spotlight()}
       >
-        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden">
+        <div class="flex flex-col h-full bg-panel border border-edge-muted rounded-sm overflow-hidden isolate">
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
@@ -251,7 +182,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center px-2">
+                <div class="flex items-center pl-2 pr-3 gap-2">
                   <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
@@ -262,73 +193,29 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     />
                   </Show>
 
-                  {/* Left clip boundary indicator */}
-                  <div
-                    class="absolute pointer-events-none left-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
-                    style={{ opacity: leftOpacity() }}
-                  />
-                  {/* Right clip boundary indicator */}
-                  <div
-                    class="absolute pointer-events-none right-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
-                    style={{ opacity: rightOpacity() }}
-                  />
-
                   <Tabs.List
-                    class="flex flex-row suppress-css-brackets h-[calc(2.5rem-1px)] bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                    class="flex flex-1 items-center justify-center py-2"
                     as="div"
-                    ref={(el) => {
-                      scrollRef = el;
-                      if (el) {
-                        scrollCleanup = setupScrollListeners(el);
-                      }
-                    }}
                   >
-                    {/* Sliding indicator line */}
-                    <div
-                      class="absolute bottom-0 h-px bg-accent z-10 pointer-events-none transition-all duration-150 ease-out"
-                      style={{
-                        transform: `translateX(${indicatorStyle().left}px)`,
-                        width: `${indicatorStyle().width}px`,
-                      }}
-                    />
-
-                    <For each={settingsTabs()}>
-                      {({ value, label }, i) => {
-                        const isActive = createMemo(() => value === activeTabId());
-
-                        let ref: HTMLDivElement | undefined;
-                        createEffect(() => {
-                          if (isActive() && ref) {
-                            ref.scrollIntoView({
-                              inline: 'end',
-                            });
-                            updateIndicatorPosition(ref);
-                            setTimeout(updateClipIndicators, 0);
-                          }
-                        });
-
-                        return (
-                          <Tabs.Trigger
-                            value={value}
-                            ref={ref}
-                            tabIndex={-1}
-                            data-value={value}
-                            class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
-                            classList={{
-                              'z-1 text-accent text-glow-sm': isActive(),
-                              'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
-                            }}
-                          >
-                            <span class="flex items-center gap-1 w-full">
-                              <span class="text-xs font-mono opacity-70 mr-0.5">
-                                {(i() + 1).toString()}
+                    <div class="border border-edge-muted rounded-xs inline-flex overflow-hidden">
+                      <For each={settingsTabs()}>
+                        {({ value, label }, i) => {
+                          return (
+                            <Tabs.Trigger
+                              value={value}
+                              tabIndex={-1}
+                              data-value={value}
+                              class="text-xs font-medium relative flex items-center px-2 py-1 border-r border-edge-muted last:border-r-0 transition-colors duration-150 text-ink-muted data-[selected]:text-ink data-[selected]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[selected]:hover:bg-ink/20"
+                            >
+                              <span class="flex items-center gap-1.5">
+                                <span>{label}</span>
+                                <span class="font-mono text-[10px] opacity-50 border border-edge-muted rounded-[3px] px-1 py-px leading-none">{(i() + 1).toString()}</span>
                               </span>
-                              <span class="truncate">{label}</span>
-                            </span>
-                          </Tabs.Trigger>
-                        );
-                      }}
-                    </For>
+                            </Tabs.Trigger>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </Tabs.List>
 
                   <div class="flex-1" />

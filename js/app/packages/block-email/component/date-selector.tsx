@@ -40,9 +40,18 @@ type DateSelectorProps = {
   disablePriorToDate?: Date;
   disableAfterDate?: Date;
   withTime?: boolean;
+  /** Render content inline instead of in a portal (avoids keyboard positioning issues on mobile) */
+  disablePortal?: boolean;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
+};
+
+const DateSelectorPortalWrapper: FlowComponent<{ disabled?: boolean }> = (
+  props
+) => {
+  if (props.disabled) return <>{props.children}</>;
+  return <Combobox.Portal>{props.children}</Combobox.Portal>;
 };
 
 export const DateSelector = (props: DateSelectorProps) => {
@@ -174,12 +183,14 @@ export const DateSelector = (props: DateSelectorProps) => {
     setSelectedOption(option);
     if (!option) {
       props.onSelectDate?.(null);
+      onOpenChange(false);
       return;
     }
 
     const dateValue = option.date;
 
     props.onSelectDate?.(dateValue);
+    onOpenChange(false);
   };
 
   const options = createMemo(() => {
@@ -289,7 +300,7 @@ export const DateSelector = (props: DateSelectorProps) => {
         </Combobox.Control>
       </Show>
 
-      <Combobox.Portal>
+      <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
           class="w-full max-w-sm bg-dialog text-ink border border-edge-muted"
           on:keydown={handleKeyDown}
@@ -365,7 +376,7 @@ export const DateSelector = (props: DateSelectorProps) => {
             </div>
           </WithCustomDateMode>
         </Combobox.Content>
-      </Combobox.Portal>
+      </DateSelectorPortalWrapper>
     </Combobox>
   );
 };
@@ -393,6 +404,7 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
           <span class="text-xs font-medium">{currentDateDisplay()}</span>
         </div>
         <button
+          onPointerDown={(e: PointerEvent) => e.preventDefault()}
           onClick={props.onClear}
           class="text-xs text-ink-muted hover:text-ink underline"
         >
@@ -453,6 +465,11 @@ const DateSelectorItem: Component<
         props.item.rawValue.type === 'select-custom' &&
           'border-t border-edge-muted'
       )}
+      onPointerDown={(e: PointerEvent) => {
+        // Prevent default to stop input blur on mobile, which would close the
+        // combobox before the selection click event fires.
+        e.preventDefault();
+      }}
     >
       <Combobox.ItemIndicator class="hidden" />
       <div class="flex items-center gap-2 flex-1 min-w-0">

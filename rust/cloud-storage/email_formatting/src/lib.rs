@@ -1,14 +1,14 @@
-use std::time::Duration;
-
 use askama::Template;
 use chrono::{DateTime, Utc};
-use model_notifications::NotifEvent;
+use macro_user_id::cowlike::CowLike;
+use model_notifications::{NotifEvent, NotificationTitle};
 use notification::domain::models::{
     Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, UserNotificationRow,
     email_notification_digest::ports::DigestBatch, queue_message::EmailContent,
 };
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Template)]
 #[template(path = "digest.html")]
@@ -22,13 +22,15 @@ struct NotifPreview {
 }
 
 impl NotifPreview {
-    fn new(v: UserNotificationRow<NotifEvent>) -> Option<Self> {
-        Some(NotifPreview {
+    #[tracing::instrument(err)]
+    fn new(v: UserNotificationRow<NotifEvent>) -> Result<Self, Report> {
+        let title = v
+            .notification_metadata
+            .format_title(v.sender_id.as_ref().map(CowLike::copied))?;
+        let body = v.notification_metadata.format_body(v.sender_id)?;
+        Ok(NotifPreview {
             created_at: v.created_at.unwrap_or(Utc::now()),
-            message: format!(
-                "PLACEHOLDER: you received a notification with typename {}",
-                v.notification_event_type
-            ),
+            message: format!("{title} - {body}"),
         })
     }
 }
@@ -57,14 +59,13 @@ impl EmailDigestNotification {
             .into_iter()
             .map(|v| v.deserialize_metadata::<NotifEvent>())
             .filter_map(|res| res.inspect_err(log_err).ok())
-            .filter_map(NotifPreview::new)
+            .map(NotifPreview::new)
+            .filter_map(Result::ok)
             .collect();
 
         let templated_len = notifs.len();
 
-        let template = DigestTemplate { notifs };
-
-        let inner_html_string = template.render()?;
+        let inner_html_string = DigestTemplate { notifs }.render()?;
 
         Ok(EmailDigestNotification {
             inner_html_string,
@@ -87,7 +88,7 @@ impl NotificationExtEmail for EmailDigestNotification {
 
     fn rate_limit_config() -> RateLimitConfig {
         RateLimitConfig {
-            max_count: 60,
+            max_count: 600,
             window: Duration::from_hours(1),
         }
     }

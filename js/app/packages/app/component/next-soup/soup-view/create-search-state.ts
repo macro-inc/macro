@@ -120,14 +120,14 @@ export const createSearchState = ({
 
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
-      const terms = debouncedSearchForService();
+      const query = debouncedSearchForService();
       const include = unifiedSearchIncludeArray();
       const filters = searchFilters();
 
       return {
         search_on: 'name_content',
         match_type: 'partial',
-        terms: terms.length > 0 ? [terms] : undefined,
+        query,
         include,
         filters,
       };

@@ -50,8 +50,7 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
         }
 
         let search_request = UnifiedSearchRequest {
-            query: Some(self.name.to_owned()),
-            terms: None,
+            query: self.name.to_owned(),
             match_type: MatchType::Partial,
             filters: Some(UnifiedSearchFilters {
                 email: Some(EmailFilters {

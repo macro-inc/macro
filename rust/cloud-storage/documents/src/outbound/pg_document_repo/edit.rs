@@ -74,7 +74,13 @@ pub(super) async fn update_share_permission(
 
     // Handle channel share permission changes
     if let Some(channel_perms) = &share_permission.channel_share_permissions {
-        update_channel_share_permissions(transaction, &share_permission_id, channel_perms).await?;
+        update_channel_share_permissions(
+            transaction,
+            document_id,
+            &share_permission_id,
+            channel_perms,
+        )
+        .await?;
     }
 
     Ok(())
@@ -160,9 +166,11 @@ async fn update_share_permission_row(
     Ok(())
 }
 
-/// Update channel share permissions (add/replace/remove).
+/// Update channel share permissions (add/replace/remove) and ensure UserItemAccess rows
+/// are created for all active channel participants.
 async fn update_channel_share_permissions(
     transaction: &mut Transaction<'_, Postgres>,
+    document_id: &str,
     share_permission_id: &str,
     channel_perms: &[models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission],
 ) -> Result<(), sqlx::Error> {
@@ -220,6 +228,51 @@ async fn update_channel_share_permissions(
         )
         .execute(transaction.as_mut())
         .await?;
+
+        // Upsert UserItemAccess rows for all active participants of the upserted channels.
+        // This ensures that even if the comms_service's update_channel_share_permission sees
+        // the CSP already exists and returns early, the UserItemAccess rows still get created.
+        let channel_uuids: Vec<uuid::Uuid> = upsert_channel_ids
+            .iter()
+            .filter_map(|id| uuid::Uuid::parse_str(id).ok())
+            .collect();
+
+        if !channel_uuids.is_empty() {
+            sqlx::query!(
+                r#"
+                INSERT INTO "UserItemAccess" (
+                    "id",
+                    "user_id",
+                    "item_id",
+                    "item_type",
+                    "access_level",
+                    "granted_from_channel_id",
+                    "created_at",
+                    "updated_at"
+                )
+                SELECT
+                    gen_random_uuid(),
+                    cp.user_id,
+                    $1,
+                    'document',
+                    'view'::"AccessLevel",
+                    cp.channel_id,
+                    NOW(),
+                    NOW()
+                FROM comms_channel_participants cp
+                WHERE cp.channel_id = ANY($2::uuid[])
+                AND cp.left_at IS NULL
+                ON CONFLICT ("user_id", "item_id", "item_type", "granted_from_channel_id")
+                DO UPDATE SET
+                    "access_level" = EXCLUDED."access_level",
+                    "updated_at" = NOW()
+                "#,
+                document_id,
+                &channel_uuids,
+            )
+            .execute(transaction.as_mut())
+            .await?;
+        }
     }
 
     Ok(())

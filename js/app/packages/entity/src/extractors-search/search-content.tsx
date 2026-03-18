@@ -2,7 +2,7 @@ import { Show } from 'solid-js';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   searchContentHitMarkdownTheme,
-  searchContentHitTwoLineClampMarkdownTheme,
+  twoLineClampMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import type { ContentHitData } from '../types/search';
 
@@ -18,7 +18,7 @@ export function SearchContent(props: SearchContentProps) {
   const content = () => props.hit?.content ?? '';
   const theme = () => {
     if (props.twoLineClamp) {
-      return searchContentHitTwoLineClampMarkdownTheme;
+      return twoLineClampMarkdownTheme;
     } else {
       return searchContentHitMarkdownTheme;
     }

@@ -15,9 +15,10 @@ import { isChannelEntity, isTaskEntity } from '../types/entity';
 interface EntityIconProps {
   entity: EntityData;
   streamState?: StreamEvent;
+  class?: string;
 }
 
-function DirectMessageIcon(props: { entity: ChannelEntity }) {
+function DirectMessageIcon(props: { entity: ChannelEntity; class?: string }) {
   const userId = useUserId();
   const participantId = () => {
     const participants = props.entity.participantIds ?? [];
@@ -25,12 +26,25 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
   };
 
   return (
-    <div class="bg-panel size-full rounded-full">
+    <div class={'bg-panel size-full rounded-full'}>
       <Show
         when={participantId()}
-        fallback={<CoreEntityIcon targetType="direct_message" size="fill" />}
+        fallback={
+          <CoreEntityIcon
+            targetType="direct_message"
+            size="fill"
+            class={props.class}
+          />
+        }
       >
-        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+        {(id) => (
+          <UserIcon
+            id={id()}
+            isDeleted={false}
+            size="fill"
+            class={props.class}
+          />
+        )}
       </Show>
     </div>
   );
@@ -62,15 +76,25 @@ export function EntityIcon(props: EntityIconProps) {
 
   return (
     <Switch
-      fallback={<CoreEntityIcon targetType={validIconType()} size="fill" />}
+      fallback={
+        <CoreEntityIcon
+          targetType={validIconType()}
+          size="fill"
+          class={props.class}
+        />
+      }
     >
       <Match when={isDirectMessage()}>
-        <DirectMessageIcon entity={props.entity as ChannelEntity} />
+        <DirectMessageIcon
+          entity={props.entity as ChannelEntity}
+          class={props.class}
+        />
       </Match>
       <Match when={isChatEntity()}>
         <PulsingStar
           kind="listIcon"
           animate={props.streamState?.type === 'created'}
+          class={props.class}
         />
       </Match>
     </Switch>

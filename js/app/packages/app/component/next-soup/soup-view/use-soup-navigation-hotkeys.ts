@@ -77,6 +77,10 @@ export const useSoupNavigationHotkeys = (
     const nextRow = next?.item;
     if (!nextRow) return true;
 
+    // At the boundary (top/bottom), peekOffset clamps and returns the
+    // same item we're already focused on. No-op to avoid toggling.
+    if (focusedEntity && nextRow.id === focusedEntity.id) return true;
+
     if (!focusedEntity) {
       navigateAndSelectEntity(offset);
       return true;

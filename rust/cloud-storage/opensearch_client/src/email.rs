@@ -15,8 +15,9 @@ impl OpensearchClient {
     pub async fn bulk_upsert_email_messages(
         &self,
         messages: &[UpsertEmailArgs],
+        index_override: Option<&str>,
     ) -> Result<BulkUpsertResult> {
-        upsert::email::bulk_upsert_email_messages(&self.inner, messages).await
+        upsert::email::bulk_upsert_email_messages(&self.inner, messages, index_override).await
     }
 
     /// Deletes all email messages with the specified thread_id

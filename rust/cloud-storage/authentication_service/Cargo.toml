@@ -88,6 +88,7 @@ non_empty = { path = "../non_empty" }
 notification = { path = "../notification" }
 openssl = { workspace = true }
 rand = { workspace = true }
+referral = { path = "../referral" }
 redis = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }

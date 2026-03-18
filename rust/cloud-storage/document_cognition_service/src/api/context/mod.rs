@@ -5,13 +5,8 @@ use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use notification::domain::models::email_notification_digest::StateMachineDriverA;
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
@@ -30,20 +25,7 @@ pub use test::*;
 pub type DcsScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
-pub(crate) type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {

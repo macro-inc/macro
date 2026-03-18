@@ -7,7 +7,8 @@ VALUES
     ('22222222-2222-2222-2222-222222222222', 'test_user_2', 'user_profile_2@macro.com', 'cus_test2'),
     ('33333333-3333-3333-3333-333333333333', 'test_user_3', 'user_profile_3@macro.com', 'cus_test3'),
     ('44444444-4444-4444-4444-444444444444', 'test_user_4', 'user_profile_4@macro.com', 'cus_test4'),
-    ('55555555-5555-5555-5555-555555555555', 'test_user_5', 'user_profile_5@macro.com', 'cus_test5');
+    ('55555555-5555-5555-5555-555555555555', 'test_user_5', 'user_profile_5@macro.com', 'cus_test5'),
+    ('66666666-6666-6666-6666-666666666666', 'contact', 'contact@example.com', 'cus_test6');
 
 -- Create macro user info with names
 INSERT INTO macro_user_info (macro_user_id, first_name, last_name)
@@ -26,7 +27,7 @@ VALUES
     ('macro|user_profile_3@macro.com', 'user_profile_3@macro.com', '33333333-3333-3333-3333-333333333333', NULL, false, false, false),
     ('macro|user_profile_4@macro.com', 'user_profile_4@macro.com', '44444444-4444-4444-4444-444444444444', NULL, false, false, false),
     ('macro|user_profile_5@macro.com', 'user_profile_5@macro.com', '55555555-5555-5555-5555-555555555555', NULL, false, false, false),
-    ('macro|contact@example.com', 'contact@example.com', NULL, NULL, false, false, false);
+    ('macro|contact@example.com', 'contact@example.com', '66666666-6666-6666-6666-666666666666', NULL, false, false, false);
 
 -- Create email link for macro user 1 (for email contacts lookup)
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)

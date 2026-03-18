@@ -1,11 +1,12 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, SendNotificationRequest,
+    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
     TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
+    request::SendNotificationRequest,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -42,7 +43,7 @@ pub struct APNSTargets<T> {
 }
 
 /// Email notification payload.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmailContent {
     /// The email subject line.
     pub subject: String,
@@ -63,6 +64,7 @@ pub struct EmailNotification<'a> {
     rate_limit_key: RateLimitKey,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EmailCreateBundle {
     /// The email content (subject and body).
     content: EmailContent,
@@ -151,12 +153,12 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
     pub(crate) recipients: Vec<MacroUserIdStr<'a>>,
 }
 
-impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
+impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
     pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
         ConnGatewayNotification {
             notif: ConnGatewayInnerNotif {
                 notification_id: id,
-                notification_event_type: T::TYPE_NAME.to_string(),
+                notification_event_type: req.req.notification.tag.as_ref().to_string(),
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 done: false,
@@ -164,7 +166,7 @@ impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
                 viewed_at: None,
                 updated_at: None,
                 deleted_at: None,
-                notification_metadata: TaggedContent::new(req.req.notification.clone()),
+                notification_metadata: req.req.notification.clone(),
                 sender_id: req.req.sender_id.as_ref().map(|x| x.clone().into_owned()),
             },
             recipients: req.req.recipient_ids.iter().cloned().collect(),
@@ -237,14 +239,29 @@ pub struct QueueMessage<'a, T, U> {
     content: NotificationChannel<'a, T, U>,
 }
 
-impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
+impl<'a, T, U> QueueMessage<'a, T, U> {
     /// Create a new queue message. Only valid notification types can be published.
-    ///
-    /// The `message_type` is derived from [`Notification::TYPE_NAME`].
-    pub(crate) fn new(content: NotificationChannel<'a, T, U>) -> Self {
+    pub(crate) fn new_from_conn_gateway(content: ConnGatewayNotification<'a, T>) -> Self {
         Self {
-            message_type: T::TYPE_NAME.to_string(),
-            content,
+            message_type: content.notif.notification_metadata.tag.as_ref().to_string(),
+            content: NotificationChannel::ConnGateway(content),
+        }
+    }
+
+    pub(crate) fn new_from_email(
+        content: EmailNotification<'a>,
+        typename: &NotificationTypeName,
+    ) -> Self {
+        Self {
+            message_type: typename.as_ref().to_string(),
+            content: NotificationChannel::Email(content),
+        }
+    }
+
+    pub(crate) fn new_from_apns(content: APNSTargets<U>, typename: &NotificationTypeName) -> Self {
+        Self {
+            message_type: typename.as_ref().to_string(),
+            content: NotificationChannel::Ios(Box::new(content)),
         }
     }
 }
@@ -373,4 +390,35 @@ pub enum DeliveryFailure {
     /// A delivery error occurred.
     #[error("A delivery error occured")]
     Other,
+}
+
+/// Message published to the ingress SQS queue.
+///
+/// Wraps a type-erased [`SendNotificationRequest`] so callers can push
+/// notification requests to a queue without needing database or state-machine
+/// dependencies. A worker in `notification_service` picks up these messages
+/// and processes them through [`crate::domain::service::NotificationIngressService`].
+#[derive(Serialize, Deserialize)]
+pub struct IngressQueueMessage {
+    /// The type-erased notification request.
+    pub request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value>,
+}
+
+impl IngressQueueMessage {
+    /// Type-erase a typed request via serde round-trip.
+    pub fn from_request<T: Serialize, U: Serialize>(
+        req: &SendNotificationRequest<'_, T, U>,
+    ) -> Result<Self, serde_json::Error> {
+        let value = serde_json::to_value(req)?;
+        let request = serde_json::from_value(value)?;
+        Ok(Self { request })
+    }
+}
+
+/// Raw message received from the ingress SQS queue.
+pub struct RawIngressQueueMessage {
+    /// The deserialized ingress queue message body.
+    pub body: IngressQueueMessage,
+    /// The receipt handle for deleting the message after processing.
+    pub receipt_handle: String,
 }

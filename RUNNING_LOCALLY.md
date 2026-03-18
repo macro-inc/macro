@@ -4,10 +4,14 @@
 
 ## Prerequisites
 
-- Doppler
+- sops
 - Docker
 - AWS
 - SQLX
+- Pulumi
+- Bun
+- Node
+- sqlx-cli
 
 ## Local Setup
 

@@ -1,5 +1,12 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { Show, Suspense, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  on,
+  Show,
+  Suspense,
+  type Accessor,
+} from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
@@ -7,12 +14,15 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
 import type { ApiThreadReply } from '@service-comms/client';
+import type { ThreadReplyListHandle } from './ThreadReplyList';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
 } from './utils/thread-reply-indicator-helpers';
+import { createMessageSelection } from '../Channel/create-message-selection';
+import { createThreadHotkeys } from './create-thread-hotkeys';
 
 function sliceIf<T>(
   val: Array<T>,
@@ -31,6 +41,8 @@ export function ChannelThread(props: ThreadProps) {
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
+
+  const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
@@ -51,6 +63,31 @@ export function ChannelThread(props: ThreadProps) {
     if (replies && !repliesQuery.isLoading) return replies;
     return thread().preview ?? [];
   };
+
+  // Thread-local reply selection
+  const replySelection = createMessageSelection({
+    keys: () => activeReplies().map((r) => r.id),
+  });
+
+  const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
+
+  const { attachReplyInputRef } = createThreadHotkeys({
+    messageListScopeId: props.messageListScopeId!,
+    replySelection,
+    isThreadFocused,
+    activeReplies,
+    threadId: () => props.data().id,
+    getMessageActions: (msg) => props.getMessageActions?.(msg),
+    userId,
+    parentMessage: props.data,
+    collapseThread: () => props.setIsExpanded(false),
+    isSelected,
+    hasReplies,
+    expandThread: () => props.setIsExpanded(true),
+    isThreadExpanded: props.isExpanded,
+    setIsReplying: (v) => props.setIsReplying(v),
+  });
+
   const firstReplyIsNewMessage = () => {
     const first = activeReplies()[0];
     return first ? props.isNewMessage?.(first) : false;
@@ -68,10 +105,38 @@ export function ChannelThread(props: ThreadProps) {
     !props.isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const shouldShowReplyButton = () =>
     hasReplies() && !props.isReplying() && !shouldShowCollapsedIndicator();
+  const [replyListHandle, setReplyListHandle] =
+    createSignal<ThreadReplyListHandle>();
 
   const expand = () => {
     props.setIsExpanded(true);
   };
+
+  createEffect(
+    on(
+      [
+        () => props.targetReplyId,
+        activeReplies,
+        props.isExpanded,
+        replyListHandle,
+      ],
+      ([targetReplyId, replies, isExpanded, handle]) => {
+        if (!targetReplyId) return;
+
+        const targetReplyIndex = replies.findIndex(
+          (reply) => reply.id === targetReplyId
+        );
+        if (targetReplyIndex === -1) return;
+
+        if (!isExpanded && targetReplyIndex >= DEFAULT_VISIBLE_REPLY_COUNT) {
+          props.setIsExpanded(true);
+          return;
+        }
+
+        handle?.scrollToIndex(targetReplyIndex);
+      }
+    )
+  );
 
   return (
     <Suspense>
@@ -91,6 +156,14 @@ export function ChannelThread(props: ThreadProps) {
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
               messageEditor={props.messageEditor}
+              highlighted={
+                props.highlighted || (isSelected() && !isThreadFocused())
+              }
+              selectionState={
+                isSelected() && !isThreadFocused()
+                  ? { isSelected: true }
+                  : undefined
+              }
             />
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
@@ -111,6 +184,10 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
+                        highlightedReplyId={props.targetReplyId}
+                        onReady={setReplyListHandle}
+                        selectedReplyId={replySelection.selectedId}
+                        isThreadFocused={isThreadFocused}
                       />
                     }
                   >
@@ -122,24 +199,30 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
+                        highlightedReplyId={props.targetReplyId}
+                        onReady={setReplyListHandle}
+                        selectedReplyId={replySelection.selectedId}
+                        isThreadFocused={isThreadFocused}
                       />
                     </Suspense>
                   </Show>
 
                   <Show when={props.isReplying()}>
-                    <Show when={!hasReplies()}>
-                      <Thread.ReplyAuthor
-                        userId={replyUserId()}
-                        displayName={displayName()}
+                    <div ref={attachReplyInputRef}>
+                      <Show when={!hasReplies()}>
+                        <Thread.ReplyAuthor
+                          userId={replyUserId()}
+                          displayName={displayName()}
+                        />
+                      </Show>
+                      <Thread.ReplyInput
+                        channelId={props.channelId()}
+                        messageId={props.data().id}
+                        replyInputState={props.replyInputState}
+                        setReplyInputState={props.setReplyInputState}
+                        setIsReplying={props.setIsReplying}
                       />
-                    </Show>
-                    <Thread.ReplyInput
-                      channelId={props.channelId()}
-                      messageId={props.data().id}
-                      replyInputState={props.replyInputState}
-                      setReplyInputState={props.setReplyInputState}
-                      setIsReplying={props.setIsReplying}
-                    />
+                    </div>
                   </Show>
 
                   <Show

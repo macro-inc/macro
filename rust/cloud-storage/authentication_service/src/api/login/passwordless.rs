@@ -9,11 +9,13 @@ use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
 use fusionauth::error::FusionAuthClientError;
+use macro_user_id::user_id::MacroUserId;
 use model::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
-    response::EmptyResponse,
+    response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
 };
+use referral::domain::{models::ReferralCode, ports::ReferralService};
 
 /// Initiates a passwordless login
 #[utoipa::path(
@@ -108,6 +110,34 @@ pub async fn handler(
                     })?;
 
                     tracing::trace!(fusionauth_user_id, "created new fusionauth user");
+
+                    if let Some(referral_code) = req.referral_code {
+                        tracing::trace!(referral_code, "referral code found");
+                        let macro_user_id = format!("macro|{}", req.email.to_lowercase());
+                        let referrerd_user_id = MacroUserId::parse_from_str(&macro_user_id)
+                            .map_err(|_| {
+                                (
+                                    StatusCode::BAD_REQUEST,
+                                    Json(ErrorResponse {
+                                        message: "invalid macro user id",
+                                    }),
+                                )
+                                    .into_response()
+                            })?
+                            .lowercase();
+
+                        // initiates tracking the referral
+                        let _ = ctx
+                            .referral_service
+                            .track_referral(
+                                &referrerd_user_id,
+                                &ReferralCode(referral_code.clone()),
+                            )
+                            .await
+                            .inspect_err(|e| {
+                                tracing::error!(error=?e, "unable to track referral");
+                            });
+                    }
                 }
                 _ => {
                     tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");

@@ -40,7 +40,7 @@ impl Clone for MpscQueue {
 impl NotificationQueue for MpscQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let json = serde_json::to_value(&message)?;

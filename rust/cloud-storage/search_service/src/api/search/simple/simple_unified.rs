@@ -82,6 +82,35 @@ fn compute_next_cursor(
     }
 }
 
+/// Splits search terms by whitespace, preserving double-quoted phrases.
+/// e.g. `["hello world"]` → `["hello", "world"]`
+/// e.g. `[r#""hello world" test"#]` → `["hello world", "test"]`
+fn split_search_terms(terms: &[String]) -> Vec<String> {
+    let joined = terms.join(" ");
+    let mut result = Vec::new();
+    // Regex-free parser: iterate chars, track quoted state
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for c in joined.chars() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            c if c.is_whitespace() && !in_quotes => {
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        result.push(trimmed);
+    }
+    result
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
@@ -127,18 +156,11 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::InvalidPageSize);
     }
 
-    let terms: Vec<String> = match (req.terms.clone(), req.query.clone()) {
-        (Some(terms), _) => terms.into_iter().filter(|t| t.len() >= 3).collect(),
-        (None, Some(query)) if query.len() >= 3 => vec![query],
-        (None, Some(_)) => {
-            return Err(SearchError::InvalidQuerySize);
-        }
-        _ => vec![],
-    };
-
-    if terms.is_empty() {
-        return Err(SearchError::NoQueryOrTermsProvided);
+    let query = req.query.trim().to_string();
+    if query.len() < 3 {
+        return Err(SearchError::InvalidQuerySize);
     }
+    let terms: Vec<String> = vec![query];
 
     let match_type = req.match_type;
     let include = req.include;
@@ -158,13 +180,15 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_projects =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
     let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
+    let email_terms = split_search_terms(&terms);
+    let is_email_multi_term = email_terms.len() > 1;
 
     // Await all tasks in parallel
     let (
-        filter_document_response,
-        filter_channel_response,
-        filter_chat_response,
-        filter_email_response,
+        mut filter_document_response,
+        mut filter_channel_response,
+        mut filter_chat_response,
+        mut filter_email_response,
         filter_project_response,
     ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
@@ -199,6 +223,13 @@ pub(in crate::api::search) async fn perform_unified_search(
         )
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+
+    // Set terms on each index's search args
+    // Email gets split terms for multi-field search; other indices get the original query
+    filter_document_response.terms = terms.clone();
+    filter_channel_response.terms = terms.clone();
+    filter_chat_response.terms = terms.clone();
+    filter_email_response.terms = email_terms.clone();
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
@@ -240,7 +271,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let content_cursor_for_search = content_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
-        terms,
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
         page_size,
@@ -311,7 +341,9 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            if should_include_emails {
+            // Skip PG email name/subject search for multi-term queries — OpenSearch
+            // simple_query_string already covers subject and contact fields.
+            if should_include_emails && !is_email_multi_term {
                 match search_on {
                     SearchOn::Name | SearchOn::NameContent => {
                         simple_email::search_names(
@@ -334,7 +366,9 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            if should_include_emails {
+            // Skip PG email contact search for multi-term queries — OpenSearch
+            // simple_query_string already covers contact fields.
+            if should_include_emails && !is_email_multi_term {
                 match search_on {
                     SearchOn::NameContent => {
                         simple_email::search_contacts(
@@ -604,7 +638,7 @@ pub async fn handler(
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!(
         user_id = user_context.user_id,
-        terms = ?req.terms,
+        query = ?req.query,
         search_on = ?req.search_on,
         "simple_unified_search"
     );

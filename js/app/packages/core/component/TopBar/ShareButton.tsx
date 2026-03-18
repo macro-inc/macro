@@ -47,7 +47,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@core/context/user';
+import { useReferralCode, useUserId } from '@core/context/user';
 import {
   blockNameToItemType,
   type ItemType,
@@ -209,13 +209,20 @@ export function ShareModal(props: ShareModalProps) {
   const [recipientScrollRef, setRecipientScrollRef] =
     createSignal<HTMLElement>();
 
+  const referralCode = useReferralCode();
+
   const copyPublicLink = createCallback(() => {
+    const params: Record<string, string> = {};
+    const code = referralCode();
+    if (code) {
+      params.referral_code = code;
+    }
     const url = buildSimpleEntityUrl(
       {
         type: props.blockAlias,
         id: props.id,
       },
-      {}
+      params
     );
     navigator.clipboard.writeText(url);
     toast.success(
@@ -755,13 +762,20 @@ export function ShareButton(props: ShareButtonProps) {
     });
   });
 
+  const referralCode = useReferralCode();
+
   const defaultUrl = () => {
+    const params: Record<string, string> = {};
+    const code = referralCode();
+    if (code) {
+      params.referral_code = code;
+    }
     return buildSimpleEntityUrl(
       {
         id: blockId ?? '',
         type: blockType,
       },
-      {}
+      params
     );
   };
 
@@ -905,8 +919,16 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     });
   });
 
-  const defaultUrl = () =>
-    buildSimpleEntityUrl({ id: blockId ?? '', type: blockType }, {});
+  const referralCode = useReferralCode();
+
+  const defaultUrl = () => {
+    const params: Record<string, string> = {};
+    const code = referralCode();
+    if (code) {
+      params.referral_code = code;
+    }
+    return buildSimpleEntityUrl({ id: blockId ?? '', type: blockType }, params);
+  };
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();

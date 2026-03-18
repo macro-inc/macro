@@ -15,14 +15,14 @@ use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::models::TaggedContent;
 use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationExtEmail, NotificationIdAndCollapseKey,
-    RateLimitConfig, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
-    UserNotificationRow, android::FCMMessage, apple::APNSPushNotification,
-    mobile::MessageAttributes,
+    DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey, RateLimitConfig,
+    RateLimitKey, RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
+    android::FCMMessage, apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -50,15 +50,24 @@ pub trait NotificationSender: Send + Sync + 'static {
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
-    /// Check if the action is allowed and increment the counter.
+    /// Check if the action is allowed without incrementing the counter.
     ///
     /// The `RateLimitKey` is a hashed value - callers control what gets rate
     /// limited by constructing the key from relevant data.
-    fn check_and_increment(
+    fn check(
         &self,
         key: &RateLimitKey,
         config: &RateLimitConfig,
     ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
+
+    /// Increment the rate limit counter for a key.
+    ///
+    /// Should only be called after a successful action.
+    fn increment(
+        &self,
+        key: &RateLimitKey,
+        config: &RateLimitConfig,
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
 }
 
 /// Port for notification persistence operations.
@@ -80,9 +89,9 @@ pub trait NotificationRepository: Send + Sync + 'static {
     ///
     /// Returns the notification ID if successful, or None if it already exists
     /// (idempotent operation).
-    fn create_notification<'a, T: Notification + Send + Sync>(
+    fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
@@ -233,14 +242,16 @@ pub trait EmailSender: Send + Sync + 'static {
 }
 
 use crate::domain::models::push_notification_event::RawPushNotificationEventMessage;
-use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
+use crate::domain::models::queue_message::{
+    DeliverySuccess, IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
+};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
     /// Publish notifications for async delivery (after DB persistence).
     fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).
@@ -267,10 +278,10 @@ pub trait NotificationEgress: Send + Sync + 'static {
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 
     /// Poll for ready digest batches, template them as emails, and send.
-    fn poll_email_digests<T: NotificationExtEmail>(
-        &self,
+    fn poll_email_digests<'a, T: NotificationExtEmail>(
+        &'a self,
         f: fn(DigestBatch) -> Result<T, Report>,
-    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send;
+    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send + 'a;
 }
 
 /// Port for SNS platform endpoint management (create, get/set attributes).
@@ -312,6 +323,30 @@ pub trait PushNotificationEventQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RawPushNotificationEventMessage>, Report>> + Send;
 
     /// Delete a message from the queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for publishing and consuming notification requests on the ingress queue.
+///
+/// This is separate from [`NotificationQueue`] (the delivery queue).
+/// The ingress queue carries type-erased [`IngressQueueMessage`] payloads
+/// that are processed by the ingress worker inside `notification_service`.
+pub trait NotificationIngressQueue: Send + Sync + 'static {
+    /// Publish a notification request to the ingress queue.
+    fn publish(
+        &self,
+        message: IngressQueueMessage,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Receive messages from the ingress queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawIngressQueueMessage>, Report>> + Send;
+
+    /// Delete a message from the ingress queue after successful processing.
     fn delete_message(
         &self,
         receipt_handle: &str,

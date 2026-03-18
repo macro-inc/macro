@@ -102,7 +102,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             <div
               class="flex-1 flex items-center min-w-0"
               style={{
-                'padding-left': 'var(--body-padding)',
+                'padding-left': 'var(--message-padding-x)',
               }}
             >
               <span class="w-16 shrink-0">
