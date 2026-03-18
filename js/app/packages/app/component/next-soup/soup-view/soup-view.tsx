@@ -212,8 +212,8 @@ export const SoupView = (props: SoupViewProps) => {
                   </h1>
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
-                  <SoupViewTabs />
                   <SoupViewCreateButton />
+                  <SoupViewTabs />
                 </Show>
                 <Show when={narrowSearchExpanded()}>
                   <div class="flex-1 min-w-0">
