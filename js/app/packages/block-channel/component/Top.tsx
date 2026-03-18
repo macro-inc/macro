@@ -32,6 +32,7 @@ import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { useChannelModals } from './ModalsProvider';
 import { ParticipantManagerButton } from './ParticipantManager';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -66,6 +67,8 @@ type TopProps = {
 };
 
 export function Top(props: TopProps) {
+  const analytics = useAnalytics();
+
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
   const channelContext = useChannelContext();
@@ -111,6 +114,12 @@ export function Top(props: TopProps) {
         <NotificationsButton
           entity={{ id: blockId, type: 'channel' }}
           notificationSource={notificationSource}
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('notifications_panel_open', {
+              blockType: 'channel',
+            })
+          }
         />
       ),
     },

@@ -19,6 +19,7 @@ export function NotificationsButton(props: {
   entity: Entity;
   notificationSource: NotificationSource;
   buttonSize?: 'sm';
+  onOpenChange?: (open: boolean) => void;
 }) {
   const drawerControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
   const notifications = useNotificationsForEntity(
@@ -37,7 +38,10 @@ export function NotificationsButton(props: {
             'bg-accent/20 hover:bg-accent/30 text-accent-ink'
         )}
         tooltip="View notifications"
-        onClick={() => drawerControl.toggle()}
+        onClick={() => {
+          props.onOpenChange?.(!drawerControl.isOpen());
+          drawerControl.toggle();
+        }}
         size="icon-sm"
       >
         <Bell />

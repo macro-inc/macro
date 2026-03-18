@@ -37,6 +37,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 
 import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
+import { useAnalytics } from '@app/component/analytics-context';
 
 interface SidebarItem {
   id: ListView;
@@ -411,6 +412,7 @@ interface SidebarLinkProps extends SidebarItem {
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
+  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
 
@@ -487,6 +489,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
           onClick={(e) => {
+            analytics.track('sidebar_click', {
+              view: props.id,
+            });
             // Middle mouse handling
             if (e.button === 1) return;
 

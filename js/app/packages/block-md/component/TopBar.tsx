@@ -59,9 +59,15 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
-import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
+import {
+  DRAWER_ID as PROPERTIES_DRAWER_ID,
+  MarkdownPropertiesButton,
+} from './MarkdownPropertiesModal';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export function TopBar() {
+  const analytics = useAnalytics();
+
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -158,6 +164,10 @@ export function TopBar() {
         <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
           notificationSource={notificationSource}
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('notifications_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },
@@ -170,6 +180,10 @@ export function TopBar() {
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('references_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },
