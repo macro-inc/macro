@@ -36,7 +36,11 @@ import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { ChannelThread } from '../Thread';
-import { ChannelInput, createInputAttachmentTracker } from '../Input';
+import {
+  ChannelInput,
+  createInputAttachmentTracker,
+  type InputSnapshot,
+} from '../Input';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useChannelActivity } from '@core/context/channels';
@@ -53,6 +57,8 @@ import {
 } from '@channel/Input/utils/persistence';
 import { createStickyScrollEffect } from './sticky-scroll';
 import { createMessageEditor } from './create-message-editor';
+import { createMessageSelection } from './create-message-selection';
+import { createChannelHotkeys } from './create-channel-hotkeys';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 
 type ChannelProps = {
@@ -72,6 +78,9 @@ export function Channel(props: ChannelProps) {
   const [targetMessageId, _setTargetMessageId] = createSignal<
     string | undefined
   >(props.targetMessageId);
+
+  const [channelInputSnapshot, setChannelInputSnapshot] =
+    createSignal<InputSnapshot>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
@@ -158,12 +167,28 @@ export function Channel(props: ChannelProps) {
     },
   });
 
+  const selection = createMessageSelection({
+    keys: () => messageIndex().keys,
+  });
+
+  const { messageListScopeId, attachMessageListRef, attachInputRef } =
+    createChannelHotkeys({
+      selection,
+      navigation: threadListNavigation,
+      messageById,
+      getMessageActions,
+      userId,
+      isInputEmpty: () =>
+        (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
+    });
+
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
     hasMoreBelow: () => threadPaginator.hasMoreShifting(),
     messages,
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
     if (!senderId) return;
@@ -181,7 +206,19 @@ export function Channel(props: ChannelProps) {
       <StaticMarkdownContext>
         <ChannelDropZone dragState={dragState}>
           <Show when={messages().length > 0}>
-            <div class="relative flex-1 min-h-0">
+            <div
+              class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={attachMessageListRef}
+              tabIndex={-1}
+              data-channel-message-list
+              data-channel-nav="keyboard"
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.channelNav !== 'mouse') {
+                  el.dataset.channelNav = 'mouse';
+                }
+              }}
+            >
               <ThreadList
                 keys={() => messageIndex().keys}
                 initialScrollTarget={threadListInitialScrollTarget()}
@@ -215,6 +252,8 @@ export function Channel(props: ChannelProps) {
                               activityTracker.dismissNewMessages,
                           }}
                           isNewMessage={activityTracker.isNewMessage}
+                          selectedMessageId={selection.selectedId}
+                          messageListScopeId={messageListScopeId}
                         />
                       )}
                     </Show>
@@ -228,7 +267,7 @@ export function Channel(props: ChannelProps) {
             </div>
           </Show>
           <Suspense>
-            <div class="pb-2 w-full flex justify-center">
+            <div class="pb-2 w-full flex justify-center" ref={attachInputRef}>
               <ChannelInput
                 input={{
                   mode: 'channel',
@@ -244,6 +283,7 @@ export function Channel(props: ChannelProps) {
                 onReady={(handle) => {
                   dragState.setAttachFilesToChannel(handle.attachFiles);
                 }}
+                onChange={(snapshot) => void setChannelInputSnapshot(snapshot)}
                 onSend={onSend}
               />
             </div>

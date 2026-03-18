@@ -16,7 +16,7 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import { children, Match, Show, Switch, type JSX } from 'solid-js';
+import { Match, Show, Switch, type JSX } from 'solid-js';
 import { isReplyInput } from './types';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -47,7 +47,6 @@ function DefaultActions(props: { input: InputData }) {
 
 export function ChannelInput(props: ChannelInputProps) {
   const mentionsTracker = createMentionsTracker();
-  const customActions = children(() => props.children);
   const attachmentTracker =
     props.attachmentTracker ??
     createInputAttachmentTracker({
@@ -147,7 +146,7 @@ export function ChannelInput(props: ChannelInputProps) {
           <Input.Attachments kind="document" />
           <Input.Footer>
             <Switch>
-              <Match when={customActions()}>{(actions) => actions()}</Match>
+              <Match when={props.children}>{props.children}</Match>
               <Match when>
                 <DefaultActions input={inputState.view()} />
               </Match>

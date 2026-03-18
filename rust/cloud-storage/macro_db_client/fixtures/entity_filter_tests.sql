@@ -139,5 +139,17 @@ VALUES
         '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user-1@test.com"}]}'
     );
 
+-- Email attachments linked to some documents via document_email
+-- doc-in-A and doc-in-B are email attachments; doc-in-C, doc-in-D, standalone, isolated are NOT
+INSERT INTO public.email_attachments (id, message_id, filename, mime_type, size_bytes)
+VALUES
+    ('ea000001-0000-0000-0000-000000000001', 'ea000001-0000-0000-0000-000000000099', 'attachment1.pdf', 'application/pdf', 1024),
+    ('ea000001-0000-0000-0000-000000000002', 'ea000001-0000-0000-0000-000000000099', 'attachment2.pdf', 'application/pdf', 2048);
+
+INSERT INTO public.document_email (document_id, email_attachment_id)
+VALUES
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'ea000001-0000-0000-0000-000000000001'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'ea000001-0000-0000-0000-000000000002');
+
 -- Re-enable foreign key constraints
 SET session_replication_role = 'origin';

@@ -6305,6 +6305,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_email_attachment": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by document notification state."

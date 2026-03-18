@@ -17,15 +17,8 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-};
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -34,6 +27,11 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{customer_repo::CustomerRepositoryImpl, team_repo::TeamRepositoryImpl},
+};
+
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 
 use crate::api::context::{
@@ -172,40 +170,18 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let redis_state_machine_client = redis::Client::open(config.redis_uri.as_str())
-        .context("failed to create redis client for state machine")?;
-    let redis_multiplexed_conn = redis_state_machine_client
+    let redis_client_for_github =
+        redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
+    let redis_multiplexed_conn = redis_client_for_github
         .get_multiplexed_async_connection()
         .await
-        .context("failed to get multiplexed redis connection for state machine")?;
+        .context("failed to get multiplexed redis connection")?;
 
-    let notification_repository = DbNotificationRepository::new(db.clone());
-    let notification_queue = SqsNotificationQueue::new(
+    let ingress_queue = SqsIngressQueue::new(
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
-    let state_machine = StateMachineDriverA {
-        user_checker: DbUserExistenceChecker::new(db.clone()),
-        notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-            db.clone(),
-        )),
-        online_checker: LastOnlineCheckerImpl::new(
-            last_online_tracker::domain::services::LastOnlineService::new(
-                last_online_tracker::outbound::time::DefaultTime,
-                last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                    redis_multiplexed_conn.clone(),
-                ),
-            ),
-        ),
-        digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn.clone()),
-        block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-        invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>()
-            .append::<model_notifications::ChannelInviteMetadata>(),
-        digest_window: std::time::Duration::from_secs(30 * 60),
-        online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-    };
-    let notification_ingress_service =
-        NotificationIngressService::new(notification_repository, notification_queue, state_machine);
+    let notification_ingress_service = SqsNotificationIngress::new(ingress_queue);
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -272,6 +248,11 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    let referral_service = ReferralServiceImpl::new(
+        PgReferralRepo::new(db.clone()),
+        StripeDiscountClient::new(stripe_client.clone(), 500),
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
@@ -297,6 +278,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::default(),
                 environment: config.environment,

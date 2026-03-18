@@ -33,7 +33,7 @@ jobs:
     outputs:
       level: ${{ steps.set-level.outputs.level }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
       - uses: ./.github/actions/deploy-cloud-storage-pulumi

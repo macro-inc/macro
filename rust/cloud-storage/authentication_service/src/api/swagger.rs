@@ -122,6 +122,9 @@ use model::user::{
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
 
+                /// /referral
+                referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
+
                 /// /merge
                 merge::create_merge_request::handler,
                 merge::verify_merge_request::handler,
@@ -177,6 +180,9 @@ use model::user::{
                         PatchTeamRequest,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
+
+                        // Referral
+                        referral::domain::models::ReferralCode,
 
                         // Merge
                         CreateAccountMergeRequest,

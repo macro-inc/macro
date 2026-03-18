@@ -9,10 +9,12 @@
 ///   e.g. SINCE=2026-03-16T00:00:00Z
 /// - EMAIL_INDEX_OVERRIDE: Override the target OpenSearch index for email upserts
 ///   e.g. EMAIL_INDEX_OVERRIDE=emails_v2
+/// - BATCH_SIZE: Number of threads per SQS batch message (default: 50)
+///   e.g. BATCH_SIZE=100
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
-use sqs_client::search::{SearchQueueMessage, email::EmailThreadMessage};
+use sqs_client::search::{SearchQueueMessage, email::EmailThreadBatchMessage};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -38,6 +40,11 @@ async fn main() -> anyhow::Result<()> {
         .transpose()?;
 
     let index_override = std::env::var("EMAIL_INDEX_OVERRIDE").ok();
+
+    let batch_size: usize = std::env::var("BATCH_SIZE")
+        .unwrap_or("50".to_string())
+        .parse()
+        .context("BATCH_SIZE must be a valid number")?;
 
     if let Some(ref index) = index_override {
         println!("Index override: {}", index);
@@ -81,14 +88,28 @@ async fn main() -> anyhow::Result<()> {
 
         total += thread_and_macro_user_ids.len();
 
-        let search_messages: Vec<SearchQueueMessage> = thread_and_macro_user_ids
+        let mut user_threads: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (thread_id, macro_user_id) in thread_and_macro_user_ids {
+            user_threads
+                .entry(macro_user_id)
+                .or_default()
+                .push(thread_id.to_string());
+        }
+
+        let search_messages: Vec<SearchQueueMessage> = user_threads
             .into_iter()
-            .map(|(thread_id, macro_user_id)| {
-                SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
-                    thread_id: thread_id.to_string(),
-                    macro_user_id,
-                    index_override: index_override.clone(),
-                })
+            .flat_map(|(macro_user_id, thread_ids)| {
+                thread_ids
+                    .chunks(batch_size)
+                    .map(|chunk| {
+                        SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
+                            thread_ids: chunk.to_vec(),
+                            macro_user_id: macro_user_id.clone(),
+                            index_override: index_override.clone(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 

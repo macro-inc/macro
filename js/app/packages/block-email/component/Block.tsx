@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { createMemo, onMount, Show, Suspense } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
@@ -11,6 +12,7 @@ import { useThreadQuery } from '@queries/email/thread';
 const { track, TrackingEvents } = withAnalytics();
 
 export default function BlockEmail() {
+  useBlockEntityCommands();
   const blockData = blockDataSignal.get;
   const notificationSource = useGlobalNotificationSource();
   const isPreview = !!useMaybePreviewPanel();

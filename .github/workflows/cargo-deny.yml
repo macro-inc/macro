@@ -19,7 +19,7 @@ jobs:
   cargo-deny:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: rust/cloud-storage/Cargo.toml

@@ -45,6 +45,9 @@ pub enum DocumentLiteral {
     /// this node value filters by document sub type
     #[serde(rename = "dst")]
     SubType(DocumentSubType),
+    /// this node value filters by email attachment status
+    #[serde(rename = "iea")]
+    IsEmailAttachment(bool),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -149,6 +152,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             notification_filters,
             task_filters,
             sub_types,
+            is_email_attachment,
         } = filter_request;
 
         let file_types_node = file_types
@@ -185,6 +189,9 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             .map(|s| DocumentSubType::from_str(s))
             .try_expand(|r| r.map(DocumentLiteral::SubType), Expr::or)?;
 
+        let is_email_attachment_node =
+            is_email_attachment.map(|v| Expr::Literal(DocumentLiteral::IsEmailAttachment(v)));
+
         let normal_expr = [
             file_types_node,
             document_id_nodes,
@@ -194,6 +201,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             notification_done_node,
             notification_seen_node,
             sub_types_node,
+            is_email_attachment_node,
         ]
         .into_iter()
         .fold_with(Expr::and);

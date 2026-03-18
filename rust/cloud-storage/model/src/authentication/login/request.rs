@@ -6,6 +6,8 @@ pub struct PasswordlessRequest {
     pub email: String,
     /// The redirect uri to redirect to after login
     pub redirect_uri: String,
+    /// The referral code
+    pub referral_code: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

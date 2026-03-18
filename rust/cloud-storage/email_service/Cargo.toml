@@ -69,6 +69,7 @@ sfs_delete = []
 
 [dependencies]
 ammonia = "4.1.0"
+openssl = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3", "sqs"] }

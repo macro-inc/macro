@@ -2,7 +2,8 @@ import { Match, Show, Switch } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 import { Message } from './Message';
 import type { ChannelMessageListMeta } from './list-meta';
-import { useMessage } from './context';
+import { useMessage, MessageSelectionProvider } from './context';
+import type { MessageSelectionState } from './context';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 
@@ -12,6 +13,8 @@ type ChannelMessageProps = {
   actions?: MessageActions;
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
+  highlighted?: boolean;
+  selectionState?: MessageSelectionState;
 };
 
 function isEditingMessage(
@@ -152,21 +155,27 @@ export function ChannelMessage(props: ChannelMessageProps) {
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
-    <Message.Root message={props.message} actions={props.actions}>
-      <Switch>
-        <Match when={isGrouped()}>
-          <GroupedMessageLayout
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-          />
-        </Match>
-        <Match when={true}>
-          <RegularMessageLayout
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-          />
-        </Match>
-      </Switch>
+    <Message.Root
+      message={props.message}
+      actions={props.actions}
+      highlighted={props.highlighted}
+    >
+      <MessageSelectionProvider value={props.selectionState}>
+        <Switch>
+          <Match when={isGrouped()}>
+            <GroupedMessageLayout
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+            />
+          </Match>
+          <Match when={true}>
+            <RegularMessageLayout
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+            />
+          </Match>
+        </Switch>
+      </MessageSelectionProvider>
     </Message.Root>
   );
 }

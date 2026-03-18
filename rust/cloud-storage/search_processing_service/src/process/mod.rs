@@ -50,6 +50,14 @@ pub async fn process_message(
             email::upsert::process_upsert_thread_message(&ctx.opensearch_client, &ctx.db, &message)
                 .await?;
         }
+        SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+            email::upsert::process_upsert_thread_batch_message(
+                &ctx.opensearch_client,
+                &ctx.db,
+                &message,
+            )
+            .await?;
+        }
         SearchQueueMessage::RemoveEmailMessage(message) => {
             email::remove::process_remove_message(&ctx.opensearch_client, &message).await?;
         }

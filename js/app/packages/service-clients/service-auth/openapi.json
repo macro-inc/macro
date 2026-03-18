@@ -661,6 +661,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "referral_code",
+            "in": "query",
+            "description": "**OPTIONAL**. If the user opened a link with a referral code.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -909,9 +918,9 @@
           "400": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -919,9 +928,9 @@
           "401": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -929,9 +938,9 @@
           "500": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1082,6 +1091,46 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/referral/code": {
+      "get": {
+        "tags": ["referral"],
+        "summary": "Handler for `GET /referral-code`.",
+        "description": "Returns the authenticated user's referral code.",
+        "operationId": "get_referral_code",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralCode"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3199,6 +3248,10 @@
           "redirect_uri": {
             "type": "string",
             "description": "The redirect uri to redirect to after login"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "The referral code"
           }
         }
       },
@@ -3313,6 +3366,10 @@
             "description": "Last Name of user"
           }
         }
+      },
+      "ReferralCode": {
+        "type": "string",
+        "description": "Wrapper for the referral code to make it type safe"
       },
       "ResendFusionauthVerifyUserEmailRequest": {
         "type": "object",
