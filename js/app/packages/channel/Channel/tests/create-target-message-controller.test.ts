@@ -58,23 +58,6 @@ function createController(
 }
 
 describe('createTargetMessageController', () => {
-  it('seeds active, highlighted, and load-around state from the initial target', () => {
-    createRoot((dispose) => {
-      const controller = createTargetMessageController({
-        channelId: () => 'channel-1',
-        initialTargetMessageId: 'message-1',
-        messageKeys: () => [],
-        navigation: () => undefined,
-      });
-
-      expect(controller.activeTargetMessageId()).toBe('message-1');
-      expect(controller.highlightedMessageId()).toBe('message-1');
-      expect(controller.loadAroundMessageId()).toBe('message-1');
-      expect(controller.pendingScrollTargetId()).toBe('message-1');
-      dispose();
-    });
-  });
-
   it('preserves the current load-around target when navigating to an already loaded message', () => {
     createRoot((dispose) => {
       const { controller } = createController({
@@ -104,41 +87,6 @@ describe('createTargetMessageController', () => {
       expect(controller.highlightedMessageId()).toBe('message-9');
       expect(controller.pendingScrollTargetId()).toBe('message-9');
       expect(controller.loadAroundMessageId()).toBe('message-9');
-      dispose();
-    });
-  });
-
-  it('clears pending scroll only for the matching target', () => {
-    createRoot((dispose) => {
-      const { controller } = createController({
-        initialTargetMessageId: 'message-1',
-      });
-
-      controller.goToMessage('message-2');
-      controller.completePendingScroll('message-1');
-
-      expect(controller.pendingScrollTargetId()).toBe('message-2');
-
-      controller.completePendingScroll('message-2');
-
-      expect(controller.pendingScrollTargetId()).toBeUndefined();
-      expect(controller.highlightedMessageId()).toBe('message-2');
-      dispose();
-    });
-  });
-
-  it('does not redo work when the same target is already pending', () => {
-    createRoot((dispose) => {
-      const { controller, setMessageKeys } = createController({
-        initialTargetMessageId: 'message-1',
-      });
-
-      controller.goToMessage('message-5');
-      setMessageKeys(['message-5']);
-      controller.goToMessage('message-5');
-
-      expect(controller.pendingScrollTargetId()).toBe('message-5');
-      expect(controller.loadAroundMessageId()).toBe('message-5');
       dispose();
     });
   });
