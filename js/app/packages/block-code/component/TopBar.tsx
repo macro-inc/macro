@@ -39,6 +39,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
+import { TabbedControl } from '@ui/components/TabbedControl';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -115,12 +116,11 @@ export const TopBar: Component<{
 
       <Show when={props.isHtmlFile && !isMobile()}>
         <SplitToolbarRight order={-1}>
-          <SegmentedControl
+          <TabbedControl
             list={[
               { value: 'render', label: 'Render' },
               { value: 'code', label: 'Code' },
             ]}
-            size="SM"
             value={props.mode}
             onChange={(value) => props.onModeChange(value as CodeBlockMode)}
           />

@@ -11,7 +11,6 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
@@ -71,7 +70,6 @@ import {
   useContext,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -901,7 +899,7 @@ export function ShareOptions(props: {
       <DropdownMenu.Trigger disabled={props.disabled}>
         <Button
           disabled={props.disabled}
-          class="w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1"
+          class="min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1"
           variant="secondary"
         >
           {currentValueText()}
