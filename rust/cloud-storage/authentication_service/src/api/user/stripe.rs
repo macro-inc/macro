@@ -174,12 +174,11 @@ pub async fn create_checkout_session(
     }
 
     // Only set subscription_data if we have metadata to include
-    let subscription_data = (!metadata.is_empty()).then_some(
-        stripe::CreateCheckoutSessionSubscriptionData {
+    let subscription_data =
+        (!metadata.is_empty()).then_some(stripe::CreateCheckoutSessionSubscriptionData {
             metadata: Some(metadata),
             ..Default::default()
-        },
-    );
+        });
 
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {
