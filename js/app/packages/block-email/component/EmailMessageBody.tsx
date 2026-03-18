@@ -125,6 +125,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
+    // Open links in a new tab instead of navigating the current one
+    for (const a of messageDiv.querySelectorAll('a[href]')) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    }
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'var(--cursor-auto)';
     messageDiv.style.overflow = 'auto';

@@ -9,8 +9,10 @@ mod util;
 mod json_tool;
 mod object;
 mod tool_async;
+mod user_tool;
 
 pub use json_tool::*;
 pub use object::*;
 pub use tool_async::*;
+pub use user_tool::*;
 pub use util::*;

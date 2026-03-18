@@ -3084,7 +3084,8 @@
           "tutorialComplete",
           "hasChromeExt",
           "hasTrialed",
-          "aiDataConsent"
+          "aiDataConsent",
+          "referralCode"
         ],
         "properties": {
           "aiDataConsent": {
@@ -3128,6 +3129,10 @@
               "type": "string"
             },
             "description": "The permissions the user has"
+          },
+          "referralCode": {
+            "type": "string",
+            "description": "The referral code for the user"
           },
           "tutorialComplete": {
             "type": "boolean",

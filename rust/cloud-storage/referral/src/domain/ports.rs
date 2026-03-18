@@ -36,6 +36,12 @@ pub trait ReferralRepo: Send + Sync + 'static {
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Gets the referral code of the user who referred the given user, if any
+    fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<ReferralCode>, Self::Err>> + Send;
+
     /// Gets the referrs customer id using their code
     fn get_referrers_customer_id(
         &self,
@@ -74,6 +80,12 @@ pub trait ReferralService: Send + Sync + 'static {
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<(), ReferralError>> + Send;
+
+    /// Gets the referral code of the user who referred the given user, if any
+    fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<ReferralCode>, ReferralError>> + Send;
 
     /// Processes a referral
     /// - tracks the referral

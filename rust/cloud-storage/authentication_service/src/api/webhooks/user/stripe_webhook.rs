@@ -8,8 +8,10 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
 use model::response::ErrorResponse;
+use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use stripe_webhook::{EventObject, EventType};
 use teams::domain::team_repo::TeamService;
@@ -230,9 +232,48 @@ async fn handle_customer_subscription_event(
         );
     }
 
+    // Check if this user was referred and process the referral
+    if subscription_status == "active"
+        && let Err(e) = check_and_process_referral(ctx, &email).await
+    {
+        tracing::error!(error=?e, "failed to process referral on subscription created");
+    }
+
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(email, subscription_status.try_into()?)
         .await?;
+
+    Ok(())
+}
+
+/// Checks if the subscribing user was referred and, if so, processes the referral
+/// to credit the referrer.
+#[tracing::instrument(skip(ctx, email), err)]
+async fn check_and_process_referral(
+    ctx: &ApiContext,
+    email: &Email<macro_user_id::lowercased::Lowercase<'_>>,
+) -> anyhow::Result<()> {
+    let (macro_user_id, user_id_str) =
+        macro_db_client::user::get::get_user_macro_user_id_and_id_by_email(&ctx.db, email.as_ref())
+            .await?;
+
+    let Some(referral_code) = ctx
+        .referral_service
+        .get_referred_by(&macro_user_id)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?
+    else {
+        return Ok(());
+    };
+
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user_id_str)
+        .expect("user id from db should be valid")
+        .into_owned();
+
+    ctx.referral_service
+        .process_referral(&user_id.0, &referral_code)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(())
 }

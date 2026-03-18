@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            u.\"id\" as \"user_id\",\n            u.\"email\" as \"email\",\n            u.\"stripeCustomerId\" as \"stripe_customer_id?\",\n            u.\"name\" as name,\n            u.\"tutorialComplete\" as tutorial_complete,\n            u.\"group\" as \"group?\",\n            u.\"hasChromeExt\" as has_chrome_ext,\n            u.\"aiDataConsent\" as ai_data_consent,\n            mu.has_trialed as has_trialed\n        FROM \"User\" u\n        JOIN \"macro_user\" mu ON u.macro_user_id = mu.id\n        WHERE u.\"id\" = $1\n        ",
+  "query": "\n        SELECT\n            u.\"id\" as \"user_id\",\n            u.\"email\" as \"email\",\n            u.\"stripeCustomerId\" as \"stripe_customer_id?\",\n            u.\"name\" as name,\n            u.\"tutorialComplete\" as tutorial_complete,\n            u.\"group\" as \"group?\",\n            u.\"hasChromeExt\" as has_chrome_ext,\n            u.\"aiDataConsent\" as ai_data_consent,\n            mu.has_trialed as has_trialed,\n            u.macro_user_id as \"macro_user_id\"\n        FROM \"User\" u\n        JOIN \"macro_user\" mu ON u.macro_user_id = mu.id\n        WHERE u.\"id\" = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,11 @@
         "ordinal": 8,
         "name": "has_trialed",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -63,8 +68,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "8a7231404c684a133961181ee74af7cb5142a2e5e80077355bc86b068d90ba2d"
+  "hash": "8d25b1711e2c00fe92b1921e1c2ee17e311301f88b1550dbff4eb41b6e12db13"
 }

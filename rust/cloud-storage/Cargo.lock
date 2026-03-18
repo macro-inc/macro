@@ -2792,6 +2792,7 @@ dependencies = [
  "ai",
  "ai_format",
  "ai_tools",
+ "ai_toolset",
  "anyhow",
  "async-openai",
  "async-stream",

@@ -2,7 +2,9 @@
   "services": {
     "authentication-service": {
       "source_paths": [
-        "rust/cloud-storage/authentication_service/**"
+        "rust/cloud-storage/authentication_service/**",
+        "rust/cloud-storage/referral/**",
+        "rust/cloud-storage/teams/**"
       ],
       "stack_path": "infra/stacks/authentication-service/**"
     },

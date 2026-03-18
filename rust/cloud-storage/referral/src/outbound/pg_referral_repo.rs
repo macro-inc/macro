@@ -87,6 +87,22 @@ impl ReferralRepo for PgReferralRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> Result<Option<ReferralCode>, Self::Err> {
+        let referrer_id: Option<uuid::Uuid> = sqlx::query!(
+            "SELECT referrer_id FROM referral_tracking WHERE referred_id = $1",
+            referred_user_id
+        )
+        .map(|r| r.referrer_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(referrer_id.map(|id| ReferralCode(self.short_uuid_converter.from_uuid(&id))))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn complete_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,

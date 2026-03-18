@@ -28,11 +28,13 @@ impl IntoResponse for ReferralError {
             ReferralError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
+        let mut message = self.to_string();
         if status_code.is_server_error() {
             tracing::error!(error=?self, "internal server error");
+            // override internal server error to hide errors
+            message = "internal server error".to_string();
         }
 
-        let message = self.to_string();
         (status_code, Json(ErrorResponse { message: &message })).into_response()
     }
 }

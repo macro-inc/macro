@@ -80,4 +80,6 @@ pub mod system_labels {
     pub const UNREAD: &str = "UNREAD";
     /// The STARRED label.
     pub const STARRED: &str = "STARRED";
+    /// The TRASH label.
+    pub const TRASH: &str = "TRASH";
 }

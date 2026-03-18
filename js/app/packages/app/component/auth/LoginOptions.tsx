@@ -12,7 +12,7 @@ import { invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
-import { type JSX, type Setter, Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
 
 function LoginOption(props: {
@@ -43,17 +43,21 @@ function LoginOption(props: {
   );
 }
 
-export function LoginOptions(props: { setStage: Setter<Stage> }) {
+export function LoginOptions(props: { setStage: (next: Stage) => void }) {
   const location = useLocation<RedirectLocation>();
+
   const startSsoLogin = async (idp_name: string) => {
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
+
     const referral_code =
       new URL(window.location.href).searchParams.get('referral_code') ??
       new URLSearchParams(location.state?.originalLocation?.search).get(
         'referral_code'
       );
+
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
+
     if (isNativeMobilePlatform()) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
@@ -62,6 +66,7 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
       // iOS: use ASWebAuthenticationSession via tauri-plugin-auth
       // so the auth flow stays in-app (required by App Store)
       authUrl.searchParams.set('original_url', 'macro://login');
+
       const result = await invoke<{
         success: boolean;
         token?: string;
@@ -69,22 +74,28 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
       }>('plugin:auth|authenticate', {
         payload: { authUrl: authUrl.toString(), callbackScheme: 'macro' },
       });
+
       if (!result.success || !result.token) {
         console.error('Authentication failed:', result.error);
         return;
       }
+
       unsetTokenPromise();
+
       const res = await authServiceClient.sessionLogin({
         session_code: result.token,
       });
+
       if (isOk(res)) {
         invalidateUserInfo();
       }
+
       return;
     }
 
     if (location.state?.originalLocation) {
       const { pathname, search, hash } = location.state.originalLocation;
+
       authUrl.searchParams.set(
         'original_url',
         `${window.location.origin}${pathname}${search}${hash}`
