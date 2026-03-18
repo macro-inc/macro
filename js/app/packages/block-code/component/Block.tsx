@@ -2,7 +2,14 @@ import { useIsNestedBlock } from '@core/block';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockMetadataSignal } from '@core/signal/load';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { isHtmlFileType } from '../util/fileMode';
 import { CodeMarkdown } from './CodeMarkdown';
 import { CodeMirror } from './CodeMirror';
@@ -27,6 +34,10 @@ export default function BlockCode() {
     })
   );
 
+  createEffect(() => {
+    console.log('MDOE', mode());
+  });
+
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
@@ -38,7 +49,9 @@ export default function BlockCode() {
               onModeChange={setMode}
             />
             <Show when={mode() === 'render'} fallback={<CodeMirror />}>
-              <HtmlPreview />
+              <Suspense>
+                <HtmlPreview />
+              </Suspense>
             </Show>
           </ModalsProvider>
         </div>

@@ -66,6 +66,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -671,6 +672,7 @@ export function ShareModal(props: ShareModalProps) {
                     variant="secondary"
                     size="sm"
                     class="flex items-center gap-1 rounded-xs px-2"
+                    onClick={copyPublicLink}
                   >
                     <IconLink class="size-4" />
                     Copy Link
@@ -826,16 +828,18 @@ export function ShareBlockModal(props: {
   if (!itemType) return null;
 
   return (
-    <ShareModal
-      isSharePermOpen={ctx.isOpen()}
-      setIsSharePermOpen={(v) => (v ? ctx.open() : ctx.close())}
-      id={id}
-      blockAlias={blockAlias}
-      itemType={itemType}
-      name={props.name ?? documentName() ?? ''}
-      userPermissions={props.userPermissions ?? permissions()}
-      owner={props.owner ?? ownerDerived()}
-    />
+    <Suspense>
+      <ShareModal
+        isSharePermOpen={ctx.isOpen()}
+        setIsSharePermOpen={(v) => (v ? ctx.open() : ctx.close())}
+        id={id}
+        blockAlias={blockAlias}
+        itemType={itemType}
+        name={props.name ?? documentName() ?? ''}
+        userPermissions={props.userPermissions ?? permissions()}
+        owner={props.owner ?? ownerDerived()}
+      />
+    </Suspense>
   );
 }
 

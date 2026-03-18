@@ -15,7 +15,6 @@ import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from '@core/component/DocumentPropertiesModal';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
