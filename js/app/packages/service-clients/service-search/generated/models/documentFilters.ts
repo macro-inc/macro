@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentFiltersImportance } from './documentFiltersImportance';
+import type { DocumentFiltersIsEmailAttachment } from './documentFiltersIsEmailAttachment';
 import type { NotificationFilters } from './notificationFilters';
 import type { TaskFilters } from './taskFilters';
 
@@ -18,6 +19,8 @@ export interface DocumentFilters {
   file_types?: string[];
   /** Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: DocumentFiltersImportance;
+  /** Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both. */
+  is_email_attachment?: DocumentFiltersIsEmailAttachment;
   /** Filter by document notification state. */
   notification_filters?: NotificationFilters;
   /** Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
