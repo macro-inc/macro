@@ -30,6 +30,8 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
 export type FilterOption = {
   id: string;
@@ -324,14 +326,30 @@ const SearchableFilterSubmenu = (props: {
 
   const isActive = (id: string) => props.activeIds().includes(id);
 
-  const handleSubContentMount = (_el: HTMLDivElement) => {
-    // Auto-focus input when submenu opens
+  const [isOpen, setIsOpen] = createSignal(false);
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) return;
     setSearch('');
     setHighlightedIndex(0);
-    // Use setTimeout to ensure the element is fully rendered
-    setTimeout(() => {
-      inputRef?.focus();
-    }, 0);
+    // Double rAF to run after Kobalte finishes its own focus management
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        inputRef?.focus();
+      });
+    });
+  };
+
+  const handleSubContentFocusOut = (e: FocusEvent) => {
+    const subContentEl = e.currentTarget as HTMLElement;
+    // If focus leaves SubContent while sub is still open (e.g. Kobalte focusing
+    // the SubTrigger on hover), refocus the input
+    if (isOpen() && !subContentEl.contains(e.relatedTarget as Node)) {
+      requestAnimationFrame(() => {
+        if (isOpen()) inputRef?.focus();
+      });
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -354,6 +372,12 @@ const SearchableFilterSubmenu = (props: {
           props.onToggle(option.id);
         }
         break;
+      case 'ArrowLeft':
+        if (search() === '') {
+          e.preventDefault();
+          setIsOpen(false);
+        }
+        break;
       default:
         // Stop propagation for other keys to prevent Kobalte typeahead
         e.stopPropagation();
@@ -361,7 +385,11 @@ const SearchableFilterSubmenu = (props: {
   };
 
   return (
-    <DropdownMenu.Sub gutter={4}>
+    <DropdownMenu.Sub
+      gutter={4}
+      open={isOpen()}
+      onOpenChange={handleOpenChange}
+    >
       <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
@@ -369,8 +397,8 @@ const SearchableFilterSubmenu = (props: {
 
       <DropdownMenu.Portal>
         <DropdownMenu.SubContent
-          ref={handleSubContentMount}
           class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] p-1"
+          onFocusOut={handleSubContentFocusOut}
         >
           {/* Search input */}
           <div class="flex items-center gap-2 px-2 py-2 border-b border-edge-muted mb-2">
@@ -504,18 +532,30 @@ export const UnifiedFilterDropdown = () => {
 
   const isTasksView = () => currentView() === 'tasks';
 
+  registerHotkey({
+    hotkey: 'f',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Open filter menu',
+    keyDownHandler: () => {
+      setOpen(true);
+      return true;
+    },
+  });
+
   return (
     <Show when={categories().length > 0 || isTasksView()}>
       <DropdownMenu open={open()} onOpenChange={setOpen}>
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="secondary"
-          size="sm"
-          class="rounded-xs [&_svg]:size-4"
-        >
-          <SlidersHorizontalIcon />
-          <span class="font-medium">Filter</span>
-        </DropdownMenu.Trigger>
+        <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
+          <DropdownMenu.Trigger
+            as={Button}
+            variant="secondary"
+            size="sm"
+            class="rounded-xs [&_svg]:size-4"
+          >
+            <SlidersHorizontalIcon />
+            <span class="font-medium">Filter</span>
+          </DropdownMenu.Trigger>
+        </Tooltip>
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
