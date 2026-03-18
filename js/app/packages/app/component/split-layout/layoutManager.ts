@@ -102,6 +102,7 @@ export type ReferredFrom =
   | 'mention'
   | 'attachment'
   | 'launcher'
+  | 'sidebar'
   | 'dock'
   | 'entity-actions-menu'
   | 'hotkey'

@@ -2,6 +2,8 @@ import {
   useMessage,
   useMessageActions,
   MessageActionsProvider,
+  MessageSelectionProvider,
+  useMessageSelection,
 } from './context';
 
 export { Message } from './Message';
@@ -13,7 +15,14 @@ export { DateDivider } from './DateDivider';
 export { NewDivider } from './NewDivider';
 export { MessageFlag } from './MessageFlag';
 export { ActionMenu } from './ActionMenu';
-export { useMessage, useMessageActions, MessageActionsProvider };
+export {
+  useMessage,
+  useMessageActions,
+  MessageActionsProvider,
+  MessageSelectionProvider,
+  useMessageSelection,
+};
+export type { MessageSelectionState } from './context';
 export type { MessageData } from './types';
 export type {
   MessageActionContext,

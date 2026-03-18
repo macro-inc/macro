@@ -269,7 +269,7 @@ impl NotificationDbOps for PgPool {
         apns_collapse_key: Option<&str>,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         let entity_type: &str = request.notification_entity.entity_type.into();
-        let metadata = serde_json::to_value(&request.notification)?;
+        let metadata = serde_json::to_value(&request.notification.content)?;
 
         let mut tx = self.begin().await?;
 

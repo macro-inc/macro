@@ -1,4 +1,4 @@
-import { For, createMemo } from 'solid-js';
+import { For, createMemo, type Accessor } from 'solid-js';
 import {
   ChannelMessage,
   type MessageActions,
@@ -18,6 +18,8 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  selectedReplyId?: Accessor<string | undefined>;
+  isThreadFocused?: Accessor<boolean>;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -30,6 +32,9 @@ export function ThreadReplyList(props: {
           ...reply,
           thread_id: props.threadId,
         });
+
+        const isReplySelected = () =>
+          !!props.isThreadFocused?.() && props.selectedReplyId?.() === reply.id;
 
         return (
           <div class="relative">
@@ -46,6 +51,10 @@ export function ThreadReplyList(props: {
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
                 messageEditor={props.messageEditor}
+                highlighted={isReplySelected()}
+                selectionState={
+                  isReplySelected() ? { isSelected: true } : undefined
+                }
               />
             </MarkMessaageNotifications>
           </div>

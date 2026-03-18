@@ -3515,6 +3515,7 @@ dependencies = [
  "models_properties",
  "notification",
  "once_cell",
+ "openssl",
  "redis",
  "regex",
  "reqwest",

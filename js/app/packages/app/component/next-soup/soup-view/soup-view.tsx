@@ -80,6 +80,7 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
+  SoupViewCreateButton,
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
@@ -218,6 +219,7 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
 
                 <SoupViewTabs />
+                <SoupViewCreateButton />
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>

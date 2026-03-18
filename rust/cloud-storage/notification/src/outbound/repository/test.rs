@@ -435,6 +435,54 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     assert_eq!(user_count, 1);
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_create_notification_stores_bare_metadata(pool: Pool<Postgres>) {
+    let recipient = test_user("recipient@test.com");
+    let notification_id = uuid::Uuid::new_v4();
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        notification: TaggedContent::new(TestNotification {
+            message: "hello".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
+    pool.create_notification(request, notification_id, "test_service", None)
+        .await
+        .unwrap();
+
+    // Read the raw metadata JSON from the DB
+    let row = sqlx::query!(
+        r#"SELECT metadata as "metadata: serde_json::Value" FROM notification WHERE id = $1"#,
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let metadata = row.metadata;
+
+    // The metadata column must store bare content, not the TaggedContent wrapper.
+    // Bare content: {"message": "hello"}
+    // Wrong (wrapped): {"tag": "test_notification", "content": {"message": "hello"}}
+    assert!(
+        !metadata.as_object().unwrap().contains_key("tag"),
+        "metadata should not contain a 'tag' key — it should be bare content, not TaggedContent. Got: {metadata}"
+    );
+    assert_eq!(metadata["message"], "hello");
+
+    // Verify round-trip: get_user_notifications deserializes the bare metadata back into T
+    let rows: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(recipient, 10, Query::Sort(CreatedAt, ()))
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].notification_metadata.message, "hello");
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications"))
