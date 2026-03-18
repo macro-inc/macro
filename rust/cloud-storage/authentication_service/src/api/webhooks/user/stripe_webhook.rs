@@ -373,11 +373,12 @@ fn track_stripe_subscription(
 
     tokio::spawn(async move {
         let event = SubscriptionEvent {
-            transaction_id: subscription_id,
+            transaction_id: subscription_id.clone(),
             value: value_cents as f64 / 100.0,
             currency: currency.to_uppercase(),
         };
         let user_data = MetaUserData::with_email(&email);
+        let event_id = Some(subscription_id.as_str());
 
         match (status.as_str(), is_new) {
             ("active" | "trialing", true) => {
@@ -387,7 +388,7 @@ fn track_stripe_subscription(
                     }
                 }
                 if let Err(e) = client
-                    .track_meta("Purchase", &user_data, MetaActionSource::Website, &event)
+                    .track_meta("Purchase", &user_data, MetaActionSource::Website, event_id, &event)
                     .await
                 {
                     tracing::warn!(error = ?e, "failed to track Meta purchase event");
@@ -400,7 +401,7 @@ fn track_stripe_subscription(
                     }
                 }
                 if let Err(e) = client
-                    .track_meta("CancelSubscription", &user_data, MetaActionSource::Website, &event)
+                    .track_meta("CancelSubscription", &user_data, MetaActionSource::Website, event_id, &event)
                     .await
                 {
                     tracing::warn!(error = ?e, "failed to track Meta cancel event");

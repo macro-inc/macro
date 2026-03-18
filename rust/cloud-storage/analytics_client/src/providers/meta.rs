@@ -66,17 +66,17 @@ fn hash_sha256(value: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Meta Conversions API provider.
+/// Meta provider for server-side event tracking.
 #[derive(Clone, Debug)]
-pub struct MetaConversionsProvider {
+pub struct MetaProvider {
     client: reqwest::Client,
     pixel_id: String,
     access_token: String,
     test_event_code: Option<String>,
 }
 
-impl MetaConversionsProvider {
-    /// Creates a new Meta Conversions API provider.
+impl MetaProvider {
+    /// Creates a new Meta provider.
     pub fn new(pixel_id: String, access_token: String, test_event_code: Option<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -87,11 +87,18 @@ impl MetaConversionsProvider {
     }
 
     /// Tracks an event to Meta Conversions API.
+    ///
+    /// - `event_name`: Standard event name (e.g., "Purchase", "Lead") or custom event
+    /// - `user_data`: User identification data for matching
+    /// - `action_source`: Where the conversion originated
+    /// - `event_id`: Optional deduplication ID (recommended for server events)
+    /// - `custom_data`: Additional event data (will be serialized to JSON)
     pub async fn track(
         &self,
         event_name: &str,
         user_data: &MetaUserData,
         action_source: MetaActionSource,
+        event_id: Option<&str>,
         custom_data: impl Serialize,
     ) -> Result<(), reqwest::Error> {
         let url = format!(
@@ -101,12 +108,6 @@ impl MetaConversionsProvider {
 
         let event_time = chrono::Utc::now().timestamp();
         let custom_data = serde_json::to_value(custom_data).unwrap_or_default();
-
-        // Use transaction_id as event_id for deduplication if present
-        let event_id = custom_data
-            .get("transaction_id")
-            .and_then(|v| v.as_str())
-            .map(|id| format!("{}_{}", id, event_time));
 
         let mut event = serde_json::json!({
             "event_name": event_name,

@@ -5,7 +5,7 @@ mod providers;
 
 pub use providers::{MetaActionSource, MetaUserData};
 
-use providers::{GoogleAnalyticsProvider, MetaConversionsProvider};
+use providers::{GoogleAnalyticsProvider, MetaProvider};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -42,7 +42,7 @@ pub struct AnalyticsClientConfig {
 #[derive(Clone)]
 pub struct AnalyticsClient {
     google: Option<Arc<GoogleAnalyticsProvider>>,
-    meta: Option<Arc<MetaConversionsProvider>>,
+    meta: Option<Arc<MetaProvider>>,
 }
 
 impl AnalyticsClient {
@@ -53,7 +53,7 @@ impl AnalyticsClient {
         });
 
         let meta = config.meta.map(|c| {
-            Arc::new(MetaConversionsProvider::new(
+            Arc::new(MetaProvider::new(
                 c.pixel_id,
                 c.access_token,
                 c.test_event_code,
@@ -89,16 +89,23 @@ impl AnalyticsClient {
     /// Tracks an event to Meta Conversions API.
     ///
     /// Returns `Ok(())` if Meta is not configured (no-op).
+    ///
+    /// - `event_name`: Standard event name (e.g., "Purchase", "Lead") or custom event
+    /// - `user_data`: User identification data for matching
+    /// - `action_source`: Where the conversion originated
+    /// - `event_id`: Optional deduplication ID (recommended for server events)
+    /// - `custom_data`: Additional event data
     pub async fn track_meta(
         &self,
         event_name: &str,
         user_data: &MetaUserData,
         action_source: MetaActionSource,
+        event_id: Option<&str>,
         custom_data: impl Serialize,
     ) -> Result<(), reqwest::Error> {
         if let Some(ref provider) = self.meta {
             provider
-                .track(event_name, user_data, action_source, custom_data)
+                .track(event_name, user_data, action_source, event_id, custom_data)
                 .await?;
         }
         Ok(())
