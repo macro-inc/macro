@@ -104,9 +104,15 @@ pub async fn seen_handler(
     }
 
     let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id).collect();
-    let message_provider_ids: Vec<String> = unread_messages
+    // Only collect provider messages for Gmail API calls (drafts have no provider_id)
+    let provider_message_tuples: Vec<(Uuid, String)> = unread_messages
         .iter()
-        .map(|m| m.provider_id.clone().unwrap_or_default())
+        .filter_map(|m| {
+            m.provider_id
+                .as_ref()
+                .filter(|pid| !pid.is_empty())
+                .map(|pid| (m.db_id, pid.clone()))
+        })
         .collect();
 
     let mut tx = ctx.db.begin().await?;
@@ -166,19 +172,14 @@ pub async fn seen_handler(
     let fusion_user_id = user_context.fusion_user_id.clone();
 
     tokio::spawn(async move {
-        let message_tuples = message_db_ids_clone
-            .iter()
-            .zip(message_provider_ids)
-            .map(|(id, provider_id)| (*id, provider_id))
-            .collect();
-
         let labels_to_add = Vec::new();
         let labels_to_remove = vec![system_labels::UNREAD.to_string()];
 
+        // Only send provider messages to Gmail (drafts are already updated in DB)
         let (success_ids, failed_ids) = gmail_client_clone
             .batch_modify_labels(
                 &gmail_access_token,
-                message_tuples,
+                provider_message_tuples,
                 labels_to_add,
                 labels_to_remove,
             )

@@ -166,6 +166,64 @@ fn to_typed_row_unknown_event_type_fails() {
     assert!(to_typed_row(row).is_err());
 }
 
+/// Simulates listing notifications when some DB rows have malformed metadata.
+/// Valid rows must still be returned; malformed rows are silently dropped.
+/// This mirrors the `partition_map` logic in `list_typed_notifications`.
+#[test]
+fn to_typed_row_returns_valid_notifications_despite_malformed_rows() {
+    let valid_mention = make_row(
+        "channel_mention",
+        serde_json::json!({
+            "messageId": "msg-1",
+            "messageContent": "hello @user",
+            "channelType": "Public",
+            "channelName": "general"
+        }),
+    );
+    let malformed_metadata = make_row("channel_mention", serde_json::json!({"garbage": true}));
+    let unknown_event = make_row("totally_bogus_event", serde_json::json!({"a": 1}));
+    let valid_email = make_row(
+        "new_email",
+        serde_json::json!({
+            "sender": "ext@example.com",
+            "toEmail": "user@example.com",
+            "threadId": "thread-2",
+            "subject": "Hello",
+            "snippet": "Hi there"
+        }),
+    );
+    let empty_metadata = make_row("channel_message_send", serde_json::json!({}));
+
+    let rows = vec![
+        valid_mention,
+        malformed_metadata,
+        unknown_event,
+        valid_email,
+        empty_metadata,
+    ];
+
+    let (ok, err): (Vec<_>, Vec<_>) = rows
+        .into_iter()
+        .map(|r| to_typed_row(r))
+        .partition(Result::is_ok);
+
+    assert_eq!(ok.len(), 2, "expected exactly the 2 valid rows to succeed");
+    assert_eq!(
+        err.len(),
+        3,
+        "expected exactly the 3 malformed rows to fail"
+    );
+
+    assert!(matches!(
+        ok[0].as_ref().unwrap().notification_metadata,
+        NotifEvent::ChannelMention(_)
+    ));
+    assert!(matches!(
+        ok[1].as_ref().unwrap().notification_metadata,
+        NotifEvent::NewEmail(_)
+    ));
+}
+
 #[test]
 fn to_typed_row_preserves_row_fields() {
     let metadata = serde_json::json!({

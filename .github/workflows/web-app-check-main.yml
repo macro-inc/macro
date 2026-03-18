@@ -16,7 +16,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       api_changed: ${{ steps.filter.outputs.api_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -39,7 +39,7 @@ jobs:
     runs-on: linux-latest-beefy
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -64,7 +64,7 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Biome
@@ -82,7 +82,7 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Prereqs
@@ -100,7 +100,7 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -117,7 +117,7 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
@@ -133,7 +133,7 @@ jobs:
     runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:

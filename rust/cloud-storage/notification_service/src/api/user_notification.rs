@@ -91,6 +91,7 @@ pub struct GetAllUserNotificationsResponse {
 
 /// Convert a [`UserNotificationRow<serde_json::Value>`] into a
 /// [`UserNotificationRow<NotifEvent>`] by tagging and deserializing the metadata.
+#[tracing::instrument(err)]
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {
@@ -205,10 +206,10 @@ where
         } = self;
 
         fn filter_erors((uuid, err): (Uuid, serde_json::Error)) -> Option<Uuid> {
-            let output = err
-                .to_string()
-                .contains("channel_message_document")
-                .then_some(uuid);
+            let err_str = err.to_string();
+            let output = (err_str.contains("channel_message_document")
+                || err_str.contains("missing field `toEmail`"))
+            .then_some(uuid);
 
             if output.is_none() {
                 tracing::warn!("{err:?}");

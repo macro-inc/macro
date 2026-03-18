@@ -9,6 +9,7 @@ pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL
 env_var!(
     pub(super) struct Vars {
         pub(crate) NotificationQueue,
+        pub(crate) NotificationIngressQueue,
         pub(crate) ConnectionGatewayUrl,
         pub(crate) RedisUri,
         pub(crate) AppleBundleId

@@ -10,7 +10,11 @@ import {
   PopupPreview,
 } from '@core/component/DocumentPreview';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
+import {
+  itemToBlockName,
+  resolveBlockAlias,
+  verifyBlockName,
+} from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
@@ -223,9 +227,17 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   });
 
+  const resolvedBlockName = createMemo(() => {
+    const i = item();
+    if (!i.loading && i.access === 'access') {
+      return itemToBlockName(i) ?? props.blockName;
+    }
+    return props.blockName;
+  });
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     openDocument(
-      props.blockName,
+      resolvedBlockName(),
       props.documentId,
       props.blockParams,
       openInNewSplitForMention(e?.shiftKey, e != null)

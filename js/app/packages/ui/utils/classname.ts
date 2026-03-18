@@ -1,4 +1,4 @@
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
 
 // Local `clsx`-compatible types + implementation (so we don't depend on the external
 // `clsx` package being installed).
@@ -34,6 +34,14 @@ const clsx = (...args: ClassValue[]): string => {
   for (const a of args) push(a);
   return out.join(' ');
 };
+
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: ['xxs'] }],
+    },
+  },
+});
 
 export const cn = (...args: ClassValue[]) => {
   return twMerge(clsx(...args));

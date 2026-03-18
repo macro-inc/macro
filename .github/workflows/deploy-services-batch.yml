@@ -26,7 +26,7 @@ jobs:
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Parse and validate services
         id: parse
         run: |
@@ -87,7 +87,7 @@ jobs:
       matrix:
         service: ${{ fromJson(needs.parse-services.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get project name
         id: project-name

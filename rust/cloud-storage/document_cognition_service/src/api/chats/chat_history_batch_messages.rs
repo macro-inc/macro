@@ -25,7 +25,7 @@ use sqlx::PgPool;
         (status = 500, body = String, description = "Internal server error")
     )
 )]
-#[tracing::instrument(skip(db, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, request), fields(user_id = %user_context.user_id, message_count = request.message_ids.len()))]
 pub async fn get_chat_history_batch_messages_handler(
     State(db): State<PgPool>,
     Extension(user_context): Extension<UserContext>,

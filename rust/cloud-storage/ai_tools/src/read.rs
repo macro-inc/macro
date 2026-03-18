@@ -1,3 +1,4 @@
+use crate::serde_utils::deserialize_permissive_datetime_opt;
 use crate::tool_context::ToolScribe;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::anyhow;
@@ -104,9 +105,10 @@ pub struct ReadThread {
     )]
     pub ids: Vec<String>,
     #[schemars(
-        description = "A local datetime of the earliest message to include in a channel transcript ex: 2025-11-25 12:00:09 EST, only applicable to channels"
+        description = "A local datetime of the earliest message to include in a channel transcript following ISO 8601 format, only applicable to channels"
     )]
-    pub messages_since: Option<chrono::DateTime<chrono::Local>>,
+    #[serde(default, deserialize_with = "deserialize_permissive_datetime_opt")]
+    pub messages_since: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, JsonSchema, Deserialize, Clone, strum::EnumString, strum::Display)]
@@ -210,7 +212,6 @@ impl ReadThread {
 
         let since = self
             .messages_since
-            .map(DateTime::<Utc>::from)
             .unwrap_or_else(|| chrono::Utc::now() - chrono::Duration::days(7));
         // Get channel metadata
         let metadata = scribe

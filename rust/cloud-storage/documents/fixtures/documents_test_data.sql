@@ -5,18 +5,25 @@ INSERT INTO
             'organization-one'
     );
 
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id") VALUES
+    ('a1111111-1111-1111-1111-111111111111', 'user', 'user@user.com', 'stripe_id'),
+    ('a2222222-2222-2222-2222-222222222222', 'teammate1', 'teammate1@user.com', 'stripe_id_t1'),
+    ('a3333333-3333-3333-3333-333333333333', 'teammate2', 'teammate2@user.com', 'stripe_id_t2');
+
 INSERT INTO
     public."User" (
         "id",
         "email",
         "stripeCustomerId",
-        "organizationId"
+        "organizationId",
+        "macro_user_id"
     ) (
         SELECT
             'macro|user@user.com',
             'user@user.com',
             'stripe_id',
-            1
+            1,
+            'a1111111-1111-1111-1111-111111111111'
     );
 
 INSERT INTO
@@ -68,11 +75,11 @@ INSERT INTO
     );
 
 -- Additional users for team sharing tests
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-    (SELECT 'macro|teammate1@user.com', 'teammate1@user.com', 'stripe_id_t1', 1);
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+    (SELECT 'macro|teammate1@user.com', 'teammate1@user.com', 'stripe_id_t1', 1, 'a2222222-2222-2222-2222-222222222222');
 
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-    (SELECT 'macro|teammate2@user.com', 'teammate2@user.com', 'stripe_id_t2', 1);
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+    (SELECT 'macro|teammate2@user.com', 'teammate2@user.com', 'stripe_id_t2', 1, 'a3333333-3333-3333-3333-333333333333');
 
 -- Team and team_user for sharing tests
 INSERT INTO public."team" ("id", "name", "owner_id")

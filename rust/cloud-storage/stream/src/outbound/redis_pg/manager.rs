@@ -9,7 +9,13 @@ use tokio::sync::oneshot;
 /// Manages stream subscriptions backed by Redis and PostgreSQL.
 pub struct RedisPostgresStreamManager {
     repo: Arc<dyn StreamRepo>,
-    subscriptions: DashMap<String, oneshot::Sender<()>>,
+    subscriptions: DashMap<SubscriptionKey, oneshot::Sender<()>>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct SubscriptionKey {
+    sender_id: String,
+    entity_id: String,
 }
 
 impl RedisPostgresStreamManager {
@@ -42,7 +48,11 @@ impl StreamManager for RedisPostgresStreamManager {
         }
 
         let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
-        self.subscriptions.insert(sender_id, cancel_tx);
+        let key = SubscriptionKey {
+            sender_id,
+            entity_id: entity_id.clone(),
+        };
+        self.subscriptions.insert(key, cancel_tx);
 
         let out = stream! {
             loop {
@@ -76,8 +86,11 @@ impl StreamManager for RedisPostgresStreamManager {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn unsubscribe(&self, sender_id: String) -> Result<()> {
-        if let Some((_, cancel_tx)) = self.subscriptions.remove(&sender_id) {
+    async fn unsubscribe(&self, sender_id: String, entity_id: String) -> Result<()> {
+        if let Some((_, cancel_tx)) = self.subscriptions.remove(&SubscriptionKey {
+            sender_id,
+            entity_id,
+        }) {
             let _ = cancel_tx.send(());
         }
         Ok(())

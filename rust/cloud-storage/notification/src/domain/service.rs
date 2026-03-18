@@ -19,6 +19,7 @@ pub use ingress::NotificationIngressService;
 pub use ingress::NotificationReader;
 pub use ingress::NotificationReaderService;
 pub use ingress::PlatformArnConfig;
+pub use ingress::SqsNotificationIngress;
 pub use push_notification_event::PushNotificationEventHandler;
 pub use push_notification_event::PushNotificationEventService;
 

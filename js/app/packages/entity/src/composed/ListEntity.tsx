@@ -40,7 +40,10 @@ import {
 import { unreadFilterFn } from '../utils/filter';
 import { cn } from '@ui/utils/classname';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  twoLineClampMarkdownTheme,
+  unifiedListMarkdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
 import type { SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
@@ -56,6 +59,7 @@ import {
 } from '../utils/notification';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
+import { createElementSize } from '@solid-primitives/resize-observer';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -111,6 +115,20 @@ const getBestContentHitContent = (entity: EntityData) => {
   return hits[bestIdx].content;
 };
 
+function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
+  const size = createElementSize(ref);
+  const [chars, setChars] = createSignal(200);
+  const CHAR_WIDTH_PX = 6; // this is an approximation for text-sm
+
+  createEffect(() => {
+    if (!size.width) return;
+    const charCount = Math.round(size.width / CHAR_WIDTH_PX / 2);
+    setChars(charCount);
+  });
+
+  return chars;
+}
+
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
@@ -151,16 +169,14 @@ interface LayoutProps {
 function EmailIdentity(props: { entity: EmailEntity }) {
   return (
     <>
-      <Show
-        when={props.entity.isDraft}
-        fallback={
-          <Show when={props.entity.hasIcsAttachment}>
-            <InviteBadge />
-          </Show>
-        }
-      >
-        <DraftBadge />
-      </Show>
+      <Switch>
+        <Match when={props.entity.isDraft}>
+          <DraftBadge />
+        </Match>
+        <Match when={props.entity.hasIcsAttachment}>
+          <InviteBadge />
+        </Match>
+      </Switch>
       <span class="truncate">
         <Entity.EmailParticipants entity={props.entity} />
       </span>
@@ -171,13 +187,16 @@ function EmailIdentity(props: { entity: EmailEntity }) {
 function EmailSnippet(props: {
   entity: EmailEntity;
   showContentHits: boolean;
+  chars: number;
 }) {
   return (
     <Show
       when={props.showContentHits && getBestContentHitContent(props.entity)}
       fallback={props.entity.snippet}
     >
-      {(content) => <HighlightRender text={windowSearchMatch(content())} />}
+      {(content) => (
+        <HighlightRender text={windowSearchMatch(content(), props.chars)} />
+      )}
     </Show>
   );
 }
@@ -208,6 +227,11 @@ function ChannelMessage(props: {
 }
 
 function NarrowLayout(props: LayoutProps) {
+  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(emailSnippetContainerRef);
+
   return (
     <Entity.Layout
       class="w-full gap-x-2 items-center text-sm pl-0 px-2 grid"
@@ -279,10 +303,14 @@ function NarrowLayout(props: LayoutProps) {
                       <Entity.Title entity={entity()} />
                     </span>
                   </div>
-                  <div class="text-ink/50 font-medium w-full truncate inline-flex items-center">
+                  <div
+                    ref={setEmailSnippetContainerRef}
+                    class="text-ink/50 font-medium w-full truncate inline-flex items-center"
+                  >
                     <EmailSnippet
                       entity={entity()}
                       showContentHits={props.showContentHits}
+                      chars={chars()}
                     />
                   </div>
                 </>
@@ -306,7 +334,115 @@ function NarrowLayout(props: LayoutProps) {
   );
 }
 
+function NarrowMessageLayout(props: LayoutProps) {
+  const isDirectMessage = () =>
+    isChannelEntity(props.entity) &&
+    props.entity.channelType === 'direct_message';
+  return (
+    <Entity.Layout
+      class="w-full text-sm grid"
+      style={{
+        'grid-template-columns': 'auto 1fr 8ch',
+        'grid-template-rows': 'auto auto auto',
+        'grid-template-areas':
+          '"icon title timestamp" "icon body body" "icon body body"',
+      }}
+    >
+      <Entity.Slot placement="icon" class="flex items-center self-center pr-3">
+        <UnreadIndicator class="mx-2 size-2.75" active={props.unread} />
+        <div class="relative size-11 shrink-0 group">
+          <Show when={!props.checked}>
+            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
+              <Show
+                when={isDirectMessage()}
+                fallback={
+                  <div class="size-11 bg-edge-muted rounded-full flex items-center justify-center">
+                    <div class="size-6">
+                      <Entity.Icon
+                        entity={props.entity}
+                        streamState={props.streamState}
+                      />
+                    </div>
+                  </div>
+                }
+              >
+                <div class="size-11">
+                  <Entity.Icon
+                    entity={props.entity}
+                    streamState={props.streamState}
+                    class="bg-edge-muted text-ink"
+                  />
+                </div>
+              </Show>
+            </div>
+          </Show>
+          {/* TODO: make multiselect work on mobile */}
+          <div
+            class={cn(
+              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
+              { 'opacity-100': props.checked }
+            )}
+          >
+            <MultiSelectCheckbox
+              checked={props.checked}
+              onChecked={props.onChecked}
+            />
+          </div>
+        </div>
+      </Entity.Slot>
+
+      <Entity.Slot
+        placement="title"
+        class="flex items-center gap-2 truncate font-semibold pt-3"
+      >
+        <Show when={isChannelEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Title entity={entity()} />}
+        </Show>
+      </Entity.Slot>
+
+      <Entity.Slot
+        placement="timestamp"
+        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
+      >
+        <Show when={!props.hasNotifications}>
+          <Entity.Timestamp entity={props.entity} />
+        </Show>
+      </Entity.Slot>
+
+      <Show when={isChannelEntity(props.entity) && props.entity}>
+        {(entity) => (
+          <Show when={entity().latestMessage}>
+            {(msg) => (
+              <>
+                <Entity.Slot
+                  placement="body"
+                  class="text-ink-extra-muted line-clamp-2 pb-2 min-h-[2lh] pr-4 border-b border-edge-muted"
+                >
+                  <Show
+                    when={msg().content?.trim()}
+                    fallback={<span class="italic">Attached Items</span>}
+                  >
+                    <StaticMarkdown
+                      theme={twoLineClampMarkdownTheme}
+                      markdown={msg().content.trim()}
+                    />
+                  </Show>
+                </Entity.Slot>
+              </>
+            )}
+          </Show>
+        )}
+      </Show>
+    </Entity.Layout>
+  );
+}
+
 function WideLayout(props: LayoutProps) {
+  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(emailSnippetContainerRef);
+
   return (
     <Entity.Layout
       class={cn(
@@ -354,10 +490,14 @@ function WideLayout(props: LayoutProps) {
                 <span class="truncate">
                   <Entity.Title entity={entity()} />
                 </span>
-                <span class="text-ink/50 font-medium truncate flex-1 inline-flex items-center">
+                <span
+                  ref={setEmailSnippetContainerRef}
+                  class="text-ink/50 font-medium truncate flex-1 inline-flex items-center"
+                >
                   <EmailSnippet
                     entity={entity()}
                     showContentHits={props.showContentHits}
+                    chars={chars()}
                   />
                 </span>
               </>
@@ -478,9 +618,17 @@ export function ListEntity(props: ListEntityProps) {
         })}
       />
 
-      <Show when={isWide()} fallback={<NarrowLayout {...layoutProps()} />}>
-        <WideLayout {...layoutProps()} />
-      </Show>
+      <Switch>
+        <Match when={isWide()}>
+          <WideLayout {...layoutProps()} />
+        </Match>
+        <Match when={isChannelEntity(props.entity) && !hasNotifications()}>
+          <NarrowMessageLayout {...layoutProps()} />
+        </Match>
+        <Match when={true}>
+          <NarrowLayout {...layoutProps()} />
+        </Match>
+      </Switch>
 
       <Show when={hasNotifications()}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">

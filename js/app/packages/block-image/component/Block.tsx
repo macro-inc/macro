@@ -1,6 +1,7 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';
@@ -11,6 +12,7 @@ import { TopBar } from './TopBar';
 const { track, TrackingEvents } = withAnalytics();
 
 export default function BlockImage() {
+  useBlockEntityCommands();
   const documentId = useBlockId();
 
   const [imageUrl, setImageUrl] = createSignal<string>();

@@ -45,6 +45,7 @@ import {
   createEffect,
   createSignal,
   For,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -52,6 +53,7 @@ import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 import { cn } from '@ui/utils/classname';
+import type { ListViewCreateActionId } from './list-view-create';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -126,7 +128,84 @@ const createComponent = async (spec: {
   );
 };
 
-export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
+export function runCreateAction(
+  actionId: ListViewCreateActionId,
+  options: { shouldInsert?: boolean } = {}
+) {
+  const shouldInsert = options.shouldInsert ?? false;
+
+  switch (actionId) {
+    case 'doc':
+      createBlock({
+        blockName: 'md',
+        loading: true,
+        createFn: () =>
+          createMarkdownFile({
+            title: '',
+            content: '',
+            projectId: undefined,
+          }),
+        shouldInsert,
+      });
+      return;
+    case 'canvas':
+      createBlock({
+        blockName: 'canvas',
+        loading: true,
+        createFn: async () => {
+          const result = await createCanvasFileFromJsonString({
+            json: JSON.stringify({ nodes: [], edges: [] }),
+            title: 'New Canvas',
+          });
+          if ('error' in result) return;
+          const [_, id] = ok(result.documentId);
+          return id;
+        },
+        shouldInsert,
+      });
+      return;
+    case 'task':
+      createComponent({
+        componentId: 'task-compose',
+        asPopover: true,
+      });
+      return;
+    case 'email':
+      createComponent({
+        componentId: 'email-compose',
+        shouldInsert,
+      });
+      return;
+    case 'message':
+      createComponent({
+        componentId: 'channel-compose',
+        shouldInsert,
+      });
+      return;
+    case 'agent':
+      createBlock({
+        blockName: 'chat',
+        createFn: async () => {
+          const result = await createChat();
+          if ('error' in result) {
+            return;
+          }
+          return result.chatId;
+        },
+        shouldInsert,
+      });
+      return;
+    case 'folder':
+      createBlock({
+        blockName: 'project',
+        createFn: () => createProject({ name: 'New Folder' }),
+        shouldInsert,
+      });
+      return;
+  }
+}
+
+type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
@@ -144,17 +223,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.noteNewSplit,
     hotkey: 'd',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'md',
-        loading: true,
-        createFn: () =>
-          createMarkdownFile({
-            title: '',
-            content: '',
-            projectId: undefined,
-          }),
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('doc', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -170,10 +239,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           altHotkeyToken: TOKENS.create.taskNewSplit,
           hotkey: 't' as const,
           keyDownHandler: () => {
-            createComponent({
-              componentId: 'task-compose',
-              asPopover: true,
-            });
+            runCreateAction('task');
             return true;
           },
         },
@@ -189,10 +255,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.emailNewSplit,
     hotkey: 'e',
     keyDownHandler: () => {
-      createComponent({
-        componentId: 'email-compose',
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('email', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -206,10 +269,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.messageNewSplit,
     hotkey: 'm',
     keyDownHandler: () => {
-      createComponent({
-        componentId: 'channel-compose',
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('message', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -223,17 +283,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'chat',
-        createFn: async () => {
-          const result = await createChat();
-          if ('error' in result) {
-            return;
-          }
-          return result.chatId;
-        },
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -247,18 +297,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.canvasNewSplit,
     hotkey: 'n',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'canvas',
-        loading: true,
-        createFn: async () => {
-          const result = await createCanvasFileFromJsonString({
-            json: JSON.stringify({ nodes: [], edges: [] }),
-            title: 'New Canvas',
-          });
-          if ('error' in result) return;
-          const [_, id] = ok(result.documentId);
-          return id;
-        },
+      runCreateAction('canvas', {
         shouldInsert: pressedKeys().has('shift'),
       });
       return true;
@@ -274,11 +313,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.projectNewSplit,
     hotkey: 'f',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'project',
-        createFn: () => createProject({ name: 'New Folder' }),
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('folder', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -437,18 +472,17 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   );
 };
 
-export type LauncherInnerProps = {
+type LauncherInnerProps = {
   onClose: (shouldReturnFocus?: boolean) => void;
-  /** Override the default CREATABLE_BLOCKS with custom blocks (e.g. sandbox blocks) */
-  blocks?: CreatableBlock[];
 };
 
-export const LauncherInner = (props: LauncherInnerProps) => {
+const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
+  let shiftRippleRef: HTMLSpanElement | undefined;
 
-  const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
+  const shiftHeld = () => pressedKeys().has('shift');
 
   const [focusedIndex, setFocusedIndex] = createSignal(0);
 
@@ -467,7 +501,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
   const getColumnCount = () => {
     const width = window.innerWidth;
-    const length = blocks().length;
+    const length = CREATABLE_BLOCKS.length;
     if (width >= 1280) {
       if (length >= 8) return 8;
       if (length >= 7) return 7;
@@ -502,7 +536,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  blocks().forEach((item) => {
+  CREATABLE_BLOCKS.forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
@@ -589,7 +623,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
-      blocks()[focusedIndex()]?.keyDownHandler();
+      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
       return true;
     },
@@ -602,7 +636,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
-      blocks()[focusedIndex()]?.keyDownHandler();
+      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
       return true;
     },
@@ -611,12 +645,24 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift' && !e.repeat && shiftRippleRef) {
+        shiftRippleRef.classList.remove('rippling');
+        void shiftRippleRef.offsetWidth; // reflow to restart animation
+        shiftRippleRef.classList.add('rippling');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
+  onMount(() => {
     if (!ref) return;
 
     attachHotkeys(ref);
 
     setTimeout(() => {
-      const firstItem = blocks()[0];
+      const firstItem = CREATABLE_BLOCKS[0];
 
       if (firstItem) {
         focusMenuItem(firstItem.label);
@@ -626,7 +672,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
-    const length = blocks().length;
+    const length = CREATABLE_BLOCKS.length;
     if (length >= 8) return 'xl:grid-cols-8';
     if (length >= 7) return 'xl:grid-cols-7';
     if (length >= 6) return 'xl:grid-cols-6';
@@ -639,9 +685,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted/50">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
+          <style>{`
+            @keyframes shift-ripple {
+              0%   { transform: scale(1); opacity: 0.6; }
+              100% { transform: scale(2.2); opacity: 0; }
+            }
+            .shift-ripple.rippling {
+              animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+            }
+          `}</style>
           Hold{' '}
-          <span class="px-1 py-0.5 my-1 rounded-sm h-fit ring ring-edge-muted text-xs grid place-items-center">
-            <Hotkey shortcut="shift" />
+          <span class="relative inline-grid place-items-center my-1">
+            <span
+              ref={shiftRippleRef}
+              class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
+            />
+            <span
+              class={`px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150 ${shiftHeld() ? 'ring-accent text-accent bg-accent/10' : 'ring-edge-muted'}`}
+            >
+              <Hotkey shortcut="shift" />
+            </span>
           </span>
           to launch in new split
         </p>
@@ -653,7 +716,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         )}
         ref={ref}
       >
-        <For each={blocks()}>
+        <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
               creatableBlock={item}

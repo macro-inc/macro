@@ -17,6 +17,14 @@ CREATE TABLE "OrganizationRetentionPolicy"
     FOREIGN KEY ("organization_id") REFERENCES "Organization" ("id") ON DELETE CASCADE
 );
 
+CREATE TABLE "macro_user"
+(
+    "id"                 UUID PRIMARY KEY,
+    "username"           TEXT UNIQUE NOT NULL,
+    "email"              TEXT UNIQUE NOT NULL,
+    "stripe_customer_id" TEXT UNIQUE NOT NULL
+);
+
 CREATE TABLE "User"
 (
     "id"               TEXT PRIMARY KEY,
@@ -24,7 +32,9 @@ CREATE TABLE "User"
     "name"             TEXT,
     "stripeCustomerId" TEXT UNIQUE,
     "organizationId"   INTEGER,
-    FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id") ON DELETE SET NULL
+    "macro_user_id"    UUID NOT NULL,
+    FOREIGN KEY ("organizationId") REFERENCES "Organization" ("id") ON DELETE SET NULL,
+    FOREIGN KEY ("macro_user_id") REFERENCES "macro_user" ("id")
 );
 
 CREATE TABLE "Permission"

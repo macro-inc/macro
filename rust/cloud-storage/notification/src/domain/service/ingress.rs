@@ -7,17 +7,21 @@ use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::queue_message::IngressQueueMessage;
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, NotificationChannel, QueueMessage,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, QueueMessage,
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationStatus,
+    SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
+    DeviceEndpoint, Notification, NotificationResult, NotificationTypeName, UserNotificationRow,
 };
-use crate::domain::ports::{NotificationQueue, NotificationRepository, SnsEndpointManager};
+use crate::domain::ports::{
+    NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
+};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
@@ -169,12 +173,13 @@ where
     /// 4. Return result (delivery happens async via worker)
     async fn send_notification_impl<
         'a,
-        T: Notification + Clone + 'static,
+        T: Clone + Serialize + Send + Sync + 'static,
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,
         request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let notification_id = request.uuid_to_write;
         let mut request = self
             .filter_recipients(request)
             .await
@@ -184,7 +189,6 @@ where
             return Ok(None);
         }
 
-        let notification_id = Uuid::now_v7();
         let (queue_messages, apns_collapse_key) = self
             .build_queue_message(notification_id, &mut request)
             .await?;
@@ -218,7 +222,7 @@ where
         .await;
 
         self.queue
-            .publish(queue_messages.with_state_decisions(results))
+            .publish(queue_messages.with_state_decisions(results).collect())
             .await
             .context(SendNotificationError::Other)?;
 
@@ -256,7 +260,11 @@ where
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
     ///   Returns `(queue_messages, apns_collapse_key)`.
-    async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
+    async fn build_queue_message<
+        'a,
+        T: Clone + Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
         &self,
         notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
@@ -266,16 +274,17 @@ where
     > {
         let mut messages = Vec::new();
         let mut apns_collapse_key = None;
+        let typename = &notification.req.notification.tag;
 
         // Connection gateway: 1:M (single message for all recipients)
         if notification.send_conn_gateway {
-            messages.push(QueueMessage::new(NotificationChannel::ConnGateway(
+            messages.push(QueueMessage::new_from_conn_gateway(
                 ConnGatewayNotification::clone_from_request(notification_id, notification),
-            )));
+            ));
         }
 
         // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
-        if let Some(ref mut build_apns) = notification.build_apns {
+        if let Some(build_apns) = notification.build_apns.take() {
             let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
             let device_endpoints = self
                 .repository
@@ -307,28 +316,28 @@ where
                 })
                 .collect();
 
-            if !ios_endpoints.is_empty()
-                && let Some((apns_notif, attributes)) =
-                    build_apns(notification.req.notification.clone(), notification_id)
-            {
-                apns_collapse_key = Some(attributes.collapse_key.clone());
-                messages.push(QueueMessage::new(NotificationChannel::Ios(Box::new(
+            if !ios_endpoints.is_empty() {
+                let BuildApnsOutput { notif, attr } = build_apns;
+                apns_collapse_key = Some(attr.collapse_key.clone());
+                messages.push(QueueMessage::new_from_apns(
                     APNSTargets {
-                        notif: apns_notif,
-                        attributes,
+                        notif,
+                        attributes: attr,
                         ios_device_endpoints: ios_endpoints,
                     },
-                ))));
+                    typename,
+                ));
             }
         }
 
         // Email: 1:1 (one message per recipient)
-        if let Some(ref mut build_email) = notification.build_email {
+        if let Some(ref build_email) = notification.build_email {
             for recipient in &notification.req.recipient_ids {
-                let email_content = build_email(&notification.req.notification);
-                messages.push(QueueMessage::new(NotificationChannel::Email(
+                let email_content = build_email.clone();
+                messages.push(QueueMessage::new_from_email(
                     email_content.with_recipient(recipient.clone()),
-                )));
+                    typename,
+                ));
             }
         }
 
@@ -336,6 +345,57 @@ where
             QueueMessageNeedsStateMachine::new(messages),
             apns_collapse_key,
         ))
+    }
+
+    /// Process a type-erased notification request from the ingress queue.
+    ///
+    /// This accepts `serde_json::Value` types (deserialized from the ingress
+    /// queue) and calls `send_notification_impl` directly, bypassing the
+    /// `T: Notification` trait bound on the public trait method.
+    pub async fn process_from_queue<'a>(
+        &'a self,
+        request: SendNotificationRequest<'a, serde_json::Value, serde_json::Value>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        self.send_notification_impl(request).await
+    }
+}
+
+/// A lightweight [`NotificationIngress`] implementation that serializes
+/// the request and publishes to an ingress queue.
+///
+/// Callers only need a queue client — no database, Redis, or state-machine
+/// dependencies. A worker in `notification_service` picks up messages from
+/// this queue and processes them through [`NotificationIngressService`].
+///
+/// `send_notification` always returns `Ok(None)` because the actual
+/// processing is deferred to the worker.
+pub struct SqsNotificationIngress<Q> {
+    queue: Q,
+}
+
+impl<Q> SqsNotificationIngress<Q> {
+    /// Create a new queue-backed notification ingress.
+    pub fn new(queue: Q) -> Self {
+        Self { queue }
+    }
+}
+
+impl<Q: NotificationIngressQueue> NotificationIngress for SqsNotificationIngress<Q> {
+    async fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        req: SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let message =
+            IngressQueueMessage::from_request(&req).context(SendNotificationError::Other)?;
+        self.queue
+            .publish(message)
+            .await
+            .context(SendNotificationError::Other)?;
+        Ok(None)
     }
 }
 
@@ -456,27 +516,35 @@ where
                 .into_iter()
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
-                    QueueMessage::new(NotificationChannel::Ios(Box::new(APNSTargets {
-                        notif: APNSPushNotification {
-                            aps: Aps {
-                                content_available: Some(1),
-                                sound: None,
-                                ..Default::default()
+
+                    let notif = ClearPushIdentifier {
+                        identifier: collapse_key.clone(),
+                    };
+
+                    let typename = NotificationTypeName::new_from_notif(&notif);
+
+                    QueueMessage::new_from_apns(
+                        APNSTargets {
+                            notif: APNSPushNotification {
+                                aps: Aps {
+                                    content_available: Some(1),
+                                    sound: None,
+                                    ..Default::default()
+                                },
+                                push_notification_data: notif.clone(),
                             },
-                            push_notification_data: ClearPushIdentifier {
-                                identifier: collapse_key.clone(),
+                            attributes: MessageAttributes {
+                                push_type: PushType::Background,
+                                collapse_key,
                             },
+                            ios_device_endpoints: ios_endpoints.clone(),
                         },
-                        attributes: MessageAttributes {
-                            push_type: PushType::Background,
-                            collapse_key,
-                        },
-                        ios_device_endpoints: ios_endpoints.clone(),
-                    })))
+                        &typename,
+                    )
                 })
                 .collect();
 
-        self.queue.publish(messages.into_iter()).await?;
+        self.queue.publish(messages).await?;
 
         Ok(())
     }

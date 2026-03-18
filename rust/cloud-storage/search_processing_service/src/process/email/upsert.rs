@@ -5,7 +5,7 @@ use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
 };
 use sqlx::PgPool;
-use sqs_client::search::email::{EmailMessage, EmailThreadMessage};
+use sqs_client::search::email::{EmailMessage, EmailThreadBatchMessage, EmailThreadMessage};
 use uuid::Uuid;
 
 pub async fn process_upsert_message(
@@ -125,7 +125,7 @@ pub async fn process_upsert_thread_message(
 ) -> anyhow::Result<()> {
     let mut message_offset = 0;
     // Max is 100
-    let message_limit = 10;
+    let message_limit = 100;
 
     let thread_id: Uuid = upsert_email_thread_message
         .thread_id
@@ -241,6 +241,117 @@ pub async fn process_upsert_thread_message(
 
         // Update offset
         message_offset += message_limit;
+    }
+
+    Ok(())
+}
+
+pub async fn process_upsert_thread_batch_message(
+    opensearch_client: &OpensearchClient,
+    db: &PgPool,
+    batch_message: &EmailThreadBatchMessage,
+) -> anyhow::Result<()> {
+    let thread_ids: Vec<Uuid> = batch_message
+        .thread_ids
+        .iter()
+        .map(|id| id.parse().context("failed to parse thread_id as UUID"))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let now = EpochSeconds::new(Utc::now().timestamp())?;
+
+    let messages =
+        email_db_client::messages::get_parsed_search::get_parsed_search_messages_by_thread_ids(
+            db,
+            &thread_ids,
+        )
+        .await
+        .context("failed to get batch thread messages")?;
+
+    let mut upsert_email_message_args = Vec::new();
+
+    for message in messages {
+        if message.labels.iter().any(|label| {
+            label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
+        }) {
+            continue;
+        }
+
+        if let Some(content) = message.body_parsed_linkless {
+            let sent_at = message
+                .internal_date_ts
+                .map(|date| EpochSeconds::new(date.timestamp()))
+                .transpose()?;
+
+            let updated_at = message
+                .internal_date_ts
+                .map(|date| EpochSeconds::new(date.timestamp()))
+                .transpose()?
+                .unwrap_or(now);
+
+            upsert_email_message_args.push(UpsertEmailArgs {
+                message_id: message.db_id.to_string(),
+                link_id: message.link_id.to_string(),
+                user_id: batch_message.macro_user_id.clone(),
+                thread_id: message.thread_db_id.to_string(),
+                subject: message.subject,
+                sender: message
+                    .from
+                    .as_ref()
+                    .map(|f| f.email.to_lowercase())
+                    .unwrap_or_default(),
+                sender_name: message.from.as_ref().and_then(|f| f.name.clone()),
+                reply_to: message.reply_to.map(|r| r.to_lowercase()),
+                recipients: message
+                    .to
+                    .iter()
+                    .map(|to| to.email.to_lowercase())
+                    .collect(),
+                recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
+                cc: message
+                    .cc
+                    .iter()
+                    .map(|cc| cc.email.to_lowercase())
+                    .collect(),
+                cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
+                bcc: message
+                    .bcc
+                    .iter()
+                    .map(|bcc| bcc.email.to_lowercase())
+                    .collect(),
+                bcc_names: message
+                    .bcc
+                    .iter()
+                    .filter_map(|bcc| bcc.name.clone())
+                    .collect(),
+                labels: message
+                    .labels
+                    .iter()
+                    .map(|label| label.name.clone())
+                    .collect(),
+                content,
+                updated_at_seconds: updated_at,
+                sent_at_seconds: sent_at,
+            });
+        } else {
+            tracing::warn!("no content found for email message");
+        }
+    }
+
+    if !upsert_email_message_args.is_empty() {
+        let result = opensearch_client
+            .bulk_upsert_email_messages(
+                &upsert_email_message_args,
+                batch_message.index_override.as_deref(),
+            )
+            .await?;
+
+        if result.failed > 0 {
+            tracing::warn!(
+                failed = result.failed,
+                errors = ?result.errors,
+                "some email messages failed to upsert"
+            );
+        }
     }
 
     Ok(())

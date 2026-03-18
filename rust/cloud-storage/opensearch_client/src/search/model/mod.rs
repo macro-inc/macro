@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use std::{collections::HashMap, fmt::Display};
 
 use chrono::{DateTime, Utc};
@@ -36,9 +39,10 @@ pub(crate) fn exclude_source_content(query: &mut serde_json::Value) {
     }
 }
 
-const MAX_VISIBLE_FRAGMENT_CHARS: usize = 500;
+const MAX_VISIBLE_FRAGMENT_CHARS: usize = 1000;
 const OPEN_TAG: &str = "<macro_em>";
 const CLOSE_TAG: &str = "</macro_em>";
+const CHARS_BEFORE_HIGHLIGHT: usize = 200;
 
 fn normalize_highlight_fragment(fragment: &str) -> String {
     let stripped: String = fragment
@@ -70,7 +74,74 @@ fn normalize_highlight_fragment(fragment: &str) -> String {
         .collect();
 
     let trimmed = normalized.trim();
-    truncate_preserving_tags(trimmed, MAX_VISIBLE_FRAGMENT_CHARS)
+    window_around_highlight(trimmed, MAX_VISIBLE_FRAGMENT_CHARS)
+}
+
+/// Returns a window of `max_chars` visible characters around the first
+/// `<macro_em>` highlight tag. If the highlight is near the start, the window
+/// starts from the beginning. Otherwise, the front is trimmed (on a word
+/// boundary) to keep the highlight visible. If no highlight tag is found,
+/// truncates from the start.
+fn window_around_highlight(s: &str, max_chars: usize) -> String {
+    let tag_byte_pos = match s.find(OPEN_TAG) {
+        Some(pos) => pos,
+        None => return truncate_preserving_tags(s, max_chars),
+    };
+
+    let visible_before_tag = s[..tag_byte_pos]
+        .replace(CLOSE_TAG, "")
+        .replace(OPEN_TAG, "")
+        .chars()
+        .count();
+
+    if visible_before_tag <= CHARS_BEFORE_HIGHLIGHT {
+        return truncate_preserving_tags(s, max_chars);
+    }
+
+    let target_visible_skip = visible_before_tag.saturating_sub(CHARS_BEFORE_HIGHLIGHT);
+    let prefix = &s[..tag_byte_pos];
+    let no_tags = prefix.replace(OPEN_TAG, "").replace(CLOSE_TAG, "");
+    let skip_byte_len: usize = no_tags
+        .chars()
+        .take(target_visible_skip)
+        .map(|c| c.len_utf8())
+        .sum();
+
+    let cut_point = find_tag_aware_byte_offset(prefix, skip_byte_len);
+
+    let after_cut = &s[cut_point..];
+    let word_break = after_cut
+        .find(|c: char| c.is_whitespace())
+        .map(|i| i + 1)
+        .unwrap_or(0);
+
+    let windowed = &after_cut[word_break..];
+    let truncated = truncate_preserving_tags(windowed, max_chars);
+    format!("...{truncated}")
+}
+
+/// Maps a visible-char byte length to the actual byte offset in text that may
+/// contain `<macro_em>` / `</macro_em>` tags (skipping tag bytes).
+fn find_tag_aware_byte_offset(s: &str, visible_byte_len: usize) -> usize {
+    let mut visible_bytes = 0;
+    let mut byte_offset = 0;
+    while byte_offset < s.len() {
+        if s[byte_offset..].starts_with(OPEN_TAG) {
+            byte_offset += OPEN_TAG.len();
+            continue;
+        }
+        if s[byte_offset..].starts_with(CLOSE_TAG) {
+            byte_offset += CLOSE_TAG.len();
+            continue;
+        }
+        if visible_bytes >= visible_byte_len {
+            break;
+        }
+        let c = s[byte_offset..].chars().next().unwrap();
+        visible_bytes += c.len_utf8();
+        byte_offset += c.len_utf8();
+    }
+    byte_offset
 }
 
 /// Truncates a highlight fragment to `max_chars` visible characters (excluding

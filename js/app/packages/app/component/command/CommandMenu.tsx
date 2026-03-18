@@ -610,7 +610,7 @@ function CategoryFilterTabs() {
         }
       }}
     >
-      <Tabs.List class="p-1.5">
+      <Tabs.List class="p-1.5 border-b border-edge-muted/50">
         <div class="text-sm rounded-xs overflow-clip border border-edge-muted inline-block">
           <div class="flex">
             <For each={CATEGORIES}>

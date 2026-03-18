@@ -1,4 +1,5 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -14,6 +15,7 @@ import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from '@core/component/DocumentPropertiesModal';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -22,6 +24,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockTextSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
@@ -34,10 +37,16 @@ import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
+import { Show } from 'solid-js';
+import type { CodeBlockMode } from './Block';
 
 const { track, TrackingEvents } = withAnalytics();
 
-export const TopBar: Component = () => {
+export const TopBar: Component<{
+  isHtmlFile: boolean;
+  mode: CodeBlockMode;
+  onModeChange: (mode: CodeBlockMode) => void;
+}> = (props) => {
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
@@ -103,6 +112,20 @@ export const TopBar: Component = () => {
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
+
+      <Show when={props.isHtmlFile && !isMobile()}>
+        <SplitToolbarRight order={-1}>
+          <SegmentedControl
+            list={[
+              { value: 'render', label: 'Render' },
+              { value: 'code', label: 'Code' },
+            ]}
+            size="SM"
+            value={props.mode}
+            onChange={(value) => props.onModeChange(value as CodeBlockMode)}
+          />
+        </SplitToolbarRight>
+      </Show>
 
       <ResponsiveBlockToolbar
         tools={tools}

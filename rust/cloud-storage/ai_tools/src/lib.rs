@@ -8,6 +8,7 @@ pub mod read;
 #[allow(dead_code)]
 mod rewrite;
 pub mod search;
+pub mod serde_utils;
 mod tool_context;
 pub mod web_fetch;
 use code_execution::{

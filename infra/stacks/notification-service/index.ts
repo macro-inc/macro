@@ -93,6 +93,10 @@ const notificationQueue = new Queue('notification', {
   tags,
 });
 
+const notificationIngressQueue = new Queue('notification-ingress', {
+  tags,
+});
+
 const pushNotificationEventHandler = new PushNotificationEventHandler(
   'push-notification-event-handler',
   {
@@ -133,8 +137,10 @@ const notificationFcmPlatform = new aws.sns.PlatformApplication(
   }
 );
 
-export const notificationQueueArn = notificationQueue.queue.arn;
-export const notificationQueueName = notificationQueue.queue.name;
+const notificationQueueArn = notificationQueue.queue.arn;
+const notificationQueueName = notificationQueue.queue.name;
+export const notificationIngressQueueArn = notificationIngressQueue.queue.arn;
+export const notificationIngressQueueName = notificationIngressQueue.queue.name;
 export const notificationSnsPlatformArns = [
   notificationApnsPlatform.arn,
   notificationFcmPlatform.arn,
@@ -153,7 +159,11 @@ const notificationService = new NotificationService('notification-service', {
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     authenticationServiceInternalApiKeyArn,
   ],
-  queueArns: [pushNotificationEventHandlerQueueArn, notificationQueueArn],
+  queueArns: [
+    pushNotificationEventHandlerQueueArn,
+    notificationQueueArn,
+    notificationIngressQueueArn,
+  ],
   snsPlatformArns: notificationSnsPlatformArns,
   serviceContainerPort: 8080,
   isPrivate: false,
@@ -191,6 +201,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'NOTIFICATION_QUEUE',
       value: pulumi.interpolate`${notificationQueueName}`,
+    },
+    {
+      name: 'NOTIFICATION_INGRESS_QUEUE',
+      value: pulumi.interpolate`${notificationIngressQueueName}`,
     },
     {
       name: 'PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE',

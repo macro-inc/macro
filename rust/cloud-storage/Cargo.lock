@@ -98,6 +98,7 @@ dependencies = [
  "comms",
  "connection",
  "cool_asserts",
+ "dateparser",
  "documents",
  "email",
  "email_service_client",
@@ -2617,6 +2618,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dateparser"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2ef451feee09ae5ecd8a02e738bd9adee9266b8fa9b44e22d3ce968d8694238"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "deflate64"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3396,6 +3409,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "chrono",
+ "macro_user_id",
  "model_notifications",
  "notification",
  "rootcause",
@@ -3501,6 +3515,7 @@ dependencies = [
  "models_properties",
  "notification",
  "once_cell",
+ "openssl",
  "redis",
  "regex",
  "reqwest",
@@ -5149,6 +5164,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "document_sub_type",
  "either",
  "filter_ast",
  "macro_user_id",
@@ -5368,7 +5384,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -6145,6 +6161,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -6596,9 +6613,11 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "email_formatting",
  "email_validator",
  "http-body-util",
  "itertools 0.14.0",
+ "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
  "macro_cors",

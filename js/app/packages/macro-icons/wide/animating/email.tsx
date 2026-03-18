@@ -6,31 +6,33 @@ import { createEffect, createUniqueId } from 'solid-js';
 
 // ── Email (source) ───────────────────────────────────────────────────────────
 const BODY_A_D = 'M 1.5,0.75 L 17.25,0.75 L 17.25,10.5';
-//   Top edge + right edge. Upper-right join rounded by stroke-linejoin.
 const BODY_B_D = 'M 16.5,11.25 L 0.75,11.25 L 0.75,1.5';
-//   Bottom edge + left edge. Lower-left join rounded by stroke-linejoin.
 const FLAP_D = 'M 1.5,1.5 L 9,7.5 L 17.25,0.75';
-//   3-point V spanning the top of the envelope.
 
 // ── Paper plane (target) ─────────────────────────────────────────────────────
-// Right-pointing plane; nose at (17.25,6), fold crease at (0.75,7.5).
 const PLANE_A_D = 'M 1.5,0.75 L 17.25,0.75 L 4.5,11.25';
-//   Top wing: back-top → nose → left fold crease.
 const PLANE_B_D = 'M 17.25,0.75 L 4.5,11.25 L 0.75,1';
-//   Bottom wing: nose → back-bottom → left fold crease.
 const PLANE_C_D = 'M 0.75,1 L 4.5,11.25 L 17.25,0.75';
-//   Spine crease: back-top → center → back-bottom.
 
 // ── Cutout triangle (fades in over paper plane) ───────────────────────────────
 // Derived from the inner notch in paper-plane-cutout.svg, scaled 24→18 (×0.75).
-// Original vertices (24-space): (4.73,8.91), (9.78,5.65), (3.80,6.39)
 const CUTOUT_D = 'M 3.5,6.7 L 7.3,4.2 L 2.85,4.8 Z';
 
-// WAAPI keyframe values — CSS `d` property requires path() wrapper for cross-browser support
+// CSS `d` property requires path() wrapper for cross-browser WAAPI support
 const p = (d: string) => `path('${d}')`;
 
 const DURATION = 400;
 const EASING = 'ease-in-out';
+
+// Bake the current animated value into inline style then remove the animation.
+// Swallows the finished-promise rejection that cancel() triggers.
+function cancelAnim(a: Animation) {
+  a.finished.catch(() => {});
+  try {
+    a.commitStyles();
+    a.cancel();
+  } catch (_) {}
+}
 
 export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
   const clipId = createUniqueId();
@@ -39,53 +41,122 @@ export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
   let flapEl!: SVGPathElement;
   let cutoutEl!: SVGPathElement;
   let prevTrigger = false;
+  let morphAnims: Animation[] = [];
+  // Kept alive between trigger cycles so we always have a reference to reverse it.
+  let cutoutAnim: Animation | null = null;
 
   createEffect(() => {
     const trigger = !!props.triggerAnimation;
     if (trigger === prevTrigger) return;
     prevTrigger = trigger;
 
-    const direction = (trigger ? 'normal' : 'reverse') as PlaybackDirection;
-    const opts = {
-      duration: DURATION,
-      easing: EASING,
-      fill: 'forwards' as FillMode,
-      direction,
-      delay: trigger ? 0 : DURATION,
-    };
+    if (trigger) {
+      // Cancel any in-progress morphs
+      for (const a of morphAnims) cancelAnim(a);
+      morphAnims = [];
 
-    // stroke-linejoin isn't interpolatable — switch it at the boundary where it looks best:
-    // going forward (→ plane): round immediately so the join softens as the shape morphs.
-    // going back (→ email): revert to miter only after the reverse animation completes.
-    if (trigger) flapEl.setAttribute('stroke-linejoin', 'round');
+      // Cancel cutout WITHOUT commitStyles — let it snap back to its base style.
+      // The new animation's fill:'both' immediately applies opacity:0, overriding
+      // any residual inline opacity before the next paint.
+      if (cutoutAnim) {
+        cutoutAnim.finished.catch(() => {});
+        try {
+          cutoutAnim.cancel();
+        } catch (_) {}
+        cutoutAnim = null;
+      }
 
-    const cutoutAnim = cutoutEl.animate(
-      trigger
-        ? [{ opacity: 0 }, { opacity: 1 }]
-        : [{ opacity: 1 }, { opacity: 0 }],
-      {
+      flapEl.setAttribute('stroke-linejoin', 'round');
+
+      const opts = {
         duration: DURATION,
         easing: EASING,
         fill: 'forwards' as FillMode,
-        delay: trigger ? DURATION : 0,
-      }
-    );
-
-    const anims = [
-      bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], opts),
-      bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], opts),
-      flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], opts),
-    ];
-
-    Promise.all([...anims, cutoutAnim].map((a) => a.finished)).then(() => {
-      [...anims, cutoutAnim].forEach((a) => {
-        try {
-          a.commitStyles();
-          a.cancel();
-        } catch (_) {}
+      };
+      morphAnims = [
+        bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], opts),
+        bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], opts),
+        flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], opts),
+      ];
+      // fill:'both' applies the first keyframe (opacity:0) during the delay phase,
+      // guarding against residual inline opacity from a previous cycle.
+      cutoutAnim = cutoutEl.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: DURATION,
+        easing: EASING,
+        fill: 'both' as FillMode,
+        delay: DURATION,
       });
-      if (!trigger) flapEl.setAttribute('stroke-linejoin', 'miter');
-    });
+
+      // Bake morph shapes when they finish; leave cutoutAnim alive to reverse later.
+      Promise.all(morphAnims.map((a) => a.finished))
+        .then(() => {
+          for (const a of morphAnims) cancelAnim(a);
+          morphAnims = [];
+        })
+        .catch(() => {});
+    } else {
+      // ── Reverse morphs ────────────────────────────────────────────────────
+      const isActive = (a: Animation) => a.playState === 'running';
+
+      for (const a of morphAnims.filter((a) => !isActive(a))) cancelAnim(a);
+      const running = morphAnims.filter(isActive);
+
+      if (running.length > 0) {
+        for (const a of running) a.reverse();
+        morphAnims = running;
+      } else {
+        const revOpts = {
+          duration: DURATION,
+          easing: EASING,
+          fill: 'forwards' as FillMode,
+          direction: 'reverse' as PlaybackDirection,
+        };
+        morphAnims = [
+          bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], revOpts),
+          bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], revOpts),
+          flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], revOpts),
+        ];
+      }
+
+      // ── Reverse cutout ────────────────────────────────────────────────────
+      // reverse() uses the animation's own keyframes — no commitStyles needed,
+      // so no inline opacity can be stranded under rapid trigger cycles.
+      if (cutoutAnim) {
+        const inDelayPhase = Number(cutoutAnim.currentTime ?? 0) < DURATION; // delay === DURATION
+        if (inDelayPhase) {
+          // fill:'both' is holding opacity:0; just cancel.
+          cutoutAnim.finished.catch(() => {});
+          try {
+            cutoutAnim.cancel();
+          } catch (_) {}
+          cutoutAnim = null;
+        } else {
+          // Active phase or finished — reverse() fades back to opacity:0.
+          try {
+            cutoutAnim.reverse();
+          } catch (_) {}
+        }
+      }
+
+      // ── Cleanup when everything settles ──────────────────────────────────
+      const morphsToWatch = [...morphAnims];
+      const cutoutToWatch = cutoutAnim;
+      const allToWatch = [
+        ...morphsToWatch,
+        ...(cutoutToWatch ? [cutoutToWatch] : []),
+      ];
+
+      Promise.all(allToWatch.map((a) => a.finished))
+        .then(() => {
+          for (const a of morphsToWatch) cancelAnim(a);
+          if (cutoutToWatch) cancelAnim(cutoutToWatch);
+          morphAnims = [];
+          // Only null cutoutAnim if it hasn't been replaced by a newer animation
+          if (cutoutAnim === cutoutToWatch) cutoutAnim = null;
+          flapEl.setAttribute('stroke-linejoin', 'miter');
+        })
+        .catch(() => {});
+    }
   });
 
   return (

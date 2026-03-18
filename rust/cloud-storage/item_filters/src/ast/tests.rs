@@ -631,3 +631,95 @@ fn it_expands_property_filter_with_entity_type() {
     // entity_type should be present when Some
     assert_eq!(json, exp);
 }
+
+#[test]
+fn it_expands_single_document_sub_type() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            sub_types: vec!["task".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "dst": "task"
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_sub_type_with_file_type() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            sub_types: vec!["task".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    // Should be AND of file_type and sub_type
+    assert!(
+        json.get("&").is_some(),
+        "file_type and sub_type should AND together"
+    );
+    let as_text = serde_json::to_string(&json).unwrap();
+    assert!(as_text.contains(r#""dst":"task""#));
+    assert!(as_text.contains(r#""ft":"pdf""#));
+}
+
+#[test]
+fn invalid_sub_type_returns_error() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            sub_types: vec!["nonexistent".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    assert!(
+        EntityFilterAst::new_from_filters(f).is_err(),
+        "invalid sub type should return an error"
+    );
+}
+
+#[test]
+fn empty_sub_types_produce_no_ast() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            sub_types: vec![],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    assert!(
+        EntityFilterAst::new_from_filters(f).unwrap().is_none(),
+        "empty sub_types should produce no AST"
+    );
+}

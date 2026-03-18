@@ -16,3 +16,14 @@ export function useMessage(): Accessor<MessageData> {
 export function useMessageActions(): MessageActions | undefined {
   return useContext(MessageActionsContext);
 }
+
+export type MessageSelectionState = {
+  isSelected: boolean;
+};
+
+const MessageSelectionContext = createContext<MessageSelectionState>();
+export const MessageSelectionProvider = MessageSelectionContext.Provider;
+
+export function useMessageSelection(): MessageSelectionState | undefined {
+  return useContext(MessageSelectionContext);
+}
