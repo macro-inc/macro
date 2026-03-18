@@ -3,59 +3,17 @@ import {
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useUserContext } from '@core/context/user';
+import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
+import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { VIEW_FILTER_CATEGORIES } from './unified-filter-dropdown';
-
-// Mapping of filter IDs to human-readable labels and categories
-const FILTER_LABELS: Record<string, { category: string; label: string }> = {
-  // Entity types
-  document: { category: 'Type', label: 'Docs' },
-  agent: { category: 'Type', label: 'Agents' },
-  people: { category: 'Type', label: 'People' },
-  teams: { category: 'Type', label: 'Teams' },
-  task: { category: 'Type', label: 'Tasks' },
-  email: { category: 'Type', label: 'Mail' },
-  file: { category: 'Type', label: 'Files' },
-  // Status
-  unread: { category: 'Status', label: 'Unread' },
-  read: { category: 'Status', label: 'Read' },
-  'not-done': { category: 'Status', label: 'Not Done' },
-  done: { category: 'Status', label: 'Done' },
-  // Attachments
-  'has-attachment': { category: 'Attachment', label: 'Has Attachment' },
-  'attachment-pdf': { category: 'Attachment', label: 'PDFs' },
-  'attachment-image': { category: 'Attachment', label: 'Images' },
-  'attachment-document': { category: 'Attachment', label: 'Documents' },
-  // Calendar
-  'has-calendar-invite': { category: 'Calendar', label: 'Has Invite' },
-  // Task status
-  'task-not-started': { category: 'Status', label: 'Not Started' },
-  'task-in-progress': { category: 'Status', label: 'In Progress' },
-  'task-in-review': { category: 'Status', label: 'In Review' },
-  'task-completed': { category: 'Status', label: 'Completed' },
-  'task-canceled': { category: 'Status', label: 'Canceled' },
-  // Task priority
-  'task-critical': { category: 'Priority', label: 'Critical' },
-  'task-high-priority': { category: 'Priority', label: 'High' },
-  'task-medium-priority': { category: 'Priority', label: 'Medium' },
-  'task-low-priority': { category: 'Priority', label: 'Low' },
-  'task-no-priority': { category: 'Priority', label: 'None' },
-  // Document types
-  'doc-markdown': { category: 'Type', label: 'Markdown' },
-  'doc-canvas': { category: 'Type', label: 'Canvas' },
-  // File types
-  'file-code': { category: 'Type', label: 'Code' },
-  'file-image': { category: 'Type', label: 'Images' },
-  'file-pdf': { category: 'Type', label: 'PDFs' },
-  'file-other': { category: 'Type', label: 'Other' },
-};
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
@@ -87,6 +45,8 @@ export function useFilterRefinements() {
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
+  const contacts = useContacts();
+  const currentUserId = useUserId();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -138,6 +98,26 @@ export function useFilterRefinements() {
   });
 
   /**
+   * Human-readable options for the assignee sub-filter, keyed by assignee ID.
+   * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   */
+  const assigneeOptionsMap = createMemo((): Map<string, { label: string }> => {
+    const uid = currentUserId();
+    const map = new Map<string, { label: string }>();
+    map.set(NO_ASSIGNEE, { label: 'Unassigned' });
+    for (const contact of contacts()) {
+      const label =
+        contact.id === uid
+          ? contact.name
+            ? `${contact.name} (me)`
+            : 'Me'
+          : contact.name || contact.id;
+      map.set(contact.id, { label });
+    }
+    return map;
+  });
+
+  /**
    * Get filter categories for the current view
    */
   const viewCategories = createMemo(() => {
@@ -157,31 +137,37 @@ export function useFilterRefinements() {
       ...(preset?.clientFilters.or ?? []),
     ]);
 
-    const activeIds = soup.filters.activeIds() as string[];
     const filters: ActiveFilter[] = [];
-    const categories = viewCategories();
-
-    for (const id of activeIds) {
-      // Skip tab-only filters and filters that are part of the current preset
-      if (TAB_ONLY_FILTERS.has(id) || presetFilterIds.has(id as FilterID)) {
-        continue;
-      }
-
-      const labelInfo = FILTER_LABELS[id];
-      if (labelInfo) {
-        // Find the category options for this filter
-        const category = categories.find(
-          (c) => c.id === labelInfo.category.toLowerCase()
-        );
-
+    for (const category of viewCategories()) {
+      for (const option of category.options) {
+        if (
+          !soup.filters.isActive(option.id) ||
+          TAB_ONLY_FILTERS.has(option.id) ||
+          presetFilterIds.has(option.id as FilterID)
+        ) {
+          continue;
+        }
         filters.push({
-          categoryId: labelInfo.category.toLowerCase(),
-          categoryLabel: labelInfo.category,
-          optionId: id,
-          optionLabel: labelInfo.label,
-          categoryOptions: category?.options,
+          categoryLabel: category.label,
+          optionId: option.id,
+          optionLabel: option.label,
+          icon: option.icon,
+          categoryOptions: category.options,
         });
       }
+    }
+
+    // Sub-filters: assignee
+    const optionsMap = assigneeOptionsMap();
+    for (const id of assigneeFilter()) {
+      const option = optionsMap.get(id);
+      filters.push({
+        categoryLabel: 'Assignee',
+        optionId: id,
+        optionLabel: option?.label ?? id,
+        onRemove: () =>
+          setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+      });
     }
 
     return filters;
@@ -191,15 +177,11 @@ export function useFilterRefinements() {
     return soup.filters.isActive(optionId);
   };
 
-  const removeFilter = (_categoryId: string, optionId: string) => {
+  const removeFilter = (optionId: string) => {
     soup.filters.toggle({ or: [optionId as FilterID] });
   };
 
-  const replaceFilter = (
-    _categoryId: string,
-    oldOptionId: string,
-    newOptionId: string
-  ) => {
+  const replaceFilter = (oldOptionId: string, newOptionId: string) => {
     // Toggle off the old filter and toggle on the new one
     batch(() => {
       soup.filters.toggle({ or: [oldOptionId as FilterID] });

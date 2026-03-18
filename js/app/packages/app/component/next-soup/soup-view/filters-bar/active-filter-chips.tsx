@@ -6,23 +6,24 @@ import CheckIcon from '@icon/regular/check.svg';
 import type { FilterOption } from './unified-filter-dropdown';
 
 export type ActiveFilter = {
-  categoryId: string;
   categoryLabel: string;
   optionId: string;
   optionLabel: string;
   icon?: () => JSX.Element;
   /** Available options in this category for replacement */
   categoryOptions?: FilterOption[];
+  /**
+   * Per-chip remove handler. When present, takes precedence over the shared
+   * `onRemove` prop on `ActiveFilterChips`. Use this for filters that live
+   * outside `soup.filters` (e.g. assigneeFilter).
+   */
+  onRemove?: () => void;
 };
 
 interface ActiveFilterChipsProps {
   filters: ActiveFilter[];
-  onRemove: (categoryId: string, optionId: string) => void;
-  onReplace: (
-    categoryId: string,
-    oldOptionId: string,
-    newOptionId: string
-  ) => void;
+  onRemove: (optionId: string) => void;
+  onReplace: (oldOptionId: string, newOptionId: string) => void;
   onClearAll: () => void;
   /** Check if a filter option is currently active */
   isOptionActive: (optionId: string) => boolean;
@@ -142,7 +143,11 @@ const FilterChip = (props: {
         )}
         onClick={(e) => {
           e.stopPropagation();
-          props.onRemove();
+          if (props.filter.onRemove) {
+            props.filter.onRemove();
+          } else {
+            props.onRemove();
+          }
         }}
       >
         <XIcon class="size-3" />
@@ -165,15 +170,9 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
               fallback={
                 <FilterChip
                   filter={filter}
-                  onRemove={() =>
-                    props.onRemove(filter.categoryId, filter.optionId)
-                  }
+                  onRemove={() => props.onRemove(filter.optionId)}
                   onReplace={(newOptionId) =>
-                    props.onReplace(
-                      filter.categoryId,
-                      filter.optionId,
-                      newOptionId
-                    )
+                    props.onReplace(filter.optionId, newOptionId)
                   }
                   isOptionActive={props.isOptionActive}
                 />
@@ -182,15 +181,9 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
               <span class="inline-flex items-center gap-1.5">
                 <FilterChip
                   filter={filter}
-                  onRemove={() =>
-                    props.onRemove(filter.categoryId, filter.optionId)
-                  }
+                  onRemove={() => props.onRemove(filter.optionId)}
                   onReplace={(newOptionId) =>
-                    props.onReplace(
-                      filter.categoryId,
-                      filter.optionId,
-                      newOptionId
-                    )
+                    props.onReplace(filter.optionId, newOptionId)
                   }
                   isOptionActive={props.isOptionActive}
                 />
