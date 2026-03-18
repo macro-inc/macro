@@ -91,30 +91,15 @@ pub async fn handler(
     tracing::trace!(document_key_parts=?document_key_parts, "processing document key");
 
     // Resolve file type: from the key extension (legacy) or via DSS lookup (extensionless)
-    let file_type_str = match document_key_parts.file_type {
-        Some(ft) => ft,
-        None => {
-            match dss_client
-                .get_document_file_type(&document_key_parts.document_id)
-                .await
-            {
-                Ok(Some(ft)) => ft,
-                Ok(None) => {
-                    tracing::warn!(
-                        document_id = %document_key_parts.document_id,
-                        "no file type found for document"
-                    );
-                    return Ok(());
-                }
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to get file type from DSS");
-                    return Err(e.into());
-                }
-            }
-        }
-    };
+    let document_basic = dss_client
+        .get_document_basic(document_id)
+        .await
+        .context("Failed to fetch document basic info")?
+        .ok_or_else(|| anyhow::anyhow!("document not found"))?;
 
-    let file_type = FileType::from_str(&file_type_str).context("unable to parse file type")?;
+    let file_type = document_basic
+        .try_file_type()
+        .ok_or_else(|| anyhow::anyhow!("file type not found"))?;
 
     let search_extractor_message = SearchExtractorMessage {
         user_id: document_key_parts.user_id,
