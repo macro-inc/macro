@@ -1,8 +1,10 @@
 //! Rate limiting models for the notification service.
 
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use thiserror::Error;
+use twox_hash::XxHash64;
 
 /// Newtype for rate limit keys.
 ///
@@ -12,13 +14,35 @@ use thiserror::Error;
 #[serde(transparent)]
 pub struct RateLimitKey(Vec<u8>);
 
+/// The builder struct for a [RateLimitKey]
+/// callers can either append values or finish the building
+pub struct RateLimitKeyBuilder(XxHash64);
+
+impl RateLimitKeyBuilder {
+    /// finish the key building, returning a [RateLimitKey]
+    pub fn finish(self) -> RateLimitKey {
+        RateLimitKey(self.0.finish().to_le_bytes().to_vec())
+    }
+
+    /// append a value to the builder
+    pub fn append<T: Hash>(self, input: &T) -> Self {
+        let RateLimitKeyBuilder(mut hasher) = self;
+        input.hash(&mut hasher);
+        RateLimitKeyBuilder(hasher)
+    }
+}
+
 impl RateLimitKey {
     /// Create a rate limit key by hashing the input string.
-    pub fn from_str_hashed(input: &str) -> Self {
-        use std::hash::{DefaultHasher, Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
+    pub fn from_str_hashed<T: Hash>(input: &T) -> Self {
+        Self::builder(input).finish()
+    }
+
+    /// create a builder from an initial value
+    pub fn builder<T: Hash>(input: &T) -> RateLimitKeyBuilder {
+        let mut hasher = XxHash64::with_seed(0);
         input.hash(&mut hasher);
-        Self(hasher.finish().to_le_bytes().to_vec())
+        RateLimitKeyBuilder(hasher)
     }
 
     /// Get the internal bytes.

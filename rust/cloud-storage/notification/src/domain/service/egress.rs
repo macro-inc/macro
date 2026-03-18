@@ -3,8 +3,6 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
-use std::time::Duration;
-
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
@@ -28,6 +26,7 @@ use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+use std::time::Duration;
 use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.

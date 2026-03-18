@@ -82,7 +82,7 @@ impl NotificationExtEmail for TestNotification {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
-        RateLimitKey::from_str_hashed("test-key")
+        RateLimitKey::from_str_hashed(&"test-key")
     }
 }
 

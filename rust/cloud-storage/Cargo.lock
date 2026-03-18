@@ -5141,6 +5141,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "invitation"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_user_id",
+ "notification",
+ "serde",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6567,6 +6577,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "twox-hash",
  "utoipa",
  "uuid",
 ]
@@ -10347,6 +10358,15 @@ dependencies = [
  "sha1",
  "thiserror 2.0.17",
  "utf-8",
+]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
+dependencies = [
+ "rand 0.9.0",
 ]
 
 [[package]]
