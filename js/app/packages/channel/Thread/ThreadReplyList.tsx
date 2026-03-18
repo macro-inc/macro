@@ -10,11 +10,18 @@ import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';
-import { getReplyElementAtIndex } from './utils/reply-list-navigation';
 
 export type ThreadReplyListHandle = {
   scrollToIndex: (index: number) => boolean;
 };
+
+function getReplyElementAtIndex(
+  elements: Array<HTMLElement | undefined>,
+  index: number
+): HTMLElement | undefined {
+  if (index < 0) return undefined;
+  return elements[index];
+}
 
 export function ThreadReplyList(props: {
   channelId: string;
