@@ -397,8 +397,10 @@ function applyMediaScale(container: Element) {
     if (scale === 1) return;
     const width = parseInt(el.getAttribute('width') || '0', 10);
     const height = parseInt(el.getAttribute('height') || '0', 10);
-    if (width > 0) el.setAttribute('width', Math.round(width * scale).toString());
-    if (height > 0) el.setAttribute('height', Math.round(height * scale).toString());
+    if (width > 0)
+      el.setAttribute('width', Math.round(width * scale).toString());
+    if (height > 0)
+      el.setAttribute('height', Math.round(height * scale).toString());
   });
 }
 
