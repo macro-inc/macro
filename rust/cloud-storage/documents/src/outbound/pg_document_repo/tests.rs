@@ -577,7 +577,10 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(csp_count, 1, "Should have created one ChannelSharePermission");
+    assert_eq!(
+        csp_count, 1,
+        "Should have created one ChannelSharePermission"
+    );
 
     // Verify UserItemAccess rows were created for all 3 active channel participants
     let channel_uuid = uuid::Uuid::parse_str(channel_id).unwrap();
@@ -656,5 +659,8 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    assert_eq!(count, 3, "Should still have exactly 3 rows after idempotent upsert");
+    assert_eq!(
+        count, 3,
+        "Should still have exactly 3 rows after idempotent upsert"
+    );
 }
