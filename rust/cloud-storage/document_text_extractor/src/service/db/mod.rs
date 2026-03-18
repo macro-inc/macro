@@ -1,9 +1,11 @@
 mod create_document_text;
 pub mod document_text_parts;
+mod get_document_file_type;
 
 use lambda_runtime::tracing;
 #[allow(unused_imports)]
 use mockall::automock;
+use model::document::FileType;
 
 #[cfg(not(test))]
 pub use DBClient as DB;
@@ -54,15 +56,8 @@ impl DBClient {
     pub async fn get_document_file_type(
         &self,
         document_id: &str,
-    ) -> anyhow::Result<Option<String>> {
-        let row: Option<(Option<String>,)> = sqlx::query_as(
-            r#"SELECT "fileType" as "file_type" FROM "Documents" WHERE "documentId" = $1"#,
-        )
-        .bind(document_id)
-        .fetch_optional(&self.inner)
-        .await?;
-
-        Ok(row.and_then(|r| r.0))
+    ) -> anyhow::Result<Option<FileType>> {
+        get_document_file_type::get_document_file_type(&self.inner, document_id).await
     }
 }
 

@@ -170,8 +170,8 @@ pub async fn extract_text_from_document(
                 tracing::error!(error=?e, "unable to get file type from db");
                 Error::from("unable to get file type from db")
             })?;
-        match file_type.as_deref() {
-            Some("pdf") => {}
+        match file_type {
+            Some(model::document::FileType::Pdf) => {}
             _ => {
                 tracing::info!(file_type=?file_type, "skipping non-pdf file for extraction");
                 return Ok(None);
