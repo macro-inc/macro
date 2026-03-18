@@ -91,6 +91,7 @@ pub struct GetAllUserNotificationsResponse {
 
 /// Convert a [`UserNotificationRow<serde_json::Value>`] into a
 /// [`UserNotificationRow<NotifEvent>`] by tagging and deserializing the metadata.
+#[tracing::instrument(err)]
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {
