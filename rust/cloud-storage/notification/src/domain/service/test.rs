@@ -2084,7 +2084,9 @@ async fn test_sqs_notification_ingress_publishes_to_queue() {
     use crate::domain::service::SqsNotificationIngress;
 
     let queue = Arc::new(MockIngressQueue::new());
-    let ingress = SqsNotificationIngress::new(queue.clone());
+    let ingress = SqsNotificationIngress {
+        queue: queue.clone(),
+    };
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {

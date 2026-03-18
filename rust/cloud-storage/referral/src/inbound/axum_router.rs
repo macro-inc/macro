@@ -7,6 +7,7 @@
 mod test;
 
 mod get_referral_code;
+mod send_invite;
 
 use std::sync::Arc;
 
@@ -15,12 +16,14 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
+use crate::inbound::axum_router::send_invite::post_referral_invite_handler;
 
 pub use get_referral_code::*;
 
 impl IntoResponse for ReferralError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
+            ReferralError::RateLimitExceeded(_) => StatusCode::TOO_MANY_REQUESTS,
             ReferralError::NotFound(_) => StatusCode::NOT_FOUND,
             ReferralError::Unauthorized => StatusCode::UNAUTHORIZED,
             ReferralError::BadRequest(_) => StatusCode::BAD_REQUEST,
@@ -61,5 +64,9 @@ where
 {
     Router::new()
         .route("/code", axum::routing::get(get_referral_code_handler::<T>))
+        .route(
+            "/send",
+            axum::routing::post(post_referral_invite_handler::<T>),
+        )
         .with_state(state)
 }

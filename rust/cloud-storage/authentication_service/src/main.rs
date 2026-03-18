@@ -180,11 +180,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get multiplexed redis connection")?;
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        config.notification_queue.clone(),
-    );
-    let notification_ingress_service = SqsNotificationIngress::new(ingress_queue);
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        queue_url: config.notification_queue.clone(),
+    };
+    let notification_ingress_service = SqsNotificationIngress {
+        queue: ingress_queue,
+    };
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -262,6 +264,7 @@ async fn main() -> anyhow::Result<()> {
                 redis: redis_client,
             },
         },
+        notification_ingress: notification_ingress_service.clone(),
     };
 
     api::setup_and_serve(
@@ -273,7 +276,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             ses_client: Arc::new(ses_client),
-            notification_ingress_service: notification_ingress_service.clone(),
+            notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
             jwt_args,

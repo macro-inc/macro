@@ -1,8 +1,9 @@
 //! Domain models for the referral crate.
 
-mod invitation;
+pub(crate) mod invitation;
 
 use macro_uuid::ShortUuidConverter;
+use rate_limit::RateLimitExceeded;
 
 /// Wrapper for the referral code to make it type safe
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -13,6 +14,9 @@ pub struct ReferralCode(pub String);
 /// Errors that can occur during referral operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ReferralError {
+    /// we have exeeded a rate limit
+    #[error("Rate limit exceeded")]
+    RateLimitExceeded(#[from] RateLimitExceeded),
     /// The requested referral code was not found.
     #[error("referral not found: {0}")]
     NotFound(String),

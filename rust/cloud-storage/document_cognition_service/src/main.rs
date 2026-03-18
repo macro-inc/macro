@@ -197,11 +197,13 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized connection repo");
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&aws_config),
+        queue_url: config.notification_queue.clone(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue,
+    });
 
     tracing::info!("initialized notification ingress service");
 

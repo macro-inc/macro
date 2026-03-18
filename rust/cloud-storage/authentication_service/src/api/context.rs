@@ -40,6 +40,7 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
     StripeDiscountClient,
     RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>,
+    Arc<SqsNotificationIngress<SqsIngressQueue>>,
 >;
 
 pub(crate) type GithubLinkServiceType =

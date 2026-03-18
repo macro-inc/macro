@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// the metadata for a referal to macro notification
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InviteToMacro {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct InviteToMacro {
     /// the recipient email
-    recipient_email: EmailStr<'static>,
+    pub(crate) recipient_email: EmailStr<'static>,
     /// the refereral code which is templated into the email to track the sender
     /// and reward them
-    referal_code: ReferralCode,
+    pub(crate) referral_code: ReferralCode,
 }
 
 impl Notification for InviteToMacro {
