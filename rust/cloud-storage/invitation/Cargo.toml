@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "invitation"
+publish = true
+version = "0.1.0"
+
+[dependencies]
+axum = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+notification = { path = "../notification" }
+serde = { workspace = true }
