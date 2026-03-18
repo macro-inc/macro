@@ -302,18 +302,11 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const existingDraft = currentDraftID() !== undefined;
-
-    // If there's an existing draft, we should send the sendTime so that the send time
-    // stays up to date and is not removed
-    const sendTime = existingDraft ? form.sendTime() : undefined;
-
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
         db_id: currentDraftID(),
       },
-      sendTime,
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -703,7 +696,7 @@ export function EmailCompose(props: EmailComposeProps) {
     },
   });
 
-  const handleSendTimeChange = (date: Date | null) => {
+  const handleSendTimeChange = async (date: Date | null) => {
     const currentSendTime = form.sendTime();
     const currentDraft = currentDraftID();
 
@@ -712,10 +705,31 @@ export function EmailCompose(props: EmailComposeProps) {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
       });
+      form.setSendTime(date);
+      return;
     }
 
     form.setSendTime(date);
-    scheduleDraftSave();
+
+    if (date) {
+      // Ensure draft is saved before scheduling
+      const draftID = currentDraft ?? (await executeSaveDraft());
+      if (!draftID) {
+        toast.failure('Failed to schedule message', 'Draft required');
+        return;
+      }
+
+      await emailClient.scheduleMessage({
+        draftID,
+        send_time: date.toISOString(),
+      });
+
+      // Mark the thread as done
+      const threadID = saveDraftMutation.data?.draft.thread_db_id;
+      if (threadID) {
+        await emailClient.flagArchived({ id: threadID, value: true });
+      }
+    }
   };
 
   const resetState = () => {
