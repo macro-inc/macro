@@ -10,6 +10,11 @@ import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';
+import { getReplyElementAtIndex } from './utils/reply-list-navigation';
+
+export type ThreadReplyListHandle = {
+  scrollToIndex: (index: number) => boolean;
+};
 
 export function ThreadReplyList(props: {
   channelId: string;
@@ -18,21 +23,40 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  highlightedReplyId?: string;
+  onReady?: (handle: ThreadReplyListHandle) => void;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
+  const replyElements: Array<HTMLElement | undefined> = [];
+
+  const scrollToIndex = (index: number): boolean => {
+    const element = getReplyElementAtIndex(replyElements, index);
+    if (!element) return false;
+    element.scrollIntoView({ block: 'nearest' });
+    return true;
+  };
+
+  props.onReady?.({
+    scrollToIndex,
+  });
 
   return (
     <For each={props.replies}>
-      {(reply) => {
+      {(reply, index) => {
         const replyMessage = () => ({
           ...reply,
           thread_id: props.threadId,
         });
 
         return (
-          <div class="relative">
+          <div
+            ref={(element) => {
+              replyElements[index()] = element;
+            }}
+            class="relative"
+          >
             <ThreadRail
               newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
@@ -46,6 +70,7 @@ export function ThreadReplyList(props: {
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
                 messageEditor={props.messageEditor}
+                highlighted={props.highlightedReplyId === reply.id}
               />
             </MarkMessaageNotifications>
           </div>

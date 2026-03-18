@@ -63,6 +63,7 @@ import { URL_PARAMS } from '@block-channel/constants';
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
+  targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
   debug?: boolean;
 };
@@ -90,18 +91,16 @@ export function Channel(props: ChannelProps) {
 
   
   // START BLOCK 
-  
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
-      // const threadId = params[URL_PARAMS.thread] as string | undefined;
+      const threadId = params[URL_PARAMS.thread] as string | undefined;
       const messageId = params[URL_PARAMS.message] as string | undefined;
       if (messageId) {
-        targetMessageController.goToMessage(messageId);
+        targetMessageController.goToMessage(threadId ? threadId : messageId, threadId ? messageId : threadId);
       }
     },
   });
-
   // END BLOCK
 
 
@@ -239,6 +238,7 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
+                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
                           highlighted={
                             m().id ===
                             targetMessageController.highlightedMessageId()

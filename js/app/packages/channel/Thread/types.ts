@@ -34,6 +34,7 @@ export type ThreadProps = {
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
+  targetReplyId?: string;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   highlighted?: boolean;
 } & ThreadState;

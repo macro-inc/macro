@@ -14,6 +14,7 @@ import { createStore } from 'solid-js/store';
 type CreateTargetMessageControllerOptions = {
   channelId: Accessor<string>;
   initialTargetMessageId?: string | undefined;
+  initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
   navigation: Accessor<ThreadListNavigation | undefined>;
 };
@@ -24,6 +25,7 @@ export type TargetMessageController = ReturnType<
 
 type TargetMessageData = {
   activeTargetMessageId: string | undefined,
+  activeTargetMessageReplyId: string | undefined,
   highlightedMessageId: string | undefined,
   loadAroundMessageId: string | undefined,
   pendingScrollTargetId: string | undefined,
@@ -34,7 +36,8 @@ export function createTargetMessageController(
 ) {
   const initialTargetMessageData: TargetMessageData = {
     activeTargetMessageId: options.initialTargetMessageId,
-    highlightedMessageId: options.initialTargetMessageId,
+    activeTargetMessageReplyId: undefined,
+    highlightedMessageId: options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
     loadAroundMessageId: options.initialTargetMessageId,
     pendingScrollTargetId: options.initialTargetMessageId,
 
@@ -45,20 +48,18 @@ export function createTargetMessageController(
   const hasMessageLoaded = (messageId: string) =>
     options.messageKeys().includes(messageId);
 
-  const goToMessage = (messageId: string | undefined) => {
-    if (!messageId) return;
-
+  const goToMessage = (messageId: string, replyId?: string) => {
     const isSameTarget = targetMessageData['activeTargetMessageId'] === messageId;
     const isPending = targetMessageData['pendingScrollTargetId'] === messageId;
 
     if (isSameTarget && isPending) return;
 
     setTargetMessageData({
-    activeTargetMessageId: messageId,
-    highlightedMessageId: messageId,
-    loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
-    pendingScrollTargetId: messageId,
-      
+      activeTargetMessageId: messageId,
+      activeTargetMessageReplyId: replyId,
+      highlightedMessageId: replyId ?? messageId,
+      loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
+      pendingScrollTargetId: messageId,
     })
   };
 
@@ -90,9 +91,11 @@ export function createTargetMessageController(
 
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
+    activeTargetMessageReplyId: () => targetMessageData['activeTargetMessageReplyId'],
     highlightedMessageId: () => targetMessageData['highlightedMessageId'],
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
+
     goToMessage,
     completePendingScroll,
   };
