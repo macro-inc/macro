@@ -154,10 +154,14 @@ async fn handle_customer_subscription_event(
         None
     };
 
+    // Extract GA client ID from subscription metadata for analytics tracking
+    let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+
     tracing::info!(
         email=%email.as_ref(),
         subscription_id,
         subscription_status,
+        ga_client_id=?ga_client_id,
         "processing stripe subscription"
     );
 
@@ -172,6 +176,7 @@ async fn handle_customer_subscription_event(
             subscription_status,
             &team_id,
             event_type,
+            ga_client_id.as_deref(),
             email.as_ref(),
             subscription_value,
             subscription_currency,
@@ -270,6 +275,7 @@ async fn handle_customer_subscription_event(
     // Track conversion events to GA and Meta
     ctx.analytics_client
         .track_stripe_subscription(
+            ga_client_id.as_deref(),
             email.as_ref(),
             subscription_id,
             subscription_value,
@@ -293,6 +299,7 @@ async fn handle_team_subscription_event(
     subscription_status: &str,
     team_id: &uuid::Uuid,
     event_type: EventType,
+    ga_client_id: Option<&str>,
     email: &str,
     value: Option<i64>,
     currency: Option<String>,
@@ -305,6 +312,7 @@ async fn handle_team_subscription_event(
         "active" => {
             ctx.analytics_client
                 .track_stripe_subscription(
+                    ga_client_id,
                     email,
                     subscription_id,
                     value,
@@ -323,6 +331,7 @@ async fn handle_team_subscription_event(
 
             ctx.analytics_client
                 .track_stripe_subscription(
+                    ga_client_id,
                     email,
                     subscription_id,
                     value,

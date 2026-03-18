@@ -136,10 +136,13 @@ impl AnalyticsClient {
     /// Automatically determines whether to track a purchase or refund based on
     /// the subscription status and whether it's a new subscription.
     ///
+    /// - `ga_client_id`: Google Analytics client ID (required for GA tracking)
+    /// - `email`: User email (used for Meta tracking, hashed internally)
     /// - `is_new`: true if this is a CustomerSubscriptionCreated event
     /// - `status`: the subscription status (e.g., "active", "trialing", "canceled")
     pub async fn track_stripe_subscription(
         &self,
+        ga_client_id: Option<&str>,
         email: &str,
         subscription_id: &str,
         value_cents: Option<i64>,
@@ -158,7 +161,11 @@ impl AnalyticsClient {
                     value: value_cents as f64 / 100.0,
                     currency: currency.to_uppercase(),
                 };
-                self.google_analytics.track(email, "purchase", &event).await?;
+                if let Some(ga_client_id) = ga_client_id {
+                    self.google_analytics
+                        .track(ga_client_id, "purchase", &event)
+                        .await?;
+                }
                 self.meta.track(email, "Purchase", &event).await?;
             }
             ("canceled", _) => {
@@ -167,7 +174,11 @@ impl AnalyticsClient {
                     value: value_cents as f64 / 100.0,
                     currency: currency.to_uppercase(),
                 };
-                self.google_analytics.track(email, "refund", &event).await?;
+                if let Some(ga_client_id) = ga_client_id {
+                    self.google_analytics
+                        .track(ga_client_id, "refund", &event)
+                        .await?;
+                }
                 self.meta.track(email, "CancelSubscription", &event).await?;
             }
             _ => {}
