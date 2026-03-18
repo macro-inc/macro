@@ -89,5 +89,4 @@ describe('createChannelMessageActions', () => {
       currentReactions: [],
     });
   });
-
 });

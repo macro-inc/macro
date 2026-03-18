@@ -156,7 +156,9 @@ export function ChannelThread(props: ThreadProps) {
               actions={props.getMessageActions?.(props.data())}
               listMeta={props.listMeta}
               messageEditor={props.messageEditor}
-              highlighted={props.highlighted || (isSelected() && !isThreadFocused())}
+              highlighted={
+                props.highlighted || (isSelected() && !isThreadFocused())
+              }
               selectionState={
                 isSelected() && !isThreadFocused()
                   ? { isSelected: true }
