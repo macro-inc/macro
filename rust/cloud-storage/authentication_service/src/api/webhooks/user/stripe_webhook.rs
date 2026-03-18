@@ -233,7 +233,7 @@ async fn handle_customer_subscription_event(
     }
 
     // Check if this user was referred and process the referral
-    if matches!(subscription_status, "active" | "trialing") {
+    if matches!(subscription_status, "active") {
         let referral_result = async {
             let (macro_user_id, user_id_str) =
                 macro_db_client::user::get::get_user_macro_user_id_and_id_by_email(
