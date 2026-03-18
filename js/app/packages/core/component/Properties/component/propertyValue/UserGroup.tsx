@@ -20,10 +20,10 @@ export const UserGroup = (props: UserEntityPillProps) => {
   const displayEntities = () => props.entities.slice(0, max());
 
   return (
-    <div class="flex items-center shrink-0 w-fit pr-3">
+    <div class="flex items-center shrink-0 w-fit">
       <For each={displayEntities()}>
         {(entity) => (
-          <div class="bg-panel rounded-full p-[2px] -mr-3">
+          <div class="bg-panel rounded-full">
             <UserIcon
               id={entity.entity_id}
               isDeleted={false}

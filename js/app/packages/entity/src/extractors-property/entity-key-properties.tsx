@@ -96,12 +96,7 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         onPropertyDeleted={() => {}}
         saveHandler={saveHandler}
       >
-        <div
-          class="grid items-center gap-1 justify-start overflow-hidden w-24"
-          style={{
-            'grid-template-columns': 'min-content min-content 1fr',
-          }}
-        >
+        <div class="flex items-center gap-1 justify-start overflow-hidden">
           <For each={keyProperties()}>
             {(property) => (
               <div class="relative">

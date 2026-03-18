@@ -1,10 +1,10 @@
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 
-export function DisplayName(props: {
+export function useDisplayName(props: {
   id: string;
   format?: 'firstName' | 'lastName' | 'fullName';
-}) {
-  const name = () => {
+}): () => string {
+  return () => {
     const parts = useDisplayNameParts(tryMacroId(props.id));
     const format = props.format ?? 'fullName';
 
@@ -16,6 +16,12 @@ export function DisplayName(props: {
     const requestedPart = parts[format]();
     return requestedPart || parts.fullName();
   };
+}
 
+export function DisplayName(props: {
+  id: string;
+  format?: 'firstName' | 'lastName' | 'fullName';
+}) {
+  const name = useDisplayName(props);
   return <>{name()}</>;
 }
