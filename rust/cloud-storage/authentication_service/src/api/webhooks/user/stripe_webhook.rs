@@ -16,6 +16,7 @@ use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::Serialize;
 use stripe_webhook::{EventObject, EventType};
 use teams::domain::team_repo::TeamService;
+use tracing::Instrument;
 
 /// The main entrypoint for all stripe webhook events handling
 #[tracing::instrument(skip(ctx, headers, body))]
@@ -354,6 +355,7 @@ struct SubscriptionEvent {
 }
 
 /// Tracks a Stripe subscription event to GA and Meta (fire-and-forget).
+#[tracing::instrument(skip(client, email), fields(subscription_id, email = %email, status, is_new))]
 fn track_stripe_subscription(
     client: std::sync::Arc<AnalyticsClient>,
     ga_client_id: Option<String>,
@@ -371,43 +373,64 @@ fn track_stripe_subscription(
         return;
     };
 
-    tokio::spawn(async move {
-        let event = SubscriptionEvent {
-            transaction_id: subscription_id.clone(),
-            value: value_cents as f64 / 100.0,
-            currency: currency.to_uppercase(),
-        };
-        let user_data = MetaUserData::with_email(&email);
-        let event_id = Some(subscription_id.as_str());
+    // Create a child span for the spawned task, linked to the current span
+    let task_span = tracing::info_span!(
+        parent: tracing::Span::current(),
+        "track_stripe_subscription_task"
+    );
 
-        match (status.as_str(), is_new) {
-            ("active" | "trialing", true) => {
-                if let Some(ga_client_id) = ga_client_id {
-                    if let Err(e) = client.track_ga(&ga_client_id, "purchase", &event).await {
-                        tracing::warn!(error = ?e, "failed to track GA purchase event");
+    tokio::spawn(
+        async move {
+            let event = SubscriptionEvent {
+                transaction_id: subscription_id.clone(),
+                value: value_cents as f64 / 100.0,
+                currency: currency.to_uppercase(),
+            };
+            let user_data = MetaUserData::with_email(&email);
+            let event_id = Some(subscription_id.as_str());
+
+            match (status.as_str(), is_new) {
+                ("active" | "trialing", true) => {
+                    if let Some(ga_client_id) = ga_client_id {
+                        if let Err(e) = client.track_ga(&ga_client_id, "purchase", &event).await {
+                            tracing::warn!(error = ?e, "failed to track GA purchase event");
+                        }
+                    }
+                    if let Err(e) = client
+                        .track_meta(
+                            "Purchase",
+                            &user_data,
+                            MetaActionSource::Website,
+                            event_id,
+                            &event,
+                        )
+                        .await
+                    {
+                        tracing::warn!(error = ?e, "failed to track Meta purchase event");
                     }
                 }
-                if let Err(e) = client
-                    .track_meta("Purchase", &user_data, MetaActionSource::Website, event_id, &event)
-                    .await
-                {
-                    tracing::warn!(error = ?e, "failed to track Meta purchase event");
-                }
-            }
-            ("canceled", _) => {
-                if let Some(ga_client_id) = ga_client_id {
-                    if let Err(e) = client.track_ga(&ga_client_id, "refund", &event).await {
-                        tracing::warn!(error = ?e, "failed to track GA refund event");
+                ("canceled", _) => {
+                    if let Some(ga_client_id) = ga_client_id {
+                        if let Err(e) = client.track_ga(&ga_client_id, "refund", &event).await {
+                            tracing::warn!(error = ?e, "failed to track GA refund event");
+                        }
+                    }
+                    if let Err(e) = client
+                        .track_meta(
+                            "CancelSubscription",
+                            &user_data,
+                            MetaActionSource::Website,
+                            event_id,
+                            &event,
+                        )
+                        .await
+                    {
+                        tracing::warn!(error = ?e, "failed to track Meta cancel event");
                     }
                 }
-                if let Err(e) = client
-                    .track_meta("CancelSubscription", &user_data, MetaActionSource::Website, event_id, &event)
-                    .await
-                {
-                    tracing::warn!(error = ?e, "failed to track Meta cancel event");
-                }
+                _ => {}
             }
-            _ => {}
         }
-    });
+        .instrument(task_span),
+    );
 }
