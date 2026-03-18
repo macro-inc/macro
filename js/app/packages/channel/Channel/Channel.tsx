@@ -78,8 +78,6 @@ export function Channel(props: ChannelProps) {
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
 
-    
-
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
@@ -87,8 +85,7 @@ export function Channel(props: ChannelProps) {
     navigation: threadListNavigation,
   });
 
-  
-  // START BLOCK COMPATIBILITY 
+  // START BLOCK COMPATIBILITY
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
@@ -98,9 +95,8 @@ export function Channel(props: ChannelProps) {
       // For compotibility the naming is  a little strange here.
       // New channels index by top level message and then spertately handle replies.
       // If we have a threadId that is actually the top level message and the reply is the message id.
-      const topLevelMessageId = threadId ? threadId: messageId;
-      const messageReplyId = threadId ? messageId: threadId;
-
+      const topLevelMessageId = threadId ? threadId : messageId;
+      const messageReplyId = threadId ? messageId : threadId;
 
       if (topLevelMessageId) {
         targetMessageController.goToMessage(topLevelMessageId, messageReplyId);
@@ -108,7 +104,6 @@ export function Channel(props: ChannelProps) {
     },
   });
   // END BLOCK COMPATIBILITY
-
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,

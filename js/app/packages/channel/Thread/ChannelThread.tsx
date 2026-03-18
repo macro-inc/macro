@@ -31,7 +31,6 @@ function sliceIf<T>(
   return should ? val.slice(start, end) : val;
 }
 
-
 export function ChannelThread(props: ThreadProps) {
   const userId = useUserId();
   const replyUserId = () => userId() ?? props.data().sender_id;
@@ -86,7 +85,12 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [() => props.targetReplyId, activeReplies, props.isExpanded, replyListHandle],
+      [
+        () => props.targetReplyId,
+        activeReplies,
+        props.isExpanded,
+        replyListHandle,
+      ],
       ([targetReplyId, replies, isExpanded, handle]) => {
         if (!targetReplyId) return;
 
@@ -95,10 +99,7 @@ export function ChannelThread(props: ThreadProps) {
         );
         if (targetReplyIndex === -1) return;
 
-        if (
-          !isExpanded &&
-          targetReplyIndex >= DEFAULT_VISIBLE_REPLY_COUNT
-        ) {
+        if (!isExpanded && targetReplyIndex >= DEFAULT_VISIBLE_REPLY_COUNT) {
           props.setIsExpanded(true);
           return;
         }
@@ -107,7 +108,6 @@ export function ChannelThread(props: ThreadProps) {
       }
     )
   );
-
 
   return (
     <Suspense>

@@ -1,8 +1,4 @@
-import {
-  createEffect,
-  on,
-  type Accessor,
-} from 'solid-js';
+import { createEffect, on, type Accessor } from 'solid-js';
 import {
   getChannelMessagesQueryKey,
   type ChannelMessagesData,
@@ -24,12 +20,12 @@ export type TargetMessageController = ReturnType<
 >;
 
 type TargetMessageData = {
-  activeTargetMessageId: string | undefined,
-  activeTargetMessageReplyId: string | undefined,
-  highlightedMessageId: string | undefined,
-  loadAroundMessageId: string | undefined,
-  pendingScrollTargetId: string | undefined,
-}
+  activeTargetMessageId: string | undefined;
+  activeTargetMessageReplyId: string | undefined;
+  highlightedMessageId: string | undefined;
+  loadAroundMessageId: string | undefined;
+  pendingScrollTargetId: string | undefined;
+};
 
 export function createTargetMessageController(
   options: CreateTargetMessageControllerOptions
@@ -37,19 +33,21 @@ export function createTargetMessageController(
   const initialTargetMessageData: TargetMessageData = {
     activeTargetMessageId: options.initialTargetMessageId,
     activeTargetMessageReplyId: undefined,
-    highlightedMessageId: options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
+    highlightedMessageId:
+      options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
     loadAroundMessageId: options.initialTargetMessageId,
     pendingScrollTargetId: options.initialTargetMessageId,
-
   };
 
-  const [targetMessageData, setTargetMessageData] = createStore<TargetMessageData>(initialTargetMessageData)
+  const [targetMessageData, setTargetMessageData] =
+    createStore<TargetMessageData>(initialTargetMessageData);
 
   const hasMessageLoaded = (messageId: string) =>
     options.messageKeys().includes(messageId);
 
   const goToMessage = (messageId: string, replyId?: string) => {
-    const isSameTarget = targetMessageData['activeTargetMessageId'] === messageId;
+    const isSameTarget =
+      targetMessageData['activeTargetMessageId'] === messageId;
     const isPending = targetMessageData['pendingScrollTargetId'] === messageId;
 
     if (isSameTarget && isPending) return;
@@ -60,7 +58,7 @@ export function createTargetMessageController(
       highlightedMessageId: replyId ?? messageId,
       loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
       pendingScrollTargetId: messageId,
-    })
+    });
   };
 
   const completePendingScroll = (messageId: string) => {
@@ -70,7 +68,11 @@ export function createTargetMessageController(
 
   createEffect(
     on(
-      [options.navigation, () => targetMessageData['pendingScrollTargetId'], options.messageKeys],
+      [
+        options.navigation,
+        () => targetMessageData['pendingScrollTargetId'],
+        options.messageKeys,
+      ],
       ([navigation, pendingTargetId]) => {
         if (!navigation || !pendingTargetId) return;
         if (!hasMessageLoaded(pendingTargetId)) return;
@@ -91,7 +93,8 @@ export function createTargetMessageController(
 
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
-    activeTargetMessageReplyId: () => targetMessageData['activeTargetMessageReplyId'],
+    activeTargetMessageReplyId: () =>
+      targetMessageData['activeTargetMessageReplyId'],
     highlightedMessageId: () => targetMessageData['highlightedMessageId'],
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
