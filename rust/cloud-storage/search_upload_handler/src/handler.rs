@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -7,7 +5,6 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use model_file_type::FileType;
 use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
 
 #[derive(Debug)]
@@ -15,7 +12,6 @@ struct DocumentKeyParts {
     pub user_id: String,
     pub document_id: String,
     pub document_version_id: String,
-    pub file_type: Option<String>,
 }
 
 impl TryFrom<String> for DocumentKeyParts {
@@ -31,19 +27,17 @@ impl TryFrom<String> for DocumentKeyParts {
             anyhow::bail!("expected 3 parts, got {}", parts.len());
         }
 
-        let file: Vec<&str> = parts[2].split('.').collect::<Vec<&str>>();
-
-        let (document_version_id, file_type) = if file.len() == 2 {
-            (file[0].to_string(), Some(file[1].to_string()))
-        } else {
-            (parts[2].to_string(), None)
-        };
+        let version_part = parts[2];
+        let document_version_id = version_part
+            .split('.')
+            .next()
+            .unwrap_or(version_part)
+            .to_string();
 
         Ok(Self {
             user_id: parts[0].to_string(),
             document_id: parts[1].to_string(),
             document_version_id,
-            file_type,
         })
     }
 }
@@ -92,7 +86,7 @@ pub async fn handler(
 
     // Resolve file type: from the key extension (legacy) or via DSS lookup (extensionless)
     let document_basic = dss_client
-        .get_document_basic(document_id)
+        .get_document_basic(&document_key_parts.document_id)
         .await
         .context("Failed to fetch document basic info")?
         .ok_or_else(|| anyhow::anyhow!("document not found"))?;
