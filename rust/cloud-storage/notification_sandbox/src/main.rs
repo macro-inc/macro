@@ -36,7 +36,7 @@ use adapters::interactive_mobile::{
 };
 use adapters::logging_websocket::LoggingWebSocketSender;
 use adapters::mpsc_queue::MpscQueue;
-use adapters::noop_rate_limiter::NoOpRateLimiter;
+use adapters::noop_rate_limiter::NoOpRateLimitPort;
 use adapters::sandbox_repository::SandboxNotificationRepository;
 
 /// Configuration collected from the interactive wizard.
@@ -160,7 +160,9 @@ async fn main() -> Result<(), Report> {
         websocket: LoggingWebSocketSender,
         mobile: mobile_sender,
         email: email_adapter,
-        rate_limiter: NoOpRateLimiter,
+        rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: NoOpRateLimitPort,
+        },
         state_machine: StateMachineDriverB {
             message_receipt_repo: DbMessageReceiptRepository::new(db.clone()),
             digest_batcher: RedisDigestBatcher::new(redis_conn.clone()),

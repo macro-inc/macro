@@ -6669,6 +6669,7 @@ dependencies = [
  "notification",
  "notification_db_client",
  "paste",
+ "rate_limit",
  "redis",
  "regex",
  "secretsmanager_client",

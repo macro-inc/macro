@@ -48,7 +48,7 @@ pub trait NotificationSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
-pub use rate_limit::RateLimitPort;
+pub use rate_limit::{RateLimitPort, RateLimitService};
 
 /// Port for notification persistence operations.
 pub trait NotificationRepository: Send + Sync + 'static {

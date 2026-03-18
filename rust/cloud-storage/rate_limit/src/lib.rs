@@ -10,6 +10,8 @@ pub mod outbound;
 // Re-export key types at crate root for convenience.
 pub use domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitKeyBuilder, RateLimitResult,
+    RateLimitTicket,
 };
-pub use domain::ports::RateLimitPort;
+pub use domain::ports::{RateLimitPort, RateLimitService};
+pub use domain::service::RateLimitServiceImpl;
 pub use outbound::redis::{RedisRateLimitAdapter, RedisRateLimitOps};

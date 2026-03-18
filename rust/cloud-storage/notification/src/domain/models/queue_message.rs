@@ -55,13 +55,13 @@ pub struct EmailContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
-    to: MacroUserIdStr<'a>,
+    pub(crate) to: MacroUserIdStr<'a>,
     /// The email content (subject and body).
     pub content: EmailContent,
 
-    rate_limit_config: RateLimitConfig,
+    pub(crate) rate_limit_config: RateLimitConfig,
 
-    rate_limit_key: RateLimitKey,
+    pub(crate) rate_limit_key: RateLimitKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,11 +107,6 @@ impl<'a> EmailNotification<'a> {
     /// return the value of the recipient of the email
     pub fn to(&'a self) -> MacroUserIdStr<'a> {
         self.to.copied()
-    }
-
-    /// return the rate limit configuration
-    pub fn rate_limit(&self) -> (&RateLimitConfig, &RateLimitKey) {
-        (&self.rate_limit_config, &self.rate_limit_key)
     }
 }
 

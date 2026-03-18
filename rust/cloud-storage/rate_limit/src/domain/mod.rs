@@ -2,4 +2,5 @@
 
 pub mod models;
 pub mod ports;
+/// Default [`ports::RateLimitService`] implementation.
 pub mod service;
