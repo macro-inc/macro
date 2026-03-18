@@ -143,6 +143,20 @@ const stripeWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
+const GA_ANALYTICS_MEASUREMENT_ID = config.require('ga_measurement_id');
+
+const GA_ANALYTICS_API_SECRET = config.require('ga_api_secret');
+const gaAnalyticsApiSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: GA_ANALYTICS_API_SECRET })
+  .apply((secret) => secret.arn);
+
+const META_PIXEL_ID = config.require('meta_pixel_id');
+
+const META_PIXEL_ACCESS_TOKEN = config.require('meta_access_token');
+const metaPixelAccessTokenArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: META_PIXEL_ACCESS_TOKEN })
+  .apply((secret) => secret.arn);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${fusionauthApiKeySecretKeyArn}`,
@@ -154,6 +168,8 @@ const secretKeyArns = [
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
   pulumi.interpolate`${stripePriceIdArn}`,
+  pulumi.interpolate`${gaAnalyticsApiSecretKeyArn}`,
+  pulumi.interpolate`${metaPixelAccessTokenArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -322,6 +338,23 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'DD_ENV',
       value: stack,
+    },
+    // Analytics
+    {
+      name: 'GA_ANALYTICS_MEASUREMENT_ID',
+      value: GA_ANALYTICS_MEASUREMENT_ID,
+    },
+    {
+      name: 'GA_ANALYTICS_API_SECRET',
+      value: GA_ANALYTICS_API_SECRET,
+    },
+    {
+      name: 'META_PIXEL_ID',
+      value: META_PIXEL_ID,
+    },
+    {
+      name: 'META_PIXEL_ACCESS_TOKEN',
+      value: META_PIXEL_ACCESS_TOKEN,
     },
   ],
 });
