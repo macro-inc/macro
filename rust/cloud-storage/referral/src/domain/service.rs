@@ -46,7 +46,7 @@ impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImp
         self.repo
             .track_referral(referred_user_id, referral_code)
             .await
-            .map_err(|e| ReferralError::Internal(e.into()))?;
+            .map_err(|e| ReferralError::Internal(e.into()))
     }
 
     #[tracing::instrument(skip(self), err)]
