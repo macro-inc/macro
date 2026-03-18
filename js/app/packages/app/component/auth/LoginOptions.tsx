@@ -48,6 +48,12 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
   const startSsoLogin = async (idp_name: string) => {
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
+    const referral_code =
+      new URL(window.location.href).searchParams.get('referral_code') ??
+      new URLSearchParams(location.state?.originalLocation?.search).get(
+        'referral_code'
+      );
+    if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
     if (isNativeMobilePlatform()) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
