@@ -30,6 +30,8 @@ uuid = { workspace = true }
 # Domain models
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+notification = { path = "../notification" }
+rate_limit = { path = "../rate_limit" }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
@@ -37,6 +39,7 @@ axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
+
 
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",

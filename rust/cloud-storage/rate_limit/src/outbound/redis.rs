@@ -12,14 +12,8 @@ use crate::domain::ports::RateLimitPort;
 /// The key is provided by the caller (already hashed), and this adapter
 /// handles the Redis operations.
 pub struct RedisRateLimitAdapter<R> {
-    redis: R,
-}
-
-impl<R> RedisRateLimitAdapter<R> {
-    /// Create a new Redis rate limit adapter.
-    pub fn new(redis: R) -> Self {
-        Self { redis }
-    }
+    /// the inner redis client
+    pub redis: R,
 }
 
 /// Trait for Redis operations needed by the rate limit adapter.

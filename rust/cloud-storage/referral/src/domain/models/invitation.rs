@@ -1,12 +1,11 @@
-#![deny(missing_docs)]
 //! This crate provides the mechanisms for sending referal code email notifications
 //! To prospective users of macro.
 
+use crate::domain::models::ReferralCode;
 use macro_user_id::email::EmailStr;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, queue_message::EmailContent,
+    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, queue_message::EmailContent,
 };
-use rate_limit::{RateLimitConfig, RateLimitKey};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -17,7 +16,7 @@ pub struct InviteToMacro {
     recipient_email: EmailStr<'static>,
     /// the refereral code which is templated into the email to track the sender
     /// and reward them
-    referal_code: String,
+    referal_code: ReferralCode,
 }
 
 impl Notification for InviteToMacro {

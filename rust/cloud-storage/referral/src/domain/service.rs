@@ -1,6 +1,7 @@
 //! Referral service implementation.
 
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use rate_limit::domain::ports::RateLimitService;
 
 use crate::domain::{
     models::{ReferralCode, ReferralError},
@@ -8,24 +9,18 @@ use crate::domain::{
 };
 
 /// The concrete referral service implementation.
-pub struct ReferralServiceImpl<R: ReferralRepo, Dc: DiscountClient> {
+pub struct ReferralServiceImpl<R: ReferralRepo, Dc: DiscountClient, Rl: RateLimitService> {
     ///  referral repo
-    repo: R,
+    pub repo: R,
     /// discount client
-    discount_client: Dc,
+    pub discount_client: Dc,
+    /// rate limiter service
+    pub rate_limit: Rl,
 }
 
-impl<R: ReferralRepo, Dc: DiscountClient> ReferralServiceImpl<R, Dc> {
-    /// Create a new referral service.
-    pub fn new(repo: R, discount_client: Dc) -> Self {
-        Self {
-            repo,
-            discount_client,
-        }
-    }
-}
-
-impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImpl<R, Dc> {
+impl<R: ReferralRepo, Dc: DiscountClient, Rl: RateLimitService> ReferralService
+    for ReferralServiceImpl<R, Dc, Rl>
+{
     #[tracing::instrument(skip(self), err)]
     async fn get_referral_code_for_user<'a>(
         &self,

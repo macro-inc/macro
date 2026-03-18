@@ -12,8 +12,11 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsIngressQueue;
+use notification::{
+    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
+};
+use rate_limit::domain::service::RateLimitServiceImpl;
 use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
@@ -33,7 +36,11 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     NotificationIngressType,
 >;
 
-pub(crate) type ReferralServiceType = ReferralServiceImpl<PgReferralRepo, StripeDiscountClient>;
+pub(crate) type ReferralServiceType = ReferralServiceImpl<
+    PgReferralRepo,
+    StripeDiscountClient,
+    RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>,
+>;
 
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;

@@ -5,8 +5,8 @@ use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
-use ::rate_limit::RateLimitServiceImpl;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
+use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
 use email_formatting::EmailDigestNotification;
@@ -168,7 +168,9 @@ pub async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get multiplexed redis connection for egress state machine")?;
     let rate_limit_adapter = RateLimitServiceImpl {
-        repo: RedisRateLimitAdapter::new(redis_client),
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
     };
 
     let egress_state_machine =
