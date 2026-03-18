@@ -28,6 +28,7 @@ import {
   PROPERTIES_DRAWER_ID,
 } from './EmailPropertiesModal';
 import { useEmailContext } from './EmailContext';
+import { useEmailLinksQuery } from '@queries/email/link';
 
 export function TopBar(props: {
   id: string;
@@ -38,6 +39,14 @@ export function TopBar(props: {
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
   const soup = useMaybeSoup();
+  const linksQuery = useEmailLinksQuery();
+
+  const isOwnThread = () => {
+    const thread = emailCtx.thread();
+    const links = linksQuery.data?.links;
+    if (!thread || !links) return false;
+    return links.some((link) => link.id === thread.link_id);
+  };
 
   const trashThread = () => {
     const thread = emailCtx.thread();
@@ -91,11 +100,13 @@ export function TopBar(props: {
           emailCtx.archiveThread();
         }
       },
+      condition: isOwnThread,
     },
     {
       label: 'Trash',
       icon: TrashIcon,
       action: trashThread,
+      condition: isOwnThread,
     },
     {
       label: 'Properties',
