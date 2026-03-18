@@ -3,6 +3,7 @@ import { cn } from '@ui/utils/classname';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
+import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   type Accessor,
@@ -281,6 +282,16 @@ const FILES_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
+export function buildContactLabel(
+  contact: { id: string; name?: string | null },
+  currentUserId: string | undefined
+): string {
+  if (contact.id === currentUserId) {
+    return contact.name ? `${contact.name} (me)` : 'Me';
+  }
+  return contact.name || contact.id;
+}
+
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   inbox: INBOX_FILTER_CATEGORIES,
   agents: [],
@@ -445,8 +456,9 @@ export const UnifiedFilterDropdown = () => {
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
-    if (content.type !== 'component') return undefined;
-    return content.id as ListView;
+    if (content.type !== 'component' || !isListViewID(content.id))
+      return undefined;
+    return content.id;
   });
 
   const categories = createMemo(() => {
@@ -473,12 +485,7 @@ export const UnifiedFilterDropdown = () => {
     };
     const contactOptions = contacts().map((contact) => ({
       id: contact.id,
-      label:
-        contact.id === currentUserId
-          ? contact.name
-            ? `${contact.name} (me)`
-            : 'Me'
-          : contact.name || contact.id,
+      label: buildContactLabel(contact, currentUserId),
       icon: () => (
         <UserIcon id={contact.id} size="xs" suppressClick showTooltip={false} />
       ),
@@ -497,91 +504,88 @@ export const UnifiedFilterDropdown = () => {
 
   const isTasksView = () => currentView() === 'tasks';
 
-  // Don't render if no categories for this view (and not tasks view which has assignee)
-  if (categories().length === 0 && !isTasksView()) {
-    return null;
-  }
-
   return (
-    <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <DropdownMenu.Trigger as={Button} variant="tertiary" size="sm">
-        <SlidersIcon class="size-3.5" />
-        <span class="font-medium">Filter</span>
-      </DropdownMenu.Trigger>
+    <Show when={categories().length > 0 || isTasksView()}>
+      <DropdownMenu open={open()} onOpenChange={setOpen}>
+        <DropdownMenu.Trigger as={Button} variant="tertiary" size="sm">
+          <SlidersIcon class="size-3.5" />
+          <span class="font-medium">Filter</span>
+        </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[180px] p-1">
-          <For each={categories()}>
-            {(category) => (
-              <DropdownMenu.Sub gutter={4}>
-                <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5">
-                  <span class="text-ink">{category.label}</span>
-                  <CaretRightIcon class="size-3 text-ink-muted" />
-                </DropdownMenu.SubTrigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[180px] p-1">
+            <For each={categories()}>
+              {(category) => (
+                <DropdownMenu.Sub gutter={4}>
+                  <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5">
+                    <span class="text-ink">{category.label}</span>
+                    <CaretRightIcon class="size-3 text-ink-muted" />
+                  </DropdownMenu.SubTrigger>
 
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[160px] p-1">
-                    <For each={category.options}>
-                      {(option) => {
-                        const active = () => isOptionActive(option.id);
-                        return (
-                          <DropdownMenu.Item
-                            class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-pointer"
-                            onSelect={() => toggleFilter(option.id)}
-                            closeOnSelect={!category.multiple}
-                          >
-                            <span
-                              class={cn(
-                                'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                active()
-                                  ? 'bg-accent border-accent'
-                                  : 'border-edge'
-                              )}
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.SubContent class="z-action-menu bg-surface-0 border border-edge-muted rounded-lg shadow-xl min-w-[160px] p-1">
+                      <For each={category.options}>
+                        {(option) => {
+                          const active = () => isOptionActive(option.id);
+                          return (
+                            <DropdownMenu.Item
+                              class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-pointer"
+                              onSelect={() => toggleFilter(option.id)}
+                              closeOnSelect={!category.multiple}
                             >
-                              <Show when={active()}>
-                                <CheckIcon class="size-2.5 text-page" />
+                              <span
+                                class={cn(
+                                  'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                  active()
+                                    ? 'bg-accent border-accent'
+                                    : 'border-edge'
+                                )}
+                              >
+                                <Show when={active()}>
+                                  <CheckIcon class="size-2.5 text-page" />
+                                </Show>
+                              </span>
+
+                              <Show when={option.icon}>
+                                {(icon) => (
+                                  <span class="size-4 flex items-center justify-center shrink-0">
+                                    {icon()()}
+                                  </span>
+                                )}
                               </Show>
-                            </span>
 
-                            <Show when={option.icon}>
-                              {(icon) => (
-                                <span class="size-4 flex items-center justify-center shrink-0">
-                                  {icon()()}
-                                </span>
-                              )}
-                            </Show>
+                              <span
+                                class={cn(
+                                  'flex-1 truncate',
+                                  active() ? 'text-ink' : 'text-ink-muted'
+                                )}
+                              >
+                                {option.label}
+                              </span>
+                            </DropdownMenu.Item>
+                          );
+                        }}
+                      </For>
+                    </DropdownMenu.SubContent>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Sub>
+              )}
+            </For>
 
-                            <span
-                              class={cn(
-                                'flex-1 truncate',
-                                active() ? 'text-ink' : 'text-ink-muted'
-                              )}
-                            >
-                              {option.label}
-                            </span>
-                          </DropdownMenu.Item>
-                        );
-                      }}
-                    </For>
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Sub>
-            )}
-          </For>
-
-          {/* Assignee filter for tasks view */}
-          <Show when={isTasksView()}>
-            <SearchableFilterSubmenu
-              label="Assignee"
-              options={assigneeOptions}
-              activeIds={assigneeFilter}
-              onToggle={toggleAssignee}
-              placeholder="Search assignees..."
-              multiple
-            />
-          </Show>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+            {/* Assignee filter for tasks view */}
+            <Show when={isTasksView()}>
+              <SearchableFilterSubmenu
+                label="Assignee"
+                options={assigneeOptions}
+                activeIds={assigneeFilter}
+                onToggle={toggleAssignee}
+                placeholder="Search assignees..."
+                multiple
+              />
+            </Show>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu>
+    </Show>
   );
 };

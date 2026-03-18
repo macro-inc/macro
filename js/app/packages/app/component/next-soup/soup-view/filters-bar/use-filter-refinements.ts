@@ -13,7 +13,10 @@ import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
-import { VIEW_FILTER_CATEGORIES } from './unified-filter-dropdown';
+import {
+  buildContactLabel,
+  VIEW_FILTER_CATEGORIES,
+} from './unified-filter-dropdown';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
@@ -106,13 +109,7 @@ export function useFilterRefinements() {
     const map = new Map<string, { label: string }>();
     map.set(NO_ASSIGNEE, { label: 'Unassigned' });
     for (const contact of contacts()) {
-      const label =
-        contact.id === uid
-          ? contact.name
-            ? `${contact.name} (me)`
-            : 'Me'
-          : contact.name || contact.id;
-      map.set(contact.id, { label });
+      map.set(contact.id, { label: buildContactLabel(contact, uid) });
     }
     return map;
   });
