@@ -56,6 +56,9 @@ import { createMessageEditor } from './create-message-editor';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import { createTargetMessageController } from './create-target-message-controller';
 import { DebugGoToMessage } from './DebugGoToMessage';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
+import { URL_PARAMS } from '@block-channel/constants';
 
 type ChannelProps = {
   channelId: string;
@@ -76,12 +79,31 @@ export function Channel(props: ChannelProps) {
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
 
+    
+
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
     messageKeys: () => messageIndex().keys,
     navigation: threadListNavigation,
   });
+
+  
+  // START BLOCK 
+  
+  const blockHandle = blockHandleSignal.get;
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: async (params: Record<string, unknown>) => {
+      // const threadId = params[URL_PARAMS.thread] as string | undefined;
+      const messageId = params[URL_PARAMS.message] as string | undefined;
+      if (messageId) {
+        targetMessageController.goToMessage(messageId);
+      }
+    },
+  });
+
+  // END BLOCK
+
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
