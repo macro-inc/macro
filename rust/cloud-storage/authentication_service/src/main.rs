@@ -221,7 +221,7 @@ async fn main() -> anyhow::Result<()> {
 
     let referral_service = ReferralServiceImpl::new(
         PgReferralRepo::new(db.clone()),
-        StripeDiscountClient::new(stripe_client.clone(), 500),
+        StripeDiscountClient::new(stripe_client.clone(), 10000 /*100$ credit, in cents*/),
     );
 
     api::setup_and_serve(
