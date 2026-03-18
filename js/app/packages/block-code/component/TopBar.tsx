@@ -9,7 +9,7 @@ import type { FileOperation } from '@app/component/split-layout/components/Split
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
-import { withAnalytics } from '@coparse/analytics';
+import { useAnalytics } from '@app/component/analytics-context';
 import { useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
@@ -40,13 +40,12 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
 
-const { track, TrackingEvents } = withAnalytics();
-
 export const TopBar: Component<{
   isHtmlFile: boolean;
   mode: CodeBlockMode;
   onModeChange: (mode: CodeBlockMode) => void;
 }> = (props) => {
+  const analytics = useAnalytics();
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
@@ -61,7 +60,7 @@ export const TopBar: Component<{
     if (!text || !name) return;
     const file = new Blob([content ?? ''], { type: 'text/plain' });
     downloadFile(file, downloadName());
-    track(TrackingEvents.BLOCKCODE.FILEMENU.DOWNLOAD);
+    analytics.track('download', { blockType: 'code' });
   });
 
   const ops: FileOperation[] = [
@@ -94,7 +93,15 @@ export const TopBar: Component<{
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
-      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+      buttonComponent: () => (
+        <DocumentPropertiesButton
+          buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('properties_panel_open', { blockType: 'code' })
+          }
+        />
+      ),
     },
     {
       label: 'Share',

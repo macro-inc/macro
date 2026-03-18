@@ -30,6 +30,7 @@ function DocumentPropertiesContent(props: {
 
 export function DocumentPropertiesButton(props: {
   buttonSize?: 'sm' | 'base';
+  onOpenChange?: (open: boolean) => void;
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   return (
@@ -38,7 +39,10 @@ export function DocumentPropertiesButton(props: {
       theme={drawerControl.isOpen() ? 'accent' : 'clear'}
       size={props.buttonSize ?? 'base'}
       tooltip={{ label: 'Properties' }}
-      onClick={drawerControl.toggle}
+      onClick={() => {
+        props.onOpenChange?.(!drawerControl.isOpen());
+        drawerControl.toggle();
+      }}
     />
   );
 }
