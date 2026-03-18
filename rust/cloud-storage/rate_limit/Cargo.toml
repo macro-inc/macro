@@ -14,4 +14,5 @@ redis = { workspace = true, features = [
 rootcause = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 twox-hash = { version = "2" }

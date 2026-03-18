@@ -69,6 +69,7 @@ pub enum RateLimitResult {
 }
 
 /// The return value from the rate limit service
+#[derive(Debug)]
 pub struct RateLimitTicket {
     pub(crate) result: RateLimitResult,
     pub(crate) key: RateLimitKey,
@@ -84,7 +85,7 @@ impl std::ops::Deref for RateLimitTicket {
 }
 
 /// Error returned when a rate limit is exceeded.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 #[error(
     "Rate limit key: {key} was exceeded. Current count is {current_count} but max count is {max_count}"
 )]

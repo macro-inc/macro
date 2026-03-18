@@ -28,6 +28,7 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn increment_ticket(&self, ticket: RateLimitTicket) -> Result<(), Report> {
         self.repo.increment(&ticket.key, &ticket.config).await?;
         Ok(())

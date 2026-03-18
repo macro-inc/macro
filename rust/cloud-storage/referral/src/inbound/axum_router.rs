@@ -63,10 +63,10 @@ where
     S: Send + Sync + 'static,
 {
     Router::new()
-        .route("/code", axum::routing::get(get_referral_code_handler::<T>))
         .route(
             "/send",
             axum::routing::post(post_referral_invite_handler::<T>),
         )
+        .route("/code", axum::routing::get(get_referral_code_handler::<T>))
         .with_state(state)
 }
