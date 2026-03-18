@@ -67,7 +67,7 @@ fn hash_sha256(value: &str) -> String {
 }
 
 /// Meta provider for server-side event tracking.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MetaProvider {
     client: reqwest::Client,
     pixel_id: String,
@@ -101,10 +101,7 @@ impl MetaProvider {
         event_id: Option<&str>,
         custom_data: impl Serialize,
     ) -> Result<(), reqwest::Error> {
-        let url = format!(
-            "https://graph.facebook.com/v18.0/{}/events",
-            self.pixel_id
-        );
+        let url = format!("https://graph.facebook.com/v18.0/{}/events", self.pixel_id);
 
         let event_time = chrono::Utc::now().timestamp();
         let custom_data = serde_json::to_value(custom_data).unwrap_or_default();

@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::sync::Arc;
 
 /// Configuration for Google Analytics.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GoogleAnalyticsConfig {
     /// GA4 Measurement ID (e.g., "G-XXXXXXXXXX")
     pub measurement_id: String,
@@ -19,7 +19,7 @@ pub struct GoogleAnalyticsConfig {
 }
 
 /// Configuration for Meta Conversions API.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MetaConfig {
     /// Meta Pixel ID
     pub pixel_id: String,
@@ -30,7 +30,7 @@ pub struct MetaConfig {
 }
 
 /// Configuration for the analytics client.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct AnalyticsClientConfig {
     /// Google Analytics configuration (optional)
     pub google_analytics: Option<GoogleAnalyticsConfig>,
@@ -48,9 +48,9 @@ pub struct AnalyticsClient {
 impl AnalyticsClient {
     /// Creates a new analytics client with the given configuration.
     pub fn new(config: AnalyticsClientConfig) -> Self {
-        let google = config.google_analytics.map(|c| {
-            Arc::new(GoogleAnalyticsProvider::new(c.measurement_id, c.api_secret))
-        });
+        let google = config
+            .google_analytics
+            .map(|c| Arc::new(GoogleAnalyticsProvider::new(c.measurement_id, c.api_secret)));
 
         let meta = config.meta.map(|c| {
             Arc::new(MetaProvider::new(
