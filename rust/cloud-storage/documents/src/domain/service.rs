@@ -22,7 +22,7 @@ use model::document::response::{
 };
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, ContentType, DocumentBasic, FileType, FileTypeExt,
-    build_cloud_storage_bucket_document_key,
+    build_cloud_storage_bucket_document_key, build_extensionless_document_key,
 };
 use model::response::PresignedUrl;
 use tracing;
@@ -117,12 +117,24 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 .0
         };
 
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            Some(file_type),
-        );
+        // Try extensionless key first, fall back to legacy key with extension
+        let extensionless_key =
+            build_extensionless_document_key(owner, document_id, document_version_id);
+        let document_key = if self
+            .upload_url_service
+            .document_key_exists(&extensionless_key)
+            .await
+            .unwrap_or(false)
+        {
+            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
+        } else {
+            build_cloud_storage_bucket_document_key(
+                &url_encoded_owner,
+                document_id,
+                document_version_id,
+                Some(file_type),
+            )
+        };
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -141,13 +153,25 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .await
             .map_err(Into::into)?;
 
+        // Try extensionless key first, fall back to legacy key with extension
+        let extensionless_key =
+            build_extensionless_document_key(owner, document_id, document_version_id);
         let file_type_str = file_type.as_ref().map(|s| s.as_str());
-        let document_key = build_cloud_storage_bucket_document_key(
-            &url_encoded_owner,
-            document_id,
-            document_version_id,
-            file_type_str,
-        );
+        let document_key = if self
+            .upload_url_service
+            .document_key_exists(&extensionless_key)
+            .await
+            .unwrap_or(false)
+        {
+            build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
+        } else {
+            build_cloud_storage_bucket_document_key(
+                &url_encoded_owner,
+                document_id,
+                document_version_id,
+                file_type_str,
+            )
+        };
 
         let signed_url = self.make_presigned_url(&document_key)?;
         Ok(LocationResponseData::PresignedUrl(signed_url))
@@ -503,12 +527,11 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             )));
         }
 
-        // Build the S3 key for upload
-        let key = build_cloud_storage_bucket_document_key(
+        // Build the S3 key for upload (extensionless — new convention)
+        let key = build_extensionless_document_key(
             document_metadata.owner.as_ref(),
             &document_id,
             document_metadata.document_version_id,
-            file_type.as_ref().map(|s| s.as_str()),
         );
 
         let content_type = match file_type {

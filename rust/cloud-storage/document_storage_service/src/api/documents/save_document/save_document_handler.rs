@@ -18,7 +18,7 @@ use macro_middleware::cloud_storage::ensure_access::{
 };
 use model::document::response::DocumentResponseMetadata;
 use model::{
-    document::{DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key},
+    document::{DocumentBasic, FileType, FileTypeExt, build_extensionless_document_key},
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -158,11 +158,10 @@ pub async fn save_document_handler(
 
     // If the document is a monaco file, we will need to generate a presigned url to save the file
     let presigned_url: Option<String> = if file_type == FileType::Py || file_type == FileType::Js {
-        let key = build_cloud_storage_bucket_document_key(
+        let key = build_extensionless_document_key(
             document_metadata.owner.as_ref(),
             &document_metadata.document_id,
             document_metadata.document_version_id,
-            Some(file_type.as_str()),
         );
         // We've already validated that the sha is present for monaco files
         let sha = sha.unwrap();

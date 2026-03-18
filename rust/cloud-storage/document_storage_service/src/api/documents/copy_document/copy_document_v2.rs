@@ -9,7 +9,7 @@ use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
         BomPart, CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-        build_cloud_storage_bucket_document_key,
+        build_cloud_storage_bucket_document_key, build_extensionless_document_key,
     },
     response::GenericResponse,
 };
@@ -136,20 +136,36 @@ pub async fn copy_document<'a>(
             let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
+            let dest_key = build_extensionless_document_key(
+                user_id.as_ref(),
+                &updated_document_metadata.document_id,
+                updated_document_metadata.document_version_id,
+            );
+
             // Get the source document key
-            let source_key = build_cloud_storage_bucket_document_key(
+            // Try extensionless key first, then fall back to legacy key with extension
+            let extensionless_source = build_extensionless_document_key(
+                &url_encoded_owner,
+                &original_document_metadata.document_id,
+                document_version_id,
+            );
+            let legacy_source = build_cloud_storage_bucket_document_key(
                 &url_encoded_owner,
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
             );
 
-            let dest_key = build_cloud_storage_bucket_document_key(
-                user_id.as_ref(),
-                &updated_document_metadata.document_id,
-                updated_document_metadata.document_version_id,
-                file_type_str,
-            );
+            let source_key = if ctx
+                .s3_client
+                .exists(&extensionless_source)
+                .await
+                .unwrap_or(false)
+            {
+                extensionless_source
+            } else {
+                legacy_source
+            };
 
             let _ = ctx
                 .s3_client
@@ -214,20 +230,36 @@ pub async fn copy_document<'a>(
             let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
+            let dest_key = build_extensionless_document_key(
+                user_id.as_ref(),
+                &updated_document_metadata.document_id,
+                updated_document_metadata.document_version_id,
+            );
+
             // Get the source document key
-            let source_key = build_cloud_storage_bucket_document_key(
+            // Try extensionless key first, then fall back to legacy key with extension
+            let extensionless_source = build_extensionless_document_key(
+                &url_encoded_owner,
+                &original_document_metadata.document_id,
+                document_version_id,
+            );
+            let legacy_source = build_cloud_storage_bucket_document_key(
                 &url_encoded_owner,
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
             );
 
-            let dest_key = build_cloud_storage_bucket_document_key(
-                user_id.as_ref(),
-                &updated_document_metadata.document_id,
-                updated_document_metadata.document_version_id,
-                file_type_str,
-            );
+            let source_key = if ctx
+                .s3_client
+                .exists(&extensionless_source)
+                .await
+                .unwrap_or(false)
+            {
+                extensionless_source
+            } else {
+                legacy_source
+            };
 
             // handle non live collab
             ctx.s3_client
