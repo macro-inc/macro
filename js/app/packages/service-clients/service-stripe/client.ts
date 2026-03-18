@@ -2,8 +2,6 @@ import { isOk } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import { authServiceClient } from '@service-auth/client';
 
-const GA_MEASUREMENT_ID = 'G-52HPEL3FTV';
-
 /**
  * Gets the Google Analytics client ID using gtag.
  * Returns a promise that resolves with the client ID or undefined if GA is blocked/unavailable.
@@ -18,10 +16,15 @@ function getGaClientId(): Promise<string | undefined> {
 
     const timeout = setTimeout(() => resolve(undefined), 500);
 
-    gtag('get', GA_MEASUREMENT_ID, 'client_id', (clientId: string) => {
-      clearTimeout(timeout);
-      resolve(clientId);
-    });
+    gtag(
+      'get',
+      import.meta.env.VITE_GA_MEASUREMENT_ID,
+      'client_id',
+      (clientId: string) => {
+        clearTimeout(timeout);
+        resolve(clientId);
+      }
+    );
   });
 }
 
