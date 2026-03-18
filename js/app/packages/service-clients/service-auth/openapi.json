@@ -2982,6 +2982,10 @@
             "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
+          "gaClientId": {
+            "type": ["string", "null"],
+            "description": "Google Analytics client ID for conversion tracking"
+          },
           "successUrl": {
             "type": "string",
             "description": "The URL to redirect to on successful checkout"

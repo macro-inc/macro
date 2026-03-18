@@ -10,6 +10,7 @@ export * from './appleLoginRequest';
 export * from './createAccountMergeRequest';
 export * from './createCheckoutSessionRequest';
 export * from './createCheckoutSessionRequestDiscount';
+export * from './createCheckoutSessionRequestGaClientId';
 export * from './createInProgressLinkResponse';
 export * from './createPortalSessionRequest';
 export * from './createTeamRequest';
