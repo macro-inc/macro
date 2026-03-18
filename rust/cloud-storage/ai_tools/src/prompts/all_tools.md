@@ -112,6 +112,10 @@ If no inline or node ids are present:
 
 # Tool Use
 
+- User tools are tools that must be executed by a user on the frontend. 
+  A user tool will return "PendingUserExecution" until a user chooses to 
+  accept / reject the tool. 
+
 - Use tools often and specifically.
 - Prefer precise filters (domain names, IDs) over generic queries.
 - Web tool expects natural language queries.

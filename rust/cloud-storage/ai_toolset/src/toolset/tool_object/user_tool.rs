@@ -8,19 +8,30 @@ use crate::{RequestContext, ServiceContext};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 
 /// User tool wrapper type that implements stubs [`AsyncTool`]
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct UserTool<T>(PhantomData<T>);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UserTool<T>(pub T);
+
+impl<T: JsonSchema> JsonSchema for UserTool<T> {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        T::schema_name()
+    }
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        T::json_schema(generator)
+    }
+}
 
 /// User tools are pending until a user executes them
 #[derive(Serialize, JsonSchema)]
 pub enum UserToolResult<T: Serialize + 'static> {
     /// Tool has not yet been executed
-    PendingUserExeuction,
+    PendingUserExecution,
     /// Tool is executed and has whatever return type the wrapped tool returns
     Executed(T),
+    /// User rejected suggested tool execution
+    Rejected,
 }
 
 #[async_trait]
@@ -38,6 +49,6 @@ where
         _service_context: ServiceContext<Context>,
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        ToolResult::Ok(UserToolResult::PendingUserExeuction)
+        ToolResult::Ok(UserToolResult::PendingUserExecution)
     }
 }

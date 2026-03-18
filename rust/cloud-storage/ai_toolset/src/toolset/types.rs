@@ -166,6 +166,26 @@ where
         Ok(tool.call(context, request_context).await)
     }
 
+    /// this isn't called in the tool loop it's calle by the user-facing API
+    #[tracing::instrument(err, skip(self, context, request_context))]
+    pub async fn try_user_tool_call(
+        &self,
+        context: ToolSetContext,
+        request_context: RequestContext,
+        tool_name: &str,
+        json: &serde_json::Value,
+    ) -> Result<ToolResult<serde_json::Value>, ToolSetError> {
+        let tool = self
+            .user_tools
+            .get(tool_name)
+            .ok_or_else(|| ToolSetError::NotFound(tool_name.to_owned()))
+            .and_then(|tool| {
+                tool.try_deserialize(json)
+                    .map_err(ToolSetError::Deserialization)
+            })?;
+        Ok(tool.call(context, request_context).await)
+    }
+
     /// Merges a subtoolset with a narrower context into this toolset.
     ///
     /// The subtoolset's context type (`SubContext`) must be derivable from this
