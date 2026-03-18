@@ -50,6 +50,17 @@ impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImp
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> Result<Option<ReferralCode>, ReferralError> {
+        self.repo
+            .get_referred_by(referred_user_id)
+            .await
+            .map_err(|e| ReferralError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn process_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,

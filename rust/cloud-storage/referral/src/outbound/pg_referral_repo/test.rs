@@ -280,3 +280,46 @@ async fn test_complete_referral_not_tracked(pool: Pool<Postgres>) {
 
     assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_get_referred_by_found(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    // First track the referral so there's a row
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+    let code = referrer_referral_code();
+    repo.track_referral(&referred_user_id.0, &code)
+        .await
+        .unwrap();
+
+    // Now look up who referred this user
+    let referred_uuid = uuid::Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
+    let result = repo.get_referred_by(&referred_uuid).await.unwrap();
+
+    assert!(result.is_some());
+    let returned_code = result.unwrap();
+
+    // The returned code should decode back to the referrer's UUID
+    let converter = ShortUuidConverter::default();
+    let decoded = converter.to_uuid(&returned_code.0).unwrap();
+    assert_eq!(decoded.to_string(), REFERRER_UUID);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
+async fn test_get_referred_by_not_found(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    // Query with a UUID that has no referral_tracking row
+    let unknown_uuid = uuid::Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+    let result = repo.get_referred_by(&unknown_uuid).await.unwrap();
+
+    assert!(result.is_none());
+}
