@@ -84,7 +84,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { isListViewID, ListView } from '@app/constants/list-views';
+import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
