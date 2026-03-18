@@ -167,12 +167,19 @@ pub async fn create_checkout_session(
         None
     };
 
-    // Build metadata with GA client ID if provided
-    let metadata = req.ga_client_id.map(|ga_client_id| {
-        let mut map = std::collections::HashMap::new();
-        map.insert("ga_client_id".to_string(), ga_client_id);
-        map
-    });
+    // Build subscription metadata from optional tracking fields
+    let mut metadata = std::collections::HashMap::new();
+    if let Some(ga_client_id) = req.ga_client_id {
+        metadata.insert("ga_client_id".to_string(), ga_client_id);
+    }
+
+    // Only set subscription_data if we have metadata to include
+    let subscription_data = (!metadata.is_empty()).then_some(
+        stripe::CreateCheckoutSessionSubscriptionData {
+            metadata: Some(metadata),
+            ..Default::default()
+        },
+    );
 
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {
@@ -192,10 +199,7 @@ pub async fn create_checkout_session(
             quantity: Some(1),
             ..Default::default()
         }]),
-        subscription_data: Some(stripe::CreateCheckoutSessionSubscriptionData {
-            metadata,
-            ..Default::default()
-        }),
+        subscription_data,
         ..Default::default()
     };
 
