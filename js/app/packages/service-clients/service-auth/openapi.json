@@ -860,15 +860,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "referral_code",
-            "in": "query",
-            "description": "Referral code",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {

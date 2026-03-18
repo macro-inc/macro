@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -373,11 +374,12 @@
     "solid-gesture@0.0.3": "patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
-    "flatted": ">=3.4.0",
-    "cross-spawn": "7.0.6",
-    "rollup": ">=4.59.0",
-    "minimatch": ">=3.1.4",
     "ajv": ">=6.14.0",
+    "cross-spawn": "7.0.6",
+    "flatted": ">=3.4.0",
+    "minimatch": ">=3.1.4",
+    "rollup": ">=4.59.0",
+    "undici": ">=6.24.0",
   },
   "packages": {
     "@adobe/css-tools": ["@adobe/css-tools@4.4.4", "", {}, "sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg=="],

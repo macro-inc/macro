@@ -10,8 +10,4 @@ export type PasswordlessCallbackParams = {
    * Email
    */
   email: string;
-  /**
-   * Referral code
-   */
-  referral_code: string;
 };
