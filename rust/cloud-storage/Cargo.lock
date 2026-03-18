@@ -5147,6 +5147,7 @@ dependencies = [
  "axum",
  "macro_user_id",
  "notification",
+ "rate_limit",
  "serde",
 ]
 
@@ -6565,6 +6566,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "rate_limit",
  "redis",
  "reqwest",
  "rootcause",
@@ -6577,7 +6579,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "twox-hash",
  "utoipa",
  "uuid",
 ]
@@ -6618,6 +6619,7 @@ dependencies = [
  "model_notifications",
  "models_pagination",
  "notification",
+ "rate_limit",
  "redis",
  "rootcause",
  "serde",
@@ -7771,6 +7773,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rate_limit"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "redis",
+ "rootcause",
+ "serde",
+ "thiserror 2.0.17",
+ "twox-hash",
 ]
 
 [[package]]

@@ -40,6 +40,7 @@ model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
@@ -56,7 +57,6 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
-twox-hash = { version = "2" }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 

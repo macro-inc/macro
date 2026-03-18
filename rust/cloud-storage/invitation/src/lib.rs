@@ -4,8 +4,9 @@
 
 use macro_user_id::email::EmailStr;
 use notification::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, queue_message::EmailContent,
+    Notification, NotificationExtEmail, queue_message::EmailContent,
 };
+use rate_limit::{RateLimitConfig, RateLimitKey};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 

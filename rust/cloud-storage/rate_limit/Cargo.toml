@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "rate_limit"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+hex = { workspace = true }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-native-tls-comp",
+] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+twox-hash = { version = "2" }

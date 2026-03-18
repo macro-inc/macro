@@ -1,5 +1,4 @@
-use notification::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult};
-use notification::domain::ports::RateLimitPort;
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult};
 use rootcause::Report;
 
 /// Rate limiter that always allows (no-op for sandbox).

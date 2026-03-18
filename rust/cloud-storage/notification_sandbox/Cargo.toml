@@ -17,6 +17,7 @@ model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification" }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
