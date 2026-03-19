@@ -30,8 +30,8 @@ export type AppEvents = {
   create_menu_open: { from: string };
   hotkey_use: Record<string, unknown>;
   preview_panel_use: Record<string, unknown>;
-  mentions_menu_use: Record<string, unknown>;
-  split_created: Record<string, unknown>;
+  mentions_menu_use: { itemType: string };
+  split_created: { from: string };
 
   share_entity: Record<string, unknown>; // payload - entity type, location
   create_entity: Record<string, unknown>; // payload - entity type

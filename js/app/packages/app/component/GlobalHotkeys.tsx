@@ -42,7 +42,7 @@ export default function GlobalShortcuts() {
   const handleFileUpload = useHandleFileUpload();
 
   const handleCommandMenu = () => {
-    analytics.track('command_menu_open', { from: 'global' });
+    analytics.track('command_menu_open', { from: 'global_hotkey' });
     CommandState.toggle();
   };
 
@@ -55,7 +55,7 @@ export default function GlobalShortcuts() {
       const willOpen = createMenuOpen();
 
       if (willOpen) {
-        analytics.track('create_menu_open', { from: 'global' });
+        analytics.track('create_menu_open', { from: 'global_hotkey' });
       }
 
       setCreateMenuOpen((prev) => !prev);
@@ -113,6 +113,7 @@ export default function GlobalShortcuts() {
   const { openWithSplit } = useSplitLayout();
 
   const createNewSplit = () => {
+    analytics.track('split_created', { from: 'global_hotkey' });
     openWithSplit(
       { type: 'component', id: 'inbox' },
       {

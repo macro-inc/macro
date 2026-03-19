@@ -263,6 +263,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     const manager = globalSplitManager();
     if (!manager || !manager.canAppendSplit()) return;
 
+    analytics.track('split_created', { from: 'sidebar' });
     manager.createNewSplit({
       content: {
         type: 'component',
@@ -446,6 +447,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const openInNewSplit = () => {
     const manager = globalSplitManager();
     if (!manager || !manager.canAppendSplit()) return;
+
+    analytics.track('split_created', { from: 'sidebar' });
 
     manager.createNewSplit({
       content: content(),

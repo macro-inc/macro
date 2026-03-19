@@ -45,6 +45,7 @@ import { useUsersMention } from './hooks/useUsersMention';
 import { useEntityMention } from './hooks/useEntityMention';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { isMobile } from '@core/mobile/isMobile';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -79,6 +80,8 @@ export function MentionsMenu(props: MentionsMenuProps) {
 }
 
 function MentionsMenuInner(props: MentionsMenuProps) {
+  const analytics = useAnalytics();
+
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
 
   const quickAccess = useQuickAccess();
@@ -249,7 +252,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
-  const itemAction = createItemHandler({
+  const itemActionHandler = createItemHandler({
     editor: props.editor,
     blockName: useMaybeBlockName(),
     blockId: useMaybeBlockId(),
@@ -259,6 +262,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     disableMentionTracking: props.disableMentionTracking,
     useSnapshotNode: props.useSnapshotForDocuments,
   });
+
+  const itemAction = (item: MentionItem) => {
+    analytics.track('mentions_menu_use', { itemType: item.kind });
+    itemActionHandler(item);
+  };
 
   createEffect(() => {
     if (props.anchor) return;
