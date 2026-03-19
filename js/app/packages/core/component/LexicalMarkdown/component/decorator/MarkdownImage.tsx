@@ -314,6 +314,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class="h-full object-contain"
           draggable={true}
+          onDragStart={(e) => {
+            e.dataTransfer?.setData('application/x-macro-internal', '1');
+          }}
           classList={{
             invisible: state() === 'loading' || state() === 'error',
           }}
