@@ -1,5 +1,8 @@
 //! Referral service implementation.
 
+#[cfg(test)]
+mod test;
+
 use std::{collections::HashSet, ops::Deref, time::Duration};
 
 use macro_user_id::{
