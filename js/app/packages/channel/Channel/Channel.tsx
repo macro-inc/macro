@@ -7,6 +7,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onMount,
   Show,
   Suspense,
@@ -215,12 +216,18 @@ export function Channel(props: ChannelProps) {
     });
   };
 
-  createEffect(() => {
-    if (props.onHandleReady)
-      props.onHandleReady({
-        goToMessage: targetMessageController.goToMessage,
-      });
-  });
+  const isChannelReady = () => {
+    return messagesQuery.isFetched && threadListNavigation();
+  };
+
+  createEffect(
+    on(isChannelReady, () => {
+      if (props.onHandleReady)
+        props.onHandleReady({
+          goToMessage: targetMessageController.goToMessage,
+        });
+    })
+  );
 
   return (
     <Suspense>
