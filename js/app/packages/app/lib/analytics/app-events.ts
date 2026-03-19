@@ -20,7 +20,9 @@ export type AppEvents = {
 
   copy_share_link: Record<string, unknown>;
   download: Record<string, unknown>;
-  comment: Record<string, unknown>;
+  comment_create: { blockType: string };
+  comment_update: { blockType: string };
+  comment_delete: { blockType: string };
   upload_file: Record<string, unknown>;
 
   command_menu_open: Record<string, unknown>;
