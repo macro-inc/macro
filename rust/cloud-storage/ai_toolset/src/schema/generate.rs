@@ -52,7 +52,7 @@ impl<Context> ToolSchemaGenerator for AsyncToolSet<Context> {
             .iter()
             .map(|(name, tool_object)| ToolSchema {
                 name: name.clone(),
-                input_schema: tool_object.input_schema.clone(),
+                input_schema: serde_json::Value::Object(tool_object.input_schema.clone()),
                 output_schema: tool_object.output_schema.clone(),
             })
             .collect();
