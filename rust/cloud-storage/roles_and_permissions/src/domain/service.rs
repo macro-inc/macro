@@ -51,14 +51,20 @@ where
         match subscription_status {
             SubscriptionStatus::Active => {
                 self.user_roles_and_permissions_repository
-                    .add_roles_to_user(&user_id, &[RoleId::ProfessionalSubscriber])
+                    .add_roles_to_user(
+                        &user_id,
+                        &[RoleId::ProfessionalSubscriber, RoleId::SubHaiku],
+                    )
                     .await
             }
             SubscriptionStatus::Canceled
             | SubscriptionStatus::Paused
             | SubscriptionStatus::Unpaid => {
                 self.user_roles_and_permissions_repository
-                    .remove_roles_from_user(&user_id, &[RoleId::ProfessionalSubscriber])
+                    .remove_roles_from_user(
+                        &user_id,
+                        &[RoleId::ProfessionalSubscriber, RoleId::SubHaiku],
+                    )
                     .await
             }
             _ => Err(UserRolesAndPermissionsError::InvalidSubscriptionStatus(
