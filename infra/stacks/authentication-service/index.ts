@@ -145,17 +145,15 @@ const MACRO_API_TOKENS = getMacroApiToken();
 
 const GA_ANALYTICS_MEASUREMENT_ID = config.require('ga_measurement_id');
 
-const GA_ANALYTICS_API_SECRET = config.require('ga_api_secret');
-const gaAnalyticsApiSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: GA_ANALYTICS_API_SECRET })
-  .apply((secret) => secret.arn);
+const GA_API_SECRET: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('ga_api_secret') })
+  .apply((secret) => secret.secretString);
 
 const META_PIXEL_ID = config.require('meta_pixel_id');
 
-const META_PIXEL_ACCESS_TOKEN = config.require('meta_access_token');
-const metaPixelAccessTokenArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: META_PIXEL_ACCESS_TOKEN })
-  .apply((secret) => secret.arn);
+// const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
+//   .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
+//   .apply((secret) => secret.secretString);
 
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
@@ -168,8 +166,6 @@ const secretKeyArns = [
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
   pulumi.interpolate`${stripePriceIdArn}`,
-  pulumi.interpolate`${gaAnalyticsApiSecretKeyArn}`,
-  pulumi.interpolate`${metaPixelAccessTokenArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -341,20 +337,16 @@ const service = new AuthenticationService('authentication-service', {
     },
     // Analytics
     {
-      name: 'GA_ANALYTICS_MEASUREMENT_ID',
+      name: 'GA_MEASUREMENT_ID',
       value: GA_ANALYTICS_MEASUREMENT_ID,
     },
     {
-      name: 'GA_ANALYTICS_API_SECRET',
-      value: GA_ANALYTICS_API_SECRET,
+      name: 'GA_API_SECRET',
+      value: pulumi.interpolate`${GA_API_SECRET}`,
     },
     {
       name: 'META_PIXEL_ID',
       value: META_PIXEL_ID,
-    },
-    {
-      name: 'META_PIXEL_ACCESS_TOKEN',
-      value: META_PIXEL_ACCESS_TOKEN,
     },
   ],
 });
