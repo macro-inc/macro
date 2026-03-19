@@ -6,7 +6,11 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
-import { chatRuleset, handleFileFolderDrop, uploadFile } from '@core/util/upload';
+import {
+  chatRuleset,
+  handleFileFolderDrop,
+  uploadFile,
+} from '@core/util/upload';
 import { uploadInputAttachments } from './upload-attachments';
 import type {
   InputAttachmentTracker,
