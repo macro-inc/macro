@@ -584,7 +584,7 @@ export interface SearchToolResponse {
  */
 
 /**
- * Create a document
+ * Create a plaintext document.
  */
 export interface CreateDocument {
   /**
@@ -592,13 +592,17 @@ export interface CreateDocument {
    */
   documentName: string;
   /**
-   * The raw bytes of the local file you created.
+   * The string content of the document you are creating.
    */
-  fileContentBytes: number[];
+  fileContent: string;
   /**
-   * The extension of the file you are going to create.
+   * The extension of the plaintext file you are creating.
    */
   fileExtension: string;
+  /**
+   * Whether this document is a task. Only applies to md documents.
+   */
+  isTask: boolean;
 }
 
 /* eslint-disable */
