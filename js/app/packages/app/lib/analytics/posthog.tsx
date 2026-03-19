@@ -16,7 +16,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
     const instance = new PostHog();
 
     const initialize = () => {
-      const key = import.meta.env.VITE_POSTHOG_KEY;
+      const key = import.meta.env.VITE_POSTHOG_API_KEY;
 
       if (!key) return;
 
