@@ -474,16 +474,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
             isActive() && 'bg-ink/5 not-disabled:hover:bg-ink/10 text-ink'
           )}
           tooltipPlacement="right"
-          tooltip={
-            <LabelAndHotKey
-              label={`Go to ${props.label}`}
-              hotkeySequence={
-                props.standaloneHotkey
-                  ? [{ shortcut: props.hotkey }]
-                  : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
-              }
-            />
-          }
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
           onClick={(e) => {
