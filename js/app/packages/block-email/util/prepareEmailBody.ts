@@ -388,6 +388,22 @@ function convertMentionsToLinks(root: ParentNode) {
   return mentions;
 }
 
+function applyMediaScale(container: Element) {
+  const mediaElements = container.querySelectorAll<HTMLElement>(
+    'img[data-scale], video[data-scale]'
+  );
+  mediaElements.forEach((el) => {
+    const scale = parseFloat(el.getAttribute('data-scale') || '1');
+    if (scale === 1) return;
+    const width = parseInt(el.getAttribute('width') || '0', 10);
+    const height = parseInt(el.getAttribute('height') || '0', 10);
+    if (width > 0)
+      el.setAttribute('width', Math.round(width * scale).toString());
+    if (height > 0)
+      el.setAttribute('height', Math.round(height * scale).toString());
+  });
+}
+
 function flattenConsecutiveParagraphs(container: Element) {
   const paragraphs = container.querySelectorAll('p');
   const groups = [];
@@ -466,6 +482,9 @@ export function prepareEmailBody(
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
   flattenConsecutiveParagraphs(parsed.body);
+
+  // Apply image scale to width/height attributes so the recipient sees the resized dimensions
+  applyMediaScale(parsed.body);
 
   // Convert Macro document mentions to HTML links in the parsed DOM
   const mentions = convertMentionsToLinks(parsed.body);

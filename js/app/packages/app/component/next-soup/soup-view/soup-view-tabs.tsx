@@ -2,38 +2,25 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import { runCreateAction } from '@app/component/Launcher';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import {
-  type ListViewCreateActionId,
-  type ListViewCreateOptionId,
-  getListViewCreateOptions,
-} from '@app/component/list-view-create';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { useUserContext } from '@core/context/user';
-import { openFilePicker } from '@core/util/upload';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import {
   batch,
   createMemo,
   For,
   Match,
   type ParentComponent,
-  Show,
   Switch,
 } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
-import { Button } from '@ui/components/Button';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -109,77 +96,10 @@ export const SoupViewTabs = () => {
       <Match when={isComponentListView('channels')}>
         <ChannelsTabs />
       </Match>
-      <Match when={isComponentListView('files')}>
+      <Match when={isComponentListView('folders')}>
         <FilesTabs />
       </Match>
     </Switch>
-  );
-};
-
-export const SoupViewCreateButton = () => {
-  const listView = useCurrentListView();
-  const handleFileUpload = useHandleFileUpload();
-  const options = createMemo(() => {
-    const view = listView();
-    if (!view) return [];
-    return getListViewCreateOptions(view);
-  });
-
-  const primaryOption = createMemo(() => options()[0]);
-
-  const handleSelect = (optionId: ListViewCreateOptionId) => {
-    if (optionId === 'import') {
-      openFilePicker({ multiple: true }, async (files) => {
-        await handleFileUpload(files, false);
-      });
-      return;
-    }
-
-    runCreateAction(optionId as ListViewCreateActionId);
-  };
-
-  return (
-    <Show when={primaryOption()}>
-      {(option) => (
-        <Show
-          when={options().length > 1}
-          fallback={
-            <Button
-              variant="secondary"
-              size="sm"
-              class="rounded-xs whitespace-nowrap px-3"
-              onClick={() => handleSelect(option().id)}
-            >
-              {option().label}
-            </Button>
-          }
-        >
-          <DropdownMenu placement="bottom-start" gutter={4}>
-            <DropdownMenu.Trigger
-              as={Button}
-              variant="secondary"
-              size="sm"
-              class="rounded-xs whitespace-nowrap px-3"
-            >
-              <span>{option().label}</span>
-              <ChevronDownIcon class="size-3" />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenuContent class="z-action-menu min-w-[160px]">
-                <For each={options()}>
-                  {(item) => (
-                    <MenuItem
-                      text={item.label}
-                      onClick={() => handleSelect(item.id)}
-                    />
-                  )}
-                </For>
-              </DropdownMenuContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
-        </Show>
-      )}
-    </Show>
   );
 };
 
@@ -254,6 +174,7 @@ const DocumentsTabs = () => {
         list={[
           { value: 'owned', label: 'Owned' },
           { value: 'shared', label: 'Shared' },
+          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
@@ -313,13 +234,11 @@ const FilesTabs = () => {
       <SegmentedControl
         list={[
           { value: 'owned', label: 'Owned' },
-          { value: 'shared', label: 'Shared' },
-          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.files.default}
-        onChange={(value) => applyTabPreset('files', value)}
+        defaultValue={VIEW_TAB_PRESETS.folders.default}
+        onChange={(value) => applyTabPreset('folders', value)}
       />
     </div>
   );
@@ -338,7 +257,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
+      class="h-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
@@ -359,7 +278,7 @@ export const SegmentedControl: ParentComponent<
                   class="border-r border-edge-muted last:border-r-0"
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-2 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[checked]:hover:bg-ink/20 transition-colors duration-150 block">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150 block">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>

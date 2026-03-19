@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 pub mod get_user_by_email;
 pub mod get_user_organization;
 pub mod get_user_permissions;
@@ -186,6 +189,25 @@ pub async fn get_user_profile(
     .await?;
 
     Ok(user_info)
+}
+
+/// Gets the user's macro_user_id (UUID) and id (MacroUserIdStr) by email
+#[tracing::instrument(skip(db), err)]
+pub async fn get_user_macro_user_id_and_id_by_email(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    email: &str,
+) -> Result<(uuid::Uuid, String), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        SELECT "macro_user_id" as "macro_user_id!", "id"
+        FROM "User"
+        WHERE "email" = $1
+        "#,
+        email
+    )
+    .map(|row| (row.macro_user_id, row.id))
+    .fetch_one(db)
+    .await
 }
 
 /// Gets all users emails

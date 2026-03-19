@@ -1,4 +1,6 @@
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
+import EntityNavigationIndicator, {
+  shouldShowEntityNavigation,
+} from '@app/component/EntityNavigationIndicator';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   ENABLE_PREVIEW,
@@ -28,6 +30,7 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
 import { isListViewID } from '@app/constants/list-views';
+import { useSoup } from '@app/component/next-soup/soup-context';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -175,9 +178,11 @@ function _SplitControlButtons() {
 }
 
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
-  const ctx = useContext(SplitPanelContext);
-  if (!ctx)
+  const soup = useSoup();
+  const panel = useContext(SplitPanelContext);
+  if (!panel)
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
+  const layout = useContext(SplitLayoutContext);
 
   return (
     <div
@@ -196,17 +201,23 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         <div
           class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
-            ctx.layoutRefs.headerLeft = ref;
+            panel.layoutRefs.headerLeft = ref;
           }}
         />
 
         <div
           class="min-w-4 h-full shrink-0 flex items-center gap-0.5 px-2"
           ref={(ref) => {
-            ctx.layoutRefs.headerRight = ref;
+            panel.layoutRefs.headerRight = ref;
           }}
         >
-          <Show when={!isTouchDevice()}>
+          <Show
+            when={
+              !isTouchDevice() &&
+              (shouldShowEntityNavigation(soup, panel) ||
+                (layout && canSpotlight(layout.manager)))
+            }
+          >
             <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
               <EntityNavigationIndicator />
               <SplitSpotlightButton />

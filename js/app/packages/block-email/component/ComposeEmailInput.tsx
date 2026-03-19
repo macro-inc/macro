@@ -42,6 +42,7 @@ import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { Button } from '@ui/components/Button';
 import { fileSelector } from '@core/directive/fileSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
@@ -155,6 +156,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     scopeId: composeHotkeyScope,
     description: 'Send email',
     keyDownHandler: () => {
+      if (props.sendTime) return false;
       handleSend();
       return true;
     },
@@ -340,14 +342,22 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     compact
                   />
                 </Show>
-                <Button
-                  disabled={props.isSubmitting || props.disabled}
-                  onClick={() => {
-                    handleSend();
-                  }}
+                <Tooltip
+                  tooltip={
+                    props.sendTime ? 'Send time is scheduled' : undefined
+                  }
                 >
-                  <PaperPlane class="size-4.5 text-accent" />
-                </Button>
+                  <Button
+                    disabled={
+                      props.isSubmitting || props.disabled || !!props.sendTime
+                    }
+                    onClick={() => {
+                      handleSend();
+                    }}
+                  >
+                    <PaperPlane class="size-4.5 text-accent" />
+                  </Button>
+                </Tooltip>
                 <DropdownMenu placement="bottom-end">
                   <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
                     <DotsThreeIcon class="h-4.5" />
@@ -414,22 +424,30 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             </Show>
           </div>
 
-          <button
-            disabled={props.isSubmitting || props.disabled}
-            onClick={() => {
-              handleSend();
-            }}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+          <Tooltip
+            tooltip={props.sendTime ? 'Send time is scheduled' : undefined}
           >
-            <Show
-              when={!props.isSubmitting}
-              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+            <button
+              disabled={
+                props.isSubmitting || props.disabled || !!props.sendTime
+              }
+              onClick={() => {
+                handleSend();
+              }}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
             >
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-              </div>
-            </Show>
-          </button>
+              <Show
+                when={!props.isSubmitting}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
+              >
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                </div>
+              </Show>
+            </button>
+          </Tooltip>
         </Show>
       </div>
     </div>

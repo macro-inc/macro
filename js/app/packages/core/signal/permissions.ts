@@ -16,12 +16,10 @@ import {
 } from './load';
 
 export const useGetPermissions = () => {
-  const isAuthenticated = useIsAuthenticated();
   // NOTE: if the dss file is available, we can assume the user can view
   const fileExists = createMemo(() => !!blockFileSignal());
 
   const accessLevel = createMemo(() => {
-    if (!isAuthenticated()) return undefined;
     const accessLevel_ = blockUserAccessSignal();
     if (!accessLevel_ && fileExists()) return AccessLevel.view;
     return accessLevel_;
@@ -55,10 +53,12 @@ export const useIsEditable = () => {
 };
 
 export const usePermissionCan = (requestedPermissions: Permissions) => {
+  const isAuthenticated = useIsAuthenticated();
   const hasAccess = useHasAccess(requestedPermissions);
   const isEditable = useIsEditable();
 
   return createMemo(() => {
+    if (!isAuthenticated()) return false;
     if (!hasAccess()) return false;
     return isEditable();
   });

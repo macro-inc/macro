@@ -93,6 +93,7 @@ vi.mock(
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
+        withFilePaste: () => builder,
         withRestoreFocus: () => builder,
         withSelectionData: () => builder,
         use: () => builder,

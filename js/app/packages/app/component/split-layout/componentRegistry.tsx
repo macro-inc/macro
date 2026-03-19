@@ -188,10 +188,10 @@ registerComponent(
 );
 
 registerComponent(
-  'files',
+  'folders',
   withAuth(() => {
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('files', {
+    const preset = getDefaultListViewPreset('folders', {
       userId: user.userId(),
       email: user.email(),
     });

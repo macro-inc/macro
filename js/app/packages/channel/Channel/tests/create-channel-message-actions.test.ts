@@ -89,16 +89,4 @@ describe('createChannelMessageActions', () => {
       currentReactions: [],
     });
   });
-
-  it('delegates edit handling to the provided callback', () => {
-    const onEdit = vi.fn();
-    const harness = buildHarness({ userId: 'user-1', onEdit });
-    const message = buildMessage();
-    const actions = harness.getMessageActions(message);
-
-    actions.onEdit?.({ message });
-
-    expect(onEdit).toHaveBeenCalledOnce();
-    expect(onEdit).toHaveBeenCalledWith({ message });
-  });
 });

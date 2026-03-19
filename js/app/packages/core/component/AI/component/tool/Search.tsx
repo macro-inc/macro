@@ -1,107 +1,266 @@
-import { EntityIcon } from '@core/component/EntityIcon';
 import type { ToolContext } from '@service-cognition/generated/tools/tool';
-import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
 import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useSplitLayout } from 'app/component/split-layout/layout';
-import { createMemo, createSignal, Show } from 'solid-js';
-import { VList } from 'virtua/solid';
+import { useChannelsContext } from '@core/context/channels';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
+import { ListEntity } from '@entity';
+import type { WithNotification } from '@entity/types/notification';
+import type {
+  EntityData,
+  ChatEntity,
+  ChannelEntity,
+  EmailEntity,
+  ProjectEntity,
+  DocumentEntity,
+} from '@entity/types/entity';
+import type { ContentHitData, SearchData } from '@entity/types/search';
 
 type UnifiedSearchResult = NamedTool<
   'NameSearch',
   'response'
 >['data']['results'][number];
 
+type EntityWithSearch = EntityData & { search: SearchData };
+
+function searchResultsToEntities(
+  results: UnifiedSearchResult[],
+  channelsById: Record<string, { name?: string | null }>
+): EntityWithSearch[] {
+  const entityMap = new Map<
+    string,
+    {
+      entity: EntityData;
+      contentHits: ContentHitData[];
+      nameHighlight: string | null;
+    }
+  >();
+
+  for (const result of results) {
+    let key: string;
+    let entity: EntityData;
+    let contentHits: ContentHitData[] = [];
+    let nameHighlight: string | null = null;
+
+    switch (result.type) {
+      case 'document': {
+        key = result.document_id;
+        entity = {
+          id: result.document_id,
+          type: 'document',
+          name: result.document_name || 'Document',
+          ownerId: result.owner_id,
+          fileType: result.file_type ?? undefined,
+          projectId: result.metadata?.project_id ?? undefined,
+          createdAt: result.metadata?.created_at ?? null,
+          updatedAt: result.metadata?.updated_at ?? null,
+          subType: result.sub_type === 'task' ? { type: 'task' } : undefined,
+        } as DocumentEntity;
+
+        for (const sr of result.document_search_results) {
+          if (sr.highlight.name) nameHighlight = sr.highlight.name;
+          if (sr.highlight.content?.length) {
+            for (const content of sr.highlight.content) {
+              if (result.file_type === 'md' && sr.node_id) {
+                contentHits.push({
+                  type: 'md',
+                  content,
+                  location: { type: 'md', nodeId: sr.node_id },
+                });
+              } else if (result.file_type === 'pdf') {
+                contentHits.push({ content });
+              } else {
+                contentHits.push({ content });
+              }
+            }
+          }
+        }
+        break;
+      }
+      case 'chat': {
+        key = result.chat_id;
+        entity = {
+          id: result.chat_id,
+          type: 'chat',
+          name: result.name || 'Chat',
+          ownerId: result.owner_id,
+          projectId: result.metadata?.project_id ?? undefined,
+          createdAt: result.metadata?.created_at ?? null,
+          updatedAt: result.metadata?.updated_at ?? null,
+        } satisfies ChatEntity;
+
+        for (const sr of result.chat_search_results) {
+          if (sr.highlight.name) nameHighlight = sr.highlight.name;
+          if (sr.highlight.content?.length) {
+            for (const content of sr.highlight.content) {
+              contentHits.push({ content });
+            }
+          }
+        }
+        break;
+      }
+      case 'email': {
+        key = result.thread_id;
+        entity = {
+          id: result.thread_id,
+          type: 'email',
+          name: result.subject || result.name || 'Email',
+          ownerId: result.owner_id,
+          isRead: result.is_read,
+          isDraft: result.is_draft,
+          isImportant: result.is_important,
+          done: false,
+          snippet: result.snippet ?? undefined,
+          participants: result.participants.map((p) => ({
+            email: p.email,
+            name: p.name ?? undefined,
+          })),
+          senderEmail: result.email_message_search_results[0]?.sender,
+          senderName: result.email_message_search_results[0]?.pretty_sender,
+          updatedAt: result.updated_at,
+          createdAt: result.created_at,
+        } satisfies EmailEntity;
+
+        for (const sr of result.email_message_search_results) {
+          if (sr.highlight.name) nameHighlight = sr.highlight.name;
+          if (sr.highlight.content?.length) {
+            for (const content of sr.highlight.content) {
+              contentHits.push({
+                type: 'email',
+                content,
+                sender: sr.pretty_sender,
+                senderId: sr.sender,
+                sentAt: sr.sent_at ?? result.created_at,
+                location: {
+                  type: 'email',
+                  messageId: sr.message_id ?? '',
+                },
+              });
+            }
+          }
+        }
+        break;
+      }
+      case 'channel': {
+        key = result.channel_id;
+        entity = {
+          id: result.channel_id,
+          type: 'channel',
+          name: channelsById[result.channel_id]?.name ?? 'Channel',
+          ownerId: result.owner_id ?? '',
+          channelType:
+            (result.channel_type as ChannelEntity['channelType']) ?? 'public',
+          createdAt: result.metadata?.created_at ?? null,
+          updatedAt: result.metadata?.updated_at ?? null,
+        } satisfies ChannelEntity;
+
+        for (const sr of result.channel_message_search_results) {
+          if (sr.highlight.content?.length) {
+            for (const content of sr.highlight.content) {
+              contentHits.push({
+                type: 'channel',
+                id: sr.message_id ?? '',
+                content,
+                senderId: sr.sender_id ?? '',
+                sentAt: sr.created_at ?? '',
+                location: {
+                  type: 'channel',
+                  threadId: sr.thread_id ?? undefined,
+                  messageId: sr.message_id ?? '',
+                },
+              });
+            }
+          }
+        }
+        break;
+      }
+      case 'project': {
+        key = result.id;
+        entity = {
+          id: result.id,
+          type: 'project',
+          name: result.name || 'Project',
+          ownerId: result.owner_id,
+          createdAt: result.metadata?.created_at ?? null,
+          updatedAt: result.metadata?.updated_at ?? null,
+        } satisfies ProjectEntity;
+
+        for (const sr of result.project_search_results) {
+          if (sr.highlight.name) nameHighlight = sr.highlight.name;
+          if (sr.highlight.content?.length) {
+            for (const content of sr.highlight.content) {
+              contentHits.push({ content });
+            }
+          }
+        }
+        break;
+      }
+      default:
+        continue;
+    }
+
+    const existing = entityMap.get(key);
+    if (existing) {
+      existing.contentHits.push(...contentHits);
+      if (nameHighlight) existing.nameHighlight = nameHighlight;
+    } else {
+      entityMap.set(key, { entity, contentHits, nameHighlight });
+    }
+  }
+
+  return Array.from(entityMap.values()).map(
+    ({ entity, contentHits, nameHighlight }) => ({
+      ...entity,
+      search: {
+        nameHighlight,
+        senderHighlightTerms: null,
+        contentHitData: contentHits.length > 0 ? contentHits : null,
+        source: 'service' as const,
+      },
+    })
+  );
+}
+
 const UnifiedSearchToolResponse = (props: {
   results: UnifiedSearchResult[];
 }) => {
-  const [isExpanded, setIsExpanded] = createSignal(false);
+  const [isExpanded, setIsExpanded] = createSignal(true);
 
-  // results can have multiple content matches across the same entity
-  const results = createMemo(() => {
-    const seen = new Set<string>();
-    return props.results.filter((result) => {
-      let key: string;
-      switch (result.type) {
-        case 'document':
-          key = result.document_id;
-          break;
-        case 'chat':
-          key = result.chat_id;
-          break;
-        case 'email':
-          key = result.thread_id;
-          break;
-        case 'channel':
-          key = result.channel_id;
-          break;
-        case 'project':
-          key = result.id;
-          break;
-        default:
-          return false;
-      }
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  });
-
-  const getResultTitle = (result: UnifiedSearchResult): string => {
-    switch (result.type) {
-      case 'document':
-        return result.document_name || 'Document';
-      case 'chat':
-        return result.name || 'Chat';
-      case 'email':
-        return result.subject || 'Email';
-      case 'channel':
-        return 'Channel'; // there are no channel names from search results
-      case 'project':
-        return result.name || 'Project';
-      default:
-        return 'Result';
-    }
-  };
+  const channelsCtx = useChannelsContext();
+  const entities = createMemo(() =>
+    searchResultsToEntities(props.results, channelsCtx.channelsById())
+  );
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
-  const getClickHandler = (result: UnifiedSearchResult) => {
-    switch (result.type) {
-      case 'document':
-        return () => {
-          const blockName = fileTypeToBlockName(result.file_type);
-          replaceOrInsertSplit({ type: blockName, id: result.document_id });
-        };
+  const getClickHandler = (entity: EntityData) => {
+    switch (entity.type) {
+      case 'document': {
+        const blockName = fileTypeToBlockName(
+          (entity as DocumentEntity).fileType
+        );
+        return () => replaceOrInsertSplit({ type: blockName, id: entity.id });
+      }
       case 'chat':
-        return () => {
-          replaceOrInsertSplit({ type: 'chat', id: result.chat_id });
-        };
+        return () => replaceOrInsertSplit({ type: 'chat', id: entity.id });
       case 'email':
-        return () => {
-          replaceOrInsertSplit({ type: 'email', id: result.thread_id });
-        };
+        return () => replaceOrInsertSplit({ type: 'email', id: entity.id });
       case 'channel':
-        return () => {
-          replaceOrInsertSplit({ type: 'channel', id: result.channel_id });
-        };
+        return () => replaceOrInsertSplit({ type: 'channel', id: entity.id });
       case 'project':
-        return () => {
-          replaceOrInsertSplit({ type: 'project', id: result.id });
-        };
+        return () => replaceOrInsertSplit({ type: 'project', id: entity.id });
       default:
         return undefined;
     }
   };
 
   return (
-    <div class="border border-edge rounded w-full">
+    <div>
       <Show
         when={props.results.length > 0}
         fallback={
@@ -111,14 +270,12 @@ const UnifiedSearchToolResponse = (props: {
         }
       >
         <button
-          class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors ${
-            isExpanded() ? 'rounded-t border-b border-edge' : 'rounded'
-          }`}
+          class={`flex items-center justify-between w-full text-left p-2 hover:bg-hover transition-colors`}
           onClick={() => setIsExpanded((e) => !e)}
         >
           <div class="flex items-center gap-2">
             <div class="text-sm font-medium text-ink">
-              Search Results ({results().length})
+              Search Results ({entities().length})
             </div>
           </div>
           <div class="flex items-center gap-1 text-ink-muted">
@@ -133,44 +290,18 @@ const UnifiedSearchToolResponse = (props: {
       </Show>
 
       <Show when={isExpanded()}>
-        <div class="max-h-[480px] overflow-hidden">
-          <VList
-            data={results()}
-            bufferSize={5 * 32}
-            itemSize={32}
-            style={{
-              height: `${Math.min(results().length * 32, 480)}px`,
-              contain: 'content',
-            }}
-          >
-            {(result) => {
-              const clickHandler = getClickHandler(result);
-
+        <div class="max-h-[480px] overflow-y-auto">
+          <For each={entities()}>
+            {(entity) => {
+              const clickHandler = getClickHandler(entity);
               return (
-                <div
-                  class="flex items-center w-full h-8 px-2 hover:bg-hover transition-colors"
+                <ListEntity
+                  entity={entity as WithNotification<EntityData>}
                   onClick={clickHandler}
-                >
-                  <div class="flex items-center flex-1 min-w-0 gap-2">
-                    <EntityIcon
-                      size="sm"
-                      targetType={
-                        result.type === 'document'
-                          ? (result.file_type as FileType)
-                          : result.type
-                      }
-                      shared={false}
-                    />
-                    <div class="flex-1 min-w-0">
-                      <TruncatedText size="sm">
-                        <span>{getResultTitle(result)}</span>
-                      </TruncatedText>
-                    </div>
-                  </div>
-                </div>
+                />
               );
             }}
-          </VList>
+          </For>
         </div>
       </Show>
     </div>

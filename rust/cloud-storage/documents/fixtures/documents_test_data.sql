@@ -105,6 +105,15 @@ INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "cr
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'document-one', 'sp-doc-one');
 
+-- Channel and participants for channel share permission tests
+INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES
+    ('c0000000-0000-0000-0000-000000000001', 'test-channel', 'private', 'macro|user@user.com');
+
+INSERT INTO comms_channel_participants (user_id, channel_id, role) VALUES
+    ('macro|user@user.com', 'c0000000-0000-0000-0000-000000000001', 'owner'),
+    ('macro|teammate1@user.com', 'c0000000-0000-0000-0000-000000000001', 'member'),
+    ('macro|teammate2@user.com', 'c0000000-0000-0000-0000-000000000001', 'member');
+
 -- Share permissions for document-two
 INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
     (SELECT 'sp-doc-two', false, NOW(), NOW());

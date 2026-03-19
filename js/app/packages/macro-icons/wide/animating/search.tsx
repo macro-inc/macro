@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSearchIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const clipId = createUniqueId();
   return (
     <svg
@@ -11,7 +14,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-search-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-search-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated search icon</title>*/}
       <defs>

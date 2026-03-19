@@ -7,7 +7,7 @@ export const LIST_VIEWS = [
   'documents',
   'tasks',
   'channels',
-  'files',
+  'folders',
   'search',
 ] as const;
 
@@ -20,7 +20,7 @@ export const LIST_VIEW_PATHS = {
   documents: '/documents',
   tasks: '/tasks',
   channels: '/channels',
-  files: '/files',
+  folders: '/folders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
 
@@ -35,7 +35,7 @@ export const LIST_VIEW_ID = {
   documents: 'documents',
   tasks: 'tasks',
   channels: 'channels',
-  files: 'files',
+  folders: 'folders',
   search: 'search',
 } as const satisfies Record<ListView, string>;
 
@@ -49,18 +49,18 @@ const BLOCK_LIST_VIEW_MAP = {
   channel: 'channels',
   canvas: 'documents',
   chat: 'agents',
-  code: 'files',
+  code: 'documents',
   contact: 'channels',
-  csv: 'files',
+  csv: 'documents',
   email: 'mail',
-  image: 'files',
+  image: 'documents',
   md: 'documents',
-  pdf: 'files',
-  project: 'files',
+  pdf: 'documents',
+  project: 'folders',
   task: 'tasks',
   unknown: 'inbox',
-  video: 'files',
-  write: 'files',
+  video: 'documents',
+  write: 'documents',
 } as const satisfies Record<BlockName | BlockAlias, ListView>;
 
 export const getBlockListView = (block: BlockName | BlockAlias): ListView => {

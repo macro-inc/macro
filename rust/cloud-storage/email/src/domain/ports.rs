@@ -201,6 +201,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<LinkLabel>, Self::Err>> + Send;
+
+    /// Delete unsent scheduled messages for a batch of draft message IDs.
+    fn delete_scheduled_messages_batch(
+        &self,
+        message_ids: &[Uuid],
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {

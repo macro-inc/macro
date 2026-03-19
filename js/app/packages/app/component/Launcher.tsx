@@ -2,10 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import {
-  ENABLE_ANIMATED_ICONS,
-  ENABLE_CREATE_TASK,
-} from '@core/constant/featureFlags';
+import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -53,7 +50,6 @@ import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 import { cn } from '@ui/utils/classname';
-import type { ListViewCreateActionId } from './list-view-create';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -129,13 +125,13 @@ const createComponent = async (spec: {
 };
 
 export function runCreateAction(
-  actionId: ListViewCreateActionId,
+  blockName: BlockName,
   options: { shouldInsert?: boolean } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
 
-  switch (actionId) {
-    case 'doc':
+  switch (blockName) {
+    case 'md':
       createBlock({
         blockName: 'md',
         loading: true,
@@ -176,13 +172,13 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'message':
+    case 'channel':
       createComponent({
         componentId: 'channel-compose',
         shouldInsert,
       });
       return;
-    case 'agent':
+    case 'chat':
       createBlock({
         blockName: 'chat',
         createFn: async () => {
@@ -195,10 +191,27 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'folder':
+    case 'project':
       createBlock({
         blockName: 'project',
         createFn: () => createProject({ name: 'New Folder' }),
+        shouldInsert,
+      });
+      return;
+    case 'code':
+      createBlock({
+        blockName: 'code',
+        loading: true,
+        createFn: async () => {
+          const result = await createCodeFileFromText({
+            code: 'print("Hello, World!")',
+            extension: 'py',
+            title: 'New Code File',
+          });
+          if (isErr(result)) return;
+          const [, id] = ok(result[1]?.documentId);
+          return id;
+        },
         shouldInsert,
       });
       return;
@@ -223,28 +236,24 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.noteNewSplit,
     hotkey: 'd',
     keyDownHandler: () => {
-      runCreateAction('doc', { shouldInsert: pressedKeys().has('shift') });
+      runCreateAction('md', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
-  ...(ENABLE_CREATE_TASK
-    ? [
-        {
-          label: 'Task',
-          icon: WideTask,
-          animatedIcon: AnimatedTaskIcon,
-          description: 'Create task',
-          blockName: 'task' as BlockName,
-          hotkeyToken: TOKENS.create.task,
-          altHotkeyToken: TOKENS.create.taskNewSplit,
-          hotkey: 't' as const,
-          keyDownHandler: () => {
-            runCreateAction('task');
-            return true;
-          },
-        },
-      ]
-    : []),
+  {
+    label: 'Task',
+    icon: WideTask,
+    animatedIcon: AnimatedTaskIcon,
+    description: 'Create task',
+    blockName: 'task',
+    hotkeyToken: TOKENS.create.task,
+    altHotkeyToken: TOKENS.create.taskNewSplit,
+    hotkey: 't' as const,
+    keyDownHandler: () => {
+      runCreateAction('task');
+      return true;
+    },
+  },
   {
     label: 'Email',
     icon: WideEmail,
@@ -269,7 +278,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.messageNewSplit,
     hotkey: 'm',
     keyDownHandler: () => {
-      runCreateAction('message', { shouldInsert: pressedKeys().has('shift') });
+      runCreateAction('channel', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -278,12 +287,12 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
     description: 'Create AI chat',
-    blockName: 'chat' as BlockName,
+    blockName: 'chat',
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
     keyDownHandler: () => {
-      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
+      runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -313,7 +322,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.projectNewSplit,
     hotkey: 'f',
     keyDownHandler: () => {
-      runCreateAction('folder', { shouldInsert: pressedKeys().has('shift') });
+      runCreateAction('project', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -327,21 +336,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.codeNewSplit,
     hotkey: 'o',
     keyDownHandler: () => {
-      createBlock({
-        blockName: 'code',
-        loading: true,
-        createFn: async () => {
-          const result = await createCodeFileFromText({
-            code: 'print("Hello, World!")',
-            extension: 'py',
-            title: 'New Code File',
-          });
-          if (isErr(result)) return;
-          const [, id] = ok(result[1]?.documentId);
-          return id;
-        },
-        shouldInsert: pressedKeys().has('shift'),
-      });
+      runCreateAction('code', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },

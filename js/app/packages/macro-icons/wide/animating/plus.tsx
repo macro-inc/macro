@@ -1,7 +1,10 @@
 const FRAME_A_D = 'M 1.5,0.75 L 17.25,0.75 L 17.25,16.5';
 const FRAME_B_D = 'M 16.5,17.25 L 0.75,17.25 L 0.75,1.5';
 
-export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedPlusIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -12,7 +15,7 @@ export const AnimatedPlusIcon = (props: { triggerAnimation?: boolean }) => {
       stroke-width="1.5"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-plus-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-plus-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated plus icon</title>*/}
       <style>{`

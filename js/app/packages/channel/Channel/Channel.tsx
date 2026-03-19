@@ -4,8 +4,10 @@ import {
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import {
+  createEffect,
   createMemo,
   createSignal,
+  on,
   onMount,
   Show,
   Suspense,
@@ -28,10 +30,6 @@ import {
   usePatchMessageMutation,
   useSendMessageMutation,
 } from '@queries/channel/message';
-import {
-  useAddReactionMutation,
-  useRemoveReactionMutation,
-} from '@queries/channel/reaction';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
@@ -60,11 +58,25 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
+import {
+  createTargetMessageController,
+  type TargetMessageController,
+} from './create-target-message-controller';
+import {
+  useAddReactionMutation,
+  useRemoveReactionMutation,
+} from '@queries/channel/reaction';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
+  targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
+  onHandleReady?: (handle: ChannelHandle) => void;
+};
+
+export type ChannelHandle = {
+  goToMessage: TargetMessageController['goToMessage'];
 };
 
 export function Channel(props: ChannelProps) {
@@ -74,18 +86,30 @@ export function Channel(props: ChannelProps) {
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
+  const [threadListNavigation, setThreadListNavigation] =
+    createSignal<ThreadListNavigation>();
+  const [threadListScrollState, setThreadListScrollState] =
+    createSignal<ThreadListScrollState>();
 
-  const [targetMessageId, _setTargetMessageId] = createSignal<
-    string | undefined
-  >(props.targetMessageId);
+  const targetMessageController = createTargetMessageController({
+    channelId: () => props.channelId,
+    initialTargetMessageId: props.targetMessageId,
+    messageKeys: () => messageIndex().keys,
+    navigation: threadListNavigation,
+  });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageId
+    targetMessageController.loadAroundMessageId
   );
+  const messageIndex = createMemo(() =>
+    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
+  );
+  const messages = createMemo(() => messageIndex().items);
+  const messageById = createMemo(() => messageIndex().byId);
 
   const activity = useChannelActivity(props.channelId);
 
@@ -109,11 +133,6 @@ export function Channel(props: ChannelProps) {
     });
   });
 
-  const [threadListNavigation, setThreadListNavigation] =
-    createSignal<ThreadListNavigation>();
-  const [threadListScrollState, setThreadListScrollState] =
-    createSignal<ThreadListScrollState>();
-
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
@@ -122,13 +141,9 @@ export function Channel(props: ChannelProps) {
   });
 
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
-    defaultThreadListTargetFromMessage(targetMessageId());
-
-  const messageIndex = createMemo(() =>
-    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
-  );
-  const messages = createMemo(() => messageIndex().items);
-  const messageById = createMemo(() => messageIndex().byId);
+    defaultThreadListTargetFromMessage(
+      targetMessageController.activeTargetMessageId()
+    );
 
   const shift = () => threadPaginator.isShifting();
 
@@ -184,7 +199,7 @@ export function Channel(props: ChannelProps) {
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
-    hasMoreBelow: () => threadPaginator.hasMoreShifting(),
+    hasMoreBelow: () => threadPaginator.hasMorePrepend(),
     messages,
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
@@ -200,6 +215,19 @@ export function Channel(props: ChannelProps) {
       message: buildPostMessageRequest(snapshot),
     });
   };
+
+  const isChannelReady = () => {
+    return messagesQuery.isFetched && threadListNavigation();
+  };
+
+  createEffect(
+    on(isChannelReady, () => {
+      if (props.onHandleReady)
+        props.onHandleReady({
+          goToMessage: targetMessageController.goToMessage,
+        });
+    })
+  );
 
   return (
     <Suspense>
@@ -239,6 +267,11 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
+                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          highlighted={
+                            m().id ===
+                            targetMessageController.highlightedMessageId()
+                          }
                           isExpanded={state.isExpanded}
                           setIsExpanded={state.setIsExpanded}
                           isReplying={state.isReplying}

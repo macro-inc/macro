@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+use analytics_client::{AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig};
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -26,6 +27,11 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{customer_repo::CustomerRepositoryImpl, team_repo::TeamRepositoryImpl},
+};
+
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 
 use crate::api::context::{
@@ -121,15 +127,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let stripe_price_id = match config.environment {
-        Environment::Local => config.stripe_price_id.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.stripe_price_id)
-            .await
-            .context("unable to get stripe price id")?
-            .to_string(),
-    };
-
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -184,6 +181,34 @@ async fn main() -> anyhow::Result<()> {
     .search_event_queue(&config.search_event_queue);
     tracing::trace!("initialized sqs client");
 
+    // Initialize analytics client with configured providers
+    let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
+        google_analytics: config
+            .ga_measurement_id
+            .as_ref()
+            .zip(config.ga_api_secret.as_ref())
+            .map(|(measurement_id, api_secret)| {
+                tracing::info!("configuring Google Analytics");
+                GoogleAnalyticsConfig {
+                    measurement_id: measurement_id.clone(),
+                    api_secret: api_secret.clone(),
+                }
+            }),
+        meta: config
+            .meta_pixel_id
+            .as_ref()
+            .zip(config.meta_access_token.as_ref())
+            .map(|(pixel_id, access_token)| {
+                tracing::info!("configuring Meta Conversions API");
+                MetaConfig {
+                    pixel_id: pixel_id.clone(),
+                    access_token: access_token.clone(),
+                    test_event_code: config.meta_test_event_code.clone(),
+                }
+            }),
+    });
+    tracing::trace!("initialized analytics client");
+
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
     let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
@@ -192,7 +217,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone(), &stripe_price_id);
+    let customer_repo_impl = CustomerRepositoryImpl::new(
+        stripe_client.clone(),
+        &config.stripe_price_ids.stripe_price_id_haiku,
+    );
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
@@ -212,6 +240,11 @@ async fn main() -> anyhow::Result<()> {
             client_secret: config.github_client_secret,
             idp_id: config.github_idp_id,
         },
+    );
+
+    let referral_service = ReferralServiceImpl::new(
+        PgReferralRepo::new(db.clone()),
+        StripeDiscountClient::new(stripe_client.clone(), 10000 /*100$ credit, in cents*/),
     );
 
     api::setup_and_serve(
@@ -239,6 +272,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::default(),
                 environment: config.environment,
@@ -247,6 +281,8 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
+            analytics_client: Arc::new(analytics_client),
+            stripe_price_ids: config.stripe_price_ids,
         },
         config.port,
     )

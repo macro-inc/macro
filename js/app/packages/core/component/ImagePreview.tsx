@@ -165,6 +165,9 @@ export function ImagePreview(props: ImagePreviewProps) {
                 'user-select': 'none',
               }}
               draggable={!isTouchDevice()}
+              onDragStart={(e) => {
+                e.dataTransfer?.setData('application/x-macro-internal', '1');
+              }}
             />
           </Show>
         </Dialog.Trigger>
