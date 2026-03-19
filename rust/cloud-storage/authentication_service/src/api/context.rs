@@ -24,6 +24,8 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 
+use crate::config::StripePriceIds;
+
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
@@ -61,6 +63,8 @@ pub(crate) struct ApiContext {
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    /// The stripe price ids
+    pub stripe_price_ids: StripePriceIds,
 }
 
 env_var! {

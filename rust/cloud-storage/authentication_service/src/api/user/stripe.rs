@@ -1,12 +1,9 @@
-use std::sync::LazyLock;
-
 use axum::{
     Extension, Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_env_var::env_var;
 use serde::{Deserialize, Serialize};
 use stripe::{ParseIdError, StripeError};
 use thiserror::Error;
@@ -51,18 +48,6 @@ impl IntoResponse for StripeOperationError {
         (status, self.to_string()).into_response()
     }
 }
-
-env_var!(
-    struct StripePremiumPriceId;
-);
-
-static STRIPE_PRICE_ID: LazyLock<StripePremiumPriceId> = LazyLock::new(|| {
-    match StripePremiumPriceId::new() {
-        Ok(var) => var,
-        // just use this non secret value if the value doesn't exist
-        Err(_) => StripePremiumPriceId::Comptime("price_1PnSgXJaD7zvQeOBfSYgOmZc"),
-    }
-});
 
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]
@@ -194,7 +179,12 @@ pub async fn create_checkout_session(
             }]
         }),
         line_items: Some(vec![stripe::CreateCheckoutSessionLineItems {
-            price: Some(STRIPE_PRICE_ID.as_ref().to_string()),
+            price: Some(
+                ctx.stripe_price_ids
+                    .stripe_price_id_haiku
+                    .as_ref()
+                    .to_string(),
+            ),
             quantity: Some(1),
             ..Default::default()
         }]),

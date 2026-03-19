@@ -127,15 +127,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let stripe_price_id = match config.environment {
-        Environment::Local => config.stripe_price_id.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.stripe_price_id)
-            .await
-            .context("unable to get stripe price id")?
-            .to_string(),
-    };
-
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -226,7 +217,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone(), &stripe_price_id);
+    let customer_repo_impl = CustomerRepositoryImpl::new(
+        stripe_client.clone(),
+        &config.stripe_price_ids.stripe_price_id_haiku,
+    );
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
@@ -288,6 +282,7 @@ async fn main() -> anyhow::Result<()> {
                 },
             }),
             analytics_client: Arc::new(analytics_client),
+            stripe_price_ids: config.stripe_price_ids,
         },
         config.port,
     )
