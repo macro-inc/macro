@@ -1,14 +1,20 @@
 import type { LessonDefinition } from '../types';
-import { choosePlanLesson } from './choose-plan';
-import { createEntityLesson } from './create-entity';
-import { navigateListLesson } from './navigate-list';
 import { welcomeLesson } from './welcome';
-import { whatsNextLesson } from './whats-next';
+import { homeLesson } from './home';
+import { navigateListLesson } from './navigate-list';
+import { commandKLesson } from './command-k';
+import { markdownMentionsLesson } from './markdown-mentions';
+import { composersPreviewLesson } from './composers-preview';
+import { emailInviteLesson } from './email-invite';
+import { choosePlanLesson } from './choose-plan';
 
 export const LESSONS: LessonDefinition[] = [
   welcomeLesson,
+  homeLesson,
   navigateListLesson,
-  createEntityLesson,
-  whatsNextLesson,
+  commandKLesson,
+  markdownMentionsLesson,
+  composersPreviewLesson,
+  emailInviteLesson,
   choosePlanLesson,
 ];

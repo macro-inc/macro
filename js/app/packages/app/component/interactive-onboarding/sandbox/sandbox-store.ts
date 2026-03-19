@@ -230,3 +230,47 @@ export function resetSandbox() {
   entityCounter = 0;
   setEntities([...SEED_ENTITIES]);
 }
+
+// -- Command menu helpers --
+
+type EntityBucketType =
+  | 'note'
+  | 'task'
+  | 'email'
+  | 'channel'
+  | 'chat'
+  | 'project'
+  | 'dm'
+  | 'document';
+
+function entityToBucket(entity: EntityData): EntityBucketType {
+  switch (entity.type) {
+    case 'document':
+      return entity.subType?.type === 'task' ? 'task' : 'note';
+    case 'email':
+      return 'email';
+    case 'channel':
+      return 'channel';
+    case 'chat':
+      return 'chat';
+    case 'project':
+      return 'project';
+    default:
+      return 'note';
+  }
+}
+
+export function sandboxToCommandItems() {
+  return sandboxEntities().map((entity) => ({
+    id: entity.id,
+    kind: 'entity' as const,
+    bucket: entityToBucket(entity),
+    searchText: entity.name,
+    sortTimestamp:
+      entity.updatedAt instanceof Date
+        ? entity.updatedAt.getTime()
+        : new Date(entity.updatedAt ?? Date.now()).getTime(),
+    timestamps: { updatedAt: entity.updatedAt ?? null },
+    data: entity,
+  }));
+}

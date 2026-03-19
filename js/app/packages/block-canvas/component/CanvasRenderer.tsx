@@ -179,7 +179,7 @@ export function CanvasRenderer() {
         lineSelection: lineSelectionLayerRef,
       })}
     >
-      <div class="absolute inset-0 w-full h-full pointer-events-none">
+      <div class="absolute inset-0 w-full h-full pointer-events-none bracket-never">
         <DotPattern scale={scale} x={canvasX} y={canvasY} />
       </div>
 

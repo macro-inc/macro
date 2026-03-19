@@ -187,7 +187,7 @@ export default function InteractiveOnboarding() {
       </div>
 
       {/* Centered card */}
-      <div class="size-full max-w-[1200px] max-h-[800px]">
+      <div class="size-full max-w-[1600px] max-h-[900px]">
         <ClippedPanel
           cornerRadius={'4px'}
           class="bg-panel size-full shadow-lg shadow-[#1111]"
@@ -222,7 +222,7 @@ export default function InteractiveOnboarding() {
                     {/* Header */}
                     <div class="p-4">
                       <div class="flex flex-col gap-0.5" style={headerStyle()}>
-                        <h2 class="text-4xl font-bold text-ink-muted mt-2">
+                        <h2 class="text-3xl font-semibold text-ink-muted mt-2">
                           {lesson().definition.title}
                         </h2>
                       </div>
@@ -243,7 +243,7 @@ export default function InteractiveOnboarding() {
                           scopeId={scopeId}
                         />
                       </div>
-                      <div class="mt-auto pt-4 flex flex-col gap-2">
+                      <div class="mt-8 pt-4 flex flex-col gap-2">
                         <ContinueButton
                           onClick={handleContinue}
                           label={continueLabel()}
@@ -276,7 +276,7 @@ export default function InteractiveOnboarding() {
                         when={lesson().definition.demo}
                         fallback={
                           <div class="flex items-center justify-center h-full">
-                            <div class="w-full m-12 opacity-10">
+                            <div class="w-full m-12 opacity-10 max-w-80">
                               <MacroLogo class="fill-ink" />
                             </div>
                           </div>
