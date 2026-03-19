@@ -39,7 +39,7 @@ function NavigateListContent(props: LessonContentProps) {
   });
 
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3 onboarding-stagger">
       <HotkeyCallout
         keys={['J', '↓']}
         separator="or"

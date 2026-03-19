@@ -9,19 +9,11 @@ function HomeContent(props: LessonContentProps) {
   onMount(() => setTimeout(() => props.onComplete('Got it')));
 
   return (
-    <div class="flex flex-col gap-3">
-      <p
-        class="text-sm text-ink/70"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 50ms both' }}
-      >
-        This is your workspace. The sidebar on the left gives you quick access
-        to all your views.
-      </p>
-      <p
-        class="text-sm text-ink/70"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 150ms both' }}
-      >
-        Your content appears in the main area on the right.
+    <div class="flex flex-col gap-3 onboarding-stagger">
+      <p>
+        The Macro workspace has a the left-hand <strong>Sidebar</strong>
+        and <strong>Splits</strong> which can contain{' '}
+        <strong>List Views</strong> or content.
       </p>
     </div>
   );
@@ -42,7 +34,7 @@ function HomeDemo() {
 
 export const homeLesson: LessonDefinition = {
   id: 'home',
-  title: 'Home',
+  title: 'Workspace',
   content: HomeContent,
   demo: HomeDemo,
   order: 1,

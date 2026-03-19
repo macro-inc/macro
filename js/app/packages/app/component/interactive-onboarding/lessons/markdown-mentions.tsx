@@ -1,18 +1,16 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { sandboxToCommandItems, SANDBOX_USERS } from '../sandbox/sandbox-store';
 import { createSignal } from 'solid-js';
 import { HotkeyCallout } from '../components-lib';
+import { MockAppChrome } from '../components/MockAppChrome';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function MarkdownMentionsContent(_props: LessonContentProps) {
   return (
-    <div class="flex flex-col gap-3">
-      <HotkeyCallout keys={['Enter']} label="to focus the editor" />
+    <div class="flex flex-col gap-3 onboarding-stagger">
       <HotkeyCallout keys={['@']} label="to mention someone" />
-      <p
-        class="text-sm text-ink/70"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 50ms both' }}
-      >
+      <p>
         Macro's editor supports rich markdown, mentions, and emoji. Try typing
         something or mentioning a teammate with <strong>@</strong>.
       </p>
@@ -21,30 +19,42 @@ function MarkdownMentionsContent(_props: LessonContentProps) {
 }
 
 function MarkdownMentionsDemo(props: LessonContentProps) {
-  const [hasTyped, setHasTyped] = createSignal(false);
+  const [mentioned, setMentioned] = createSignal(false);
+
+  const sandboxEntities = () =>
+    sandboxToCommandItems().map((item) => ({
+      ...item,
+      kind: 'entity' as const,
+    }));
 
   const config = buildConfig('markdown')
     .namespace('onboarding-editor')
-    .withMentions()
+    .withMentions({
+      entities: sandboxEntities,
+      users: () => SANDBOX_USERS,
+      disableMentionTracking: true,
+      onCreate: () => {
+        if (!mentioned()) {
+          setMentioned(true);
+          props.onComplete();
+        }
+      },
+    })
     .withEmojis()
     .withHistory()
-    .onChange(() => {
-      if (!hasTyped()) {
-        setHasTyped(true);
-        props.onComplete();
-      }
-    });
+    .withSkipPreviewFetch();
 
   return (
-    <div class="h-full w-full flex items-start justify-center pt-8 px-6">
-      <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-panel p-4 min-h-[200px]">
+    <MockAppChrome viewTitle="Daily Note">
+      <div class="px-8 py-6">
+        <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell
           config={config}
           placeholder="Start typing... use @ to mention"
           autofocus
         />
       </div>
-    </div>
+    </MockAppChrome>
   );
 }
 
@@ -55,4 +65,5 @@ export const markdownMentionsLesson: LessonDefinition = {
   content: MarkdownMentionsContent,
   demo: MarkdownMentionsDemo,
   order: 50,
+  skippable: true,
 };

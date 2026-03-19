@@ -13,11 +13,9 @@ export function OnboardingProgress(props: OnboardingProgressProps) {
       <For each={props.lessons}>
         {(lesson, i) => (
           <div
-            class={cn('size-4 border border-edge-muted', {
-              'border-edge pattern pattern-edge pattern-diagonal-4':
-                i() === props.currentIndex,
-              'border-edge bg-edge':
-                lesson.completed || i() < props.currentIndex,
+            class={cn('size-2 border border-edge-muted rounded-full', {
+              'bg-ink/10': lesson.completed,
+              'border-edge bg-edge': i() === props.currentIndex,
             })}
           />
         )}

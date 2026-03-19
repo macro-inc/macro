@@ -5,19 +5,10 @@ function WelcomeContent(props: LessonContentProps) {
   onMount(() => props.onComplete('Get Started'));
 
   return (
-    <div class="flex flex-col gap-3">
-      <p
-        class="text-base text-ink"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 50ms both' }}
-      >
-        Macro is a powerful, keyboard-first workspace.{' '}
-      </p>
-      <p
-        class="text-base text-ink"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 100ms both' }}
-      >
-        This short tutorial will take you through a few core interactions. Each
-        step only takes a few seconds.
+    <div class="flex flex-col gap-3 onboarding-stagger">
+      <p>
+        Macro is a powerful, keyboard-first workspace. Let's learn a few core
+        features.
       </p>
     </div>
   );

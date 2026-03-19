@@ -13,8 +13,9 @@ export function createOnboardingState(options: OnboardingStateOptions) {
   );
 
   const [store, setStore] = createStore<LessonState[]>(
-    sorted.map((def) => ({
+    sorted.map((def, index) => ({
       definition: def,
+      index,
       completed: options.initialCompleted?.has(def.id) ?? false,
       skipped: false,
     }))

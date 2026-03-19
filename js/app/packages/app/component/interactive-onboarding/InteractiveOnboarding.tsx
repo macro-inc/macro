@@ -12,7 +12,9 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { CommandState } from '@app/component/command';
 import { resetSandbox } from './sandbox/sandbox-store';
+import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton, SkipButton } from './components-lib';
@@ -53,9 +55,12 @@ export default function InteractiveOnboarding() {
     });
   };
 
+  let continueButtonRef: HTMLButtonElement | undefined;
+
   const handleLessonComplete = (buttonLabel?: string) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
+    requestAnimationFrame(() => continueButtonRef?.focus());
   };
 
   const handleContinue = () => {
@@ -118,9 +123,57 @@ export default function InteractiveOnboarding() {
     },
   });
 
+  // Block global cmd+k during the entire tutorial.
+  // On the command-k lesson slide this opens/closes the sandbox command menu.
+  const cmdkReg = registerHotkey({
+    scopeId,
+    hotkey: 'cmd+k',
+    description: 'Command menu (onboarding)',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      setCommandKOpen((v) => !v);
+      return true; // swallow — prevents global handler
+    },
+  });
+
+  // Patch CommandState so the global cmd+k handler (which calls toggle/open)
+  // cannot open the real command menu while we're in the tutorial. Instead
+  // it drives our sandbox dialog. Also patch close() so escape inside
+  // CommandMenuInner closes the sandbox dialog.
+  const origToggle = CommandState.toggle.bind(CommandState);
+  const origOpen = CommandState.open.bind(CommandState);
+  const origClose = CommandState.close.bind(CommandState);
+
+  CommandState.toggle = () => {
+    setCommandKOpen((v) => !v);
+  };
+  CommandState.open = () => {
+    setCommandKOpen(true);
+  };
+  CommandState.close = () => {
+    origClose();
+    setCommandKOpen(false);
+  };
+
+  onCleanup(() => {
+    CommandState.toggle = origToggle;
+    CommandState.open = origOpen;
+    CommandState.close = origClose;
+  });
   onCleanup(() => reg.dispose());
   onCleanup(() => skipReg.dispose());
+  onCleanup(() => cmdkReg.dispose());
   onCleanup(() => resetSandbox());
+
+  // When the sandbox command menu dialog closes, return focus to the
+  // onboarding shell so DOM-scoped hotkeys (including cmd+k) keep working.
+  createEffect(
+    on(commandKOpen, (open) => {
+      if (!open) {
+        shellRef?.focus();
+      }
+    })
+  );
 
   createEffect(
     on(
@@ -170,6 +223,14 @@ export default function InteractiveOnboarding() {
           from { opacity: 0; transform: scale(0.92); }
           to   { opacity: 1; transform: scale(1); }
         }
+        .onboarding-stagger > * {
+          animation: onboarding-fade-up 300ms ease-out both;
+        }
+        .onboarding-stagger > *:nth-child(1) { animation-delay: 50ms; }
+        .onboarding-stagger > *:nth-child(2) { animation-delay: 120ms; }
+        .onboarding-stagger > *:nth-child(3) { animation-delay: 190ms; }
+        .onboarding-stagger > *:nth-child(4) { animation-delay: 260ms; }
+        .onboarding-stagger > *:nth-child(5) { animation-delay: 330ms; }
       `
       }</style>
       <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
@@ -221,15 +282,18 @@ export default function InteractiveOnboarding() {
                   <div class="w-1/3 h-full min-w-0 flex flex-col border-r border-edge-muted">
                     {/* Header */}
                     <div class="p-4">
-                      <div class="flex flex-col gap-0.5" style={headerStyle()}>
-                        <h2 class="text-3xl font-semibold text-ink-muted mt-2">
+                      <div style={headerStyle()}>
+                        <div class="bg-ink text-panel text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
+                          {lesson().index + 1}
+                        </div>
+                        <h2 class="text-3xl font-semibold text-ink-muted mt-12">
                           {lesson().definition.title}
                         </h2>
                       </div>
                     </div>
 
                     {/* Body */}
-                    <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
+                    <div class="flex-1 overflow-y-auto px-4 flex flex-col">
                       <div style={bodyStyle()}>
                         <Show when={lesson().definition.subtitle}>
                           <p class="text-sm text-ink/60 mb-4">
@@ -245,6 +309,9 @@ export default function InteractiveOnboarding() {
                       </div>
                       <div class="mt-8 pt-4 flex flex-col gap-2">
                         <ContinueButton
+                          ref={(el) => {
+                            continueButtonRef = el;
+                          }}
                           onClick={handleContinue}
                           label={continueLabel()}
                           ghost={!readyToContinue()}

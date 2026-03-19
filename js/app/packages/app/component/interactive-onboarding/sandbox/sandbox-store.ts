@@ -1,4 +1,5 @@
 import type { EntityData } from '@entity';
+import type { IUser } from '@core/user/types';
 import {
   MOCK_DOCUMENT_BASIC,
   MOCK_EMAIL_UNREAD,
@@ -259,6 +260,26 @@ function entityToBucket(entity: EntityData): EntityBucketType {
       return 'note';
   }
 }
+
+// -- Sandbox contacts --
+
+export const SANDBOX_USERS: IUser[] = [
+  { id: 'user_1', name: 'Sarah Chen', email: 'sarah@example.com' },
+  { id: 'user_2', name: 'Marcus Lee', email: 'marcus@example.com' },
+  { id: 'user_3', name: 'Jordan Rivera', email: 'jordan@example.com' },
+  { id: 'user_4', name: 'Alex Kim', email: 'alex@example.com' },
+  { id: 'user_5', name: 'Priya Patel', email: 'priya@example.com' },
+  { id: 'user_6', name: 'David Okafor', email: 'david@example.com' },
+  { id: 'user_7', name: 'Emily Zhang', email: 'emily@example.com' },
+  { id: 'user_8', name: 'Carlos Ruiz', email: 'carlos@example.com' },
+  { id: 'user_9', name: 'Aisha Mohammed', email: 'aisha@example.com' },
+  { id: 'user_10', name: 'Tom Brennan', email: 'tom@example.com' },
+  { id: 'user_11', name: 'Yuki Tanaka', email: 'yuki@example.com' },
+  { id: 'user_12', name: 'Fatima Al-Hassan', email: 'fatima@example.com' },
+  { id: 'user_13', name: 'Liam Murphy', email: 'liam@example.com' },
+  { id: 'user_14', name: 'Sofia Andersson', email: 'sofia@example.com' },
+  { id: 'user_15', name: 'Raj Gupta', email: 'raj@example.com' },
+];
 
 export function sandboxToCommandItems() {
   return sandboxEntities().map((entity) => ({

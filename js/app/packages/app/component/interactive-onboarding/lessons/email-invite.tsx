@@ -3,11 +3,8 @@ import type { LessonContentProps, LessonDefinition } from '../types';
 
 function EmailInviteContent(_props: LessonContentProps) {
   return (
-    <div class="flex flex-col gap-3">
-      <p
-        class="text-sm text-ink/70"
-        style={{ animation: 'onboarding-fade-up 300ms ease-out 50ms both' }}
-      >
+    <div class="flex flex-col gap-3 onboarding-stagger">
+      <p>
         Macro is better with your team. Invite collaborators to your workspace
         by email.
       </p>

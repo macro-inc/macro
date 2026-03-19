@@ -27,4 +27,5 @@ export interface LessonState {
   definition: LessonDefinition;
   completed: boolean;
   skipped: boolean;
+  index: number;
 }
