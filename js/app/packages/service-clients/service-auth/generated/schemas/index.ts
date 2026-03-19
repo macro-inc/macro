@@ -50,6 +50,7 @@ export * from './putUserNameQueryParams';
 export * from './putUserNameQueryParamsFirstName';
 export * from './putUserNameQueryParamsLastName';
 export * from './resendFusionauthVerifyUserEmailRequest';
+export * from './sendInviteBody';
 export * from './ssoLoginParams';
 export * from './ssoRequiredResponse';
 export * from './stripeSessionResponse';

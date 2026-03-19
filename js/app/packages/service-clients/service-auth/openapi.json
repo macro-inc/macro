@@ -1138,6 +1138,49 @@
         }
       }
     },
+    "/referral/send": {
+      "post": {
+        "tags": ["referral"],
+        "summary": "Handler for `POST /referral/send`.",
+        "description": "Sends a referral code via email to a user",
+        "operationId": "send_referral_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInviteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/session": {
       "post": {
         "tags": ["session::session_creation"],
@@ -3383,6 +3426,17 @@
           "email": {
             "type": "string",
             "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "SendInviteBody": {
+        "type": "object",
+        "description": "The body which is used to describe the recipient email",
+        "required": ["recipient"],
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "the recipient of the referral email"
           }
         }
       },
