@@ -1108,9 +1108,9 @@
           "200": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReferralCode"
+                  "type": "string"
                 }
               }
             }
@@ -3375,10 +3375,6 @@
             "description": "Last Name of user"
           }
         }
-      },
-      "ReferralCode": {
-        "type": "string",
-        "description": "Wrapper for the referral code to make it type safe"
       },
       "ResendFusionauthVerifyUserEmailRequest": {
         "type": "object",

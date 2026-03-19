@@ -49,7 +49,6 @@ export * from './putUserNameParams';
 export * from './putUserNameQueryParams';
 export * from './putUserNameQueryParamsFirstName';
 export * from './putUserNameQueryParamsLastName';
-export * from './referralCode';
 export * from './resendFusionauthVerifyUserEmailRequest';
 export * from './ssoLoginParams';
 export * from './ssoRequiredResponse';

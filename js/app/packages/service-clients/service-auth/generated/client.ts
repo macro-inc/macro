@@ -37,7 +37,6 @@ import type {
   ProfilePictures,
   PutProfilePictureParams,
   PutUserNameParams,
-  ReferralCode,
   ResendFusionauthVerifyUserEmailRequest,
   SsoLoginParams,
   SsoRequiredResponse,
@@ -1314,7 +1313,7 @@ export const getUserPermissions = async (
  * @summary Handler for `GET /referral-code`.
  */
 export type getReferralCodeResponse200 = {
-  data: ReferralCode;
+  data: string;
   status: 200;
 };
 
