@@ -1,12 +1,12 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
-    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
-    TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
     request::SendNotificationRequest,
+    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
+    TaggedContent,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -290,7 +290,7 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
     /// open the inner container by applying the state machine output to the necessary fields
     pub fn with_state_decisions(
         self,
-        states: Vec<Result<StateMachineDecisionA<T>, Report>>,
+        states: Vec<Result<StateMachineDecisionA, Report>>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
         // Collect indeterminate decisions keyed by owner_id
         let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
@@ -300,8 +300,7 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
                     Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
                     Err(_)
                     | Ok(StateMachineDecisionA::DontSend(_))
-                    | Ok(StateMachineDecisionA::BatchWasQueued(_))
-                    | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
+                    | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
                 })
                 .map(|batch| {
                     let owner = batch.inner().owner_id().clone();

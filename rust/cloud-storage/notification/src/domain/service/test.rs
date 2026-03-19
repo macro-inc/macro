@@ -154,7 +154,7 @@ impl BulkDigestStateMachine for MockStateMachine {
     async fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         _notif: UserNotificationRow<Arc<T>>,
-    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA<T>, Report>
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
     {
         Err(report!("not implemented"))
     }

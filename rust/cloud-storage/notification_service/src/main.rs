@@ -237,8 +237,7 @@ pub async fn main() -> anyhow::Result<()> {
                 ),
             ),
             ::notification::outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
-            model_notifications::digest_state::common_email_block_list(),
-            model_notifications::digest_state::common_explicit_invite_allow_list(),
+            model_notifications::digest_state::digest_email_block_list(),
         );
 
     let ingress_repository =
