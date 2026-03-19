@@ -49,6 +49,15 @@ impl IntoResponse for StripeOperationError {
     }
 }
 
+#[derive(Debug, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum StripeProductTier {
+    #[default]
+    Haiku,
+    Sonnet,
+    Opus,
+}
+
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +70,9 @@ pub struct CreateCheckoutSessionRequest {
     pub discount: Option<String>,
     /// Google Analytics client ID for conversion tracking
     pub ga_client_id: Option<String>,
+    /// The tier, defaults to haiku
+    #[serde(default)]
+    pub tier: StripeProductTier,
 }
 
 /// Response containing the Stripe session URL
@@ -165,6 +177,12 @@ pub async fn create_checkout_session(
             ..Default::default()
         });
 
+    let price_id = match req.tier {
+        StripeProductTier::Haiku => ctx.stripe_price_ids.stripe_price_id_haiku.as_ref(),
+        StripeProductTier::Sonnet => ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref(),
+        StripeProductTier::Opus => ctx.stripe_price_ids.stripe_price_id_opus.as_ref(),
+    };
+
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {
         customer: Some(customer_id),
@@ -179,12 +197,7 @@ pub async fn create_checkout_session(
             }]
         }),
         line_items: Some(vec![stripe::CreateCheckoutSessionLineItems {
-            price: Some(
-                ctx.stripe_price_ids
-                    .stripe_price_id_haiku
-                    .as_ref()
-                    .to_string(),
-            ),
+            price: Some(price_id.to_string()),
             quantity: Some(1),
             ..Default::default()
         }]),

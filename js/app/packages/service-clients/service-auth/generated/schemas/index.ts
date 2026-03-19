@@ -53,6 +53,7 @@ export * from './referralCode';
 export * from './resendFusionauthVerifyUserEmailRequest';
 export * from './ssoLoginParams';
 export * from './ssoRequiredResponse';
+export * from './stripeProductTier';
 export * from './stripeSessionResponse';
 export * from './team';
 export * from './teamInviteDetails';

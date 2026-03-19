@@ -2989,6 +2989,10 @@
           "successUrl": {
             "type": "string",
             "description": "The URL to redirect to on successful checkout"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/StripeProductTier",
+            "description": "The tier, defaults to haiku"
           }
         }
       },
@@ -3399,6 +3403,10 @@
             "description": "The idp_id you need to perform sso login with."
           }
         }
+      },
+      "StripeProductTier": {
+        "type": "string",
+        "enum": ["haiku", "sonnet", "opus"]
       },
       "StripeSessionResponse": {
         "type": "object",
