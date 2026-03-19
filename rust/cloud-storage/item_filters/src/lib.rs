@@ -197,6 +197,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
+    /// A list of project ids to search within. Empty to ignore project filtering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_ids: Vec<String>,
+
     /// Filter by email importance. None to not filter. True to show only important emails
     /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
     /// (those categorized as promotions, social, updates, or forums).
@@ -226,6 +230,7 @@ impl IsEmpty for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            project_ids,
             importance,
             notification_filters,
             include_labels,
@@ -236,6 +241,7 @@ impl IsEmpty for EmailFilters {
             && bcc.is_empty()
             && recipients.is_empty()
             && email_thread_ids.is_empty()
+            && project_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()
             && include_labels.is_empty()

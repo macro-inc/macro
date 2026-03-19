@@ -21,6 +21,7 @@ export interface SoupEmailThreadPreview {
   isRead: boolean;
   name?: SoupEmailThreadPreviewName;
   ownerId: string;
+  projectId?: string | null;
   providerId?: SoupEmailThreadPreviewProviderId;
   senderEmail?: SoupEmailThreadPreviewSenderEmail;
   senderName?: SoupEmailThreadPreviewSenderName;

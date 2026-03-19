@@ -43,6 +43,7 @@ pub struct ThreadPreviewCursorDbRow {
     pub viewed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
@@ -110,6 +111,7 @@ impl ThreadPreviewCursorDbRow {
             viewed_at,
             created_at,
             updated_at,
+            project_id,
         } = self;
 
         EmailThreadPreview {
@@ -129,6 +131,7 @@ impl ThreadPreviewCursorDbRow {
             created_at,
             updated_at,
             viewed_at,
+            project_id,
         }
     }
 }
@@ -164,6 +167,7 @@ pub struct DbThreadRow {
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
+    pub project_id: Option<String>,
 }
 
 impl From<DbThreadRow> for ThreadRow {
@@ -179,6 +183,7 @@ impl From<DbThreadRow> for ThreadRow {
             latest_non_spam_message_ts: row.latest_non_spam_message_ts,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            project_id: row.project_id,
         }
     }
 }

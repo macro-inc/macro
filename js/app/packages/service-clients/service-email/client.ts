@@ -137,6 +137,19 @@ export const emailClient = {
       (result) => result
     );
   },
+  async updateThreadProject(args: {
+    thread_id: string;
+    projectId: string | null;
+  }) {
+    const { thread_id, projectId } = args;
+    return emailFetch<{ oldProjectId: string | null }>(
+      `/email/threads/${thread_id}/project`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ projectId }),
+      }
+    );
+  },
   async flagArchived(args: { value: boolean; id: string }) {
     const { value, id } = args;
     return mapOk(

@@ -11,7 +11,9 @@ use crate::domain::{
     },
     ports::{EmailMessageEnqueuer, EmailRepo, EmailService, GmailLabelModifier},
 };
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
+};
 use frecency::domain::ports::FrecencyQueryService;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
@@ -127,5 +129,47 @@ where
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
         self.update_thread_labels_impl(access_token, link, thread_id, label_id, add)
             .await
+    }
+
+    async fn update_thread_project(
+        &self,
+        thread_receipt: EntityAccessReceipt<EditAccessLevel>,
+        project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
+    ) -> Result<Option<String>, EmailErr> {
+        let is_owner = matches!(
+            thread_receipt.entity_permission(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner
+            }
+        );
+
+        if !is_owner {
+            return Err(EmailErr::Unauthorized);
+        }
+
+        let thread_id = Uuid::parse_str(&thread_receipt.entity().entity_id)
+            .map_err(|e| EmailErr::RepoErr(anyhow::anyhow!("invalid thread id: {}", e)))?;
+
+        let project_id = project_receipt
+            .as_ref()
+            .map(|r| r.entity().entity_id.as_str());
+
+        let old_project_id = self
+            .email_repo
+            .get_thread_project_id(thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))?;
+
+        let updated = self
+            .email_repo
+            .update_thread_project(thread_id, project_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))?;
+
+        if !updated {
+            return Err(EmailErr::ThreadNotFound);
+        }
+
+        Ok(old_project_id)
     }
 }
