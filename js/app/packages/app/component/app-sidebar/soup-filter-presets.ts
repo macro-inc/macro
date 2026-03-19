@@ -182,7 +182,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.task,
-            document_filters: { owners: [ctx.userId] },
+            document_filters: {
+              ...QUERY_FILTERS.task.document_filters,
+              owners: [ctx.userId],
+            },
           },
           clientFilters: { and: ['task', 'assigned-to'] },
         };
@@ -192,7 +195,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.task,
-            document_filters: { owners: [ctx.userId] },
+            document_filters: {
+              ...QUERY_FILTERS.task.document_filters,
+              owners: [ctx.userId],
+            },
           },
           clientFilters: { and: ['task'] },
         };

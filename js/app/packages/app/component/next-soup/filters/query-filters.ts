@@ -22,7 +22,16 @@ function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
   return !ids.includes(value);
 }
 
-// TODO: this only supports for item type and id filters, other filters to be added later
+function isValueFilteredOut(
+  values: string[] | undefined,
+  value: string | null | undefined
+): boolean {
+  if (!values || values.length === 0) return false;
+  if (!value) return true;
+  return !values.includes(value);
+}
+
+// TODO: this only supports the subset of soup filters needed for cache matching.
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
   body: SoupBody
@@ -31,7 +40,12 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'document' },
       ({ data }) =>
-        !isIdFilteredOut(body.document_filters?.document_ids, data.id)
+        !isIdFilteredOut(body.document_filters?.document_ids, data.id) &&
+        !isValueFilteredOut(body.document_filters?.owners, data.ownerId) &&
+        !isValueFilteredOut(
+          body.document_filters?.sub_types,
+          data.subType?.type
+        )
     )
     .with(
       { tag: 'chat' },
@@ -88,7 +102,7 @@ export const QUERY_FILTERS = {
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    document_filters: { file_types: ['md'] },
+    document_filters: { sub_types: ['task'] },
   },
 
   email: {
