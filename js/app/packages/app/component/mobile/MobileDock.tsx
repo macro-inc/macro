@@ -63,7 +63,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-const PRIMARY_IDS = ['inbox', 'channels', 'files', 'search'] as const;
+const PRIMARY_IDS = ['inbox', 'channels', 'folders', 'search'] as const;
 
 const MORE_VIEWS = SIDEBAR_LINKS.filter(
   (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
@@ -239,8 +239,8 @@ export function MobileDock() {
       <MobileDockButton
         icon={AnimatedFolderIcon}
         label="Files"
-        active={isActive('files')}
-        onClick={() => navigate('files')}
+        active={isActive('folders')}
+        onClick={() => navigate('folders')}
       />
       <MorePopover
         active={isMoreActive()}

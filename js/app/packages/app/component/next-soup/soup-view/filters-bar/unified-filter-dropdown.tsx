@@ -22,10 +22,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 
-import FileCodeIcon from '@icon/regular/file-code.svg';
-import FileImageIcon from '@icon/regular/file-image.svg';
-import FilePdfIcon from '@icon/regular/file-pdf.svg';
-import FileIcon from '@icon/regular/file.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
@@ -112,17 +108,17 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'attachment-pdf',
         label: 'PDFs',
-        icon: () => <FilePdfIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'attachment-image',
         label: 'Images',
-        icon: () => <FileImageIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'attachment-document',
         label: 'Documents',
-        icon: () => <FileIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="unknown" size="xs" />,
       },
     ],
     multiple: true,
@@ -248,37 +244,35 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
     id: 'type',
     label: 'Type',
     options: [
-      { id: 'doc-markdown', label: 'Markdown' },
-      { id: 'doc-canvas', label: 'Canvas' },
-    ],
-    multiple: true,
-  },
-];
-
-const FILES_FILTER_CATEGORIES: FilterCategory[] = [
-  {
-    id: 'type',
-    label: 'Type',
-    options: [
+      {
+        id: 'doc-markdown',
+        label: 'Markdown',
+        icon: () => <EntityIcon targetType="md" size="xs" />,
+      },
+      {
+        id: 'doc-canvas',
+        label: 'Canvas',
+        icon: () => <EntityIcon targetType="canvas" size="xs" />,
+      },
       {
         id: 'file-code',
         label: 'Code',
-        icon: () => <FileCodeIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="code" size="xs" />,
       },
       {
         id: 'file-image',
         label: 'Images',
-        icon: () => <FileImageIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
-        icon: () => <FilePdfIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'file-other',
         label: 'Other',
-        icon: () => <FileIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="unknown" size="xs" />,
       },
     ],
     multiple: true,
@@ -302,7 +296,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
   channels: [],
-  files: FILES_FILTER_CATEGORIES,
+  folders: [],
   search: [],
 };
 
@@ -560,74 +554,123 @@ export const UnifiedFilterDropdown = () => {
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
-            <For each={categories()}>
-              {(category) => (
-                <DropdownMenu.Sub gutter={4}>
-                  <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
-                    <span class="text-ink">{category.label}</span>
-                    <CaretRightIcon class="size-3 text-ink-muted" />
-                  </DropdownMenu.SubTrigger>
+            <Show
+              when={categories().length === 1 && !isTasksView()}
+              fallback={
+                <>
+                  <For each={categories()}>
+                    {(category) => (
+                      <DropdownMenu.Sub gutter={4}>
+                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+                          <span class="text-ink">{category.label}</span>
+                          <CaretRightIcon class="size-3 text-ink-muted" />
+                        </DropdownMenu.SubTrigger>
 
-                  <DropdownMenu.Portal>
-                    <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
-                      <For each={category.options}>
-                        {(option) => {
-                          const active = () => isOptionActive(option.id);
-                          return (
-                            <DropdownMenu.Item
-                              class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
-                              onSelect={() => toggleFilter(option.id)}
-                              closeOnSelect={!category.multiple}
-                            >
-                              <span
-                                class={cn(
-                                  'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                  active()
-                                    ? 'bg-accent border-accent'
-                                    : 'border-edge'
-                                )}
-                              >
-                                <Show when={active()}>
-                                  <CheckIcon class="size-2.5 text-page" />
-                                </Show>
-                              </span>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+                            <For each={category.options}>
+                              {(option) => {
+                                const active = () => isOptionActive(option.id);
+                                return (
+                                  <DropdownMenu.Item
+                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                                    onSelect={() => toggleFilter(option.id)}
+                                    closeOnSelect={!category.multiple}
+                                  >
+                                    <span
+                                      class={cn(
+                                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                        active()
+                                          ? 'bg-accent border-accent'
+                                          : 'border-edge'
+                                      )}
+                                    >
+                                      <Show when={active()}>
+                                        <CheckIcon class="size-2.5 text-page" />
+                                      </Show>
+                                    </span>
 
-                              <Show when={option.icon}>
-                                {(icon) => (
-                                  <span class="size-4 flex items-center justify-center shrink-0">
-                                    {icon()()}
-                                  </span>
-                                )}
-                              </Show>
+                                    <Show when={option.icon}>
+                                      {(icon) => (
+                                        <span class="size-4 flex items-center justify-center shrink-0">
+                                          {icon()()}
+                                        </span>
+                                      )}
+                                    </Show>
 
-                              <span
-                                class={cn(
-                                  'flex-1 truncate',
-                                  active() ? 'text-ink' : 'text-ink-muted'
-                                )}
-                              >
-                                {option.label}
-                              </span>
-                            </DropdownMenu.Item>
-                          );
-                        }}
-                      </For>
-                    </DropdownMenu.SubContent>
-                  </DropdownMenu.Portal>
-                </DropdownMenu.Sub>
-              )}
-            </For>
+                                    <span
+                                      class={cn(
+                                        'flex-1 truncate',
+                                        active() ? 'text-ink' : 'text-ink-muted'
+                                      )}
+                                    >
+                                      {option.label}
+                                    </span>
+                                  </DropdownMenu.Item>
+                                );
+                              }}
+                            </For>
+                          </DropdownMenu.SubContent>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Sub>
+                    )}
+                  </For>
 
-            {/* Assignee filter for tasks view */}
-            <Show when={isTasksView()}>
-              <SearchableFilterSubmenu
-                label="Assignee"
-                options={assigneeOptions}
-                activeIds={assigneeFilter}
-                onToggle={toggleAssignee}
-                placeholder="Search assignees..."
-                multiple
-              />
+                  {/* Assignee filter for tasks view */}
+                  <Show when={isTasksView()}>
+                    <SearchableFilterSubmenu
+                      label="Assignee"
+                      options={assigneeOptions}
+                      activeIds={assigneeFilter}
+                      onToggle={toggleAssignee}
+                      placeholder="Search assignees..."
+                      multiple
+                    />
+                  </Show>
+                </>
+              }
+            >
+              {/* Single category: render options directly */}
+              <For each={categories()[0]!.options}>
+                {(option) => {
+                  const active = () => isOptionActive(option.id);
+                  return (
+                    <DropdownMenu.Item
+                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                      onSelect={() => toggleFilter(option.id)}
+                      closeOnSelect={!categories()[0]!.multiple}
+                    >
+                      <span
+                        class={cn(
+                          'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                          active() ? 'bg-accent border-accent' : 'border-edge'
+                        )}
+                      >
+                        <Show when={active()}>
+                          <CheckIcon class="size-2.5 text-page" />
+                        </Show>
+                      </span>
+
+                      <Show when={option.icon}>
+                        {(icon) => (
+                          <span class="size-4 flex items-center justify-center shrink-0">
+                            {icon()()}
+                          </span>
+                        )}
+                      </Show>
+
+                      <span
+                        class={cn(
+                          'flex-1 truncate',
+                          active() ? 'text-ink' : 'text-ink-muted'
+                        )}
+                      >
+                        {option.label}
+                      </span>
+                    </DropdownMenu.Item>
+                  );
+                }}
+              </For>
             </Show>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

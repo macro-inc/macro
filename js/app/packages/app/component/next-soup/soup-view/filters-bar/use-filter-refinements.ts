@@ -31,6 +31,7 @@ const TAB_ONLY_FILTERS = new Set([
   'email',
   'no-drafts',
   'email-drafts',
+  'not-task',
 ]);
 
 /**
