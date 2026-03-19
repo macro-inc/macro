@@ -10,10 +10,12 @@ import {
   Show,
 } from 'solid-js';
 
+export const posthogInstance = new PostHog();
+
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   'PosthogProvider',
   () => {
-    const instance = new PostHog();
+    const instance = posthogInstance;
 
     const initialize = () => {
       const key = import.meta.env.VITE_POSTHOG_API_KEY;

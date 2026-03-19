@@ -25,7 +25,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  ENABLE_NEW_CHANNELS: true,
+  ENABLE_NEW_CHANNELS: () => true,
 }));
 
 vi.mock('@service-comms/client', () => ({

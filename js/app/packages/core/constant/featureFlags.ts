@@ -1,3 +1,5 @@
+import { posthogInstance } from '@app/lib/analytics/posthog';
+
 /**
  * This constant reflects whether the app is running locally with hot reload enabled
  *
@@ -278,10 +280,17 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_NEW_CHANNELS = resolveFeatureFlag(
-  'ENABLE_NEW_CHANNELS',
-  false
+const ENABLE_NEW_CHANNELS_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_NEW_CHANNELS'
 );
+
+export function ENABLE_NEW_CHANNELS(): boolean {
+  if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {
+    return ENABLE_NEW_CHANNELS_OVERRIDE;
+  }
+
+  return posthogInstance.isFeatureEnabled('enable-new-channels') ?? false;
+}
 
 export const ENABLE_PROXY_EMAIL_IMAGES = resolveFeatureFlag(
   'ENABLE_PROXY_EMAIL_IMAGES',

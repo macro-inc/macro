@@ -8,11 +8,11 @@ import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 export const definition = defineBlock({
   name: 'channel',
   description: '',
-  component: ENABLE_NEW_CHANNELS ? NewChannelBlockAdapter : ChannelBlock,
+  component: ENABLE_NEW_CHANNELS() ? NewChannelBlockAdapter : ChannelBlock,
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      if (!ENABLE_NEW_CHANNELS) {
+      if (!ENABLE_NEW_CHANNELS()) {
         await fetchAndCacheChannel(source.id);
       }
       return ok({ id: source.id });
