@@ -193,12 +193,7 @@ pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<GetChatResponse>, ChatHandlerErr> {
-    let user_id = match access.entity_access_receipt.auth() {
-        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => id.clone(),
-        _ => return Err(ChatHandlerErr::Internal),
-    };
-
-    let response = state.inner.get_chat(user_id, &chat_id).await?;
+    let response = state.inner.get_chat(access.entity_access_receipt).await?;
 
     Ok(Json(response))
 }
@@ -216,13 +211,13 @@ pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
     )
 )]
 /// Soft-delete a chat.
-#[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
+#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
 pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode, ChatHandlerErr> {
-    state.inner.delete(&chat_id).await?;
+    state.inner.delete(access.entity_access_receipt).await?;
     Ok(StatusCode::OK)
 }
 
@@ -239,13 +234,16 @@ pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
     )
 )]
 /// Permanently delete a chat and all associated data.
-#[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
+#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
 pub async fn permanently_delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode, ChatHandlerErr> {
-    state.inner.permanently_delete(&chat_id).await?;
+    state
+        .inner
+        .permanently_delete(access.entity_access_receipt)
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -282,16 +280,10 @@ pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
     Path(chat_id): Path<String>,
     Json(req): Json<PatchChatRequest>,
 ) -> Result<StatusCode, ChatHandlerErr> {
-    let user_id = match access.entity_access_receipt.auth() {
-        entity_access::domain::models::EntityAccessAuth::Authenticated(id) => id.clone(),
-        _ => return Err(ChatHandlerErr::Internal),
-    };
-
     state
         .inner
         .patch(
-            user_id,
-            &chat_id,
+            access.entity_access_receipt,
             PatchChatArgs {
                 name: req.name,
                 project_id: req.project_id,
@@ -317,14 +309,13 @@ pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
     )
 )]
 /// Copy a chat and its messages into a new chat.
-#[tracing::instrument(skip(state, _access, user), fields(user_id = %user.macro_user_id, chat_id = %chat_id))]
+#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
 pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    _access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
-    user: MacroUserExtractor,
     Path(chat_id): Path<String>,
 ) -> Result<Json<StringIDResponse>, ChatHandlerErr> {
-    let id = state.inner.copy_chat(user.macro_user_id, &chat_id).await?;
+    let id = state.inner.copy_chat(access.entity_access_receipt).await?;
     Ok(Json(StringIDResponse { id }))
 }
 
@@ -341,13 +332,16 @@ pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
     )
 )]
 /// Revert a soft-deleted chat.
-#[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
+#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
 pub async fn revert_delete_handler<S: ChatService, Svc: EntityAccessService>(
-    _access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode, ChatHandlerErr> {
-    state.inner.revert_delete(&chat_id).await?;
+    state
+        .inner
+        .revert_delete(access.entity_access_receipt)
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -372,12 +366,15 @@ pub struct GetChatPermissionsResponse {
     )
 )]
 /// Get the share permissions for a chat.
-#[tracing::instrument(skip(state, _access), fields(chat_id = %chat_id))]
+#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id))]
 pub async fn get_chat_permissions_handler<S: ChatService, Svc: EntityAccessService>(
-    _access: ChatAccessLevelExtractor<EditAccessLevel, Svc>,
+    access: ChatAccessLevelExtractor<EditAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<GetChatPermissionsResponse>, ChatHandlerErr> {
-    let permissions = state.inner.get_permissions(&chat_id).await?;
+    let permissions = state
+        .inner
+        .get_permissions(access.entity_access_receipt)
+        .await?;
     Ok(Json(GetChatPermissionsResponse { permissions }))
 }

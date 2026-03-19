@@ -13,7 +13,10 @@ use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs,
 };
 use crate::domain::ports::ChatService;
-use entity_access::domain::models::{AccessError, AccessLevel, EntityPermission, EntityType};
+use entity_access::domain::models::{
+    AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
+    OwnerAccessLevel, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
@@ -32,12 +35,12 @@ impl ChatService for MockService {
     #[allow(deprecated)]
     async fn get_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetChatResponse, ChatErr> {
+        let chat_id = entity_access_receipt.entity().entity_id.clone();
         Ok(GetChatResponse {
             chat: ChatResponse {
-                id: chat_id.to_string(),
+                id: chat_id,
                 user_id: "macro|test@example.com".to_string(),
                 project_id: None,
                 name: "Mock Chat".to_string(),
@@ -57,36 +60,43 @@ impl ChatService for MockService {
 
     async fn copy_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, ChatErr> {
         Ok("copied-chat-id".to_string())
     }
 
-    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Ok(())
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn permanently_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Ok(())
     }
 
     async fn patch(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
         Ok(())
     }
 
-    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn revert_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Ok(())
     }
 
     async fn get_permissions(
         &self,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
@@ -105,44 +115,50 @@ impl ChatService for ErrorService {
 
     async fn get_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetChatResponse, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn copy_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn permanently_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn patch(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn revert_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_permissions(
         &self,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
@@ -161,44 +177,50 @@ impl ChatService for NotFoundService {
 
     async fn get_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<GetChatResponse, ChatErr> {
         Err(ChatErr::NotFound)
     }
 
     async fn copy_chat(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, ChatErr> {
         Err(ChatErr::NotFound)
     }
 
-    async fn delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn permanently_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn patch(
         &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
-    async fn revert_delete(&self, _chat_id: &str) -> Result<(), ChatErr> {
+    async fn revert_delete(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_permissions(
         &self,
-        _chat_id: &str,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }

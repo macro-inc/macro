@@ -7,13 +7,14 @@ publish = false
 [features]
 default = ["ports", "inbound", "outbound"]
 ports = []
-inbound = ["ports", "dep:axum", "dep:entity_access", "dep:model_user"]
+inbound = ["ports", "dep:axum", "dep:model_user", "entity_access/inbound"]
 outbound = ["ports", "dep:sqlx", "dep:macro_share_permissions", "dep:macro_uuid"]
 
 [dependencies]
 # Domain (always included)
 ai = { path = "../ai" }
 anyhow = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
@@ -26,7 +27,6 @@ tracing = { workspace = true }
 
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }
-entity_access = { path = "../entity_access", default-features = false, features = ["inbound"], optional = true }
 model_user = { path = "../model_user", optional = true }
 utoipa = { workspace = true }
 

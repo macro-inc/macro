@@ -1,6 +1,9 @@
 use crate::domain::models::{
     ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
 };
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::Chat;
 use models_permissions::share_permission::SharePermissionV2;
@@ -91,46 +94,43 @@ pub trait ChatService: Send + Sync + 'static {
     /// Get a chat with messages, web citations, and the user's access level.
     fn get_chat(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl std::future::Future<Output = Result<GetChatResponse, ChatErr>> + Send;
 
     /// Copy a chat and its messages, returning the new chat ID.
     fn copy_chat(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl std::future::Future<Output = Result<String, ChatErr>> + Send;
 
     /// Soft-delete a chat.
     fn delete(
         &self,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 
     /// Permanently delete a chat and all associated data.
     fn permanently_delete(
         &self,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 
     /// Patch a chat's metadata (name, project, share permissions).
     fn patch(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         args: PatchChatArgs,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 
     /// Revert a soft-deleted chat.
     fn revert_delete(
         &self,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
 
     /// Get the share permissions for a chat.
     fn get_permissions(
         &self,
-        chat_id: &str,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl std::future::Future<Output = Result<SharePermissionV2, ChatErr>> + Send;
 }
