@@ -26,14 +26,19 @@ import {
 } from '@core/util/upload';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import Upload from '@icon/regular/upload.svg';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
+
+  const analytics = useAnalytics();
+
   const { toggleSettings } = useSettingsState();
 
   const handleFileUpload = useHandleFileUpload();
 
   const handleCommandMenu = () => {
+    analytics.track('command_menu_open', { from: 'global' });
     CommandState.toggle();
   };
 

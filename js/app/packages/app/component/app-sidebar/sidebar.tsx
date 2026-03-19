@@ -178,10 +178,12 @@ export const registerSidebarHotkeys = ({
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
+  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
 
   const handleCommandPaletteClick = () => {
+    analytics.track('command_menu_open', { from: 'sidebar' });
     CommandState.toggle();
   };
 

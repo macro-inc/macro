@@ -25,6 +25,7 @@ import {
   makeMoveToProjectAction,
   makeRenameAction,
 } from './index';
+import { useAnalytics } from '@app/component/analytics-context';
 
 /**
  * Common manipulations scoped to the current block's hotkey scope.
@@ -32,6 +33,8 @@ import {
  * can be found by the command menu.
  */
 export const useBlockEntityCommands = () => {
+  const analytics = useAnalytics();
+
   const blockId = useBlockId();
   const quickAccess = useQuickAccess();
   const userId = useUserId();
@@ -317,8 +320,18 @@ export const useBlockEntityCommands = () => {
         e?.preventDefault();
         const entity = getEntity();
         if (entity) {
+          analytics.track('command_menu_open', {
+            from: 'block_entity_action',
+            blockType: blockId,
+          });
+
           CommandState.openForEntityAction([entity]);
         } else {
+          analytics.track('command_menu_open', {
+            from: 'block',
+            blockType: blockId,
+          });
+
           CommandState.toggle();
         }
         return true;
