@@ -4,32 +4,38 @@ import {
 } from '@channel/Channel/Channel';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { createMemo, createSignal } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
 import { URL_PARAMS } from '@block-channel/constants';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
-import { ChannelTypeEnum } from '@service-comms/client';
-import { useChannelQuery } from '@queries/channel/channel';
-import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { ChannelTopLeft } from './Top';
+import { useChannelName, useChannelType } from '@core/context/channels';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+
+function NewTop(props: { channelId: string }) {
+  const channelName = useChannelName(props.channelId);
+  const channelType = useChannelType(props.channelId);
+  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
+  const participants = () =>
+    participantsQuery.isLoading ? [] : participantsQuery.data;
+
+  return (
+    <Suspense>
+      <ChannelTopLeft
+        channelId={props.channelId}
+        channelType={channelType()!}
+        participants={participants() ?? []}
+        channelName={channelName() ?? 'New Channel'}
+      />
+    </Suspense>
+  );
+}
 
 export function NewChannelBlockAdapter() {
   useBlockEntityCommands();
   const channelId = useBlockId();
   const [channelHandle, setChannelHandle] = createSignal<ChannelHandle>();
-  const channelQuery = useChannelQuery(() => channelId);
-  const channel = createMemo(() => channelQuery.data?.channel);
-  const participants = createMemo(() => channelQuery.data?.participants ?? []);
-  const lockRename = createMemo(() => {
-    const channelData = channelQuery.data;
-    if (!channelData) return true;
-
-    return (
-      channelData.channel.channel_type === ChannelTypeEnum.DirectMessage ||
-      !isChannelAdminOrOwner(channelData)
-    );
-  });
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -52,14 +58,8 @@ export function NewChannelBlockAdapter() {
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <ChannelTopLeft
-        channelId={channelId}
-        channelType={channel()?.channel_type ?? ChannelTypeEnum.Public}
-        participants={participants()}
-        channelName={channel()?.name ?? 'New Channel'}
-        lockRename={lockRename()}
-      />
       <NewChannel channelId={channelId} onHandleReady={setChannelHandle} />
+      <NewTop channelId={channelId} />
     </EntityPermissionsGate>
   );
 }
