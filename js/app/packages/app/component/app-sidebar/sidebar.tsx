@@ -11,7 +11,7 @@ import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import SplitIcon from '@macro-icons/new-split.svg';
+import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
 import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
@@ -375,7 +375,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           isSlim={isSlim}
           onClick={handleNewSplitClick}
           disabled={() => !canCreateNewSplit()}
-          icon={SplitIcon}
+          icon={AnimatedNewSplitIcon}
         />
 
         <SidebarActionButton
