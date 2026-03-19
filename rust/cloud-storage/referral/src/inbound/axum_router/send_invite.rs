@@ -7,11 +7,10 @@ use model_user::axum_extractor::MacroUserExtractor;
 use serde::Deserialize;
 
 use super::ReferralRouterState;
-use crate::domain::models::{ReferralCode, ReferralError};
+use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
 
-#[derive(Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SendInviteBody {
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     recipient: EmailStr<'static>,
@@ -26,7 +25,7 @@ pub struct SendInviteBody {
     path = "/referral/send",
     operation_id = "get_referral_code",
     responses(
-        (status = 200, body = ReferralCode),
+        (status = StatusCode::NO_CONTENT),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )

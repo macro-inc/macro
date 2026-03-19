@@ -341,7 +341,7 @@ pub enum StateMachineDecisionA {
     ///
     /// This allows the egress worker to continue the state machine after we know what the status
     /// of the push notification is.
-    Indeterminate(BatchSend<PushNotificationsEnabled>),
+    Indeterminate(Box<BatchSend<PushNotificationsEnabled>>),
 }
 
 impl<U, N, O, B> StateMachineDriverA<U, N, O, B>
@@ -364,9 +364,7 @@ where
                 return Ok(StateMachineDecisionA::DontSend(r));
             }
         };
-        let push_notification_state = match allowed
-            .check_user_existence(&self.user_checker)
-            .await?
+        let push_notification_state = match allowed.check_user_existence(&self.user_checker).await?
         {
             Either::Left(l) => {
                 l.push_notifications_enabled(&self.notification_checker)
@@ -380,7 +378,7 @@ where
         };
         let last_online = match push_notification_state {
             Either::Left(l) => {
-                return Ok(StateMachineDecisionA::Indeterminate(BatchSend(l)));
+                return Ok(StateMachineDecisionA::Indeterminate(Box::new(BatchSend(l))));
             }
             Either::Right(r) => {
                 r.check_last_online_time(&self.online_checker, self.online_duration_threshold)

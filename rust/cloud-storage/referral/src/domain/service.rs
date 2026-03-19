@@ -13,7 +13,7 @@ use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, domain::ports::
 use rootcause::compat::boxed_error::IntoBoxedError;
 
 use crate::domain::{
-    models::{ReferralCode, ReferralError, invitation::InviteToMacro},
+    models::{InviteToMacro, ReferralCode, ReferralError},
     ports::{DiscountClient, ReferralRepo, ReferralService},
 };
 

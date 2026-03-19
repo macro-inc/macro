@@ -1,15 +1,9 @@
 //! Domain models for the referral crate.
 
-pub(crate) mod invitation;
+pub use referral_invitation::{InviteToMacro, ReferralCode};
 
 use macro_uuid::ShortUuidConverter;
 use rate_limit::RateLimitExceeded;
-
-/// Wrapper for the referral code to make it type safe
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[serde(transparent)]
-pub struct ReferralCode(pub String);
 
 /// Errors that can occur during referral operations.
 #[derive(Debug, thiserror::Error)]

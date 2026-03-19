@@ -1,12 +1,12 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
+    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
+    TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
     request::SendNotificationRequest,
-    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
-    TaggedContent,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -28,7 +28,7 @@ pub struct UserApnsEndpoints {
     pub endpoints: Vec<String>,
     /// State machine data if the ingress decision was indeterminate for this user.
     #[serde(default)]
-    pub digest_state: Option<BatchSend<PushNotificationsEnabled>>,
+    pub digest_state: Option<Box<BatchSend<PushNotificationsEnabled>>>,
 }
 
 /// APNS push notification targets.
@@ -293,20 +293,22 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
         states: Vec<Result<StateMachineDecisionA, Report>>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
         // Collect indeterminate decisions keyed by owner_id
-        let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
-            states
-                .into_iter()
-                .filter_map(|v| match v {
-                    Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
-                    Err(_)
-                    | Ok(StateMachineDecisionA::DontSend(_))
-                    | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
-                })
-                .map(|batch| {
-                    let owner = batch.inner().owner_id().clone();
-                    (owner, batch)
-                })
-                .collect();
+        let indeterminates: HashMap<
+            MacroUserIdStr<'static>,
+            Box<BatchSend<PushNotificationsEnabled>>,
+        > = states
+            .into_iter()
+            .filter_map(|v| match v {
+                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                Err(_)
+                | Ok(StateMachineDecisionA::DontSend(_))
+                | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
+            })
+            .map(|batch| {
+                let owner = batch.inner().owner_id().clone();
+                (owner, batch)
+            })
+            .collect();
 
         let mut indeterminates = Some(indeterminates);
 

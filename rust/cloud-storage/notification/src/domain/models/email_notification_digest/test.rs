@@ -820,10 +820,7 @@ async fn test_full_flow_user_not_exists() {
 
     // Step 2: Check user existence - does not exist → always BatchSend
     let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let result = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap();
+    let result = allowed.check_user_existence(&user_checker).await.unwrap();
 
     assert!(
         result.is_right(),

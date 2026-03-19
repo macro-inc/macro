@@ -181,9 +181,6 @@ use model::user::{
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
 
-                        // Referral
-                        referral::domain::models::ReferralCode,
-
                         // Merge
                         CreateAccountMergeRequest,
                 ),

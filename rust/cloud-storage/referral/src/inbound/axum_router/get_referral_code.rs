@@ -16,7 +16,7 @@ use crate::domain::ports::ReferralService;
     path = "/referral/code",
     operation_id = "get_referral_code",
     responses(
-        (status = 200, body = ReferralCode),
+        (status = 200, body = String),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )

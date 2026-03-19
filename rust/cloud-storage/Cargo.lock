@@ -6178,6 +6178,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
+ "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -7932,6 +7933,7 @@ dependencies = [
  "model_user",
  "notification",
  "rate_limit",
+ "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -7943,6 +7945,15 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "referral_invitation"
+version = "0.1.0"
+dependencies = [
+ "macro_user_id",
+ "notification",
+ "serde",
 ]
 
 [[package]]
