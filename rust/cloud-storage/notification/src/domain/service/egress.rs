@@ -220,7 +220,7 @@ where
                     exceeded.current_count,
                     exceeded.max_count
                 )
-                .context(DeliveryFailure::RateLimit));
+                .context(DeliveryFailure::RateLimit(exceeded.clone())));
             }
             RateLimitResult::Allowed { .. } => {}
         }

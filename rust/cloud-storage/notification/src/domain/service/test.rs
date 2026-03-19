@@ -540,6 +540,14 @@ impl NotificationQueue for MockQueue {
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
@@ -556,6 +564,14 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
 
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         (**self).delete_message(_receipt_handle).await
+    }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        (**self).delay_message(receipt_handle, delay).await
     }
 }
 
@@ -1860,6 +1876,14 @@ impl NotificationQueue for EgressTestQueue {
             .lock()
             .unwrap()
             .push(receipt_handle.to_string());
+        Ok(())
+    }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
         Ok(())
     }
 }

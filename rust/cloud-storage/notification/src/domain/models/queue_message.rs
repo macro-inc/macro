@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rate_limit::RateLimitExceeded;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -376,7 +377,7 @@ pub enum DeliverySuccess {
 pub enum DeliveryFailure {
     /// The rate limit for this notification type was exceeded.
     #[error("The rate limit was exceeded")]
-    RateLimit,
+    RateLimit(RateLimitExceeded),
     /// a timeout limit was reached trying to deliver the notif
     #[error("A timeout was reached")]
     Timeout,

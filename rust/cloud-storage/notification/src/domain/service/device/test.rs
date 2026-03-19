@@ -288,6 +288,14 @@ impl NotificationQueue for MockQueue {
     async fn delete_message(&self, _: &str) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 fn test_config() -> PlatformArnConfig {

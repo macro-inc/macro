@@ -72,4 +72,13 @@ impl NotificationQueue for MpscQueue {
         // No-op: messages are consumed from the channel on receive.
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        // No-op: in-process queue doesn't support visibility changes.
+        Ok(())
+    }
 }
