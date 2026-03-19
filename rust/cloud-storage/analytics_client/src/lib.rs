@@ -83,7 +83,10 @@ impl AnalyticsClient {
     ) -> Result<(), reqwest::Error> {
         if let Some(ref provider) = self.google {
             provider.track(client_id, event_name, params).await?;
+        } else {
+            tracing::warn!("ga not configured")
         }
+
         Ok(())
     }
 
@@ -109,7 +112,10 @@ impl AnalyticsClient {
             provider
                 .track(event_name, user_data, action_source, event_id, custom_data)
                 .await?;
+        } else {
+            tracing::warn!("meta not configured")
         }
+
         Ok(())
     }
 }
