@@ -3,11 +3,12 @@ import { ok } from '@core/util/maybeResult';
 import ChannelBlock from './component/Block';
 import { fetchAndCacheChannel } from '@queries/channel/channel';
 import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
+import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 
 export const definition = defineBlock({
   name: 'channel',
   description: '',
-  component: ChannelBlock,
+  component: ENABLE_NEW_CHANNELS ? NewChannelBlockAdapter : ChannelBlock,
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {

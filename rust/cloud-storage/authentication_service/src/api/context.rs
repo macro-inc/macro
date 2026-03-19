@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
@@ -22,6 +23,8 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+
+use crate::config::StripePriceIds;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
@@ -58,7 +61,10 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
+    pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    /// The stripe price ids
+    pub stripe_price_ids: StripePriceIds,
 }
 
 env_var! {

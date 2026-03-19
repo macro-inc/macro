@@ -191,6 +191,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "analytics_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tracing",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -558,6 +571,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
+ "analytics_client",
  "anyhow",
  "async-stripe",
  "async-stripe-webhook",

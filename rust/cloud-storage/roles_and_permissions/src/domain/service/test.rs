@@ -82,6 +82,7 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
         .update_user_roles_and_permissions_for_subscription(
             Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
             SubscriptionStatus::Active,
+            ProductTier::Haiku,
         )
         .await?;
 
@@ -94,6 +95,7 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
         .update_user_roles_and_permissions_for_subscription(
             Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
             SubscriptionStatus::Paused,
+            ProductTier::Haiku,
         )
         .await?;
 

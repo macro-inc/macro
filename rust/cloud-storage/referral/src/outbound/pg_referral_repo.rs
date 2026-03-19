@@ -131,7 +131,7 @@ impl ReferralRepo for PgReferralRepo {
             r#"
             UPDATE referral_tracking
             SET status = 'complete'
-            WHERE referrer_id = $1 and referred_id = $2"#,
+            WHERE referrer_id = $1 AND referred_id = $2 AND status != 'complete'"#,
             &referrer_id,
             &referred_id
         )

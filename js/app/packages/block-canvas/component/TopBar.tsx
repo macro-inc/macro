@@ -12,6 +12,7 @@ import {
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { withAnalytics } from '@coparse/analytics';
+import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
@@ -51,6 +52,7 @@ const { track, TrackingEvents } = withAnalytics();
 export const connectorTypeMenuTriggerSignal = createBlockSignal(false);
 
 export function TopBar() {
+  const isAuth = useIsAuthenticated();
   const toolManager = useToolManager();
   const { getLocation } = useRenderState();
   const getCurrentSavedFile = currentSavedFile.get;
@@ -117,7 +119,7 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
-      condition: () => ENABLE_REFERENCES_MODAL,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={documentId}

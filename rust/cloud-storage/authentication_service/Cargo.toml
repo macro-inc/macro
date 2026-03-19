@@ -23,6 +23,7 @@ local = []
 rate_limit = []
 
 [dependencies]
+analytics_client = { path = "../analytics_client" }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
