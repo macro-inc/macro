@@ -6942,6 +6942,13 @@
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
           },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Empty to ignore project filtering."
+          },
           "recipients": {
             "type": "array",
             "items": {
@@ -9970,6 +9977,9 @@
           },
           "ownerId": {
             "type": "string"
+          },
+          "projectId": {
+            "type": ["string", "null"]
           },
           "providerId": {
             "type": ["string", "null"]

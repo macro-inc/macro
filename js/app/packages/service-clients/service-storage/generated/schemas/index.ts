@@ -541,6 +541,7 @@ export * from './soupDocumentSubTypeProperty';
 export * from './soupDocumentViewedAt';
 export * from './soupEmailThreadPreview';
 export * from './soupEmailThreadPreviewName';
+export * from './soupEmailThreadPreviewProjectId';
 export * from './soupEmailThreadPreviewProviderId';
 export * from './soupEmailThreadPreviewSenderEmail';
 export * from './soupEmailThreadPreviewSenderName';

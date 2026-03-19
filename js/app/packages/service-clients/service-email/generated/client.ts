@@ -45,6 +45,8 @@ import type {
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
   UpdateThreadLabelsResponse,
+  UpdateThreadProjectRequest,
+  UpdateThreadProjectResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -2382,6 +2384,73 @@ export const getThread = async (
     status: res.status,
     headers: res.headers,
   } as getThreadResponse;
+};
+
+/**
+ * @summary Update the project assignment for a thread.
+ */
+export type updateThreadProjectResponse200 = {
+  data: UpdateThreadProjectResponse;
+  status: 200;
+};
+
+export type updateThreadProjectResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type updateThreadProjectResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateThreadProjectResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type updateThreadProjectResponseSuccess =
+  updateThreadProjectResponse200 & {
+    headers: Headers;
+  };
+export type updateThreadProjectResponseError = (
+  | updateThreadProjectResponse401
+  | updateThreadProjectResponse404
+  | updateThreadProjectResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateThreadProjectResponse =
+  | updateThreadProjectResponseSuccess
+  | updateThreadProjectResponseError;
+
+export const getUpdateThreadProjectUrl = (threadId: string) => {
+  return `/email/threads/${threadId}/project`;
+};
+
+export const updateThreadProject = async (
+  threadId: string,
+  updateThreadProjectRequest: UpdateThreadProjectRequest,
+  options?: RequestInit
+): Promise<updateThreadProjectResponse> => {
+  const res = await fetch(getUpdateThreadProjectUrl(threadId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadProjectRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateThreadProjectResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateThreadProjectResponse;
 };
 
 /**
