@@ -16,6 +16,7 @@ import {
   setTempRedirectLocation,
   type TempRedirectLocation,
 } from '@core/signal/location';
+import { useReferralCode } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
@@ -280,6 +281,7 @@ export function selectLocationForFidelity(
 export function useCreateShareUrl() {
   const locationStore_ = locationStore.get;
   const blockId = useBlockId();
+  const referralCode = useReferralCode();
 
   /**
    * Creates a shareable URL with location information at the specified fidelity level.
@@ -301,6 +303,10 @@ export function useCreateShareUrl() {
     const location = selectLocationForFidelity(fidelity, locations);
     const url = locationToUrl(location);
     const params = Object.fromEntries(new URL(url).searchParams);
+    const code = referralCode();
+    if (code) {
+      params.referral_code = code;
+    }
     const updatedUrl = buildSimpleEntityUrl(
       {
         type: 'pdf',

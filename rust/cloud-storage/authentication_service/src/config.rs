@@ -68,6 +68,18 @@ pub struct Config {
     pub github_client_secret: String,
     /// The github idp id
     pub github_idp_id: String,
+
+    /// GA4 Measurement ID (optional, e.g., "G-XXXXXXXXXX")
+    pub ga_measurement_id: Option<String>,
+    /// GA4 Measurement Protocol API secret (optional)
+    pub ga_api_secret: Option<String>,
+
+    /// Meta Pixel ID (optional)
+    pub meta_pixel_id: Option<String>,
+    /// Meta Conversions API access token (optional)
+    pub meta_access_token: Option<String>,
+    /// Meta test event code for testing (optional)
+    pub meta_test_event_code: Option<String>,
 }
 
 impl Config {
@@ -127,6 +139,15 @@ impl Config {
         let github_idp_id =
             std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
 
+        // Google Analytics configuration
+        let ga_measurement_id = std::env::var("GA_MEASUREMENT_ID").ok();
+        let ga_api_secret = std::env::var("GA_API_SECRET").ok();
+
+        // Meta Conversions API configuration
+        let meta_pixel_id = std::env::var("META_PIXEL_ID").ok();
+        let meta_access_token = std::env::var("META_ACCESS_TOKEN").ok();
+        let meta_test_event_code = std::env::var("META_TEST_EVENT_CODE").ok();
+
         Ok(Config {
             base_url,
             database_url,
@@ -150,6 +171,11 @@ impl Config {
             github_client_id,
             github_client_secret,
             github_idp_id,
+            ga_measurement_id,
+            ga_api_secret,
+            meta_pixel_id,
+            meta_access_token,
+            meta_test_event_code,
         })
     }
 }

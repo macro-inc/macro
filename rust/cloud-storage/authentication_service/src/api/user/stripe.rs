@@ -74,6 +74,8 @@ pub struct CreateCheckoutSessionRequest {
     pub cancel_url: String,
     /// Optional discount/promo code to apply
     pub discount: Option<String>,
+    /// Google Analytics client ID for conversion tracking
+    pub ga_client_id: Option<String>,
 }
 
 /// Response containing the Stripe session URL
@@ -165,6 +167,19 @@ pub async fn create_checkout_session(
         None
     };
 
+    // Build subscription metadata from optional tracking fields
+    let mut metadata = std::collections::HashMap::new();
+    if let Some(ga_client_id) = req.ga_client_id {
+        metadata.insert("ga_client_id".to_string(), ga_client_id);
+    }
+
+    // Only set subscription_data if we have metadata to include
+    let subscription_data =
+        (!metadata.is_empty()).then_some(stripe::CreateCheckoutSessionSubscriptionData {
+            metadata: Some(metadata),
+            ..Default::default()
+        });
+
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {
         customer: Some(customer_id),
@@ -183,6 +198,7 @@ pub async fn create_checkout_session(
             quantity: Some(1),
             ..Default::default()
         }]),
+        subscription_data,
         ..Default::default()
     };
 

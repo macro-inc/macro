@@ -3,12 +3,35 @@ import {
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useUserContext } from '@core/context/user';
+import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
+import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo } from 'solid-js';
+import type { ActiveFilter } from './active-filter-chips';
+import {
+  buildContactLabel,
+  VIEW_FILTER_CATEGORIES,
+} from './unified-filter-dropdown';
+
+// Filter IDs that are set by tabs and should not be shown as removable chips
+const TAB_ONLY_FILTERS = new Set([
+  'signal',
+  'noise',
+  'explicit-noise',
+  'channels',
+  'file-folder',
+  'shared-entity',
+  'shared-agent',
+  'assigned-to',
+  'email',
+  'no-drafts',
+  'email-drafts',
+]);
 
 /**
  * Hook that provides detection of active filter refinements beyond tab defaults,
@@ -25,6 +48,8 @@ export function useFilterRefinements() {
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
+  const contacts = useContacts();
+  const currentUserId = useUserId();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -75,6 +100,92 @@ export function useFilterRefinements() {
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
 
+  /**
+   * Human-readable options for the assignee sub-filter, keyed by assignee ID.
+   * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   */
+  const assigneeOptionsMap = createMemo((): Map<string, { label: string }> => {
+    const uid = currentUserId();
+    const map = new Map<string, { label: string }>();
+    map.set(NO_ASSIGNEE, { label: 'Unassigned' });
+    for (const contact of contacts()) {
+      map.set(contact.id, { label: buildContactLabel(contact, uid) });
+    }
+    return map;
+  });
+
+  /**
+   * Get filter categories for the current view
+   */
+  const viewCategories = createMemo(() => {
+    const view = currentView();
+    if (!view) return [];
+    return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
+  });
+
+  /**
+   * Returns a list of active filters that can be displayed as removable chips.
+   * Excludes filters that are set by tabs (like signal/noise).
+   */
+  const activeFiltersList = createMemo((): ActiveFilter[] => {
+    const preset = currentPreset();
+    const presetFilterIds = new Set([
+      ...(preset?.clientFilters.and ?? []),
+      ...(preset?.clientFilters.or ?? []),
+    ]);
+
+    const filters: ActiveFilter[] = [];
+    for (const category of viewCategories()) {
+      for (const option of category.options) {
+        if (
+          !soup.filters.isActive(option.id) ||
+          TAB_ONLY_FILTERS.has(option.id) ||
+          presetFilterIds.has(option.id as FilterID)
+        ) {
+          continue;
+        }
+        filters.push({
+          categoryLabel: category.label,
+          optionId: option.id,
+          optionLabel: option.label,
+          icon: option.icon,
+          categoryOptions: category.options,
+        });
+      }
+    }
+
+    // Sub-filters: assignee
+    const optionsMap = assigneeOptionsMap();
+    for (const id of assigneeFilter()) {
+      const option = optionsMap.get(id);
+      filters.push({
+        categoryLabel: 'Assignee',
+        optionId: id,
+        optionLabel: option?.label ?? id,
+        onRemove: () =>
+          setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+      });
+    }
+
+    return filters;
+  });
+
+  const isOptionActive = (optionId: string) => {
+    return soup.filters.isActive(optionId);
+  };
+
+  const removeFilter = (optionId: string) => {
+    soup.filters.toggle({ or: [optionId as FilterID] });
+  };
+
+  const replaceFilter = (oldOptionId: string, newOptionId: string) => {
+    // Toggle off the old filter and toggle on the new one
+    batch(() => {
+      soup.filters.toggle({ or: [oldOptionId as FilterID] });
+      soup.filters.toggle({ or: [newOptionId as FilterID] });
+    });
+  };
+
   const resetToTabDefaults = () => {
     const preset = currentPreset();
     if (!preset) return;
@@ -90,5 +201,9 @@ export function useFilterRefinements() {
     hasActiveRefinements,
     resetToTabDefaults,
     currentView,
+    activeFiltersList,
+    removeFilter,
+    replaceFilter,
+    isOptionActive,
   };
 }

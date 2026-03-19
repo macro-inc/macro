@@ -24,7 +24,8 @@ async fn it_works_with_no_params() {
             idp_id: None,
             login_hint: None,
             original_url: None,
-            is_mobile: false
+            is_mobile: false,
+            referral_code: None,
         })
     );
 }
@@ -47,7 +48,8 @@ async fn it_works_with_mobile() {
             idp_id: None,
             login_hint: None,
             original_url: None,
-            is_mobile: true
+            is_mobile: true,
+            referral_code: None,
         })
     );
 }
@@ -70,7 +72,9 @@ async fn it_works_with_mobile_false() {
             idp_id: None,
             login_hint: None,
             original_url: None,
-            is_mobile: false
+            is_mobile: false,
+
+            referral_code: None,
         })
     );
 }
@@ -88,7 +92,7 @@ async fn it_fails_with_mobile_garbage() {
 
 #[tokio::test]
 async fn it_works_with_everything() {
-    let request = Request::builder().uri("https://example.com?is_mobile=true&idp_name=testing&idp_id=something&login_hint=myhint&original_url=https%3A%2F%2Fexample.com").body(Body::from(())).unwrap();
+    let request = Request::builder().uri("https://example.com?is_mobile=true&idp_name=testing&referral_code=code&idp_id=something&login_hint=myhint&original_url=https%3A%2F%2Fexample.com").body(Body::from(())).unwrap();
 
     let extracted = Query::<LoginQueryParams>::from_request(request, &())
         .await
@@ -99,12 +103,14 @@ async fn it_works_with_everything() {
        idp_id: Some(idp_id),
        login_hint: Some(login_hint),
        original_url: Some(original_url),
-       is_mobile: true
+       is_mobile: true,
+        referral_code: Some(code),
     }) => {
         assert_eq!(idp_name, "testing");
         assert_eq!(idp_id, "something");
         assert_eq!(login_hint, "myhint");
         assert_eq!(original_url.0.as_str(), "https://example.com/");
+        assert_eq!(code, "code");
     });
 }
 
@@ -121,7 +127,8 @@ async fn it_works_with_macro_scheme() {
        idp_id: None,
        login_hint: None,
        original_url: Some(original_url),
-       is_mobile: true
+       is_mobile: true,
+       referral_code: _
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "macro://app/login");
@@ -141,7 +148,8 @@ async fn it_works_with_double_encoded_scheme() {
        idp_id: None,
        login_hint: None,
        original_url: Some(original_url),
-       is_mobile: true
+       is_mobile: true,
+       referral_code: _
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "https://example.com/");

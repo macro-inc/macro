@@ -34,6 +34,7 @@ async-trait = { workspace = true }
 ai = { path = "../ai" }
 ai_format = { path = "../ai_format" }
 ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

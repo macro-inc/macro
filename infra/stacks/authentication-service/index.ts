@@ -143,6 +143,18 @@ const stripeWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
+const GA_ANALYTICS_MEASUREMENT_ID = config.require('ga_measurement_id');
+
+const GA_API_SECRET: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('ga_api_secret') })
+  .apply((secret) => secret.secretString);
+
+const META_PIXEL_ID = config.require('meta_pixel_id');
+
+// const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
+//   .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
+//   .apply((secret) => secret.secretString);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${fusionauthApiKeySecretKeyArn}`,
@@ -322,6 +334,19 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'DD_ENV',
       value: stack,
+    },
+    // Analytics
+    {
+      name: 'GA_MEASUREMENT_ID',
+      value: GA_ANALYTICS_MEASUREMENT_ID,
+    },
+    {
+      name: 'GA_API_SECRET',
+      value: pulumi.interpolate`${GA_API_SECRET}`,
+    },
+    {
+      name: 'META_PIXEL_ID',
+      value: META_PIXEL_ID,
     },
   ],
 });

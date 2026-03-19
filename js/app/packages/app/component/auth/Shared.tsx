@@ -1,11 +1,6 @@
-import { withAnalytics } from '@coparse/analytics';
-import { fetchUserInfo, invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import { detect } from 'detect-browser';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
-
-const { track, identify, TrackingEvents } = withAnalytics();
 
 export function setCookie(name: string, value: string, days: number) {
   const expires = days
@@ -13,25 +8,6 @@ export function setCookie(name: string, value: string, days: number) {
     : '';
   document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/`;
 }
-
-export const identifyUser = async () => {
-  await invalidateUserInfo();
-  // Use fetchUserInfo which leverages the query cache instead of direct API call
-  const userInfo = await fetchUserInfo();
-
-  if (!userInfo) {
-    return;
-  }
-
-  const platform = detect(navigator.userAgent);
-  track(TrackingEvents.AUTH.LOGIN);
-  if (userInfo?.id) {
-    identify(userInfo.id, {
-      email: userInfo?.email,
-      os: `${platform?.os?.replaceAll(' ', '')}`,
-    });
-  }
-};
 
 export const assignABGroup = async () => {
   const randomGroup = Math.random() < 0.5 ? 'A' : 'B';

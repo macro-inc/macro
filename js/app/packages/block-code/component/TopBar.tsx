@@ -10,12 +10,12 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { useAnalytics } from '@app/component/analytics-context';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from '@core/component/DocumentPropertiesModal';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import {
   ReferencesButton,
   REFERENCES_DRAWER_ID,
@@ -24,6 +24,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockTextSignal } from '@core/signal/load';
 import {
@@ -39,6 +40,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
+import { TabbedControl } from '@ui/components/TabbedControl';
 
 export const TopBar: Component<{
   isHtmlFile: boolean;
@@ -46,6 +48,9 @@ export const TopBar: Component<{
   onModeChange: (mode: CodeBlockMode) => void;
 }> = (props) => {
   const analytics = useAnalytics();
+
+  const isAuth = useIsAuthenticated();
+
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
@@ -81,6 +86,7 @@ export const TopBar: Component<{
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}
@@ -122,12 +128,11 @@ export const TopBar: Component<{
 
       <Show when={props.isHtmlFile && !isMobile()}>
         <SplitToolbarRight order={-1}>
-          <SegmentedControl
+          <TabbedControl
             list={[
               { value: 'render', label: 'Render' },
               { value: 'code', label: 'Code' },
             ]}
-            size="SM"
             value={props.mode}
             onChange={(value) => props.onModeChange(value as CodeBlockMode)}
           />

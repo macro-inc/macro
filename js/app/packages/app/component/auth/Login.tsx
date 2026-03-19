@@ -1,12 +1,9 @@
-import { useIsAuthenticated } from '@core/auth';
 import { cn } from '@ui/utils/classname';
-import { setActiveModal } from '@core/signal/activeModal';
-import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import { fetchUserInfo, invalidateUserInfo } from '@queries/auth/user-info';
-import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { Navigate, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
@@ -19,22 +16,37 @@ import {
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
-import { identifyUser, Stage } from './Shared';
+import { Stage } from './Shared';
 import { VerifyForm } from './VerifyForm';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { useAnalytics } from '@app/component/analytics-context';
+import { detect } from 'detect-browser';
+import { useUserInfo } from '@queries/auth';
 
 // Lazy load ThreeWireframe to keep three.js out of main bundle
 const ThreeWireframe = lazy(() => import('./ThreeWireframe'));
 
 export function Login() {
   const [stage, setStage] = createSignal(Stage.None);
-  const location = useLocation<RedirectLocation>();
-  const authenticated = useIsAuthenticated();
+  const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
+  const analytics = useAnalytics();
+
+  const identifyUser = () => {
+    const user = userInfo();
+
+    if (!user || !user.authenticated) return;
+
+    const platform = detect(navigator.userAgent);
+    analytics.identify(user.id, {
+      email: user.email,
+      os: `${platform?.os?.replaceAll(' ', '')}`,
+    });
+  };
 
   createEffect(() => {
-    if (authenticated()) {
-      identifyUser();
+    if (userInfo()?.authenticated) {
+      invalidateUserInfo().then(identifyUser);
     }
   });
 
@@ -58,31 +70,29 @@ export function Login() {
   });
 
   const onComplete = async () => {
-    setActiveModal();
     unsetTokenPromise();
-    invalidateUserInfo();
-    const userInfo = await fetchUserInfo();
-    if (
-      userInfo?.authenticated &&
-      location.state?.originalLocation &&
-      location.state.originalLocation.pathname !== location.pathname
-    ) {
-      await identifyUser();
-    }
+    await invalidateUserInfo();
+    const user = userInfo();
+
+    if (!user || !user.authenticated) return;
+
+    analytics.track('login');
+    identifyUser();
   };
 
   onCleanup(() => {
     setStage(Stage.Email);
   });
 
-  createEffect(() => {
-    if (stage() === Stage.Done) {
+  const onStageChange = (next: Stage) => {
+    if (next === Stage.Done) {
       onComplete();
     }
-  });
+    setStage(next);
+  };
 
   return (
-    <Show when={!authenticated()} fallback={<Navigate href="/" />}>
+    <Show when={!userInfo()?.authenticated} fallback={<Navigate href="/" />}>
       <div class="grid w-full h-full items-center justify-center font-mono text-[15px]">
         <div class="grid w-min">
           <div
@@ -107,13 +117,13 @@ export function Login() {
           <div class="w-[350px]">
             <Switch>
               <Match when={stage() === Stage.None}>
-                <LoginOptions setStage={setStage} />
+                <LoginOptions setStage={onStageChange} />
               </Match>
               <Match when={stage() === Stage.Email}>
-                <EmailForm setStage={setStage} />
+                <EmailForm setStage={onStageChange} />
               </Match>
               <Match when={stage() === Stage.Verify}>
-                <VerifyForm setStage={setStage} />
+                <VerifyForm setStage={onStageChange} />
               </Match>
             </Switch>
           </div>

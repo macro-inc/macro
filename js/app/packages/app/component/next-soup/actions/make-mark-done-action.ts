@@ -73,7 +73,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     for (const entity of entities) {
       if (entity.type === 'email') {
-        archiveEmail(entity.id, {
+        await archiveEmail(entity.id, {
           archive: true,
           optimisticallyExclude: true,
         });

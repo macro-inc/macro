@@ -6,13 +6,7 @@ import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';
 import { platformFetch } from 'core/util/platformFetch';
-import {
-  createEffect,
-  createSignal,
-  type Setter,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -60,6 +54,9 @@ export const sendEmailCode = action(async (formData: FormData) => {
     return 'LoggedIn';
   }
 
+  const url = new URL(window.location.href);
+  const referral_code = url.searchParams.get('referral_code');
+
   const response = await platformFetch(
     `${SERVER_HOSTS['auth-service']}/login/passwordless`,
     {
@@ -68,6 +65,7 @@ export const sendEmailCode = action(async (formData: FormData) => {
       body: JSON.stringify({
         redirect_uri: REDIRECT_URI,
         email,
+        ...(referral_code && { referral_code }),
       }),
     }
   );
@@ -79,16 +77,18 @@ export const sendEmailCode = action(async (formData: FormData) => {
   if (response.status === 202) {
     const body = await response.json();
     const idp_id = body.idp_id;
-    // form dumb
-    const urlEncodedEmail = encodeURIComponent((email ?? '').toString());
-    window.location.href = `${SERVER_HOSTS['auth-service']}/login/sso?idp_id=${idp_id}&login_hint=${urlEncodedEmail}`;
+    const ssoUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
+    ssoUrl.searchParams.set('idp_id', idp_id);
+    ssoUrl.searchParams.set('login_hint', (email ?? '').toString());
+    if (referral_code) ssoUrl.searchParams.set('referral_code', referral_code);
+    window.location.href = ssoUrl.toString();
     return false; // passwordless login flow is not reached
   }
 
   return true;
 }, 'passwordless-login');
 
-export function useResetEmailCode(setStage: Setter<Stage>) {
+export function useResetEmailCode(setStage: (next: Stage) => void) {
   const submission = useSubmission(sendEmailCode);
   return createCallback(() => {
     submission.clear();
@@ -96,7 +96,7 @@ export function useResetEmailCode(setStage: Setter<Stage>) {
   });
 }
 
-export function EmailForm(props: { setStage: Setter<Stage> }) {
+export function EmailForm(props: { setStage: (next: Stage) => void }) {
   const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
   const submission = useSubmission(sendEmailCode);
   const [searchParams] = useSearchParams();

@@ -11,6 +11,18 @@ import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';
 
+export type ThreadReplyListHandle = {
+  scrollToIndex: (index: number) => boolean;
+};
+
+function getReplyElementAtIndex(
+  elements: Array<HTMLElement | undefined>,
+  index: number
+): HTMLElement | undefined {
+  if (index < 0) return undefined;
+  return elements[index];
+}
+
 export function ThreadReplyList(props: {
   channelId: string;
   threadId: string;
@@ -18,16 +30,30 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  highlightedReplyId?: string;
+  onReady?: (handle: ThreadReplyListHandle) => void;
   selectedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
+  const replyElements: Array<HTMLElement | undefined> = [];
+
+  const scrollToIndex = (index: number): boolean => {
+    const element = getReplyElementAtIndex(replyElements, index);
+    if (!element) return false;
+    element.scrollIntoView({ block: 'nearest' });
+    return true;
+  };
+
+  props.onReady?.({
+    scrollToIndex,
+  });
 
   return (
     <For each={props.replies}>
-      {(reply) => {
+      {(reply, index) => {
         const replyMessage = () => ({
           ...reply,
           thread_id: props.threadId,
@@ -37,7 +63,12 @@ export function ThreadReplyList(props: {
           !!props.isThreadFocused?.() && props.selectedReplyId?.() === reply.id;
 
         return (
-          <div class="relative">
+          <div
+            ref={(element) => {
+              replyElements[index()] = element;
+            }}
+            class="relative"
+          >
             <ThreadRail
               newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
@@ -51,7 +82,9 @@ export function ThreadReplyList(props: {
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
                 messageEditor={props.messageEditor}
-                highlighted={isReplySelected()}
+                highlighted={
+                  props.highlightedReplyId === reply.id || isReplySelected()
+                }
                 selectionState={
                   isReplySelected() ? { isSelected: true } : undefined
                 }

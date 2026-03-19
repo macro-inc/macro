@@ -110,6 +110,24 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     )),
             ),
         )
+        .nest(
+            "/referral",
+            referral::inbound::axum_router::referral_router(
+                referral::inbound::axum_router::ReferralRouterState {
+                    service: state.referral_service.clone(),
+                },
+            )
+            .layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::tracking::attach_ip_context_handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.jwt_args.clone(),
+                        macro_middleware::auth::decode_jwt::handler,
+                    )),
+            ),
+        )
         .nest("/jwt", jwt::router(state.jwt_args.clone()))
         .nest("/session", session::router())
         .nest(

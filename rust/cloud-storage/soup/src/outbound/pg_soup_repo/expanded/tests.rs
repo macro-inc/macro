@@ -5177,3 +5177,136 @@ async fn test_dyn_filter_by_sub_type_and_file_type(db: PgPool) -> anyhow::Result
 
     Ok(())
 }
+
+// Test filtering documents by is_email_attachment = true (only email attachments)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_is_email_attachment_true(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            is_email_attachment: Some(true),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let doc_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(doc) => Some(doc.id),
+            _ => None,
+        })
+        .collect();
+
+    let expected: HashSet<Uuid> = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    ]
+    .iter()
+    .map(|s| Uuid::parse_str(s).unwrap())
+    .collect();
+
+    assert_eq!(
+        doc_ids, expected,
+        "is_email_attachment=true should only return documents linked via document_email"
+    );
+
+    // Chats and projects are unaffected by document filters
+    let chat_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Chat(_)))
+        .count();
+    let project_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Project(_)))
+        .count();
+    assert!(chat_count > 0, "Should still get chats");
+    assert!(project_count > 0, "Should still get projects");
+
+    Ok(())
+}
+
+// Test filtering documents by is_email_attachment = false (only non-email attachments)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_dyn_filter_is_email_attachment_false(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            is_email_attachment: Some(false),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let doc_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(doc) => Some(doc.id),
+            _ => None,
+        })
+        .collect();
+
+    // doc-in-A and doc-in-B are email attachments, so they should be excluded
+    let email_attachment_ids: HashSet<Uuid> = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    ]
+    .iter()
+    .map(|s| Uuid::parse_str(s).unwrap())
+    .collect();
+
+    assert!(
+        doc_ids.is_disjoint(&email_attachment_ids),
+        "is_email_attachment=false should exclude documents linked via document_email"
+    );
+    assert!(
+        !doc_ids.is_empty(),
+        "Should still return non-email-attachment documents"
+    );
+
+    Ok(())
+}

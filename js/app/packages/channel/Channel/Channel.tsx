@@ -60,10 +60,15 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
+import { createTargetMessageController } from './create-target-message-controller';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
+import { URL_PARAMS } from '@block-channel/constants';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
+  targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
 };
 
@@ -74,18 +79,50 @@ export function Channel(props: ChannelProps) {
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
+  const [threadListNavigation, setThreadListNavigation] =
+    createSignal<ThreadListNavigation>();
+  const [threadListScrollState, setThreadListScrollState] =
+    createSignal<ThreadListScrollState>();
 
-  const [targetMessageId, _setTargetMessageId] = createSignal<
-    string | undefined
-  >(props.targetMessageId);
+  const targetMessageController = createTargetMessageController({
+    channelId: () => props.channelId,
+    initialTargetMessageId: props.targetMessageId,
+    messageKeys: () => messageIndex().keys,
+    navigation: threadListNavigation,
+  });
+
+  // START BLOCK COMPATIBILITY
+  const blockHandle = blockHandleSignal.get;
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: async (params: Record<string, unknown>) => {
+      const threadId = params[URL_PARAMS.thread] as string | undefined;
+      const messageId = params[URL_PARAMS.message] as string | undefined;
+
+      // For compotibility the naming is  a little strange here.
+      // New channels index by top level message and then spertately handle replies.
+      // If we have a threadId that is actually the top level message and the reply is the message id.
+      const topLevelMessageId = threadId ? threadId : messageId;
+      const messageReplyId = threadId ? messageId : threadId;
+
+      if (topLevelMessageId) {
+        targetMessageController.goToMessage(topLevelMessageId, messageReplyId);
+      }
+    },
+  });
+  // END BLOCK COMPATIBILITY
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
-    targetMessageId
+    targetMessageController.loadAroundMessageId
   );
+  const messageIndex = createMemo(() =>
+    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
+  );
+  const messages = createMemo(() => messageIndex().items);
+  const messageById = createMemo(() => messageIndex().byId);
 
   const activity = useChannelActivity(props.channelId);
 
@@ -109,11 +146,6 @@ export function Channel(props: ChannelProps) {
     });
   });
 
-  const [threadListNavigation, setThreadListNavigation] =
-    createSignal<ThreadListNavigation>();
-  const [threadListScrollState, setThreadListScrollState] =
-    createSignal<ThreadListScrollState>();
-
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
@@ -122,13 +154,9 @@ export function Channel(props: ChannelProps) {
   });
 
   const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
-    defaultThreadListTargetFromMessage(targetMessageId());
-
-  const messageIndex = createMemo(() =>
-    makeMessageIndex(messagesQuery.data as ChannelMessagesData | undefined)
-  );
-  const messages = createMemo(() => messageIndex().items);
-  const messageById = createMemo(() => messageIndex().byId);
+    defaultThreadListTargetFromMessage(
+      targetMessageController.activeTargetMessageId()
+    );
 
   const shift = () => threadPaginator.isShifting();
 
@@ -184,7 +212,7 @@ export function Channel(props: ChannelProps) {
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
-    hasMoreBelow: () => threadPaginator.hasMoreShifting(),
+    hasMoreBelow: () => threadPaginator.hasMorePrepend(),
     messages,
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
@@ -239,6 +267,11 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
+                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          highlighted={
+                            m().id ===
+                            targetMessageController.highlightedMessageId()
+                          }
                           isExpanded={state.isExpanded}
                           setIsExpanded={state.setIsExpanded}
                           isReplying={state.isReplying}

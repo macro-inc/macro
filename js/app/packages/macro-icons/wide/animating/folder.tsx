@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedFolderIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedFolderIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -11,7 +14,7 @@ export const AnimatedFolderIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-folder-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-folder-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated folder icon</title>*/}
       <style>{`

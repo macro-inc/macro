@@ -13,7 +13,6 @@ import type {
 } from '@core/component/Properties/types';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { CommandState } from '@app/component/command';
 import { isTaskEntity, type EntityData } from '@entity';
 import { createEffect, onCleanup } from 'solid-js';
 import {
@@ -25,16 +24,14 @@ import {
   makeMoveToProjectAction,
   makeRenameAction,
 } from './index';
-import { useAnalytics } from '@app/component/analytics-context';
 
 /**
- * Common manipulations scoped to the current block's hotkey scope.
+ * Common manipulations scoped to the current block.
+ * This should be called and mounted
  * Note: several of these do not register with an actual hot key so that they
  * can be found by the command menu.
  */
 export const useBlockEntityCommands = () => {
-  const analytics = useAnalytics();
-
   const blockId = useBlockId();
   const quickAccess = useQuickAccess();
   const userId = useUserId();
@@ -45,14 +42,8 @@ export const useBlockEntityCommands = () => {
     notificationSource: () => notificationSource,
   });
 
-  const deleteAction = makeDeleteAction({
-    userId: () => userId(),
-  });
-
-  const renameAction = makeRenameAction({
-    userId: () => userId(),
-  });
-
+  const deleteAction = makeDeleteAction({ userId: () => userId() });
+  const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
   const moveToProjectAction = makeMoveToProjectAction();
   const copyLinkAction = makeCopyLinkAction();
@@ -306,44 +297,7 @@ export const useBlockEntityCommands = () => {
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // CMD+K — open entity action mode for this block
-    const cmdKReg = registerHotkey({
-      scopeId,
-      hotkey: 'cmd+k',
-      description: () =>
-        CommandState.isOpen() ? 'Close command menu' : 'Open command menu',
-      condition: () => {
-        const entity = getEntity();
-        return !CommandState.isOpen() && entity !== undefined;
-      },
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        const entity = getEntity();
-        if (entity) {
-          analytics.track('command_menu_open', {
-            from: 'block_entity_action',
-            blockType: blockId,
-          });
-
-          CommandState.openForEntityAction([entity]);
-        } else {
-          analytics.track('command_menu_open', {
-            from: 'block',
-            blockType: blockId,
-          });
-
-          CommandState.toggle();
-        }
-        return true;
-      },
-      displayPriority: 10,
-      handlerPriority: 1,
-      hide: CommandState.isOpen,
-      runWithInputFocused: true,
-    });
-
     onCleanup(() => {
-      cmdKReg.dispose();
       group.dispose();
     });
   });

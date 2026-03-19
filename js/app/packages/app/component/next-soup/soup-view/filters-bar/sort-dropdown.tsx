@@ -2,6 +2,7 @@ import { type Component, For, Show } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@icon/regular/check.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import SortIcon from '@macro-icons/wide/sort.svg';
 import type {
   SortOption,
   SystemSortOption,
@@ -24,10 +25,6 @@ export interface SortDropdownProps {
 export const SortDropdown: Component<SortDropdownProps> = (props) => {
   const options = () => props.options ?? [];
 
-  const currentOption = () => options().find((o) => o.value === props.value());
-
-  const currentLabel = () => currentOption()?.label ?? 'Sort';
-
   return (
     <DropdownMenu
       open={props.open}
@@ -39,24 +36,17 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         as={Button}
         variant="secondary"
         size="sm"
-        class="whitespace-nowrap rounded-xs"
+        class="whitespace-nowrap rounded-xs [&_svg]:size-4"
       >
-        <Show when={currentOption()?.icon}>
-          {(icon) => (
-            <span class="size-3.5 flex items-center justify-center shrink-0">
-              {icon()()}
-            </span>
-          )}
-        </Show>
-        <span class="font-medium">{currentLabel()}</span>
-        <ChevronDownIcon class="size-3" />
+        <SortIcon />
+        <ChevronDownIcon class="size-4" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
           <For each={options()}>
             {(option) => (
               <DropdownMenu.Item
-                class="w-full flex items-center gap-2 px-2 py-2 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                 onSelect={() => props.onChange(option.value)}
               >
                 <Show when={option.icon}>

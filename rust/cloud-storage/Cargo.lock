@@ -191,6 +191,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "analytics_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tracing",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -558,6 +571,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
+ "analytics_client",
  "anyhow",
  "async-stripe",
  "async-stripe-webhook",
@@ -604,6 +618,7 @@ dependencies = [
  "openssl",
  "rand 0.9.0",
  "redis",
+ "referral",
  "remote_env_var",
  "reqwest",
  "roles_and_permissions",
@@ -2791,6 +2806,7 @@ dependencies = [
  "ai",
  "ai_format",
  "ai_tools",
+ "ai_toolset",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -7878,6 +7894,34 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "referral"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stripe",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "http-body-util",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "model-error-response",
+ "model_user",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

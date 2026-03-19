@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "analytics_client"
+version = "0.1.0"
+publish = false
+
+[dependencies]
+chrono = { workspace = true }
+hex = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tracing = { workspace = true }

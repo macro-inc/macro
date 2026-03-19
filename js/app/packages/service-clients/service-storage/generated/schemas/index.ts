@@ -182,6 +182,7 @@ export * from './deleteUnthreadedPdfAnchorRequestOneOf';
 export * from './deleteUnthreadedPdfAnchorRequestOneOfAnchorType';
 export * from './documentFilters';
 export * from './documentFiltersImportance';
+export * from './documentFiltersIsEmailAttachment';
 export * from './documentMetadata';
 export * from './documentMetadataBranchedFromId';
 export * from './documentMetadataBranchedFromVersionId';
