@@ -21,7 +21,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { setCreateMenuOpen } from '@app/component/Launcher';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@ui/components/Button';
@@ -249,6 +249,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   };
 
   const handleCreateClick = () => {
+    const willOpen = !createMenuOpen();
+    if (willOpen) {
+      analytics.track('create_menu_open', { from: 'sidebar' });
+    }
     setCreateMenuOpen((p) => !p);
   };
 

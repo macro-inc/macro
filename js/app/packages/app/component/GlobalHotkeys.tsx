@@ -17,7 +17,11 @@ import {
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
+import {
+  CREATABLE_BLOCKS,
+  createMenuOpen,
+  setCreateMenuOpen,
+} from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 import {
   openFilePicker,
@@ -48,6 +52,12 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
+      const willOpen = createMenuOpen();
+
+      if (willOpen) {
+        analytics.track('create_menu_open', { from: 'global' });
+      }
+
       setCreateMenuOpen((prev) => !prev);
       return true;
     },
