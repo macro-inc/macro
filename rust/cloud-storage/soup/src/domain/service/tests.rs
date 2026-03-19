@@ -102,7 +102,9 @@ impl EmailService for NoopEmailService {
     async fn update_thread_project(
         &self,
         _thread_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
-        _project_receipt: Option<EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>>,
+        _project_receipt: Option<
+            EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        >,
     ) -> Result<Option<String>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
