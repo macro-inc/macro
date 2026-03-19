@@ -198,11 +198,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       const results = await Promise.all(
         entities.map((entity) =>
           moveToFolder({
-            itemType: entity.type as
-              | 'document'
-              | 'chat'
-              | 'project'
-              | 'email',
+            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
             id: entity.id,
             folderId: project.id,
           })
