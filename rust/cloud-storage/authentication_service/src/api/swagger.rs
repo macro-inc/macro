@@ -124,6 +124,7 @@ use model::user::{
 
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
+                referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType>,
 
                 /// /merge
                 merge::create_merge_request::handler,

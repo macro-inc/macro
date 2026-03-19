@@ -10,20 +10,22 @@ use super::ReferralRouterState;
 use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
 
+/// The body which is used to describe the recipient email
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct SendInviteBody {
-    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    /// the recipient of the referral email
+    #[schema(value_type = String)]
     recipient: EmailStr<'static>,
 }
 
-/// Handler for `GET /referral-code`.
+/// Handler for `POST /referral/send`.
 ///
-/// Returns the authenticated user's referral code.
+/// Sends a referral code via email to a user
 #[utoipa::path(
     tag = "referral",
     post,
     path = "/referral/send",
-    operation_id = "get_referral_code",
+    operation_id = "send_referral_code",
     responses(
         (status = StatusCode::NO_CONTENT),
         (status = 401, body = model_error_response::ErrorResponse),
