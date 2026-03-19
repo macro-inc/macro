@@ -14,6 +14,10 @@ type CreateConfiguredChannelMarkdownEditorOptions = {
   onMentionRemove?: (mention: ItemMention) => void;
   onChange?: (markdown: string) => void;
   onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
 };
 
 export function createConfiguredChannelMarkdownEditor(
@@ -25,6 +29,12 @@ export function createConfiguredChannelMarkdownEditor(
     editor.withMentions({
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
+    });
+  }
+
+  if (options.onPasteFilesAndDirs) {
+    editor.withFilePaste({
+      onPasteFilesAndDirs: options.onPasteFilesAndDirs,
     });
   }
 
