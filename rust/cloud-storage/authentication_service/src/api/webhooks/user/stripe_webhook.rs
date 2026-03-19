@@ -14,7 +14,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
-use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
+use roles_and_permissions::domain::{model::ProductTier, port::UserRolesAndPermissionsService};
 use serde::Serialize;
 use stripe_webhook::{EventObject, EventType};
 use teams::domain::team_repo::TeamService;
@@ -280,10 +280,26 @@ async fn handle_customer_subscription_event(
         tracing::error!(error=?e, "failed to process referral on subscription created");
     }
 
+    // Extract the price ID(s) from the subscription items
+    let price_id = subscription
+        .items
+        .data
+        .first() // SAFETY: we only need the first item because we know the user is not in a team
+        .map(|item| item.price.id.as_str().to_string())
+        .context("no price id attached to subscription")?;
+
+    let product_tier = match price_id.as_str() {
+        id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
+        id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
+        id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
+        _ => anyhow::bail!("unsupported price id: {price_id}"),
+    };
+
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
             email.clone(),
             subscription_status.try_into()?,
+            product_tier,
         )
         .await?;
 

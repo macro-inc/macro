@@ -2,6 +2,28 @@
 
 use std::{fmt::Display, str::FromStr};
 
+/// The product tier the user is on
+#[derive(Debug, Default)]
+pub enum ProductTier {
+    /// Haiku tier - default
+    #[default]
+    Haiku,
+    /// Sonnet tier
+    Sonnet,
+    /// Opus tier
+    Opus,
+}
+
+impl Display for ProductTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProductTier::Haiku => write!(f, "haiku"),
+            ProductTier::Sonnet => write!(f, "sonnet"),
+            ProductTier::Opus => write!(f, "opus"),
+        }
+    }
+}
+
 /// All valid roles that exist in our system
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RoleId {
