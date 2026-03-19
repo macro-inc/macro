@@ -25,8 +25,8 @@ export type AppEvents = {
   comment_delete: { blockType: string };
   upload_file: Record<string, unknown>;
 
-  command_menu_open: Record<string, unknown>;
-  command_menu_use: Record<string, unknown>; // payload - selected command or item
+  command_menu_open: { from: string };
+  command_menu_use: { itemType: string };
   create_menu_open: Record<string, unknown>;
   hotkey_use: Record<string, unknown>;
   preview_panel_use: Record<string, unknown>;
