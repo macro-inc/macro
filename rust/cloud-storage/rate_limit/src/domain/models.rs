@@ -96,6 +96,8 @@ pub struct RateLimitExceeded {
     pub current_count: u64,
     /// The maximum allowed count.
     pub max_count: u64,
+    /// How long until the rate limit window expires.
+    pub retry_after: Duration,
 }
 
 /// Configuration for rate limiting.
