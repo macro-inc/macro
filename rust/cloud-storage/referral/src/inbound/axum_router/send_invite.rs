@@ -1,4 +1,4 @@
-//! Handler for `GET /code`.
+//! Handler for `POST /send`.
 
 use axum::http::StatusCode;
 use axum::{Json, extract::State};

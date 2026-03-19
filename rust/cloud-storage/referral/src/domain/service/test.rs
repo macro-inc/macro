@@ -63,6 +63,7 @@ impl rate_limit::RateLimitPort for MockRateLimitPort {
                 key: "test_key".to_string(),
                 current_count: config.max_count.saturating_add(1),
                 max_count: config.max_count,
+                retry_after: config.window,
             }))
         } else {
             Ok(RateLimitResult::Allowed { current_count: 1 })
