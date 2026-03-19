@@ -42,7 +42,7 @@ export type AppEvents = {
 
   search: Record<string, unknown>;
 
-  theme_changed: Record<string, unknown>;
+  theme_changed: { themeId: string };
 
   ai_message_sent: Record<string, unknown>;
   ai_attachment_add: Record<string, unknown>;
@@ -50,8 +50,7 @@ export type AppEvents = {
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
-  channel_reaction_sent: Record<string, unknown>;
-  channel_thread_reply: Record<string, unknown>;
+  channel_reaction: Record<string, unknown>;
   channel_participant_add: Record<string, unknown>;
   channel_participant_remove: Record<string, unknown>;
 

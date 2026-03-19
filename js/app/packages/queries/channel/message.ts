@@ -1,4 +1,3 @@
-import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import type { DateValue } from '@core/util/date';
@@ -34,6 +33,7 @@ import {
   resolveMessageTarget,
   type DeleteTargetSnapshot,
 } from './reconcile';
+import { useAnalytics } from '@app/component/analytics-context';
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -559,8 +559,6 @@ export function rollbackUpdateChannelMessage(
   }
 }
 
-const { track } = withAnalytics();
-
 type SendMessageParams = {
   channelID: string;
   message: PostMessageRequest;
@@ -581,6 +579,8 @@ export function useSendMessageMutation(
     SendMessageContext
   >
 ) {
+  const analytics = useAnalytics();
+
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
@@ -619,11 +619,10 @@ export function useSendMessageMutation(
             realId: data.id,
             threadId: variables.message.thread_id ?? undefined,
           });
-          track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-            channelId: variables.channelID,
+          analytics.track('channel_message_sent', {
             contentLength: variables.message.content?.length ?? 0,
             attachmentsLength: variables.message.attachments.length,
-            inThread: variables.message.thread_id !== undefined,
+            isThreadReply: variables.message.thread_id !== undefined,
           });
         },
         onError(error, vars, context) {
