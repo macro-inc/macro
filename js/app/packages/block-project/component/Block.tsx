@@ -198,6 +198,7 @@ const ProjectEntityList = (props: {
           },
           email_filters: {
             project_ids: [props.projectId],
+            shared: 'include',
           },
         }}
       >

@@ -35,7 +35,6 @@ where
             macro_id,
             limit,
             query,
-            include_shared,
         } = req;
         let sort_method = *query.sort_method();
 
@@ -49,7 +48,6 @@ where
             link_id,
             limit,
             query,
-            include_shared,
         };
 
         let previews = self

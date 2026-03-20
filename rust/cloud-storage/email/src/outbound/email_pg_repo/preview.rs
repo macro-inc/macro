@@ -21,7 +21,6 @@ pub(super) async fn previews_for_view_cursor(
         link_id,
         limit,
         query,
-        include_shared,
     } = query;
 
     let query = query.split_option();
@@ -34,7 +33,6 @@ pub(super) async fn previews_for_view_cursor(
                 limit,
                 &view,
                 dynamic_query,
-                include_shared,
                 user_id.as_ref(),
             )
             .await?
@@ -80,7 +78,7 @@ pub(super) async fn previews_for_view_cursor(
         }
     }
     .into_iter()
-    .map(|row: ThreadPreviewCursorDbRow| row.with_user_id(user_id.clone()))
+    .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
     .collect())
 }
 

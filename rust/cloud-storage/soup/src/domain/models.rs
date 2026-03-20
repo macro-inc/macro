@@ -205,22 +205,11 @@ impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
     /// and move them into a [GetEmailsRequest] if it is possible to create one
     pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
-        let include_shared = match &self.cursor {
-            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => {
-                f.as_ref().is_some_and(|f| f.email_include_shared)
-            }
-            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
-                filter,
-                ..
-            }))) => filter.as_ref().is_some_and(|f| f.email_include_shared),
-            SoupQuery::Frecency(_) => false,
-        };
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
             link_id: self.link_id?,
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
-            include_shared,
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,

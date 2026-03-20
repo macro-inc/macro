@@ -92,9 +92,6 @@ pub struct EntityFilterAst {
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
-    /// whether to include email threads shared with the user from other accounts
-    #[serde(default, rename = "eis")]
-    pub email_include_shared: bool,
 }
 
 impl EntityFilterAst {
@@ -103,7 +100,6 @@ impl EntityFilterAst {
         if entity_filter.is_empty() {
             return Ok(None);
         }
-        let email_include_shared = entity_filter.email_filters.include_shared;
         Ok(Some(EntityFilterAst {
             document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?
                 .map(Arc::new),
@@ -115,7 +111,6 @@ impl EntityFilterAst {
                 .map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
-            email_include_shared,
         }))
     }
 
@@ -129,7 +124,6 @@ impl EntityFilterAst {
             email_filter: None,
             channel_filter: None,
             properties_filter: None,
-            email_include_shared: false,
         }
     }
 }
@@ -143,7 +137,6 @@ impl IsEmpty for EntityFilterAst {
             email_filter,
             channel_filter,
             properties_filter,
-            email_include_shared,
         } = self;
         document_filter.is_none()
             && project_filter.is_none()
@@ -151,6 +144,5 @@ impl IsEmpty for EntityFilterAst {
             && email_filter.is_none()
             && channel_filter.is_none()
             && properties_filter.is_none()
-            && !email_include_shared
     }
 }

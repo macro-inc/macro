@@ -18,8 +18,6 @@ pub struct PreviewCursorQuery {
     pub link_id: Uuid,
     pub limit: u32,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
-    /// Whether to include email threads shared with the user from other accounts.
-    pub include_shared: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
@@ -137,6 +135,4 @@ pub struct GetEmailsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
-    /// Whether to include email threads shared with the user from other accounts.
-    pub include_shared: bool,
 }

@@ -44,6 +44,8 @@ pub struct ThreadPreviewCursorDbRow {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub project_id: Option<String>,
+    /// The macro user ID of the thread owner, resolved from email_links.
+    pub owner_id: String,
 }
 
 #[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
@@ -94,7 +96,7 @@ pub struct LabelDbRow {
 }
 
 impl ThreadPreviewCursorDbRow {
-    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> EmailThreadPreview {
+    pub fn into_preview(self) -> EmailThreadPreview {
         let ThreadPreviewCursorDbRow {
             id,
             provider_id,
@@ -112,12 +114,15 @@ impl ThreadPreviewCursorDbRow {
             created_at,
             updated_at,
             project_id,
+            owner_id,
         } = self;
 
         EmailThreadPreview {
             id,
             provider_id,
-            owner_id: owner_id.into_owned(),
+            owner_id: MacroUserIdStr::parse_from_str(&owner_id)
+                .expect("invalid macro_id in email_links")
+                .into_owned(),
             inbox_visible,
             is_read,
             is_draft,
