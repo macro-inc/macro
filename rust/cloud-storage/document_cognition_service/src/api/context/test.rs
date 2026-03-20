@@ -252,12 +252,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
     let scribe = Arc::new(content_client);
 
+    // Build properties tool context
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(pool.clone()),
+        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(ai_tools::NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
     let memory_tool_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
         document_tool_context: document_tool_context.clone(),
+        properties_tool_context: properties_tool_context.clone(),
     };
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
@@ -284,6 +294,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
         memory_service,
+        properties_tool_context,
     };
     Arc::new(api_context)
 }

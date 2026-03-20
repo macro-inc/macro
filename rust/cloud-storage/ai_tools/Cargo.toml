@@ -27,10 +27,12 @@ item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 macro_db_client = { path = "../macro_db_client" }
 model = { path = "../model" }
+model_notifications = { path = "../model_notifications" }
 models_dcs = { path = "../models_dcs" }
 models_email = { path = "../models_email" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
+notification = { path = "../notification" }
 models_properties = { path = "../models_properties" }
 models_search = { path = "../models_search" }
 rand.workspace = true
@@ -45,6 +47,7 @@ scribe = { path = "../scribe", features = [
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
+properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true

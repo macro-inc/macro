@@ -11,6 +11,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
+use super::model::EntityPropertyInfo;
 use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::PropertiesService;
 
@@ -141,6 +142,19 @@ where
             .await
             .map_err(anyhow::Error::from)?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type), err)]
+    async fn get_entity_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityPropertyInfo>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_entity_properties(entity_id, entity_type)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_definition_id = %property_definition_id))]

@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{NoOpConnectionService, NoOpTaskProperties};
+use ai_tools::{NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties};
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -269,6 +269,17 @@ async fn main() -> anyhow::Result<()> {
     );
     let search_service_client = Arc::new(search_service_client);
 
+    // Build properties tool context for AI tools
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(db.clone()),
+        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
+    tracing::info!("initialized properties tool context");
+
     // Build memory service
     let memory_tool_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
@@ -276,6 +287,7 @@ async fn main() -> anyhow::Result<()> {
         scribe: scribe.clone(),
         soup_service: soup_service.clone(),
         document_tool_context: document_tool_context.clone(),
+        properties_tool_context: properties_tool_context.clone(),
     };
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
@@ -304,6 +316,7 @@ async fn main() -> anyhow::Result<()> {
         stream_repo,
         document_tool_context,
         memory_service,
+        properties_tool_context,
     })
     .await
     .context("failed to setup and serve api")?;

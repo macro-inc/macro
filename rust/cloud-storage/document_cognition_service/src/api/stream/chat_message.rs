@@ -363,6 +363,7 @@ fn stream_and_save_message(
         scribe: ctx.scribe.clone(),
         soup_service: ctx.soup_service.clone(),
         document_tool_context: ctx.document_tool_context.clone(),
+        properties_tool_context: ctx.properties_tool_context.clone(),
     };
 
     #[expect(deprecated)]

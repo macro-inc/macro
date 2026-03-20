@@ -15,6 +15,7 @@ use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
 use documents::inbound::toolset::document_toolset;
+use properties::inbound::toolset::properties_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
@@ -48,7 +49,9 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .expect("read thread tool")
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
-        .expect("failed to add document toolset");
+        .expect("failed to add document toolset")
+        .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
+        .expect("failed to add properties toolset");
     let prompt = prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }

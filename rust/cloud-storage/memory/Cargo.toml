@@ -41,6 +41,7 @@ document_cognition_service_client = { path = "../document_cognition_service_clie
 static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 soup = { path = "../soup", features = ["all"] }
+properties = { path = "../properties" }
 macro_aws_config = { path = "../macro_aws_config" }
 
 [dev-dependencies]

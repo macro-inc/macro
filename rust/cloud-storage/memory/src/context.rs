@@ -1,4 +1,6 @@
-use ai_tools::{NoOpConnectionService, NoOpTaskProperties, ToolServiceContext};
+use ai_tools::{
+    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+};
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
@@ -143,11 +145,21 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let document_tool_context =
         DocumentToolContext::new(document_service, entity_access_service, lexical_client);
 
+    // Properties tool context
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(pool.clone()),
+        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
         scribe,
         soup_service,
         document_tool_context,
+        properties_tool_context,
     })
 }
