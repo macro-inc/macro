@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    INSERT INTO \"OrganizationRetentionPolicy\" (organization_id, retention_days)\n    VALUES ($1, $2)\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d162c039601a7fe5f829eeaedb6cd324c875cdc9e74287873ec41a9fd495e696"
+}

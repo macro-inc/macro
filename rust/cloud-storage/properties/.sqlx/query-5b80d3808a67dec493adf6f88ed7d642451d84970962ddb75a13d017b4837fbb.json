@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH MultiAttachmentChats AS (\n                SELECT\n                    \"chatId\",\n                    COUNT(*) as attachment_count\n                FROM \"ChatAttachment\"\n                GROUP BY \"chatId\"\n            )\n            SELECT\n                c.id,\n                c.name,\n                c.\"userId\" as \"user_id\",\n                c.\"createdAt\"::timestamptz as \"created_at\",\n                c.\"updatedAt\"::timestamptz as \"updated_at\",\n                c.\"deletedAt\"::timestamptz as \"deleted_at\",\n                c.model,\n                c.\"tokenCount\" as \"token_count\",\n                c.\"projectId\" as \"project_id\",\n                c.\"isPersistent\" as \"is_persistent\"\n            FROM \"Chat\" c\n            INNER JOIN \"ChatAttachment\" ca ON c.id = ca.\"chatId\"\n            INNER JOIN MultiAttachmentChats mac ON c.id = mac.\"chatId\"\n            WHERE\n                ca.\"attachmentId\" = $1 AND c.\"userId\" = $2\n                    AND\n                c.\"deletedAt\" IS NULL\n            ORDER BY c.\"updatedAt\" DESC;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "token_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5b80d3808a67dec493adf6f88ed7d642451d84970962ddb75a13d017b4837fbb"
+}

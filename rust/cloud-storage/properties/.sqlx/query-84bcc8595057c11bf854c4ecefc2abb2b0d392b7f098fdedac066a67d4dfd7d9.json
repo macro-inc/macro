@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\"\n        FROM\n            \"Chat\" c\n        WHERE\n            c.\"userId\" = $1 AND c.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "84bcc8595057c11bf854c4ecefc2abb2b0d392b7f098fdedac066a67d4dfd7d9"
+}

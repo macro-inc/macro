@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            a.uuid, \n            a.\"threadId\" as thread_id,\n            a.page, \n            a.red, \n            a.green, \n            a.blue, \n            a.alpha,\n            a.type as highlight_type, \n            a.text,\n            a.\"pageViewportWidth\" as page_viewport_width, \n            a.\"pageViewportHeight\" as page_viewport_height, \n            a.\"createdAt\"::timestamptz as created_at, \n            a.\"updatedAt\"::timestamptz as updated_at\n        FROM \"PdfHighlightAnchor\" a\n        WHERE a.\"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "page",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "red",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "green",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "blue",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "alpha",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
+        "name": "highlight_type",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "page_viewport_width",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 10,
+        "name": "page_viewport_height",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "569440328317c8738d56baf89e528c093cc117a1ff6a8628f3bea4ea860c2dfd"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            \"messageId\" as \"message_id\",\n            \"url\",\n            \"title\",\n            \"description\",\n            \"favicon_url\",\n            \"image_url\"\n        FROM \"WebAnnotations\" wa\n        INNER JOIN \"ChatMessage\" cm ON cm.id = wa.\"messageId\"\n        WHERE cm.\"chatId\" = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "favicon_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "image_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f9f7a7f7bf87cffd10d68d891874a0a270de769b42747942090f55ac86c78574"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.\"content\"\n        FROM \"DocumentProcessResult\" d\n        JOIN \"JobToDocumentProcessResult\" j ON d.id = j.\"documentProcessResultId\"\n        WHERE j.\"jobId\" = $1 AND d.\"documentId\" = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cb37182733a71e6939495eb29d0ab6544c02094129fc9c7e921dd5280d78047a"
+}

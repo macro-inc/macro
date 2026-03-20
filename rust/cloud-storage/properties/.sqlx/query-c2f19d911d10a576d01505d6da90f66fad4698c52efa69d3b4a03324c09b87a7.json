@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.\"id\" as \"item_id!\",\n            c.\"createdAt\" as \"created_at!\",\n            c.\"updatedAt\" as \"updated_at!\",\n            c.\"deletedAt\" as \"deleted_at?\",\n            uh.\"updatedAt\" as \"viewed_at?\",\n            c.\"projectId\" as \"project_id?\",\n            c.\"userId\" as \"user_id\",\n            c.\"name\"\n        FROM\n            \"Chat\" c\n        LEFT JOIN\n            \"UserHistory\" uh ON uh.\"itemId\" = c.\"id\"\n                AND uh.\"userId\" = $1\n                AND uh.\"itemType\" = 'chat'\n        WHERE\n            c.\"id\" = ANY($2)\n        ORDER BY\n            c.\"updatedAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at!",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at!",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at?",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "viewed_at?",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c2f19d911d10a576d01505d6da90f66fad4698c52efa69d3b4a03324c09b87a7"
+}

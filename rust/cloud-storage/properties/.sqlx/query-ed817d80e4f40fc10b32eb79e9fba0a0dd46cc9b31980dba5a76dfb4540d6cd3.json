@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"jobId\" as job_id, \"jobType\" as job_type FROM \"UploadJob\" WHERE \"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ed817d80e4f40fc10b32eb79e9fba0a0dd46cc9b31980dba5a76dfb4540d6cd3"
+}

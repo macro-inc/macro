@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.owner, t.\"documentId\" as document_id, d.name as document_name, d.\"fileType\" as file_type, d.owner as document_owner\n        FROM \"Comment\" c\n        JOIN \"Thread\" t ON c.\"threadId\" = t.id\n        JOIN \"Document\" d ON t.\"documentId\" = d.id\n        WHERE c.id = $1 and c.\"deletedAt\" IS NULL AND t.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "document_owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "4ffa9cfbefb9f75c3964db40d92d40085e0093d476d8b3d8aab8e81e575e1897"
+}

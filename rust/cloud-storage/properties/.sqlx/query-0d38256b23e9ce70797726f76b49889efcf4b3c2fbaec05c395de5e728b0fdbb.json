@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                sp.id as id,\n                sp.\"isPublic\" as is_public,\n                sp.\"publicAccessLevel\" as \"public_access_level?\",\n                c.\"userId\" as owner,\n                COALESCE(\n                    json_agg(json_build_object(\n                        'channel_id', csp.\"channel_id\",\n                        'access_level', csp.\"access_level\"\n                    )) FILTER (WHERE csp.\"channel_id\" IS NOT NULL),\n                    '[]'\n                ) as \"channel_share_permissions?\"\n            FROM\n                \"ChatPermission\" cp\n            JOIN \"SharePermission\" sp ON cp.\"sharePermissionId\" = sp.id\n            JOIN \"Chat\" c ON cp.\"chatId\" = c.id\n            LEFT JOIN \"ChannelSharePermission\" csp ON csp.\"share_permission_id\" = sp.id\n            WHERE\n                cp.\"chatId\" = $1\n            GROUP BY\n                sp.id, c.\"userId\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "public_access_level?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_share_permissions?",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "0d38256b23e9ce70797726f76b49889efcf4b3c2fbaec05c395de5e728b0fdbb"
+}

@@ -11,6 +11,8 @@ use models_properties::service::property_value::PropertyValue;
 use notification::domain::models::SendNotificationRequest;
 use uuid::Uuid;
 
+use super::model::EntityPropertyInfo;
+
 /// Repository trait for property operations.
 ///
 /// This trait abstracts the database layer, allowing for different implementations
@@ -89,6 +91,14 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Returns properties sorted by display name.
+    fn get_entity_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
 
     /// Get the name of a document.
     /// Returns `None` if the document doesn't exist or has no name.

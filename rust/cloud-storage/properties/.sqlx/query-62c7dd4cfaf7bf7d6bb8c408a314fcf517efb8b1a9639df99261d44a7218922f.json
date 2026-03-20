@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"Document\"\n        SET \"deletedAt\" = NOW()\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62c7dd4cfaf7bf7d6bb8c408a314fcf517efb8b1a9639df99261d44a7218922f"
+}

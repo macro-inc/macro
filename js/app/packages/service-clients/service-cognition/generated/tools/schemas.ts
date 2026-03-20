@@ -334,6 +334,41 @@ export const CreateDocumentResponse = z.object({
   documentId: z.string().uuid(),
 });
 
+export const GetEntityProperties = z
+  .object({
+    entity_id: z.string(),
+    entity_type: z.enum([
+      'document',
+      'task',
+      'project',
+      'chat',
+      'thread',
+      'channel',
+    ]),
+  })
+  .strict();
+
+export const GetEntityPropertiesResponse = z.object({
+  properties: z.array(
+    z.object({
+      currentValue: z.any().optional(),
+      dataType: z.string(),
+      displayName: z.string(),
+      isMultiSelect: z.boolean(),
+      isSystem: z.boolean(),
+      options: z.array(
+        z.object({
+          displayOrder: z.number().int(),
+          displayValue: z.string(),
+          id: z.string().uuid(),
+        })
+      ),
+      propertyDefinitionId: z.string().uuid(),
+    })
+  ),
+  summary: z.string(),
+});
+
 export const ListEntities = z
   .object({
     includeTypes: z.union([
@@ -553,6 +588,70 @@ export const ReadResponse = z.object({
       });
     }
   }),
+});
+
+export const SetEntityProperty = z
+  .object({
+    boolean_value: z.union([z.boolean(), z.null()]).default(null),
+    date_value: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .default(null),
+    entity_id: z.string(),
+    entity_ref: z.union([
+      z
+        .object({
+          entityId: z.string(),
+          entityType: z.enum([
+            'document',
+            'task',
+            'project',
+            'chat',
+            'thread',
+            'channel',
+          ]),
+        })
+        .strict(),
+      z.null(),
+    ]),
+    entity_refs: z.union([
+      z.array(
+        z
+          .object({
+            entityId: z.string(),
+            entityType: z.enum([
+              'document',
+              'task',
+              'project',
+              'chat',
+              'thread',
+              'channel',
+            ]),
+          })
+          .strict()
+      ),
+      z.null(),
+    ]),
+    entity_type: z.enum([
+      'document',
+      'task',
+      'project',
+      'chat',
+      'thread',
+      'channel',
+    ]),
+    link_url: z.union([z.string(), z.null()]).default(null),
+    link_urls: z.union([z.array(z.string()), z.null()]).default(null),
+    number_value: z.union([z.number(), z.null()]).default(null),
+    option_id: z.union([z.string().uuid(), z.null()]).default(null),
+    option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
+    property_definition_id: z.string().uuid(),
+    string_value: z.union([z.string(), z.null()]).default(null),
+  })
+  .strict();
+
+export const SetEntityPropertyResponse = z.object({
+  message: z.string(),
+  success: z.boolean(),
 });
 
 export const TextEditorCodeExecutionToolCall = z.object({

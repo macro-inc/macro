@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            industry,\n            title,\n            \"firstName\" as first_name,\n            \"lastName\" as last_name,\n            \"profilePicture\" as profile_picture,\n            \"profilePictureHash\" as profile_picture_hash\n        FROM \"User\"\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "industry",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "profile_picture",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "profile_picture_hash",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "e89719852a1e6166dbcebe6190a79a830b0e0a98c92967f15c2a89b96871bbd4"
+}

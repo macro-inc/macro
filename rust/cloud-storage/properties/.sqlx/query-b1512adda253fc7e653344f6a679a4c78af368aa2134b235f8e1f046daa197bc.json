@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.id,\n            c.name,\n            c.model,\n            c.\"tokenCount\" as \"token_count\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\"::timestamptz as \"created_at\",\n            c.\"updatedAt\"::timestamptz as \"updated_at\",\n            c.\"deletedAt\"::timestamptz as \"deleted_at\",\n            c.\"projectId\" as \"project_id\",\n            c.\"isPersistent\" as \"is_persistent\"\n        FROM \"Chat\" c\n        WHERE c.\"userId\" = $1 AND c.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "b1512adda253fc7e653344f6a679a4c78af368aa2134b235f8e1f046daa197bc"
+}

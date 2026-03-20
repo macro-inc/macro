@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{NoOpConnectionService, NoOpTaskProperties};
+use ai_tools::{NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties};
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -248,6 +248,17 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized document tool context");
 
+    // Build properties tool context for AI tools
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(db.clone()),
+        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
+    tracing::info!("initialized properties tool context");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -280,6 +291,7 @@ async fn main() -> anyhow::Result<()> {
         soup_service,
         stream_repo,
         document_tool_context,
+        properties_tool_context,
     })
     .await
     .context("failed to setup and serve api")?;

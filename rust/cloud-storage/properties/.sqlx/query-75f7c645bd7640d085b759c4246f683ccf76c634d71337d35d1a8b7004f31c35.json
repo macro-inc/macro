@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO \"DocumentInstance\" (\"documentId\", \"sha\")\n                VALUES ($1, $2)\n                RETURNING id, sha, \"createdAt\"::timestamptz as created_at, \"updatedAt\"::timestamptz as updated_at;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "75f7c645bd7640d085b759c4246f683ccf76c634d71337d35d1a8b7004f31c35"
+}

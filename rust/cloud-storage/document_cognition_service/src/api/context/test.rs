@@ -249,6 +249,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         test_lexical_client,
     );
 
+    // Build properties tool context
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(pool.clone()),
+        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(ai_tools::NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
@@ -265,6 +274,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         soup_service,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
+        properties_tool_context,
     };
     Arc::new(api_context)
 }

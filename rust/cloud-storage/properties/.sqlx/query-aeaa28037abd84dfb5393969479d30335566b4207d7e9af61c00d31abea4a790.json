@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE project_hierarchy AS (\n            SELECT p.id as project_id\n            FROM \"Chat\" c\n            JOIN \"Project\" p ON c.\"projectId\" = p.id AND p.\"deletedAt\" IS NULL\n            WHERE c.id = $1 AND c.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT parent.id as project_id\n            FROM project_hierarchy ph\n            JOIN \"Project\" parent ON parent.id = (\n                SELECT \"parentId\" FROM \"Project\" WHERE id = ph.project_id\n                AND \"parentId\" IS NOT NULL AND \"deletedAt\" IS NULL\n            )\n        )\n        SELECT \"publicAccessLevel\" as access_level\n        FROM \"SharePermission\"\n        WHERE \"isPublic\" = true AND \"publicAccessLevel\" IS NOT NULL AND id IN (\n            SELECT \"sharePermissionId\" FROM \"ChatPermission\" WHERE \"chatId\" = $1\n            UNION\n            SELECT \"sharePermissionId\" FROM \"ProjectPermission\"\n            WHERE \"projectId\" IN (SELECT project_id FROM project_hierarchy)\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "aeaa28037abd84dfb5393969479d30335566b4207d7e9af61c00d31abea4a790"
+}
