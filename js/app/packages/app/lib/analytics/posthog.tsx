@@ -84,7 +84,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
   fallback?: JSX.Element;
   fallbackPayload?: T;
   enabledOverride?: boolean;
-  children: JSX.Element | ((payload: T | undefined) => JSX.Element);
+  children: JSX.Element | ((payload: Accessor<T | undefined>) => JSX.Element);
 }) => {
   const flag = useFeatureFlag(props.key, {
     fallbackPayload: props.fallbackPayload,
@@ -95,7 +95,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     const children_ = props.children;
 
     if (typeof children_ === 'function') {
-      return untrack(() => children_(flag().payload));
+      return untrack(() => children_(() => flag().payload));
     }
 
     return children_;
