@@ -211,18 +211,18 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             panel.layoutRefs.headerRight = ref;
           }}
         >
-          <Show
-            when={
-              !isTouchDevice() &&
-              (shouldShowEntityNavigation(soup, panel) ||
-                (layout && canSpotlight(layout.manager)))
-            }
-          >
-            <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
+          <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
+            <Show
+              when={
+                !isTouchDevice() &&
+                (shouldShowEntityNavigation(soup, panel) ||
+                  (layout && canSpotlight(layout.manager)))
+              }
+            >
               <EntityNavigationIndicator />
               <SplitSpotlightButton />
-            </div>
-          </Show>
+            </Show>
+          </div>
         </div>
       </div>
     </div>
