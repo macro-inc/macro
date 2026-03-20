@@ -184,9 +184,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   const layout = useContext(SplitLayoutContext);
 
-  const shouldShowRightmost = () => !isTouchDevice() &&
+  const shouldShowRightmost = () =>
+    !isTouchDevice() &&
     (shouldShowEntityNavigation(soup, panel) ||
-      (layout && canSpotlight(layout.manager)))
+      (layout && canSpotlight(layout.manager)));
 
   return (
     <div
@@ -210,7 +211,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         <div
-          class={cn("min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2", !shouldShowRightmost() && 'pr-2')}
+          class={cn(
+            'min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2',
+            !shouldShowRightmost() && 'pr-2'
+          )}
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}
@@ -226,7 +230,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             <SplitSpotlightButton />
           </div>
         </Show>
-
       </div>
     </div>
   );
