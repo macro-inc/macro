@@ -308,8 +308,7 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
         .await
         .unwrap();
 
-    let team_id =
-        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
 
     // All 3 team members should have access rows
     let rows = sqlx::query!(
@@ -506,8 +505,7 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
 async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    let team_id =
-        uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
 
     // A teammate (not the owner) triggers the share — should still find the
     // same team and share with all members including the owner.
