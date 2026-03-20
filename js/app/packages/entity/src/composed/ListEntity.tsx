@@ -60,6 +60,7 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { DisplayName } from '@entity/components/DisplayName';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
