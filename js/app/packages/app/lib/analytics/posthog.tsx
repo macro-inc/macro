@@ -72,7 +72,7 @@ export function useFeatureFlag<T extends JsonType>(
 
     const flag = posthog.instance.getFeatureFlagResult(key);
 
-    const enabled = flag?.enabled || enabledOverride || false;
+    const enabled = flag?.enabled || (enabledOverride ?? false);
     const payload = (flag?.payload as T) ?? fallbackPayload;
 
     return { enabled, payload };
@@ -91,19 +91,19 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     enabledOverride: props.enabledOverride,
   });
 
-  const resolved = children(() => {
-    const children_ = props.children;
-
-    if (typeof children_ === 'function') {
-      return untrack(() => children_(() => flag().payload));
-    }
-
-    return children_;
-  });
+  // const resolved = children(() => {
+  //   const children_ = props.children;
+  //
+  //   if (typeof children_ === 'function') {
+  //     return untrack(() => children_(() => flag().payload));
+  //   }
+  //
+  //   return children_;
+  // });
 
   return (
     <Show when={flag().enabled} keyed fallback={props.fallback}>
-      {resolved()}
+      {props.children}
     </Show>
   );
 };
