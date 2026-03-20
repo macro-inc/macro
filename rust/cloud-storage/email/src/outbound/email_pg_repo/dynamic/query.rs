@@ -62,6 +62,8 @@ fn build_query(
         b.push(
             r#" AND item_type = 'thread'
             UNION
+            -- Find threads living in accessible projects.
+            -- project_id is text, ProjectHierarchy.id is uuid, so cast to text for comparison.
             SELECT t.id AS thread_id
             FROM email_threads t
             WHERE t.project_id = ANY(ARRAY(SELECT id::text FROM ProjectHierarchy))
@@ -246,7 +248,7 @@ fn build_query(
         -- Step 3: Join to get the sender's details
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID
-        LEFT JOIN email_links el ON t.link_id = el.id
+        JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
     );
@@ -330,7 +332,6 @@ pub(crate) async fn dynamic_email_thread_cursor(
             user_id: user_id.to_string(),
         },
     );
-    tracing::error!("asdf {}", qb.sql());
     qb.build()
         .try_map(|row| {
             Ok(ThreadPreviewCursorDbRow {

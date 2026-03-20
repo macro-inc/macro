@@ -9,6 +9,7 @@ import {
 } from '@app/component/next-soup/filters/inbox-query-filters';
 import type { ListView } from '@app/constants/list-views';
 import type { SoupBody } from '@queries/soup/items';
+import { SharedEmailFilter } from '@service-storage/generated/schemas';
 
 export type SoupFiltersPreset = {
   queryFilters: SoupBody;
@@ -46,7 +47,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...filters,
-            email_filters: { ...filters.email_filters, shared: 'exclude' },
+            email_filters: { ...filters.email_filters, shared: SharedEmailFilter.exclude },
             emailView: 'inbox',
           },
           clientFilters: { and: ['signal', 'not-done'] },
@@ -59,7 +60,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...filters,
-            email_filters: { ...filters.email_filters, shared: 'exclude' },
+            email_filters: { ...filters.email_filters, shared: SharedEmailFilter.exclude },
             emailView: 'inbox',
           },
           clientFilters: { and: ['noise', 'not-done'] },
@@ -68,7 +69,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         queryFilters: {
           document_filters: { is_email_attachment: false },
-          email_filters: { shared: 'include' },
+          email_filters: { shared: SharedEmailFilter.include },
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
@@ -104,21 +105,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       important: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: true, shared: 'exclude' },
+          email_filters: { importance: true, shared: SharedEmailFilter.exclude },
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: false, shared: 'exclude' },
+          email_filters: { importance: false, shared: SharedEmailFilter.exclude },
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { shared: 'exclude' },
+          email_filters: { shared: SharedEmailFilter.exclude },
           emailView: 'drafts',
         },
         clientFilters: { and: ['email-drafts'] },
@@ -128,7 +129,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.email,
-            email_filters: { senders: [ctx.email], shared: 'exclude' },
+            email_filters: { senders: [ctx.email], shared: SharedEmailFilter.exclude },
             emailView: 'sent',
           },
           clientFilters: { and: ['email', 'no-drafts'] },
@@ -137,7 +138,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       shared: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { shared: 'only' },
+          email_filters: { shared: SharedEmailFilter.only },
           emailView: 'all',
         },
         clientFilters: { and: ['email'] },
