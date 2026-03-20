@@ -7,7 +7,7 @@ export function ChannelBlockSwitch(props: BlockChannelProps) {
   return (
     <ShowFeatureFlag
       key="enable-new-channels"
-      fallback={<BlockChannel {...props} />}
+      fallback={() => <BlockChannel {...props} />}
     >
       <NewChannelBlockAdapter />
     </ShowFeatureFlag>
