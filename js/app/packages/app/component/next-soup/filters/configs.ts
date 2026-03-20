@@ -394,7 +394,7 @@ export const createSoupFilters = (
     {
       id: 'task-not-completed',
       label: 'Not Completed',
-      predicate: (entity: EntityData) => !isCompleted(entity),
+      predicate: (entity) => taskFilter(entity) && !isCompleted(entity),
     },
     ...TASK_STATUS_FILTERS,
     ...TASK_PRIORITY_FILTERS,
