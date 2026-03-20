@@ -572,21 +572,21 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
   });
   registerHotkey({
-    hotkey: 'arrowleft',
+    hotkey: ['arrowleft', 'h'],
     scopeId: launcherScope,
     description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
   });
 
   registerHotkey({
-    hotkey: 'arrowright' as ValidHotkey,
+    hotkey: ['arrowright', 'l'],
     scopeId: launcherScope,
     description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
   });
 
   registerHotkey({
-    hotkey: 'arrowup' as ValidHotkey,
+    hotkey: ['arrowup', 'k'],
     scopeId: launcherScope,
     description: 'Navigate Up',
     keyDownHandler: (e) => {
@@ -596,7 +596,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    hotkey: 'arrowdown' as ValidHotkey,
+    hotkey: ['arrowdown', 'j'],
     scopeId: launcherScope,
     description: 'Navigate Down',
     keyDownHandler: (e) => {

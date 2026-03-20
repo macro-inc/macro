@@ -24,7 +24,6 @@ import {
   loadCompletedLessons,
   saveCompletedLesson,
 } from './persistence';
-
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 
@@ -314,7 +313,7 @@ export default function InteractiveOnboarding() {
                           }}
                           onClick={handleContinue}
                           label={continueLabel()}
-                          ghost={!readyToContinue()}
+                          disabled={!readyToContinue()}
                         />
                         <Show when={lesson().definition.skippable}>
                           <SkipButton onClick={handleSkip} />

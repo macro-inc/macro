@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { Hotkey } from '@core/component/Hotkey';
 
@@ -30,9 +30,8 @@ interface HotkeyCalloutProps {
 export function HotkeyCallout(props: HotkeyCalloutProps) {
   const isLarge = () => (props.size ?? 'lg') === 'lg';
   const [activeKeys, setActiveKeys] = createSignal<Set<string>>(new Set());
-  // Keys that have been pressed at least once (for progressive chord feedback)
+
   const [everPressed, setEverPressed] = createSignal<Set<string>>(new Set());
-  // Whether the full chord was completed (all keys held simultaneously)
   const [chordDone, setChordDone] = createSignal(false);
 
   onMount(() => {
@@ -148,7 +147,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
 interface ContinueButtonProps {
   onClick: () => void;
   label?: string;
-  ghost?: boolean;
+  disabled?: boolean;
   ref?: (el: HTMLButtonElement) => void;
 }
 
@@ -158,23 +157,26 @@ export function ContinueButton(props: ContinueButtonProps) {
       ref={props.ref}
       type="button"
       class={cn(
-        'w-full px-4 py-2.5 text-lg font-bold rounded-xs flex items-center justify-between gap-2 bracket-never',
-        props.ghost
-          ? 'bg-transparent text-ink/40 font-normal'
-          : 'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 focus:ring-2'
+        'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center justify-between gap-2 bracket-never',
+        {
+          'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted/50':
+            props.disabled,
+          'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 focus:ring-2':
+            !props.disabled,
+        }
       )}
       onClick={props.onClick}
     >
       {props.label ?? 'Continue'}
       <span
         class={cn(
-          'text-sm px-3 py-1 border rounded-sm',
-          props.ghost
-            ? 'border-edge-muted text-ink/30'
-            : 'border-panel/50 text-panel'
+          'text-sm px-3 py-1 border rounded-sm flex items-center gap-1 border-panel/50 text-panel',
+          { 'opacity-0': props.disabled }
         )}
       >
-        <Hotkey shortcut="cmd+enter" />
+        <Hotkey shortcut="cmd" />
+        <span>+</span>
+        <span>Enter</span>
       </span>
     </button>
   );
@@ -188,13 +190,11 @@ export function SkipButton(props: SkipButtonProps) {
   return (
     <button
       type="button"
-      class="w-full px-4 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 bg-transparent text-ink/40 hover:bg-hover/60"
+      class="w-full px-4 py-2.5 text-lg rounded-xs flex items-center gap-2 bg-transparent text-ink/40 hover:bg-hover/60"
       onClick={props.onClick}
     >
       Skip
-      <span class="text-sm px-3 py-1 border rounded-sm border-edge-muted text-ink/30">
-        esc
-      </span>
+      <span class="opacity-50">(esc)</span>
     </button>
   );
 }

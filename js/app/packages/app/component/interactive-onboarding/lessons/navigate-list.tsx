@@ -1,6 +1,6 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import { sandboxEntities } from '../sandbox/sandbox-store';
+import { filteredSandboxEntities } from '../sandbox/sandbox-store';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import { HotkeyCallout } from '../components-lib';
@@ -14,15 +14,15 @@ const [sharedSoup, setSharedSoup] = createSignal<SoupState | undefined>();
 
 function NavigateListContent(props: LessonContentProps) {
   const soup = createSoupState({
-    initialData: sandboxEntities(),
+    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
   setSharedSoup(soup);
 
-  // Keep soup synced with sandbox store (entities created in earlier lesson)
+  // Keep soup synced with sandbox store + active filter
   createEffect(() => {
-    soup.setData(sandboxEntities());
+    soup.setData(filteredSandboxEntities());
   });
 
   let navCount = 0;
@@ -52,7 +52,7 @@ function NavigateListContent(props: LessonContentProps) {
 
 function NavigateListDemo() {
   return (
-    <MockAppChrome viewTitle="Documents">
+    <MockAppChrome>
       <Show when={sharedSoup()}>
         {(soup) => (
           <div class="h-full overflow-y-auto">
@@ -66,7 +66,7 @@ function NavigateListDemo() {
 
 export const navigateListLesson: LessonDefinition = {
   id: 'navigate-list',
-  title: 'The List',
+  title: 'The List View',
   content: NavigateListContent,
   demo: NavigateListDemo,
   order: 20,

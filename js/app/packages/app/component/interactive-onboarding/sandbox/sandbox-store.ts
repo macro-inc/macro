@@ -94,64 +94,151 @@ function seedChat(id: string, name: string): EntityData {
     frecencyScore: 1,
   };
 }
+function seedDM(id: string, name: string): EntityData {
+  return {
+    type: 'channel',
+    id,
+    name,
+    ownerId: 'sandbox',
+    channelType: 'direct_message',
+    createdAt: now,
+    updatedAt: now,
+    frecencyScore: 1,
+  };
+}
 
 const SEED_ENTITIES: EntityData[] = [
+  // Projects / Folders
   MOCK_PROJECT_1,
+  seedProject('seed_project_2', 'Website Redesign'),
+  seedProject('seed_project_3', 'Mobile App v2'),
+
+  // Documents
   seedDoc('seed_doc_1', 'Q3 Product Roadmap'),
+  seedDoc('seed_doc_2', 'Architecture Decision Record'),
+  seedDoc('seed_doc_3', 'Meeting Notes — All Hands'),
+  seedDoc('seed_doc_4', 'Customer Interview Summary', 'canvas'),
+  seedDoc('seed_doc_5', 'API Reference', 'py'),
+  seedDoc('seed_doc_6', 'Brand Guidelines'),
+  MOCK_DOCUMENT_BASIC,
+
+  // Tasks
   seedTask('seed_task_1', 'Review design mockups'),
+  seedTask('seed_task_2', 'Write release notes'),
+  seedTask('seed_task_3', 'Set up CI pipeline'),
+  seedTask('seed_task_4', 'Fix login page regression'),
+  seedTask('seed_task_5', 'Update dependencies'),
+  seedTask('seed_task_6', 'Schedule user research sessions'),
+  MOCK_TASK_TODO,
+
+  // Emails
   seedEmail(
     'seed_email_1',
     'Re: Launch checklist',
     'Sarah Chen',
     'sarah@example.com'
   ),
-  seedChannel('seed_channel_1', 'engineering'),
-  seedDoc('seed_doc_2', 'Architecture Decision Record'),
-  seedTask('seed_task_2', 'Write release notes'),
-  seedProject('seed_project_2', 'Website Redesign'),
-  seedChat('seed_chat_1', 'Brainstorm: onboarding flow'),
   seedEmail(
     'seed_email_2',
     'Budget approval needed',
     'Marcus Lee',
     'marcus@example.com'
   ),
-  seedDoc('seed_doc_3', 'Meeting Notes — All Hands'),
-  seedTask('seed_task_3', 'Set up CI pipeline'),
-  seedChannel('seed_channel_2', 'design'),
-  seedDoc('seed_doc_4', 'Customer Interview Summary', 'canvas'),
   seedEmail(
     'seed_email_3',
     'Investor update Q3',
     'Jordan Rivera',
     'jordan@example.com'
   ),
-  seedTask('seed_task_4', 'Fix login page regression'),
-  seedProject('seed_project_3', 'Mobile App v2'),
-  seedDoc('seed_doc_5', 'API Reference', 'py'),
-  seedChat('seed_chat_2', 'Draft: pricing page copy'),
-  seedChannel('seed_channel_3', 'announcements'),
   seedEmail(
     'seed_email_4',
     'Contract renewal — action required',
     'Alex Kim',
     'alex@example.com'
   ),
-  seedTask('seed_task_5', 'Update dependencies'),
-  seedDoc('seed_doc_6', 'Brand Guidelines'),
-  seedTask('seed_task_6', 'Schedule user research sessions'),
-  MOCK_DOCUMENT_BASIC,
+  seedEmail(
+    'seed_email_5',
+    'Design review feedback',
+    'Emily Zhang',
+    'emily@example.com'
+  ),
   MOCK_EMAIL_UNREAD,
-  MOCK_TASK_TODO,
+
+  // Channels
+  seedChannel('seed_channel_1', 'engineering'),
+  seedChannel('seed_channel_2', 'design'),
+  seedChannel('seed_channel_3', 'announcements'),
+  seedChannel('seed_channel_4', 'product'),
+  seedChannel('seed_channel_5', 'random'),
   MOCK_CHANNEL_PUBLIC,
+
+  // DMs
+  seedDM('seed_dm_1', 'Sarah Chen'),
+  seedDM('seed_dm_2', 'Marcus Lee'),
+  seedDM('seed_dm_3', 'Jordan Rivera'),
+  seedDM('seed_dm_4', 'Priya Patel'),
+  seedDM('seed_dm_5', 'Alex Kim'),
+
+  // AI Agent Chats
+  seedChat('seed_chat_1', 'Brainstorm: onboarding flow'),
+  seedChat('seed_chat_2', 'Draft: pricing page copy'),
+  seedChat('seed_chat_3', 'Debug: auth token expiry'),
+  seedChat('seed_chat_4', 'Summarize: customer feedback Q3'),
+  seedChat('seed_chat_5', 'Code review: payments module'),
+  seedChat('seed_chat_6', 'Research: competitor analysis'),
 ];
 
 const [entities, setEntities] = createSignal<EntityData[]>([...SEED_ENTITIES]);
 
 let entityCounter = 0;
 
+// -- Sidebar filter --
+
+export type SandboxSidebarFilter =
+  | 'agents'
+  | 'mail'
+  | 'documents'
+  | 'tasks'
+  | 'channels'
+  | 'folders'
+  | null;
+
+const [sidebarFilter, setSidebarFilter] =
+  createSignal<SandboxSidebarFilter>(null);
+
+export { sidebarFilter, setSidebarFilter };
+
+function matchesFilter(
+  entity: EntityData,
+  filter: SandboxSidebarFilter
+): boolean {
+  if (!filter) return true;
+  switch (filter) {
+    case 'agents':
+      return entity.type === 'chat';
+    case 'mail':
+      return entity.type === 'email';
+    case 'documents':
+      return entity.type === 'document' && entity.subType?.type !== 'task';
+    case 'tasks':
+      return entity.type === 'document' && entity.subType?.type === 'task';
+    case 'channels':
+      return entity.type === 'channel';
+    case 'folders':
+      return entity.type === 'project';
+    default:
+      return true;
+  }
+}
+
 export function sandboxEntities() {
   return entities();
+}
+
+export function filteredSandboxEntities() {
+  const filter = sidebarFilter();
+  if (!filter) return entities();
+  return entities().filter((e) => matchesFilter(e, filter));
 }
 
 export function addSandboxEntity(entity: EntityData) {
@@ -230,6 +317,7 @@ export function createSandboxEntity(type: SandboxEntityType): EntityData {
 export function resetSandbox() {
   entityCounter = 0;
   setEntities([...SEED_ENTITIES]);
+  setSidebarFilter(null);
 }
 
 // -- Command menu helpers --
