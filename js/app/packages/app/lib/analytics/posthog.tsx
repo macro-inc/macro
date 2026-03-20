@@ -66,6 +66,7 @@ export function useFeatureFlag<T extends JsonType>(
     }
 
     const flag = posthog.instance.getFeatureFlagResult(key);
+    console.log('Run', flag);
 
     const enabled = flag?.enabled || enabledOverride || false;
     const payload = (flag?.payload as T) ?? fallbackPayload;
