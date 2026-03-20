@@ -211,17 +211,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             panel.layoutRefs.headerRight = ref;
           }}
         >
-          <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
-            <Show
-              when={
-                !isTouchDevice() &&
-                (shouldShowEntityNavigation(soup, panel) ||
-                  (layout && canSpotlight(layout.manager)))
-              }
-            >
+          <div class={cn("z-2 relative flex items-center gap-0.5 h-full order-last", !isTouchDevice() &&
+            (shouldShowEntityNavigation(soup, panel) ||
+              (layout && canSpotlight(layout.manager))) ? 'flex' : 'hidden')}>
               <EntityNavigationIndicator />
               <SplitSpotlightButton />
-            </Show>
           </div>
         </div>
       </div>
