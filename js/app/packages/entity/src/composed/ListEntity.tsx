@@ -339,12 +339,12 @@ function NarrowMessageLayout(props: LayoutProps) {
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
-  
+
   const name =
     isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
       ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
       : undefined;
-  
+
   return (
     <Entity.Layout
       class="w-full text-sm grid"
@@ -432,7 +432,8 @@ function NarrowMessageLayout(props: LayoutProps) {
                     <StaticMarkdown
                       theme={twoLineClampMarkdownTheme}
                       markdown={
-                        (name ? `**${name.firstName()}:** ` : '') + msg().content.trim()
+                        (name ? `**${name.firstName()}:** ` : '') +
+                        msg().content.trim()
                       }
                       singleLine
                     />
