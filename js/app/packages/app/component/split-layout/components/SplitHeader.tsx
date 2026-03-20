@@ -211,11 +211,19 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             panel.layoutRefs.headerRight = ref;
           }}
         >
-          <div class={cn("z-2 relative flex items-center gap-0.5 h-full order-last", !isTouchDevice() &&
-            (shouldShowEntityNavigation(soup, panel) ||
-              (layout && canSpotlight(layout.manager))) ? 'flex' : 'hidden')}>
-              <EntityNavigationIndicator />
-              <SplitSpotlightButton />
+          {/* Using CSS to hide the div below because wrapping this in a show was causing Portal issues. */}
+          <div
+            class={cn(
+              'z-2 relative flex items-center gap-0.5 h-full order-last',
+              !isTouchDevice() &&
+                (shouldShowEntityNavigation(soup, panel) ||
+                  (layout && canSpotlight(layout.manager)))
+                ? 'flex'
+                : 'hidden'
+            )}
+          >
+            <EntityNavigationIndicator />
+            <SplitSpotlightButton />
           </div>
         </div>
       </div>
