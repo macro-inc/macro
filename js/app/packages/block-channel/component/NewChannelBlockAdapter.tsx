@@ -59,7 +59,7 @@ export function NewChannelBlockAdapter() {
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <NewChannel channelId={channelId} onHandleReady={onChannelReady} />
-      {/* <NewTop channelId={channelId} /> */}
+      <NewTop channelId={channelId} />
     </EntityPermissionsGate>
   );
 }
