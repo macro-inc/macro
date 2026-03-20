@@ -87,19 +87,9 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     enabledOverride: props.enabledOverride,
   });
 
-  const resolved = children(() => {
-    const children_ = props.children;
-
-    if (typeof children_ === 'function') {
-      return children_(flag().payload);
-    }
-
-    return children_;
-  });
-
   return (
     <Show when={flag().enabled} fallback={props.fallback}>
-      {resolved()}
+      {props.children}
     </Show>
   );
 };

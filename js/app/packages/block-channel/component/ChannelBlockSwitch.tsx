@@ -4,5 +4,12 @@ import BlockChannel from './Block';
 import { NewChannelBlockAdapter } from './NewChannelBlockAdapter';
 
 export function ChannelBlockSwitch(props: BlockChannelProps) {
-  return <NewChannelBlockAdapter />;
+  return (
+    <ShowFeatureFlag
+      key="enable-new-channels"
+      fallback={<BlockChannel {...props} />}
+    >
+      <NewChannelBlockAdapter />
+    </ShowFeatureFlag>
+  );
 }
