@@ -61,6 +61,10 @@ export function useFeatureFlag<T extends JsonType>(
   return createMemo(() => {
     const { enabledOverride, fallbackPayload } = opts ?? {};
 
+    if (!posthog.instance.__loaded) {
+      return { enabled: enabledOverride ?? false, payload: fallbackPayload };
+    }
+
     if (!posthog.featureFlags().length && !enabledOverride) {
       return { enabled: false, payload: fallbackPayload };
     }
