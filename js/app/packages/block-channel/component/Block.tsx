@@ -46,13 +46,7 @@ export default function BlockChannel(props: BlockChannelProps) {
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <Suspense fallback={<ChannelBlockSuspenseFallback />}>
-        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-          <Show when={channelQuery.data}>
-            <ChannelContextProvider query={channelQuery}>
-              <Channel channelId={channelId} target={targetMessage()} />
-            </ChannelContextProvider>
-          </Show>
-        </DocumentBlockContainer>
+        <div>Old channel</div>
       </Suspense>
     </EntityPermissionsGate>
   );
