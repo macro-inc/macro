@@ -6,10 +6,8 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  Match,
   onCleanup,
   Show,
-  Switch,
 } from 'solid-js';
 
 export const posthogInstance = new PostHog();
@@ -92,20 +90,19 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     enabledOverride: props.enabledOverride,
   });
 
-  // const resolved = children(() => {
-  //   const children_ = props.children;
-  //
-  //   if (typeof children_ === 'function') {
-  //     return children_(flag().payload);
-  //   }
-  //
-  //   return children_;
-  // });
+  const resolved = children(() => {
+    const children_ = props.children;
+
+    if (typeof children_ === 'function') {
+      return children_(flag().payload);
+    }
+
+    return children_;
+  });
 
   return (
-    <Switch>
-      <Match when={flag().enabled}>{props.children}</Match>
-      <Match when={true}>{props.fallback}</Match>
-    </Switch>
+    <Show when={flag().enabled} fallback={props.fallback}>
+      {resolved()}
+    </Show>
   );
 };
