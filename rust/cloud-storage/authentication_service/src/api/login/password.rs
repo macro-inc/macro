@@ -9,10 +9,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use fusionauth::error::FusionAuthClientError;
+use macro_middleware::tracking::ClientIp;
 use model::{
     authentication::login::request::PasswordRequest,
     response::{ErrorResponse, UserTokensResponse},
-    tracking::IPContext,
 };
 use tower_cookies::Cookies;
 
@@ -28,10 +28,10 @@ use tower_cookies::Cookies;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=?ip_context))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     cookies: Cookies,
     extract::Json(req): extract::Json<PasswordRequest>,
 ) -> Result<Response, Response> {

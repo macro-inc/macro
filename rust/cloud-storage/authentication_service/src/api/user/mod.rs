@@ -31,9 +31,6 @@ pub(in crate::api) mod stripe;
 pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
     Router::new()
         .route("/", post(create_user::handler))
-        .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
-            macro_middleware::tracking::attach_ip_context_handler, // attach ip context to all requests
-        )))
         .merge(router_with_auth(state, jwt_args))
 }
 

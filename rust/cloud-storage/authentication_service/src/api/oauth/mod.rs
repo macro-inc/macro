@@ -17,9 +17,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             get(passwordless_callback::handler).layer(
                 ServiceBuilder::new()
                     .layer(CookieManagerLayer::new())
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::tracking::attach_ip_context_handler,
-                    ))
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),
                         middleware::rate_limit::login_code::handler,

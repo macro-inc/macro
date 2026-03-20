@@ -5256,11 +5256,7 @@ dependencies = [
 name = "ip_extractor"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
- "macro_env",
- "model",
- "serde_json",
  "thiserror 2.0.17",
  "tokio",
 ]
