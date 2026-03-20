@@ -47,7 +47,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...filters,
-            email_filters: { ...filters.email_filters, shared: SharedEmailFilter.exclude },
+            email_filters: {
+              ...filters.email_filters,
+              shared: SharedEmailFilter.exclude,
+            },
             emailView: 'inbox',
           },
           clientFilters: { and: ['signal', 'not-done'] },
@@ -60,7 +63,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...filters,
-            email_filters: { ...filters.email_filters, shared: SharedEmailFilter.exclude },
+            email_filters: {
+              ...filters.email_filters,
+              shared: SharedEmailFilter.exclude,
+            },
             emailView: 'inbox',
           },
           clientFilters: { and: ['noise', 'not-done'] },
@@ -105,14 +111,20 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       important: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: true, shared: SharedEmailFilter.exclude },
+          email_filters: {
+            importance: true,
+            shared: SharedEmailFilter.exclude,
+          },
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: false, shared: SharedEmailFilter.exclude },
+          email_filters: {
+            importance: false,
+            shared: SharedEmailFilter.exclude,
+          },
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
@@ -129,7 +141,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.email,
-            email_filters: { senders: [ctx.email], shared: SharedEmailFilter.exclude },
+            email_filters: {
+              senders: [ctx.email],
+              shared: SharedEmailFilter.exclude,
+            },
             emailView: 'sent',
           },
           clientFilters: { and: ['email', 'no-drafts'] },
