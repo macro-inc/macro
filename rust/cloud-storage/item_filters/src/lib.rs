@@ -220,6 +220,11 @@ pub struct EmailFilters {
     /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_labels: Vec<String>,
+
+    /// Whether to include email threads that were shared with the user (from other users' accounts).
+    /// Defaults to false, meaning only the user's own threads are returned.
+    #[serde(default)]
+    pub include_shared: bool,
 }
 
 impl IsEmpty for EmailFilters {
@@ -235,6 +240,7 @@ impl IsEmpty for EmailFilters {
             notification_filters,
             include_labels,
             exclude_labels,
+            include_shared,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -246,6 +252,7 @@ impl IsEmpty for EmailFilters {
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
+            && !include_shared
     }
 }
 

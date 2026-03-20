@@ -226,6 +226,8 @@ pub(crate) async fn dynamic_email_thread_cursor(
     limit: u32,
     view: &PreviewView,
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    _include_shared: bool,
+    _user_id: &str,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();

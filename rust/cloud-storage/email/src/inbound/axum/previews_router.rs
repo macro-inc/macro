@@ -102,6 +102,7 @@ async fn cursor_handler<T: EmailService>(
                         (),
                     )
                     .map_filter(|_| None),
+                include_shared: false,
             })
             .await?
             .type_erase(),

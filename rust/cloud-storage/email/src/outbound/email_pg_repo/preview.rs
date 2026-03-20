@@ -21,14 +21,23 @@ pub(super) async fn previews_for_view_cursor(
         link_id,
         limit,
         query,
+        include_shared,
     } = query;
 
     let query = query.split_option();
 
     Ok(match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor(pool, &link_id, limit, &view, dynamic_query)
-                .await?
+            super::dynamic::dynamic_email_thread_cursor(
+                pool,
+                &link_id,
+                limit,
+                &view,
+                dynamic_query,
+                include_shared,
+                user_id.as_ref(),
+            )
+            .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
             super::preview_views::new_inbox::new_inbox_preview_cursor(pool, &link_id, limit, &query)
