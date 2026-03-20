@@ -19,10 +19,36 @@ pub async fn metadata(State(state): State<OAuthState>) -> Json<serde_json::Value
         "issuer": base,
         "authorization_endpoint": format!("{base}/authorize"),
         "token_endpoint": format!("{base}/token"),
+        "registration_endpoint": format!("{base}/register"),
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
         "code_challenge_methods_supported": ["S256"],
     }))
+}
+
+// ── 1b. Dynamic Client Registration (RFC 7591) ─────────────────────────
+
+/// `POST /register` — accepts a dynamic client registration request and returns
+/// a new client_id. Since we proxy all auth through FusionAuth and use PKCE,
+/// we don't need real client credentials — we just mint a unique client_id.
+pub async fn register(axum::Json(body): axum::Json<serde_json::Value>) -> Response {
+    let client_id = uuid::Uuid::new_v4().to_string();
+    let client_name = body
+        .get("client_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("mcp-client");
+
+    tracing::info!(%client_id, %client_name, "dynamic client registration");
+
+    Json(serde_json::json!({
+        "client_id": client_id,
+        "client_name": client_name,
+        "redirect_uris": body.get("redirect_uris").cloned().unwrap_or(serde_json::json!([])),
+        "grant_types": ["authorization_code"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+    }))
+    .into_response()
 }
 
 // ── 2. Authorize ────────────────────────────────────────────────────────

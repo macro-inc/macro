@@ -28,6 +28,7 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -41,9 +42,29 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
-fn env(name: &str) -> anyhow::Result<String> {
-    std::env::var(name).with_context(|| format!("{name} must be provided"))
-}
+env_var!(
+    struct McpEnvVars {
+        DatabaseUrl,
+        DocumentStorageServiceUrl,
+        SyncServiceUrl,
+        SyncServiceAuthKey,
+        LexicalServiceUrl,
+        EmailServiceUrl,
+        StaticFileServiceUrl,
+        DocumentStorageBucket,
+        DocxDocumentUploadBucket,
+        DocumentStorageServiceCloudfrontDistributionUrl,
+        DocumentStorageServiceCloudfrontSignerPublicKeyId,
+        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        McpPublicUrl,
+        FusionauthBaseUrl,
+        FusionauthClientId,
+        FusionauthTenantId,
+        FusionauthApiKeySecretKey,
+        GoogleClientId,
+        GoogleClientSecretKey,
+    }
+);
 
 fn is_local() -> bool {
     matches!(
@@ -57,39 +78,21 @@ fn is_local() -> bool {
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
-    let database_url = env("DATABASE_URL")?;
-    let document_storage_service_url = env("DOCUMENT_STORAGE_SERVICE_URL")?;
-    let sync_service_url = env("SYNC_SERVICE_URL")?;
-    let sync_service_auth_key_raw = env("SYNC_SERVICE_AUTH_KEY")?;
-    let lexical_service_url = env("LEXICAL_SERVICE_URL")?;
-    let email_service_url = env("EMAIL_SERVICE_URL")?;
-    let static_file_service_url = env("STATIC_FILE_SERVICE_URL")?;
-    let document_storage_bucket = env("DOCUMENT_STORAGE_BUCKET")?;
-    let docx_document_upload_bucket = env("DOCX_DOCUMENT_UPLOAD_BUCKET")?;
-    let cloudfront_distribution_url = env("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")?;
-    let cloudfront_signer_public_key_id =
-        env("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID")?;
-    let cloudfront_signer_private_key_secret =
-        env("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME")?;
+    let env_vars = McpEnvVars::new().context("failed to load environment variables")?;
 
-    // OAuth / FusionAuth config
-    let mcp_public_url = env("MCP_PUBLIC_URL")?;
-    let fusionauth_base_url = env("FUSIONAUTH_BASE_URL")?;
-    let fusionauth_client_id = env("FUSIONAUTH_CLIENT_ID")?;
+    // FusionAuth client secret uses a different env var name in local vs deployed
     let fusionauth_client_secret_env = if is_local() {
-        env("FUSIONAUTH_CLIENT_SECRET")?
+        std::env::var("FUSIONAUTH_CLIENT_SECRET")
+            .context("FUSIONAUTH_CLIENT_SECRET must be provided")?
     } else {
-        env("FUSIONAUTH_CLIENT_SECRET_KEY")?
+        std::env::var("FUSIONAUTH_CLIENT_SECRET_KEY")
+            .context("FUSIONAUTH_CLIENT_SECRET_KEY must be provided")?
     };
-    let fusionauth_tenant_id = env("FUSIONAUTH_TENANT_ID")?;
-    let fusionauth_api_key_secret_key = env("FUSIONAUTH_API_KEY_SECRET_KEY")?;
-    let google_client_id = env("GOOGLE_CLIENT_ID")?;
-    let google_client_secret_key = env("GOOGLE_CLIENT_SECRET_KEY")?;
 
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(10)
-        .connect(&database_url)
+        .connect(&env_vars.database_url)
         .await
         .context("failed to connect to macrodb")?;
 
@@ -111,37 +114,34 @@ async fn main() -> anyhow::Result<()> {
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
     );
 
-    let document_storage_client = DocumentStorageServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        document_storage_service_url.clone(),
-    );
+    let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
 
-    let comms_service_client =
-        comms_service_client::CommsServiceClient::new(document_storage_service_url.clone());
+    let document_storage_client =
+        DocumentStorageServiceClient::new(internal_auth_key.as_ref().to_string(), dss_url.clone());
+
+    let comms_service_client = comms_service_client::CommsServiceClient::new(dss_url.clone());
 
     let sync_service_auth_key = if is_local() {
-        sync_service_auth_key_raw.clone()
+        env_vars.sync_service_auth_key.as_ref().to_owned()
     } else {
         secretsmanager_client
-            .get_secret_value(&sync_service_auth_key_raw)
+            .get_secret_value(&env_vars.sync_service_auth_key)
             .await
             .context("failed to get sync service auth key from secrets manager")?
             .to_string()
     };
 
-    let search_service_client = SearchServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        document_storage_service_url,
-    );
+    let search_service_client =
+        SearchServiceClient::new(internal_auth_key.as_ref().to_string(), dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         sync_service_auth_key.clone(),
-        lexical_service_url,
+        env_vars.lexical_service_url.as_ref().to_owned(),
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        email_service_url,
+        env_vars.email_service_url.as_ref().to_owned(),
     ));
 
     // DCS URL for scribe loopback — just use localhost on port 8080
@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     let static_file_service_client =
         Arc::new(static_file_service_client::StaticFileServiceClient::new(
             internal_auth_key.as_ref().to_string(),
-            static_file_service_url,
+            env_vars.static_file_service_url.as_ref().to_owned(),
         ));
 
     // Build soup service
@@ -184,26 +184,38 @@ async fn main() -> anyhow::Result<()> {
     let s3_client = macro_aws_config::s3_client().await;
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
-        document_storage_bucket,
-        docx_document_upload_bucket,
+        env_vars.document_storage_bucket.as_ref(),
+        env_vars.docx_document_upload_bucket.as_ref(),
     );
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_private_key = if is_local() {
-        cloudfront_signer_private_key_secret
+        env_vars
+            .document_storage_service_cloudfront_signer_private_key_secret_name
+            .as_ref()
+            .to_owned()
     } else {
         secretsmanager_client
-            .get_secret_value(&cloudfront_signer_private_key_secret)
+            .get_secret_value(
+                &env_vars.document_storage_service_cloudfront_signer_private_key_secret_name,
+            )
             .await
             .context("failed to get CloudFront signer private key from secrets manager")?
             .to_string()
     };
     let cloudfront_config = CloudFrontConfig {
-        distribution_url: cloudfront_distribution_url,
-        signer_public_key_id: cloudfront_signer_public_key_id,
+        distribution_url: env_vars
+            .document_storage_service_cloudfront_distribution_url
+            .as_ref()
+            .to_owned(),
+        signer_public_key_id: env_vars
+            .document_storage_service_cloudfront_signer_public_key_id
+            .as_ref()
+            .to_owned(),
         signer_private_key: cloudfront_private_key,
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
+    let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
     let document_service = DocumentServiceImpl::new(
@@ -267,13 +279,14 @@ async fn main() -> anyhow::Result<()> {
 
     // Build FusionAuth client for the MCP OAuth flow.
     // The oauth_redirect_uri points to the MCP server's own callback endpoint.
+    let mcp_public_url: String = env_vars.mcp_public_url.as_ref().to_owned();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
 
     let fusionauth_api_key = if is_local() {
-        fusionauth_api_key_secret_key
+        env_vars.fusionauth_api_key_secret_key.as_ref().to_owned()
     } else {
         secretsmanager_client
-            .get_secret_value(&fusionauth_api_key_secret_key)
+            .get_secret_value(&env_vars.fusionauth_api_key_secret_key)
             .await
             .context("failed to get FusionAuth API key")?
             .to_string()
@@ -290,23 +303,23 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let google_client_secret = if is_local() {
-        google_client_secret_key
+        env_vars.google_client_secret_key.as_ref().to_owned()
     } else {
         secretsmanager_client
-            .get_secret_value(&google_client_secret_key)
+            .get_secret_value(&env_vars.google_client_secret_key)
             .await
             .context("failed to get Google client secret")?
             .to_string()
     };
 
     let fusionauth_client = fusionauth::FusionAuthClient::new(
-        fusionauth_tenant_id,
+        env_vars.fusionauth_tenant_id.as_ref().to_owned(),
         fusionauth_api_key,
-        fusionauth_client_id,
+        env_vars.fusionauth_client_id.as_ref().to_owned(),
         fusionauth_client_secret,
-        fusionauth_base_url,
+        env_vars.fusionauth_base_url.as_ref().to_owned(),
         mcp_oauth_redirect_uri,
-        google_client_id,
+        env_vars.google_client_id.as_ref().to_owned(),
         google_client_secret,
     );
 
@@ -324,7 +337,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_args: jwt_args.clone(),
         fusionauth_client: Arc::new(fusionauth_client),
         google_idp_id,
-        mcp_public_url,
+        mcp_public_url: mcp_public_url.clone(),
     };
 
     // Spawn background cleanup for expired OAuth entries
@@ -339,8 +352,8 @@ async fn main() -> anyhow::Result<()> {
 
     let app = mcp_router(oauth_state, jwt_args, mcp_service);
 
-    let port = std::env::var("MCP_PORT").unwrap_or_else(|_| "8090".to_string());
-    let addr = format!("127.0.0.1:{port}");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8090".to_string());
+    let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .context("failed to bind MCP server")?;

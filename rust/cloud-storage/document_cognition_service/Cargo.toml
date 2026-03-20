@@ -22,7 +22,7 @@ name = "document_cognition_service_models"
 path = "src/models_bin.rs"
 
 [[bin]]
-name = "dcs_mcp_server"
+name = "mcp_server"
 path = "src/bin/mcp_server.rs"
 
 [features]

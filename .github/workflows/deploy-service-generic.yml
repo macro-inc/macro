@@ -24,6 +24,7 @@ on:
           - image-proxy-service
           - lambda-aggregate-frecency
           - link-sharing
+          - mcp-server
           - notification-service
           - organization-retention
           - search-processing-service

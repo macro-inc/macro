@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "macro-tools": {
-      "type": "http",
-      "url": "http://localhost:8090/mcp"
-    }
-  }
-}
