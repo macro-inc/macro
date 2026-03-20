@@ -383,14 +383,6 @@ export function Channel(props: {
       />
       <StaticMarkdownContext>
         <ModalsProvider>
-          <Suspense>
-            <Top
-              channelId={props.channelId}
-              channelType={channelContext.channelType()}
-              participants={channelContext.channel()?.participants ?? []}
-              channelName={channelContext.channelName()}
-            />
-          </Suspense>
           <div
             class="h-full flex flex-col min-h-0 flex-1 relative w-full"
             use:fileFolderDrop={{
