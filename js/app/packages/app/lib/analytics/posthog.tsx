@@ -8,6 +8,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  untrack,
 } from 'solid-js';
 
 export const posthogInstance = new PostHog();
@@ -94,7 +95,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     const children_ = props.children;
 
     if (typeof children_ === 'function') {
-      return children_(flag().payload);
+      return untrack(() => children_(flag().payload));
     }
 
     return children_;

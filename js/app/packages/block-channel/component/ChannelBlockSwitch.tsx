@@ -8,8 +8,11 @@ export function ChannelBlockSwitch(props: BlockChannelProps) {
   const flag = useFeatureFlag('enable-new-channels');
 
   return (
-    <Show when={flag().enabled} fallback={<BlockChannel {...props} />}>
+    <ShowFeatureFlag
+      key="enable-new-channels"
+      fallback={<BlockChannel {...props} />}
+    >
       <NewChannelBlockAdapter />
-    </Show>
+    </ShowFeatureFlag>
   );
 }
