@@ -71,6 +71,23 @@ pub struct RateLimitOk {
     pub(crate) config: RateLimitConfig,
 }
 
+#[cfg(feature = "testing")]
+impl RateLimitOk {
+    /// function which should only be used in downstream tests
+    /// constructs the value from raw parts
+    pub fn new_testing_value(
+        current_count: u64,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Self {
+        RateLimitOk {
+            current_count,
+            key,
+            config,
+        }
+    }
+}
+
 /// Error returned when a rate limit is exceeded.
 #[derive(Debug, Error, Clone, Copy)]
 #[error(

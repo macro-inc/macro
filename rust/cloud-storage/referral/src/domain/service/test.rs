@@ -6,6 +6,7 @@ use notification::domain::{
 };
 use rate_limit::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
+    domain::models::RateLimitOk,
 };
 use rootcause::Report;
 
@@ -55,18 +56,19 @@ struct MockRateLimitPort {
 impl rate_limit::RateLimitPort for MockRateLimitPort {
     async fn check(
         &self,
-        _key: &RateLimitKey,
-        config: &RateLimitConfig,
+        key: RateLimitKey,
+        config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         if self.should_exceed {
-            Ok(RateLimitResult::Exceeded(RateLimitExceeded {
-                key: "test_key".to_string(),
+            Ok(RateLimitResult::Err(RateLimitExceeded {
                 current_count: config.max_count.saturating_add(1),
                 max_count: config.max_count,
                 retry_after: config.window,
             }))
         } else {
-            Ok(RateLimitResult::Allowed { current_count: 1 })
+            Ok(RateLimitResult::Ok(RateLimitOk::new_testing_value(
+                1, key, config,
+            )))
         }
     }
 

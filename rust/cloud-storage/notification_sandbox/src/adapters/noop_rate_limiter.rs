@@ -1,4 +1,6 @@
-use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult};
+use rate_limit::{
+    RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult, domain::models::RateLimitOk,
+};
 use rootcause::Report;
 
 /// Rate limit port that always allows (no-op for sandbox).
@@ -7,10 +9,12 @@ pub struct NoOpRateLimitPort;
 impl RateLimitPort for NoOpRateLimitPort {
     async fn check(
         &self,
-        _key: &RateLimitKey,
-        _config: &RateLimitConfig,
+        key: RateLimitKey,
+        config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
-        Ok(RateLimitResult::Allowed(RateLimitOk { current_count: 0 }))
+        Ok(RateLimitResult::Ok(RateLimitOk::new_testing_value(
+            0, key, config,
+        )))
     }
 
     async fn increment(
