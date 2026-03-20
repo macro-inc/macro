@@ -7,9 +7,12 @@ import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments'
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
-import { UserContextProvider, useUserId } from '@core/context/user';
+import {
+  UserContextProvider,
+  useUserId,
+  useUserInfo,
+} from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -25,7 +28,7 @@ import {
   usePlatformNotificationState,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
-import { setUser, useObserveRouting } from '@observability';
+import { useObserveRouting } from '@observability';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
@@ -51,6 +54,7 @@ import {
   createEffect,
   type JSX,
   Match,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -81,10 +85,13 @@ const InteractiveOnboarding = lazy(
 );
 import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
-import { AnalyticsContextProvider } from '@app/component/analytics-context';
-import { PosthogProvider } from '@app/lib/analytics/posthog';
+import {
+  AnalyticsContextProvider,
+  useAnalytics,
+} from '@app/component/analytics-context';
+import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 
-const { track, identify, TrackingEvents } = withAnalytics();
+const { track, TrackingEvents } = withAnalytics();
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -356,32 +363,34 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
+  const analytics = useAnalytics();
+  const posthog = usePosthog();
+
   useSyncLoginCookie();
 
   // Set user info for observability and analytics
-  const userInfoQuery = useUserInfoQuery();
-  createEffect(() => {
-    if (userInfoQuery.isLoading) return;
-    const data = userInfoQuery.data;
-    if (!data?.id) return;
+  const userInfo = useUserInfo();
 
-    const platform = detect(navigator.userAgent);
-    const os = platform?.os?.replaceAll(' ', '') ?? '';
+  let identified = false;
+  createEffect(
+    on(userInfo, (user) => {
+      if (!user || !user.authenticated) return;
 
-    setUser({
-      id: data.id,
-      email: data.email,
-      hasChromeExt: data.hasChromeExt,
-    });
+      if (posthog.instance._isIdentified() || identified) {
+        return;
+      }
 
-    if (PROD_MODE_ENV) {
-      identify(data.id, {
-        email: data.email,
+      identified = true;
+
+      const platform = detect(navigator.userAgent);
+      const os = platform?.os?.replaceAll(' ', '');
+
+      analytics.identify(user.id, {
+        email: user.email,
         os,
-        hasChromeExt: data.hasChromeExt,
       });
-    }
-  });
+    })
+  );
 
   return null;
 }
