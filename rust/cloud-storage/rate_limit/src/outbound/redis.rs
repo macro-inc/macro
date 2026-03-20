@@ -6,7 +6,9 @@ mod test;
 use redis::AsyncCommands;
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
+use crate::domain::models::{
+    RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitOk, RateLimitResult,
+};
 use crate::domain::ports::RateLimitPort;
 
 /// Redis-based implementation of the rate limit port.
@@ -77,8 +79,8 @@ impl RedisRateLimitOps for redis::Client {
 impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLimitAdapter<R> {
     async fn check(
         &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
+        key: RateLimitKey,
+        config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         let key_str = format!("rtl:{}", key.to_hex_string());
 
@@ -88,14 +90,17 @@ impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLi
             let ttl = self.redis.get_ttl(&key_str).await?;
             let retry_after =
                 std::time::Duration::from_secs(ttl.unwrap_or(config.window.as_secs()));
-            Ok(RateLimitResult::Exceeded(RateLimitExceeded {
-                key: key_str,
+            Ok(RateLimitResult::Err(RateLimitExceeded {
                 current_count,
                 max_count: config.max_count,
                 retry_after,
             }))
         } else {
-            Ok(RateLimitResult::Allowed { current_count })
+            Ok(RateLimitResult::Ok(RateLimitOk {
+                current_count,
+                key,
+                config,
+            }))
         }
     }
 

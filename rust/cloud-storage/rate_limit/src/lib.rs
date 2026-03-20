@@ -5,12 +5,13 @@
 //! adapter following hexagonal architecture.
 
 pub mod domain;
+#[cfg(feature = "axum")]
+pub mod inbound;
 pub mod outbound;
 
 // Re-export key types at crate root for convenience.
 pub use domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitKeyBuilder, RateLimitResult,
-    RateLimitTicket,
 };
 pub use domain::ports::{RateLimitPort, RateLimitService};
 pub use domain::service::RateLimitServiceImpl;

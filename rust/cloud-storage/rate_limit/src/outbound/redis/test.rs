@@ -36,8 +36,7 @@ async fn retry_after_is_populated_when_rate_limit_exceeded() {
         .check_rate_limit(key.clone(), config.clone())
         .await
         .expect("check_rate_limit failed");
-    assert!(matches!(&*ticket, RateLimitResult::Allowed { .. }));
-    svc.increment_ticket(ticket)
+    svc.increment_ticket(ticket.unwrap())
         .await
         .expect("increment_ticket failed");
 
@@ -47,8 +46,8 @@ async fn retry_after_is_populated_when_rate_limit_exceeded() {
         .await
         .expect("check_rate_limit failed");
 
-    match &*ticket {
-        RateLimitResult::Exceeded(exceeded) => {
+    match ticket {
+        RateLimitResult::Err(exceeded) => {
             assert!(
                 !exceeded.retry_after.is_zero(),
                 "retry_after should be non-zero"
@@ -60,7 +59,7 @@ async fn retry_after_is_populated_when_rate_limit_exceeded() {
                 config.window,
             );
         }
-        RateLimitResult::Allowed { .. } => {
+        RateLimitResult::Ok { .. } => {
             panic!("expected rate limit to be exceeded after max_count requests");
         }
     }
@@ -80,15 +79,15 @@ async fn retry_after_decreases_over_time() {
         .check_rate_limit(key.clone(), config.clone())
         .await
         .unwrap();
-    svc.increment_ticket(ticket).await.unwrap();
+    svc.increment_ticket(ticket.unwrap()).await.unwrap();
 
     // Check immediately.
     let ticket = svc
         .check_rate_limit(key.clone(), config.clone())
         .await
         .unwrap();
-    let first_retry_after = match &*ticket {
-        RateLimitResult::Exceeded(e) => e.retry_after,
+    let first_retry_after = match ticket {
+        RateLimitResult::Err(e) => e.retry_after,
         _ => panic!("expected exceeded"),
     };
 
@@ -96,8 +95,8 @@ async fn retry_after_decreases_over_time() {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let ticket = svc.check_rate_limit(key, config).await.unwrap();
-    let second_retry_after = match &*ticket {
-        RateLimitResult::Exceeded(e) => e.retry_after,
+    let second_retry_after = match ticket {
+        RateLimitResult::Err(e) => e.retry_after,
         _ => panic!("expected exceeded"),
     };
 

@@ -4,7 +4,7 @@ use std::future::Future;
 
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitTicket};
+use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult};
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
@@ -14,8 +14,8 @@ pub trait RateLimitPort: Send + Sync + 'static {
     /// limited by constructing the key from relevant data.
     fn check(
         &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
+        key: RateLimitKey,
+        config: RateLimitConfig,
     ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
 
     /// Increment the rate limit counter for a key.
@@ -35,11 +35,11 @@ pub trait RateLimitService: Send + Sync + 'static {
         &self,
         key: RateLimitKey,
         config: RateLimitConfig,
-    ) -> impl Future<Output = Result<RateLimitTicket, Report>> + Send;
+    ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
 
     /// increment the counter for a given ticket
     fn increment_ticket(
         &self,
-        ticket: RateLimitTicket,
+        ticket: RateLimitOk,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

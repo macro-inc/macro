@@ -7917,6 +7917,8 @@ dependencies = [
 name = "rate_limit"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "axum-extra",
  "hex",
  "redis",
  "rootcause",

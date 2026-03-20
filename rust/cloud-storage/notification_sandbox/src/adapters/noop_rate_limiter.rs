@@ -10,7 +10,7 @@ impl RateLimitPort for NoOpRateLimitPort {
         _key: &RateLimitKey,
         _config: &RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
-        Ok(RateLimitResult::Allowed { current_count: 0 })
+        Ok(RateLimitResult::Allowed(RateLimitOk { current_count: 0 }))
     }
 
     async fn increment(
