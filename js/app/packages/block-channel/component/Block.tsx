@@ -3,7 +3,7 @@ import { useChannelName } from '@core/context/channels';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
-import { type JSXElement, onMount, Show, Suspense } from 'solid-js';
+import { type JSXElement, onMount, Suspense } from 'solid-js';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 import { useChannelQuery } from '@queries/channel/channel';
@@ -46,7 +46,11 @@ export default function BlockChannel(props: BlockChannelProps) {
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <Suspense fallback={<ChannelBlockSuspenseFallback />}>
-        <div>Old channel</div>
+        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+          <ChannelContextProvider query={channelQuery}>
+            <Channel channelId={channelId} target={targetMessage()} />
+          </ChannelContextProvider>
+        </DocumentBlockContainer>
       </Suspense>
     </EntityPermissionsGate>
   );
