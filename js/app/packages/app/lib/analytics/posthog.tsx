@@ -2,13 +2,11 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { PostHog, type JsonType } from 'posthog-js';
 import {
   type Accessor,
-  children,
   createMemo,
   createSignal,
   type JSX,
   onCleanup,
   Show,
-  untrack,
 } from 'solid-js';
 
 export const posthogInstance = new PostHog();
@@ -84,7 +82,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
   fallback?: JSX.Element;
   fallbackPayload?: T;
   enabledOverride?: boolean;
-  children: JSX.Element | ((payload: Accessor<T | undefined>) => JSX.Element);
+  children: JSX.Element;
 }) => {
   const flag = useFeatureFlag(props.key, {
     fallbackPayload: props.fallbackPayload,
@@ -93,25 +91,7 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
 
   return (
     <Show when={flag().enabled} keyed fallback={props.fallback}>
-      <ShowFeatureFlagChild payload={flag().payload}>
-        {props.children}
-      </ShowFeatureFlagChild>
+      {props.children}
     </Show>
   );
-};
-
-const ShowFeatureFlagChild = (props: {
-  payload: unknown;
-  children: JSX.Element | ((payload: Accessor<unknown>) => JSX.Element);
-}) => {
-  const resolved = children(() => {
-    const children_ = props.children;
-
-    if (typeof children_ === 'function') {
-      return untrack(() => children_(() => props.payload));
-    }
-
-    return children_;
-  });
-  return <>{resolved()}</>;
 };
