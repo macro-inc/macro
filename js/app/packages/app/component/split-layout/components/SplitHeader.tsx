@@ -184,6 +184,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   const layout = useContext(SplitLayoutContext);
 
+  const shouldShowRightmost = () => !isTouchDevice() &&
+    (shouldShowEntityNavigation(soup, panel) ||
+      (layout && canSpotlight(layout.manager)))
+
   return (
     <div
       class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
@@ -206,26 +210,23 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         <div
-          class="min-w-4 h-full shrink-0 flex items-center gap-0.5 px-2"
+          class={cn("min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2", !shouldShowRightmost() && 'pr-2')}
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}
-        >
-          {/* Using CSS to hide the div below because wrapping this in a show was causing Portal issues. */}
+        />
+
+        <Show when={shouldShowRightmost()}>
           <div
-            class={cn(
-              'z-2 relative flex items-center gap-0.5 h-full order-last',
-              !isTouchDevice() &&
-                (shouldShowEntityNavigation(soup, panel) ||
-                  (layout && canSpotlight(layout.manager)))
-                ? 'flex'
-                : 'hidden'
-            )}
+            class={
+              'pl-0.5 pr-2 z-2 relative flex items-center gap-0.5 h-full order-last'
+            }
           >
             <EntityNavigationIndicator />
             <SplitSpotlightButton />
           </div>
-        </div>
+        </Show>
+
       </div>
     </div>
   );
