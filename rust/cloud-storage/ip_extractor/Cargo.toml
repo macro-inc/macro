@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "ip_extractor"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+macro_env = { path = "../macro_env" }
+model = { path = "../model" }
+serde_json = { workspace = true }

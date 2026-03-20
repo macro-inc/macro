@@ -5253,6 +5253,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ip_extractor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "macro_env",
+ "model",
+ "serde_json",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5835,6 +5846,7 @@ dependencies = [
  "anyhow",
  "axum",
  "http-body-util",
+ "ip_extractor",
  "macro_auth",
  "macro_db_client",
  "macro_env",
