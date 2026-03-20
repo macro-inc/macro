@@ -60,7 +60,7 @@ export function Input(props: {
 export function ErrorMsg(props: { msg?: string }) {
   return (
     <Show when={props.msg}>
-      <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0">
+      <div class="grid items-center justify-center p-4 border-b border-edge-muted text-sm text-red-500">
         {props.msg}
       </div>
     </Show>

@@ -7,11 +7,9 @@ import { Navigate, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
-  lazy,
   Match,
   onCleanup,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
 import { EmailForm } from './EmailForm';
@@ -22,9 +20,9 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { useAnalytics } from '@app/component/analytics-context';
 import { detect } from 'detect-browser';
 import { useUserInfo } from '@queries/auth';
-
-// Lazy load ThreeWireframe to keep three.js out of main bundle
-const ThreeWireframe = lazy(() => import('./ThreeWireframe'));
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 
 export function Login() {
   const [stage, setStage] = createSignal(Stage.None);
@@ -93,40 +91,69 @@ export function Login() {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<Navigate href="/" />}>
-      <div class="grid w-full h-full items-center justify-center font-mono text-[15px]">
-        <div class="grid w-min">
-          <div
-            class={cn(
-              'border border-dashed border-[var(--color-ink)] box-border w-[350px]',
-              virtualKeyboardVisible() && 'hidden'
-            )}
+      <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+        <style>{
+          /*css*/ `
+          @keyframes login-fade-up {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .login-card {
+            animation: login-fade-up 300ms ease-out both;
+          }
+          .login-stagger > * {
+            animation: login-fade-up 300ms ease-out both;
+          }
+          .login-stagger > *:nth-child(1) { animation-delay: 50ms; }
+          .login-stagger > *:nth-child(2) { animation-delay: 120ms; }
+          .login-stagger > *:nth-child(3) { animation-delay: 190ms; }
+          .login-stagger > *:nth-child(4) { animation-delay: 260ms; }
+          .login-stagger > *:nth-child(5) { animation-delay: 330ms; }
+        `
+        }</style>
+        <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+          <PcNoiseGrid
+            cellSize={30}
+            warp={0}
+            crunch={0.2}
+            freq={0.001}
+            size={[0, 0.3]}
+            rounding={0}
+            fill={0}
+            stroke={1}
+            speed={[0.017, 0.209]}
+          />
+        </div>
+
+        <div class="w-full max-w-[420px] login-card">
+          <ClippedPanel
+            cornerRadius={'4px'}
+            class="bg-panel shadow-lg shadow-[#1111]"
           >
-            <Suspense
-              fallback={
-                <div
-                  style={{
-                    width: 'min(350px, 100%)',
-                    'aspect-ratio': '1 / 1',
-                  }}
-                />
-              }
-            >
-              <ThreeWireframe src="m" scale={9.5} clockwise={false} />
-            </Suspense>
-          </div>
-          <div class="w-[350px]">
-            <Switch>
-              <Match when={stage() === Stage.None}>
-                <LoginOptions setStage={onStageChange} />
-              </Match>
-              <Match when={stage() === Stage.Email}>
-                <EmailForm setStage={onStageChange} />
-              </Match>
-              <Match when={stage() === Stage.Verify}>
-                <VerifyForm setStage={onStageChange} />
-              </Match>
-            </Switch>
-          </div>
+            <div class="login-stagger">
+              <div
+                class={cn(
+                  'flex items-center justify-center py-10',
+                  virtualKeyboardVisible() && 'hidden'
+                )}
+              >
+                <LogoIcon class="size-20 text-accent" />
+              </div>
+              <div class="w-full">
+                <Switch>
+                  <Match when={stage() === Stage.None}>
+                    <LoginOptions setStage={onStageChange} />
+                  </Match>
+                  <Match when={stage() === Stage.Email}>
+                    <EmailForm setStage={onStageChange} />
+                  </Match>
+                  <Match when={stage() === Stage.Verify}>
+                    <VerifyForm setStage={onStageChange} />
+                  </Match>
+                </Switch>
+              </div>
+            </div>
+          </ClippedPanel>
         </div>
       </div>
     </Show>

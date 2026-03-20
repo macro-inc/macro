@@ -101,18 +101,21 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
       <form ref={formEl} action={verifyCode} method="post" class="mt-1">
         <div
           class={cn(
-            'grid items-center justify-center pt-5 pr-10 pb-5 pl-10 border border-dashed border-ink border-t-0 max-w-full',
-            virtualKeyboardVisible() && 'border-t'
+            'flex items-center justify-center py-4 px-6 border-b border-edge-muted',
+            virtualKeyboardVisible() && 'border-t border-edge-muted'
           )}
         >
-          <label for="one-time-code" class="block text-sm font-medium text-ink">
+          <label
+            for="one-time-code"
+            class="block text-sm text-ink-muted text-center"
+          >
             A 6-digit code has been sent to
             <br />
-            <span class="underline">{email()}</span>
+            <span class="underline text-ink">{email()}</span>
           </label>
         </div>
 
-        <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
+        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <Input
             id="one-time-code"
             type="text"
@@ -142,9 +145,9 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
           </button>
         </div>
 
-        <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
+        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             onClick={resetEmailCode}
             type="button"
           >
@@ -153,7 +156,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
           </button>
 
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             type="submit"
             disabled={submission.pending}
           >
