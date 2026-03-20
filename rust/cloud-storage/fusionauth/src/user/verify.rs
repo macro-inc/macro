@@ -19,10 +19,12 @@ pub(crate) async fn verify_email<'a>(
     client: &AuthedClient,
     base_url: &str,
     verify_email_request: VerifyEmailRequest<'a>,
+    client_ip: &str,
 ) -> Result<()> {
     let res = client
         .client()
         .post(format!("{base_url}/api/user/verify-email"))
+        .header("X-Forwarded-For", client_ip)
         .json(&verify_email_request)
         .send()
         .await

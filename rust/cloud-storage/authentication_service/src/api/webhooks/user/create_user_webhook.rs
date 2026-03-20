@@ -19,7 +19,7 @@ use fusionauth::error::FusionAuthClientError;
 use model::authentication::webhooks::FusionAuthUserWebhook;
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type))]
+#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     _internal_access: ValidInternalKey,

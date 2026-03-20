@@ -42,7 +42,7 @@ pub async fn handler(
     // This will trigger the user.email.verify event in FusionAuth to call our webhook to update
     // macro_user_email_verification table
     ctx.auth_client
-        .verify_email(&verification_id)
+        .verify_email(&verification_id, &ip_context.client_ip)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to verify email");
