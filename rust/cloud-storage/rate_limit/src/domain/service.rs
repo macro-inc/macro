@@ -6,6 +6,7 @@ use crate::{
 };
 
 /// a concrete struct which implements [RateLimitService]
+#[derive(Clone)]
 pub struct RateLimitServiceImpl<R> {
     /// the inner impl of [RateLimitPort]
     pub repo: R,

@@ -14,9 +14,11 @@ use axum::{
 use axum_extra::either::Either3;
 
 /// trait which allows a caller to define rate limit key via the hash impl and a config
-pub trait RateLimitExtractable<S>: FromRequestParts<S> + std::hash::Hash + Send + 'static {
+pub trait RateLimitExtractable<S>: FromRequestParts<S> + Send + 'static {
     /// return the configuration for this rate limit that the key will be compared against
     fn config() -> RateLimitConfig;
+    /// the return the rate limit key for this value
+    fn key(&self) -> RateLimitKey;
 }
 
 /// An extractor for some rate limit key, where K: Hash + FromRequestParts
@@ -50,7 +52,7 @@ where
     ) -> Result<Self, Self::Rejection> {
         let service: Svc = FromRef::from_ref(state);
         let key: K = parts.extract_with_state(state).await.map_err(Either3::E1)?;
-        let rate_limit_key = RateLimitKey::from_str_hashed(&key);
+        let rate_limit_key = key.key();
         let config = K::config();
         let res = service
             .check_rate_limit(rate_limit_key, config)

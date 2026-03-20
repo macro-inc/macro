@@ -212,18 +212,17 @@ where
             .await
             .context(DeliveryFailure::Other)?;
 
-        match &*ticket {
-            RateLimitResult::Exceeded(exceeded) => {
+        let ticket_ok = match ticket {
+            RateLimitResult::Err(exceeded) => {
                 return Err(report!(
-                    "Rate limit key: {} was exceeded. Current count is {} but max count is {}",
-                    exceeded.key,
+                    "Rate limit key was exceeded. Current count is {} but max count is {}",
                     exceeded.current_count,
                     exceeded.max_count
                 )
-                .context(DeliveryFailure::RateLimit(exceeded.clone())));
+                .context(DeliveryFailure::RateLimit(exceeded)));
             }
-            RateLimitResult::Allowed { .. } => {}
-        }
+            RateLimitResult::Ok(ticket) => ticket,
+        };
 
         self.email
             .send_email(recipient.clone(), &content)
@@ -239,7 +238,7 @@ where
             .context(DeliveryFailure::Other)?;
 
         self.rate_limiter
-            .increment_ticket(ticket)
+            .increment_ticket(ticket_ok)
             .await
             .context(DeliveryFailure::Other)?;
 

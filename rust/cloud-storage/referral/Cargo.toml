@@ -10,6 +10,7 @@ axum = [
   "dep:axum-extra",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:tower",
   "dep:utoipa",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
@@ -33,7 +34,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 notification = { path = "../notification" }
-rate_limit = { path = "../rate_limit" }
+rate_limit = { path = "../rate_limit", features = ["axum"] }
 referral_invitation = { path = "../referral_invitation" }
 
 # Axum dependencies (for inbound)
@@ -41,6 +42,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
+tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 

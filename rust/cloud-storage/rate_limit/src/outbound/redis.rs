@@ -16,6 +16,7 @@ use crate::domain::ports::RateLimitPort;
 /// This adapter uses Redis to store and check rate limit counters.
 /// The key is provided by the caller (already hashed), and this adapter
 /// handles the Redis operations.
+#[derive(Clone)]
 pub struct RedisRateLimitAdapter<R> {
     /// the inner redis client
     pub redis: R,

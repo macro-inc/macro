@@ -39,51 +39,6 @@ impl<
     // the constructor for this is Arc<NI> so we use a different bound here
     N: Deref<Target = NI> + Send + Sync + 'static,
     NI: NotificationIngress,
-> ReferralServiceImpl<R, Dc, Rl, N>
-{
-    async fn send_referral_invite_inner(
-        &self,
-        sending_user: MacroUserIdStr<'_>,
-        recipient: EmailStr<'static>,
-    ) -> Result<(), ReferralError> {
-        let referral_code = self.get_referral_code_for_user(&sending_user.0).await?;
-
-        let notification = InviteToMacro {
-            recipient_email: recipient.clone(),
-            referral_code,
-        };
-
-        let _res = self
-            .notification_ingress
-            .send_notification(
-                SendNotificationRequestBuilder {
-                    notification_entity: EntityType::User
-                        .with_entity_string(sending_user.as_ref().to_string()),
-                    notification,
-                    sender_id: Some(sending_user),
-                    recipient_ids: HashSet::from([MacroUserIdStr::try_from_email(
-                        recipient.0.as_ref(),
-                    )
-                    .map_err(anyhow::Error::from)?]),
-                }
-                .into_request()
-                .with_email(),
-            )
-            .await
-            .map_err(|r| r.into_boxed_error())
-            .map_err(anyhow::Error::from_boxed)?;
-
-        Ok(())
-    }
-}
-
-impl<
-    R: ReferralRepo,
-    Dc: DiscountClient,
-    Rl: RateLimitService,
-    // the constructor for this is Arc<NI> so we use a different bound here
-    N: Deref<Target = NI> + Send + Sync + 'static,
-    NI: NotificationIngress,
 > ReferralService for ReferralServiceImpl<R, Dc, Rl, N>
 {
     #[tracing::instrument(skip(self), err)]
@@ -152,32 +107,33 @@ impl<
         sending_user: MacroUserIdStr<'_>,
         recipient: EmailStr<'static>,
     ) -> Result<(), ReferralError> {
-        let user_rate_limit = RateLimitKey::builder(&"user_sent_invites")
-            .append(&sending_user.as_ref())
-            .finish();
-        let ticket = self
-            .rate_limit
-            .check_rate_limit(user_rate_limit, RATE_LIMIT_CONFIG_PER_USER.clone())
+        let referral_code = self.get_referral_code_for_user(&sending_user.0).await?;
+
+        let notification = InviteToMacro {
+            recipient_email: recipient.clone(),
+            referral_code,
+        };
+
+        let _res = self
+            .notification_ingress
+            .send_notification(
+                SendNotificationRequestBuilder {
+                    notification_entity: EntityType::User
+                        .with_entity_string(sending_user.as_ref().to_string()),
+                    notification,
+                    sender_id: Some(sending_user),
+                    recipient_ids: HashSet::from([MacroUserIdStr::try_from_email(
+                        recipient.0.as_ref(),
+                    )
+                    .map_err(anyhow::Error::from)?]),
+                }
+                .into_request()
+                .with_email(),
+            )
             .await
             .map_err(|r| r.into_boxed_error())
             .map_err(anyhow::Error::from_boxed)?;
 
-        if let RateLimitResult::Exceeded(err) = &*ticket {
-            return Err(ReferralError::RateLimitExceeded(err.clone()));
-        }
-
-        let () = self
-            .send_referral_invite_inner(sending_user, recipient)
-            .await?;
-
-        let _ = self.rate_limit.increment_ticket(ticket).await;
-
         Ok(())
     }
 }
-
-/// The fixed window rate limit config for the number of invites a user can send to others
-const RATE_LIMIT_CONFIG_PER_USER: RateLimitConfig = RateLimitConfig {
-    max_count: 50,
-    window: Duration::from_mins(60),
-};

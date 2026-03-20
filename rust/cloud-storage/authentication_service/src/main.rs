@@ -247,17 +247,18 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    let rate_limit = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
         discount_client: StripeDiscountClient::new(
             stripe_client.clone(),
             10000, /*100$ credit, in cents*/
         ),
-        rate_limit: RateLimitServiceImpl {
-            repo: RedisRateLimitAdapter {
-                redis: redis_client,
-            },
-        },
+        rate_limit: rate_limit.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
 
@@ -273,6 +274,7 @@ async fn main() -> anyhow::Result<()> {
             notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
+            rate_limit_service: rate_limit,
             jwt_args,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,

@@ -115,6 +115,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             referral::inbound::axum_router::referral_router(
                 referral::inbound::axum_router::ReferralRouterState {
                     service: state.referral_service.clone(),
+                    rate_limiter: state.rate_limit_service.clone(),
                 },
             )
             .layer(
