@@ -6,8 +6,10 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  Match,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 
 export const posthogInstance = new PostHog();
@@ -101,8 +103,9 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
   });
 
   return (
-    <Show when={flag().enabled} fallback={props.fallback}>
-      {resolved()}
-    </Show>
+    <Switch>
+      <Match when={flag().enabled}>{resolved()}</Match>
+      <Match when={true}>{props.fallback}</Match>
+    </Switch>
   );
 };
