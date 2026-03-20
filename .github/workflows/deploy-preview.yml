@@ -28,7 +28,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup
         uses: ./.github/actions/setup-reqs-web

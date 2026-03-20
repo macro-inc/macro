@@ -45,7 +45,7 @@ jobs:
       CI: "true"
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -74,7 +74,7 @@ jobs:
       CI: "true"
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -119,7 +119,7 @@ jobs:
     needs: [build, deploy]
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:
