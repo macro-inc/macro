@@ -91,19 +91,27 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
     enabledOverride: props.enabledOverride,
   });
 
-  // const resolved = children(() => {
-  //   const children_ = props.children;
-  //
-  //   if (typeof children_ === 'function') {
-  //     return untrack(() => children_(() => flag().payload));
-  //   }
-  //
-  //   return children_;
-  // });
-
   return (
     <Show when={flag().enabled} keyed fallback={props.fallback}>
-      {props.children}
+      <ShowFeatureFlagChild payload={flag().payload}>
+        {props.children}
+      </ShowFeatureFlagChild>
     </Show>
   );
+};
+
+const ShowFeatureFlagChild = (props: {
+  payload: unknown;
+  children: JSX.Element | ((payload: Accessor<unknown>) => JSX.Element);
+}) => {
+  const resolved = children(() => {
+    const children_ = props.children;
+
+    if (typeof children_ === 'function') {
+      return untrack(() => children_(() => props.payload));
+    }
+
+    return children_;
+  });
+  return <>{resolved()}</>;
 };
