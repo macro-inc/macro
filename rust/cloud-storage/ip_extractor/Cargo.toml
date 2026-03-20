@@ -11,3 +11,6 @@ macro_env = { path = "../macro_env" }
 model = { path = "../model" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -1,6 +1,9 @@
 #![deny(missing_docs)]
 //! Axum middleware for extracting client IP from requests.
 
+#[cfg(test)]
+mod test;
+
 use std::{
     net::{AddrParseError, IpAddr, SocketAddr},
     str::{FromStr, Utf8Error},
@@ -20,6 +23,7 @@ use thiserror::Error;
 
 /// The best guess at what the originating IP of a client request is
 /// uses the x-forwarded-for header if it exists, falling back to the client ip
+#[derive(Debug)]
 pub enum ClientIp {
     /// the leftmost x-forwarded-for value of the request
     ForwardedFor(IpAddr),
