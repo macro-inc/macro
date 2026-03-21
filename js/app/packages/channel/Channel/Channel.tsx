@@ -217,7 +217,11 @@ export function Channel(props: ChannelProps) {
   };
 
   const isChannelReady = () => {
-    return messagesQuery.isFetched && threadListNavigation() && threadListScrollState()?.didInitialScroll;
+    return (
+      messagesQuery.isFetched &&
+      threadListNavigation() &&
+      threadListScrollState()?.didInitialScroll
+    );
   };
 
   createEffect(
