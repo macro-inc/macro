@@ -217,7 +217,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const isChannelReady = () => {
-    return messagesQuery.isFetched && threadListNavigation();
+    return messagesQuery.isFetched && threadListNavigation() && threadListScrollState()?.didInitialScroll;
   };
 
   createEffect(
