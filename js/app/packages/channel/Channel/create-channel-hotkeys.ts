@@ -14,7 +14,23 @@ type CreateChannelHotkeysOptions = {
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
   isInputEmpty: Accessor<boolean>;
+  isEditing: Accessor<boolean>;
 };
+
+export function canReplyToSelectedMessageFromHotkey(input: {
+  hasSelection: boolean;
+  isEditing: boolean;
+}) {
+  return input.hasSelection && !input.isEditing;
+}
+
+export function canEditSelectedMessageFromHotkey(input: {
+  hasSelection: boolean;
+  isEditing: boolean;
+  isOwnMessage: boolean;
+}) {
+  return canReplyToSelectedMessageFromHotkey(input) && input.isOwnMessage;
+}
 
 export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   const [attachMessageList, messageListScope] =
@@ -31,6 +47,11 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   });
 
   const hasSelection = () => !!options.selection.selectedId();
+  const canRunSelectionActionHotkeys = () =>
+    canReplyToSelectedMessageFromHotkey({
+      hasSelection: hasSelection(),
+      isEditing: options.isEditing(),
+    });
 
   const getSelectedMessage = () => {
     const id = options.selection.selectedId();
@@ -73,7 +94,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     hotkey: 'enter',
     hotkeyToken: TOKENS.channel.replyToMessage,
     description: 'Reply to message',
-    condition: hasSelection,
+    condition: canRunSelectionActionHotkeys,
     keyDownHandler: () => {
       const msg = getSelectedMessage();
       if (!msg) return false;
@@ -89,9 +110,13 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     hotkeyToken: TOKENS.channel.editMessage,
     description: 'Edit message',
     condition: () => {
-      if (!hasSelection()) return false;
+      if (!canRunSelectionActionHotkeys()) return false;
       const msg = getSelectedMessage();
-      return !!msg && msg.sender_id === options.userId();
+      return canEditSelectedMessageFromHotkey({
+        hasSelection: true,
+        isEditing: options.isEditing(),
+        isOwnMessage: !!msg && msg.sender_id === options.userId(),
+      });
     },
     keyDownHandler: () => {
       const msg = getSelectedMessage();

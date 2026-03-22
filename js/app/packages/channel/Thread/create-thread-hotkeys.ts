@@ -14,6 +14,7 @@ type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
   replySelection: MessageSelection;
   isThreadFocused: Accessor<boolean>;
+  isEditing: Accessor<boolean>;
   activeReplies: Accessor<Array<ApiThreadReply>>;
   threadId: Accessor<string>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
@@ -26,6 +27,26 @@ type CreateThreadHotkeysOptions = {
   isThreadExpanded: Accessor<boolean>;
   setIsReplying: (replying: boolean) => void;
 };
+
+export function canReplyToThreadFromHotkey(input: {
+  isThreadFocused: boolean;
+  isEditing: boolean;
+}) {
+  return input.isThreadFocused && !input.isEditing;
+}
+
+export function canEditThreadReplyFromHotkey(input: {
+  isThreadFocused: boolean;
+  isEditing: boolean;
+  hasSelectedReply: boolean;
+  isOwnReply: boolean;
+}) {
+  return (
+    canReplyToThreadFromHotkey(input) &&
+    input.hasSelectedReply &&
+    input.isOwnReply
+  );
+}
 
 function scrollReplyIntoView(replyId: string) {
   document
@@ -136,7 +157,11 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     description: 'Reply to thread',
     registrationType: 'add',
     handlerPriority: HOTKEY_PRIORITY_HIGH,
-    condition: options.isThreadFocused,
+    condition: () =>
+      canReplyToThreadFromHotkey({
+        isThreadFocused: options.isThreadFocused(),
+        isEditing: options.isEditing(),
+      }),
     keyDownHandler: () => {
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
@@ -153,11 +178,16 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
     registrationType: 'add',
     handlerPriority: HOTKEY_PRIORITY_HIGH,
     condition: () => {
-      if (!options.isThreadFocused()) return false;
+      if (options.isEditing()) return false;
       const replyId = options.replySelection.selectedId();
       if (!replyId) return false;
       const reply = getReplyById(replyId);
-      return !!reply && reply.sender_id === options.userId();
+      return canEditThreadReplyFromHotkey({
+        isThreadFocused: options.isThreadFocused(),
+        isEditing: options.isEditing(),
+        hasSelectedReply: !!replyId,
+        isOwnReply: !!reply && reply.sender_id === options.userId(),
+      });
     },
     keyDownHandler: () => {
       const replyId = options.replySelection.selectedId();

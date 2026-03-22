@@ -75,6 +75,7 @@ export function ChannelThread(props: ThreadProps) {
     messageListScopeId: props.messageListScopeId!,
     replySelection,
     isThreadFocused,
+    isEditing: () => !!props.messageEditor?.state(),
     activeReplies,
     threadId: () => props.data().id,
     getMessageActions: (msg) => props.getMessageActions?.(msg),

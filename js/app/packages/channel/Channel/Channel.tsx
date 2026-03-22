@@ -193,6 +193,7 @@ export function Channel(props: ChannelProps) {
       messageById,
       getMessageActions,
       userId,
+      isEditing: () => !!messageEditor.state(),
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
     });
