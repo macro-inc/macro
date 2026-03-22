@@ -228,11 +228,9 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    if (!messageListElement) {
-      console.warn('[channel]: tried to go to message, but list ref undefined');
-      return;
+    if (messageListElement) {
+      resetKeyboardModality(messageListElement);
     }
-    resetKeyboardModality(messageListElement);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
