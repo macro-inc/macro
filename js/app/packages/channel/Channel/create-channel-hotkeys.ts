@@ -70,6 +70,19 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
 
   registerHotkey({
     scopeId: messageListScope,
+    hotkey: 'shift+g',
+    description: 'Go to latest message',
+    keyDownHandler: () => {
+      options.selection.clear();
+      const id = options.selection.selectPrevious();
+      if (!id) return false;
+      options.navigation()?.scrollToId(id, { align: 'end' });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: messageListScope,
     hotkey: 'enter',
     hotkeyToken: TOKENS.channel.replyToMessage,
     description: 'Reply to message',
