@@ -35,7 +35,7 @@ export function canReplyToThreadFromHotkey(input: {
   return input.isThreadFocused && !input.isEditing;
 }
 
-export function canEditThreadReplyFromHotkey(input: {
+export function canEditOrDeleteThreadReplyFromHotkey(input: {
   isThreadFocused: boolean;
   isEditing: boolean;
   hasSelectedReply: boolean;
@@ -182,7 +182,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const replyId = options.replySelection.selectedId();
       if (!replyId) return false;
       const reply = getReplyById(replyId);
-      return canEditThreadReplyFromHotkey({
+      return canEditOrDeleteThreadReplyFromHotkey({
         isThreadFocused: options.isThreadFocused(),
         isEditing: options.isEditing(),
         hasSelectedReply: !!replyId,
@@ -196,6 +196,36 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
       actions?.onEdit?.({ message: reply });
+      return true;
+    },
+  }).withGroup(group);
+
+  registerHotkey({
+    scopeId: scope,
+    hotkey: 'backspace',
+    hotkeyToken: TOKENS.channel.threadDeleteReply,
+    description: 'Delete reply',
+    registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_HIGH,
+    condition: () => {
+      if (options.isEditing()) return false;
+      const replyId = options.replySelection.selectedId();
+      if (!replyId) return false;
+      const reply = getReplyById(replyId);
+      return canEditOrDeleteThreadReplyFromHotkey({
+        isThreadFocused: options.isThreadFocused(),
+        isEditing: options.isEditing(),
+        hasSelectedReply: !!replyId,
+        isOwnReply: !!reply && reply.sender_id === options.userId(),
+      });
+    },
+    keyDownHandler: () => {
+      const replyId = options.replySelection.selectedId();
+      if (!replyId) return false;
+      const reply = getReplyById(replyId);
+      if (!reply) return false;
+      const actions = options.getMessageActions(reply);
+      actions?.onDelete?.({ message: reply });
       return true;
     },
   }).withGroup(group);

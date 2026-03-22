@@ -24,7 +24,7 @@ export function canReplyToSelectedMessageFromHotkey(input: {
   return input.hasSelection && !input.isEditing;
 }
 
-export function canEditSelectedMessageFromHotkey(input: {
+export function canEditOrDeleteSelectedMessageFromHotkey(input: {
   hasSelection: boolean;
   isEditing: boolean;
   isOwnMessage: boolean;
@@ -125,7 +125,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     condition: () => {
       if (!canRunSelectionActionHotkeys()) return false;
       const msg = getSelectedMessage();
-      return canEditSelectedMessageFromHotkey({
+      return canEditOrDeleteSelectedMessageFromHotkey({
         hasSelection: true,
         isEditing: options.isEditing(),
         isOwnMessage: !!msg && msg.sender_id === options.userId(),
@@ -136,6 +136,29 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
       actions?.onEdit?.({ message: msg });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: messageListScope,
+    hotkey: 'backspace',
+    hotkeyToken: TOKENS.channel.deleteMessage,
+    description: 'Delete message',
+    condition: () => {
+      if (!canRunSelectionActionHotkeys()) return false;
+      const msg = getSelectedMessage();
+      return canEditOrDeleteSelectedMessageFromHotkey({
+        hasSelection: true,
+        isEditing: options.isEditing(),
+        isOwnMessage: !!msg && msg.sender_id === options.userId(),
+      });
+    },
+    keyDownHandler: () => {
+      const msg = getSelectedMessage();
+      if (!msg) return false;
+      const actions = options.getMessageActions(msg);
+      actions?.onDelete?.({ message: msg });
       return true;
     },
   });
