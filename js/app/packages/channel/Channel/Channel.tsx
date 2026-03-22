@@ -90,10 +90,12 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
+  let messageListElement: HTMLDivElement | undefined;
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
+    initialTargetMessageReplyId: props.targetMessageReplyId,
     messageKeys: () => messageIndex().keys,
     navigation: threadListNavigation,
   });
@@ -224,11 +226,19 @@ export function Channel(props: ChannelProps) {
     );
   };
 
+  const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
+    const listElement = messageListElement;
+    if (listElement && listElement.dataset.channelNav !== 'keyboard') {
+      listElement.dataset.channelNav = 'keyboard';
+    }
+    targetMessageController.goToMessage(messageId, replyId);
+  };
+
   createEffect(
     on(isChannelReady, () => {
       if (props.onHandleReady)
         props.onHandleReady({
-          goToMessage: targetMessageController.goToMessage,
+          goToMessage,
         });
     })
   );
@@ -240,7 +250,10 @@ export function Channel(props: ChannelProps) {
           <Show when={messages().length > 0}>
             <div
               class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-              ref={attachMessageListRef}
+              ref={(element) => {
+                messageListElement = element;
+                attachMessageListRef(element);
+              }}
               tabIndex={-1}
               data-channel-message-list
               data-channel-nav="keyboard"
@@ -271,7 +284,14 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
-                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          targetReplyId={targetMessageController.pendingTargetReplyId()}
+                          highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          onTargetReplyScrolled={(replyId) => {
+                            targetMessageController.completePendingReplyScroll(
+                              m().id,
+                              replyId
+                            );
+                          }}
                           highlighted={
                             m().id ===
                             targetMessageController.highlightedMessageId()

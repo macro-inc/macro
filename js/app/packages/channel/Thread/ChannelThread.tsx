@@ -56,8 +56,11 @@ export function ChannelThread(props: ThreadProps) {
       sliceIf(val(), 0, DEFAULT_VISIBLE_REPLY_COUNT, !props.isExpanded());
 
   const previewReplies = sliceIfNotExpanded(() => thread().preview ?? []);
+  const loadedReplies = () => repliesQuery.data ?? [];
   const fetchedReplies = sliceIfNotExpanded(() => repliesQuery.data ?? []);
   const hasFetchedReplies = () => repliesQuery.data !== undefined;
+  const canScrollToTargetReply = () =>
+    !repliesQuery.isLoading && hasFetchedReplies();
   const activeReplies = () => {
     const replies = repliesQuery.data;
     if (replies && !repliesQuery.isLoading) return replies;
@@ -116,12 +119,14 @@ export function ChannelThread(props: ThreadProps) {
     on(
       [
         () => props.targetReplyId,
-        activeReplies,
+        canScrollToTargetReply,
+        loadedReplies,
         props.isExpanded,
         replyListHandle,
       ],
-      ([targetReplyId, replies, isExpanded, handle]) => {
+      ([targetReplyId, canScroll, replies, isExpanded, handle]) => {
         if (!targetReplyId) return;
+        if (!canScroll) return;
 
         const targetReplyIndex = replies.findIndex(
           (reply) => reply.id === targetReplyId
@@ -133,7 +138,8 @@ export function ChannelThread(props: ThreadProps) {
           return;
         }
 
-        handle?.scrollToIndex(targetReplyIndex);
+        if (!handle?.scrollToIndex(targetReplyIndex)) return;
+        props.onTargetReplyScrolled?.(targetReplyId);
       }
     )
   );
@@ -184,7 +190,7 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.targetReplyId}
+                        highlightedReplyId={props.highlightedReplyId}
                         onReady={setReplyListHandle}
                         selectedReplyId={replySelection.selectedId}
                         isThreadFocused={isThreadFocused}
@@ -199,7 +205,7 @@ export function ChannelThread(props: ThreadProps) {
                         getMessageActions={props.getMessageActions}
                         messageEditor={props.messageEditor}
                         isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.targetReplyId}
+                        highlightedReplyId={props.highlightedReplyId}
                         onReady={setReplyListHandle}
                         selectedReplyId={replySelection.selectedId}
                         isThreadFocused={isThreadFocused}
