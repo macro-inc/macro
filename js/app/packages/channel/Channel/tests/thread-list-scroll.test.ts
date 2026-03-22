@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   accumulateExplicitScrollDownDistance,
   hasExplicitScrollDownGesture,
+  hasRecentExplicitScrollIntent,
   isExplicitScrollDown,
 } from '../ThreadList';
 
@@ -68,5 +69,26 @@ describe('hasExplicitScrollDownGesture', () => {
   it('requires a minimum accumulated downward distance', () => {
     expect(hasExplicitScrollDownGesture(63)).toBe(false);
     expect(hasExplicitScrollDownGesture(64)).toBe(true);
+  });
+});
+
+describe('hasRecentExplicitScrollIntent', () => {
+  it('returns true when intent is recent', () => {
+    expect(
+      hasRecentExplicitScrollIntent({ direction: 'up', at: 1000 }, 1100)
+    ).toBe(true);
+    expect(
+      hasRecentExplicitScrollIntent({ direction: 'down', at: 1000 }, 1100)
+    ).toBe(true);
+  });
+
+  it('returns false when intent is undefined', () => {
+    expect(hasRecentExplicitScrollIntent(undefined, 1100)).toBe(false);
+  });
+
+  it('returns false when intent is stale', () => {
+    expect(
+      hasRecentExplicitScrollIntent({ direction: 'up', at: 1000 }, 1300)
+    ).toBe(false);
   });
 });

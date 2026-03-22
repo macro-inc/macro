@@ -74,6 +74,14 @@ export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
 
+export function hasRecentExplicitScrollIntent(
+  intent: ExplicitScrollIntent | undefined,
+  now = Date.now()
+): boolean {
+  if (!intent) return false;
+  return now - intent.at <= EXPLICIT_SCROLL_INTENT_WINDOW_MS;
+}
+
 export function isExplicitScrollDown(
   delta: number,
   intent: ExplicitScrollIntent | undefined,
@@ -272,14 +280,21 @@ export function ThreadList(props: ThreadListProps) {
 
     if (!didInitialScroll()) return;
 
-    if (nearTop && !nearTopFired) {
+    // Only trigger pagination callbacks when the user has recently
+    // scrolled (wheel/touch). This prevents synthetic scroll events
+    // from data changes (e.g., optimistic updates triggering
+    // ResizeObserver → scroll offset adjustments) from incorrectly
+    // loading more pages.
+    const hasUserIntent = hasRecentExplicitScrollIntent(explicitScrollIntent);
+
+    if (nearTop && !nearTopFired && hasUserIntent) {
       nearTopFired = true;
       props.onScrollNearTop?.();
     } else if (!nearTop) {
       nearTopFired = false;
     }
 
-    if (nearBottom && !nearBottomFired) {
+    if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
     } else if (!nearBottom) {
@@ -312,6 +327,19 @@ export function ThreadList(props: ThreadListProps) {
       }}
       onTouchCancel={() => {
         previousTouchY = undefined;
+      }}
+      onKeyDown={(event) => {
+        const key = event.key;
+        if (key === 'ArrowUp' || key === 'PageUp' || key === 'Home') {
+          markExplicitScrollIntent('up');
+        } else if (
+          key === 'ArrowDown' ||
+          key === 'PageDown' ||
+          key === 'End' ||
+          key === ' '
+        ) {
+          markExplicitScrollIntent('down');
+        }
       }}
       style={{
         width: '100%',

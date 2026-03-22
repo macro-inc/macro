@@ -1,12 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import {
-  createEffect,
-  createSignal,
-  on,
-  Show,
-  Suspense,
-  type Accessor,
-} from 'solid-js';
+import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
@@ -23,15 +16,6 @@ import {
 } from './utils/thread-reply-indicator-helpers';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { createThreadHotkeys } from './create-thread-hotkeys';
-
-function sliceIf<T>(
-  val: Array<T>,
-  start: number,
-  end: number,
-  should: boolean
-): Array<T> {
-  return should ? val.slice(start, end) : val;
-}
 
 export function ChannelThread(props: ThreadProps) {
   const userId = useUserId();
@@ -50,21 +34,39 @@ export function ChannelThread(props: ThreadProps) {
     fetchRepliesEnabled
   );
 
-  const sliceIfNotExpanded =
-    <T,>(val: Accessor<Array<T>>) =>
-    () =>
-      sliceIf(val(), 0, DEFAULT_VISIBLE_REPLY_COUNT, !props.isExpanded());
+  // IMPORTANT: In @tanstack/solid-query, accessing `query.data` when
+  // `state.data` is undefined triggers Suspense (uses the resource's
+  // suspending accessor). Always check `isLoading` BEFORE reading `.data`
+  // to stay on the non-suspending path (`queryResource.latest`).
 
-  const previewReplies = sliceIfNotExpanded(() => thread().preview ?? []);
-  const loadedReplies = () => repliesQuery.data ?? [];
-  const fetchedReplies = sliceIfNotExpanded(() => repliesQuery.data ?? []);
-  const hasFetchedReplies = () => repliesQuery.data !== undefined;
-  const canScrollToTargetReply = () =>
-    !repliesQuery.isLoading && hasFetchedReplies();
-  const activeReplies = () => {
-    const replies = repliesQuery.data;
-    if (replies && !repliesQuery.isLoading) return replies;
-    return thread().preview ?? [];
+  const queryReplies = (): Array<ApiThreadReply> | undefined => {
+    if (repliesQuery.isLoading) return undefined;
+    return repliesQuery.data;
+  };
+
+  const loadedReplies = () => queryReplies() ?? [];
+  const canScrollToTargetReply = () => queryReplies() !== undefined;
+
+  const activeReplies = (): Array<ApiThreadReply> => {
+    return queryReplies() ?? thread().preview ?? [];
+  };
+
+  const displayReplies = (): Array<ApiThreadReply> => {
+    const preview = thread().preview ?? [];
+
+    // When collapsed, use preview directly without reading query state.
+    // This avoids creating a reactive dependency on repliesQuery so that
+    // query resolution doesn't trigger re-renders for collapsed threads.
+    if (!props.isExpanded()) {
+      return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
+        ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
+        : preview;
+    }
+
+    // When expanded, prefer fetched data (full reply list).
+    const fetched = queryReplies();
+    if (fetched) return fetched;
+    return preview;
   };
 
   // Thread-local reply selection
@@ -181,38 +183,18 @@ export function ChannelThread(props: ThreadProps) {
               />
               <Suspense>
                 <Thread.RepliesContainer>
-                  <Show
-                    when={!repliesQuery.isLoading && hasFetchedReplies()}
-                    fallback={
-                      <Thread.ReplyList
-                        channelId={props.channelId()}
-                        threadId={props.data().id}
-                        replies={previewReplies()}
-                        getMessageActions={props.getMessageActions}
-                        messageEditor={props.messageEditor}
-                        isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.highlightedReplyId}
-                        onReady={setReplyListHandle}
-                        selectedReplyId={replySelection.selectedId}
-                        isThreadFocused={isThreadFocused}
-                      />
-                    }
-                  >
-                    <Suspense>
-                      <Thread.ReplyList
-                        channelId={props.channelId()}
-                        threadId={props.data().id}
-                        replies={fetchedReplies()}
-                        getMessageActions={props.getMessageActions}
-                        messageEditor={props.messageEditor}
-                        isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.highlightedReplyId}
-                        onReady={setReplyListHandle}
-                        selectedReplyId={replySelection.selectedId}
-                        isThreadFocused={isThreadFocused}
-                      />
-                    </Suspense>
-                  </Show>
+                  <Thread.ReplyList
+                    channelId={props.channelId()}
+                    threadId={props.data().id}
+                    replies={displayReplies()}
+                    getMessageActions={props.getMessageActions}
+                    messageEditor={props.messageEditor}
+                    isNewMessage={props.isNewMessage}
+                    highlightedReplyId={props.highlightedReplyId}
+                    onReady={setReplyListHandle}
+                    selectedReplyId={replySelection.selectedId}
+                    isThreadFocused={isThreadFocused}
+                  />
 
                   <Show when={props.isReplying()}>
                     <div ref={attachReplyInputRef}>
