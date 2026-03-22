@@ -39,6 +39,7 @@ function MessageContentSlot(props: {
           <MessageEditorContent
             channelId={props.channelId}
             messageEditor={messageEditor()}
+            class={props.class}
           />
         )}
       </Match>

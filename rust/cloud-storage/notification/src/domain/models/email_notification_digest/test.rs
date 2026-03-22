@@ -32,24 +32,6 @@ impl Notification for BlockedNotification {
     const TYPE_NAME: &'static str = "blocked_notification";
 }
 
-/// An invite notification that should be sent immediately (single send).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct InviteNotification {
-    workspace_name: String,
-}
-
-impl Notification for InviteNotification {
-    const TYPE_NAME: &'static str = "invite_notification";
-}
-
-/// A workspace invite notification for testing multiple invite types.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct WorkspaceInviteNotification;
-
-impl Notification for WorkspaceInviteNotification {
-    const TYPE_NAME: &'static str = "workspace_invite_notification";
-}
-
 // ============================================================================
 // Mock Implementations
 // ============================================================================
@@ -212,10 +194,6 @@ fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificatio
 
 fn create_block_list() -> EmailBlockList {
     EmailBlockList::new::<BlockedNotification>()
-}
-
-fn create_invite_list() -> ExplicitInviteAllowList {
-    ExplicitInviteAllowList::new::<InviteNotification>().append::<WorkspaceInviteNotification>()
 }
 
 // ============================================================================
@@ -686,96 +664,6 @@ async fn test_check_last_online_time_edge_case_zero_last_online() {
 }
 
 // ============================================================================
-// AccountDoesNotExist::batch_or_single_send Tests
-// ============================================================================
-
-#[tokio::test]
-async fn test_batch_or_single_send_returns_single_send_for_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(InviteNotification {
-        workspace_name: "Test Workspace".to_string(),
-    });
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Should return SingleSend for invite notifications"
-    );
-}
-
-#[tokio::test]
-async fn test_batch_or_single_send_returns_batch_send_for_non_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(TestNotification {
-        message: "hello".to_string(),
-    });
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_right(),
-        "Should return BatchSend for non-invite notifications"
-    );
-}
-
-#[tokio::test]
-async fn test_batch_or_single_send_with_multiple_invite_types() {
-    // Test that workspace invite also gets single send
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(WorkspaceInviteNotification);
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Should return SingleSend for workspace invite notifications"
-    );
-}
-
-// ============================================================================
 // Full Flow Integration Tests
 // ============================================================================
 
@@ -918,39 +806,7 @@ async fn test_full_flow_user_exists_push_disabled_offline() {
 }
 
 #[tokio::test]
-async fn test_full_flow_user_not_exists_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(InviteNotification {
-        workspace_name: "Test Workspace".to_string(),
-    });
-
-    // Step 1: Check if allowed
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    // Step 2: Check user existence - does not exist
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    // Step 3: Decide batch vs single - invite should be single
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Full flow: user does not exist, invite notification should return SingleSend"
-    );
-}
-
-#[tokio::test]
-async fn test_full_flow_user_not_exists_non_invite() {
+async fn test_full_flow_user_not_exists() {
     let block_list = create_block_list();
     let notif = create_test_notification_row(TestNotification {
         message: "hello".to_string(),
@@ -962,21 +818,12 @@ async fn test_full_flow_user_not_exists_non_invite() {
         .left()
         .expect("Should be allowed");
 
-    // Step 2: Check user existence - does not exist
+    // Step 2: Check user existence - does not exist → always BatchSend
     let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    // Step 3: Decide batch vs single - non-invite should be batch
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
+    let result = allowed.check_user_existence(&user_checker).await.unwrap();
 
     assert!(
         result.is_right(),
-        "Full flow: user does not exist, non-invite notification should return BatchSend"
+        "Full flow: user does not exist should return BatchSend"
     );
 }

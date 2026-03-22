@@ -132,6 +132,7 @@ pub(crate) async fn important_preview_cursor(
                isk.effective_ts as "sort_ts!",
                isk.created_at as "created_at!",
                isk.updated_at as "updated_at!",
+               t.project_id,
                isk.viewed_at as "viewed_at?",
                isk.is_draft as "is_draft!",
                -- It's the important view - all threads here are important

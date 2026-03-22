@@ -226,7 +226,7 @@ export const EntityTypeFilter = () => {
   );
 };
 
-type FolderFilterTarget = 'chat' | 'document';
+type FolderFilterTarget = 'chat' | 'document' | 'email';
 
 interface FolderFilterProps {
   target: FolderFilterTarget;
@@ -254,7 +254,9 @@ export const FolderFilter = (props: FolderFilterProps) => {
     const projectIds =
       props.target === 'chat'
         ? filters.chat_filters?.project_ids
-        : filters.document_filters?.project_ids;
+        : props.target === 'email'
+          ? filters.email_filters?.project_ids
+          : filters.document_filters?.project_ids;
 
     if (!projectIds?.length) return [];
 
@@ -274,6 +276,16 @@ export const FolderFilter = (props: FolderFilterProps) => {
           ...prev,
           chat_filters: {
             ...prev.chat_filters,
+            project_ids: newProjectIds,
+          },
+        };
+      }
+
+      if (props.target === 'email') {
+        return {
+          ...prev,
+          email_filters: {
+            ...prev.email_filters,
             project_ids: newProjectIds,
           },
         };

@@ -71,7 +71,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
         };
       });
 
-      if (ENABLE_NEW_CHANNELS) {
+      if (ENABLE_NEW_CHANNELS()) {
         const threadId = payload.thread_id;
         if (threadId) {
           const reply: ApiThreadReply = {
@@ -126,7 +126,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
   }
 
   softInvalidateChannelWithID(payload.channel_id);
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     softInvalidateTargetCaches(
       payload.channel_id,
       resolveMessageTarget({
@@ -164,7 +164,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
         };
       });
 
-      if (ENABLE_NEW_CHANNELS) {
+      if (ENABLE_NEW_CHANNELS()) {
         const target = resolveMessageTarget({
           channelId: payload.channel_id,
           messageId: payload.message_id,
@@ -177,7 +177,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
   }
 
   softInvalidateChannelWithID(payload.channel_id);
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     const target = resolveMessageTarget({
       channelId: payload.channel_id,
       messageId: payload.message_id,
@@ -197,7 +197,7 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
     ChannelNonceKeys.ATTACHMENT,
     payload.nonce
   );
-  const target = ENABLE_NEW_CHANNELS
+  const target = ENABLE_NEW_CHANNELS()
     ? resolveMessageTarget({
         channelId: payload.channel_id,
         messageId: payload.message_id,
@@ -231,7 +231,7 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
       };
     });
 
-    if (ENABLE_NEW_CHANNELS && target) {
+    if (ENABLE_NEW_CHANNELS() && target) {
       replaceTargetAttachments(payload.channel_id, target, payload.attachments);
     }
   } catch (error) {
@@ -239,7 +239,7 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
   }
 
   softInvalidateChannelWithID(payload.channel_id);
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     softInvalidateTargetCaches(payload.channel_id, target);
   }
 }

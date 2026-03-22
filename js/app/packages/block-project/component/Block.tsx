@@ -35,7 +35,7 @@ import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project', 'email'];
 
 const Block: Component = () => {
   useBlockEntityCommands();
@@ -197,7 +197,7 @@ const ProjectEntityList = (props: {
             project_ids: [props.projectId],
           },
           email_filters: {
-            recipients: [NIL_UUID],
+            project_ids: [props.projectId],
           },
         }}
       >

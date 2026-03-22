@@ -6,7 +6,11 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
-import { chatRuleset, uploadFile } from '@core/util/upload';
+import {
+  chatRuleset,
+  handleFileFolderDrop,
+  uploadFile,
+} from '@core/util/upload';
 import { uploadInputAttachments } from './upload-attachments';
 import type {
   InputAttachmentTracker,
@@ -97,6 +101,11 @@ export function ChannelInput(props: ChannelInputProps) {
       if (isMobile()) return false;
       inputState.commands.send();
       return true;
+    },
+    onPasteFilesAndDirs: (files, directories) => {
+      void handleFileFolderDrop(files, directories, (entries) =>
+        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      );
     },
   });
   clearComposer = () => markdownEditor.controls.clear();

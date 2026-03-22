@@ -2,6 +2,28 @@
 
 use std::{fmt::Display, str::FromStr};
 
+/// The product tier the user is on
+#[derive(Debug, Default)]
+pub enum ProductTier {
+    /// Haiku tier - default
+    #[default]
+    Haiku,
+    /// Sonnet tier
+    Sonnet,
+    /// Opus tier
+    Opus,
+}
+
+impl Display for ProductTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProductTier::Haiku => write!(f, "haiku"),
+            ProductTier::Sonnet => write!(f, "sonnet"),
+            ProductTier::Opus => write!(f, "opus"),
+        }
+    }
+}
+
 /// All valid roles that exist in our system
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RoleId {
@@ -31,6 +53,12 @@ pub enum RoleId {
     AiSubscriber,
     /// The editor user role
     EditorUser,
+    /// The user is subscribed to haiku plan
+    SubHaiku,
+    /// The user is subscribed to sonnet plan
+    SubSonnet,
+    /// The user is subscribed to opus plan
+    SubOpus,
 }
 
 impl Display for RoleId {
@@ -49,6 +77,9 @@ impl Display for RoleId {
             RoleId::EmailToolOnPrem => write!(f, "email_tool_on_prem"),
             RoleId::AiSubscriber => write!(f, "ai_subscriber"),
             RoleId::EditorUser => write!(f, "editor_user"),
+            RoleId::SubHaiku => write!(f, "sub_haiku"),
+            RoleId::SubSonnet => write!(f, "sub_sonnet"),
+            RoleId::SubOpus => write!(f, "sub_opus"),
         }
     }
 }
@@ -76,6 +107,12 @@ pub enum PermissionId {
     WriteAiFeatures,
     /// Read access to the docx editor
     ReadDocxEditor,
+    /// Use haiku
+    WriteHaiku,
+    /// Use sonnet
+    WriteSonnet,
+    /// Use opus
+    WriteOpus,
 }
 
 impl FromStr for PermissionId {
@@ -93,6 +130,9 @@ impl FromStr for PermissionId {
             "write:email_tool" => Ok(Self::WriteEmailTool),
             "write:ai_features" => Ok(Self::WriteAiFeatures),
             "read:docx_editor" => Ok(Self::ReadDocxEditor),
+            "write:haiku" => Ok(Self::WriteHaiku),
+            "write:sonnet" => Ok(Self::WriteSonnet),
+            "write:opus" => Ok(Self::WriteOpus),
             _ => Err(anyhow::anyhow!("invalid permission id {s}")),
         }
     }
@@ -113,6 +153,9 @@ impl Display for PermissionId {
             PermissionId::WriteEmailTool => write!(f, "write:email_tool"),
             PermissionId::WriteAiFeatures => write!(f, "write:ai_features"),
             PermissionId::ReadDocxEditor => write!(f, "read:docx_editor"),
+            PermissionId::WriteHaiku => write!(f, "write:haiku"),
+            PermissionId::WriteSonnet => write!(f, "write:sonnet"),
+            PermissionId::WriteOpus => write!(f, "write:opus"),
         }
     }
 }

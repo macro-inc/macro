@@ -10,7 +10,7 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
-  "channels",
+  "channels", "chat",
   "comms_db_client",
   "comms_service",
   "comms_service_client",
@@ -97,7 +97,9 @@ members = [
   "properties",
   "properties_db_client",
   "properties_service",
+  "rate_limit",
   "referral",
+  "referral_invitation",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -144,9 +146,7 @@ aws-sdk-sns = "1.90.0"
 aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
-axum = { version = "0.8", features = [
-  "tower-log",
-] }
+axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
 base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
@@ -155,8 +155,8 @@ clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 csv = "1"
-dateparser = "0.2.1"
 dashmap = "6.1.0"
+dateparser = "0.2.1"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"

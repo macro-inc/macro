@@ -12,6 +12,7 @@ pub struct RateLimitConfig {
     pub merge_email_minute: (u64, i64),
     #[allow(dead_code)]
     pub merge_email_daily: (u64, i64),
+    pub create_user_hourly: (u64, i64),
     // pub sso: (u64, i64),
 }
 
@@ -26,4 +27,6 @@ pub static RATE_LIMIT_CONFIG: RateLimitConfig = RateLimitConfig {
 
     merge_email_minute: (5, 60),
     merge_email_daily: (5, 86400),
+
+    create_user_hourly: (50, 3600),
 };

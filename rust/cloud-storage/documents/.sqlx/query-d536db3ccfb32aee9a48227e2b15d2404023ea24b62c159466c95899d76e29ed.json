@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE project_hierarchy AS (\n            SELECT p.id as project_id\n            FROM email_threads t\n            JOIN \"Project\" p ON t.project_id = p.id AND p.\"deletedAt\" IS NULL\n            WHERE t.id = $1\n            UNION ALL\n            SELECT parent.id as project_id\n            FROM project_hierarchy ph\n            JOIN \"Project\" parent ON parent.id = (\n                SELECT \"parentId\" FROM \"Project\" WHERE id = ph.project_id AND \"parentId\" IS NOT NULL AND \"deletedAt\" IS NULL\n            )\n        )\n        SELECT access_level FROM (\n            -- Source 1: Cast the AccessLevel enum to text.\n            SELECT access_level::text FROM \"UserItemAccess\"\n            WHERE user_id = $3 AND item_id IN (\n                SELECT $2 -- The thread ID as text\n                UNION\n                SELECT project_id FROM project_hierarchy -- All parent projects\n            )\n            UNION ALL\n            -- Source 2: Select the publicAccessLevel (which is already text).\n            SELECT \"publicAccessLevel\" as access_level\n            FROM \"SharePermission\"\n            WHERE \"isPublic\" = true AND \"publicAccessLevel\" IS NOT NULL AND id IN (\n                SELECT \"sharePermissionId\" FROM \"EmailThreadPermission\" WHERE \"threadId\" = $2\n                UNION\n                SELECT \"sharePermissionId\" FROM \"ProjectPermission\" WHERE \"projectId\" IN (SELECT project_id FROM project_hierarchy)\n            )\n        ) as all_levels\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d536db3ccfb32aee9a48227e2b15d2404023ea24b62c159466c95899d76e29ed"
+}

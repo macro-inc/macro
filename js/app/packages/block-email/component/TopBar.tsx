@@ -41,6 +41,11 @@ export function TopBar(props: {
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
 
+  const isInvite = () => {
+    const entity = soup?.items.get(props.id);
+    return entity?.type === 'email' && entity.hasIcsAttachment === true;
+  };
+
   const isOwnThread = () => {
     const thread = emailCtx.thread();
     const links = linksQuery.data?.links;
@@ -128,7 +133,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          iconType="email"
+          iconType={isInvite() ? 'emailInvite' : 'email'}
           label={props.title}
           badges={
             props.isDraft

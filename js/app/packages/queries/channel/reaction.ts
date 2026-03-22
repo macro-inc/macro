@@ -161,7 +161,7 @@ export function optimisticAddReaction(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetReactions(vars.channelId, context.target, result.reactions);
   }
 
@@ -196,7 +196,7 @@ export function rollbackAddReaction(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetReactions(
       channelId,
       context.target,
@@ -256,7 +256,7 @@ export function optimisticRemoveReaction(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetReactions(vars.channelId, context.target, result.reactions);
   }
 
@@ -293,7 +293,7 @@ export function rollbackRemoveReaction(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetReactions(
       channelId,
       context.target,
@@ -380,7 +380,7 @@ export function useAddReactionMutation(
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
-          if (ENABLE_NEW_CHANNELS) {
+          if (ENABLE_NEW_CHANNELS()) {
             softInvalidateTargetCaches(
               vars.channelId,
               resolveMessageTarget({
@@ -453,7 +453,7 @@ export function useRemoveReactionMutation(
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
-          if (ENABLE_NEW_CHANNELS) {
+          if (ENABLE_NEW_CHANNELS()) {
             softInvalidateTargetCaches(
               vars.channelId,
               resolveMessageTarget({

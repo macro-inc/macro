@@ -14,7 +14,23 @@ type CreateChannelHotkeysOptions = {
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
   isInputEmpty: Accessor<boolean>;
+  isEditing: Accessor<boolean>;
 };
+
+export function canReplyToSelectedMessageFromHotkey(input: {
+  hasSelection: boolean;
+  isEditing: boolean;
+}) {
+  return input.hasSelection && !input.isEditing;
+}
+
+export function canEditOrDeleteSelectedMessageFromHotkey(input: {
+  hasSelection: boolean;
+  isEditing: boolean;
+  isOwnMessage: boolean;
+}) {
+  return canReplyToSelectedMessageFromHotkey(input) && input.isOwnMessage;
+}
 
 export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   const [attachMessageList, messageListScope] =
@@ -31,6 +47,11 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   });
 
   const hasSelection = () => !!options.selection.selectedId();
+  const canRunSelectionActionHotkeys = () =>
+    canReplyToSelectedMessageFromHotkey({
+      hasSelection: hasSelection(),
+      isEditing: options.isEditing(),
+    });
 
   const getSelectedMessage = () => {
     const id = options.selection.selectedId();
@@ -70,10 +91,23 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
 
   registerHotkey({
     scopeId: messageListScope,
+    hotkey: 'shift+g',
+    description: 'Go to latest message',
+    keyDownHandler: () => {
+      options.selection.clear();
+      const id = options.selection.selectPrevious();
+      if (!id) return false;
+      options.navigation()?.scrollToId(id, { align: 'end' });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: messageListScope,
     hotkey: 'enter',
     hotkeyToken: TOKENS.channel.replyToMessage,
     description: 'Reply to message',
-    condition: hasSelection,
+    condition: canRunSelectionActionHotkeys,
     keyDownHandler: () => {
       const msg = getSelectedMessage();
       if (!msg) return false;
@@ -89,15 +123,42 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     hotkeyToken: TOKENS.channel.editMessage,
     description: 'Edit message',
     condition: () => {
-      if (!hasSelection()) return false;
+      if (!canRunSelectionActionHotkeys()) return false;
       const msg = getSelectedMessage();
-      return !!msg && msg.sender_id === options.userId();
+      return canEditOrDeleteSelectedMessageFromHotkey({
+        hasSelection: true,
+        isEditing: options.isEditing(),
+        isOwnMessage: !!msg && msg.sender_id === options.userId(),
+      });
     },
     keyDownHandler: () => {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
       actions?.onEdit?.({ message: msg });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: messageListScope,
+    hotkey: 'backspace',
+    hotkeyToken: TOKENS.channel.deleteMessage,
+    description: 'Delete message',
+    condition: () => {
+      if (!canRunSelectionActionHotkeys()) return false;
+      const msg = getSelectedMessage();
+      return canEditOrDeleteSelectedMessageFromHotkey({
+        hasSelection: true,
+        isEditing: options.isEditing(),
+        isOwnMessage: !!msg && msg.sender_id === options.userId(),
+      });
+    },
+    keyDownHandler: () => {
+      const msg = getSelectedMessage();
+      if (!msg) return false;
+      const actions = options.getMessageActions(msg);
+      actions?.onDelete?.({ message: msg });
       return true;
     },
   });

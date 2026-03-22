@@ -634,6 +634,153 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
     Ok(())
 }
 
+// ── Project ID filter tests ──────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_with_single_project_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // Filter for threads in Project Alpha
+    let filter = Arc::new(Expr::Literal(EmailLiteral::ProjectId(
+        "proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+    )));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    // Threads 1, 2, 5 are in Project Alpha
+    assert_eq!(results.len(), 3, "Should return 3 threads in Project Alpha");
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(result_ids.contains("20000001-0000-0000-0000-000000000001"));
+    assert!(result_ids.contains("20000002-0000-0000-0000-000000000002"));
+    assert!(result_ids.contains("20000005-0000-0000-0000-000000000005"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_with_multiple_project_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // Filter for threads in Project Alpha OR Project Beta
+    let filter = Arc::new(Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::ProjectId(
+            "proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+        )),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    // Threads 1, 2, 5 (Alpha) + Thread 6 (Beta)
+    assert_eq!(
+        results.len(),
+        4,
+        "Should return 4 threads across both projects"
+    );
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(result_ids.contains("20000006-0000-0000-0000-000000000006"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_project_id_with_sender_filter(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // Filter for threads in Project Alpha AND from john@example.com
+    // Threads 1 and 5 are in Alpha and from john; thread 2 is in Alpha but from john (sent)
+    let filter = Arc::new(Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    // All results should be in Project Alpha and from john
+    for result in &results {
+        if let Some(sender) = &result.sender_email {
+            assert_eq!(sender, "john@example.com");
+        }
+    }
+    assert!(
+        results.len() >= 2,
+        "Should return threads in Project Alpha from john"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_project_id_with_inbox_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let limit = 50;
+
+    // Filter for inbox threads in Project Alpha
+    // Thread 1 and 5 are inbox + Alpha; thread 2 is Alpha but not inbox
+    let filter = Arc::new(Expr::Literal(EmailLiteral::ProjectId(
+        "proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+    )));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    assert_eq!(
+        results.len(),
+        2,
+        "Should return 2 inbox threads in Project Alpha"
+    );
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(result_ids.contains("20000001-0000-0000-0000-000000000001"));
+    assert!(result_ids.contains("20000005-0000-0000-0000-000000000005"));
+    // Thread 2 is in Alpha but not inbox
+    assert!(!result_ids.contains("20000002-0000-0000-0000-000000000002"));
+
+    Ok(())
+}
+
 // Inbox view + importance=false: the "Other" toggle in the UI.
 // Thread 6 (CATEGORY_UPDATES) has importance=false but inbox_visible=false → excluded by Inbox view.
 // Thread 7 (CATEGORY_PROMOTIONS) has importance=false AND inbox_visible=true → included.

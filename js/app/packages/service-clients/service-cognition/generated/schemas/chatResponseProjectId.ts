@@ -6,6 +6,6 @@
  */
 
 /**
- * The project id the chat belongs to
+ * The project id the chat belongs to.
  */
 export type ChatResponseProjectId = string | null;

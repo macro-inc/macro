@@ -14,7 +14,7 @@ pub fn tool_object_to_chat_completion_tool<T>(value: &ToolObject<T>) -> ChatComp
         function: FunctionObject {
             name: value.name.clone(),
             description: Some(value.description.clone()),
-            parameters: Some(value.input_schema.clone()),
+            parameters: Some(serde_json::Value::Object(value.input_schema.clone())),
             strict: Some(true),
         },
     }

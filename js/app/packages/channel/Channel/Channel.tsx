@@ -4,8 +4,10 @@ import {
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import {
+  createEffect,
   createMemo,
   createSignal,
+  on,
   onMount,
   Show,
   Suspense,
@@ -28,10 +30,6 @@ import {
   usePatchMessageMutation,
   useSendMessageMutation,
 } from '@queries/channel/message';
-import {
-  useAddReactionMutation,
-  useRemoveReactionMutation,
-} from '@queries/channel/reaction';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
@@ -60,16 +58,26 @@ import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
-import { createTargetMessageController } from './create-target-message-controller';
-import { createMethodRegistration } from '@core/orchestrator';
-import { blockHandleSignal } from '@core/signal/load';
-import { URL_PARAMS } from '@block-channel/constants';
+import {
+  createTargetMessageController,
+  type TargetMessageController,
+} from './create-target-message-controller';
+import {
+  useAddReactionMutation,
+  useRemoveReactionMutation,
+} from '@queries/channel/reaction';
+import { resetKeyboardModality } from './util';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
+  onHandleReady?: (handle: ChannelHandle) => void;
+};
+
+export type ChannelHandle = {
+  goToMessage: TargetMessageController['goToMessage'];
 };
 
 export function Channel(props: ChannelProps) {
@@ -83,33 +91,15 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
+  let messageListElement: HTMLDivElement | undefined;
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
+    initialTargetMessageReplyId: props.targetMessageReplyId,
     messageKeys: () => messageIndex().keys,
     navigation: threadListNavigation,
   });
-
-  // START BLOCK COMPATIBILITY
-  const blockHandle = blockHandleSignal.get;
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: async (params: Record<string, unknown>) => {
-      const threadId = params[URL_PARAMS.thread] as string | undefined;
-      const messageId = params[URL_PARAMS.message] as string | undefined;
-
-      // For compotibility the naming is  a little strange here.
-      // New channels index by top level message and then spertately handle replies.
-      // If we have a threadId that is actually the top level message and the reply is the message id.
-      const topLevelMessageId = threadId ? threadId : messageId;
-      const messageReplyId = threadId ? messageId : threadId;
-
-      if (topLevelMessageId) {
-        targetMessageController.goToMessage(topLevelMessageId, messageReplyId);
-      }
-    },
-  });
-  // END BLOCK COMPATIBILITY
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
@@ -206,6 +196,7 @@ export function Channel(props: ChannelProps) {
       messageById,
       getMessageActions,
       userId,
+      isEditing: () => !!messageEditor.state(),
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
     });
@@ -229,6 +220,30 @@ export function Channel(props: ChannelProps) {
     });
   };
 
+  const isChannelReady = () => {
+    return (
+      messagesQuery.isFetched &&
+      threadListNavigation() &&
+      threadListScrollState()?.didInitialScroll
+    );
+  };
+
+  const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
+    if (messageListElement) {
+      resetKeyboardModality(messageListElement);
+    }
+    targetMessageController.goToMessage(messageId, replyId);
+  };
+
+  createEffect(
+    on(isChannelReady, () => {
+      if (props.onHandleReady)
+        props.onHandleReady({
+          goToMessage,
+        });
+    })
+  );
+
   return (
     <Suspense>
       <StaticMarkdownContext>
@@ -236,7 +251,10 @@ export function Channel(props: ChannelProps) {
           <Show when={messages().length > 0}>
             <div
               class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-              ref={attachMessageListRef}
+              ref={(element) => {
+                messageListElement = element;
+                attachMessageListRef(element);
+              }}
               tabIndex={-1}
               data-channel-message-list
               data-channel-nav="keyboard"
@@ -267,7 +285,14 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
-                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          targetReplyId={targetMessageController.pendingTargetReplyId()}
+                          highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          onTargetReplyScrolled={(replyId) => {
+                            targetMessageController.completePendingReplyScroll(
+                              m().id,
+                              replyId
+                            );
+                          }}
                           highlighted={
                             m().id ===
                             targetMessageController.highlightedMessageId()

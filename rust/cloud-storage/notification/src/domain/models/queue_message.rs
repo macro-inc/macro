@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rate_limit::RateLimitExceeded;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -28,7 +29,7 @@ pub struct UserApnsEndpoints {
     pub endpoints: Vec<String>,
     /// State machine data if the ingress decision was indeterminate for this user.
     #[serde(default)]
-    pub digest_state: Option<BatchSend<PushNotificationsEnabled>>,
+    pub digest_state: Option<Box<BatchSend<PushNotificationsEnabled>>>,
 }
 
 /// APNS push notification targets.
@@ -55,13 +56,13 @@ pub struct EmailContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
-    to: MacroUserIdStr<'a>,
+    pub(crate) to: MacroUserIdStr<'a>,
     /// The email content (subject and body).
     pub content: EmailContent,
 
-    rate_limit_config: RateLimitConfig,
+    pub(crate) rate_limit_config: RateLimitConfig,
 
-    rate_limit_key: RateLimitKey,
+    pub(crate) rate_limit_key: RateLimitKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,11 +108,6 @@ impl<'a> EmailNotification<'a> {
     /// return the value of the recipient of the email
     pub fn to(&'a self) -> MacroUserIdStr<'a> {
         self.to.copied()
-    }
-
-    /// return the rate limit configuration
-    pub fn rate_limit(&self) -> (&RateLimitConfig, &RateLimitKey) {
-        (&self.rate_limit_config, &self.rate_limit_key)
     }
 }
 
@@ -295,24 +291,25 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
     /// open the inner container by applying the state machine output to the necessary fields
     pub fn with_state_decisions(
         self,
-        states: Vec<Result<StateMachineDecisionA<T>, Report>>,
+        states: Vec<Result<StateMachineDecisionA, Report>>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
         // Collect indeterminate decisions keyed by owner_id
-        let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
-            states
-                .into_iter()
-                .filter_map(|v| match v {
-                    Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
-                    Err(_)
-                    | Ok(StateMachineDecisionA::DontSend(_))
-                    | Ok(StateMachineDecisionA::BatchWasQueued(_))
-                    | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
-                })
-                .map(|batch| {
-                    let owner = batch.inner().owner_id().clone();
-                    (owner, batch)
-                })
-                .collect();
+        let indeterminates: HashMap<
+            MacroUserIdStr<'static>,
+            Box<BatchSend<PushNotificationsEnabled>>,
+        > = states
+            .into_iter()
+            .filter_map(|v| match v {
+                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                Err(_)
+                | Ok(StateMachineDecisionA::DontSend(_))
+                | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
+            })
+            .map(|batch| {
+                let owner = batch.inner().owner_id().clone();
+                (owner, batch)
+            })
+            .collect();
 
         let mut indeterminates = Some(indeterminates);
 
@@ -380,7 +377,7 @@ pub enum DeliverySuccess {
 pub enum DeliveryFailure {
     /// The rate limit for this notification type was exceeded.
     #[error("The rate limit was exceeded")]
-    RateLimit,
+    RateLimit(RateLimitExceeded),
     /// a timeout limit was reached trying to deliver the notif
     #[error("A timeout was reached")]
     Timeout,

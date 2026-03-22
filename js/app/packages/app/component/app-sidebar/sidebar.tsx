@@ -103,9 +103,9 @@ export const SIDEBAR_LINKS = [
     hotkey: 'c',
   },
   {
-    id: 'files',
-    label: 'Files',
-    href: LIST_VIEW_PATHS.files,
+    id: 'folders',
+    label: 'Folders',
+    href: LIST_VIEW_PATHS.folders,
     icon: AnimatedFolderIcon,
     hotkey: 'f',
   },

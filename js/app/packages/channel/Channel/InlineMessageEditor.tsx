@@ -3,10 +3,12 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { MessageEditor } from './create-message-editor';
 import { useMessage } from '../Message';
+import { cn } from '@ui/utils/classname';
 
 type MessageEditorContentProps = {
   channelId: string;
   messageEditor: MessageEditor;
+  class?: string;
 };
 
 export function MessageEditorContent(props: MessageEditorContentProps) {
@@ -31,7 +33,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
   });
 
   return (
-    <div ref={attachHotkeys}>
+    <div ref={attachHotkeys} class={cn('w-full min-w-0', props.class)}>
       <ChannelInput
         input={{
           mode: 'channel',

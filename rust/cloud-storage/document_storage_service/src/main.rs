@@ -210,16 +210,19 @@ async fn main() -> anyhow::Result<()> {
     );
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.notification_queue.as_ref().to_string(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue.clone()));
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&aws_config),
+        queue_url: config.vars.notification_queue.as_ref().to_string(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue.clone(),
+    });
     tracing::trace!("initialized notification ingress service");
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service =
-        NotificationServiceImpl::new(SqsNotificationIngress::new(ingress_queue));
+    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
+        queue: ingress_queue,
+    });
     let properties_service = Arc::new(PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),

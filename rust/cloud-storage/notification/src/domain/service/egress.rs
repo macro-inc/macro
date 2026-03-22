@@ -3,8 +3,6 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
-use std::time::Duration;
-
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
@@ -20,7 +18,7 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::{NotificationExtEmail, NotificationTypeName, RateLimitResult};
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    RateLimitPort, WebSocketSender,
+    RateLimitService, WebSocketSender,
 };
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -28,6 +26,7 @@ use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+use std::time::Duration;
 use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.
@@ -88,7 +87,7 @@ where
     W: WebSocketSender,
     M: NotificationSender,
     E: EmailSender,
-    R: RateLimitPort,
+    R: RateLimitService,
     S: BulkDigestEgressStateMachine,
     D: DigestBatcher,
 {
@@ -110,9 +109,7 @@ where
                 .deliver_conn_gateway(conn)
                 .await
                 .context(DeliveryFailure::Other)]),
-            NotificationChannel::Email(ref email) => {
-                Either::Left([self.deliver_email(email).await])
-            }
+            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
             NotificationChannel::Ios(apns) => Either::Right(
                 self.deliver_ios(&apns)
                     .await
@@ -200,36 +197,49 @@ where
     /// Deliver via email.
     async fn deliver_email(
         &self,
-        email: &EmailNotification<'static>,
+        email: EmailNotification<'static>,
     ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
-        let (config, key) = email.rate_limit();
+        let EmailNotification {
+            content,
+            to: recipient,
+            rate_limit_config,
+            rate_limit_key,
+        } = email;
 
-        match self.rate_limiter.check(key, config).await {
-            Ok(RateLimitResult::Exceeded(exceeded)) => {
-                return Err(report!(exceeded).context(DeliveryFailure::RateLimit));
+        let ticket = self
+            .rate_limiter
+            .check_rate_limit(rate_limit_key, rate_limit_config)
+            .await
+            .context(DeliveryFailure::Other)?;
+
+        match &*ticket {
+            RateLimitResult::Exceeded(exceeded) => {
+                return Err(report!(
+                    "Rate limit key: {} was exceeded. Current count is {} but max count is {}",
+                    exceeded.key,
+                    exceeded.current_count,
+                    exceeded.max_count
+                )
+                .context(DeliveryFailure::RateLimit(exceeded.clone())));
             }
-            Ok(RateLimitResult::Allowed { .. }) => {
-                // Rate limit allowed, continue
-            }
-            Err(e) => return Err(e.context(DeliveryFailure::Other)),
+            RateLimitResult::Allowed { .. } => {}
         }
 
-        let recipient = email.to();
         self.email
-            .send_email(recipient.clone(), &email.content)
+            .send_email(recipient.clone(), &content)
             .await
             .inspect_err(|e| {
                 tracing::error!(
                     error = ?e,
                     recipient = %recipient,
-                    subject = %email.content.subject,
+                    subject = %content.subject,
                     "Email delivery failed"
                 );
             })
             .context(DeliveryFailure::Other)?;
 
         self.rate_limiter
-            .increment(key, config)
+            .increment_ticket(ticket)
             .await
             .context(DeliveryFailure::Other)?;
 
@@ -245,7 +255,7 @@ where
     W: WebSocketSender,
     M: NotificationSender,
     E: EmailSender,
-    R: RateLimitPort,
+    R: RateLimitService,
     S: BulkDigestEgressStateMachine,
     D: DigestBatcher,
 {
@@ -288,17 +298,36 @@ where
             let all_ios_failed = delivery_results.iter().all(
                 |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Ios )),
             );
-
-            for result in delivery_results {
-                results.push(result.map_err(Report::from));
-            }
+            let rate_limited = delivery_results.iter().find_map(|e| {
+                match e.as_ref().map_err(Report::current_context) {
+                    Err(DeliveryFailure::RateLimit(rate_limit)) => Some(rate_limit),
+                    Ok(_)
+                    | Err(
+                        DeliveryFailure::Ios | DeliveryFailure::Other | DeliveryFailure::Timeout,
+                    ) => None,
+                }
+            });
 
             // Delete from queue if any deliveries succeeded
             // or all the failed notifs were ios
             if (any_succeeded || all_ios_failed)
                 && let Err(e) = self.queue.delete_message(&receipt_handle).await
             {
+                // push the failed delete to errors
                 results.push(Err(e))
+            } else if let Some(rate_limited) = rate_limited
+                && let Err(e) = self
+                    .queue
+                    // if we got rate limited, delay this message by the rate limit expiry time
+                    .delay_message(&receipt_handle, rate_limited.retry_after)
+                    .await
+            {
+                // push the failed delay to errors
+                results.push(Err(e))
+            }
+
+            for result in delivery_results {
+                results.push(result.map_err(Report::from));
             }
         }
 

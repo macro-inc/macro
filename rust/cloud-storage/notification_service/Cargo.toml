@@ -53,6 +53,7 @@ model_user = { path = "../model_user", features = ["axum"] }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 notification = { path = "../notification", features = ["axum"] }
+rate_limit = { path = "../rate_limit" }
 notification_db_client = { path = "../notification_db_client" }
 paste = { workspace = true }
 redis = { workspace = true }

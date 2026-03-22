@@ -37,8 +37,8 @@ import type {
   ProfilePictures,
   PutProfilePictureParams,
   PutUserNameParams,
-  ReferralCode,
   ResendFusionauthVerifyUserEmailRequest,
+  SendInviteBody,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -1314,7 +1314,7 @@ export const getUserPermissions = async (
  * @summary Handler for `GET /referral-code`.
  */
 export type getReferralCodeResponse200 = {
-  data: ReferralCode;
+  data: string;
   status: 200;
 };
 
@@ -1362,6 +1362,64 @@ export const getReferralCode = async (
     status: res.status,
     headers: res.headers,
   } as getReferralCodeResponse;
+};
+
+/**
+ * Sends a referral code via email to a user
+ * @summary Handler for `POST /referral/send`.
+ */
+export type sendReferralCodeResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type sendReferralCodeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendReferralCodeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendReferralCodeResponseSuccess = sendReferralCodeResponse204 & {
+  headers: Headers;
+};
+export type sendReferralCodeResponseError = (
+  | sendReferralCodeResponse401
+  | sendReferralCodeResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendReferralCodeResponse =
+  | sendReferralCodeResponseSuccess
+  | sendReferralCodeResponseError;
+
+export const getSendReferralCodeUrl = () => {
+  return `/referral/send`;
+};
+
+export const sendReferralCode = async (
+  sendInviteBody: SendInviteBody,
+  options?: RequestInit
+): Promise<sendReferralCodeResponse> => {
+  const res = await fetch(getSendReferralCodeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendInviteBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendReferralCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendReferralCodeResponse;
 };
 
 /**

@@ -16,12 +16,13 @@ config:
   authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-prod
   authentication-service:macro_api_token_expiry_seconds: 3600
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-prod
-  authentication-service:stripe_price_id: stripe-price-id-prod
   authentication-service:fusionauth_tenant_id: a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be
   authentication-service:github_client_id_key: github-client-id-prod
   authentication-service:github_client_secret_key: github-client-secret-prod
   authentication-service:github_idp_id_key: github-idp-id-prod 
-
   authentication-service:ga_measurement_id: G-52HPEL3FTV
   authentication-service:ga_api_secret: ga-api-secret
   authentication-service:meta_pixel_id: 639142540393286
+  authentication-service:stripe_price_id_haiku: stripe-price-id-haiku-prod
+  authentication-service:stripe_price_id_sonnet: stripe-price-id-sonnet-prod
+  authentication-service:stripe_price_id_opus: stripe-price-id-opus-prod

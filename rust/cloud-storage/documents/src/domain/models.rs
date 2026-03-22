@@ -115,6 +115,10 @@ pub struct PropertyInput {
     pub value: SetPropertyValue,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Request body for creating a task.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -126,6 +130,10 @@ pub struct CreateTaskRequest {
     pub project_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.
     pub property_values: Option<Vec<PropertyInput>>,
+    /// Whether to share the task with your team or not
+    /// Defaults to true
+    #[serde(default = "default_true")]
+    pub share_with_team: bool,
 }
 
 /// Response for creating a task.

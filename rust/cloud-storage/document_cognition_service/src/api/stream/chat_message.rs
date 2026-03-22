@@ -322,6 +322,7 @@ async fn create_new_chat(
 /// Creates a payload stream, publishes it via `from_async_stream`, and stores
 /// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
+#[tracing::instrument(skip(ctx, request, toolset, user_message_content))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: ai::types::ChatCompletionRequest,
@@ -481,7 +482,7 @@ fn stream_and_save_message(
                     if let Ok(json) = serde_json::to_value(&stream_error) {
                         yield json;
                     }
-                    return;
+                    break;
                 }
             }
         }
@@ -496,10 +497,7 @@ fn stream_and_save_message(
         if let Ok(json) = serde_json::to_value(&end_msg) {
             yield json;
         }
-
-        // Save conversation messages
         let new_messages = chat.get_new_conversation_messages();
-
         // Extract assistant response text before moving new_messages into store
         let assistant_text = new_messages
             .iter()

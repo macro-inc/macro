@@ -6,7 +6,7 @@ use crate::domain::models::{
     SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use std::collections::HashMap;
@@ -208,6 +208,20 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Update the project assignment for a thread. Pass `None` to remove from project.
+    /// Returns `false` if the thread was not found.
+    fn update_thread_project(
+        &self,
+        thread_id: Uuid,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the current project_id for a thread.
+    fn get_thread_project_id(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -272,6 +286,17 @@ pub trait EmailService: Send + Sync + 'static {
         label_id: Uuid,
         add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send;
+
+    /// Update the project assignment for a thread. Returns the old project_id.
+    ///
+    /// `thread_receipt` proves the caller has edit access to the thread.
+    /// `project_receipt` proves the caller has edit access to the target project.
+    /// Pass `None` to remove the thread from its current project.
+    fn update_thread_project(
+        &self,
+        thread_receipt: EntityAccessReceipt<EditAccessLevel>,
+        project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
+    ) -> impl Future<Output = Result<Option<String>, EmailErr>> + Send;
 }
 
 /// Port for modifying Gmail message labels via the provider API.

@@ -188,10 +188,10 @@ registerComponent(
 );
 
 registerComponent(
-  'files',
+  'folders',
   withAuth(() => {
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('files', {
+    const preset = getDefaultListViewPreset('folders', {
       userId: user.userId(),
       email: user.email(),
     });
@@ -236,6 +236,12 @@ registerComponent(
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
+registerComponent(
+  'welcome',
+  lazy(
+    () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
+  )
+);
 
 if (LOCAL_ONLY) {
   registerComponent(

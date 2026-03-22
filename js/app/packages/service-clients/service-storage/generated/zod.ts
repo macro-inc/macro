@@ -1563,6 +1563,12 @@ export const createTaskHandlerBody = zod
       )
       .nullish()
       .describe('Optional property values to set on the task.'),
+    shareWithTeam: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether to share the task with your team or not\nDefaults to true'
+      ),
     taskName: zod.string().describe('The name of the task.'),
   })
   .describe('Request body for creating a task.');
@@ -3694,6 +3700,7 @@ export const getItemsSoupResponse = zod.object({
               isRead: zod.boolean(),
               name: zod.string().nullish(),
               ownerId: zod.string(),
+              projectId: zod.string().nullish(),
               providerId: zod.string().nullish(),
               senderEmail: zod.string().nullish(),
               senderName: zod.string().nullish(),
@@ -4320,6 +4327,12 @@ export const postItemsSoupBody = zod
           })
           .optional()
           .describe('Notification-level filters that apply to an entity type.'),
+        project_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'A list of project ids to search within. Empty to ignore project filtering.'
+          ),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -5279,6 +5292,7 @@ export const postItemsSoupResponse = zod.object({
               isRead: zod.boolean(),
               name: zod.string().nullish(),
               ownerId: zod.string(),
+              projectId: zod.string().nullish(),
               providerId: zod.string().nullish(),
               senderEmail: zod.string().nullish(),
               senderName: zod.string().nullish(),

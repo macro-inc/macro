@@ -27,6 +27,8 @@ pub enum EmailLiteral {
     Recipient(Email),
     /// This value filters by email thread ID
     ThreadId(Uuid),
+    /// This value filters by project ID
+    ProjectId(String),
     /// This node value filters by email importance. false short-circuits to match nothing.
     Importance(bool),
     /// This node value filters by notification done state for emails.
@@ -44,6 +46,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            project_ids,
             importance,
             notification_filters,
             include_labels: _,
@@ -79,6 +82,10 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(|s| Uuid::parse_str(s))
             .try_expand(|r| r.map(EmailLiteral::ThreadId), Expr::or)?;
 
+        let project_id_nodes = project_ids
+            .into_iter()
+            .expand(EmailLiteral::ProjectId, Expr::or);
+
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
         let notification_done_node = notification_filters
             .done
@@ -93,6 +100,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc_nodes,
             recipient_nodes,
             thread_id_nodes,
+            project_id_nodes,
             importance_node,
             notification_done_node,
             notification_seen_node,

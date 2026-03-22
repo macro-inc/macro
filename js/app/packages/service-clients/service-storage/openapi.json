@@ -6061,6 +6061,10 @@
             },
             "description": "Optional property values to set on the task."
           },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether to share the task with your team or not\nDefaults to true"
+          },
           "taskName": {
             "type": "string",
             "description": "The name of the task."
@@ -6941,6 +6945,13 @@
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Empty to ignore project filtering."
           },
           "recipients": {
             "type": "array",
@@ -9970,6 +9981,9 @@
           },
           "ownerId": {
             "type": "string"
+          },
+          "projectId": {
+            "type": ["string", "null"]
           },
           "providerId": {
             "type": ["string", "null"]

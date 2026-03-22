@@ -2,7 +2,11 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    email::EmailStr,
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 
 use crate::domain::models::{ReferralCode, ReferralError};
 
@@ -94,5 +98,12 @@ pub trait ReferralService: Send + Sync + 'static {
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
+    ) -> impl Future<Output = Result<(), ReferralError>> + Send;
+
+    /// Send a referral to an external user via email
+    fn send_referral_invite(
+        &self,
+        sending_user: MacroUserIdStr<'_>,
+        recipient: EmailStr<'static>,
     ) -> impl Future<Output = Result<(), ReferralError>> + Send;
 }

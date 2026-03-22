@@ -3,6 +3,7 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
+import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import {
   getDeletedTree,
@@ -53,6 +54,15 @@ export async function getItemAccessLevel({
       });
       if (isOk(maybeChatMetadata)) {
         return maybeChatMetadata[1].userAccessLevel;
+      }
+      break;
+    case 'email':
+      const maybeThread = await emailClient.getThread({
+        thread_id: id,
+        limit: 1,
+      });
+      if (isOk(maybeThread)) {
+        return maybeThread[1].thread.access_level;
       }
       break;
     default:
@@ -223,6 +233,13 @@ export async function moveToFolder(args: {
       result = await cognitionApiServiceClient.editChatProject({
         chat_id: id,
         project_id: folderId,
+      });
+      break;
+    }
+    case 'email': {
+      result = await emailClient.updateThreadProject({
+        thread_id: id,
+        projectId: folderId,
       });
       break;
     }

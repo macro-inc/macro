@@ -393,6 +393,90 @@ fn test_has_both_literals_in_combined_ast() {
 }
 
 #[test]
+fn test_build_thread_email_filter_single_project_id() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.project_id = "));
+    assert!(result.has_bind_string("project-123"));
+    assert!(result.has_no_raw_containing("project-123"));
+}
+
+#[test]
+fn test_build_thread_email_filter_multiple_project_ids() {
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId("project-1".to_string())),
+        Expr::Literal(EmailLiteral::ProjectId("project-2".to_string())),
+    );
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("OR"));
+    assert!(result.has_bind_string("project-1"));
+    assert!(result.has_bind_string("project-2"));
+    assert!(result.has_no_raw_containing("project-1"));
+    assert!(result.has_no_raw_containing("project-2"));
+}
+
+#[test]
+fn test_build_message_email_filter_maps_project_id_to_true() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("project_id"));
+}
+
+#[test]
+fn test_has_thread_literals_true_when_project_id_present() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_has_message_literals_false_when_only_project_id() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    assert!(!has_message_literals(&expr));
+}
+
+#[test]
+fn test_combined_project_id_and_sender_splits_correctly() {
+    let email = Email::Complete(
+        EmailStr::parse_from_str("sender@example.com")
+            .unwrap()
+            .into_owned(),
+    );
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId("project-123".to_string())),
+        Expr::Literal(EmailLiteral::Sender(email)),
+    );
+
+    let thread_result = build_thread_email_filter(&expr);
+    let thread_debug = thread_result.to_debug_sql();
+    assert!(thread_debug.contains("t.project_id = "));
+    assert!(thread_result.has_bind_string("project-123"));
+    assert!(!thread_debug.contains("from_contact_id"));
+
+    let message_result = build_message_email_filter(&expr);
+    let message_debug = message_result.to_debug_sql();
+    assert!(message_debug.contains("from_contact_id"));
+    assert!(message_result.has_bind_string("sender@example.com"));
+    assert!(!message_result.has_bind_string("project-123"));
+}
+
+#[test]
+fn test_sql_injection_project_id_not_in_raw_sql() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("'; DROP TABLE--".to_string()));
+    let result = build_thread_email_filter(&expr);
+
+    assert!(result.has_bind_string("'; DROP TABLE--"));
+    assert!(result.has_no_raw_containing("DROP"));
+    assert!(result.has_no_raw_containing("';"));
+}
+
+#[test]
 fn test_sql_injection_email_not_in_raw_sql() {
     let malicious = Email::Complete(EmailStr::parse_from_str("evil@x.com").unwrap().into_owned());
     let expr = Expr::Literal(EmailLiteral::Sender(malicious));

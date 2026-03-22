@@ -110,14 +110,12 @@ export function Account() {
   };
 
   const logoutHandler = () => {
-    let redirectUrl = window.location.origin;
-    logout(redirectUrl);
+    logout();
   };
 
   const deleteAccountHandler = async () => {
     await authServiceClient.deleteUser();
-    let redirectUrl = window.location.origin;
-    logout(redirectUrl);
+    logout();
   };
 
   return (

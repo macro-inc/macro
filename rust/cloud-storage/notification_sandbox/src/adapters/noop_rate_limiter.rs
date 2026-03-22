@@ -1,11 +1,10 @@
-use notification::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult};
-use notification::domain::ports::RateLimitPort;
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult};
 use rootcause::Report;
 
-/// Rate limiter that always allows (no-op for sandbox).
-pub struct NoOpRateLimiter;
+/// Rate limit port that always allows (no-op for sandbox).
+pub struct NoOpRateLimitPort;
 
-impl RateLimitPort for NoOpRateLimiter {
+impl RateLimitPort for NoOpRateLimitPort {
     async fn check(
         &self,
         _key: &RateLimitKey,

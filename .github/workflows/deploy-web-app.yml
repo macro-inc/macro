@@ -58,7 +58,7 @@ jobs:
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
       - name: Setup

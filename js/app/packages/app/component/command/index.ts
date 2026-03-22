@@ -1,4 +1,4 @@
-export { CommandMenu } from './CommandMenu';
+export { CommandMenu, CommandMenuInner } from './CommandMenu';
 export { CommandState } from './state';
 export type { ICommandState } from './state';
 export type { CategoryFilter } from './types';
@@ -9,3 +9,4 @@ export {
   isUserItem,
   isCommandItem,
 } from './useCommandItems';
+export type { CommandMenuItem } from './useCommandItems';

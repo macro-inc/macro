@@ -14,7 +14,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::Email;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
-use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
+use roles_and_permissions::domain::{model::ProductTier, port::UserRolesAndPermissionsService};
 use serde::Serialize;
 use stripe_webhook::{EventObject, EventType};
 use teams::domain::team_repo::TeamService;
@@ -280,10 +280,26 @@ async fn handle_customer_subscription_event(
         tracing::error!(error=?e, "failed to process referral on subscription created");
     }
 
+    // Extract the price ID(s) from the subscription items
+    let price_id = subscription
+        .items
+        .data
+        .first() // SAFETY: we only need the first item because we know the user is not in a team
+        .map(|item| item.price.id.as_str().to_string())
+        .context("no price id attached to subscription")?;
+
+    let product_tier = match price_id.as_str() {
+        id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
+        id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
+        id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
+        _ => anyhow::bail!("unsupported price id: {price_id}"),
+    };
+
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
             email.clone(),
             subscription_status.try_into()?,
+            product_tier,
         )
         .await?;
 
@@ -402,9 +418,11 @@ fn track_stripe_subscription(
     data: SubscriptionTrackingData,
 ) {
     let Some(value_cents) = data.value_cents else {
+        tracing::debug!("skipping analytics tracking: missing value_cents");
         return;
     };
     let Some(currency) = data.currency else {
+        tracing::debug!("skipping analytics tracking: missing currency");
         return;
     };
 
@@ -428,13 +446,16 @@ fn track_stripe_subscription(
 
             match (data.status.as_str(), data.is_new) {
                 ("active" | "trialing", true) => {
-                    if let Some(ref ga_client_id) = data.ga_client_id
-                        && let Err(e) = client.track_ga(ga_client_id, "purchase", &event).await
-                    {
-                        tracing::warn!(error = ?e, "failed to track GA purchase event");
+                    if let Some(ref ga_client_id) = data.ga_client_id {
+                        match client.track_ga(ga_client_id, "purchase", &event).await {
+                            Ok(()) => tracing::info!("tracked GA purchase event"),
+                            Err(e) => tracing::warn!(error = ?e, "failed to track GA purchase event"),
+                        }
+                    } else {
+                        tracing::debug!("skipping GA purchase tracking: no ga_client_id");
                     }
 
-                    if let Err(e) = client
+                    match client
                         .track_meta(
                             "Purchase",
                             &user_data,
@@ -444,17 +465,21 @@ fn track_stripe_subscription(
                         )
                         .await
                     {
-                        tracing::warn!(error = ?e, "failed to track Meta purchase event");
+                        Ok(()) => tracing::info!("tracked Meta purchase event"),
+                        Err(e) => tracing::warn!(error = ?e, "failed to track Meta purchase event"),
                     }
                 }
                 ("canceled", _) => {
-                    if let Some(ref ga_client_id) = data.ga_client_id
-                        && let Err(e) = client.track_ga(ga_client_id, "refund", &event).await
-                    {
-                        tracing::warn!(error = ?e, "failed to track GA refund event");
+                    if let Some(ref ga_client_id) = data.ga_client_id {
+                        match client.track_ga(ga_client_id, "refund", &event).await {
+                            Ok(()) => tracing::info!("tracked GA refund event"),
+                            Err(e) => tracing::warn!(error = ?e, "failed to track GA refund event"),
+                        }
+                    } else {
+                        tracing::debug!("skipping GA refund tracking: no ga_client_id");
                     }
 
-                    if let Err(e) = client
+                    match client
                         .track_meta(
                             "CancelSubscription",
                             &user_data,
@@ -464,10 +489,13 @@ fn track_stripe_subscription(
                         )
                         .await
                     {
-                        tracing::warn!(error = ?e, "failed to track Meta cancel event");
+                        Ok(()) => tracing::info!("tracked Meta cancel event"),
+                        Err(e) => tracing::warn!(error = ?e, "failed to track Meta cancel event"),
                     }
                 }
-                _ => {}
+                _ => {
+                    tracing::debug!(status = %data.status, is_new = data.is_new, "skipping analytics tracking: unhandled status/is_new combination");
+                }
             }
         }
         .instrument(task_span),

@@ -18,7 +18,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    RateLimitPort, SnsEndpointManager, WebSocketSender,
+    SnsEndpointManager, WebSocketSender,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
@@ -82,7 +82,7 @@ impl NotificationExtEmail for TestNotification {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
-        RateLimitKey::from_str_hashed("test-key")
+        RateLimitKey::from_str_hashed(&"test-key")
     }
 }
 
@@ -154,7 +154,7 @@ impl BulkDigestStateMachine for MockStateMachine {
     async fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         _notif: UserNotificationRow<Arc<T>>,
-    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA<T>, Report>
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA, Report>
     {
         Err(report!("not implemented"))
     }
@@ -540,6 +540,14 @@ impl NotificationQueue for MockQueue {
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
@@ -556,6 +564,14 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
 
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         (**self).delete_message(_receipt_handle).await
+    }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        (**self).delay_message(receipt_handle, delay).await
     }
 }
 
@@ -1033,26 +1049,12 @@ impl EmailSender for MockEmailSender {
     }
 }
 
-/// Mock rate limiter that can be configured to allow or exceed.
-struct MockRateLimiter {
+/// Mock rate limit port that can be configured to allow or exceed.
+struct MockRateLimitPort {
     should_exceed: bool,
 }
 
-impl MockRateLimiter {
-    fn allowing() -> Self {
-        Self {
-            should_exceed: false,
-        }
-    }
-
-    fn exceeding() -> Self {
-        Self {
-            should_exceed: true,
-        }
-    }
-}
-
-impl RateLimitPort for MockRateLimiter {
+impl rate_limit::RateLimitPort for MockRateLimitPort {
     async fn check(
         &self,
         _key: &RateLimitKey,
@@ -1063,6 +1065,7 @@ impl RateLimitPort for MockRateLimiter {
                 key: "test_key".to_string(),
                 current_count: config.max_count.saturating_add(1),
                 max_count: config.max_count,
+                retry_after: config.window,
             }))
         } else {
             Ok(RateLimitResult::Allowed { current_count: 1 })
@@ -1075,6 +1078,22 @@ impl RateLimitPort for MockRateLimiter {
         _config: &RateLimitConfig,
     ) -> Result<u64, Report> {
         Ok(1)
+    }
+}
+
+fn allowing_rate_limiter() -> rate_limit::RateLimitServiceImpl<MockRateLimitPort> {
+    rate_limit::RateLimitServiceImpl {
+        repo: MockRateLimitPort {
+            should_exceed: false,
+        },
+    }
+}
+
+fn exceeding_rate_limiter() -> rate_limit::RateLimitServiceImpl<MockRateLimitPort> {
+    rate_limit::RateLimitServiceImpl {
+        repo: MockRateLimitPort {
+            should_exceed: true,
+        },
     }
 }
 
@@ -1139,7 +1158,7 @@ impl crate::domain::models::email_notification_digest::BulkDigestEgressStateMach
     }
 }
 
-fn create_egress_service<R: RateLimitPort>(
+fn create_egress_service<R: rate_limit::RateLimitService>(
     rate_limiter: R,
 ) -> NotificationEgressService<
     MockQueue,
@@ -1181,7 +1200,7 @@ fn create_mock_notif<T: Notification>(meta: T) -> ConnGatewayInnerNotif<T> {
 
 #[tokio::test]
 async fn test_egress_rate_limit_exceeded() {
-    let service = create_egress_service(MockRateLimiter::exceeding());
+    let service = create_egress_service(exceeding_rate_limiter());
 
     let recipient = test_user_id("user@example.com");
     let email = EmailCreateBundle::new(&TestNotification {
@@ -1209,7 +1228,7 @@ async fn test_egress_rate_limit_exceeded() {
 
 #[tokio::test]
 async fn test_egress_rate_limit_allowed() {
-    let service = create_egress_service(MockRateLimiter::allowing());
+    let service = create_egress_service(allowing_rate_limiter());
 
     let recipient = test_user_id("user@example.com");
     let email = EmailCreateBundle::new(&TestNotification {
@@ -1230,7 +1249,7 @@ async fn test_egress_rate_limit_allowed() {
 
 #[tokio::test]
 async fn test_egress_conn_gateway_not_rate_limited() {
-    let service = create_egress_service(MockRateLimiter::exceeding());
+    let service = create_egress_service(exceeding_rate_limiter());
 
     let recipient = test_user_id("user@example.com");
     let message = QueueMessage::new_test(
@@ -1594,7 +1613,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
         websocket: MockWebSocketSender,
         mobile: mobile_sender.clone(),
         email: MockEmailSender,
-        rate_limiter: MockRateLimiter::allowing(),
+        rate_limiter: allowing_rate_limiter(),
         state_machine: MockEgressStateMachine,
         digest_batcher: MockDigestBatcher,
     };
@@ -1730,7 +1749,7 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
         websocket: MockWebSocketSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
-        rate_limiter: MockRateLimiter::allowing(),
+        rate_limiter: allowing_rate_limiter(),
         state_machine: MockEgressStateMachine,
         digest_batcher: batcher,
     };
@@ -1789,7 +1808,7 @@ async fn it_fails_to_send_to_non_macro_users() {
         websocket: MockWebSocketSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
-        rate_limiter: MockRateLimiter::allowing(),
+        rate_limiter: allowing_rate_limiter(),
         state_machine: MockEgressStateMachine,
         digest_batcher: batcher,
     };
@@ -1808,7 +1827,7 @@ async fn it_fails_to_send_to_non_macro_users() {
 
 #[tokio::test]
 async fn test_poll_email_digests_noop_when_empty() {
-    let service = create_egress_service(MockRateLimiter::allowing());
+    let service = create_egress_service(allowing_rate_limiter());
 
     fn digest_to_notif(_batch: DigestBatch) -> Result<TestNotification, Report> {
         panic!("should not be called when empty")
@@ -1858,6 +1877,14 @@ impl NotificationQueue for EgressTestQueue {
             .lock()
             .unwrap()
             .push(receipt_handle.to_string());
+        Ok(())
+    }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
         Ok(())
     }
 }
@@ -1929,7 +1956,7 @@ async fn test_poll_and_deliver_times_out_slow_delivery() {
         websocket: HangingWebSocketSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
-        rate_limiter: MockRateLimiter::allowing(),
+        rate_limiter: allowing_rate_limiter(),
         state_machine: MockEgressStateMachine,
         digest_batcher: MockDigestBatcher,
     };
@@ -1997,7 +2024,7 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
         websocket: MockWebSocketSender,
         mobile: FailingMobileSender,
         email: MockEmailSender,
-        rate_limiter: MockRateLimiter::allowing(),
+        rate_limiter: allowing_rate_limiter(),
         state_machine: MockEgressStateMachine,
         digest_batcher: MockDigestBatcher,
     };
@@ -2082,7 +2109,9 @@ async fn test_sqs_notification_ingress_publishes_to_queue() {
     use crate::domain::service::SqsNotificationIngress;
 
     let queue = Arc::new(MockIngressQueue::new());
-    let ingress = SqsNotificationIngress::new(queue.clone());
+    let ingress = SqsNotificationIngress {
+        queue: queue.clone(),
+    };
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {

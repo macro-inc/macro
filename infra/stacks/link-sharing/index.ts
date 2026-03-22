@@ -133,6 +133,14 @@ const documentCognitionRoleArn: pulumi.Output<string> = documentCognitionStack
   .getOutput('documentCognitionServiceRoleArn')
   .apply((arn) => arn as string);
 
+const mcpServerStack = new pulumi.StackReference('mcp-server-stack', {
+  name: `macro-inc/mcp-server/${stack}`,
+});
+
+const mcpServerRoleArn: pulumi.Output<string> = mcpServerStack
+  .getOutput('mcpServerRoleArn')
+  .apply((arn) => arn as string);
+
 export const bucketPolicy = attachPolicyToBucket({
   cloudfrontDistributionArn: s3CloudfrontDistribution.distribution.arn,
   bucket: fileStorageBucket,
@@ -147,4 +155,5 @@ export const bucketPolicy = attachPolicyToBucket({
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
   documentCognitionRoleArn,
+  mcpServerRoleArn,
 });

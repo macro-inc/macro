@@ -50,6 +50,14 @@ impl ReferralService for MockReferralService {
     ) -> Result<(), ReferralError> {
         Ok(())
     }
+
+    async fn send_referral_invite(
+        &self,
+        _sending_user: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _recipient: macro_user_id::email::EmailStr<'static>,
+    ) -> Result<(), ReferralError> {
+        todo!()
+    }
 }
 
 fn test_user_context() -> UserContext {

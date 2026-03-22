@@ -142,6 +142,16 @@ impl EmailService for MockEmail {
     ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
+
+    async fn update_thread_project(
+        &self,
+        _thread_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _project_receipt: Option<
+            EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        >,
+    ) -> Result<Option<String>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 fn mock_router() -> Router {
@@ -255,6 +265,16 @@ impl EmailService for MockEmailLinkResult {
         _label_id: uuid::Uuid,
         _add: bool,
     ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn update_thread_project(
+        &self,
+        _thread_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _project_receipt: Option<
+            EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        >,
+    ) -> Result<Option<String>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 }

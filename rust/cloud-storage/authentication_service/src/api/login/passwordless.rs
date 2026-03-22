@@ -102,7 +102,7 @@ pub async fn handler(
                         email: (&lowercase_email).into(),
                         password: generate_random_password().into(),
                         username: None,
-                    }, true)
+                    }, true, &ip_context.client_ip)
                     .await
                     .map_err(|e| {
                         tracing::error!(error=?e, email=%lowercase_email, "unable to create user");

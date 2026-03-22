@@ -156,6 +156,9 @@ where
         let (name, description) = validate_tool_schema(&input_schema)?;
         let input_schema_json =
             serde_json::to_value(input_schema).map_err(ValidationError::JsonSerialization)?;
+        let serde_json::Value::Object(input_schema_json) = input_schema_json else {
+            return Err(ValidationError::ExpectedObject);
+        };
 
         let deserializer = Box::new(|data: &serde_json::Value| {
             serde_json::from_value::<T>(data.clone()).map(|tool| {

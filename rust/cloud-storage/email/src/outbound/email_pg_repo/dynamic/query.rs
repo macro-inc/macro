@@ -40,6 +40,7 @@ fn build_query(
             t.created_at,
             t.updated_at,
             t.viewed_at,
+            t.project_id,
             lmp.subject AS name,
             lmp.snippet,
             lmp.is_draft,
@@ -74,6 +75,7 @@ fn build_query(
                 t.link_id,
                 t.inbox_visible,
                 t.is_read,
+                t.project_id,
         "#,
     );
 
@@ -268,6 +270,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
             viewed_at: row.try_get("viewed_at")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
+            project_id: row.try_get("project_id")?,
         })
     })
     .fetch_all(pool)

@@ -80,10 +80,10 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
-  SoupViewCreateButton,
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
@@ -212,8 +212,8 @@ export const SoupView = (props: SoupViewProps) => {
                   </h1>
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
-                  <SoupViewCreateButton />
                   <SoupViewTabs />
+                  <SoupViewCreateButton />
                 </Show>
                 <Show when={narrowSearchExpanded()}>
                   <div class="flex-1 min-w-0">

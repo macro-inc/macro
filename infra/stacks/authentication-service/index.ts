@@ -115,14 +115,20 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GOOGLE_CLIENT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
-const STRIPE_PREMIUM_PRICE_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
-  .apply((secret) => secret.secretString);
+// -- STRIPE PRICE IDs
+const STRIPE_PRICE_ID_HAIKU = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('stripe_price_id_haiku') })
+  .apply((s) => s.secretString);
 
-const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
-  .apply((secret) => secret.arn);
+const STRIPE_PRICE_ID_SONNET = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('stripe_price_id_sonnet'),
+  })
+  .apply((s) => s.secretString);
+
+const STRIPE_PRICE_ID_OPUS = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('stripe_price_id_opus') })
+  .apply((s) => s.secretString);
 
 const MACRO_API_TOKEN_EXPIRY_SECONDS = config.require(
   `macro_api_token_expiry_seconds`
@@ -165,7 +171,6 @@ const secretKeyArns = [
   pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKeyArn}`,
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
-  pulumi.interpolate`${stripePriceIdArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -304,16 +309,20 @@ const service = new AuthenticationService('authentication-service', {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
     },
+    // Stripe price ids
     {
-      name: 'STRIPE_PRICE_ID',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_KEY}`,
+      name: 'STRIPE_PRICE_ID_HAIKU',
+      value: pulumi.interpolate`${STRIPE_PRICE_ID_HAIKU}`,
     },
     {
-      // NOTE: this is the fetched secret value of the STRIPE_PRICE_ID
-      // from above. Will unify these in a separate PR.
-      name: 'STRIPE_PREMIUM_PRICE_ID',
-      value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
+      name: 'STRIPE_PRICE_ID_SONNET',
+      value: pulumi.interpolate`${STRIPE_PRICE_ID_SONNET}`,
     },
+    {
+      name: 'STRIPE_PRICE_ID_OPUS',
+      value: pulumi.interpolate`${STRIPE_PRICE_ID_OPUS}`,
+    },
+    // Github
     {
       name: 'GITHUB_CLIENT_ID',
       value: pulumi.interpolate`${GITHUB_CLIENT_ID}`,

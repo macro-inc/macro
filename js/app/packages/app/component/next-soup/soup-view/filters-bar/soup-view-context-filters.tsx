@@ -60,7 +60,7 @@ export const SoupViewContextFilters = () => {
       <Match when={isComponentListView('channels')}>
         <ChannelsFilters />
       </Match>
-      <Match when={isComponentListView('files')}>
+      <Match when={isComponentListView('folders')}>
         <FilesFilters />
       </Match>
     </Switch>

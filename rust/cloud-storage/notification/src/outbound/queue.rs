@@ -77,6 +77,21 @@ impl NotificationQueue for SqsNotificationQueue {
             .await?;
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        self.client
+            .change_message_visibility()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .visibility_timeout(delay.as_secs() as i32)
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
 /// File-based queue for local development across multiple processes.
@@ -162,6 +177,15 @@ impl NotificationQueue for FileQueue {
         }
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        // No-op for file-based queue.
+        Ok(())
+    }
 }
 
 /// SQS-backed implementation of the notification ingress queue port.
@@ -170,15 +194,10 @@ impl NotificationQueue for FileQueue {
 /// type-erased notification requests, and by the ingress worker to consume them.
 #[derive(Clone)]
 pub struct SqsIngressQueue {
-    client: SqsClient,
-    queue_url: String,
-}
-
-impl SqsIngressQueue {
-    /// Create a new SQS ingress queue adapter.
-    pub fn new(client: SqsClient, queue_url: String) -> Self {
-        Self { client, queue_url }
-    }
+    /// the sqs client
+    pub client: SqsClient,
+    /// the url of the queue
+    pub queue_url: String,
 }
 
 impl NotificationIngressQueue for SqsIngressQueue {

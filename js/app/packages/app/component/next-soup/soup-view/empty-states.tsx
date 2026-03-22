@@ -80,9 +80,6 @@ export function EmptyState(props: {
       <Match when={props.viewId === 'people'}>
         <EmptyStateInner message={'No messages to show.'} />
       </Match>
-      <Match when={props.viewId === 'files'}>
-        <EmptyStateInner message={'No files to show.'} showDropZone />
-      </Match>
       <Match when={props.viewId === 'folders'}>
         <EmptyStateInner message={'No folders to show.'} showDropZone />
       </Match>

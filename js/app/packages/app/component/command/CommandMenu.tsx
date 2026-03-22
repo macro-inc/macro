@@ -92,8 +92,10 @@ export function CommandMenu() {
   );
 }
 
-function CommandMenuInner(props: {
+export function CommandMenuInner(props: {
   commandMenuRef: () => HTMLDivElement | undefined;
+  /** Override items source with custom data (e.g. sandbox entities for tutorial) */
+  items?: () => CommandMenuItem[];
 }) {
   const analytics = useAnalytics();
 
@@ -103,7 +105,10 @@ function CommandMenuInner(props: {
 
   const query = debouncedDependent(CommandState.query, 60);
 
-  const filteredItems = useCommandItems(query, CommandState.categoryFilter);
+  const defaultFilteredItems = props.items
+    ? undefined
+    : useCommandItems(query, CommandState.categoryFilter);
+  const filteredItems = props.items ?? defaultFilteredItems!;
 
   createEffect(() => {
     const items = filteredItems();
