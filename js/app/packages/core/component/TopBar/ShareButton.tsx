@@ -173,6 +173,7 @@ interface ShareModalProps {
 
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
+  const analytics = useAnalytics();
   const isBlockContext = isInBlock();
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -453,6 +454,7 @@ export function ShareModal(props: ShareModalProps) {
         });
         if (!isErr(result)) {
           refetch();
+
           if (accessLevel === null) {
             toast.success(
               'Made chat private',
@@ -463,6 +465,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this chat`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'chat',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change chat access', 'Please try again');
@@ -488,6 +496,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this document`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'document',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change document access', 'Please try again');
@@ -513,6 +527,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this folder`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'project',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change folder access', 'Please try again');

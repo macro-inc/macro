@@ -24,8 +24,6 @@ import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
-
-
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
@@ -194,7 +192,6 @@ export function ChatInput(props: ChatInputComponentProps) {
           <AttachmentList
             attached={attachments.attached}
             removeAttachment={(id) => {
-              track(TrackingEvents.CHAT.ATTACHMENT.REMOVE);
               attachments.removeAttachment(id);
             }}
             uploading={() =>
