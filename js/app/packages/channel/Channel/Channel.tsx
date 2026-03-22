@@ -66,6 +66,7 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
+import { resetKeyboardModality } from './util';
 
 type ChannelProps = {
   channelId: string;
@@ -227,10 +228,11 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    const listElement = messageListElement;
-    if (listElement && listElement.dataset.channelNav !== 'keyboard') {
-      listElement.dataset.channelNav = 'keyboard';
+    if (!messageListElement) {
+      console.warn('[channel]: tried to go to message, but list ref undefined');
+      return;
     }
+    resetKeyboardModality(messageListElement);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
