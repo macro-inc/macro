@@ -42,7 +42,7 @@ export function isNewMessage(
   );
 }
 
-function resetKeyboardModality(listElement: HTMLElement) {
+export function resetKeyboardModality(listElement: HTMLElement) {
   if (listElement && listElement.dataset.channelNav !== 'keyboard') {
     listElement.dataset.channelNav = 'keyboard';
   }
