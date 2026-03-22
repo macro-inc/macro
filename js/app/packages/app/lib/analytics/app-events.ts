@@ -23,7 +23,18 @@ export type AppEvents = {
   comment_create: { blockType: string };
   comment_update: { blockType: string };
   comment_delete: { blockType: string };
-  upload_file: Record<string, unknown>;
+  upload_file: {
+    fileType?: string;
+    fileName?: string;
+    fileSize?: number;
+    destination: 'dss' | 'static';
+    folder?: boolean;
+  };
+  upload_error: {
+    type: string;
+    error: string;
+    destination?: 'dss' | 'static';
+  };
 
   command_menu_open: { from: string };
   command_menu_use: { itemType: string };

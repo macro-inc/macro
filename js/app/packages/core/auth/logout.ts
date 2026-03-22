@@ -1,12 +1,9 @@
-import { withAnalytics } from '@coparse/analytics';
 import { authServiceClient } from '@service-auth/client';
 import { authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { createCallback } from '@solid-primitives/rootless';
 import { useAnalytics } from '@app/component/analytics-context';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export function useLogout() {
   const analytics = useAnalytics();
@@ -30,9 +27,9 @@ export function useLogout() {
     });
 
     await authServiceClient.logout();
+    analytics.track('sign_out');
     analytics.reset();
 
-    track(TrackingEvents.AUTH.LOGOUT);
     window.location.href = SERVER_HOSTS['auth-logout'];
   });
 }

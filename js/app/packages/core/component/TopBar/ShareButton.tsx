@@ -737,6 +737,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
     navigator.clipboard.writeText(defaultUrl());
+    analytics.track('copy_share_link', { blockType });
     toast.success(
       'Link copied to clipboard.',
       'Sending this link in a Macro message will automatically update permissions to include recipients.'

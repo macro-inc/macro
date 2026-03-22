@@ -1,5 +1,5 @@
 import { useSoup } from '@app/component/next-soup/soup-context';
-import { withAnalytics } from '@coparse/analytics';
+import { useAnalytics } from '@app/component/analytics-context';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -23,9 +23,8 @@ import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
-const { track, TrackingEvents } = withAnalytics();
-
 function SoupChatInputInner() {
+  const analytics = useAnalytics();
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
@@ -35,7 +34,7 @@ function SoupChatInputInner() {
 
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      track(TrackingEvents.CHAT.MENTION.SELECT);
+      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },

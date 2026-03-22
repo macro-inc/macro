@@ -1,4 +1,4 @@
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
@@ -24,7 +24,7 @@ import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
-const { track, TrackingEvents } = withAnalytics();
+
 
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
@@ -64,7 +64,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     uploaded
       .filter((upload) => upload.type === 'ok')
       .forEach((upload) => {
-        track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+        analytics.track('ai_attachment_add');
         attachments.addAttachment(upload.attachment);
       });
   });
@@ -211,7 +211,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           containerRef={containerRef}
           open={showAttachMenu()}
           onAttach={(attachment) => {
-            track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+            analytics.track('ai_attachment_add');
             attachments.addAttachment(attachment);
           }}
         />

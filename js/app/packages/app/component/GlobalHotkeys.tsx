@@ -185,6 +185,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         applyTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,
@@ -207,6 +208,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         setLightModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,
@@ -229,6 +231,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         setDarkModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,

@@ -8,10 +8,8 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import { onMount } from 'solid-js';
-
-const { track, TrackingEvents } = withAnalytics();
 
 function EditableChatMessageInner(props: {
   chatId: string;
@@ -26,7 +24,7 @@ function EditableChatMessageInner(props: {
 
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      track(TrackingEvents.CHAT.MENTION.SELECT);
+      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },
