@@ -31,11 +31,34 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import Upload from '@icon/regular/upload.svg';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+
+function useHotkeyAnalytics(): void {
+  const analytics = useAnalytics();
+
+  useSubscribeToKeypress((context) => {
+    // Only track when a command was actually executed
+    if (!context.commandCaptured) return;
+
+    const command = context.commandCaptured;
+    const description =
+      typeof command.description === 'function'
+        ? command.description()
+        : command.description;
+
+    analytics.track('hotkey_use', {
+      action: description,
+      token: command.hotkeyToken,
+    });
+  });
+}
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
 
   const analytics = useAnalytics();
+
+  useHotkeyAnalytics();
 
   const { toggleSettings } = useSettingsState();
 
