@@ -63,11 +63,12 @@ pub type RateLimitResult = Result<RateLimitOk, RateLimitExceeded>;
 #[derive(Debug)]
 pub struct RateLimitOk {
     /// the current count of the rate limit key
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub(crate) current_count: u64,
     /// the key that was used to create this value
     pub(crate) key: RateLimitKey,
     /// the config that was used to create this value
+    #[expect(dead_code)]
     pub(crate) config: RateLimitConfig,
 }
 
