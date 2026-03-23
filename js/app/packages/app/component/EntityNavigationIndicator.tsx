@@ -7,22 +7,27 @@ import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import { Show } from 'solid-js';
 
+export const shouldShowEntityNavigation = (
+  soup: ReturnType<typeof useSoup>,
+  panel: ReturnType<typeof useSplitPanelOrThrow>
+) => {
+  const selectedEntity = () => soup.focus.item();
+  return (
+    panel.handle.referredFrom() === 'list-view' &&
+    soup.data()?.length &&
+    selectedEntity() &&
+    panel.handle.content().type !== 'component' &&
+    panel.handle.content().type !== 'project'
+  );
+};
+
 const EntityNavigationIndicator = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
-  const selectedEntity = () => soup.focus.item();
   const selectedEntityIndex = () => soup.focus.index();
 
   return (
-    <Show
-      when={
-        panel.handle.referredFrom() === 'list-view' &&
-        soup.data()?.length &&
-        selectedEntity() &&
-        panel.handle.content().type !== 'component' &&
-        panel.handle.content().type !== 'project'
-      }
-    >
+    <Show when={shouldShowEntityNavigation(soup, panel)}>
       <div class="flex gap-1 items-center font-mono text-xs text-ink/50">
         <div>
           [<span class="text-ink">{selectedEntityIndex() + 1}</span>/

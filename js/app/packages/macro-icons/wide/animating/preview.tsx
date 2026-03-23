@@ -1,4 +1,7 @@
-export const AnimatedPreviewIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedPreviewIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   // Eye icon with pupil animation - pupil slides left and right
 
   return (
@@ -10,9 +13,9 @@ export const AnimatedPreviewIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-preview-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-preview-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated preview icon</title>
+      {/*<title>Animated preview icon</title>*/}
       <style>{`
         @keyframes pupil-look {
           0% { transform: translateX(0); animation-timing-function: ease-out; }

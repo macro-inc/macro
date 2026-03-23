@@ -43,6 +43,9 @@ pub struct ThreadPreviewCursorDbRow {
     pub viewed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub project_id: Option<String>,
+    /// The macro user ID of the thread owner, resolved from email_links.
+    pub owner_id: String,
 }
 
 #[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
@@ -93,7 +96,7 @@ pub struct LabelDbRow {
 }
 
 impl ThreadPreviewCursorDbRow {
-    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> EmailThreadPreview {
+    pub fn into_preview(self) -> EmailThreadPreview {
         let ThreadPreviewCursorDbRow {
             id,
             provider_id,
@@ -110,12 +113,16 @@ impl ThreadPreviewCursorDbRow {
             viewed_at,
             created_at,
             updated_at,
+            project_id,
+            owner_id,
         } = self;
 
         EmailThreadPreview {
             id,
             provider_id,
-            owner_id: owner_id.into_owned(),
+            owner_id: MacroUserIdStr::parse_from_str(&owner_id)
+                .expect("invalid macro_id in email_links")
+                .into_owned(),
             inbox_visible,
             is_read,
             is_draft,
@@ -129,6 +136,7 @@ impl ThreadPreviewCursorDbRow {
             created_at,
             updated_at,
             viewed_at,
+            project_id,
         }
     }
 }
@@ -164,6 +172,7 @@ pub struct DbThreadRow {
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
+    pub project_id: Option<String>,
 }
 
 impl From<DbThreadRow> for ThreadRow {
@@ -179,6 +188,7 @@ impl From<DbThreadRow> for ThreadRow {
             latest_non_spam_message_ts: row.latest_non_spam_message_ts,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            project_id: row.project_id,
         }
     }
 }

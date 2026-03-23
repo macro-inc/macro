@@ -23,7 +23,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/drafts", drafts::router(state.clone()))
         .nest("/messages", messages::router(state.clone()))
         .nest("/links", links::router())
-        .nest("/contacts", contacts::router())
+        .nest("/contacts", contacts::router(state.clone()))
         .nest("/backfill", backfill::router(state.clone()))
         .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))
@@ -35,7 +35,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/init",
             post(init::handler).layer(axum::middleware::from_fn_with_state(
                 state,
-                crate::api::middleware::gmail_token::attach_gmail_token,
+                crate::api::middleware::gmail_token::attach_gmail_token_no_cache,
             )),
         )
 }

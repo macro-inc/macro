@@ -56,6 +56,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
         isInteractable,
       });
 
+  if (config.skipPreviewFetch) {
+    lexicalWrapper.skipPreviewFetch = true;
+  }
+
   const { editor, plugins, cleanup: cleanupLexical } = lexicalWrapper;
 
   const [markdownState, setMarkdownState] = createSignal<string>('');

@@ -207,7 +207,8 @@ export const deleteChatQueueName: pulumi.Output<string> =
     .getOutput('deleteChatQueueName')
     .apply((name) => name as string);
 
-const { notificationQueueName, notificationQueueArn } = getMacroNotify();
+const { notificationIngressQueueName, notificationIngressQueueArn } =
+  getMacroNotify();
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
@@ -238,7 +239,7 @@ const documentCognitionService = new DocumentCognitionService(
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
       searchEventQueueArn,
-      notificationQueueArn,
+      notificationIngressQueueArn,
     ],
     connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
@@ -305,7 +306,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'NOTIFICATION_QUEUE',
-        value: pulumi.interpolate`${notificationQueueName}`,
+        value: pulumi.interpolate`${notificationIngressQueueName}`,
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',

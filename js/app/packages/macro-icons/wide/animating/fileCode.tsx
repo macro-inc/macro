@@ -1,4 +1,7 @@
-export const AnimatedFileCodeIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedFileCodeIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -8,9 +11,9 @@ export const AnimatedFileCodeIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-file-code-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-file-code-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated code file icon</title>
+      {/*<title>Animated code file icon</title>*/}
       <style>{`
         @keyframes underline-move {
           0% {

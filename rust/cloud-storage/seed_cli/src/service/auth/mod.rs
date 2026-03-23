@@ -29,7 +29,7 @@ impl SeedAuth {
     ) -> anyhow::Result<String> {
         let result = self
             .inner
-            .create_user(user, true /*skip_verification*/)
+            .create_user(user, true /*skip_verification*/, "127.0.0.1")
             .await?;
 
         Ok(result)

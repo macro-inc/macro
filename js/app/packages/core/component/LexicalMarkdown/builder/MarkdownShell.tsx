@@ -235,6 +235,11 @@ export const MarkdownShell: Component<
               useSnapshotForDocuments={
                 builderConfig.mentions?.useSnapshotForDocuments
               }
+              entities={builderConfig.mentions?.entities}
+              users={builderConfig.mentions?.users}
+              disableMentionTracking={
+                builderConfig.mentions?.disableMentionTracking
+              }
             />
           )}
         </Show>

@@ -61,6 +61,16 @@ impl TaskPropertiesPort for NoOpTaskProperties {
     async fn update_task_status(&self, _task_id: &str, _status: &str) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn set_entity_property(
+        &self,
+        _user_id: &str,
+        _entity_id: &str,
+        _property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// The prompt to use in the example.

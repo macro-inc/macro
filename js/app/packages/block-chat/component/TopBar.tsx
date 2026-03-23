@@ -9,6 +9,7 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import {
   ReferencesButton,
@@ -18,6 +19,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import Quotes from '@icon/regular/quotes.svg';
@@ -25,6 +27,7 @@ import IconShared from '@icon/regular/share.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 
 export function TopBar() {
+  const isAuth = useIsAuthenticated();
   const blockId = useBlockId();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
@@ -52,6 +55,7 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}

@@ -6,8 +6,10 @@ use ::notification::outbound::email::EmailAdapter;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
+use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
+use email_formatting::EmailDigestNotification;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
@@ -159,13 +161,17 @@ pub async fn main() -> anyhow::Result<()> {
     );
 
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
-    let email_adapter = EmailAdapter::new(ses_client, config.sender_base_address.clone());
+    let email_adapter = EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone());
 
     let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for egress state machine")?;
-    let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+    let rate_limit_adapter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
 
     let egress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverB {
@@ -193,11 +199,69 @@ pub async fn main() -> anyhow::Result<()> {
         digest_batcher: egress_digest_batcher,
     };
 
-    let worker = NotificationWorker::new(egress_service);
+    let worker = Arc::new(NotificationWorker::new(egress_service));
 
+    let worker_clone = worker.clone();
     tokio::spawn(async move {
         tracing::info!("starting notification egress worker");
-        worker.run().await
+        worker_clone.run_notifications().await
+    });
+    tokio::spawn(async move {
+        tracing::info!("starting digest worker");
+        worker
+            .run_digests(EmailDigestNotification::new_from_digest_batch)
+            .await
+    });
+
+    // Set up ingress worker for processing notification requests from the ingress queue
+    let ingress_redis_conn = redis::Client::open(vars.redis_uri.as_ref())
+        .expect("failed to create redis client for ingress")
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get redis connection for ingress state machine")?;
+
+    let ingress_state_machine =
+        ::notification::domain::models::email_notification_digest::StateMachineDriverA::new_with_defaults(
+            ::notification::outbound::user_existence_checker::DbUserExistenceChecker::new(
+                db.clone(),
+            ),
+            ::notification::outbound::push_notification_checker::PushNotificationCheckerImpl::new(
+                ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+            ),
+            ::notification::outbound::last_online_checker::LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        ingress_redis_conn.clone(),
+                    ),
+                ),
+            ),
+            ::notification::outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
+            model_notifications::digest_state::digest_email_block_list(),
+        );
+
+    let ingress_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+    let ingress_delivery_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        vars.notification_queue.as_ref().to_string(),
+    );
+    let ingress_service = ::notification::domain::service::NotificationIngressService::new(
+        ingress_repository,
+        ingress_delivery_queue,
+        ingress_state_machine,
+    );
+
+    let ingress_queue = ::notification::outbound::queue::SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&aws_config),
+        queue_url: vars.notification_ingress_queue.as_ref().to_string(),
+    };
+    let ingress_worker =
+        ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);
+
+    tokio::spawn(async move {
+        tracing::info!("starting notification ingress worker");
+        ingress_worker.run().await
     });
 
     api::setup_and_serve(

@@ -1,4 +1,7 @@
-export const AnimatedChannelIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedChannelIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -8,9 +11,9 @@ export const AnimatedChannelIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated channel icon</title>
+      {/*<title>Animated channel icon</title>*/}
       <style>{`
         @keyframes head-bounce {
           0% {

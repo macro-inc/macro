@@ -1,4 +1,4 @@
-//! Handler for `GET /documents/:document_id/location_v3`.
+//! Handler for `GET /documents/{document_id}/location_v3`.
 
 use axum::{
     Extension, Json,
@@ -15,7 +15,7 @@ use super::{DocumentRouterState, Params};
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
 
-/// Handler for `GET /documents/:document_id/location_v3`.
+/// Handler for `GET /documents/{document_id}/location_v3`.
 ///
 /// Returns a presigned URL or sync service content for accessing the document.
 #[utoipa::path(

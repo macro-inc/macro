@@ -1,6 +1,10 @@
+import { cn } from '@ui/utils/classname';
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedStarIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedStarIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -11,9 +15,13 @@ export const AnimatedStarIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-star-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={cn(
+        'animated-star-icon',
+        props.triggerAnimation && 'animating',
+        props.class
+      )}
     >
-      <title>Animated star icon</title>
+      {/*<title>Animated star icon</title>*/}
       <style>{`
         .animated-star-icon {
           .star-inflate, .star-eye, #${maskId} .inflated-rhombus {

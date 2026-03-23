@@ -12,15 +12,15 @@ use crate::api::context::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/file/metadata/:file_id",
+            "/file/metadata/{file_id}",
             get(metadata::handle_get_metadata),
         )
         .route(
-            "/file/:file_id/presigned-url",
+            "/file/{file_id}/presigned-url",
             get(get_file::handle_get_presigned_url),
         )
         .route("/file", put(put_presigned_url::put_presigned_url))
-        .route("/file/:file_id", delete(delete_file::handle_delete_file))
+        .route("/file/{file_id}", delete(delete_file::handle_delete_file))
         .route(
             "/file/bulk-delete",
             post(bulk_delete_file::handle_bulk_delete_file),

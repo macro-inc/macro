@@ -74,8 +74,6 @@ interface SoupViewContextValues {
   isLocalSearchSettling: Accessor<boolean>;
   queryFilters: Accessor<SoupBody>;
   setQueryFilters: Setter<SoupBody>;
-  statusFilter: Accessor<string[]>;
-  setStatusFilter: Setter<string[]>;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
@@ -136,14 +134,12 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setInternalQueryFilters] =
     createSignal<SoupBody>({ ...(props.queryFilters ?? {}) });
 
-  const [statusFilter, setStatusFilter] = createSignal<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
   const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
     if (!soup.filters.isActive('task')) {
-      setStatusFilter([]);
       setAssigneeFilter([]);
     }
   });
@@ -279,7 +275,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     const next = [];
 
-    const currentStatusFilter = statusFilter();
     const currentAssigneeFilter = assigneeFilter();
 
     for (const entity of transformed) {
@@ -288,14 +283,10 @@ export const SoupViewContextProvider: FlowComponent<
       }
 
       // Apply task sub-filters
-      if (
-        (currentStatusFilter.length > 0 || currentAssigneeFilter.length > 0) &&
-        isTaskEntity(entity)
-      ) {
+      if (currentAssigneeFilter.length > 0 && isTaskEntity(entity)) {
         const taskEntity = entity as unknown as TaskEntityWithProperties;
         if (
           !matchesTaskSubFilters(taskEntity, {
-            statusFilter: currentStatusFilter,
             assigneeFilter: currentAssigneeFilter,
           })
         ) {
@@ -377,8 +368,6 @@ export const SoupViewContextProvider: FlowComponent<
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,
     setQueryFilters,
-    statusFilter,
-    setStatusFilter,
     assigneeFilter,
     setAssigneeFilter,
     activeTab,

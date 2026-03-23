@@ -25,15 +25,15 @@ impl NotificationExtIos for SandboxNotification {
         NotifCollapseKey::new("sandbox")
     }
 
-    fn into_apns<'a>(
-        self,
+    fn as_apns<'a>(
+        &self,
         _sender_id: Option<MacroUserIdStr<'a>>,
         _entity: &model_entity::Entity<'_>,
         _notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         Some(APNSPushNotification {
             aps: Default::default(),
-            push_notification_data: self,
+            push_notification_data: self.clone(),
         })
     }
 }
@@ -48,7 +48,7 @@ impl NotificationExtEmail for SandboxNotification {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
-        RateLimitKey::from_str_hashed("sandbox")
+        RateLimitKey::from_str_hashed(&"sandbox")
     }
 }
 

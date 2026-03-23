@@ -13,13 +13,13 @@ use model::comms::ParticipantRole;
 use rand::Rng;
 use sqlx::{Pool, Postgres};
 
-use crate::api::context::ApiContext;
+use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 use authentication_service::service::user::create_user::create_user;
 use fusionauth::error::FusionAuthClientError;
 use model::authentication::webhooks::FusionAuthUserWebhook;
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type))]
+#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     _internal_access: ValidInternalKey,
@@ -55,6 +55,7 @@ pub async fn handler(
     Ok(StatusCode::OK.into_response())
 }
 
+#[tracing::instrument(skip(ctx, req), err)]
 async fn verify_user_email_webhook(
     ctx: &ApiContext,
     req: FusionAuthUserWebhook,
@@ -91,11 +92,24 @@ async fn create_user_webhook_complete(
     }
 }
 
-#[tracing::instrument(skip(ctx), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type))]
+#[tracing::instrument(skip(ctx, req), err)]
 async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> anyhow::Result<()> {
+    let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
+
+    // rate limit check for user creation
+    let rate_limit = ctx
+        .macro_cache_client
+        .get_create_user_hourly_rate_limit(&ip_address)
+        .await?;
+
+    if let Some(count) = rate_limit
+        && count >= RATE_LIMIT_CONFIG.create_user_hourly.0
+    {
+        anyhow::bail!("rate limit exceeded")
+    }
 
     // check if user exists
     if let Ok((user_id, stripe_customer_id)) =
@@ -186,6 +200,13 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     }
 
     tracing::trace!(email, fusionauth_user_id, elapsed=?start_time.elapsed(), "created user");
+
+    // Allow to fail silently
+    let _ = ctx
+        .macro_cache_client
+        .increment_create_user_hourly_rate_limit(&ip_address)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
 
     Ok(())
 }

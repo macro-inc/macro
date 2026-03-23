@@ -1,6 +1,7 @@
 pub(crate) mod attachments;
 pub(crate) mod auth;
 pub(crate) mod contacts;
+pub(crate) mod filters;
 pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
@@ -23,6 +24,7 @@ use models_email::email::service::message;
 use models_email::email::service::thread::ThreadList as ServiceThreadList;
 use models_email::gmail::contacts::PersonResource;
 pub use models_email::gmail::error::GmailError;
+pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
@@ -61,7 +63,7 @@ impl GmailClient {
     }
 
     /// Lists the num_threads most recent threads for the user
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn list_threads(
         &self,
         access_token: &str,
@@ -72,7 +74,7 @@ impl GmailClient {
     }
 
     // Returns a list containing the message ids belonging to the thread.
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_message_ids_for_thread(
         &self,
         access_token: &str,
@@ -83,7 +85,7 @@ impl GmailClient {
 
     /// Fetches the threads and messages for the given thread_ids.
     /// Returns raw Gmail ThreadResource objects - callers should map to service layer structs.
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_threads(
         &self,
         access_token: &str,
@@ -94,7 +96,7 @@ impl GmailClient {
 
     /// Gets the changes to a user's inbox that have occurred since start_history_id.
     /// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_history(
         &self,
         access_token: &str,
@@ -104,20 +106,20 @@ impl GmailClient {
     }
 
     /// Returns the current history id for the user's inbox
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_current_history_id(&self, access_token: &str) -> anyhow::Result<String> {
         history::get_current_history_id(self, access_token).await
     }
 
     /// Fetches Google's public JWKS keys used for verifying OAuth 2.0 tokens
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_google_public_keys(&self) -> anyhow::Result<GooglePublicKeys> {
         fetch_google_public_keys(self).await
     }
 
     /// Verifies a Google JWT token against the provided public keys
     /// Validates the token's signature, issuer, audience, and expiration time
-    #[tracing::instrument(skip(self, token, public_keys))]
+    #[tracing::instrument(skip(self, token, public_keys), err)]
     pub fn verify_google_token(
         &self,
         token: &str,
@@ -128,7 +130,7 @@ impl GmailClient {
 
     /// Registers a push notification watch on the user's inbox
     /// This will cause notifications to be sent to the subscription_topic
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn register_watch(
         &self,
         access_token: &str,
@@ -137,7 +139,7 @@ impl GmailClient {
     }
 
     /// Stops push notifications by revoking the notification watch
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn stop_watch(&self, access_token: &str) -> anyhow::Result<()> {
         watch::stop_watch(self, access_token).await
     }
@@ -146,7 +148,7 @@ impl GmailClient {
     #[tracing::instrument(
         skip(self, access_token),
         fields(provider_message_id = %provider_message_id),
-        level = "debug"
+        err
     )]
     pub async fn modify_message_labels(
         &self,
@@ -169,8 +171,7 @@ impl GmailClient {
     /// Returns a tuple of (successful_message_ids, failed_message_ids)
     #[tracing::instrument(
         skip(self, gmail_access_token),
-        fields(message_count = %db_provider_id_tuples.len()),
-        level = "debug"
+        fields(message_count = %db_provider_id_tuples.len())
     )]
     pub async fn batch_modify_labels(
         &self,
@@ -191,7 +192,7 @@ impl GmailClient {
 
     /// Fetches a specific message from Gmail by its provider ID.
     /// Returns raw Gmail MessageResource - callers should map to service layer structs.
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_message(
         &self,
         access_token: &str,
@@ -201,7 +202,7 @@ impl GmailClient {
     }
 
     /// Fetches a specific message's thread ID from Gmail by its provider ID
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_message_thread_id(
         &self,
         access_token: &str,
@@ -210,7 +211,7 @@ impl GmailClient {
         get_message_thread_id(self, access_token, message_provider_id).await
     }
 
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_message_label_ids(
         &self,
         access_token: &str,
@@ -220,7 +221,7 @@ impl GmailClient {
     }
 
     /// Sends a new email message
-    #[tracing::instrument(skip(self, access_token, message))]
+    #[tracing::instrument(skip(self, access_token, message), err)]
     pub async fn send_message(
         &self,
         access_token: &str,
@@ -240,13 +241,13 @@ impl GmailClient {
         .await
     }
 
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_profile_threads_total(&self, access_token: &str) -> anyhow::Result<i32> {
         profile::get_profile_threads_total(self, access_token).await
     }
 
     /// Fetches an attachment from Gmail by its provider ID
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_attachment_data(
         &self,
         access_token: &str,
@@ -257,7 +258,7 @@ impl GmailClient {
     }
 
     /// Fetches user's Gmail labels
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn fetch_user_labels(
         &self,
         access_token: &str,
@@ -267,7 +268,7 @@ impl GmailClient {
     }
 
     /// Creates a new Gmail label for the user
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn create_label(
         &self,
         access_token: &str,
@@ -278,14 +279,14 @@ impl GmailClient {
     }
 
     /// Deletes a Gmail label by its ID
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn delete_label(&self, access_token: &str, label_id: &str) -> Result<(), GmailError> {
         delete_gmail_label(self, access_token, label_id).await
     }
 
     /// Fetches the user's own contact information.
     /// Returns raw Gmail PersonResource - callers should map to service layer Contact.
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_self_contact(&self, access_token: &str) -> anyhow::Result<PersonResource> {
         get_self_connection(self, access_token).await
     }
@@ -293,7 +294,7 @@ impl GmailClient {
     /// Fetches all of the user's main contacts, handling pagination.
     /// Returns raw Gmail PersonResource objects and a sync token for future incremental updates.
     /// Callers should map PersonResource to service layer Contact.
-    #[tracing::instrument(skip(self, access_token, sync_token))]
+    #[tracing::instrument(skip(self, access_token, sync_token), err)]
     pub async fn get_contacts(
         &self,
         access_token: &str,
@@ -306,7 +307,7 @@ impl GmailClient {
     /// These are typically contacts auto-created from interactions.
     /// Returns raw Gmail PersonResource objects and a sync token.
     /// Callers should map PersonResource to service layer Contact.
-    #[tracing::instrument(skip(self, access_token, sync_token))]
+    #[tracing::instrument(skip(self, access_token, sync_token), err)]
     pub async fn get_other_contacts(
         &self,
         access_token: &str,
@@ -316,12 +317,91 @@ impl GmailClient {
     }
 
     /// Gets the email signature for a specific email address
-    #[tracing::instrument(skip(self, access_token))]
+    #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_email_signature(
         &self,
         access_token: &str,
         email_address: &str,
     ) -> Result<Option<String>, GmailError> {
         settings::get_email_signature(self, access_token, email_address).await
+    }
+
+    /// Blocks a sender by creating a filter that sends their emails to SPAM.
+    /// This replicates the "Block Sender" functionality in the Gmail UI.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn block_sender(
+        &self,
+        access_token: &str,
+        email_to_block: &str,
+    ) -> Result<Filter, GmailError> {
+        filters::block_sender(self, access_token, email_to_block).await
+    }
+
+    /// Creates a new Gmail filter.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn create_filter(
+        &self,
+        access_token: &str,
+        filter: Filter,
+    ) -> Result<Filter, GmailError> {
+        filters::create_filter(self, access_token, filter).await
+    }
+
+    /// Lists all filters for the user.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_filters(&self, access_token: &str) -> Result<Vec<Filter>, GmailError> {
+        filters::list_filters(self, access_token).await
+    }
+
+    /// Gets a specific filter by ID.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn get_filter(
+        &self,
+        access_token: &str,
+        filter_id: &str,
+    ) -> Result<Filter, GmailError> {
+        filters::get_filter(self, access_token, filter_id).await
+    }
+
+    /// Deletes a filter by ID.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn delete_filter(
+        &self,
+        access_token: &str,
+        filter_id: &str,
+    ) -> Result<(), GmailError> {
+        filters::delete_filter(self, access_token, filter_id).await
+    }
+
+    /// Finds and returns any existing "block" filters for a specific email address.
+    /// This can be used to check if a user is already blocked.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn find_block_filter_for_sender(
+        &self,
+        access_token: &str,
+        email_address: &str,
+    ) -> Result<Option<Filter>, GmailError> {
+        filters::find_block_filter_for_sender(self, access_token, email_address).await
+    }
+
+    /// Unblocks a sender by finding and deleting their block filter.
+    /// Returns true if a filter was found and deleted, false if no filter existed.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn unblock_sender(
+        &self,
+        access_token: &str,
+        email_address: &str,
+    ) -> Result<bool, GmailError> {
+        filters::unblock_sender(self, access_token, email_address).await
+    }
+
+    /// Lists all blocked senders by finding filters that send emails to TRASH.
+    /// Returns a list of email addresses that are currently blocked.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_blocked_senders(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<String>, GmailError> {
+        filters::list_blocked_senders(self, access_token).await
     }
 }

@@ -1,19 +1,19 @@
 //! CreateDocument tool for reading document content.
 
-use base64::Engine;
-use sha2::Digest;
-use sha2::Sha256;
 use std::str::FromStr;
 
 use crate::domain::{models::CreateDocumentRepoArgs, ports::DocumentService};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
+use base64::Engine;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_file_type::FileType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
+use sha2::Sha256;
 
 use super::DocumentToolContext;
 
@@ -27,16 +27,20 @@ pub struct CreateDocumentResponse {
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-#[schemars(title = "CreateDocument", description = "Create a document")]
+#[schemars(title = "CreateDocument", description = "Create a plaintext document.")]
 pub struct CreateDocument {
     #[schemars(description = "The name of the document without the file extension")]
     pub document_name: String,
 
-    #[schemars(description = "The raw bytes of the local file you created.")]
-    pub file_content_bytes: Vec<u8>,
+    #[schemars(description = "The string content of the document you are creating.")]
+    pub file_content: String,
 
-    #[schemars(description = "The extension of the file you are going to create.")]
+    #[schemars(description = "The extension of the plaintext file you are creating.")]
     pub file_extension: String,
+
+    #[schemars(description = "Whether this document is a task. Only applies to md documents.")]
+    #[serde(default)]
+    pub is_task: bool,
 }
 
 #[async_trait]
@@ -61,11 +65,12 @@ where
                 internal_error: e.into(),
             })?;
         let content_type = parsed_file_type.mime_type();
-        let file_type: Option<FileType> = Some(parsed_file_type);
 
         let user_id: MacroUserIdStr<'static> = (*request_context.user_id).clone();
 
-        let hashes = get_file_shas(&self.file_content_bytes).map_err(|e| ToolCallError {
+        let file_bytes = self.file_content.as_bytes();
+
+        let hashes = get_file_shas(file_bytes).map_err(|e| ToolCallError {
             description: "could not get file content shas".to_string(),
             internal_error: e,
         })?;
@@ -80,11 +85,11 @@ where
                     sha: hashes.0,
                     document_name: self.document_name.clone(),
                     user_id,
-                    file_type,
+                    file_type: Some(parsed_file_type),
                     project_id: None,
                     email_attachment_id: None,
                     created_at: None,
-                    is_task: false,
+                    is_task: self.is_task,
                     skip_history: false,
                 },
                 None, // job_id
@@ -111,7 +116,7 @@ where
             .put(&presigned_url)
             .header("content-type", content_type)
             .header("x-amz-checksum-sha256", &hashes.1)
-            .body(self.file_content_bytes.clone())
+            .body(file_bytes.to_vec())
             .send()
             .await
             .map_err(|e| ToolCallError {

@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedShareIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskRightPersonId = createUniqueId();
   const clipBottomId = createUniqueId();
 
@@ -13,9 +16,9 @@ export const AnimatedShareIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-share-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-share-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated share icon</title>
+      {/*<title>Animated share icon</title>*/}
       <defs>
         {/* Mask for right person - hides areas behind left person and bottom */}
         <mask id={maskRightPersonId} maskUnits="userSpaceOnUse">

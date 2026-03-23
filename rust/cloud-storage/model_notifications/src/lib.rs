@@ -1,8 +1,10 @@
 use chrono::DateTime;
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
 mod device;
+pub mod digest_state;
 mod metadata;
 mod unsubscribe;
 pub use device::*;
@@ -188,3 +190,77 @@ define_notif_event!(
         AiResponse(AiResponseMetadata),
     }
 );
+
+impl NotificationTitle for NotifEvent {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        match self {
+            NotifEvent::ChannelMention(channel_mention_metadata) => {
+                channel_mention_metadata.format_title(sender_id)
+            }
+            NotifEvent::DocumentMention(document_mention_metadata) => {
+                document_mention_metadata.format_title(sender_id)
+            }
+            NotifEvent::MentionedInDocumentComment(mentioned_in_document_comment_metadata) => {
+                mentioned_in_document_comment_metadata.format_title(sender_id)
+            }
+            NotifEvent::ChannelInvite(channel_invite_metadata) => {
+                channel_invite_metadata.format_title(sender_id)
+            }
+            NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
+                channel_message_send_metadata.format_title(sender_id)
+            }
+            NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
+                channel_reply_metadata.format_title(sender_id)
+            }
+            NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
+            NotifEvent::InviteToTeam(invite_to_team_metadata) => {
+                invite_to_team_metadata.format_title(sender_id)
+            }
+            NotifEvent::TaskAssigned(task_assigned_metadata) => {
+                task_assigned_metadata.format_title(sender_id)
+            }
+            NotifEvent::AiResponse(ai_response_metadata) => {
+                ai_response_metadata.format_title(sender_id)
+            }
+        }
+    }
+
+    fn format_body(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        match self {
+            NotifEvent::ChannelMention(channel_mention_metadata) => {
+                channel_mention_metadata.format_body(sender_id)
+            }
+            NotifEvent::DocumentMention(document_mention_metadata) => {
+                document_mention_metadata.format_body(sender_id)
+            }
+            NotifEvent::MentionedInDocumentComment(mentioned_in_document_comment_metadata) => {
+                mentioned_in_document_comment_metadata.format_body(sender_id)
+            }
+            NotifEvent::ChannelInvite(channel_invite_metadata) => {
+                channel_invite_metadata.format_body(sender_id)
+            }
+            NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
+                channel_message_send_metadata.format_body(sender_id)
+            }
+            NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
+                channel_reply_metadata.format_body(sender_id)
+            }
+            NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
+            NotifEvent::InviteToTeam(invite_to_team_metadata) => {
+                invite_to_team_metadata.format_body(sender_id)
+            }
+            NotifEvent::TaskAssigned(task_assigned_metadata) => {
+                task_assigned_metadata.format_body(sender_id)
+            }
+            NotifEvent::AiResponse(ai_response_metadata) => {
+                ai_response_metadata.format_body(sender_id)
+            }
+        }
+    }
+}

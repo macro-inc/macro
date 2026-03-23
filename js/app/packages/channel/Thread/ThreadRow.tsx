@@ -5,6 +5,7 @@ import {
   NewDivider,
   type ChannelMessageListMeta,
 } from '../Message';
+import { ThreadRail } from './ThreadRail';
 
 type ThreadRowProps = ParentProps & {
   message: ApiChannelMessage;
@@ -16,12 +17,6 @@ export function ThreadRow(props: ThreadRowProps) {
   return (
     <div class="w-full flex justify-center">
       <div class="macro-message-width w-full relative">
-        <div
-          class="pointer-events-none absolute top-0 bottom-0 border-l border-edge-muted/60"
-          style={{
-            left: 'var(--left-of-connector)',
-          }}
-        />
         <NewDivider
           listMeta={props.listMeta}
           onDismiss={props.onDismissNewMessages}
@@ -30,7 +25,10 @@ export function ThreadRow(props: ThreadRowProps) {
           createdAt={props.message.created_at}
           listMeta={props.listMeta}
         />
-        {props.children}
+        <div class="relative">
+          <ThreadRail newMessage={props.listMeta?.isNewMessage} />
+          {props.children}
+        </div>
       </div>
     </div>
   );

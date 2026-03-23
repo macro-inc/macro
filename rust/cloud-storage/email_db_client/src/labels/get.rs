@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod test;
 
-use anyhow::anyhow;
 use models_email::db;
 use models_email::email::service::label;
 use sqlx::PgPool;
@@ -17,7 +16,7 @@ pub async fn fetch_message_label(
     link_id: Uuid,
 ) -> anyhow::Result<Option<label::MessageLabel>> {
     if provider_label_id.is_empty() {
-        return Err(anyhow!("Provider label ID cannot be empty"));
+        anyhow::bail!("Provider label ID cannot be empty");
     }
 
     let record = sqlx::query_as!(

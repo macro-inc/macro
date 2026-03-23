@@ -8,6 +8,7 @@ import type { FileOperation } from '@app/component/split-layout/components/Split
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import {
   ReferencesButton,
@@ -17,6 +18,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockFileSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
@@ -29,6 +31,7 @@ import IconShared from '@icon/regular/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
+  const isAuth = useIsAuthenticated();
   const blockId = useBlockId();
   const imageFile = blockFileSignal.get;
   const name = useBlockDocumentName();
@@ -61,6 +64,7 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}

@@ -23,6 +23,7 @@ local = []
 rate_limit = []
 
 [dependencies]
+analytics_client = { path = "../analytics_client" }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
@@ -88,7 +89,9 @@ non_empty = { path = "../non_empty" }
 notification = { path = "../notification" }
 openssl = { workspace = true }
 rand = { workspace = true }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true }
+referral = { path = "../referral" }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }
@@ -108,7 +111,7 @@ thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-cookies = { version = "0.10.0" }
+tower-cookies = { version = "0.11.0" }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }

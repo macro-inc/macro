@@ -153,6 +153,12 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       'user-select': 'none',
                     }}
                     draggable={!isTouchDevice()}
+                    onDragStart={(e) => {
+                      e.dataTransfer?.setData(
+                        'application/x-macro-internal',
+                        '1'
+                      );
+                    }}
                   />
                 </Dialog.Trigger>
               </div>

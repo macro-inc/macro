@@ -28,6 +28,7 @@ pub(crate) async fn drafts_preview_cursor(
             t.effective_ts AS "sort_ts!",
             t.created_at AS "created_at!",
             t.updated_at AS "updated_at!",
+            t.project_id,
             t.viewed_at AS "viewed_at?",
             lmp.subject AS "name?",
             lmp.snippet AS "snippet?",
@@ -45,7 +46,8 @@ pub(crate) async fn drafts_preview_cursor(
             ) AS "is_important!",
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
-            c.sfs_photo_url as "sender_photo_url?"
+            c.sfs_photo_url as "sender_photo_url?",
+            el.macro_id AS "owner_id!"
         FROM (
             -- Step 1: Find the latest draft timestamp for each thread, calculate the
             -- effective sort key, then sort and limit the results. This is the core optimization.
@@ -55,6 +57,7 @@ pub(crate) async fn drafts_preview_cursor(
                 t.link_id,
                 t.inbox_visible,
                 t.is_read,
+                t.project_id,
                 ldpt.latest_draft_ts AS created_at,
                 ldpt.latest_draft_ts AS updated_at,
                 uh.updated_at AS viewed_at,
@@ -65,11 +68,16 @@ pub(crate) async fn drafts_preview_cursor(
                 END AS effective_ts
             FROM (
                 -- This sub-subquery efficiently finds the latest draft timestamp for every thread.
-                SELECT thread_id, MAX(updated_at) as latest_draft_ts
-                FROM email_messages
+                SELECT m.thread_id, MAX(m.updated_at) as latest_draft_ts
+                FROM email_messages m
                 -- we only display macro drafts, not drafts created in gmail
-                WHERE link_id = $1 AND is_draft = TRUE AND internal_date_ts IS NULL
-                GROUP BY thread_id
+                WHERE m.link_id = $1 AND m.is_draft = TRUE AND m.internal_date_ts IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_message_labels ml
+                      JOIN email_labels l ON ml.label_id = l.id
+                      WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = $1
+                  )
+                GROUP BY m.thread_id
             ) ldpt
             JOIN email_threads t ON ldpt.thread_id = t.id
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
@@ -97,11 +105,17 @@ pub(crate) async fn drafts_preview_cursor(
               AND m.is_draft = TRUE
               -- we only display macro drafts, not drafts created in gmail
               AND m.internal_date_ts IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  JOIN email_labels l ON ml.label_id = l.id
+                  WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = t.link_id
+              )
             ORDER BY m.updated_at DESC
             LIMIT 1
         ) AS lmp
         -- Step 3: Join to get the sender's details.
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
+        JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
         link_id,            // $1

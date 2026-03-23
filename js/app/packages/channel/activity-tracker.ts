@@ -1,13 +1,15 @@
 import type { DateValue } from '@core/util/date';
-import type { ApiChannelMessage } from '@service-comms/client';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import { isNewMessage as isNewMessagePure } from './Channel/util';
+import {
+  isNewMessage as isNewMessagePure,
+  type NewMessageCheckable,
+} from './Channel/util';
 
-type ActivityTracker = {
+export type ActivityTracker = {
   openedAt: Accessor<Date>;
   newMessagesDismissed: Accessor<boolean>;
   dismissNewMessages: () => void;
-  isNewMessage: (message: ApiChannelMessage) => boolean;
+  isNewMessage: (message: NewMessageCheckable) => boolean;
 };
 
 type ActivityTrackerOptions = {
@@ -23,10 +25,17 @@ export function createActivityTracker(
 
   const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
 
-  const isNewMessage = (message: ApiChannelMessage) =>
+  // Freeze lastViewedAt at the value present when the channel was first opened.
+  // This prevents a query refetch (triggered by the activity mutation on mount)
+  // from resetting viewed_at to "now" and hiding all the new-message indicators.
+  const frozenLastViewedAt = createMemo<DateValue | undefined | null>((prev) =>
+    prev !== undefined ? prev : props.lastViewedAt()
+  );
+
+  const isNewMessage = (message: NewMessageCheckable) =>
     isNewMessagePure(message, {
       dismissed: newMessagesDismissed(),
-      lastViewedAt: props.lastViewedAt(),
+      lastViewedAt: frozenLastViewedAt(),
       openedAt: openedChannelAt(),
       userId: props.userId(),
     });

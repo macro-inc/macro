@@ -29,8 +29,8 @@ import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import Plus from '@icon/regular/plus.svg';
-import Quotes from '@icon/bold/quotes-bold.svg';
+import Paperclip from '@icon/regular/paperclip.svg';
+import Quotes from '@icon/regular/quotes.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -46,7 +46,6 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import {
-  useScheduleMessageMutation,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
@@ -78,6 +77,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   onCleanup,
   onMount,
@@ -95,6 +95,7 @@ import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
   clearEmailBody,
+  hasDraftContent,
   prepareEmailBody,
   prepareMacroBody,
   registerToggleAppendedThread,
@@ -123,6 +124,7 @@ import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { stickyGate } from '@core/util/debounce';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import ChevronDown from '@icon/regular/caret-down.svg';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -150,6 +152,57 @@ const buildRecipientText = (
 ): string => {
   return prefix + displayName + (showSeparator ? RECIPIENT_SEPARATOR : '');
 };
+
+type RecipientFieldId = 'to' | 'cc' | 'bcc';
+
+function RecipientDropRow(props: {
+  field: RecipientFieldId;
+  class?: string;
+  children: JSX.Element;
+  dragState: Accessor<{
+    recipient: EmailRecipient;
+    sourceField: RecipientFieldId;
+  } | null>;
+  onDrop: (
+    targetField: RecipientFieldId,
+    recipient: EmailRecipient,
+    sourceField: RecipientFieldId
+  ) => void;
+}) {
+  const [isDragOver, setIsDragOver] = createSignal(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    const drag = props.dragState();
+    if (!drag || drag.sourceField === props.field) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const drag = props.dragState();
+    if (!drag || drag.sourceField === props.field) return;
+    props.onDrop(props.field, drag.recipient, drag.sourceField);
+  };
+
+  return (
+    <div
+      class={`flex flex-row items-center ${props.class ?? ''}`}
+      classList={{ 'bg-accent/10': isDragOver() }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function TruncatedRecipientList(props: {
   toRecipients: EmailRecipient[];
@@ -386,6 +439,10 @@ export function BaseInput(props: {
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
+  const [recipientDragState, setRecipientDragState] = createSignal<{
+    recipient: EmailRecipient;
+    sourceField: 'to' | 'cc' | 'bcc';
+  } | null>(null);
   const [savedDraftId, setSavedDraftId] = createSignal<
     ApiDraftOutputDbId | undefined
   >(
@@ -578,11 +635,12 @@ export function BaseInput(props: {
       );
       return null;
     }
-    // Fail if no body text and no attachments
-    // You can have a draft with attachments and no body text
     if (
-      prepared.bodyText.trim() === '' &&
-      form().attachments.list().length === 0
+      !hasDraftContent(
+        prepared.bodyText,
+        form().subject(),
+        form().attachments.list().length
+      )
     ) {
       return null;
     }
@@ -629,12 +687,6 @@ export function BaseInput(props: {
       return;
     }
 
-    const existingDraft = savedDraftId() !== undefined;
-
-    // If there's an existing draft, we should send the sendTime so that the send time
-    // stays up to date and is not removed
-    const sendTime = existingDraft ? form().sendTime() : undefined;
-
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -642,7 +694,6 @@ export function BaseInput(props: {
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
-      sendTime,
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -702,6 +753,47 @@ export function BaseInput(props: {
     }, DRAFT_DEBOUNCE_MS);
   }
 
+  const handleChipDragStart = (
+    field: 'to' | 'cc' | 'bcc',
+    recipient: EmailRecipient,
+    e: DragEvent
+  ) => {
+    if (!e.dataTransfer) return;
+    setRecipientDragState({ recipient, sourceField: field });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  };
+
+  const handleChipDragEnd = () => {
+    setRecipientDragState(null);
+  };
+
+  const handleRecipientDrop = (
+    targetField: 'to' | 'cc' | 'bcc',
+    recipient: EmailRecipient,
+    sourceField: 'to' | 'cc' | 'bcc'
+  ) => {
+    const sourceList = form().recipients()[sourceField];
+    form().setRecipients(
+      sourceField,
+      sourceList.filter((r) => r.id !== recipient.id)
+    );
+    const targetList = form().recipients()[targetField];
+    if (!targetList.some((r) => r.id === recipient.id)) {
+      form().setRecipients(targetField, [...targetList, recipient]);
+    }
+    if (targetField === 'cc') setShowCc(true);
+    if (targetField === 'bcc') setShowBcc(true);
+    scheduleDraftSave();
+  };
+
+  const withDraftSave =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      scheduleDraftSave();
+    };
+
   // We are consuming the first change, because it is the initial value
   let firstChangeConsumed = false;
   const handleChange = (value: string) => {
@@ -742,15 +834,6 @@ export function BaseInput(props: {
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
-
-  const scheduleMessageMutation = useScheduleMessageMutation({
-    onSuccess: () => {
-      toast.success('Email scheduled');
-    },
-    onError: () => {
-      toast.failure('Failed to schedule email');
-    },
-  });
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -856,22 +939,8 @@ export function BaseInput(props: {
 
     const currentDraftID = savedDraftId();
 
-    const sendTime = form().sendTime();
-
-    if (sendTime) {
-      if (!currentDraftID) {
-        console.error('No draft');
-        toast.failure('Failed to schedule message', 'Draft required');
-        cleanupWatermark();
-        return;
-      }
-
-      scheduleMessageMutation.mutate({
-        draftID: currentDraftID,
-        sendTime,
-        threadID: currentThread?.db_id,
-      });
-
+    // Failsafe: don't send if a scheduled send time is set
+    if (form().sendTime()) {
       cleanupWatermark();
       return;
     }
@@ -972,6 +1041,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
+          if (form().sendTime()) return false;
           sendEmail();
           return true;
         },
@@ -985,6 +1055,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
+          if (form().sendTime()) return false;
           sendEmail(true);
           return true;
         },
@@ -1112,7 +1183,7 @@ export function BaseInput(props: {
     },
   });
 
-  const handleSendTimeChange = (date: Date | null) => {
+  const handleSendTimeChange = async (date: Date | null) => {
     const currentSendTime = form().sendTime();
     const currentDraft = savedDraftId();
 
@@ -1121,19 +1192,34 @@ export function BaseInput(props: {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
       });
+      form().setSendTime(date);
+      return;
     }
 
     form().setSendTime(date);
-    scheduleDraftSave();
+
+    if (date) {
+      // Ensure draft is saved before scheduling
+      const draftID = currentDraft ?? (await executeSaveDraft());
+      if (!draftID) {
+        toast.failure('Failed to schedule message', 'Draft required');
+        return;
+      }
+
+      await emailClient.scheduleMessage({
+        draftID,
+        send_time: date.toISOString(),
+      });
+
+      // Mark the thread as done
+      const threadID = ctx.thread()?.db_id;
+      if (threadID) {
+        await emailClient.flagArchived({ id: threadID, value: true });
+      }
+    }
   };
 
   const isDraftSaving = () => saveDraftMutation.isPending;
-
-  // Used to keep displaying draft status for some time
-  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
-
-  // Used to keep displaying spinner for a short time before switching
-  // to saved state
   const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
@@ -1148,7 +1234,7 @@ export function BaseInput(props: {
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
-              <Button showChevron>
+              <Button class="p-0 pr-1 gap-0">
                 <Switch>
                   <Match when={effectiveReplyType() === 'reply'}>
                     <Reply class="h-7 p-1" />
@@ -1161,6 +1247,7 @@ export function BaseInput(props: {
                     <Forward class="h-7 p-1" />
                   </Match>
                 </Switch>
+                <ChevronDown class="size-3" />
               </Button>
             </div>
           </DropdownMenu.Trigger>
@@ -1216,44 +1303,77 @@ export function BaseInput(props: {
             </div>
             {/* Expanded TO */}
 
-            <div class="flex flex-row items-center -mt-0.5">
+            <RecipientDropRow
+              field="to"
+              class="-mt-0.5"
+              dragState={recipientDragState}
+              onDrop={handleRecipientDrop}
+            >
               <div class="min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
                 selectedOptions={form().recipients().to}
-                setSelectedOptions={(v) => form().setRecipients('to', v)}
+                setSelectedOptions={withDraftSave((v) =>
+                  form().setRecipients('to', v)
+                )}
                 triggerMode="input"
                 hideBorder
+                onChipDragStart={(option, e) =>
+                  handleChipDragStart('to', option, e)
+                }
+                onChipDragEnd={handleChipDragEnd}
               />
-            </div>
+            </RecipientDropRow>
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
-              <div class="flex flex-row items-center -mt-1.5">
+              <RecipientDropRow
+                field="cc"
+                class="-mt-1.5"
+                dragState={recipientDragState}
+                onDrop={handleRecipientDrop}
+              >
                 <div class="min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
                   selectedOptions={form().recipients().cc}
-                  setSelectedOptions={(v) => form().setRecipients('cc', v)}
+                  setSelectedOptions={withDraftSave((v) =>
+                    form().setRecipients('cc', v)
+                  )}
                   triggerMode="input"
                   hideBorder
+                  onChipDragStart={(option, e) =>
+                    handleChipDragStart('cc', option, e)
+                  }
+                  onChipDragEnd={handleChipDragEnd}
                 />
-              </div>
+              </RecipientDropRow>
             </Show>
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
-              <div class="flex flex-row items-center -mt-1.5">
+              <RecipientDropRow
+                field="bcc"
+                class="-mt-1.5"
+                dragState={recipientDragState}
+                onDrop={handleRecipientDrop}
+              >
                 <div class="min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
                   selectedOptions={form().recipients().bcc}
-                  setSelectedOptions={(v) => form().setRecipients('bcc', v)}
+                  setSelectedOptions={withDraftSave((v) =>
+                    form().setRecipients('bcc', v)
+                  )}
                   triggerMode="input"
                   hideBorder
+                  onChipDragStart={(option, e) =>
+                    handleChipDragStart('bcc', option, e)
+                  }
+                  onChipDragEnd={handleChipDragEnd}
                 />
-              </div>
+              </RecipientDropRow>
             </Show>
             {/* Show to, cc, bcc buttons */}
             <div class="flex flex-row justify-end space-x-2 pt-2">
@@ -1284,17 +1404,6 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
             </div>
-          </div>
-        </Show>
-        <Show when={debouncedIsDraftSaving()}>
-          <div class="absolute right-4 top-4 flex gap-1 items-center text-xs text-ink-muted">
-            <Show
-              when={laggedIsDraftSaving()}
-              fallback={<span>Draft saved</span>}
-            >
-              <Spinner class="size-4 animate-spin" />
-              <span>Saving draft</span>
-            </Show>
           </div>
         </Show>
       </div>
@@ -1331,7 +1440,7 @@ export function BaseInput(props: {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: () => setIsDragging(true),
+            onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (fileEntries, folderEntries, e) => {
               const editor_ = editor();
@@ -1451,7 +1560,7 @@ export function BaseInput(props: {
           </div>
         </div>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
-          <div class="flex flex-row items-center gap-2">
+          <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button
                 ref={(el) =>
@@ -1460,10 +1569,10 @@ export function BaseInput(props: {
                     onSelect: handleAddAttachments,
                   }))
                 }
+                size="icon-sm"
                 tooltip="Attach"
-                class="aspect-square p-1"
               >
-                <Plus class="h-5" />
+                <Paperclip />
               </Button>
             </div>
 
@@ -1472,9 +1581,9 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
               tooltip="Show formatting toolbar"
-              class="aspect-square p-1"
+              size="icon-sm"
             >
-              <TextAa class="h-5" />
+              <TextAa />
             </Button>
 
             <Tooltip
@@ -1483,9 +1592,8 @@ export function BaseInput(props: {
               }
             >
               <KToggleButton
-                class={
-                  'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
-                }
+                as={Button}
+                size="icon-sm"
                 pressed={form().replyAppended()}
                 onChange={() => {
                   const replyingToID = props.replyingTo()?.replying_to_id;
@@ -1508,18 +1616,17 @@ export function BaseInput(props: {
                   });
                 }}
               >
-                <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
-                  <Quotes class="inline size-4" />
-                </div>
+                <Quotes />
               </KToggleButton>
             </Tooltip>
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
                 onSendTimeChange={handleSendTimeChange}
+                disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId()}>
+            <Show when={savedDraftId() && !laggedIsDraftSaving()}>
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
@@ -1528,24 +1635,37 @@ export function BaseInput(props: {
                 <Trash class="h-5" />
               </Button>
             </Show>
-          </div>
-
-          <Button
-            disabled={
-              uploadAttachmentMutation.isPending || sendMutation.isPending
-            }
-            onClick={() => sendEmail()}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-          >
-            <Show
-              when={!sendMutation.isPending}
-              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
-            >
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+            <Show when={laggedIsDraftSaving()}>
+              <div class="aspect-square p-1 flex items-center justify-center">
+                <Spinner class="size-5 animate-spin text-ink-muted" />
               </div>
             </Show>
-          </Button>
+          </div>
+
+          <Tooltip
+            tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}
+          >
+            <button
+              disabled={
+                uploadAttachmentMutation.isPending ||
+                sendMutation.isPending ||
+                !!form().sendTime()
+              }
+              onClick={() => sendEmail()}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+            >
+              <Show
+                when={!sendMutation.isPending}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
+              >
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                </div>
+              </Show>
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>

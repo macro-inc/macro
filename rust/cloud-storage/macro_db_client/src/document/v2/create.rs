@@ -132,9 +132,7 @@ pub async fn create_document_txn(
 
     let sub_type: Option<DocumentSubType> = if is_task {
         if file_type != Some(FileType::Md) {
-            return Err(anyhow::anyhow!(
-                "is_task is only applicable for md documents"
-            ));
+            anyhow::bail!("is_task is only applicable for md documents");
         }
 
         sqlx::query!(
@@ -311,15 +309,12 @@ async fn insert_document_with_id(
                 && db_err.is_unique_violation()
             {
                 tracing::warn!(error=?err, "document with ID already exists");
-                return Err(anyhow::anyhow!("document with ID already exists: {}", id));
+                anyhow::bail!("document with ID already exists: {}", id);
             }
 
             // All other errors
             tracing::error!(error=?err, "unable to create document with specified ID");
-            Err(anyhow::anyhow!(
-                "unable to create document with specified ID: {}",
-                err
-            ))
+            anyhow::bail!("unable to create document with specified ID: {}", err)
         }
     }
 }

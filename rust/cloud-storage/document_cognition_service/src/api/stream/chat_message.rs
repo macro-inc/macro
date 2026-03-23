@@ -124,7 +124,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id), err)]
+#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
@@ -322,6 +322,7 @@ async fn create_new_chat(
 /// Creates a payload stream, publishes it via `from_async_stream`, and stores
 /// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
+#[tracing::instrument(skip(ctx, request, toolset, user_message_content))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: ai::types::ChatCompletionRequest,
@@ -378,7 +379,7 @@ fn stream_and_save_message(
         {
             Ok(stream) => stream,
             Err(e) => {
-                tracing::error!(error=?e, "failed to create AI stream");
+                tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to create AI stream");
                 let stream_error = match e {
                     ai::types::AiError::ContextWindowExceeded => {
                         StreamError::ModelContextOverflow {
@@ -402,7 +403,7 @@ fn stream_and_save_message(
         while let Some(response) = match tokio::time::timeout(idle_timeout, ai_stream.next()).await {
             Ok(item) => item,
             Err(_) => {
-                tracing::error!("AI stream idle timeout: no token received within {idle_timeout:?}");
+                tracing::error!(chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "AI stream idle timeout: no token received within {idle_timeout:?}");
                 let stream_error = StreamError::InternalError {
                     stream_id: stream_id.clone(),
                 };
@@ -466,7 +467,7 @@ fn stream_and_save_message(
                     }
                 }
                 Err(e) => {
-                    tracing::error!(error=?e, "error in AI stream");
+                    tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
                     // Map error type to appropriate StreamError
                     let stream_error = match e {
                         ai::types::AiError::ContextWindowExceeded => {
@@ -481,7 +482,7 @@ fn stream_and_save_message(
                     if let Ok(json) = serde_json::to_value(&stream_error) {
                         yield json;
                     }
-                    return;
+                    break;
                 }
             }
         }
@@ -496,10 +497,7 @@ fn stream_and_save_message(
         if let Ok(json) = serde_json::to_value(&end_msg) {
             yield json;
         }
-
-        // Save conversation messages
         let new_messages = chat.get_new_conversation_messages();
-
         // Extract assistant response text before moving new_messages into store
         let assistant_text = new_messages
             .iter()
@@ -516,7 +514,7 @@ fn stream_and_save_message(
         )
         .await
         {
-            tracing::error!(error=?err, "failed to store conversation messages");
+            tracing::error!(error=?err, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to store conversation messages");
         }
 
         // Summarize and send notification in a background task

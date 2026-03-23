@@ -2,12 +2,12 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/filters';
+import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
+import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useUserContext } from '@core/context/user';
 import {
   batch,
@@ -22,7 +22,19 @@ import {
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
 
-const useApplyPreset = () => {
+const useCurrentListView = () => {
+  const panel = useSplitPanelOrThrow();
+
+  return createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+
+    if (content.type !== 'component') return;
+
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+};
+
+export const useApplyPreset = () => {
   const soup = useSoup();
   const { setQueryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
@@ -58,18 +70,10 @@ const useApplyPreset = () => {
 };
 
 export const SoupViewTabs = () => {
-  const panel = useSplitPanelOrThrow();
+  const listView = useCurrentListView();
 
-  const component = createMemo(() => {
-    const content = panel.handle.content();
-
-    if (content.type !== 'component') return;
-
-    return content.id;
-  });
-
-  const isComponentListView = (listView: ListView) => {
-    return component() === listView;
+  const isComponentListView = (view: ListView) => {
+    return listView() === view;
   };
 
   return (
@@ -92,7 +96,7 @@ export const SoupViewTabs = () => {
       <Match when={isComponentListView('channels')}>
         <ChannelsTabs />
       </Match>
-      <Match when={isComponentListView('files')}>
+      <Match when={isComponentListView('folders')}>
         <FilesTabs />
       </Match>
     </Switch>
@@ -151,6 +155,7 @@ const MailTabs = () => {
           { value: 'noise', label: 'Noise' },
           { value: 'drafts', label: 'Drafts' },
           { value: 'sent', label: 'Sent' },
+          { value: 'shared', label: 'Shared' },
         ]}
         value={activeTab()}
         defaultValue={VIEW_TAB_PRESETS.mail.default}
@@ -170,6 +175,7 @@ const DocumentsTabs = () => {
         list={[
           { value: 'owned', label: 'Owned' },
           { value: 'shared', label: 'Shared' },
+          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
@@ -229,12 +235,11 @@ const FilesTabs = () => {
       <SegmentedControl
         list={[
           { value: 'owned', label: 'Owned' },
-          { value: 'shared', label: 'Shared' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.files.default}
-        onChange={(value) => applyTabPreset('files', value)}
+        defaultValue={VIEW_TAB_PRESETS.folders.default}
+        onChange={(value) => applyTabPreset('folders', value)}
       />
     </div>
   );
@@ -253,7 +258,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm rounded-xs border border-edge-muted relative"
+      class="h-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
@@ -271,10 +276,10 @@ export const SegmentedControl: ParentComponent<
                 <KSegmentedControl.Item
                   value={itemValue()}
                   disabled={props.disabled}
-                  class="border-r-1 border-edge-muted last:border-r-0"
+                  class="border-r border-edge-muted last:border-r-0"
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-3 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/8 transition-colors duration-50 block hover:bg-ink/8 hover:text-ink">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150 block">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>

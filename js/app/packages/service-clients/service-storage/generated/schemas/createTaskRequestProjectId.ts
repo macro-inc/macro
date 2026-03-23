@@ -6,6 +6,6 @@
  */
 
 /**
- * Optional project id to associate the task with
+ * Optional project ID to associate the task with.
  */
 export type CreateTaskRequestProjectId = string | null;

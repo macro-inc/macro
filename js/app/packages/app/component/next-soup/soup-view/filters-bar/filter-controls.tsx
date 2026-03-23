@@ -14,12 +14,11 @@ import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { TASK_STATUS_OPTIONS } from '@entity';
 import { useProjectsQuery } from '@queries/storage/projects';
 import {
   getFileAssociations,
   QUERY_FILTERS_BASE,
-} from '@app/component/next-soup/filters/filters';
+} from '@app/component/next-soup/filters/query-filters';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ChannelType } from '@service-comms/generated/models';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
@@ -31,6 +30,7 @@ import {
 } from './filter-primitives';
 import { useFilterOptions } from './use-filter-options';
 import { useQuickAccess } from '@core/context/quickAccess';
+import { TASK_STATUS_FILTERS } from '@app/component/next-soup/filters/configs';
 
 export const AssigneeFilter = () => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
@@ -43,7 +43,7 @@ export const AssigneeFilter = () => {
 
     const noAssigneeOption: Option = {
       value: NO_ASSIGNEE,
-      label: 'No Assignee',
+      label: 'No assignee',
       icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
     };
 
@@ -226,7 +226,7 @@ export const EntityTypeFilter = () => {
   );
 };
 
-type FolderFilterTarget = 'chat' | 'document';
+type FolderFilterTarget = 'chat' | 'document' | 'email';
 
 interface FolderFilterProps {
   target: FolderFilterTarget;
@@ -254,7 +254,9 @@ export const FolderFilter = (props: FolderFilterProps) => {
     const projectIds =
       props.target === 'chat'
         ? filters.chat_filters?.project_ids
-        : filters.document_filters?.project_ids;
+        : props.target === 'email'
+          ? filters.email_filters?.project_ids
+          : filters.document_filters?.project_ids;
 
     if (!projectIds?.length) return [];
 
@@ -274,6 +276,16 @@ export const FolderFilter = (props: FolderFilterProps) => {
           ...prev,
           chat_filters: {
             ...prev.chat_filters,
+            project_ids: newProjectIds,
+          },
+        };
+      }
+
+      if (props.target === 'email') {
+        return {
+          ...prev,
+          email_filters: {
+            ...prev.email_filters,
             project_ids: newProjectIds,
           },
         };
@@ -311,7 +323,7 @@ export const StatusFilter = () => {
   const statusOptions: Option[] = [
     { value: 'unread', label: 'Unread' },
     { value: 'read', label: 'Read' },
-    { value: 'not-done', label: 'Not Done' },
+    { value: 'not-done', label: 'Not done' },
     { value: 'done', label: 'Done' },
   ];
 
@@ -349,30 +361,34 @@ export const DocumentFolderFilter = () => {
   return <FolderFilter target="document" label="Folder" />;
 };
 
-export const TaskStatusFilter = () => {
-  const { statusFilter, setStatusFilter } = useSoupView();
+const STATUS_FILTER_PROPERTY_ID = {
+  'task-not-started': PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  'task-in-progress': PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  'task-in-review': PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  'task-completed': PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+  'task-canceled': PROPERTY_OPTION_IDS.STATUS.CANCELED,
+} satisfies Record<(typeof TASK_STATUS_FILTERS)[number]['id'], string>;
 
-  const statusOptions: Option[] = TASK_STATUS_OPTIONS.map((o) => ({
-    value: o.value,
-    label: o.label,
-    icon: () => <PropertyValueIcon optionId={o.value} class="size-3.5" />,
+export const TaskStatusFilter = () => {
+  const statusOptions = TASK_STATUS_FILTERS.map((o) => ({
+    value: o.id,
+    label: o.label ?? 'Unknown status',
+    icon: () => (
+      <PropertyValueIcon
+        optionId={STATUS_FILTER_PROPERTY_ID[o.id]}
+        class="size-3.5"
+      />
+    ),
   }));
 
-  const activeStatus = createMemo((): Option[] => {
-    const current = statusFilter();
-    return statusOptions.filter((o) => current.includes(o.value));
-  });
-
-  const handleStatusChange = (options: Option[]) => {
-    setStatusFilter(options.map((o) => o.value));
-  };
+  const status = useFilterOptions(statusOptions, { target: 'or' });
 
   return (
     <FilterSelect
       label="Status"
       options={statusOptions}
-      active={activeStatus()}
-      onChange={handleStatusChange}
+      active={status.active()}
+      onChange={status.onChange}
     />
   );
 };
@@ -391,7 +407,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-high-priority',
-      label: 'High Priority',
+      label: 'High priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.HIGH}
@@ -401,7 +417,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-medium-priority',
-      label: 'Medium Priority',
+      label: 'Medium priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.MEDIUM}
@@ -411,7 +427,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-low-priority',
-      label: 'Low Priority',
+      label: 'Low priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.LOW}
@@ -421,7 +437,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-no-priority',
-      label: 'No Priority',
+      label: 'No priority',
     },
   ];
 
@@ -572,7 +588,7 @@ export const FromSenderFilter = () => {
 
 export const HasCalendarInviteFilter = () => {
   const calendarInviteOptions: Option[] = [
-    { value: 'has-calendar-invite', label: 'Has Calendar Invite' },
+    { value: 'has-calendar-invite', label: 'Has calendar invite' },
   ];
 
   const calendarInvite = useFilterOptions(calendarInviteOptions);
@@ -588,7 +604,7 @@ export const HasCalendarInviteFilter = () => {
 
 export const HasAttachmentFilter = () => {
   const attachmentOptions: Option[] = [
-    { value: 'has-attachment', label: 'Has Attachment' },
+    { value: 'has-attachment', label: 'Has attachment' },
   ];
 
   const attachment = useFilterOptions(attachmentOptions, { target: 'and' });

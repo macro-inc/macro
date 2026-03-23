@@ -43,6 +43,18 @@ impl GmailTokenProvider for GmailTokenProviderImpl {
             .await
             .map_err(EmailErr::ProviderErr)
     }
+
+    #[tracing::instrument(skip(self, link), err)]
+    async fn fetch_gmail_access_token_no_cache(&self, link: &Link) -> Result<String, EmailErr> {
+        let key = TokenCacheKey::new(
+            &link.fusionauth_user_id,
+            link.macro_id.0.as_ref(),
+            link.provider.as_str(),
+        );
+        fetch_gmail_access_token_no_cache(&key, &self.redis_conn, &self.auth_service_client)
+            .await
+            .map_err(EmailErr::ProviderErr)
+    }
 }
 
 /// Fetches a Gmail access token, first checking the Redis cache then falling back to the auth
@@ -68,34 +80,59 @@ pub async fn fetch_gmail_access_token(
     let access_token = if let Some(token) = token_from_redis {
         token
     } else {
-        let fetched_token = auth_service_client
-            .get_google_access_token(&key.fusion_user_id, &key.macro_id)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to get Google access token from auth service. TokenCacheKey: {:?}",
-                    key
-                )
-            })?;
-
-        // Cache newly fetched token
-        if let Err(cache_err) = conn
-            .set_ex::<&str, &str, ()>(
-                &redis_key,
-                &fetched_token.access_token,
-                GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS,
-            )
-            .await
-        {
-            tracing::warn!(
-                error = ?cache_err,
-                token_cache_key = ?key,
-                "Failed to cache fetched access token in Redis"
-            );
-        }
-
-        fetched_token.access_token
+        let token = fetch_token_from_auth_service(key, auth_service_client).await?;
+        cache_token_in_redis(&mut conn, key, &token).await;
+        token
     };
 
     Ok(access_token)
+}
+
+/// Fetches a Gmail access token directly from the auth service, bypassing the Redis cache for
+/// reads but still caching the newly fetched token.
+#[tracing::instrument(skip(key, redis_conn, auth_service_client), err)]
+pub async fn fetch_gmail_access_token_no_cache(
+    key: &TokenCacheKey,
+    redis_conn: &MultiplexedConnection,
+    auth_service_client: &AuthServiceClient,
+) -> anyhow::Result<String> {
+    let token = fetch_token_from_auth_service(key, auth_service_client).await?;
+    let mut conn = redis_conn.clone();
+    cache_token_in_redis(&mut conn, key, &token).await;
+    Ok(token)
+}
+
+/// Best-effort cache write. Logs a warning on failure but never errors.
+#[tracing::instrument(skip(conn, key, token))]
+async fn cache_token_in_redis(conn: &mut MultiplexedConnection, key: &TokenCacheKey, token: &str) {
+    let redis_key = key.to_redis_key();
+    if let Err(cache_err) = conn
+        .set_ex::<&str, &str, ()>(&redis_key, token, GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS)
+        .await
+    {
+        tracing::warn!(
+            error = ?cache_err,
+            token_cache_key = ?key,
+            "Failed to cache fetched access token in Redis"
+        );
+    }
+}
+
+/// Fetches a Gmail access token from the auth service.
+#[tracing::instrument(skip(key, auth_service_client), err)]
+async fn fetch_token_from_auth_service(
+    key: &TokenCacheKey,
+    auth_service_client: &AuthServiceClient,
+) -> anyhow::Result<String> {
+    let fetched_token = auth_service_client
+        .get_google_access_token(&key.fusion_user_id, &key.macro_id)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to get Google access token from auth service. TokenCacheKey: {:?}",
+                key
+            )
+        })?;
+
+    Ok(fetched_token.access_token)
 }

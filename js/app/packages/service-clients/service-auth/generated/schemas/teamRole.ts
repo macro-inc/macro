@@ -12,7 +12,7 @@ export type TeamRole = (typeof TeamRole)[keyof typeof TeamRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TeamRole = {
-  member: 'member',
-  admin: 'admin',
-  owner: 'owner',
+  Member: 'Member',
+  Admin: 'Admin',
+  Owner: 'Owner',
 } as const;

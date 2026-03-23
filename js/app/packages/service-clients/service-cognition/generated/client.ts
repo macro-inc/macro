@@ -8,21 +8,18 @@ import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
-  CopyChatRequest,
+  CreateChatRequest,
   DocumentTextPart,
-  EmptyResponse,
-  GenericErrorResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
-  GetChatPermissionsResponseV2,
+  GetChatPermissionsResponse,
   GetChatResponse,
   GetChatsForAttachmentResponse,
   GetModelsResponse,
   HttpSendChatMessageRequest,
-  PatchChatRequestV2,
+  PatchChatRequest,
   SendChatMessageResponse,
   StringIDResponse,
-  SuccessResponse,
 } from './schemas';
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -86,61 +83,232 @@ export const getChatsForAttachmentHandler = async (
   } as getChatsForAttachmentHandlerResponse;
 };
 
-export type createChatHandlerResponse201 = {
-  data: StringIDResponse;
-  status: 201;
+/**
+ * @summary Soft-delete a chat.
+ */
+export type deleteChatResponse200 = {
+  data: void;
+  status: 200;
 };
 
-export type createChatHandlerResponse401 = {
+export type deleteChatResponse401 = {
   data: string;
   status: 401;
 };
 
-export type createChatHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type createChatHandlerResponse500 = {
+export type deleteChatResponse500 = {
   data: string;
   status: 500;
 };
 
-export type createChatHandlerResponseSuccess = createChatHandlerResponse201 & {
+export type deleteChatResponseSuccess = deleteChatResponse200 & {
   headers: Headers;
 };
-export type createChatHandlerResponseError = (
-  | createChatHandlerResponse401
-  | createChatHandlerResponse404
-  | createChatHandlerResponse500
+export type deleteChatResponseError = (
+  | deleteChatResponse401
+  | deleteChatResponse500
 ) & {
   headers: Headers;
 };
 
-export type createChatHandlerResponse =
-  | createChatHandlerResponseSuccess
-  | createChatHandlerResponseError;
+export type deleteChatResponse =
+  | deleteChatResponseSuccess
+  | deleteChatResponseError;
 
-export const getCreateChatHandlerUrl = () => {
-  return `/chats`;
+export const getDeleteChatUrl = (chatId: string) => {
+  return `/chat/${chatId}`;
 };
 
-export const createChatHandler = async (
+export const deleteChat = async (
+  chatId: string,
   options?: RequestInit
-): Promise<createChatHandlerResponse> => {
-  const res = await fetch(getCreateChatHandlerUrl(), {
+): Promise<deleteChatResponse> => {
+  const res = await fetch(getDeleteChatUrl(chatId), {
     ...options,
-    method: 'POST',
+    method: 'DELETE',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: createChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  const data: deleteChatResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as createChatHandlerResponse;
+  } as deleteChatResponse;
+};
+
+/**
+ * @summary Patch a chat's name, project, or share permissions.
+ */
+export type patchChatResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchChatResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type patchChatResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type patchChatResponseSuccess = patchChatResponse200 & {
+  headers: Headers;
+};
+export type patchChatResponseError = (
+  | patchChatResponse401
+  | patchChatResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchChatResponse =
+  | patchChatResponseSuccess
+  | patchChatResponseError;
+
+export const getPatchChatUrl = (chatId: string) => {
+  return `/chat/${chatId}`;
+};
+
+export const patchChat = async (
+  chatId: string,
+  patchChatRequest: PatchChatRequest,
+  options?: RequestInit
+): Promise<patchChatResponse> => {
+  const res = await fetch(getPatchChatUrl(chatId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchChatRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchChatResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchChatResponse;
+};
+
+/**
+ * @summary Permanently delete a chat and all associated data.
+ */
+export type permanentlyDeleteChatResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type permanentlyDeleteChatResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type permanentlyDeleteChatResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type permanentlyDeleteChatResponseSuccess =
+  permanentlyDeleteChatResponse200 & {
+    headers: Headers;
+  };
+export type permanentlyDeleteChatResponseError = (
+  | permanentlyDeleteChatResponse401
+  | permanentlyDeleteChatResponse500
+) & {
+  headers: Headers;
+};
+
+export type permanentlyDeleteChatResponse =
+  | permanentlyDeleteChatResponseSuccess
+  | permanentlyDeleteChatResponseError;
+
+export const getPermanentlyDeleteChatUrl = (chatId: string) => {
+  return `/chat/${chatId}/permanent`;
+};
+
+export const permanentlyDeleteChat = async (
+  chatId: string,
+  options?: RequestInit
+): Promise<permanentlyDeleteChatResponse> => {
+  const res = await fetch(getPermanentlyDeleteChatUrl(chatId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: permanentlyDeleteChatResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as permanentlyDeleteChatResponse;
+};
+
+/**
+ * @summary Create a new chat.
+ */
+export type createChatResponse200 = {
+  data: StringIDResponse;
+  status: 200;
+};
+
+export type createChatResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createChatResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createChatResponseSuccess = createChatResponse200 & {
+  headers: Headers;
+};
+export type createChatResponseError = (
+  | createChatResponse401
+  | createChatResponse500
+) & {
+  headers: Headers;
+};
+
+export type createChatResponse =
+  | createChatResponseSuccess
+  | createChatResponseError;
+
+export const getCreateChatUrl = () => {
+  return `/chats`;
+};
+
+export const createChat = async (
+  createChatRequest: CreateChatRequest,
+  options?: RequestInit
+): Promise<createChatResponse> => {
+  const res = await fetch(getCreateChatUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createChatRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createChatResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createChatResponse;
 };
 
 /**
@@ -268,334 +436,186 @@ export const getChatHistoryBatchMessagesHandler = async (
 };
 
 /**
- * @summary Gets a particular chat by its id
+ * @summary Get a chat by ID with messages and web citations.
  */
-export type getChatHandlerResponse200 = {
+export type getChatResponse200 = {
   data: GetChatResponse;
   status: 200;
 };
 
-export type getChatHandlerResponse401 = {
+export type getChatResponse401 = {
   data: string;
   status: 401;
 };
 
-export type getChatHandlerResponse404 = {
+export type getChatResponse404 = {
   data: string;
   status: 404;
 };
 
-export type getChatHandlerResponse500 = {
+export type getChatResponse500 = {
   data: string;
   status: 500;
 };
 
-export type getChatHandlerResponseSuccess = getChatHandlerResponse200 & {
+export type getChatResponseSuccess = getChatResponse200 & {
   headers: Headers;
 };
-export type getChatHandlerResponseError = (
-  | getChatHandlerResponse401
-  | getChatHandlerResponse404
-  | getChatHandlerResponse500
+export type getChatResponseError = (
+  | getChatResponse401
+  | getChatResponse404
+  | getChatResponse500
 ) & {
   headers: Headers;
 };
 
-export type getChatHandlerResponse =
-  | getChatHandlerResponseSuccess
-  | getChatHandlerResponseError;
+export type getChatResponse = getChatResponseSuccess | getChatResponseError;
 
-export const getGetChatHandlerUrl = (chatId: string) => {
+export const getGetChatUrl = (chatId: string) => {
   return `/chats/${chatId}`;
 };
 
-export const getChatHandler = async (
+export const getChat = async (
   chatId: string,
   options?: RequestInit
-): Promise<getChatHandlerResponse> => {
-  const res = await fetch(getGetChatHandlerUrl(chatId), {
+): Promise<getChatResponse> => {
+  const res = await fetch(getGetChatUrl(chatId), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChatHandlerResponse;
+  const data: getChatResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getChatResponse;
 };
 
 /**
- * @summary Deletes a particular chat by its id.
-Soft deletes the chat.
+ * @summary Copy a chat and its messages into a new chat.
  */
-export type deleteChatHandlerResponse200 = {
-  data: EmptyResponse;
+export type copyChatResponse200 = {
+  data: StringIDResponse;
   status: 200;
 };
 
-export type deleteChatHandlerResponse401 = {
+export type copyChatResponse401 = {
   data: string;
   status: 401;
 };
 
-export type deleteChatHandlerResponse404 = {
+export type copyChatResponse404 = {
   data: string;
   status: 404;
 };
 
-export type deleteChatHandlerResponse500 = {
+export type copyChatResponse500 = {
   data: string;
   status: 500;
 };
 
-export type deleteChatHandlerResponseSuccess = deleteChatHandlerResponse200 & {
+export type copyChatResponseSuccess = copyChatResponse200 & {
   headers: Headers;
 };
-export type deleteChatHandlerResponseError = (
-  | deleteChatHandlerResponse401
-  | deleteChatHandlerResponse404
-  | deleteChatHandlerResponse500
+export type copyChatResponseError = (
+  | copyChatResponse401
+  | copyChatResponse404
+  | copyChatResponse500
 ) & {
   headers: Headers;
 };
 
-export type deleteChatHandlerResponse =
-  | deleteChatHandlerResponseSuccess
-  | deleteChatHandlerResponseError;
+export type copyChatResponse = copyChatResponseSuccess | copyChatResponseError;
 
-export const getDeleteChatHandlerUrl = (chatId: string) => {
-  return `/chats/${chatId}`;
+export const getCopyChatUrl = (chatId: string) => {
+  return `/chats/${chatId}/copy`;
 };
 
-export const deleteChatHandler = async (
+export const copyChat = async (
   chatId: string,
   options?: RequestInit
-): Promise<deleteChatHandlerResponse> => {
-  const res = await fetch(getDeleteChatHandlerUrl(chatId), {
+): Promise<copyChatResponse> => {
+  const res = await fetch(getCopyChatUrl(chatId), {
     ...options,
-    method: 'DELETE',
+    method: 'POST',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: deleteChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  const data: copyChatResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as copyChatResponse;
+};
+
+/**
+ * @summary Get the share permissions for a chat.
+ */
+export type getChatPermissionsResponse200 = {
+  data: GetChatPermissionsResponse;
+  status: 200;
+};
+
+export type getChatPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getChatPermissionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getChatPermissionsResponseSuccess =
+  getChatPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getChatPermissionsResponseError = (
+  | getChatPermissionsResponse401
+  | getChatPermissionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type getChatPermissionsResponse =
+  | getChatPermissionsResponseSuccess
+  | getChatPermissionsResponseError;
+
+export const getGetChatPermissionsUrl = (chatId: string) => {
+  return `/chats/${chatId}/permissions`;
+};
+
+export const getChatPermissions = async (
+  chatId: string,
+  options?: RequestInit
+): Promise<getChatPermissionsResponse> => {
+  const res = await fetch(getGetChatPermissionsUrl(chatId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatPermissionsResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as deleteChatHandlerResponse;
+  } as getChatPermissionsResponse;
 };
 
-export type patchChatHandlerResponse200 = {
+/**
+ * @summary Revert a soft-deleted chat.
+ */
+export type revertDeleteChatResponse200 = {
   data: void;
   status: 200;
 };
 
-export type patchChatHandlerResponse400 = {
-  data: string;
-  status: 400;
-};
-
-export type patchChatHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type patchChatHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type patchChatHandlerResponseSuccess = patchChatHandlerResponse200 & {
-  headers: Headers;
-};
-export type patchChatHandlerResponseError = (
-  | patchChatHandlerResponse400
-  | patchChatHandlerResponse401
-  | patchChatHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchChatHandlerResponse =
-  | patchChatHandlerResponseSuccess
-  | patchChatHandlerResponseError;
-
-export const getPatchChatHandlerUrl = (chatId: string) => {
-  return `/chats/${chatId}`;
-};
-
-export const patchChatHandler = async (
-  chatId: string,
-  patchChatRequestV2: PatchChatRequestV2,
-  options?: RequestInit
-): Promise<patchChatHandlerResponse> => {
-  const res = await fetch(getPatchChatHandlerUrl(chatId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchChatRequestV2),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchChatHandlerResponse;
-};
-
-export type copyChatHandlerResponse201 = {
-  data: StringIDResponse;
-  status: 201;
-};
-
-export type copyChatHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type copyChatHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type copyChatHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type copyChatHandlerResponseSuccess = copyChatHandlerResponse201 & {
-  headers: Headers;
-};
-export type copyChatHandlerResponseError = (
-  | copyChatHandlerResponse401
-  | copyChatHandlerResponse404
-  | copyChatHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type copyChatHandlerResponse =
-  | copyChatHandlerResponseSuccess
-  | copyChatHandlerResponseError;
-
-export const getCopyChatHandlerUrl = (chatId: string) => {
-  return `/chats/${chatId}/copy`;
-};
-
-export const copyChatHandler = async (
-  chatId: string,
-  copyChatRequest: CopyChatRequest,
-  options?: RequestInit
-): Promise<copyChatHandlerResponse> => {
-  const res = await fetch(getCopyChatHandlerUrl(chatId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(copyChatRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: copyChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as copyChatHandlerResponse;
-};
-
-/**
- * @summary Permanently deletes a chat.
- */
-export type permanentlyDeleteChatResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type permanentlyDeleteChatResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type permanentlyDeleteChatResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type permanentlyDeleteChatResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type permanentlyDeleteChatResponseSuccess =
-  permanentlyDeleteChatResponse200 & {
-    headers: Headers;
-  };
-export type permanentlyDeleteChatResponseError = (
-  | permanentlyDeleteChatResponse401
-  | permanentlyDeleteChatResponse404
-  | permanentlyDeleteChatResponse500
-) & {
-  headers: Headers;
-};
-
-export type permanentlyDeleteChatResponse =
-  | permanentlyDeleteChatResponseSuccess
-  | permanentlyDeleteChatResponseError;
-
-export const getPermanentlyDeleteChatUrl = (chatId: string) => {
-  return `/chats/${chatId}/permanent`;
-};
-
-export const permanentlyDeleteChat = async (
-  chatId: string,
-  options?: RequestInit
-): Promise<permanentlyDeleteChatResponse> => {
-  const res = await fetch(getPermanentlyDeleteChatUrl(chatId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: permanentlyDeleteChatResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as permanentlyDeleteChatResponse;
-};
-
-/**
- * @summary Deletes a specific document
- */
-export type revertDeleteChatResponse200 = {
-  data: SuccessResponse;
-  status: 200;
-};
-
 export type revertDeleteChatResponse401 = {
-  data: GenericErrorResponse;
+  data: string;
   status: 401;
-};
-
-export type revertDeleteChatResponse404 = {
-  data: GenericErrorResponse;
-  status: 404;
 };
 
 export type revertDeleteChatResponse500 = {
-  data: GenericErrorResponse;
+  data: string;
   status: 500;
 };
 
@@ -604,7 +624,6 @@ export type revertDeleteChatResponseSuccess = revertDeleteChatResponse200 & {
 };
 export type revertDeleteChatResponseError = (
   | revertDeleteChatResponse401
-  | revertDeleteChatResponse404
   | revertDeleteChatResponse500
 ) & {
   headers: Headers;
@@ -879,62 +898,4 @@ export const sendChatMessage = async (
     status: res.status,
     headers: res.headers,
   } as sendChatMessageResponse;
-};
-
-/**
- * @summary Gets the current chat share permissions
- */
-export type getChatPermissionsHandlerV2Response200 = {
-  data: GetChatPermissionsResponseV2;
-  status: 200;
-};
-
-export type getChatPermissionsHandlerV2Response404 = {
-  data: string;
-  status: 404;
-};
-
-export type getChatPermissionsHandlerV2Response500 = {
-  data: string;
-  status: 500;
-};
-
-export type getChatPermissionsHandlerV2ResponseSuccess =
-  getChatPermissionsHandlerV2Response200 & {
-    headers: Headers;
-  };
-export type getChatPermissionsHandlerV2ResponseError = (
-  | getChatPermissionsHandlerV2Response404
-  | getChatPermissionsHandlerV2Response500
-) & {
-  headers: Headers;
-};
-
-export type getChatPermissionsHandlerV2Response =
-  | getChatPermissionsHandlerV2ResponseSuccess
-  | getChatPermissionsHandlerV2ResponseError;
-
-export const getGetChatPermissionsHandlerV2Url = (chatId: string) => {
-  return `/v2/chats/${chatId}/permissions`;
-};
-
-export const getChatPermissionsHandlerV2 = async (
-  chatId: string,
-  options?: RequestInit
-): Promise<getChatPermissionsHandlerV2Response> => {
-  const res = await fetch(getGetChatPermissionsHandlerV2Url(chatId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getChatPermissionsHandlerV2Response['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChatPermissionsHandlerV2Response;
 };

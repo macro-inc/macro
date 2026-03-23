@@ -33,7 +33,7 @@ impl TryFrom<Message> for axum::extract::ws::Message {
 
     fn try_from(msg: Message) -> Result<Self> {
         let string: String = serde_json::to_string(&msg)?;
-        Ok(axum::extract::ws::Message::Text(string))
+        Ok(axum::extract::ws::Message::Text(string.into()))
     }
 }
 
@@ -42,7 +42,7 @@ impl TryFrom<OutgoingMessage> for axum::extract::ws::Message {
 
     fn try_from(msg: OutgoingMessage) -> Result<Self> {
         match msg {
-            OutgoingMessage::Pong => Ok(axum::extract::ws::Message::Text("pong".to_string())),
+            OutgoingMessage::Pong => Ok(axum::extract::ws::Message::Text("pong".into())),
             OutgoingMessage::Message(message) => message.try_into(),
         }
     }

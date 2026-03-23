@@ -6,13 +6,14 @@ use crate::{
     inbound::{ApiSortMethod, EmailRouterState},
 };
 use axum::{
-    RequestPartsExt, async_trait,
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts, Path, rejection::PathRejection},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
+use std::future::Future;
 use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
@@ -47,7 +48,6 @@ impl IntoResponse for GetPreviewsCursorError {
 
 pub(crate) struct PreviewViewPathExtractor(pub PreviewView);
 
-#[async_trait]
 impl<S: Send + Sync> FromRequestParts<S> for PreviewViewPathExtractor {
     type Rejection = GetPreviewsCursorError;
 
@@ -101,7 +101,6 @@ impl IntoResponse for EmailLinkErr {
     }
 }
 
-#[async_trait]
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
@@ -135,7 +134,6 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
     }
 }
 
-#[async_trait]
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
@@ -158,7 +156,25 @@ where
     }
 }
 
-pub use crate::domain::ports::GmailTokenProvider;
+/// Port for fetching a Gmail access token for a given link.
+///
+/// This is an inbound concern — the domain service receives the token as an
+/// opaque `&str`.  The trait lives here (rather than in `domain::ports`)
+/// because only the axum extractor layer uses it.
+pub trait GmailTokenProvider: Send + Sync + 'static {
+    /// Fetch a Gmail OAuth access token for the given email link.
+    fn fetch_gmail_access_token(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+
+    /// Fetch a Gmail OAuth access token directly from the auth service,
+    /// bypassing the Redis cache for reads but still caching the result.
+    fn fetch_gmail_access_token_no_cache(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+}
 
 /// Axum state wrapper for a [`GmailTokenProvider`] implementation.
 pub struct GmailTokenState<T> {
@@ -218,7 +234,6 @@ impl IntoResponse for GmailAccessTokenErr {
     }
 }
 
-#[async_trait]
 impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
 where
     EmailRouterState<U>: FromRef<S>,

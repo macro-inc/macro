@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSidebarIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const clipId = createUniqueId();
   const notchMaskId = createUniqueId();
 
@@ -13,9 +16,9 @@ export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-sidebar-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-sidebar-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated sidebar icon</title>
+      {/*<title>Animated sidebar icon</title>*/}
       <defs>
         {/* Clip to frame interior */}
         <clipPath id={clipId}>
@@ -75,8 +78,8 @@ export const AnimatedSidebarIcon = (props: { triggerAnimation?: boolean }) => {
           {/* Vertical divider */}
           <rect x="6" y="0.75" width="1.5" height="10.5" />
           {/* Content lines */}
-          <rect x="2.5" y="3" width="2.5" height="1" />
-          <rect x="2.5" y="5.5" width="2.5" height="1" />
+          <rect x="2.5" y="2.5" width="2.5" height="1" />
+          <rect x="2.5" y="4.5" width="2.5" height="1" />
         </g>
       </g>
     </svg>

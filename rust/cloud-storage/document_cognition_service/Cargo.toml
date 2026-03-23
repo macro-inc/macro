@@ -21,6 +21,10 @@ path = "src/openapi.rs"
 name = "document_cognition_service_models"
 path = "src/models_bin.rs"
 
+[[bin]]
+name = "mcp_server"
+path = "src/bin/mcp_server.rs"
+
 [features]
 local = []
 local_auth = ["macro_middleware/local_auth"]
@@ -34,6 +38,7 @@ async-trait = { workspace = true }
 ai = { path = "../ai" }
 ai_format = { path = "../ai_format" }
 ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -43,6 +48,7 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 base64 = { workspace = true }
+chat = { path = "../chat" }
 chrono = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_service_client = { path = "../comms_service_client" }
@@ -52,12 +58,14 @@ dashmap = { workspace = true }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }
-entity_access = { path = "../entity_access" }
 doppleganger = { workspace = true }
+entity_access = { path = "../entity_access" }
 email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
+http = { workspace = true }
 http-body-util = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 lazy_static = { workspace = true }
@@ -87,6 +95,7 @@ models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 reqwest.workspace = true
+rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
 schemars = { workspace = true }
 scribe = { path = "../scribe", features = [
   "channel",
@@ -99,6 +108,7 @@ search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 soup = { path = "../soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
@@ -126,6 +136,8 @@ tracing = { workspace = true }
 unfurl_service = { path = "../unfurl_service" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+url = { workspace = true }
+urlencoding = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

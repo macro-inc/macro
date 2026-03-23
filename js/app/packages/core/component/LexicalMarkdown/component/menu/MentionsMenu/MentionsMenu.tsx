@@ -42,7 +42,10 @@ import { MentionsMenuItem } from './components/MentionsMenuItem';
 import { createItemHandler } from './utils/mentionHandlers';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { useUsersMention } from './hooks/useUsersMention';
-import { useEntityMention } from './hooks/useEntityMention';
+import {
+  useEntityMention,
+  useEntityMentionFromList,
+} from './hooks/useEntityMention';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -56,6 +59,8 @@ export type MentionsMenuProps = {
   menu: MenuOperations;
   /** pass in a custom users list if necessary */
   users?: Accessor<IUser[]>;
+  /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
+  entities?: Accessor<EntityItem[]>;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
@@ -81,9 +86,11 @@ export function MentionsMenu(props: MentionsMenuProps) {
 function MentionsMenuInner(props: MentionsMenuProps) {
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
 
-  const quickAccess = useQuickAccess();
+  const hasCustomEntities = () => !!props.entities;
 
-  const allItems = quickAccess.useList();
+  const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
+
+  const allItems = props.entities ?? quickAccess!.useList();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -96,20 +103,49 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     blockId: useMaybeBlockId(),
   });
 
-  const { searchedEntities: docs } = useEntityMention({
-    buckets: ['note', 'task', 'document', 'project', 'chat'],
-    searchTerm,
-  });
+  const customDocs = props.entities
+    ? useEntityMentionFromList({
+        items: props.entities,
+        buckets: ['note', 'task', 'document', 'project', 'chat'],
+        searchTerm,
+      })
+    : undefined;
 
-  const { searchedEntities: channels } = useEntityMention({
-    buckets: ['channel'],
-    searchTerm,
-  });
+  const customChannels = props.entities
+    ? useEntityMentionFromList({
+        items: props.entities,
+        buckets: ['channel'],
+        searchTerm,
+      })
+    : undefined;
 
-  const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
-    useEmailSearchMention({
+  const { searchedEntities: docs } =
+    customDocs ??
+    useEntityMention({
+      buckets: ['note', 'task', 'document', 'project', 'chat'],
       searchTerm,
     });
+
+  const { searchedEntities: channels } =
+    customChannels ??
+    useEntityMention({
+      buckets: ['channel'],
+      searchTerm,
+    });
+
+  const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
+    hasCustomEntities()
+      ? {
+          emails: () => [],
+          emailSearchQuery: {
+            hasNextPage: false,
+            isFetching: false,
+            fetchNextPage: () => {},
+          } as any,
+        }
+      : useEmailSearchMention({
+          searchTerm,
+        });
 
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {

@@ -112,6 +112,10 @@ If no inline or node ids are present:
 
 # Tool Use
 
+- User tools are tools that must be executed by a user on the frontend. 
+  A user tool will return "PendingUserExecution" until a user chooses to 
+  accept / reject the tool. 
+
 - Use tools often and specifically.
 - Prefer precise filters (domain names, IDs) over generic queries.
 - Web tool expects natural language queries.
@@ -123,8 +127,9 @@ If no inline or node ids are present:
   returns anything relavent. IMPORTANT
 
 - IMPORTANT: The code execution tools (`bash_code_execution`, and `text_editor_code_execution`) should only be used 
-when the user asks you to _execute_ code or asks you to do a task that is best done with code ie compute std dev, 
-draw a chart, create a pdf, or some other task that can't be completed with any other tool. DO NOT confuse `text_editor_code_execution` tool
+when the user explicitely asks you to _execute_ code. 
+
+- DO NOT confuse `text_editor_code_execution` tool
 (which creates a file for the code execution environment) for the `CreateDocument` tool which creates a document in the
 users workspace. If the user asks you to create a document, write a code file, or create any file you should use the `CreateDocument` tool.
 

@@ -1,27 +1,38 @@
 //! Contains the service logic for teams
 
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::{
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+};
 use roles_and_permissions::domain::{model::RoleId, port::UserRolesAndPermissionsService};
+
+#[cfg(feature = "ports")]
+use model_entity::EntityType;
+#[cfg(feature = "ports")]
+use model_notifications::InviteToTeamMetadata;
+#[cfg(feature = "ports")]
+use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         CreateSubscriptionArgs, CreateTeamError, CustomerError, DeleteTeamError,
-        InviteUsersToTeamError, JoinTeamError, RemoveTeamInviteError, RemoveUserFromTeamError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamMember,
+        InviteUsersToTeamError, JoinTeamError, PatchTeamRequest, ReinviteError,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RevokePermissionsForTeamMembersError, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
-#[derive(Debug, Clone)]
-pub struct TeamServiceImpl<TR, CR, URPS>
+#[derive(Debug)]
+pub struct TeamServiceImpl<TR, CR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
     URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -29,33 +40,101 @@ where
     customer_repository: CR,
     /// The underlying user roles and permissions service
     user_roles_and_permissions_service: URPS,
+    /// The notification ingress service
+    notification_ingress: Arc<NI>,
 }
 
-impl<TR, CR, URPS> TeamServiceImpl<TR, CR, URPS>
+impl<TR, CR, URPS, NI> Clone for TeamServiceImpl<TR, CR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
     URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
+{
+    fn clone(&self) -> Self {
+        Self {
+            team_repository: self.team_repository.clone(),
+            customer_repository: self.customer_repository.clone(),
+            user_roles_and_permissions_service: self.user_roles_and_permissions_service.clone(),
+            notification_ingress: self.notification_ingress.clone(),
+        }
+    }
+}
+
+impl<TR, CR, URPS, NI> TeamServiceImpl<TR, CR, URPS, NI>
+where
+    TR: TeamRepository,
+    CR: CustomerRepository,
+    URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
 {
     /// Creates a new TeamService
     pub fn new(
         team_repository: TR,
         customer_repository: CR,
         user_roles_and_permissions_service: URPS,
+        notification_ingress: Arc<NI>,
     ) -> Self {
         Self {
             team_repository,
             customer_repository,
             user_roles_and_permissions_service,
+            notification_ingress,
         }
     }
 }
 
-impl<TR, CR, URPS> TeamService for TeamServiceImpl<TR, CR, URPS>
+impl<TR, CR, URPS, NI> TeamServiceImpl<TR, CR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
     URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
+{
+    /// Sends an invite notification for a team invite
+    async fn send_invite_notification(
+        &self,
+        team_id: &uuid::Uuid,
+        team_invite_id: &uuid::Uuid,
+        email: &str,
+        team_name: &str,
+        invited_by: &MacroUserIdStr<'static>,
+    ) -> anyhow::Result<()> {
+        let notification = InviteToTeamMetadata {
+            invited_by: invited_by.clone(),
+            team_name: team_name.to_string(),
+            team_id: team_id.to_string(),
+            role: None,
+        };
+
+        let recipient = MacroUserIdStr::try_from_email(email)
+            .map_err(|e| anyhow::anyhow!("failed to parse email as macro user id: {}", e))?;
+
+        let entity_id = team_invite_id.to_string();
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::Team.with_entity_str(&entity_id),
+            notification,
+            sender_id: Some(invited_by.clone()),
+            recipient_ids: HashSet::from([recipient]),
+        }
+        .into_request()
+        .with_conn_gateway();
+
+        self.notification_ingress
+            .send_notification(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
+
+        Ok(())
+    }
+}
+
+impl<TR, CR, URPS, NI> TeamService for TeamServiceImpl<TR, CR, URPS, NI>
+where
+    TR: TeamRepository,
+    CR: CustomerRepository,
+    URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
 {
     async fn create_team(
         &self,
@@ -121,6 +200,29 @@ where
                 self.team_repository
                     .update_team_subscription(team_id, &subscription_id)
                     .await?;
+            }
+        }
+
+        // Send notifications for new invites
+        if !invited.is_empty() {
+            let team_name = self.team_repository.get_team_name(team_id).await.ok();
+
+            if let Some(team_name) = team_name {
+                let invited_by_owned = invited_by.clone().into_owned();
+                for invite in &invited {
+                    self.send_invite_notification(
+                        team_id,
+                        &invite.team_invite_id,
+                        invite.email.as_ref(),
+                        &team_name,
+                        &invited_by_owned,
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to send invite notification"),
+                    )
+                    .ok();
+                }
             }
         }
 
@@ -338,5 +440,90 @@ where
         }
 
         Ok(())
+    }
+
+    async fn get_team(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
+        self.team_repository.get_team_by_id(team_id).await
+    }
+
+    async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
+        self.team_repository.get_user_teams(user_id).await
+    }
+
+    async fn get_user_invites(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<TeamInviteDetails>, TeamError> {
+        self.team_repository.get_user_team_invites(user_id).await
+    }
+
+    async fn get_team_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Vec<TeamInviteDetails>, TeamError> {
+        self.team_repository.get_team_invites(team_id).await
+    }
+
+    async fn patch_team(
+        &self,
+        team_id: &uuid::Uuid,
+        req: &PatchTeamRequest,
+    ) -> Result<(), TeamError> {
+        self.team_repository.patch_team(team_id, req).await
+    }
+
+    async fn reinvite_to_team(
+        &self,
+        team_invite_id: &uuid::Uuid,
+        invited_by: &MacroUserIdStr<'_>,
+    ) -> Result<TeamInviteDetails, ReinviteError> {
+        let invite = self
+            .team_repository
+            .get_team_invite_details_by_id(team_invite_id)
+            .await
+            .map_err(|e| match e {
+                TeamError::TeamInviteDoesNotExist => ReinviteError::InviteNotFound,
+                other => ReinviteError::StorageLayerError(other.into()),
+            })?;
+
+        // Rate limit: must wait 5 minutes between reinvites
+        let five_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(5);
+        if invite.last_sent_at > five_minutes_ago {
+            return Err(ReinviteError::TooManyRequests);
+        }
+
+        self.team_repository
+            .update_team_invite_last_sent_at(team_invite_id)
+            .await
+            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
+
+        // Send notification
+        let team_name = self
+            .team_repository
+            .get_team_name(&invite.team_id)
+            .await
+            .map_err(|e| ReinviteError::StorageLayerError(e.into()))?;
+
+        let invited_by = invited_by.clone().into_owned();
+        self.send_invite_notification(
+            &invite.team_id,
+            team_invite_id,
+            &invite.email,
+            &team_name,
+            &invited_by,
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to send reinvite notification"))
+        .ok();
+
+        Ok(invite)
+    }
+
+    async fn get_team_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamRole>, TeamError> {
+        self.team_repository.get_team_role(team_id, user_id).await
     }
 }

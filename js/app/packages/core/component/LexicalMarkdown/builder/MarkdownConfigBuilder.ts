@@ -37,6 +37,7 @@ export class EditorConfigBuilder implements EditorBuilder {
       withIds: false,
       selectionData: false,
       actions: false as const,
+      skipPreviewFetch: false,
     };
   }
 
@@ -105,6 +106,12 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   withSelectionData(): this {
     this.state.selectionData = true;
+    return this;
+  }
+
+  /** Skip backend fetches in decorator components (e.g. mention preview API). */
+  withSkipPreviewFetch(): this {
+    this.state.skipPreviewFetch = true;
     return this;
   }
 

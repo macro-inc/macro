@@ -4,7 +4,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE;
 use models_email::gmail::AttachmentGetResponse;
 
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub async fn get_attachment_data(
     client: &GmailClient,
     access_token: &str,
@@ -31,11 +31,11 @@ pub async fn get_attachment_data(
         .await
         .context("Failed to get response body")?;
     if !status.is_success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "Gmail API returned an error status: {} (get attachment): {}",
             status,
             body_text
-        ));
+        );
     }
 
     let attachment_response: AttachmentGetResponse = serde_json::from_str(&body_text)

@@ -91,6 +91,7 @@ pub struct GetAllUserNotificationsResponse {
 
 /// Convert a [`UserNotificationRow<serde_json::Value>`] into a
 /// [`UserNotificationRow<NotifEvent>`] by tagging and deserializing the metadata.
+#[tracing::instrument(err)]
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {
@@ -110,11 +111,11 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
             axum::routing::post(bulk_get_typed_notifications_by_event_item_ids::<S>),
         )
         .route(
-            "/item/:event_item_id",
+            "/item/{event_item_id}",
             axum::routing::get(get_typed_by_event_item_id::<S>),
         )
         .route(
-            "/:notification_id",
+            "/{notification_id}",
             axum::routing::get(get_typed_notification_by_id::<S>)
                 .delete(::notification::inbound::http::delete_notification::<S>),
         )
@@ -205,16 +206,11 @@ where
         } = self;
 
         fn filter_erors((uuid, err): (Uuid, serde_json::Error)) -> Option<Uuid> {
-            let output = err
-                .to_string()
-                .contains("channel_message_document")
-                .then_some(uuid);
+            let err_str = err.to_string();
 
-            if output.is_none() {
-                tracing::warn!("{err:?}");
-            }
-
-            output
+            (err_str.contains("channel_message_document")
+                || err_str.contains("missing field `toEmail`"))
+            .then_some(uuid)
         }
 
         let to_delete: Vec<_> = failed_notifs.into_iter().filter_map(filter_erors).collect();

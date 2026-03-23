@@ -4,7 +4,6 @@ import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
 import { Tabs } from '@kobalte/core/tabs';
 import {
-  createMemo,
   createSignal,
   For,
   Match,
@@ -16,14 +15,12 @@ import {
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
 import { cn } from '@ui/utils/classname';
-import Macro from '@macro-icons/macro-logo.svg';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';
 import { Entity, type WithSearch, type EntityData } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { isMobile } from '@core/mobile/isMobile';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import type { CategoryFilter } from '../command/types';
 import {
@@ -43,7 +40,7 @@ import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'Dms' },
+  { id: 'dms', label: 'DMs' },
   { id: 'notes', label: 'Notes' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'documents', label: 'Docs' },
@@ -131,35 +128,18 @@ export function MobileSearchInner() {
     SearchState.setQuery('');
   }
 
-  function handleFullTextItemAction(
-    entity: WithSearch<EntityData>,
-    openInNewSplit = false
-  ) {
-    const blockName = itemToBlockName(entity);
-    if (blockName) {
-      openWithSplit(
-        { type: blockName, id: entity.id },
-        { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
-      );
-    }
+  function handleFullTextItemAction(entity: WithSearch<EntityData>) {
+    const hitData = entity.search.contentHitData?.[0];
+    const location =
+      hitData && 'location' in hitData ? hitData.location : undefined;
+    openEntityInSplitFromUnifiedList(entity, { location });
     SearchState.onMenuClose();
     SearchState.close();
   }
 
-  const isInCommandScope = createMemo(
-    () => SearchState.commandScopeCommands().length > 0
-  );
-
-  const handleBackFromCommandScope = () => {
-    SearchState.clearCommandScopeCommands();
-  };
-
-  // Show back button only in command scope (entity action mode just closes)
-  const showBackButton = () => isInCommandScope() || isMobile();
-
   const handleBack = () => {
-    if (isInCommandScope()) {
-      handleBackFromCommandScope();
+    if (SearchState.isInCommandScope()) {
+      SearchState.clearCommandScopeCommands();
     } else {
       SearchState.close();
     }
@@ -167,7 +147,9 @@ export function MobileSearchInner() {
 
   return (
     <div class="flex flex-col h-full bg-panel">
-      <Show when={!isInCommandScope() && !SearchState.isFullTextMode()}>
+      <Show
+        when={!SearchState.isInCommandScope() && !SearchState.isFullTextMode()}
+      >
         <CategoryFilterTabs />
       </Show>
 
@@ -177,32 +159,21 @@ export function MobileSearchInner() {
         onSelectNameMatch={(item, openInNewSplit) =>
           handleItemAction(item, openInNewSplit)
         }
-        onSelectFullText={(entity, openInNewSplit) =>
-          handleFullTextItemAction(entity, openInNewSplit)
-        }
+        onSelectFullText={(entity) => handleFullTextItemAction(entity)}
         isLoading={() => SearchState.isFullTextMode() && isFullTextLoading()}
         onFullTextSearch={() => SearchState.enableFullTextMode()}
         query={SearchState.query}
       />
       {/* Search Input */}
       <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
-        <Show
-          when={showBackButton()}
-          fallback={
-            <span class="pl-2 text-accent">
-              <Macro class="size-3" />
-            </span>
-          }
+        <button
+          class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3"
+          onClick={handleBack}
+          title="Back (Esc)"
         >
-          <button
-            class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3"
-            onClick={handleBack}
-            title="Back (Esc)"
-          >
-            <ArrowLeft class="size-6" />
-            <div class="text-xs text-transparent">Back</div>
-          </button>
-        </Show>
+          <ArrowLeft class="size-6" />
+          <div class="text-xs text-transparent">Back</div>
+        </button>
         <input
           ref={(el) => setTimeout(() => el.focus(), 50)} // setTimeout needed: iOS only allows focus() within the user gesture window
           type="text"
@@ -220,10 +191,7 @@ function ResultsContainer(props: {
   nameMatchItems: CommandMenuItem[];
   fullTextItems: WithSearch<EntityData>[];
   onSelectNameMatch: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onSelectFullText: (
-    entity: WithSearch<EntityData>,
-    openInNewSplit: boolean
-  ) => void;
+  onSelectFullText: (entity: WithSearch<EntityData>) => void;
   isLoading?: () => boolean;
   onFullTextSearch: () => void;
   query: () => string;
@@ -361,7 +329,7 @@ function VirtualizedCommandList(props: {
 /** Virtualized list for full-text search results */
 function FullTextResultList(props: {
   items: WithSearch<EntityData>[];
-  onSelect: (entity: WithSearch<EntityData>, openInNewSplit: boolean) => void;
+  onSelect: (entity: WithSearch<EntityData>) => void;
 }) {
   return (
     <VList
@@ -379,7 +347,7 @@ function FullTextResultList(props: {
 /** Single full-text search result: entity header + first content snippet */
 function FullTextResultItem(props: {
   entity: WithSearch<EntityData>;
-  onSelect: (entity: WithSearch<EntityData>, openInNewSplit: boolean) => void;
+  onSelect: (entity: WithSearch<EntityData>) => void;
 }) {
   const hit = () => {
     const hitData = props.entity.search.contentHitData?.[0];
@@ -392,7 +360,7 @@ function FullTextResultItem(props: {
   return (
     <div
       class="px-2 py-2 text-sm font-semibold cursor-pointer"
-      onClick={(e) => props.onSelect(props.entity, e.shiftKey)}
+      onClick={() => props.onSelect(props.entity)}
     >
       <div class="flex items-center gap-2 min-w-0">
         <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
@@ -403,7 +371,6 @@ function FullTextResultItem(props: {
       <Show when={hit()}>
         {(h) => (
           <div class="ml-7 mt-1 border-l-2 border-edge-muted pl-2 text-xs font-normal text-ink-muted">
-            {/*<p class="line-clamp-3">{h()}</p>*/}
             <SearchContent twoLineClamp hit={h()} />
           </div>
         )}

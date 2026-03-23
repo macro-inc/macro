@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 askama = "0.14"
 chrono = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 model_notifications = { path = "../model_notifications" }
 notification = { path = "../notification" }
 rootcause = { workspace = true }

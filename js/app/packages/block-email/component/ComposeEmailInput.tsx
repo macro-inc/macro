@@ -5,7 +5,6 @@ import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
@@ -43,6 +42,7 @@ import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { Button } from '@ui/components/Button';
 import { fileSelector } from '@core/directive/fileSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
@@ -63,6 +63,7 @@ type ComposeEmailInputProps = {
   isSubmitting?: boolean;
   hasDraft?: boolean;
   onDraftDeletePress?: VoidFunction;
+  isDraftSaving?: boolean;
   attachments?: DraftFormAttachment[];
   initialHtml?: string;
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
@@ -155,6 +156,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     scopeId: composeHotkeyScope,
     description: 'Send email',
     keyDownHandler: () => {
+      if (props.sendTime) return false;
       handleSend();
       return true;
     },
@@ -228,7 +230,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: () => setIsDragging(true),
+            onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, dirs) => {
               handleFileFolderDrop(files, dirs, (u) =>
@@ -340,14 +342,22 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     compact
                   />
                 </Show>
-                <Button
-                  disabled={props.isSubmitting || props.disabled}
-                  onClick={() => {
-                    handleSend();
-                  }}
+                <Tooltip
+                  tooltip={
+                    props.sendTime ? 'Send time is scheduled' : undefined
+                  }
                 >
-                  <PaperPlane class="size-4.5 text-accent" />
-                </Button>
+                  <Button
+                    disabled={
+                      props.isSubmitting || props.disabled || !!props.sendTime
+                    }
+                    onClick={() => {
+                      handleSend();
+                    }}
+                  >
+                    <PaperPlane class="size-4.5 text-accent" />
+                  </Button>
+                </Tooltip>
                 <DropdownMenu placement="bottom-end">
                   <DropdownMenu.Trigger as={Button} class="aspect-square p-1">
                     <DotsThreeIcon class="h-4.5" />
@@ -382,21 +392,23 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <PaperclipIcon class="h-5" />
               </Button>
             </div>
-            <DeprecatedIconButton
-              theme="base"
-              icon={TextAa}
+            <Button
+              variant="ghost"
+              size="icon-sm"
               disabled={props.disabled}
-              onclick={() => {
+              onClick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
-            />
+            >
+              <TextAa />
+            </Button>
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
               <EmailDateSelector
                 sendTime={props.sendTime}
                 onSendTimeChange={props.onSendTimeChange}
               />
             </Show>
-            <Show when={props.hasDraft}>
+            <Show when={props.hasDraft && !props.isDraftSaving}>
               <Button
                 onclick={props.onDraftDeletePress}
                 tooltip="Delete draft"
@@ -405,24 +417,37 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 <Trash />
               </Button>
             </Show>
-          </div>
-
-          <Button
-            disabled={props.isSubmitting || props.disabled}
-            onClick={() => {
-              handleSend();
-            }}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-          >
-            <Show
-              when={!props.isSubmitting}
-              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
-            >
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+            <Show when={props.isDraftSaving}>
+              <div class="aspect-square p-1 flex items-center justify-center">
+                <Spinner class="size-5 animate-spin text-ink-muted" />
               </div>
             </Show>
-          </Button>
+          </div>
+
+          <Tooltip
+            tooltip={props.sendTime ? 'Send time is scheduled' : undefined}
+          >
+            <button
+              disabled={
+                props.isSubmitting || props.disabled || !!props.sendTime
+              }
+              onClick={() => {
+                handleSend();
+              }}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+            >
+              <Show
+                when={!props.isSubmitting}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
+              >
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                </div>
+              </Show>
+            </button>
+          </Tooltip>
         </Show>
       </div>
     </div>

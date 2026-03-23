@@ -1,10 +1,15 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { UnifiedNotification } from '@notifications/types';
-import { For, Show, createSignal, createMemo, onMount } from 'solid-js';
 import {
-  EntityIcon,
-  type EntityWithValidIcon,
-} from '@core/component/EntityIcon';
+  For,
+  Show,
+  createSignal,
+  createMemo,
+  createEffect,
+  on,
+  onMount,
+} from 'solid-js';
+import ChannelIcon from '@macro-icons/wide/channel.svg?component-solid';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   isChannelNotification,
@@ -12,6 +17,8 @@ import {
 } from '@app/component/app-sidebar/utils';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { compareDateDesc } from '@core/util/date';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -112,8 +119,9 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     <Button
       as={'a'}
       href={`/channel/${props.group.entityId}`}
-      class="flex items-center justify-start gap-3 w-full cursor-default"
+      class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
       variant="ghost"
+      size="sm"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -138,12 +146,9 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
         <Show
           when={props.group.isDM && props.group.latestSenderId}
           fallback={
-            <EntityIcon
-              targetType={
-                (props.group.channelType ?? 'channel') as EntityWithValidIcon
-              }
-              size="xs"
-            />
+            <div class="size-4 text-ink-muted">
+              <ChannelIcon />
+            </div>
           }
         >
           <UserIcon
@@ -174,32 +179,70 @@ export const ChannelsUnreadWidget = () => {
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = () => [...notificationSource.notifications()];
 
+  const openChannelIds = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return new Set<string>();
+    return new Set(
+      manager
+        .splits()
+        .filter((s) => s.content.type === 'channel')
+        .map((s) => s.content.id)
+    );
+  });
+
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
 
-  const channelGroups = createMemo(() => {
+  const channelGroupsMap = createMemo(() => {
+    const open = openChannelIds();
     const groups = groupByChannel(filteredNotifications());
-    // Convert to array and sort by most recent notification
-    return Array.from(groups.values()).sort((a, b) => {
-      const aTime = new Date(a.notifications[0]?.created_at ?? 0).getTime();
-      const bTime = new Date(b.notifications[0]?.created_at ?? 0).getTime();
-      return bTime - aTime;
-    });
+    for (const id of open) {
+      groups.delete(id);
+    }
+    return groups;
+  });
+
+  const [orderedIds, setOrderedIds] = createSignal<string[]>([]);
+
+  createEffect(
+    on(channelGroupsMap, (groups) => {
+      const currentIds = new Set(groups.keys());
+      const prev = orderedIds();
+      const kept = prev.filter((id) => currentIds.has(id));
+      const keptSet = new Set(kept);
+      const added = [...currentIds].filter((id) => !keptSet.has(id));
+
+      if (added.length === 0 && kept.length === prev.length) return;
+
+      added.sort((a, b) => {
+        const aTime = groups.get(a)?.notifications[0]?.created_at;
+        const bTime = groups.get(b)?.notifications[0]?.created_at;
+        return compareDateDesc(aTime, bTime);
+      });
+
+      setOrderedIds([...added, ...kept]);
+    })
+  );
+
+  const channelGroups = createMemo(() => {
+    const groups = channelGroupsMap();
+    return orderedIds()
+      .map((id) => groups.get(id))
+      .filter((g): g is ChannelGroup => g != null);
   });
 
   return (
-    <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
-      <header class="text-xs font-medium text-ink-muted tracking-wide">
-        <h1>Unread</h1>
-      </header>
+    <Show when={channelGroups().length > 0}>
+      <section class="w-full h-full px-2 py-1.5 flex flex-col justify-center">
+        <header class="text-xs font-medium text-ink-muted ml-3">
+          <h1>Unread</h1>
+        </header>
 
-      <div class="flex-1 overflow-y-auto">
-        <For
-          each={channelGroups()}
-          fallback={<span class="text-ink/80 text-xs">No unread messages</span>}
-        >
-          {(group) => <ChannelGroupItem group={group} animate={false} />}
-        </For>
-      </div>
-    </section>
+        <div class="flex-1 overflow-hidden">
+          <For each={channelGroups()}>
+            {(group) => <ChannelGroupItem group={group} animate={false} />}
+          </For>
+        </div>
+      </section>
+    </Show>
   );
 };

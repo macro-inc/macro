@@ -8,7 +8,12 @@
 import type { AccessLevel } from './accessLevel';
 import type { ChatResponse } from './chatResponse';
 
+/**
+ * Wrapper response for get_chat, matching the DCS API response shape.
+ */
 export interface GetChatResponse {
+  /** The full chat data. */
   chat: ChatResponse;
+  /** The requesting user's access level on this chat. */
   userAccessLevel: AccessLevel;
 }

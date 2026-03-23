@@ -54,7 +54,7 @@ where
     T: EmailService,
 {
     Router::new()
-        .route("/cursor/:view", get(cursor_handler))
+        .route("/cursor/{view}", get(cursor_handler))
         .with_state(state)
 }
 

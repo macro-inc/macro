@@ -87,6 +87,7 @@ export type EmailEntity = EntityBase & {
   snippet?: string;
   isImportant: boolean;
   done: boolean;
+  projectId?: string;
   participants?: EmailThreadParticipants;
   senderEmail?: string;
   senderName?: string;

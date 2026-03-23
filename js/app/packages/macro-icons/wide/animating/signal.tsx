@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSignalIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -10,9 +13,9 @@ export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
-      class={`animated-signal-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-signal-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated signal icon</title>
+      {/*<title>Animated signal icon</title>*/}
       <style>{`
         @keyframes move-left {
           0% {

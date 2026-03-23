@@ -67,7 +67,7 @@ export const Button = <T extends ValidComponent = 'button'>(
   return (
     <KButton
       class={cn(
-        'inline-flex items-center justify-center font-medium rounded-md transition-colors',
+        'inline-flex items-center justify-center font-medium rounded-md',
         'focus-visible:outline-none',
         'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
         variantStyles[variant()],

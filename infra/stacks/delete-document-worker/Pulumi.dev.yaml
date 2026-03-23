@@ -1,6 +1,0 @@
-config:
-  aws-native:region: us-east-1
-  aws:region: us-east-1
-  delete-document-worker:macro_db_secret_key: macro-db-dev
-  delete-document-worker:macro_cache_secret_key: macro-cache-dev
-  delete-document-worker:sync_service_auth_key: sync-service-key-dev

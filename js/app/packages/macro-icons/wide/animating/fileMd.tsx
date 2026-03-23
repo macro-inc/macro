@@ -1,4 +1,7 @@
-export const AnimatedFileMdIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedFileMdIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -8,9 +11,9 @@ export const AnimatedFileMdIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-file-md-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-file-md-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated markdown file icon</title>
+      {/*<title>Animated markdown file icon</title>*/}
       <style>{`
         .animated-file-md-icon {
           .lower-l, .lower-extension {

@@ -7,7 +7,7 @@ import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
-import { useMessage, useMessageActions } from './context';
+import { useMessage, useMessageActions, useMessageSelection } from './context';
 import { renderIcon } from './render-icon';
 import type { MessageActionEvent, MessageActionHandler } from './types';
 
@@ -53,6 +53,7 @@ function ActionButton(props: {
 export function ActionMenu(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
+  const selection = useMessageSelection();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
 
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
@@ -97,7 +98,10 @@ export function ActionMenu(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
+      <HoverActions
+        class={props.class}
+        persistentVisible={emojiMenuOpen() || !!selection?.isSelected}
+      >
         <div class="flex flex-row bg-menu border border-edge-muted items-center allow-css-brackets">
           <Show when={hasReactAction()}>
             <For each={QUICK_REACTION_EMOJIS}>

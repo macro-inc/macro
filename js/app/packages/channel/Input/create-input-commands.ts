@@ -6,6 +6,7 @@ import type {
   InputData,
   InputSnapshot,
 } from './types';
+import { hasSendableInputContent } from './utils/sendable-content';
 
 type CreateInputCommandsDeps = {
   view: Accessor<InputData>;
@@ -13,6 +14,7 @@ type CreateInputCommandsDeps = {
   setIsSending: (value: boolean) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   reset: () => void;
+  clearComposer?: () => void;
   removeTrackedAttachment: (id: string) => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
   callbacks?: InputCallbacks;
@@ -33,10 +35,12 @@ export function createInputCommands(
       if (!deps.callbacks?.onSend) return false;
 
       const current = deps.snapshot();
+      if (!hasSendableInputContent(current)) return false;
       deps.setIsSending(true);
       try {
         await deps.callbacks.onSend(current);
         deps.reset();
+        deps.clearComposer?.();
         return true;
       } finally {
         deps.setIsSending(false);
@@ -56,6 +60,7 @@ export function createInputCommands(
     close: () => {
       const current = deps.snapshot();
       deps.reset();
+      deps.clearComposer?.();
       deps.callbacks?.onClose?.(current);
     },
     removeAttachment,

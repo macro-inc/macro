@@ -1,133 +1,195 @@
-import { createUniqueId } from 'solid-js';
+import { createEffect, createUniqueId } from 'solid-js';
 
-export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
-  const maskId = createUniqueId();
+// All coordinates are stroke-centers: path is inset 0.75px from visual edges on all sides.
+// Body is two open L-shaped strokes; each stops 1.5px short of the missing corners.
+// stroke-linejoin="round" on each path provides r=0.75 rounding at the surviving corners.
+
+// ── Email (source) ───────────────────────────────────────────────────────────
+const BODY_A_D = 'M 1.5,0.75 L 17.25,0.75 L 17.25,10.5';
+const BODY_B_D = 'M 16.5,11.25 L 0.75,11.25 L 0.75,1.5';
+const FLAP_D = 'M 1.5,1.5 L 9,7.5 L 17.25,0.75';
+
+// ── Paper plane (target) ─────────────────────────────────────────────────────
+const PLANE_A_D = 'M 1.5,0.75 L 17.25,0.75 L 4.5,11.25';
+const PLANE_B_D = 'M 17.25,0.75 L 4.5,11.25 L 0.75,1';
+const PLANE_C_D = 'M 0.75,1 L 4.5,11.25 L 17.25,0.75';
+
+// ── Cutout triangle (fades in over paper plane) ───────────────────────────────
+// Derived from the inner notch in paper-plane-cutout.svg, scaled 24→18 (×0.75).
+const CUTOUT_D = 'M 3.5,6.7 L 7.3,4.2 L 2.85,4.8 Z';
+
+// CSS `d` property requires path() wrapper for cross-browser WAAPI support
+const p = (d: string) => `path('${d}')`;
+
+const DURATION = 400;
+const EASING = 'ease-in-out';
+
+// Bake the current animated value into inline style then remove the animation.
+// Swallows the finished-promise rejection that cancel() triggers.
+function cancelAnim(a: Animation) {
+  a.finished.catch(() => {});
+  try {
+    a.commitStyles();
+    a.cancel();
+  } catch (_) {}
+}
+
+export const AnimatedEmailIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
+  const clipId = createUniqueId();
+  let bodyAEl!: SVGPathElement;
+  let bodyBEl!: SVGPathElement;
+  let flapEl!: SVGPathElement;
+  let cutoutEl!: SVGPathElement;
+  let prevTrigger = false;
+  let morphAnims: Animation[] = [];
+  // Kept alive between trigger cycles so we always have a reference to reverse it.
+  let cutoutAnim: Animation | null = null;
+
+  createEffect(() => {
+    const trigger = !!props.triggerAnimation;
+    if (trigger === prevTrigger) return;
+    prevTrigger = trigger;
+
+    if (trigger) {
+      // Cancel any in-progress morphs
+      for (const a of morphAnims) cancelAnim(a);
+      morphAnims = [];
+
+      // Cancel cutout WITHOUT commitStyles — let it snap back to its base style.
+      // The new animation's fill:'both' immediately applies opacity:0, overriding
+      // any residual inline opacity before the next paint.
+      if (cutoutAnim) {
+        cutoutAnim.finished.catch(() => {});
+        try {
+          cutoutAnim.cancel();
+        } catch (_) {}
+        cutoutAnim = null;
+      }
+
+      flapEl.setAttribute('stroke-linejoin', 'round');
+
+      const opts = {
+        duration: DURATION,
+        easing: EASING,
+        fill: 'forwards' as FillMode,
+      };
+      morphAnims = [
+        bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], opts),
+        bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], opts),
+        flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], opts),
+      ];
+      // fill:'both' applies the first keyframe (opacity:0) during the delay phase,
+      // guarding against residual inline opacity from a previous cycle.
+      cutoutAnim = cutoutEl.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: DURATION,
+        easing: EASING,
+        fill: 'both' as FillMode,
+        delay: DURATION,
+      });
+
+      // Bake morph shapes when they finish; leave cutoutAnim alive to reverse later.
+      Promise.all(morphAnims.map((a) => a.finished))
+        .then(() => {
+          for (const a of morphAnims) cancelAnim(a);
+          morphAnims = [];
+        })
+        .catch(() => {});
+    } else {
+      // ── Reverse morphs ────────────────────────────────────────────────────
+      const isActive = (a: Animation) => a.playState === 'running';
+
+      for (const a of morphAnims.filter((a) => !isActive(a))) cancelAnim(a);
+      const running = morphAnims.filter(isActive);
+
+      if (running.length > 0) {
+        for (const a of running) a.reverse();
+        morphAnims = running;
+      } else {
+        const revOpts = {
+          duration: DURATION,
+          easing: EASING,
+          fill: 'forwards' as FillMode,
+          direction: 'reverse' as PlaybackDirection,
+        };
+        morphAnims = [
+          bodyAEl.animate([{ d: p(BODY_A_D) }, { d: p(PLANE_A_D) }], revOpts),
+          bodyBEl.animate([{ d: p(BODY_B_D) }, { d: p(PLANE_B_D) }], revOpts),
+          flapEl.animate([{ d: p(FLAP_D) }, { d: p(PLANE_C_D) }], revOpts),
+        ];
+      }
+
+      // ── Reverse cutout ────────────────────────────────────────────────────
+      // reverse() uses the animation's own keyframes — no commitStyles needed,
+      // so no inline opacity can be stranded under rapid trigger cycles.
+      if (cutoutAnim) {
+        const inDelayPhase = Number(cutoutAnim.currentTime ?? 0) < DURATION; // delay === DURATION
+        if (inDelayPhase) {
+          // fill:'both' is holding opacity:0; just cancel.
+          cutoutAnim.finished.catch(() => {});
+          try {
+            cutoutAnim.cancel();
+          } catch (_) {}
+          cutoutAnim = null;
+        } else {
+          // Active phase or finished — reverse() fades back to opacity:0.
+          try {
+            cutoutAnim.reverse();
+          } catch (_) {}
+        }
+      }
+
+      // ── Cleanup when everything settles ──────────────────────────────────
+      const morphsToWatch = [...morphAnims];
+      const cutoutToWatch = cutoutAnim;
+      const allToWatch = [
+        ...morphsToWatch,
+        ...(cutoutToWatch ? [cutoutToWatch] : []),
+      ];
+
+      Promise.all(allToWatch.map((a) => a.finished))
+        .then(() => {
+          for (const a of morphsToWatch) cancelAnim(a);
+          if (cutoutToWatch) cancelAnim(cutoutToWatch);
+          morphAnims = [];
+          // Only null cutoutAnim if it hasn't been replaced by a newer animation
+          if (cutoutAnim === cutoutToWatch) cutoutAnim = null;
+          flapEl.setAttribute('stroke-linejoin', 'miter');
+        })
+        .catch(() => {});
+    }
+  });
+
   return (
     <svg
       width="100%"
       height="100%"
       viewBox="0 -3 18 18"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="visible"
-      class={`animated-email-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={props.class}
     >
-      <title>Animated email icon</title>
-      <style>{`
-        @keyframes disappear {
-          0% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes appear {
-          0% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        .animated-email-icon {
-          .triangle, .notch {
-            opacity: 0;
-          }
-          .notch {
-            translate: -.5px .5px;
-          }
-          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1 {
-            transition: transform 0.4s ease;
-          }
-          #${maskId} .moving-square {
-            transition: transform 0.4s ease;
-            transform-origin: -1 -1;
-          }
-          .left-line {
-            transform-origin: .75px .75px;
-          }
-          .right-line {
-            transform-origin: 17.25px .75px;
-          }
-          .bottom-line {
-            transform-origin: .75px 10.75px;
-          }
-          .left-flap {
-            transform-origin: 1.23px 0.17px;
-          }
-          .right-flap-1 {
-            transform-origin: 17.73px 1.33px;
-          }
-        }
-        .animated-email-icon.animating {
-          .triangle, .notch {
-            animation: appear 0.2s ease forwards .4s;
-          }
-          #${maskId} .moving-square {
-            transition: transform 0.4s ease;
-            transform: scaleX(1.2);
-          }
-          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1, .right-flap-2 {
-            animation: disappear 0.4s ease forwards .4s;
-          }
-          .left-line {
-            transform: rotate(-20deg);
-          }
-          .right-line {
-            transform: rotate(50.5deg);
-          }
-          .bottom-line {
-            transform: translate(3.5px, 0) rotate(-40deg);
-          }
-          .left-flap {
-            transform: rotate(30deg);
-          }
-          .right-flap-1 {
-            transform: translate(-4px, 3.1px);
-          }
-        }
-      `}</style>
-      <mask id={maskId}>
-        <rect x="0" y="0" width="18" height="18" fill="white" />
-        <rect
-          class="moving-square"
-          x="-1"
-          y="-1"
-          width="2.5"
-          height="2.5"
-          fill="black"
-        />
-      </mask>
-      <g mask={`url(#${maskId})`}>
+      {/*<title>Animated email icon</title>*/}
+      <defs>
+        {/* Clips out the top-left 1.5×1.5 missing corner (visual coords 0,0 → 1.5,1.5) */}
+        <clipPath id={clipId}>
+          <path d="M 1.5,-3 L 18,-3 L 18,15 L 0,15 L 0,1.5 L 1.5,1.5 Z" />
+        </clipPath>
+      </defs>
+      <g clip-path={`url(#${clipId})`}>
+        <path ref={bodyAEl} d={BODY_A_D} stroke-linejoin="round" />
+        <path ref={bodyBEl} d={BODY_B_D} stroke-linejoin="round" />
+        <path ref={flapEl} d={FLAP_D} />
         <path
-          class="triangle"
-          d="M4.60001 12C4.53001 12 4.47001 12 4.40001 11.97C4.16001 11.91 3.98001 11.73 3.89001 11.5L0.0500093 1.01C-0.0399907 0.78 9.32813e-06 0.52 0.140009 0.32C0.280009 0.12 0.510009 0 0.750009 0H17.25C17.57 0 17.85 0.2 17.96 0.5C18.07 0.8 17.98 1.13 17.73 1.33L5.08001 11.83C4.94001 11.94 4.77001 12 4.60001 12ZM1.82001 1.5L4.93001 9.99L15.17 1.5H1.82001Z"
-        />
-        <path
-          class="notch"
-          d="M7.45815 4.23999L2.85815 4.81999L3.58815 6.78999L7.45815 4.23999Z"
-        />
-        <path
-          class="top-line"
-          d="M17.25 0H1.5V1.5H17.25C17.66 1.5 18 1.16 18 0.75C18 0.34 17.66 0 17.25 0Z"
-        />
-        <path
-          class="right-line"
-          d="M17.25 0C16.84 0 16.5 0.34 16.5 0.75V10.5H18V0.75C18 0.34 17.66 0 17.25 0Z"
-        />
-        <path
-          class="bottom-line"
-          d="M0.75 12H16.5V10.5H0.75C0.34 10.5 0 10.84 0 11.25C0 11.66 0.34 12 0.75 12Z"
-        />
-        <path
-          class="left-line"
-          d="M0.75 12C1.16 12 1.5 11.66 1.5 11.25V1.5H0V11.25C0 11.66 0.34 12 0.75 12Z"
-        />
-        <path
-          class="left-flap"
-          d="M9.00002 8.57004L0.27002 1.33004L1.23002 0.170044L9.00002 6.62004"
-        />
-        <path
-          class="right-flap-1"
-          d="M9 6.62004L16.77 0.170044L17.73 1.33004L9 8.57004"
-        />
-        <path
-          class="right-flap-2"
-          d="M9 6.62004L16.77 0.170044L17.73 1.33004L9 8.57004"
+          ref={cutoutEl}
+          d={CUTOUT_D}
+          fill="currentColor"
+          stroke="none"
+          style={{ opacity: 0 }}
         />
       </g>
     </svg>

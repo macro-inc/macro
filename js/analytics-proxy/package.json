@@ -1,0 +1,18 @@
+{
+  "name": "analytics-proxy",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env local",
+    "deploy": "wrangler deploy",
+    "deploy-dev": "wrangler deploy --env dev",
+    "deploy-prod": "wrangler deploy --env prod",
+    "gen-types": "wrangler types",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "wrangler": "^4.25.1"
+  }
+}

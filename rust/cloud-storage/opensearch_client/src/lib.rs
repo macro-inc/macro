@@ -3,11 +3,8 @@ pub mod delete;
 pub mod error;
 pub mod name;
 pub mod search;
-pub mod search_on;
 pub mod unified;
 pub mod upsert;
-
-pub use search_on::SearchOn;
 
 pub mod channel_message;
 pub mod chat;
@@ -62,9 +59,7 @@ impl OpensearchClient {
         let status = response.status_code();
 
         if status != 200 {
-            return Err(anyhow::anyhow!(
-                "Health check failed with status code {status}"
-            ));
+            anyhow::bail!("Health check failed with status code {status}");
         }
 
         Ok(())
@@ -102,7 +97,7 @@ impl OpensearchClient {
                 .await?;
 
             if !response.status_code().is_success() {
-                return Err(anyhow::anyhow!("error creating index: {response:?}"));
+                anyhow::bail!("error creating index: {response:?}");
             }
         }
 

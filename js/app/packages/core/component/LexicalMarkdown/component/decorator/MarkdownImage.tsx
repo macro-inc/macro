@@ -294,26 +294,19 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           setImageHover(false);
         }}
       >
-        <Show
-          when={
-            state() === 'ok' &&
-            editor()?.isEditable() &&
-            !props.constrainedWidth &&
-            !props.constrainedHeight
-          }
-        >
+        <Show when={state() === 'ok' && editor()?.isEditable()}>
           <ResizeHandle
             scale={scale}
             setScale={setScale}
             side="left"
-            imageDims={imageDims}
+            imageDims={effectiveDims}
             containerRef={containerRef}
           />
           <ResizeHandle
             scale={scale}
             setScale={setScale}
             side="right"
-            imageDims={imageDims}
+            imageDims={effectiveDims}
             containerRef={containerRef}
           />
         </Show>
@@ -321,6 +314,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class="h-full object-contain"
           draggable={true}
+          onDragStart={(e) => {
+            e.dataTransfer?.setData('application/x-macro-internal', '1');
+          }}
           classList={{
             invisible: state() === 'loading' || state() === 'error',
           }}

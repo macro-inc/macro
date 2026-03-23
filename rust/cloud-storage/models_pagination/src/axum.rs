@@ -1,8 +1,8 @@
 use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter, Sortable};
+use axum::Json;
 use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
-use axum::{Json, async_trait};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -112,7 +112,6 @@ where
         .map_err(CursorExtractErr::DecodeErr)
 }
 
-#[async_trait]
 impl<S, Id, Sort, F> FromRequestParts<S> for CursorExtractor<Id, Sort, F>
 where
     S: Send + Sync,
@@ -177,7 +176,6 @@ impl<Id, S: Sortable, F> BidirectionalCursorExtractor<Id, S, F> {
     }
 }
 
-#[async_trait]
 impl<S, Id, Sort, F> FromRequestParts<S> for BidirectionalCursorExtractor<Id, Sort, F>
 where
     S: Send + Sync,

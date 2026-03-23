@@ -15,15 +15,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             email::inbound::router(state.email_service.clone()),
         )
         .route(
-            "/:id/seen",
+            "/{id}/seen",
             post(seen::seen_handler).layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 crate::api::middleware::gmail_token::attach_gmail_token,
             )),
         )
-        .route("/:id/messages", get(get::get_thread_messages_handler))
+        .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route(
-            "/:id/archived",
+            "/{id}/archived",
             patch(archived::archived_handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),
@@ -44,8 +44,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         email::outbound::GmailTokenProviderImpl,
     >();
 
+    let hex_thread_project_routes =
+        email::inbound::thread_project_router(state.email_thread_state.clone());
+
     Router::new()
         .merge(required_link_routes)
         .merge(hex_thread_routes)
         .merge(hex_thread_labels_routes)
+        .merge(hex_thread_project_routes)
 }

@@ -2,7 +2,9 @@ use crate::api::email::attachments::get::GetAttachmentResponse;
 use crate::api::email::attachments::get_document_id::GetAttachmentDocumentIDResponse;
 use crate::api::email::backfill::cancel::CancelBackfillParams;
 use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfillJobResponse};
+use crate::api::email::contacts::block_sender::{BlockSenderRequest, BlockSenderResponse};
 use crate::api::email::contacts::list::ListContactsResponse;
+use crate::api::email::contacts::list_blocked::ListBlockedResponse;
 use crate::api::email::drafts::add_attachment::{
     AddDraftAttachmentRequest, AddDraftAttachmentResponse,
 };
@@ -25,7 +27,10 @@ use ::email::inbound::{
     CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
-use ::email::inbound::{UpdateThreadLabelRequest, UpdateThreadLabelsResponse};
+use ::email::inbound::{
+    UpdateThreadLabelRequest, UpdateThreadLabelsResponse, UpdateThreadProjectRequest,
+    UpdateThreadProjectResponse,
+};
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
 use models_email::email::service;
@@ -70,11 +75,15 @@ use utoipa::OpenApi;
         inbound::update_thread_labels_handler,
         inbound::cursor_handler,
         inbound::get_thread_handler,
+        inbound::update_thread_project_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
         inbound::list_labels_handler,
         email::contacts::list::list_contacts_handler,
+        email::contacts::block_sender::handler,
+        email::contacts::unblock_sender::handler,
+        email::contacts::list_blocked::handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
     ),
@@ -113,6 +122,8 @@ use utoipa::OpenApi;
             ArchiveThreadRequest,
             UpdateThreadLabelRequest,
             UpdateThreadLabelsResponse,
+            UpdateThreadProjectRequest,
+            UpdateThreadProjectResponse,
             ThreadPreviewCursor,
             GetThreadResponse,
             ApiThread,
@@ -131,6 +142,9 @@ use utoipa::OpenApi;
             // Contact types
             ListContactsResponse,
             ContactInfoWithInteraction,
+            BlockSenderRequest,
+            BlockSenderResponse,
+            ListBlockedResponse,
             // Sort/filter types
             ApiSortMethod,
             // Legacy service types (keeping for backward compatibility)

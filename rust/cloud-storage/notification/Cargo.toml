@@ -36,11 +36,11 @@ itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-strum = { workspace = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
@@ -53,6 +53,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }

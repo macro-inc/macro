@@ -1,5 +1,6 @@
 import { Root } from './Root';
 import { Layout } from './Layout';
+import { Slot } from './Slot';
 import { SenderName } from './SenderName';
 import { SenderIcon } from './SenderIcon';
 import { Timestamp } from './Timestamp';
@@ -12,10 +13,12 @@ import { EditedIndicator } from './EditedIndicator';
 import { HoverActions } from './HoverActions';
 import { MessageFlag } from './MessageFlag';
 import { ActionMenu } from './ActionMenu';
+import { MediaPreview } from './MediaPreview';
 
 export const Message = {
   Root,
   Layout,
+  Slot,
   SenderName,
   SenderIcon,
   Timestamp,
@@ -28,4 +31,5 @@ export const Message = {
   HoverActions,
   MessageFlag,
   ActionMenu,
+  MediaPreview,
 };

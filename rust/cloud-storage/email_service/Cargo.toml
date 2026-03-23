@@ -42,6 +42,10 @@ name = "cleanup_unused_sfs"
 path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
 
 [[bin]]
+name = "reverse_sfs_mappings"
+path = "src/bin/reverse_sfs_mappings/reverse_sfs_mappings.rs"
+
+[[bin]]
 name = "email_service_openapi"
 path = "src/openapi.rs"
 
@@ -65,6 +69,7 @@ sfs_delete = []
 
 [dependencies]
 ammonia = "4.1.0"
+openssl = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3", "sqs"] }
@@ -99,7 +104,7 @@ macro_env = { path = "../macro_env" }
 mailparse = "0.16.1"
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
+  "auth", "cloud_storage"
 ] }
 last_online_tracker = { path = "../last_online_tracker" }
 notification = { path = "../notification" }

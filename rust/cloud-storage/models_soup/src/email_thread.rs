@@ -105,6 +105,7 @@ pub struct SoupEmailThreadPreview {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

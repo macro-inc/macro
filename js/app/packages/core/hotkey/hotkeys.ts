@@ -257,7 +257,6 @@ export function registerHotkey(
     // Register each hotkey with the same command
     if (hotkeys) {
       hotkeys.forEach((h) => {
-        // Add to existing handlers array
         const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
         if (registrationType === 'add') {
           scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);

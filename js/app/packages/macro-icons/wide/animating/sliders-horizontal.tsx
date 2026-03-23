@@ -2,6 +2,7 @@ import { createUniqueId } from 'solid-js';
 
 export const AnimatedSlidersHorizontalIcon = (props: {
   triggerAnimation?: boolean;
+  class?: string;
 }) => {
   const maskId = createUniqueId();
 
@@ -14,9 +15,9 @@ export const AnimatedSlidersHorizontalIcon = (props: {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-sliders-horizontal-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-sliders-horizontal-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated sliders horizontal icon</title>
+      {/*<title>Animated sliders horizontal icon</title>*/}
       <style>{`
         @keyframes slide-right {
           0%, 100% { translate: 0; }

@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedProfileIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const frameMaskId = createUniqueId();
   const clipBottomId = createUniqueId();
 
@@ -13,9 +16,9 @@ export const AnimatedProfileIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-profile-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-profile-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated profile icon</title>
+      {/*<title>Animated profile icon</title>*/}
       <defs>
         {/* Mask to hide frame behind person */}
         <mask id={frameMaskId} maskUnits="userSpaceOnUse">

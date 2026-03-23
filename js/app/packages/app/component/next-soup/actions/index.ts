@@ -8,3 +8,4 @@ export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeShareAction } from './make-share-action';
 
 export { useEntityActionHotkeys } from './use-entity-action-hotkeys';
+export { useBlockEntityCommands } from './use-block-entity-commands';

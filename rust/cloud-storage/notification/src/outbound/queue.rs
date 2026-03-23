@@ -4,8 +4,10 @@ use aws_sdk_sqs::Client as SqsClient;
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
-use crate::domain::ports::NotificationQueue;
+use crate::domain::models::queue_message::{
+    IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
+};
+use crate::domain::ports::{NotificationIngressQueue, NotificationQueue};
 
 /// SQS-backed implementation of the notification queue port.
 #[derive(Clone)]
@@ -24,7 +26,7 @@ impl SqsNotificationQueue {
 impl NotificationQueue for SqsNotificationQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let body = serde_json::to_string(&message)?;
@@ -75,6 +77,21 @@ impl NotificationQueue for SqsNotificationQueue {
             .await?;
         Ok(())
     }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        self.client
+            .change_message_visibility()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .visibility_timeout(delay.as_secs() as i32)
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
 /// File-based queue for local development across multiple processes.
@@ -102,7 +119,7 @@ impl FileQueue {
 impl NotificationQueue for FileQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let id = uuid::Uuid::new_v4();
@@ -158,6 +175,78 @@ impl NotificationQueue for FileQueue {
         if path.exists() {
             tokio::fs::remove_file(&path).await?;
         }
+        Ok(())
+    }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        // No-op for file-based queue.
+        Ok(())
+    }
+}
+
+/// SQS-backed implementation of the notification ingress queue port.
+///
+/// Used by [`crate::domain::service::SqsNotificationIngress`] to publish
+/// type-erased notification requests, and by the ingress worker to consume them.
+#[derive(Clone)]
+pub struct SqsIngressQueue {
+    /// the sqs client
+    pub client: SqsClient,
+    /// the url of the queue
+    pub queue_url: String,
+}
+
+impl NotificationIngressQueue for SqsIngressQueue {
+    async fn publish(&self, message: IngressQueueMessage) -> Result<(), Report> {
+        let body = serde_json::to_string(&message)?;
+        self.client
+            .send_message()
+            .queue_url(&self.queue_url)
+            .message_body(body)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawIngressQueueMessage>, Report> {
+        let result = self
+            .client
+            .receive_message()
+            .queue_url(&self.queue_url)
+            .max_number_of_messages(10)
+            .wait_time_seconds(20)
+            .send()
+            .await?;
+
+        let messages = result
+            .messages
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|msg| {
+                let body_str = msg.body?;
+                let body = serde_json::from_str(&body_str).ok()?;
+                let receipt_handle = msg.receipt_handle?;
+                Some(RawIngressQueueMessage {
+                    body,
+                    receipt_handle,
+                })
+            })
+            .collect();
+
+        Ok(messages)
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        self.client
+            .delete_message()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .send()
+            .await?;
         Ok(())
     }
 }

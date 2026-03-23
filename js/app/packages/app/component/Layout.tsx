@@ -31,6 +31,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
+import { makePersisted } from '@solid-primitives/storage';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -39,10 +40,14 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}onboarding`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
+  `${ROUTER_BASE_CONCAT}welcome`,
 ];
 
-export const [sidebarState, setSidebarState] = createSignal<SidebarState>(
-  !isMobile() ? 'expanded' : 'hidden'
+export const [sidebarState, setSidebarState] = makePersisted(
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  {
+    name: 'sidebar-state',
+  }
 );
 
 export function Layout(props: RouteSectionProps) {
@@ -131,20 +136,28 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <AppSidebar
-          sidebarState={sidebarState()}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSidebarState(isMobile() ? 'hidden' : 'slim');
-              return;
-            }
+        <Show
+          when={
+            !isMobile() &&
+            isAuthenticated() &&
+            !AUTH_URLS.includes(location.pathname)
+          }
+        >
+          <AppSidebar
+            sidebarState={sidebarState()}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSidebarState(isMobile() ? 'hidden' : 'slim');
+                return;
+              }
 
-            setSidebarState('expanded');
-          }}
-        />
+              setSidebarState('expanded');
+            }}
+          />
+        </Show>
 
         <Resize.Zone
-          gutter={4}
+          gutter={2}
           direction="horizontal"
           class="flex-1 w-full min-h-0 font-sans text-ink caret-accent"
           id={'main-layout'}
@@ -157,7 +170,14 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
-      <Show when={isMobile() && !virtualKeyboardVisible()}>
+      <Show
+        when={
+          isMobile() &&
+          !virtualKeyboardVisible() &&
+          isAuthenticated() &&
+          !AUTH_URLS.includes(location.pathname)
+        }
+      >
         <MobileDock />
       </Show>
       <Show when={isMobile()}>

@@ -40,7 +40,7 @@ impl Clone for MpscQueue {
 impl NotificationQueue for MpscQueue {
     async fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
+        messages: Vec<QueueMessage<'a, T, U>>,
     ) -> Result<(), Report> {
         for message in messages {
             let json = serde_json::to_value(&message)?;
@@ -70,6 +70,15 @@ impl NotificationQueue for MpscQueue {
 
     async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         // No-op: messages are consumed from the channel on receive.
+        Ok(())
+    }
+
+    async fn delay_message(
+        &self,
+        _receipt_handle: &str,
+        _delay: std::time::Duration,
+    ) -> Result<(), Report> {
+        // No-op: in-process queue doesn't support visibility changes.
         Ok(())
     }
 }

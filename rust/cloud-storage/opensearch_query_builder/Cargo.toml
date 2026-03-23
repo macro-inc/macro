@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "opensearch_query_builder"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

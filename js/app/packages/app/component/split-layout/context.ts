@@ -7,6 +7,26 @@ import {
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
 
+export type CollapsibleRegistration = {
+  id: string;
+  priority: number; // lower = higher priority to collapse first
+  collapsed: Accessor<boolean>;
+  setCollapsed: Setter<boolean>;
+  ref: Accessor<HTMLElement | null | undefined>; // uncollapsed element — measured before collapse
+  collapsedRef?: Accessor<HTMLElement | null | undefined>; // collapsed element — measured while collapsed
+};
+
+export type CollapsibleItemInput = Omit<
+  CollapsibleRegistration,
+  'collapsed' | 'setCollapsed'
+> & {
+  onCollapsedChange?: (isCollapsed: boolean) => void;
+};
+
+export type HeaderCollapser = {
+  register: (reg: CollapsibleRegistration) => () => void; // returns cleanup
+};
+
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;
 }>();
@@ -32,6 +52,7 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  headerCollapser: HeaderCollapser;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();

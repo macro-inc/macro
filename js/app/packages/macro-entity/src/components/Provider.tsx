@@ -1,7 +1,5 @@
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { SolidQueryDevtools } from '@tanstack/solid-query-devtools';
-import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import { Show, type ParentProps } from 'solid-js';
+import type { ParentProps } from 'solid-js';
 import { fetchApiToken } from '../queries/auth';
 import { queryClient } from '@queries/client';
 import { queryKeys } from '../queries/key';
@@ -19,9 +17,9 @@ export function Provider(props: ParentProps) {
   return (
     <QueryClientProvider client={queryClient}>
       {props.children}
-      <Show when={LOCAL_ONLY}>
+      {/* <Show when={LOCAL_ONLY}>
         <SolidQueryDevtools initialIsOpen={false} />
-      </Show>
+      </Show> */}
     </QueryClientProvider>
   );
 }

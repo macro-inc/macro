@@ -28,8 +28,8 @@ use model::response::PresignedUrl;
 use tracing;
 
 use super::models::{
-    CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, LocationQueryParams,
+    CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
+    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -206,7 +206,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .collect();
 
         if shas.len() != presigned_urls.len() {
-            return Err(anyhow!("unable to generate presigned urls"));
+            anyhow::bail!("unable to generate presigned urls");
         }
 
         Ok(LocationResponseData::PresignedUrls(presigned_urls))
@@ -476,6 +476,10 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
+        if args.document_name.chars().count() > 100 {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
@@ -577,6 +581,12 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         document_context: DocumentBasic,
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
+        if let Some(name) = args.document_name.as_ref()
+            && name.chars().count() > 100
+        {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         // Check owner-only restrictions for authenticated users
         if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
             entity_access_receipt.entity_permission()
@@ -671,5 +681,76 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             });
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, request))]
+    async fn create_task(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        plain_user_id: String,
+        request: CreateTaskRequest,
+    ) -> Result<CreateTaskResponse, DocumentError> {
+        let response_data = self
+            .create_document(
+                user_id.clone(),
+                CreateDocumentRepoArgs {
+                    id: None,
+                    sha: EMPTY_SHA256.to_string(),
+                    document_name: request.task_name,
+                    user_id,
+                    file_type: Some(FileType::Md),
+                    project_id: request.project_id,
+                    email_attachment_id: None,
+                    created_at: None,
+                    is_task: true,
+                    skip_history: false,
+                },
+                None,
+            )
+            .await?;
+
+        let document_id = response_data
+            .document_response
+            .document_metadata
+            .document_id
+            .clone();
+
+        if request.share_with_team {
+            let _ = self
+                .repo
+                .share_with_team(&plain_user_id, &document_id)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to share task with team");
+                });
+        }
+
+        if let Some(properties) = request.property_values {
+            for property_input in properties {
+                let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                    tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                    continue;
+                };
+
+                let _ = self
+                    .task_properties_service
+                    .set_entity_property(
+                        &plain_user_id,
+                        &document_id,
+                        property_uuid,
+                        Some(property_input.value.clone()),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::warn!(
+                            property_id=?property_uuid,
+                            error=?e,
+                            "failed to set property on task, continuing"
+                        );
+                    });
+            }
+        }
+
+        Ok(CreateTaskResponse { document_id })
     }
 }

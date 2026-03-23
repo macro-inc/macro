@@ -108,6 +108,7 @@ function useCommandsList(): () => CommandItem[] {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
     hideCommandsWithoutHotkeys: false,
+    ignoreInputFocused: true,
   });
 
   return createMemo(() => {

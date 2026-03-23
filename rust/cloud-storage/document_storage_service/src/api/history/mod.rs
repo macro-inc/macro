@@ -12,11 +12,11 @@ pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", get(get_history::get_history_handler))
         .route(
-            "/:item_type/:item_id",
+            "/{item_type}/{item_id}",
             post(upsert_history::upsert_history_handler),
         )
         .route(
-            "/:item_type/:item_id",
+            "/{item_type}/{item_id}",
             delete(delete_history::delete_history_handler),
         )
         .layer(axum::middleware::from_fn(

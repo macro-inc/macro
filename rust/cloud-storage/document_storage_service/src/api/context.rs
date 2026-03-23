@@ -30,13 +30,8 @@ use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
-use notification::domain::models::email_notification_digest::StateMachineDriverA;
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification::outbound::queue::SqsIngressQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -82,20 +77,7 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
-pub(crate) type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl,
@@ -106,11 +88,14 @@ type PropertiesService = PropertiesServiceImpl<
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
-pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+pub(crate) struct TaskPropertiesAdapter {
+    pub system_properties: Arc<SystemPropertiesService>,
+    pub properties: Arc<PropertiesService>,
+}
 
 impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
-        self.0
+        self.system_properties
             .attach_task_properties(entity_ids)
             .await
             .map_err(Into::into)
@@ -119,9 +104,32 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
 
-        self.0.update_task_status(task_id, status_option).await?;
+        self.system_properties
+            .update_task_status(task_id, status_option)
+            .await?;
 
         Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
+        self.properties
+            .set_entity_property(
+                user_id,
+                entity_id,
+                models_properties::EntityType::Task,
+                property_definition_id,
+                value,
+            )
+            .await
+            .map_err(Into::into)
     }
 }
 

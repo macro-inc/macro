@@ -78,12 +78,8 @@ impl TryFrom<String> for EntityType {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, ToSchema, Hash, PartialEq, Eq)]
 pub struct Entity<'a> {
     /// The type of entity we are describing
-    // TODO: we can remove this alias after a few weeks
-    #[serde(alias = "eventItemType")]
     pub entity_type: EntityType,
     /// The id of that entity
-    // TODO: we can remove this alias after a few weeks
-    #[serde(alias = "eventItemId")]
     pub entity_id: Cow<'a, str>,
 }
 

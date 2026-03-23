@@ -90,7 +90,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
       >
         <span class="font-medium">{props.label}</span>
         <Show when={multiple() && hasActiveFilters()}>
-          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
+          <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
             {activeCount()}
           </span>
         </Show>
@@ -274,7 +274,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
         >
           <span class="font-medium">{props.label}</span>
           <Show when={hasActiveFilters()}>
-            <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 rounded-full text-xs font-semibold bg-accent text-page">
+            <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
               {activeCount()}
             </span>
           </Show>

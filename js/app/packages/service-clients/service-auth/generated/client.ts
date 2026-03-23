@@ -38,12 +38,13 @@ import type {
   PutProfilePictureParams,
   PutUserNameParams,
   ResendFusionauthVerifyUserEmailRequest,
+  SendInviteBody,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
   Team,
   TeamInvitesResponse,
-  TeamWithUsers,
+  TeamWithMembers,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -1075,17 +1076,17 @@ export type oauthRedirectResponse200 = {
 };
 
 export type oauthRedirectResponse400 = {
-  data: string;
+  data: ErrorResponse;
   status: 400;
 };
 
 export type oauthRedirectResponse401 = {
-  data: string;
+  data: ErrorResponse;
   status: 401;
 };
 
 export type oauthRedirectResponse500 = {
-  data: string;
+  data: ErrorResponse;
   status: 500;
 };
 
@@ -1309,6 +1310,119 @@ export const getUserPermissions = async (
 };
 
 /**
+ * Returns the authenticated user's referral code.
+ * @summary Handler for `GET /referral-code`.
+ */
+export type getReferralCodeResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type getReferralCodeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getReferralCodeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getReferralCodeResponseSuccess = getReferralCodeResponse200 & {
+  headers: Headers;
+};
+export type getReferralCodeResponseError = (
+  | getReferralCodeResponse401
+  | getReferralCodeResponse500
+) & {
+  headers: Headers;
+};
+
+export type getReferralCodeResponse =
+  | getReferralCodeResponseSuccess
+  | getReferralCodeResponseError;
+
+export const getGetReferralCodeUrl = () => {
+  return `/referral/code`;
+};
+
+export const getReferralCode = async (
+  options?: RequestInit
+): Promise<getReferralCodeResponse> => {
+  const res = await fetch(getGetReferralCodeUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getReferralCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getReferralCodeResponse;
+};
+
+/**
+ * Sends a referral code via email to a user
+ * @summary Handler for `POST /referral/send`.
+ */
+export type sendReferralCodeResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type sendReferralCodeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendReferralCodeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendReferralCodeResponseSuccess = sendReferralCodeResponse204 & {
+  headers: Headers;
+};
+export type sendReferralCodeResponseError = (
+  | sendReferralCodeResponse401
+  | sendReferralCodeResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendReferralCodeResponse =
+  | sendReferralCodeResponseSuccess
+  | sendReferralCodeResponseError;
+
+export const getSendReferralCodeUrl = () => {
+  return `/referral/send`;
+};
+
+export const sendReferralCode = async (
+  sendInviteBody: SendInviteBody,
+  options?: RequestInit
+): Promise<sendReferralCodeResponse> => {
+  const res = await fetch(getSendReferralCodeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendInviteBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendReferralCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendReferralCodeResponse;
+};
+
+/**
  * @summary Refreshes a JWT token
  */
 export type sessionCreationResponse200 = {
@@ -1484,7 +1598,7 @@ export const createTeam = async (
  * @summary Joins a team by accepting an invite.
  */
 export type joinTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1539,7 +1653,7 @@ export const joinTeam = async (
  * @summary Rejects an invitation to join a team.
  */
 export type rejectInvitationResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1720,7 +1834,7 @@ export const getUserInvites = async (
  * @summary Gets a team by ID.
  */
 export type getTeamResponse200 = {
-  data: TeamWithUsers;
+  data: TeamWithMembers;
   status: 200;
 };
 
@@ -1783,7 +1897,7 @@ This will update all team members roles and cancel your subscription for the tea
 This action is **irreversible** and you will not be able to recover the team afterwards.
  */
 export type deleteTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1844,7 +1958,7 @@ export const deleteTeam = async (
  * @summary Updates a team.
  */
 export type patchTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -1987,6 +2101,80 @@ export const inviteToTeam = async (
 };
 
 /**
+ * @summary Deletes a team invite from a team.
+ */
+export type deleteTeamInviteHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type deleteTeamInviteHandlerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamInviteHandlerResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamInviteHandlerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamInviteHandlerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamInviteHandlerResponseSuccess =
+  deleteTeamInviteHandlerResponse200 & {
+    headers: Headers;
+  };
+export type deleteTeamInviteHandlerResponseError = (
+  | deleteTeamInviteHandlerResponse400
+  | deleteTeamInviteHandlerResponse401
+  | deleteTeamInviteHandlerResponse404
+  | deleteTeamInviteHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamInviteHandlerResponse =
+  | deleteTeamInviteHandlerResponseSuccess
+  | deleteTeamInviteHandlerResponseError;
+
+export const getDeleteTeamInviteHandlerUrl = (
+  teamId: string,
+  teamInviteId: string
+) => {
+  return `/team/${teamId}/invite/${teamInviteId}`;
+};
+
+export const deleteTeamInviteHandler = async (
+  teamId: string,
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<deleteTeamInviteHandlerResponse> => {
+  const res = await fetch(getDeleteTeamInviteHandlerUrl(teamId, teamInviteId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamInviteHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamInviteHandlerResponse;
+};
+
+/**
  * @summary Gets all invites for a team.
  */
 export type getTeamInvitesResponse200 = {
@@ -2051,7 +2239,7 @@ export const getTeamInvites = async (
  * @summary Regenerates a team invite notifying the user again.
  */
 export type reinviteToTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -2119,7 +2307,7 @@ export const reinviteToTeam = async (
  * @summary Removes a user from a team.
  */
 export type removeUserFromTeamResponse200 = {
-  data: EmptyResponse;
+  data: void;
   status: 200;
 };
 
@@ -2131,11 +2319,6 @@ export type removeUserFromTeamResponse400 = {
 export type removeUserFromTeamResponse401 = {
   data: ErrorResponse;
   status: 401;
-};
-
-export type removeUserFromTeamResponse429 = {
-  data: ErrorResponse;
-  status: 429;
 };
 
 export type removeUserFromTeamResponse500 = {
@@ -2150,7 +2333,6 @@ export type removeUserFromTeamResponseSuccess =
 export type removeUserFromTeamResponseError = (
   | removeUserFromTeamResponse400
   | removeUserFromTeamResponse401
-  | removeUserFromTeamResponse429
   | removeUserFromTeamResponse500
 ) & {
   headers: Headers;

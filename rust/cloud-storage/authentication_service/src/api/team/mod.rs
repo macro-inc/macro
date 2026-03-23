@@ -23,25 +23,25 @@ pub(in crate::api) mod remove_user_from_team;
 pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
     Router::new()
         .route("/", post(create_team::handler))
-        .route("/join/:team_invite_id", get(join_team::handler))
+        .route("/join/{team_invite_id}", get(join_team::handler))
         .route("/user", get(get_user_teams::handler))
         .route("/user/invites", get(get_user_invites::handler))
-        .route("/:team_id", get(get_team::handler))
-        .route("/:team_id", patch(patch_team::handler))
-        .route("/:team_id", delete(delete_team::handler))
-        .route("/:team_id/invites", get(get_team_invites::handler))
-        .route("/:team_id/invite", post(invite_to_team::handler))
+        .route("/{team_id}", get(get_team::handler))
+        .route("/{team_id}", patch(patch_team::handler))
+        .route("/{team_id}", delete(delete_team::handler))
+        .route("/{team_id}/invites", get(get_team_invites::handler))
+        .route("/{team_id}/invite", post(invite_to_team::handler))
         .route(
-            "/:team_id/reinvite/:team_invite_id",
+            "/{team_id}/reinvite/{team_invite_id}",
             get(reinvite_to_team::handler),
         )
-        .route("/join/:team_invite_id", delete(reject_invitation::handler))
+        .route("/join/{team_invite_id}", delete(reject_invitation::handler))
         .route(
-            "/:team_id/remove/:remove_user_id",
+            "/{team_id}/remove/{remove_user_id}",
             delete(remove_user_from_team::handler),
         )
         .route(
-            "/:team_id/invite/:team_invite_id",
+            "/{team_id}/invite/{team_invite_id}",
             delete(delete_team_invite::handler),
         )
         .layer(

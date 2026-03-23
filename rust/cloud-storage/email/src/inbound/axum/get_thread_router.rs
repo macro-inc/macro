@@ -49,7 +49,7 @@ where
     Svc: EntityAccessService,
 {
     Router::new()
-        .route("/:thread_id", get(get_thread_handler::<T, Svc>))
+        .route("/{thread_id}", get(get_thread_handler::<T, Svc>))
         .with_state(state)
 }
 

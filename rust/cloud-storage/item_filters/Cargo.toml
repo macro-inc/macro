@@ -11,6 +11,7 @@ schema = ["dep:schemars", "dep:utoipa"]
 [dependencies]
 chrono = { workspace = true }
 either = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }
 filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }

@@ -42,11 +42,7 @@ impl DocumentStorageServiceClient {
                 .await
                 .unwrap_or_else(|_| "<failed to read body>".into());
 
-            return Err(anyhow::anyhow!(
-                "upload unnested failed: {} - {}",
-                status,
-                text
-            ));
+            anyhow::bail!("upload unnested failed: {} - {}", status, text);
         }
 
         let data = match response
@@ -55,7 +51,7 @@ impl DocumentStorageServiceClient {
         {
             Ok(upload_response_data) => upload_response_data.data,
             Err(_) => {
-                return Err(anyhow::anyhow!("unable to parse response"));
+                anyhow::bail!("unable to parse response");
             }
         };
 
@@ -89,17 +85,13 @@ impl DocumentStorageServiceClient {
                 .await
                 .unwrap_or_else(|_| "<failed to read body>".into());
 
-            return Err(anyhow::anyhow!(
-                "mark uploaded failed: {} - {}",
-                status,
-                text
-            ));
+            anyhow::bail!("mark uploaded failed: {} - {}", status, text);
         }
 
         let data = match response.json::<MarkProjectUploadedResponse>().await {
             Ok(data) => data,
             Err(_) => {
-                return Err(anyhow::anyhow!("unable to parse response"));
+                anyhow::bail!("unable to parse response");
             }
         };
 

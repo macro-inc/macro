@@ -19,7 +19,7 @@ pub struct Params {
 /// Deletes the pin for the user
 #[utoipa::path(
         delete,
-        path = "/pins/:pinned_item_id",
+        path = "/pins/{pinned_item_id}",
         params(
             ("pinned_item_id" = String, Path, description = "ID of the pinned item")
         ),

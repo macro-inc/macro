@@ -516,8 +516,9 @@
 
 @theme default {
     /* Font families */
-    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    /*--font-mono: "Roboto Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;*/
+    --font-mono: "Roboto Mono Variable",  monospace;
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
@@ -614,25 +615,13 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        /* Need to set opsz here so that it will apply to MD */
-        font-variation-settings: "opsz" 11;
-        font-synthesis: none;
-
         color: var(--color-ink);
+        font-feature-settings: "dlig" 1, "calt" 1;
     }
 
     @font-face {
         font-family: "oooh-baby";
         src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
-    }
-
-    @font-face {
-      font-family: "Forma Macro Mono";
-      src: url("./asset/fonts/FormaMacroMonoVariable.woff2") format("woff2");
-      font-weight: 200 700;
-      font-style: normal italic;
-      font-display: swap;
-      font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
     }
 
     /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
@@ -708,6 +697,17 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
   pointer-events: none;
 }
 
+/* Channel message highlight: hover only in mouse nav, keyboard selection only in keyboard nav */
+[data-channel-nav="mouse"] [data-message]:hover,
+[data-channel-nav="keyboard"] [data-message][data-highlighted] {
+    @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
+}
+
+[data-channel-nav="mouse"] [data-message]:hover > .message-accent-bar,
+[data-channel-nav="keyboard"] [data-message][data-highlighted] > .message-accent-bar {
+    @apply opacity-100;
+}
+
 html[data-modality="keyboard"] input:focus-visible::after,
 html[data-modality="keyboard"] textarea:focus-visible::after,
 html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
@@ -750,18 +750,22 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 :root {
+  --message-padding-x: .5rem;
+  --regular-message-padding-t: .5rem;
+  --thread-padding-y: .5rem;
   --thread-shift: 32px;
   --user-icon-width: 36px;
-  --body-padding: .5rem;
-  --left-of-connector: 16px;
-  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+  --left-of-connector: calc(
+    var(--message-padding-x) + var(--user-icon-width) / 2
+  );
+  --left-of-user-icon: calc(
+    var(--left-of-connector) - var(--user-icon-width) / 2
+  );
 }
 
 @media (min-width: 640px) {
   :root {
     --thread-shift: 40px;
-    --body-padding: .5rem;
-    --left-of-connector: 28px;
   }
 }
 

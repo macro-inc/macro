@@ -240,7 +240,7 @@ pub async fn mark_projects_uploaded(
     let project_ids = get_all_sub_project_ids(&mut transaction, root_project_id).await?;
 
     if project_ids.is_empty() {
-        return Err(anyhow::anyhow!("Project not found: {}", root_project_id));
+        anyhow::bail!("Project not found: {}", root_project_id);
     }
 
     // Update all projects to set uploadPending to false
@@ -274,15 +274,32 @@ mod tests {
     use uuid::Uuid;
 
     async fn create_test_permission(pool: &Pool<Postgres>) -> anyhow::Result<SharePermissionV2> {
+        let macro_user_id = Uuid::new_v4();
+
+        // insert macro_user first (foreign key for User.macro_user_id)
+        sqlx::query!(
+            r#"
+            INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+            VALUES ($1, $2, $3, $4)
+            "#,
+            macro_user_id,
+            "user@user.com",
+            "user@user.com",
+            "stripe_id"
+        )
+        .execute(pool)
+        .await?;
+
         // insert macro user into user table
         let _user = sqlx::query!(
             r#"
-            INSERT INTO "User" ("id", "email") 
-            VALUES ($1, $2)
+            INSERT INTO "User" ("id", "email", "macro_user_id")
+            VALUES ($1, $2, $3)
             RETURNING id
             "#,
             "macro|user@user.com",
-            "user@user.com"
+            "user@user.com",
+            macro_user_id
         )
         .fetch_one(pool)
         .await?;

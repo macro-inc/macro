@@ -7,6 +7,7 @@ mod tests;
 
 mod create;
 mod edit;
+mod share;
 
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -539,5 +540,10 @@ impl DocumentRepo for PgDocumentRepo {
             .await?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn share_with_team(&self, user_id: &str, document_id: &str) -> Result<(), Self::Err> {
+        share::share_with_team(&self.pool, user_id, document_id).await
     }
 }

@@ -6,7 +6,11 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
-import { chatRuleset, uploadFile } from '@core/util/upload';
+import {
+  chatRuleset,
+  handleFileFolderDrop,
+  uploadFile,
+} from '@core/util/upload';
 import { uploadInputAttachments } from './upload-attachments';
 import type {
   InputAttachmentTracker,
@@ -16,14 +20,36 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import { Match, Show, Switch, type Accessor, type JSX } from 'solid-js';
+import { isReplyInput } from './types';
+import type { IUser } from '@core/user/types';
 
-type ChannelInputProps = InputCallbacks & {
+export type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
+  participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
+  children?: JSX.Element;
 };
+
+function DefaultActions(props: { input: InputData }) {
+  return (
+    <Input.Actions>
+      <Input.Actions.Left>
+        <Input.AttachFilesAction />
+        <Input.ToggleFormatAction />
+        <Show when={isReplyInput(props.input)}>
+          <Input.CloseReplyAction />
+        </Show>
+      </Input.Actions.Left>
+      <Input.Actions.Right>
+        <Input.SendAction />
+      </Input.Actions.Right>
+    </Input.Actions>
+  );
+}
 
 export function ChannelInput(props: ChannelInputProps) {
   const mentionsTracker = createMentionsTracker();
@@ -32,11 +58,13 @@ export function ChannelInput(props: ChannelInputProps) {
     createInputAttachmentTracker({
       initialAttachments: props.input.attachments,
     });
+  let clearComposer = () => {};
 
   const inputState = createInputState({
     initialInput: props.input,
     mentions: mentionsTracker.mentions,
     attachmentTracker,
+    clearComposer: () => clearComposer(),
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
@@ -62,6 +90,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
+    users: props.participants,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
     },
@@ -76,7 +105,13 @@ export function ChannelInput(props: ChannelInputProps) {
       inputState.commands.send();
       return true;
     },
+    onPasteFilesAndDirs: (files, directories) => {
+      void handleFileFolderDrop(files, directories, (entries) =>
+        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      );
+    },
   });
+  clearComposer = () => markdownEditor.controls.clear();
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
@@ -122,8 +157,12 @@ export function ChannelInput(props: ChannelInputProps) {
           <Input.Attachments kind="media" />
           <Input.Attachments kind="document" />
           <Input.Footer>
-            <Input.PrimaryActions />
-            <Input.SendAction />
+            <Switch>
+              <Match when={props.children}>{props.children}</Match>
+              <Match when>
+                <DefaultActions input={inputState.view()} />
+              </Match>
+            </Switch>
           </Input.Footer>
         </Input.Layout>
       </Input.DropZone>

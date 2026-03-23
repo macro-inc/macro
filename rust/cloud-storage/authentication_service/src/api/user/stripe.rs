@@ -1,12 +1,9 @@
-use std::sync::LazyLock;
-
 use axum::{
     Extension, Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_env_var::env_var;
 use serde::{Deserialize, Serialize};
 use stripe::{ParseIdError, StripeError};
 use thiserror::Error;
@@ -52,17 +49,14 @@ impl IntoResponse for StripeOperationError {
     }
 }
 
-env_var!(
-    struct StripePremiumPriceId;
-);
-
-static STRIPE_PRICE_ID: LazyLock<StripePremiumPriceId> = LazyLock::new(|| {
-    match StripePremiumPriceId::new() {
-        Ok(var) => var,
-        // just use this non secret value if the value doesn't exist
-        Err(_) => StripePremiumPriceId::Comptime("price_1PnSgXJaD7zvQeOBfSYgOmZc"),
-    }
-});
+#[derive(Debug, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum StripeProductTier {
+    #[default]
+    Haiku,
+    Sonnet,
+    Opus,
+}
 
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]
@@ -74,6 +68,11 @@ pub struct CreateCheckoutSessionRequest {
     pub cancel_url: String,
     /// Optional discount/promo code to apply
     pub discount: Option<String>,
+    /// Google Analytics client ID for conversion tracking
+    pub ga_client_id: Option<String>,
+    /// The tier, defaults to haiku
+    #[serde(default)]
+    pub tier: StripeProductTier,
 }
 
 /// Response containing the Stripe session URL
@@ -165,6 +164,25 @@ pub async fn create_checkout_session(
         None
     };
 
+    // Build subscription metadata from optional tracking fields
+    let mut metadata = std::collections::HashMap::new();
+    if let Some(ga_client_id) = req.ga_client_id {
+        metadata.insert("ga_client_id".to_string(), ga_client_id);
+    }
+
+    // Only set subscription_data if we have metadata to include
+    let subscription_data =
+        (!metadata.is_empty()).then_some(stripe::CreateCheckoutSessionSubscriptionData {
+            metadata: Some(metadata),
+            ..Default::default()
+        });
+
+    let price_id = match req.tier {
+        StripeProductTier::Haiku => ctx.stripe_price_ids.stripe_price_id_haiku.as_ref(),
+        StripeProductTier::Sonnet => ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref(),
+        StripeProductTier::Opus => ctx.stripe_price_ids.stripe_price_id_opus.as_ref(),
+    };
+
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {
         customer: Some(customer_id),
@@ -179,10 +197,11 @@ pub async fn create_checkout_session(
             }]
         }),
         line_items: Some(vec![stripe::CreateCheckoutSessionLineItems {
-            price: Some(STRIPE_PRICE_ID.as_ref().to_string()),
+            price: Some(price_id.to_string()),
             quantity: Some(1),
             ..Default::default()
         }]),
+        subscription_data,
         ..Default::default()
     };
 

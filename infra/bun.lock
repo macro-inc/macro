@@ -71,10 +71,6 @@
       "name": "convert-service-stack",
       "version": "0.0.0",
     },
-    "stacks/delete-document-worker": {
-      "name": "delete-document-worker-stack",
-      "version": "0.0.0",
-    },
     "stacks/deleted-item-poller": {
       "name": "deleted-item-poller-stack",
       "version": "0.0.0",
@@ -122,6 +118,10 @@
         "pulumi-fusionauth": "6.0.2",
       },
     },
+    "stacks/github-runners": {
+      "name": "github-runners-stack",
+      "version": "0.0.0",
+    },
     "stacks/image-proxy-service": {
       "name": "image-proxy-service-stack",
       "version": "0.0.0",
@@ -132,6 +132,10 @@
     },
     "stacks/macrodb": {
       "name": "macrodb-stack",
+      "version": "0.0.0",
+    },
+    "stacks/mcp-server": {
+      "name": "mcp-server-stack",
       "version": "0.0.0",
     },
     "stacks/notification-service": {
@@ -592,8 +596,6 @@
 
     "defer-to-connect": ["defer-to-connect@2.0.1", "", {}, "sha512-4tvttepXG1VaYGrRibk5EwJd1t4udunSOVMdLSAL6mId1ix438oPwPZMALY41FCijukO1L0twNcGsdzS7dHgDg=="],
 
-    "delete-document-worker-stack": ["delete-document-worker-stack@workspace:stacks/delete-document-worker"],
-
     "deleted-item-poller-stack": ["deleted-item-poller-stack@workspace:stacks/deleted-item-poller"],
 
     "diff": ["diff@4.0.2", "", {}, "sha512-58lmxKSA4BNyLz+HHMUzlOEpg09FV+ev6ZMe3vJihgdxzgcwZ8VoEEPmALCZG9LmqfVoNMMKpttIYTVG6uDY7A=="],
@@ -657,6 +659,8 @@
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
     "get-stream": ["get-stream@6.0.1", "", {}, "sha512-ts6Wi+2j3jQjqi70w5AlN8DFnkSwC+MqmxEzdEALB2qXZYV3X/b1CTfgPLGJNMeAWxdPfU8FO1ms3NUfaHCPYg=="],
+
+    "github-runners-stack": ["github-runners-stack@workspace:stacks/github-runners"],
 
     "glob": ["glob@10.4.5", "", { "dependencies": { "foreground-child": "^3.1.0", "jackspeak": "^3.1.2", "minimatch": "^9.0.4", "minipass": "^7.1.2", "package-json-from-dist": "^1.0.0", "path-scurry": "^1.11.1" }, "bin": { "glob": "dist/esm/bin.mjs" } }, "sha512-7Bv8RF0k6xjo7d4A/PxYLbUCfb6c+Vpd2/mB2yRDlew7Jb5hEXiCD9ibfO7wpk8i4sevK6DFny9h7EYbM3/sHg=="],
 
@@ -747,6 +751,8 @@
     "make-error": ["make-error@1.3.6", "", {}, "sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw=="],
 
     "make-fetch-happen": ["make-fetch-happen@13.0.1", "", { "dependencies": { "@npmcli/agent": "^2.0.0", "cacache": "^18.0.0", "http-cache-semantics": "^4.1.1", "is-lambda": "^1.0.1", "minipass": "^7.0.2", "minipass-fetch": "^3.0.0", "minipass-flush": "^1.0.5", "minipass-pipeline": "^1.2.4", "negotiator": "^0.6.3", "proc-log": "^4.2.0", "promise-retry": "^2.0.1", "ssri": "^10.0.0" } }, "sha512-cKTUFc/rbKUd/9meOvgrpJ2WrNzymt6jfRDdwg5UCnVzv9dTpEj9JS5m3wtziXVCjluIXyL8pcaukYqezIzZQA=="],
+
+    "mcp-server-stack": ["mcp-server-stack@workspace:stacks/mcp-server"],
 
     "merge-stream": ["merge-stream@2.0.0", "", {}, "sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w=="],
 

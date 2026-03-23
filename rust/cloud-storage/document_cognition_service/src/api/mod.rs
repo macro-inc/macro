@@ -97,6 +97,6 @@ fn api_router(api_context: ApiContext) -> Router {
         );
 
     Router::new()
-        .nest("/:version", internal_router.clone())
+        .nest("/{version}", internal_router.clone())
         .merge(internal_router)
 }

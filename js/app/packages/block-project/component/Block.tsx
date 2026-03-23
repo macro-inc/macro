@@ -4,6 +4,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -28,15 +29,17 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { NIL_UUID } from '@app/component/next-soup/filters/filters';
+import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
+import { SharedEmailFilter } from '@service-storage/generated/schemas';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project', 'email'];
 
 const Block: Component = () => {
+  useBlockEntityCommands();
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
@@ -195,7 +198,8 @@ const ProjectEntityList = (props: {
             project_ids: [props.projectId],
           },
           email_filters: {
-            recipients: [NIL_UUID],
+            project_ids: [props.projectId],
+            shared: SharedEmailFilter.include,
           },
         }}
       >

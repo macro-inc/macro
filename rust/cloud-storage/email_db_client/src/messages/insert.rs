@@ -2,7 +2,7 @@ use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, labels, parse, threads};
-use anyhow::Context;
+
 use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::message;
 use sqlx::PgPool;
@@ -29,12 +29,9 @@ pub async fn insert_message_with_tx(
         recipents.from_contact_id,
         update_thread_metadata,
     )
-    .await
-    .context("Failed to insert message")?;
+    .await?;
 
-    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents)
-        .await
-        .context("Failed to insert recipients")?;
+    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents).await?;
 
     if !message.labels.is_empty() {
         let provider_label_ids: Vec<String> = message
@@ -49,20 +46,15 @@ pub async fn insert_message_with_tx(
             &provider_label_ids,
             true,
         )
-        .await
-        .context("failed to upsert labels")?;
+        .await?;
     }
 
     if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments)
-            .await
-            .context("Failed to insert attachments")?;
+        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
     }
 
     if update_thread_metadata {
-        threads::update::update_thread_metadata(tx, thread_db_id, link_id)
-            .await
-            .context("Failed to update thread metadata")?;
+        threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;
 
         replying_to_id::update_message_replying_to_from_headers(
             tx,
@@ -70,8 +62,7 @@ pub async fn insert_message_with_tx(
             message_db_id,
             link_id,
         )
-        .await
-        .context("Failed to update message replying_to_id from headers")?;
+        .await?;
     }
 
     Ok(())
@@ -165,8 +156,7 @@ pub async fn insert_message(
 
     let recipients =
         contacts::upsert_message::parse_and_upsert_message_contacts(pool, link_id, addresses)
-            .await
-            .context("Failed to insert address ids")?;
+            .await?;
 
     let mut tx = pool.begin().await?;
 
@@ -186,12 +176,10 @@ pub async fn insert_message(
         }
         Err(e) => {
             if let Err(rollback_err) = tx.rollback().await {
-                return Err(e)
-                    .context("Failed to insert message")
-                    .context(format!("Rollback also failed: {:?}", rollback_err));
+                return Err(e.context(format!("Rollback also failed: {:?}", rollback_err)));
             }
 
-            Err(e).context("Failed to insert message")
+            Err(e)
         }
     }
 }

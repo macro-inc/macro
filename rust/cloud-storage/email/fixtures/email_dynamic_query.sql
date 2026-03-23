@@ -1,6 +1,19 @@
 -- Fixture for testing dynamic email query builder
 -- Sets up threads, messages, contacts, recipients, labels for comprehensive testing
 
+-- Insert test user for project ownership
+INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_user1');
+
+INSERT INTO "User" (id, email, name, macro_user_id)
+VALUES ('macro|user1@test.com', 'user1@test.com', 'Test User 1', 'a1111111-1111-1111-1111-111111111111');
+
+-- Insert test projects
+INSERT INTO "Project" (id, name, "userId", "createdAt", "updatedAt")
+VALUES
+    ('proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Project Alpha', 'macro|user1@test.com', NOW(), NOW()),
+    ('proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Project Beta', 'macro|user1@test.com', NOW(), NOW());
+
 -- Insert test link
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
@@ -36,27 +49,27 @@ INSERT INTO email_threads (
     created_at, updated_at
 )
 VALUES
-    -- Thread 1: Inbox, from john@example.com
+    -- Thread 1: Inbox, from john@example.com, in Project Alpha
     ('20000001-0000-0000-0000-000000000001', 'thread1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      true, false, '2024-01-15 10:00:00+00', NULL, '2024-01-15 10:00:00+00', NOW(), NOW()),
 
-    -- Thread 2: Sent, to jane@example.com
+    -- Thread 2: Sent, to jane@example.com, in Project Alpha
     ('20000002-0000-0000-0000-000000000002', 'thread2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      false, true, NULL, '2024-01-14 09:00:00+00', '2024-01-14 09:00:00+00', NOW(), NOW()),
 
-    -- Thread 3: Draft from bob@example.com
+    -- Thread 3: Draft from bob@example.com (no project)
     ('20000003-0000-0000-0000-000000000003', 'thread3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      false, false, NULL, NULL, '2024-01-13 08:00:00+00', NOW(), NOW()),
 
-    -- Thread 4: Starred, from alice@example.com
+    -- Thread 4: Starred, from alice@example.com (no project)
     ('20000004-0000-0000-0000-000000000004', 'thread4', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      true, false, '2024-01-12 07:00:00+00', NULL, '2024-01-12 07:00:00+00', NOW(), NOW()),
 
-    -- Thread 5: Important inbox from john@example.com
+    -- Thread 5: Important inbox from john@example.com, in Project Alpha
     ('20000005-0000-0000-0000-000000000005', 'thread5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      true, false, '2024-01-11 06:00:00+00', NULL, '2024-01-11 06:00:00+00', NOW(), NOW()),
 
-    -- Thread 6: User label "Work", from jane@example.com
+    -- Thread 6: User label "Work", from jane@example.com, in Project Beta
     ('20000006-0000-0000-0000-000000000006', 'thread6', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      false, false, NULL, NULL, '2024-01-10 05:00:00+00', NOW(), NOW()),
 
@@ -66,7 +79,27 @@ VALUES
 
     -- Thread 8: Draft with depriority label (CATEGORY_UPDATES) - tests that DRAFT priority overrides depriority
     ('20000008-0000-0000-0000-000000000008', 'thread8', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-     false, false, NULL, NULL, '2024-01-08 03:00:00+00', NOW(), NOW());
+     false, false, NULL, NULL, '2024-01-08 03:00:00+00', NOW(), NOW()),
+
+    -- Thread 9: Draft in TRASH - tests that importance=true excludes trashed drafts
+    ('20000009-0000-0000-0000-000000000009', 'thread9', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, NULL, NULL, '2024-01-07 02:00:00+00', NOW(), NOW()),
+
+    -- Thread 10: Starred message in TRASH - tests that starred view excludes trashed messages
+    ('20000010-0000-0000-0000-000000000010', 'thread10', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, '2024-01-06 01:00:00+00', NULL, '2024-01-06 01:00:00+00', NOW(), NOW()),
+
+    -- Thread 11: User label "Work" message in TRASH - tests that user label view excludes trashed messages
+    ('20000011-0000-0000-0000-000000000011', 'thread11', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     false, false, NULL, NULL, '2024-01-05 00:00:00+00', NOW(), NOW());
+
+-- Assign threads to projects
+UPDATE email_threads SET project_id = 'proj-aaaa-aaaa-aaaa-aaaaaaaaaaaa' WHERE id IN (
+    '20000001-0000-0000-0000-000000000001',
+    '20000002-0000-0000-0000-000000000002',
+    '20000005-0000-0000-0000-000000000005'
+);
+UPDATE email_threads SET project_id = 'proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb' WHERE id = '20000006-0000-0000-0000-000000000006';
 
 -- Insert test messages
 INSERT INTO email_messages (
@@ -122,7 +155,25 @@ VALUES
     ('30000008-0000-0000-0000-000000000008', '20000008-0000-0000-0000-000000000008',
      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg8', '40000003-0000-0000-0000-000000000003',
      'Draft With Updates Label', 'Draft that also has a depriority label', '2024-01-08 03:00:00+00',
-     true, false, false, false, NOW(), NOW());
+     true, false, false, false, NOW(), NOW()),
+
+    -- Message 9: Draft in TRASH from alice@example.com
+    ('30000009-0000-0000-0000-000000000009', '20000009-0000-0000-0000-000000000009',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg9', '40000004-0000-0000-0000-000000000004',
+     'Trashed Draft', 'A draft that was moved to trash', '2024-01-07 02:00:00+00',
+     true, false, false, false, NOW(), NOW()),
+
+    -- Message 10: Starred message in TRASH from john@example.com
+    ('30000010-0000-0000-0000-000000000010', '20000010-0000-0000-0000-000000000010',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg10', '40000001-0000-0000-0000-000000000001',
+     'Trashed Starred', 'A starred message that was moved to trash', '2024-01-06 01:00:00+00',
+     false, false, true, false, NOW(), NOW()),
+
+    -- Message 11: User label "Work" message in TRASH from jane@example.com
+    ('30000011-0000-0000-0000-000000000011', '20000011-0000-0000-0000-000000000011',
+     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'msg11', '40000002-0000-0000-0000-000000000002',
+     'Trashed Work Email', 'A work email that was moved to trash', '2024-01-05 00:00:00+00',
+     false, false, false, false, NOW(), NOW());
 
 -- Insert message recipients
 INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
@@ -150,7 +201,16 @@ VALUES
     ('30000007-0000-0000-0000-000000000007', '40000003-0000-0000-0000-000000000003', 'CC'),
 
     -- Message 8: To alice@example.com
-    ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO');
+    ('30000008-0000-0000-0000-000000000008', '40000004-0000-0000-0000-000000000004', 'TO'),
+
+    -- Message 9: To john@example.com
+    ('30000009-0000-0000-0000-000000000009', '40000001-0000-0000-0000-000000000001', 'TO'),
+
+    -- Message 10: To alice@example.com
+    ('30000010-0000-0000-0000-000000000010', '40000004-0000-0000-0000-000000000004', 'TO'),
+
+    -- Message 11: To bob@example.com
+    ('30000011-0000-0000-0000-000000000011', '40000003-0000-0000-0000-000000000003', 'TO');
 
 -- Insert message-label relationships
 INSERT INTO email_message_labels (message_id, label_id)
@@ -187,4 +247,13 @@ VALUES
     ('30000007-0000-0000-0000-000000000007', '10000010-0000-0000-0000-000000000010'),
     -- Message 8 (thread 8): DRAFT + CATEGORY_UPDATES (draft with depriority label → important because DRAFT is priority)
     ('30000008-0000-0000-0000-000000000008', '10000005-0000-0000-0000-000000000005'),
-    ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009');
+    ('30000008-0000-0000-0000-000000000008', '10000009-0000-0000-0000-000000000009'),
+    -- Message 9 (thread 9): DRAFT + TRASH (trashed draft → excluded from importance=true)
+    ('30000009-0000-0000-0000-000000000009', '10000005-0000-0000-0000-000000000005'),
+    ('30000009-0000-0000-0000-000000000009', '10000006-0000-0000-0000-000000000006'),
+    -- Message 10 (thread 10): STARRED + TRASH (trashed starred → excluded from starred view)
+    ('30000010-0000-0000-0000-000000000010', '10000004-0000-0000-0000-000000000004'),
+    ('30000010-0000-0000-0000-000000000010', '10000006-0000-0000-0000-000000000006'),
+    -- Message 11 (thread 11): Work + TRASH (trashed user label → excluded from user label view)
+    ('30000011-0000-0000-0000-000000000011', '10000007-0000-0000-0000-000000000007'),
+    ('30000011-0000-0000-0000-000000000011', '10000006-0000-0000-0000-000000000006');

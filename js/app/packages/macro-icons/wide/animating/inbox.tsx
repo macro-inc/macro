@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedInboxIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedInboxIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -11,9 +14,9 @@ export const AnimatedInboxIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-inbox-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-inbox-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      <title>Animated inbox icon</title>
+      {/*<title>Animated inbox icon</title>*/}
       <style>{`
         .animated-inbox-icon {
           .right-bar {
