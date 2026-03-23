@@ -7,10 +7,10 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { useEmailLinks } from '@core/email-link';
+import { useLogout } from '@core/auth/logout';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -494,7 +494,10 @@ export function EmailCompose(props: EmailComposeProps) {
     shouldReturnFocusOnClose: false,
   });
 
-  const { connect: connectEmail } = useEmailLinks();
+  const logout = useLogout();
+  const logoutHandler = () => {
+    logout(window.location.origin);
+  };
 
   const previewName = createMemo(() => {
     const recipients = form.recipients().to;
@@ -851,14 +854,17 @@ export function EmailCompose(props: EmailComposeProps) {
             <div class="flex items-center justify-between gap-2">
               <Caution class="size-4" />
               <span class="text-sm">
-                You have not connected an email account.
+                Email requires additional Google permissions. Select the permissions on sign-in to enable.
               </span>
               <span class="grow" />
-              <DeprecatedTextButton
-                theme="base"
-                text="Connect Email"
-                onClick={connectEmail}
-              />
+              <Button
+                variant="secondary"
+                size="sm"
+                class="px-2"
+                onClick={logoutHandler}
+              >
+                Logout
+              </Button>
             </div>
           </div>
         </Show>
