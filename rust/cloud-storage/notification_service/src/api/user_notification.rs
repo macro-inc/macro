@@ -209,7 +209,8 @@ where
             let err_str = err.to_string();
 
             (err_str.contains("channel_message_document")
-                || err_str.contains("missing field `toEmail`"))
+                || err_str.contains("missing field `toEmail`")
+                || err_str.contains("missing field `sender`"))
             .then_some(uuid)
         }
 
