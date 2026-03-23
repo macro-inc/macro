@@ -192,7 +192,7 @@ interface LayoutProps {
 
 function InboxDivider() {
   return (
-    <div class="ml-(--soup-inbox-left-of-content) min-w-full min-h-[1px] max-h-[1px] bg-edge-muted col-span-3" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-[1px] max-h-[1px] bg-edge-muted" />
   );
 }
 
@@ -485,6 +485,7 @@ function NarrowInboxLayout(props: LayoutProps) {
           <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
         </Match>
       </Switch>
+      <InboxDivider />
     </Entity.Layout>
   );
 }
@@ -737,7 +738,7 @@ function MobileMultiStackLayout(props: {
     props.entity.channelType === 'direct_message';
 
   return (
-    <div class="pl-(--soup-stack-row-padding-l) pb-3">
+    <div class="pl-(--soup-stack-row-padding-l) pb-3 relative">
       {/* Non-swipeable header */}
       <div class="grid grid-cols-[calc(var(--soup-inbox-left-of-content)-var(--soup-stack-row-padding-l))_auto] w-full text-sm items-center pr-4 py-3">
         <div class="ml-(--soup-stack-header-icon-padding-l) mr-(--soup-inbox-icon-padding-r) shrink-0 size-(--soup-stack-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
@@ -835,19 +836,19 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
-      class={cn('@container/entity w-full min-h-10 relative group/narrow', {
+      class={cn('@container/entity w-full relative group/narrow', {
         'bg-accent/5': props.checked,
         'hover:bg-hover/30':
           !props.checked && !props.highlighted && !props.hovered,
         'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
         'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
-          props.highlighted,
+          props.highlighted && !isMobile(),
       })}
       onMouseMove={props.onMouseMove}
     >
       <div
         class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
-          'opacity-100': props.highlighted,
+          'opacity-100': props.highlighted && !isMobile(),
         })}
       />
 
@@ -877,7 +878,6 @@ export function ListEntity(props: ListEntityProps) {
           >
             <NarrowInboxLayout {...layoutProps()} />
           </MaybeEntityRow>
-          <InboxDivider />
         </Match>
         <Match when={true}>
           <MaybeEntityRow
