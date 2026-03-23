@@ -27,6 +27,8 @@ type ImageGalleryMediaPreviewProps = {
 type VideoMediaPreviewProps = {
   kind: 'video';
   id: string;
+  width?: number | undefined;
+  height?: number | undefined;
   class?: string;
 };
 
@@ -89,7 +91,12 @@ function VideoMediaPreview(props: VideoMediaPreviewProps) {
       )}
       data-message-media-preview="video"
     >
-      <VideoPreview id={props.id} variant="dynamic" />
+      <VideoPreview
+        id={props.id}
+        variant="dynamic"
+        width={props.width}
+        height={props.height}
+      />
     </div>
   );
 }

@@ -85,7 +85,12 @@ export function Attachments(props: AttachmentsProps) {
         <Show when={buckets().videoAttachments.length > 0}>
           <For each={buckets().videoAttachments}>
             {(attachment) => (
-              <MediaPreview kind="video" id={attachment.entity_id} />
+              <MediaPreview
+                kind="video"
+                id={attachment.entity_id}
+                width={attachment.width ?? undefined}
+                height={attachment.height ?? undefined}
+              />
             )}
           </For>
         </Show>
