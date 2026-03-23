@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiMessageAttachmentHeight } from './apiMessageAttachmentHeight';
+import type { ApiMessageAttachmentWidth } from './apiMessageAttachmentWidth';
 
 /**
  * An attachment on a message.
@@ -15,6 +17,10 @@ export interface ApiMessageAttachment {
   entity_id: string;
   /** Type of entity. */
   entity_type: string;
+  /** Height (for images). */
+  height?: ApiMessageAttachmentHeight;
   /** Attachment id. */
   id: string;
+  /** Width (for images). */
+  width?: ApiMessageAttachmentWidth;
 }

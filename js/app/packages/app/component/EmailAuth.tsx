@@ -66,9 +66,9 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onSuccess();
           return;
         }
-        toast.failure(
+        toast.alert(
           'Failed to connect email',
-          'Please email contact@macro.com'
+          'Select email permissions on sign-in to enable'
         );
         navigateToSuccess();
       });

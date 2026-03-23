@@ -905,7 +905,15 @@ export const getChannelMessagesResponse = zod
                       .describe('When the attachment was created.'),
                     entity_id: zod.string().describe('Entity id.'),
                     entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
                     id: zod.string().uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
                   })
                   .describe('An attachment on a message.')
               )
@@ -963,10 +971,18 @@ export const getChannelMessagesResponse = zod
                                 entity_type: zod
                                   .string()
                                   .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
                                 id: zod
                                   .string()
                                   .uuid()
                                   .describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
                               })
                               .describe('An attachment on a message.')
                           )
@@ -1052,7 +1068,9 @@ export const getThreadRepliesResponseItem = zod
               .describe('When the attachment was created.'),
             entity_id: zod.string().describe('Entity id.'),
             entity_type: zod.string().describe('Type of entity.'),
+            height: zod.number().nullish().describe('Height (for images).'),
             id: zod.string().uuid().describe('Attachment id.'),
+            width: zod.number().nullish().describe('Width (for images).'),
           })
           .describe('An attachment on a message.')
       )
@@ -4344,6 +4362,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          ),
+        shared: zod
+          .enum(['exclude', 'include', 'only'])
+          .optional()
+          .describe(
+            'Controls whether shared email threads are included in results.'
           ),
       })
       .optional()

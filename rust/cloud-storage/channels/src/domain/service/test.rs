@@ -131,6 +131,8 @@ async fn returns_messages_with_thread_info() {
         id: Uuid::new_v4(),
         entity_type: "document".into(),
         entity_id: "doc_1".into(),
+        width: None,
+        height: None,
         created_at: Utc::now(),
     };
     let attachment_clone = attachment.clone();
@@ -429,6 +431,8 @@ async fn thread_replies_resolve_and_hydrate() {
                 id: Uuid::new_v4(),
                 entity_type: "document".into(),
                 entity_id: "doc-1".into(),
+                width: None,
+                height: None,
                 created_at: Utc::now(),
             }],
         );
