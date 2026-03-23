@@ -6,12 +6,15 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { IUser } from '@core/user/types';
 
 type CreateConfiguredChannelMarkdownEditorOptions = {
   namespace: string;
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
+  /** Override user mention suggestions (e.g. channel participants). */
+  users?: () => IUser[];
   onChange?: (markdown: string) => void;
   onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
   onPasteFilesAndDirs?: (
@@ -29,6 +32,8 @@ export function createConfiguredChannelMarkdownEditor(
     editor.withMentions({
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
+      users: options.users,
+      block: 'channel',
     });
   }
 

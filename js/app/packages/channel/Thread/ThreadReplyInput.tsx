@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
-import type { Accessor, Setter } from 'solid-js';
+import { createMemo, type Accessor, type Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
 import { buildPostMessageRequest } from '../Input/message-payload';
@@ -11,6 +11,8 @@ import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { channelParticipantInfo } from '@core/user/util';
 
 type ThreadReplyInputProps = {
   channelId: string;
@@ -23,6 +25,15 @@ type ThreadReplyInputProps = {
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
+
+  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
+  const channelParticipants = createMemo(() =>
+    (participantsQuery.data ?? []).map(channelParticipantInfo)
+  );
+  const participantIds = createMemo(() =>
+    (participantsQuery.data ?? []).map((p) => p.user_id)
+  );
+
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
       channelId: props.channelId,
@@ -53,6 +64,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 isDraggingOverChannel: entityDropZone.isDraggingOver(),
                 mode: 'reply',
               }}
+              participants={channelParticipants}
               attachmentTracker={tracker}
               persistenceKey={makeInputValuePersistenceKey({
                 channelId: props.channelId,
@@ -72,7 +84,11 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                   channelID: props.channelId,
                   senderId,
                   optimisticId: crypto.randomUUID(),
-                  message: buildPostMessageRequest(snapshot, props.messageId),
+                  message: buildPostMessageRequest({
+                    snapshot,
+                    threadId: props.messageId,
+                    participantIds: participantIds(),
+                  }),
                 });
 
                 props.setReplyInputState(undefined);
