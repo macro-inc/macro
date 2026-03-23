@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Optional project to associate the chat with.
+ */
 export type CreateChatRequestProjectId = string | null;

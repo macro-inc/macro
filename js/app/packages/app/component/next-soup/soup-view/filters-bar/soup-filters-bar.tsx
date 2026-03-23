@@ -69,7 +69,7 @@ export const SoupFiltersBar = () => {
         </div>
       </Match>
       <Match when={true}>
-        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
+        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
           <UnifiedFilterDropdown />
           <ActiveFilterChips
             filters={activeFiltersList()}

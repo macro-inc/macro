@@ -104,7 +104,7 @@ impl ValidatedGithubWebhookEvent {
                     texts.push(s.to_string());
                 }
             }
-            GithubWebhookEventType::Unknown(_) => {}
+            GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => {}
         }
         texts
     }
@@ -155,7 +155,7 @@ impl ValidatedGithubWebhookEvent {
 
                 if is_open { Some("In Review") } else { None }
             }
-            GithubWebhookEventType::Unknown(_) => None,
+            GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => None,
         }
     }
 
@@ -197,6 +197,18 @@ impl ValidatedGithubWebhookEvent {
             .and_then(|v| v.as_u64())
     }
 
+    /// Extract the sender's GitHub user ID from the webhook payload.
+    ///
+    /// Uses the numeric `sender.id` rather than `sender.login` because
+    /// GitHub usernames can change but user IDs are stable.
+    pub fn sender_github_user_id(&self) -> Option<String> {
+        self.payload
+            .get("sender")
+            .and_then(|s| s.get("id"))
+            .and_then(|v| v.as_u64())
+            .map(|id| id.to_string())
+    }
+
     /// Extract text from the PR context (title, body, branch) regardless of
     /// event type. For comment/review events this returns the surrounding PR
     /// info so callers can determine which task IDs are already associated
@@ -207,7 +219,9 @@ impl ValidatedGithubWebhookEvent {
 
         let pr = match self.parsed_event_type() {
             // For PR events, the event itself is the context — nothing to compare against.
-            GithubWebhookEventType::PullRequest | GithubWebhookEventType::Unknown(_) => {
+            GithubWebhookEventType::PullRequest
+            | GithubWebhookEventType::Installation
+            | GithubWebhookEventType::Unknown(_) => {
                 return texts;
             }
             // issue_comment payloads embed the issue (which contains PR title/body).
@@ -248,6 +262,8 @@ pub enum GithubWebhookEventType {
     PullRequestReview,
     /// `pull_request_review_comment` events
     PullRequestReviewComment,
+    /// `installation` events (app installed/uninstalled)
+    Installation,
     /// Any event type we don't handle
     Unknown(String),
 }
@@ -260,6 +276,7 @@ impl GithubWebhookEventType {
             "issue_comment" => Self::IssueComment,
             "pull_request_review" => Self::PullRequestReview,
             "pull_request_review_comment" => Self::PullRequestReviewComment,
+            "installation" => Self::Installation,
             other => Self::Unknown(other.to_string()),
         }
     }

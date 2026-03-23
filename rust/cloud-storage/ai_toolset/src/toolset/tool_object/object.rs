@@ -1,4 +1,5 @@
 use serde_json::Error as JsonError;
+use serde_json::Map;
 use serde_json::Value;
 use thiserror::Error;
 
@@ -8,7 +9,7 @@ use thiserror::Error;
 /// it to be invoked with JSON input at runtime.
 pub struct ToolObject<T> {
     /// The JSON schema describing the tool's input parameters.
-    pub input_schema: Value,
+    pub input_schema: Map<String, Value>,
     /// The JSON schema describing the tool's output.
     pub output_schema: Value,
     /// A human-readable description of what the tool does.
@@ -37,4 +38,7 @@ pub enum ValidationError {
     /// The schema contains `oneOf` which is not supported for AI tools.
     #[error("schema must not have oneOf set. Do not use descriptions or /// on enum types.")]
     OneOf,
+    /// Schema must be a serde_json::Value::Object
+    #[error("schema must be a serde_json::Value::Object")]
+    ExpectedObject,
 }

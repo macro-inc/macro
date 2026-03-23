@@ -70,20 +70,25 @@
         }
       }
     },
-    "/chats": {
-      "post": {
-        "tags": ["create_user_chat"],
-        "operationId": "create_chat_handler",
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StringIDResponse"
-                }
-              }
+    "/chat/{chat_id}": {
+      "delete": {
+        "tags": ["chats"],
+        "summary": "Soft-delete a chat.",
+        "operationId": "delete_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           },
           "401": {
             "description": "",
@@ -95,7 +100,140 @@
               }
             }
           },
-          "404": {
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["chats"],
+        "summary": "Patch a chat's name, project, or share permissions.",
+        "operationId": "patch_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/{chat_id}/permanent": {
+      "delete": {
+        "tags": ["chats"],
+        "summary": "Permanently delete a chat and all associated data.",
+        "operationId": "permanently_delete_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "ID of the chat",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chats": {
+      "post": {
+        "tags": ["chats"],
+        "summary": "Create a new chat.",
+        "operationId": "create_chat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StringIDResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "text/plain": {
@@ -229,14 +367,14 @@
     },
     "/chats/{chat_id}": {
       "get": {
-        "tags": ["get_chat"],
-        "summary": "Gets a particular chat by its id",
-        "operationId": "get_chat_handler",
+        "tags": ["chats"],
+        "summary": "Get a chat by ID with messages and web citations.",
+        "operationId": "get_chat",
         "parameters": [
           {
             "name": "chat_id",
             "in": "path",
-            "description": "id of the chat",
+            "description": "ID of the chat",
             "required": true,
             "schema": {
               "type": "string"
@@ -285,153 +423,26 @@
             }
           }
         }
-      },
-      "delete": {
-        "tags": ["delete_chat"],
-        "summary": "Deletes a particular chat by its id.\nSoft deletes the chat.",
-        "operationId": "delete_chat_handler",
-        "parameters": [
-          {
-            "name": "chat_id",
-            "in": "path",
-            "description": "Chat id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": ["patch_chat"],
-        "operationId": "patch_chat_handler",
-        "parameters": [
-          {
-            "name": "chat_id",
-            "in": "path",
-            "description": "Chat ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchChatRequestV2"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Chat patched successfully"
-          },
-          "400": {
-            "description": "Cannot modify deleted chat",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/chats/{chat_id}/copy": {
       "post": {
-        "tags": ["copy_chat"],
-        "operationId": "copy_chat_handler",
+        "tags": ["chats"],
+        "summary": "Copy a chat and its messages into a new chat.",
+        "operationId": "copy_chat",
         "parameters": [
           {
             "name": "chat_id",
             "in": "path",
-            "description": "Chat id",
+            "description": "ID of the chat to copy",
             "required": true,
             "schema": {
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CopyChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
-          "201": {
+          "200": {
             "description": "",
             "content": {
               "application/json": {
@@ -474,16 +485,16 @@
         }
       }
     },
-    "/chats/{chat_id}/permanent": {
-      "delete": {
-        "tags": ["delete_chat"],
-        "summary": "Permanently deletes a chat.",
-        "operationId": "permanently_delete_chat",
+    "/chats/{chat_id}/permissions": {
+      "get": {
+        "tags": ["chats"],
+        "summary": "Get the share permissions for a chat.",
+        "operationId": "get_chat_permissions",
         "parameters": [
           {
             "name": "chat_id",
             "in": "path",
-            "description": "Chat id",
+            "description": "ID of the chat",
             "required": true,
             "schema": {
               "type": "string"
@@ -496,22 +507,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
+                  "$ref": "#/components/schemas/GetChatPermissionsResponse"
                 }
               }
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "text/plain": {
@@ -536,14 +537,14 @@
     },
     "/chats/{chat_id}/revert_delete": {
       "put": {
-        "tags": ["chat"],
-        "summary": "Deletes a specific document",
+        "tags": ["chats"],
+        "summary": "Revert a soft-deleted chat.",
         "operationId": "revert_delete_chat",
         "parameters": [
           {
             "name": "chat_id",
             "in": "path",
-            "description": "Chat ID",
+            "description": "ID of the chat to restore",
             "required": true,
             "schema": {
               "type": "string"
@@ -552,31 +553,14 @@
         ],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
+            "description": ""
           },
           "401": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -584,9 +568,9 @@
           "500": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -771,56 +755,6 @@
           },
           "403": {
             "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/v2/chats/{chat_id}/permissions": {
-      "get": {
-        "tags": ["get_chat_permissions"],
-        "summary": "Gets the current chat share permissions",
-        "operationId": "get_chat_permissions_handler_v2",
-        "parameters": [
-          {
-            "name": "chat_id",
-            "in": "path",
-            "description": "id of the chat",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetChatPermissionsResponseV2"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
           }
         }
       }
@@ -1304,6 +1238,7 @@
       },
       "ChatResponse": {
         "type": "object",
+        "description": "The full chat response, matching the DCS API response shape.",
         "required": [
           "id",
           "userId",
@@ -1320,7 +1255,7 @@
             "items": {
               "$ref": "#/components/schemas/ChatAttachmentWithName"
             },
-            "description": "attachment context - attachments not attached to messages",
+            "description": "Attachment context — attachments not attached to messages.",
             "deprecated": true
           },
           "availableModels": {
@@ -1328,27 +1263,27 @@
             "items": {
               "$ref": "#/components/schemas/Model"
             },
-            "description": "Available models for the chat"
+            "description": "Available models for the chat."
           },
           "createdAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "The time the chat was created"
+            "description": "The time the chat was created."
           },
           "id": {
             "type": "string",
-            "description": "The chat uuid"
+            "description": "The chat uuid."
           },
           "isPersistent": {
             "type": "boolean",
-            "description": "whether the chat is persistent or not"
+            "description": "Whether the chat is persistent or not."
           },
           "messages": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ChatMessageWithAttachments"
             },
-            "description": "The messages in the chat"
+            "description": "The messages in the chat."
           },
           "model": {
             "oneOf": [
@@ -1357,31 +1292,31 @@
               },
               {
                 "$ref": "#/components/schemas/Model",
-                "description": "The model used to generate the chat"
+                "description": "The model used to generate the chat."
               }
             ]
           },
           "name": {
             "type": "string",
-            "description": "The name of the Chat"
+            "description": "The name of the chat."
           },
           "projectId": {
             "type": ["string", "null"],
-            "description": "The project id the chat belongs to"
+            "description": "The project id the chat belongs to."
           },
           "tokenCount": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "Current number of tokens in the chat"
+            "description": "Current number of tokens in the chat."
           },
           "updatedAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "The time the chat was last updated"
+            "description": "The time the chat was last updated."
           },
           "userId": {
             "type": "string",
-            "description": "Who the chat belongs to"
+            "description": "Who the chat belongs to."
           },
           "webCitations": {
             "type": "array",
@@ -1396,29 +1331,35 @@
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "description": "A web citation associated with a chat message.",
                     "required": ["url", "title"],
                     "properties": {
                       "description": {
-                        "type": ["string", "null"]
+                        "type": ["string", "null"],
+                        "description": "A description of the cited page."
                       },
                       "favicon_url": {
-                        "type": ["string", "null"]
+                        "type": ["string", "null"],
+                        "description": "The URL of the page's favicon."
                       },
                       "image_url": {
-                        "type": ["string", "null"]
+                        "type": ["string", "null"],
+                        "description": "The URL of the page's image."
                       },
                       "title": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "The title of the cited page."
                       },
                       "url": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "The URL of the citation."
                       }
                     }
                   }
                 }
               ]
             },
-            "description": "message_id - web citation list"
+            "description": "Message ID to web citation list."
           }
         }
       },
@@ -1738,42 +1679,17 @@
           }
         }
       },
-      "CopyChatRequest": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        }
-      },
       "CreateChatRequest": {
         "type": "object",
+        "description": "Request body for creating a chat.",
         "properties": {
-          "attachments": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/NewAttachment"
-            }
-          },
-          "isPersistent": {
-            "type": ["boolean", "null"]
-          },
-          "model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Model"
-              }
-            ]
-          },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Optional name for the chat."
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Optional project to associate the chat with."
           }
         }
       },
@@ -1816,10 +1732,6 @@
             "$ref": "#/components/schemas/DocumentReference"
           }
         }
-      },
-      "EmptyResponse": {
-        "type": "object",
-        "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
       "ExtractionStatusEnum": {
         "oneOf": [
@@ -2307,16 +2219,6 @@
           }
         }
       },
-      "GenericSuccessResponse": {
-        "type": "object",
-        "required": ["success"],
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "description": "Indicates if the request was successful"
-          }
-        }
-      },
       "GetBatchPreviewRequest": {
         "type": "object",
         "required": ["chat_ids"],
@@ -2341,33 +2243,29 @@
           }
         }
       },
-      "GetChatPathParams": {
+      "GetChatPermissionsResponse": {
         "type": "object",
-        "required": ["chat_id"],
-        "properties": {
-          "chat_id": {
-            "type": "string"
-          }
-        }
-      },
-      "GetChatPermissionsResponseV2": {
-        "type": "object",
+        "description": "Response body for get chat permissions.",
         "required": ["permissions"],
         "properties": {
           "permissions": {
-            "$ref": "#/components/schemas/SharePermissionV2"
+            "$ref": "#/components/schemas/SharePermissionV2",
+            "description": "The share permissions for the chat."
           }
         }
       },
       "GetChatResponse": {
         "type": "object",
+        "description": "Wrapper response for get_chat, matching the DCS API response shape.",
         "required": ["chat", "userAccessLevel"],
         "properties": {
           "chat": {
-            "$ref": "#/components/schemas/ChatResponse"
+            "$ref": "#/components/schemas/ChatResponse",
+            "description": "The full chat data."
           },
           "userAccessLevel": {
-            "$ref": "#/components/schemas/AccessLevel"
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The requesting user's access level on this chat."
           }
         }
       },
@@ -2566,29 +2464,15 @@
       },
       "PatchChatRequest": {
         "type": "object",
+        "description": "Request body for patching a chat.",
         "properties": {
-          "model": {
-            "type": ["string", "null"]
-          },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "New name for the chat."
           },
           "projectId": {
-            "type": ["string", "null"]
-          }
-        }
-      },
-      "PatchChatRequestV2": {
-        "type": "object",
-        "properties": {
-          "model": {
-            "type": ["string", "null"]
-          },
-          "name": {
-            "type": ["string", "null"]
-          },
-          "projectId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "New project ID for the chat. Empty string clears the project."
           },
           "sharePermission": {
             "oneOf": [
@@ -2596,7 +2480,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
+                "description": "Share permission updates."
               }
             ]
           }
@@ -2764,20 +2649,6 @@
           }
         }
       },
-      "SuccessResponse": {
-        "type": "object",
-        "required": ["error", "data"],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/GenericSuccessResponse",
-            "description": "Data to be returned"
-          },
-          "error": {
-            "type": "boolean",
-            "description": "Indicates if an error occurred"
-          }
-        }
-      },
       "ToolSchema": {
         "type": "object",
         "description": "Schema information for a single tool, serializable for API responses.",
@@ -2914,6 +2785,33 @@
           "width": {
             "type": "number",
             "format": "float"
+          }
+        }
+      },
+      "WebCitation": {
+        "type": "object",
+        "description": "A web citation associated with a chat message.",
+        "required": ["url", "title"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "A description of the cited page."
+          },
+          "favicon_url": {
+            "type": ["string", "null"],
+            "description": "The URL of the page's favicon."
+          },
+          "image_url": {
+            "type": ["string", "null"],
+            "description": "The URL of the page's image."
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the cited page."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL of the citation."
           }
         }
       },

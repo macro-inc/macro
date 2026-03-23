@@ -72,7 +72,7 @@
             font-family: &quot;Inter&quot;, sans-serif;
           "
         >
-          You have {{ notifs.len() }} unread messages
+          You have {{ notifs.len() }} unread {% if notifs.len() == 1 %}message{% else %}messages{% endif %}
         </div>
         <hr
           style="

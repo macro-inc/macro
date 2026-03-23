@@ -6061,6 +6061,10 @@
             },
             "description": "Optional property values to set on the task."
           },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether to share the task with your team or not\nDefaults to true"
+          },
           "taskName": {
             "type": "string",
             "description": "The name of the task."

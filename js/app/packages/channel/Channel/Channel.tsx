@@ -66,6 +66,8 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
+import { resetKeyboardModality } from './util';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 
 type ChannelProps = {
   channelId: string;
@@ -90,10 +92,12 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
+  let messageListElement: HTMLDivElement | undefined;
 
   const targetMessageController = createTargetMessageController({
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
+    initialTargetMessageReplyId: props.targetMessageReplyId,
     messageKeys: () => messageIndex().keys,
     navigation: threadListNavigation,
   });
@@ -110,6 +114,8 @@ export function Channel(props: ChannelProps) {
   );
   const messages = createMemo(() => messageIndex().items);
   const messageById = createMemo(() => messageIndex().byId);
+
+  const participants = useChannelParticipants(() => props.channelId);
 
   const activity = useChannelActivity(props.channelId);
 
@@ -193,6 +199,7 @@ export function Channel(props: ChannelProps) {
       messageById,
       getMessageActions,
       userId,
+      isEditing: () => !!messageEditor.state(),
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
     });
@@ -212,19 +219,33 @@ export function Channel(props: ChannelProps) {
       channelID: props.channelId,
       senderId,
       optimisticId: crypto.randomUUID(),
-      message: buildPostMessageRequest(snapshot),
+      message: buildPostMessageRequest({
+        snapshot,
+        participantIds: participants.ids(),
+      }),
     });
   };
 
   const isChannelReady = () => {
-    return messagesQuery.isFetched && threadListNavigation();
+    return (
+      messagesQuery.isFetched &&
+      threadListNavigation() &&
+      threadListScrollState()?.didInitialScroll
+    );
+  };
+
+  const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
+    if (messageListElement) {
+      resetKeyboardModality(messageListElement);
+    }
+    targetMessageController.goToMessage(messageId, replyId);
   };
 
   createEffect(
     on(isChannelReady, () => {
       if (props.onHandleReady)
         props.onHandleReady({
-          goToMessage: targetMessageController.goToMessage,
+          goToMessage,
         });
     })
   );
@@ -236,7 +257,10 @@ export function Channel(props: ChannelProps) {
           <Show when={messages().length > 0}>
             <div
               class="relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-              ref={attachMessageListRef}
+              ref={(element) => {
+                messageListElement = element;
+                attachMessageListRef(element);
+              }}
               tabIndex={-1}
               data-channel-message-list
               data-channel-nav="keyboard"
@@ -267,7 +291,14 @@ export function Channel(props: ChannelProps) {
                           data={m}
                           channelId={() => props.channelId}
                           getMessageActions={getMessageActions}
-                          targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          targetReplyId={targetMessageController.pendingTargetReplyId()}
+                          highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
+                          onTargetReplyScrolled={(replyId) => {
+                            targetMessageController.completePendingReplyScroll(
+                              m().id,
+                              replyId
+                            );
+                          }}
                           highlighted={
                             m().id ===
                             targetMessageController.highlightedMessageId()
@@ -309,6 +340,7 @@ export function Channel(props: ChannelProps) {
                   isDraggingOverChannel: dragState.isDraggingOverChannel(),
                   isValidChannelDrag: dragState.isValidChannelDrag(),
                 }}
+                participants={participants.users}
                 attachmentTracker={attachmentTracker}
                 persistenceKey={makeInputValuePersistenceKey({
                   channelId: props.channelId,

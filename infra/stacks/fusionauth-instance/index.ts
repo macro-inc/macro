@@ -262,6 +262,7 @@ const macroApplication = new FusionAuthApplication(
       authorizedUrlValidationPolicy: 'ExactMatch',
       authorizedRedirectUrls: [
         `${AUTHENTICATION_SERVICE_DOMAIN}/oauth/redirect`,
+        `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com/oauth/callback`,
       ],
       authorizedOriginUrls: ALLOWED_ORIGINS(),
       logoutBehavior: 'AllApplications',

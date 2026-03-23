@@ -1,5 +1,6 @@
 const serverHostLocal: Servers = {
   'auth-service': 'http://localhost:8080',
+  'auth-logout': 'http://localhost:3000', // TODO: make work with local fusionauth later
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8086',
   'websocket-service': 'ws://localhost:6969',
@@ -15,8 +16,14 @@ const serverHostLocal: Servers = {
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
+const authLogoutUrl =
+  import.meta.env.MODE === 'development'
+    ? 'https://fusionauth-dev.macro.com/oauth2/logout?client_id=eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c&tenantId=5e13f524-8d32-0454-81f8-061936256aa4'
+    : 'https://auth.macro.com/oauth2/logout?client_id=75409999-7dc4-4241-b73b-a51818c3a71c&tenantId=a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be';
+
 const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
+  'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,

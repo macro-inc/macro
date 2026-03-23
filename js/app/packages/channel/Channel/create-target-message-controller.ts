@@ -25,6 +25,7 @@ type TargetMessageData = {
   highlightedMessageId: string | undefined;
   loadAroundMessageId: string | undefined;
   pendingScrollTargetId: string | undefined;
+  pendingTargetReplyId: string | undefined;
 };
 
 export function createTargetMessageController(
@@ -32,11 +33,12 @@ export function createTargetMessageController(
 ) {
   const initialTargetMessageData: TargetMessageData = {
     activeTargetMessageId: options.initialTargetMessageId,
-    activeTargetMessageReplyId: undefined,
+    activeTargetMessageReplyId: options.initialTargetMessageReplyId,
     highlightedMessageId:
       options.initialTargetMessageReplyId ?? options.initialTargetMessageId,
     loadAroundMessageId: options.initialTargetMessageId,
     pendingScrollTargetId: options.initialTargetMessageId,
+    pendingTargetReplyId: options.initialTargetMessageReplyId,
   };
 
   const [targetMessageData, setTargetMessageData] =
@@ -48,9 +50,11 @@ export function createTargetMessageController(
   const goToMessage = (messageId: string, replyId?: string) => {
     const isSameTarget =
       targetMessageData['activeTargetMessageId'] === messageId;
+    const isSameReplyTarget =
+      targetMessageData['activeTargetMessageReplyId'] === replyId;
     const isPending = targetMessageData['pendingScrollTargetId'] === messageId;
 
-    if (isSameTarget && isPending) return;
+    if (isSameTarget && isSameReplyTarget && isPending) return;
 
     setTargetMessageData({
       activeTargetMessageId: messageId,
@@ -58,12 +62,19 @@ export function createTargetMessageController(
       highlightedMessageId: replyId ?? messageId,
       loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
       pendingScrollTargetId: messageId,
+      pendingTargetReplyId: replyId,
     });
   };
 
   const completePendingScroll = (messageId: string) => {
     if (targetMessageData['pendingScrollTargetId'] !== messageId) return;
     setTargetMessageData('pendingScrollTargetId', undefined);
+  };
+
+  const completePendingReplyScroll = (messageId: string, replyId: string) => {
+    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
+    if (targetMessageData['pendingTargetReplyId'] !== replyId) return;
+    setTargetMessageData('pendingTargetReplyId', undefined);
   };
 
   createEffect(
@@ -98,9 +109,11 @@ export function createTargetMessageController(
     highlightedMessageId: () => targetMessageData['highlightedMessageId'],
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
+    pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
 
     goToMessage,
     completePendingScroll,
+    completePendingReplyScroll,
   };
 }
 

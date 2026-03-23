@@ -2,7 +2,6 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { PostHog, type JsonType } from 'posthog-js';
 import {
   type Accessor,
-  children,
   createMemo,
   createSignal,
   type JSX,
@@ -67,7 +66,7 @@ export function useFeatureFlag<T extends JsonType>(
 
     const flag = posthog.instance.getFeatureFlagResult(key);
 
-    const enabled = flag?.enabled || enabledOverride || false;
+    const enabled = flag?.enabled || (enabledOverride ?? false);
     const payload = (flag?.payload as T) ?? fallbackPayload;
 
     return { enabled, payload };
@@ -79,26 +78,16 @@ export const ShowFeatureFlag = <T extends JsonType>(props: {
   fallback?: JSX.Element;
   fallbackPayload?: T;
   enabledOverride?: boolean;
-  children: JSX.Element | ((payload: T | undefined) => JSX.Element);
+  children: JSX.Element;
 }) => {
   const flag = useFeatureFlag(props.key, {
     fallbackPayload: props.fallbackPayload,
     enabledOverride: props.enabledOverride,
   });
 
-  const resolved = children(() => {
-    const children_ = props.children;
-
-    if (typeof children_ === 'function') {
-      return children_(flag().payload);
-    }
-
-    return children_;
-  });
-
   return (
-    <Show when={flag().enabled} fallback={props.fallback}>
-      {resolved()}
+    <Show when={flag().enabled} keyed fallback={props.fallback}>
+      {props.children}
     </Show>
   );
 };

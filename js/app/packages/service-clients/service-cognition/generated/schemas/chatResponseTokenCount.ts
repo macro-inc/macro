@@ -6,6 +6,6 @@
  */
 
 /**
- * Current number of tokens in the chat
+ * Current number of tokens in the chat.
  */
 export type ChatResponseTokenCount = number | null;

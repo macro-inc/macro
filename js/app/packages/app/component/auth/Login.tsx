@@ -38,7 +38,7 @@ export function Login() {
     const platform = detect(navigator.userAgent);
     analytics.identify(user.id, {
       email: user.email,
-      os: `${platform?.os?.replaceAll(' ', '')}`,
+      os: platform?.os?.replaceAll(' ', ''),
     });
   };
 

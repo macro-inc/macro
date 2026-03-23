@@ -10,7 +10,7 @@ members = [
   "anthropic",
   "authentication_service",
   "authentication_service_client",
-  "channels",
+  "channels", "chat",
   "comms_db_client",
   "comms_service",
   "comms_service_client",

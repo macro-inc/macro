@@ -258,7 +258,7 @@ export function createResizeSolver(params: {
       const length = ids.length;
       const nextLength = length + 1;
 
-      let index = ndx && ndx < order().length ? ndx : order().length;
+      let index = ndx != null && ndx < order().length ? ndx : order().length;
 
       // default is the "equal size" share
       let incomingShare = 1 / nextLength;
