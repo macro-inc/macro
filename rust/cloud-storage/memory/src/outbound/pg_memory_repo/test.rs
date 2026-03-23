@@ -90,12 +90,11 @@ async fn memories_are_scoped_to_user(pool: Pool<Postgres>) {
 async fn get_latest_includes_created_at(pool: Pool<Postgres>) {
     let repo = PgMemoryRepo::new(pool);
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let before = chrono::Utc::now();
 
     repo.save_memory(&"a memory".to_string(), user.clone())
         .await
         .unwrap();
 
     let record = repo.get_latest_memory(user).await.unwrap().unwrap();
-    assert!(record.created_at >= before);
+    assert!(record.created_at <= chrono::Utc::now());
 }

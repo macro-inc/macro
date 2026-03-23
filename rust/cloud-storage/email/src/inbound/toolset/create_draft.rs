@@ -7,6 +7,7 @@ use crate::domain::{
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -94,7 +95,7 @@ where
         tracing::info!("Create draft");
 
         let link = service_context
-            .resolve_link((*request_context.user_id).clone())
+            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
             .await?;
 
         let input = CreateDraftInput {

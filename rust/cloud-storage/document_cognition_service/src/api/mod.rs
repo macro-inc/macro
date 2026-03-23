@@ -103,4 +103,3 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
 }
-

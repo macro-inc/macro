@@ -22,10 +22,8 @@ async fn main() -> anyhow::Result<()> {
     let memory_repo = PgMemoryRepo::new(pool.clone());
     let memory_service = MemoryServiceImpl::new(pool, memory_repo, tool_context, tools);
 
-    let user: MacroUserIdStr<'static> = "macro|eric.hayes@macro.com"
-        .to_string()
-        .try_into()
-        .expect("valid user id");
+    let user = MacroUserIdStr::try_from(std::env::var("USER_ID").expect("USER_ID"))
+        .expect("parse user id");
 
     tracing::info!("Generating memory for {user}...");
     match memory_service.get_or_generate_memory(user).await? {

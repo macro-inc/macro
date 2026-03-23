@@ -27,9 +27,8 @@ pub type DcsScribe =
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
-pub type DcsMemoryService = memory::domain::service::MemoryServiceImpl<
-    memory::outbound::pg_memory_repo::PgMemoryRepo,
->;
+pub type DcsMemoryService =
+    memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {

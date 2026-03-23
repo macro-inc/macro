@@ -8,13 +8,13 @@ use crate::api::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
     },
 };
-use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 use crate::model::{
     response::{
         attachments::GetChatsForAttachmentResponse, models::AIModel, models::GetModelsResponse,
     },
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
