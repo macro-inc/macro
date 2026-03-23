@@ -226,11 +226,17 @@ export function Account() {
                 <span>Disabled</span>
                 <Popover.Root open={showTooltip()} gutter={10} placement={'top'}>
                   <Popover.Anchor>
-                    <QuestionCircle
-                      class="size-5 cursor-help text-ink-muted"
+                    <button
+                      type="button"
+                      aria-label="Why email is disabled"
+                      class="inline-flex items-center cursor-help"
                       onPointerEnter={() => setShowTooltip(true)}
                       onPointerLeave={() => setShowTooltip(false)}
-                    />
+                      onFocus={() => setShowTooltip(true)}
+                      onBlur={() => setShowTooltip(false)}
+                    >
+                      <QuestionCircle class="size-5 text-ink-muted" />
+                    </button>
                   </Popover.Anchor>
                   <Popover.Portal>
                     <Popover.Content class="z-modal">

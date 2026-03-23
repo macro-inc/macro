@@ -45,9 +45,7 @@ import {
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useLogout } from '@core/auth/logout';
-import Caution from '@icon/regular/warning.svg';
-import { Button as UIButton } from '@ui/components/Button';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -207,11 +205,6 @@ export const SoupView = (props: SoupViewProps) => {
     );
   });
 
-  const logout = useLogout();
-  const logoutHandler = () => {
-    logout();
-  };
-
   return (
     <SplitPanelContext.Provider
       value={{
@@ -286,24 +279,7 @@ export const SoupView = (props: SoupViewProps) => {
             <SoupFiltersBar />
           </div>
           <Show when={hasLinkError()}>
-            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-              <div class="flex items-center justify-between gap-2">
-                <Caution class="size-4" />
-                <span class="text-sm">
-                  Email requires additional Google permissions. Select the
-                  permissions on sign-in to enable.
-                </span>
-                <span class="grow" />
-                <UIButton
-                  variant="secondary"
-                  size="sm"
-                  class="px-2"
-                  onClick={logoutHandler}
-                >
-                  Logout
-                </UIButton>
-              </div>
-            </div>
+            <EmailPermissionsBanner />
           </Show>
           <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <Suspense>
