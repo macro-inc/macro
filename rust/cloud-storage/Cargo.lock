@@ -810,30 +810,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-dynamodbstreams"
-version = "1.98.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55029fc1203b398fa60d7d0d21db8f380c8ace6c8646092285d8602fd49ddae9"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-observability",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "fastrand 2.3.0",
- "http 0.2.12",
- "http 1.4.0",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-ecs"
 version = "1.118.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1177,30 +1153,6 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "pin-utils",
- "tracing",
-]
-
-[[package]]
-name = "aws-smithy-http-client"
-version = "1.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a2f165a7feee6f263028b899d0a181987f4fa7179a6411a32a439fba7c5f769"
-dependencies = [
- "aws-smithy-async",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "h2 0.4.13",
- "http 1.4.0",
- "hyper 1.8.1",
- "hyper-rustls",
- "hyper-util",
- "pin-project-lite",
- "rustls",
- "rustls-native-certs",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls",
- "tower 0.5.3",
  "tracing",
 ]
 
@@ -5577,22 +5529,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
-name = "local_stream_processor"
-version = "0.1.0"
-dependencies = [
- "aws-sdk-dynamodb",
- "aws-sdk-dynamodbstreams",
- "chrono",
- "macro_aws_config",
- "macro_env_var",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5705,7 +5641,6 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "aws-sdk-sqs",
- "aws-smithy-http-client",
  "macro_env",
  "macro_env_var",
  "thiserror 2.0.18",
