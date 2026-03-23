@@ -476,6 +476,10 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
+        if args.document_name.chars().count() > 100 {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
@@ -577,6 +581,12 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         document_context: DocumentBasic,
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
+        if let Some(name) = args.document_name.as_ref()
+            && name.chars().count() > 100
+        {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         // Check owner-only restrictions for authenticated users
         if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
             entity_access_receipt.entity_permission()

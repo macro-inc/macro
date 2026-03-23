@@ -38,6 +38,9 @@ pub enum InitError {
     #[error("Database query error")]
     DatabaseError(#[from] anyhow::Error),
 
+    #[error("Gmail API error")]
+    GmailError(#[from] models_email::gmail::error::GmailError),
+
     #[error("Bad request")]
     BadRequest(String),
 
@@ -52,7 +55,7 @@ impl IntoResponse for InitError {
                 StatusCode::BAD_REQUEST
             }
             InitError::TooManyJobs => StatusCode::TOO_MANY_REQUESTS,
-            InitError::EnqueueError | InitError::DatabaseError(_) => {
+            InitError::EnqueueError | InitError::DatabaseError(_) | InitError::GmailError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -208,11 +211,7 @@ pub async fn enable_gmail_sync(
     };
 
     // Register watch with Gmail
-    let watch_response = ctx
-        .gmail_client
-        .register_watch(&token)
-        .await
-        .context("Gmail call to register watch failed")?;
+    let watch_response = ctx.gmail_client.register_watch(&token).await?;
 
     let email = extract_email_with_response(&user_context.user_id)
         .map_err(|_| InitError::BadRequest("Failed to extract email".to_string()))?;

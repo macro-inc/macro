@@ -39,6 +39,10 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
     ) -> Result<String, ChatErr> {
+        if args.name.chars().count() > 100 {
+            return Err(ChatErr::BadRequest("name too long".to_string()));
+        }
+
         self.repo.create(user_id, args).await
     }
 
@@ -106,6 +110,12 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
+        if let Some(name) = args.name.as_ref()
+            && name.chars().count() > 100
+        {
+            return Err(ChatErr::BadRequest("name too long".to_string()));
+        }
+
         let user_id = extract_user_id(&entity_access_receipt)?;
         let chat_id = &entity_access_receipt.entity().entity_id;
         self.repo.patch(user_id, chat_id, args).await
