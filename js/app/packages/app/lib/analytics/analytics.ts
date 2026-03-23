@@ -28,6 +28,13 @@ interface CreateAnalyticsOptions {
   disabled?: boolean;
 }
 
+interface PageViewOptions {
+  /** Override the page path (defaults to window.location.pathname) */
+  path?: string;
+  /** Override the page location/URL (defaults to window.location.href) */
+  location?: string;
+}
+
 const GA_ID = 'G-52HPEL3FTV';
 
 export const createAnalytics = (options: CreateAnalyticsOptions) => {
@@ -117,11 +124,39 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     }
   };
 
+  const pageView = (pageTitle: string, opts?: PageViewOptions) => {
+    if (options.disabled) return;
+
+    const pagePath = opts?.path ?? window.location.pathname;
+    const pageLocation = opts?.location ?? window.location.href;
+
+    try {
+      gtag('event', 'page_view', {
+        page_title: pageTitle,
+        page_location: pageLocation,
+        page_path: pagePath,
+      });
+
+      fbq('track', 'PageView', {
+        content_name: pageTitle,
+      });
+
+      posthog.instance.capture('$pageview', {
+        $current_url: pageLocation,
+        $pathname: pagePath,
+        $title: pageTitle,
+      });
+    } catch (e) {
+      console.error('[Analytics] Failed to send page_view:', e);
+    }
+  };
+
   return {
     initializeProviders,
     track,
     identify,
     reset,
+    pageView,
   };
 };
 
@@ -129,4 +164,5 @@ export type AnalyticsInterface = {
   track: TrackFn;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   reset: () => void;
+  pageView: (pageTitle: string, opts?: PageViewOptions) => void;
 };
