@@ -476,7 +476,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        if args.document_name.len() > 100 {
+        if args.document_name.chars().count() > 100 {
             return Err(DocumentError::BadRequest("name too long".to_string()));
         }
 
@@ -582,7 +582,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
         if let Some(name) = args.document_name.as_ref()
-            && name.len() > 100
+            && name.chars().count() > 100
         {
             return Err(DocumentError::BadRequest("name too long".to_string()));
         }

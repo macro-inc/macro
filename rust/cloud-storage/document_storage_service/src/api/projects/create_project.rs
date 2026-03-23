@@ -59,7 +59,7 @@ async fn create_project_v2(
     user_context: MacroUserExtractor,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
-    if req.name.len() > 100 {
+    if req.name.chars().count() > 100 {
         return Err((StatusCode::BAD_REQUEST, "name too long".to_string()));
     }
 

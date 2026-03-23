@@ -39,7 +39,7 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
     ) -> Result<String, ChatErr> {
-        if args.name.len() > 100 {
+        if args.name.chars().count() > 100 {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
 
@@ -111,7 +111,7 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
         if let Some(name) = args.name.as_ref()
-            && name.len() > 100
+            && name.chars().count() > 100
         {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }

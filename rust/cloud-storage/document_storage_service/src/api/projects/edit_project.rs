@@ -99,7 +99,7 @@ async fn edit_project_v2(
     req: PatchProjectRequestV2,
 ) -> Result<(), (StatusCode, String)> {
     if let Some(name) = req.name.as_ref()
-        && name.len() > 100
+        && name.chars().count() > 100
     {
         return Err((StatusCode::BAD_REQUEST, "name too long".to_string()));
     }
