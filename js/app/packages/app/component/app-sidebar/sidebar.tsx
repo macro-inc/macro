@@ -318,21 +318,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-ink/5" />
       </div>
 
-      <div class="w-full px-2 pb-2">
+      <div class="w-full px-2 my-[4.5px]">
         <SidebarActionButton
           label="Create"
           hotkeyToken={TOKENS.global.createCommand}
           isSlim={isSlim}
           onClick={handleCreateClick}
-          icon={AnimatedPlusIcon}
+          icon={() => <AnimatedPlusIcon class="size-4" />}
         />
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-ink/5 mb-[8px]" />
       </div>
 
       <nav>
@@ -351,7 +351,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-edge-muted my-[8px]" />
+        <hr class="border-ink/5 my-[8px]" />
       </div>
 
       <Show when={isExpanded()}>
