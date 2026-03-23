@@ -124,7 +124,7 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     }) as const;
 
   const canOpenInNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? true;
+    globalSplitManager()?.canAppendSplit() ?? false;
 
   const openInCurrentSplit = () =>
     layout.openWithSplit(content(), {
@@ -132,8 +132,8 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
     });
 
   const openInNewSplit = () => {
-    const manager = globalSplitManager();
-    if (!manager || !manager.canAppendSplit()) return;
+    if (!canOpenInNewSplit()) return;
+    const manager = globalSplitManager()!;
 
     manager.createNewSplit({
       content: content(),
@@ -169,6 +169,7 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
             e.preventDefault();
             layout.openWithSplit(content(), {
               preferNewSplit: e.shiftKey,
+              referredFrom: 'sidebar',
             });
           }}
         >
