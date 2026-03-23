@@ -820,6 +820,10 @@ export function ListEntity(props: ListEntityProps) {
     return stackNotifications(validNotifs);
   });
 
+  // Lock in multi-stack layout for entities that initially load with multiple
+  // stacks. This prevents a jarring layout switch when swiping down to 1 stack.
+  const startsMultiStack = mobileStacks().length > 1;
+
   return (
     <Entity.Root
       entity={props.entity}
@@ -856,7 +860,9 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match when={isMobile() && mobileStacks().length > 1}>
+        <Match
+          when={isMobile() && (startsMultiStack || mobileStacks().length > 1)}
+        >
           <MobileMultiStackLayout
             stacks={mobileStacks()}
             entity={props.entity}
