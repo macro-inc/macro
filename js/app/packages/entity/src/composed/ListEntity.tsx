@@ -193,7 +193,7 @@ interface LayoutProps {
 function InboxDivider() {
   return (
     <div class="ml-(--soup-inbox-left-of-content) min-w-full min-h-[1px] max-h-[1px] bg-edge-muted col-span-3" />
-  )
+  );
 }
 
 function EmailIdentity(props: { entity: EmailEntity }) {
@@ -341,8 +341,14 @@ function NarrowInboxLayout(props: LayoutProps) {
           '"icon title timestamp" "icon body body" "icon body body"',
       }}
     >
-      <Entity.Slot placement="icon" class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)">
-        <UnreadIndicator class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)" active={props.unread} />
+      <Entity.Slot
+        placement="icon"
+        class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)"
+      >
+        <UnreadIndicator
+          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
+          active={props.unread}
+        />
         <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
           <Show when={!props.checked}>
             <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
@@ -476,10 +482,7 @@ function NarrowInboxLayout(props: LayoutProps) {
           </Entity.Slot>
         </Match>
         <Match when={true}>
-          <Entity.Slot
-            placement="body"
-            class="pb-2 min-h-[2lh] pr-4"
-          />
+          <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
         </Match>
       </Switch>
     </Entity.Layout>
@@ -631,15 +634,18 @@ function StackRowLayout(props: {
     <Entity.Layout
       class="w-full text-sm grid bg-edge/10 border-edge-muted"
       style={{
-        'grid-template-columns': 'var(--soup-stack-row-unread-column-width) 1fr 8ch',
+        'grid-template-columns':
+          'var(--soup-stack-row-unread-column-width) 1fr 8ch',
         'grid-template-rows': 'auto auto',
-        'grid-template-areas':
-          '"unread title timestamp" "unread body body"',
-        'border-left-width': 'var(--soup-stack-row-border-l)'
+        'grid-template-areas': '"unread title timestamp" "unread body body"',
+        'border-left-width': 'var(--soup-stack-row-border-l)',
       }}
     >
       <Entity.Slot placement="unread" class="flex items-center justify-center">
-        <UnreadIndicator class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)" active={props.unread} />
+        <UnreadIndicator
+          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
+          active={props.unread}
+        />
       </Entity.Slot>
       <Entity.Slot
         placement="title"
@@ -682,11 +688,11 @@ function StackRow(props: {
   const stackEntityId = getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);
 
-  const handleSwipeLeft = () => {
+  const handleSwipeLeft = async () => {
+    await ctx?.collapseEntity(stackEntityId);
     void notificationSource.bulkMarkAsDone(
       getAllNotificationsFromGroup(props.stack)
     );
-    ctx?.collapseEntity(stackEntityId);
   };
 
   if (!ctx) {
@@ -735,7 +741,13 @@ function MobileMultiStackLayout(props: {
       {/* Non-swipeable header */}
       <div class="grid grid-cols-[calc(var(--soup-inbox-left-of-content)-var(--soup-stack-row-padding-l))_auto] w-full text-sm items-center pr-4 py-3">
         <div class="ml-(--soup-stack-header-icon-padding-l) mr-(--soup-inbox-icon-padding-r) shrink-0 size-(--soup-stack-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
-          <Entity.Icon entity={props.entity} class={cn(!isDirectMessage() && "size-[calc(var(--soup-stack-icon-diameter)*var(--soup-inbox-icon-factor))]")} />
+          <Entity.Icon
+            entity={props.entity}
+            class={cn(
+              !isDirectMessage() &&
+                'size-[calc(var(--soup-stack-icon-diameter)*var(--soup-inbox-icon-factor))]'
+            )}
+          />
         </div>
         <span class="flex-1 truncate font-semibold text-sm">
           <Entity.Title entity={props.entity} />
