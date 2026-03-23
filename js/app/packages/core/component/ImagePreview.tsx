@@ -6,7 +6,7 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
+import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
@@ -61,27 +61,36 @@ const getDssImageBlob = async (documentId: string) => {
 /** Max width for single image preview containers (matches MediaPreview max-w-[400px]) */
 const SINGLE_IMAGE_MAX_WIDTH = 400;
 
-/**
- * Compute scaled dimensions that fit within a max width while
- * maintaining aspect ratio. Returns undefined if dimensions are unavailable.
- */
-function computeScaledDimensions(
-  width: string | number | undefined,
-  height: string | number | undefined,
-  maxWidth: number
-): { width: number; height: number } | undefined {
-  const w = typeof width === 'string' ? Number.parseInt(width, 10) : width;
-  const h = typeof height === 'string' ? Number.parseInt(height, 10) : height;
-  if (!w || !h || w <= 0 || h <= 0) return undefined;
-  return calculateEffectiveDimensions(w, h, maxWidth);
+function ImagePlaceholder(props: {
+  dims: { width: number; height: number } | undefined;
+}) {
+  return (
+    <div
+      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      style={
+        props.dims
+          ? {
+              width: `${props.dims.width}px`,
+              height: `${props.dims.height}px`,
+            }
+          : {
+              width: '60px',
+              height: '60px',
+            }
+      }
+    >
+      <Spinner class="w-4 h-4 animate-spin" />
+    </div>
+  );
 }
 
 export function ImagePreview(props: ImagePreviewProps) {
   const [imageBlob, setImageBlob] = createSignal<Blob>();
   const [objectUrl, setObjectUrl] = createSignal<string>();
+  const [loaded, setLoaded] = createSignal(false);
 
   const scaledDimensions = () =>
-    computeScaledDimensions(
+    constrainImageDimensions(
       props.image.width,
       props.image.height,
       SINGLE_IMAGE_MAX_WIDTH
@@ -168,16 +177,13 @@ export function ImagePreview(props: ImagePreviewProps) {
           </div>
         </Show>
         <Dialog.Trigger class="flex" disabled={props.isContext}>
-          <Show
-            when={imageSrc()}
-            fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
-                <Spinner class="w-4 h-4 animate-spin" />
-              </div>
-            }
-          >
+          <Show when={!loaded()}>
+            <ImagePlaceholder dims={scaledDimensions()} />
+          </Show>
+          <Show when={imageSrc()}>
             <img
               class={`${THEMES[props.variant]} select-none`}
+              classList={{ hidden: !loaded() }}
               src={imageSrc()}
               alt="preview"
               width={scaledDimensions()?.width ?? props.image.width}
@@ -197,6 +203,7 @@ export function ImagePreview(props: ImagePreviewProps) {
                   : {}),
               }}
               draggable={!isTouchDevice()}
+              onLoad={() => setLoaded(true)}
               onDragStart={(e) => {
                 e.dataTransfer?.setData('application/x-macro-internal', '1');
               }}

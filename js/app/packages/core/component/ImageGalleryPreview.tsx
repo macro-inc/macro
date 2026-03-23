@@ -5,9 +5,10 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
+import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { copyImageToClipboard, downloadImage } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
@@ -43,18 +44,26 @@ const THEMES = {
 const GALLERY_MAX_WIDTH = 200;
 const GALLERY_MAX_HEIGHT = 200;
 
-function computeGalleryDimensions(
-  width: string | number | undefined,
-  height: string | number | undefined
-): { width: number; height: number } | undefined {
-  const w = typeof width === 'string' ? Number.parseInt(width, 10) : width;
-  const h = typeof height === 'string' ? Number.parseInt(height, 10) : height;
-  if (!w || !h || w <= 0 || h <= 0) return undefined;
-  return calculateEffectiveDimensions(
-    w,
-    h,
-    GALLERY_MAX_WIDTH,
-    GALLERY_MAX_HEIGHT
+function GalleryImagePlaceholder(props: {
+  dims: { width: number; height: number } | undefined;
+}) {
+  return (
+    <div
+      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      style={
+        props.dims
+          ? {
+              width: `${props.dims.width}px`,
+              height: `${props.dims.height}px`,
+            }
+          : {
+              width: '60px',
+              height: '60px',
+            }
+      }
+    >
+      <Spinner class="w-4 h-4 animate-spin" />
+    </div>
   );
 }
 
@@ -161,39 +170,49 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                   disabled={props.isContext}
                 >
                   {(() => {
-                    const dims = computeGalleryDimensions(
+                    const dims = constrainImageDimensions(
                       image.width,
-                      image.height
+                      image.height,
+                      GALLERY_MAX_WIDTH,
+                      GALLERY_MAX_HEIGHT
                     );
+                    const [loaded, setLoaded] = createSignal(false);
                     return (
-                      <img
-                        class={`${THEMES[props.variant]} select-none`}
-                        src={getImageUrl(image.id)}
-                        alt="preview"
-                        width={dims?.width}
-                        height={dims?.height}
-                        style={{
-                          '-webkit-touch-callout': 'none',
-                          '-webkit-user-select': 'none',
-                          '-khtml-user-select': 'none',
-                          '-moz-user-select': 'none',
-                          '-ms-user-select': 'none',
-                          'user-select': 'none',
-                          ...(dims
-                            ? {
-                                'aspect-ratio': `${dims.width} / ${dims.height}`,
-                                'max-width': `${dims.width}px`,
-                              }
-                            : {}),
-                        }}
-                        draggable={!isTouchDevice()}
-                        onDragStart={(e) => {
-                          e.dataTransfer?.setData(
-                            'application/x-macro-internal',
-                            '1'
-                          );
-                        }}
-                      />
+                      <>
+                        <Show when={!loaded()}>
+                          <GalleryImagePlaceholder dims={dims} />
+                        </Show>
+                        <img
+                          class={`${THEMES[props.variant]} select-none`}
+                          classList={{ hidden: !loaded() }}
+                          src={getImageUrl(image.id)}
+                          alt="preview"
+                          width={dims?.width}
+                          height={dims?.height}
+                          style={{
+                            '-webkit-touch-callout': 'none',
+                            '-webkit-user-select': 'none',
+                            '-khtml-user-select': 'none',
+                            '-moz-user-select': 'none',
+                            '-ms-user-select': 'none',
+                            'user-select': 'none',
+                            ...(dims
+                              ? {
+                                  'aspect-ratio': `${dims.width} / ${dims.height}`,
+                                  'max-width': `${dims.width}px`,
+                                }
+                              : {}),
+                          }}
+                          draggable={!isTouchDevice()}
+                          onLoad={() => setLoaded(true)}
+                          onDragStart={(e) => {
+                            e.dataTransfer?.setData(
+                              'application/x-macro-internal',
+                              '1'
+                            );
+                          }}
+                        />
+                      </>
                     );
                   })()}
                 </Dialog.Trigger>

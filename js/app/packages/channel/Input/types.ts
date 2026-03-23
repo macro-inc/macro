@@ -11,6 +11,10 @@ export type InputAttachmentData = {
   kind: InputAttachmentKind;
   iconType?: EntityIconSelector;
   pending?: boolean;
+  /** Image/video width in pixels (set after upload). */
+  width?: number;
+  /** Image/video height in pixels (set after upload). */
+  height?: number;
 };
 
 export type InputPersistenceKey = PersistenceKey;
