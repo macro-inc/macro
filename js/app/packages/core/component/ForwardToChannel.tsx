@@ -216,7 +216,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   text: 'View in channel',
                 });
               }
-              analytics.track('share_entity', { location: 'forward_to_channel' });
+              analytics.track('share_entity', {
+                location: 'forward_to_channel',
+              });
             }),
           ]);
         } else {

@@ -67,7 +67,10 @@ const createBlock = async (spec: {
     const id = await createFn();
     if (!id) return;
 
-    analytics.track('create_entity', { entityType: blockName, source: 'launcher' });
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
 
     const block = { type: blockName, id };
 
@@ -92,7 +95,10 @@ const createBlock = async (spec: {
       return;
     }
 
-    analytics.track('create_entity', { entityType: blockName, source: 'launcher' });
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
 
     if (split)
       split.replace({

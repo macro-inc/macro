@@ -86,8 +86,6 @@ export interface IPageOverlayProps {
   pageViewDiv: PDFPageView['div'];
 }
 
-
-
 export interface IHighlightObj {
   left: number;
   top: number;

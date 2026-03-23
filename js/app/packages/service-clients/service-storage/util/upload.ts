@@ -13,8 +13,6 @@ import { storageWS } from '@service-storage/websocket';
 import { createUploadToast, toast } from 'core/component/Toast/Toast';
 import { uploadDocx } from './uploadDocx';
 
-
-
 const dismissToast = (toastId: number | null) => {
   if (toastId !== null) toaster.dismiss(toastId);
 };
