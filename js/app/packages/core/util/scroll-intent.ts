@@ -2,8 +2,10 @@ import type { JSX } from 'solid-js';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
-/** How long after an input event we still consider the user to be interacting. */
-const INTERACTION_TIMEOUT_MS = 100;
+/** How long after an input event we still consider the user to be interacting.
+ *  300 ms gives async virtualizer scrolls (e.g. from hotkey-driven `scrollToId`)
+ *  enough time to fire, even on slower devices or busy main threads. */
+const INTERACTION_TIMEOUT_MS = 300;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -17,8 +19,9 @@ export type ScrollIntentTracker = {
   markUserIntent: (direction: ScrollDirection) => void;
   /** Whether the user is currently in an active scrolling interaction. */
   isUserInteracting: (now?: number) => boolean;
-  /** The direction of the last user scroll intent, if any. */
-  lastDirection: () => ScrollDirection | undefined;
+  /** The direction of the last user scroll intent, or undefined if the
+   *  user is no longer interacting (prevents stale direction reads). */
+  lastDirection: (now?: number) => ScrollDirection | undefined;
   /**
    * Event handler props to spread onto the scrollable container element.
    * Covers pointer (scrollbar drag + touch), wheel, and keyboard scrolling.
@@ -79,16 +82,30 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
   const isUserInteracting = (now = Date.now()) =>
     isPointerDown || now < activeUntil;
 
-  const lastDirection = () => direction;
+  const lastDirection = (now?: number) =>
+    isUserInteracting(now) ? direction : undefined;
 
   const endPointer = () => {
+    if (!isPointerDown) return;
     isPointerDown = false;
     activeUntil = Math.max(activeUntil, Date.now() + INTERACTION_TIMEOUT_MS);
   };
 
   const handlers: ScrollIntentHandlers = {
-    onPointerDown: () => {
-      isPointerDown = true;
+    onPointerDown: (event) => {
+      // Touch interactions always indicate scroll intent (finger drag)
+      if (event.pointerType === 'touch') {
+        isPointerDown = true;
+        return;
+      }
+      // For mouse/pen, only track scrollbar drags. Scrollbar clicks
+      // target the container element itself, while clicks on child
+      // elements (messages, buttons, text selection) have a different
+      // target. This prevents false positives from normal click
+      // interactions within the scroll container.
+      if (event.target === event.currentTarget) {
+        isPointerDown = true;
+      }
     },
     onPointerUp: endPointer,
     onPointerCancel: endPointer,

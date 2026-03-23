@@ -30,4 +30,13 @@ describe('createScrollIntentTracker', () => {
     tracker.markUserIntent('up');
     expect(tracker.lastDirection()).toBe('up');
   });
+
+  it('clears last direction after interaction expires', () => {
+    const tracker = createScrollIntentTracker();
+    tracker.markUserIntent('down');
+    expect(tracker.lastDirection()).toBe('down');
+
+    const farFuture = Date.now() + 500;
+    expect(tracker.lastDirection(farFuture)).toBe(undefined);
+  });
 });
