@@ -120,6 +120,7 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       as={'a'}
       href={`/channel/${props.group.entityId}`}
       class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
+      draggable={false}
       variant="ghost"
       size="sm"
       classList={{
