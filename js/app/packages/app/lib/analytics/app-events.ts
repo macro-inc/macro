@@ -32,7 +32,6 @@ export type AppEvents = {
   };
   upload_error: {
     type: string;
-    error: string;
     destination?: 'dss' | 'static';
   };
 
@@ -61,7 +60,10 @@ export type AppEvents = {
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
-  channel_reaction: Record<string, unknown>;
+  channel_reaction: {
+    emoji: string;
+    action: 'add' | 'remove';
+  };
   channel_participant_add: Record<string, unknown>;
   channel_participant_remove: Record<string, unknown>;
 

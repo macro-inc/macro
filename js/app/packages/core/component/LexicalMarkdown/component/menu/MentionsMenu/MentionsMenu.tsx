@@ -299,9 +299,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useSnapshotNode: props.useSnapshotForDocuments,
   });
 
-  const itemAction = (item: MentionItem) => {
+  const itemAction = async (item: MentionItem) => {
     analytics.track('mentions_menu_use', { itemType: item.kind });
-    itemActionHandler(item);
+    await itemActionHandler(item);
   };
 
   createEffect(() => {

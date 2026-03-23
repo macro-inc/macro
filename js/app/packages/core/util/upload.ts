@@ -241,7 +241,6 @@ export class FileSizeExceededError extends Error {
 
     analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 
@@ -267,7 +266,6 @@ export class UnsupportedFileTypeError extends Error {
 
     analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 }
@@ -291,7 +289,6 @@ export class UploadError extends Error {
 
     analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
       destination,
     });
   }

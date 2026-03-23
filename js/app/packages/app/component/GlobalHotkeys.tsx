@@ -75,7 +75,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      const willOpen = createMenuOpen();
+      const willOpen = !createMenuOpen();
 
       if (willOpen) {
         analytics.track('create_menu_open', { from: 'global_hotkey' });
