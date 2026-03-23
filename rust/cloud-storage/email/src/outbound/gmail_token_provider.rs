@@ -80,19 +80,7 @@ pub async fn fetch_gmail_access_token(
         token
     } else {
         let token = fetch_token_from_auth_service(key, auth_service_client).await?;
-
-        // Cache newly fetched token
-        if let Err(cache_err) = conn
-            .set_ex::<&str, &str, ()>(&redis_key, &token, GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS)
-            .await
-        {
-            tracing::warn!(
-                error = ?cache_err,
-                token_cache_key = ?key,
-                "Failed to cache fetched access token in Redis"
-            );
-        }
-
+        cache_token_in_redis(&mut conn, key, &token).await;
         token
     };
 
@@ -107,11 +95,16 @@ pub async fn fetch_gmail_access_token_no_cache(
     auth_service_client: &AuthServiceClient,
 ) -> anyhow::Result<String> {
     let token = fetch_token_from_auth_service(key, auth_service_client).await?;
-
     let mut conn = redis_conn.clone();
+    cache_token_in_redis(&mut conn, key, &token).await;
+    Ok(token)
+}
+
+/// Best-effort cache write. Logs a warning on failure but never errors.
+async fn cache_token_in_redis(conn: &mut MultiplexedConnection, key: &TokenCacheKey, token: &str) {
     let redis_key = key.to_redis_key();
     if let Err(cache_err) = conn
-        .set_ex::<&str, &str, ()>(&redis_key, &token, GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS)
+        .set_ex::<&str, &str, ()>(&redis_key, token, GMAIL_ACCESS_TOKEN_EXPIRY_SECONDS)
         .await
     {
         tracing::warn!(
@@ -120,8 +113,6 @@ pub async fn fetch_gmail_access_token_no_cache(
             "Failed to cache fetched access token in Redis"
         );
     }
-
-    Ok(token)
 }
 
 /// Fetches a Gmail access token from the auth service.
