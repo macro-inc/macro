@@ -151,8 +151,7 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     ) -> Result<(), Self::Err> {
         let installation_ids: Vec<&str> =
             std::iter::repeat_n(installation_id, team_ids.len()).collect();
-        let installed_bys: Vec<&str> =
-            std::iter::repeat_n(installed_by, team_ids.len()).collect();
+        let installed_bys: Vec<&str> = std::iter::repeat_n(installed_by, team_ids.len()).collect();
 
         sqlx::query!(
             r#"
