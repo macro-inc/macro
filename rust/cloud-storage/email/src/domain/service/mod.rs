@@ -77,6 +77,16 @@ where
             .await
     }
 
+    async fn get_link_by_macro_id(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .link_by_macro_id(macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn get_thread_with_messages(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

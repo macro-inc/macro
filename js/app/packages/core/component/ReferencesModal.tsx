@@ -18,6 +18,7 @@ export function ReferencesButton(props: {
   documentName?: string;
   entityType?: ItemType;
   buttonSize?: 'sm';
+  onOpenChange?: (open: boolean) => void;
 }) {
   const drawerControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const [referenceCount] = createResource(
@@ -40,7 +41,10 @@ export function ReferencesButton(props: {
       <div
         class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
         tabIndex={0}
-        onClick={drawerControl.toggle}
+        onClick={() => {
+          props.onOpenChange?.(!drawerControl.isOpen());
+          drawerControl.toggle();
+        }}
         role="button"
       >
         <BracketLeft class="h-4 w-2 text-edge" />

@@ -4363,6 +4363,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           ),
+        shared: zod
+          .enum(['exclude', 'include', 'only'])
+          .optional()
+          .describe(
+            'Controls whether shared email threads are included in results.'
+          ),
       })
       .optional()
       .describe(

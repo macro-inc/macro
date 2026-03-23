@@ -503,6 +503,7 @@ export * from './setPropertyValueOneOfSevenType';
 export * from './setPropertyValueOneOfThree';
 export * from './setPropertyValueOneOfThreeType';
 export * from './setPropertyValueOneOfType';
+export * from './sharedEmailFilter';
 export * from './sharePermissionV2';
 export * from './sharePermissionV2ChannelSharePermissions';
 export * from './sharePermissionV2PublicAccessLevel';

@@ -1,5 +1,4 @@
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
+import { useAnalytics } from '@app/component/analytics-context';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
@@ -10,10 +9,11 @@ import type { Accessor } from 'solid-js';
  * Hook to add participants to a channel with optimistic updates
  */
 export function useAddParticipantsToChannel(channelId: Accessor<string>) {
-  const { track } = withAnalytics();
+  const analytics = useAnalytics();
+
   const mutation = useAddParticipantsMutation({
     onSuccess: () => {
-      track(TrackingEvents.BLOCKCHANNEL.PARTICIPANT.ADD);
+      analytics.track('channel_participant_add');
     },
   });
 
@@ -34,7 +34,13 @@ export function useAddParticipantsToChannel(channelId: Accessor<string>) {
  * Hook to remove participants from a channel with optimistic updates
  */
 export function useRemoveParticipantsFromChannel(channelId: Accessor<string>) {
-  const mutation = useRemoveParticipantsMutation();
+  const analytics = useAnalytics();
+
+  const mutation = useRemoveParticipantsMutation({
+    onSuccess: () => {
+      analytics.track('channel_participant_remove');
+    },
+  });
 
   return (participants: string[]) => {
     const id = channelId();

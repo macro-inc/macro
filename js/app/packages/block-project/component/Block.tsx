@@ -30,6 +30,7 @@ import {
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
 import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
+import { SharedEmailFilter } from '@service-storage/generated/schemas';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -198,6 +199,7 @@ const ProjectEntityList = (props: {
           },
           email_filters: {
             project_ids: [props.projectId],
+            shared: SharedEmailFilter.include,
           },
         }}
       >

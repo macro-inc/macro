@@ -13,22 +13,35 @@ export type AppEvents = {
   sidebar_click: Record<string, unknown>;
   notifications_toggled: Record<string, unknown>;
 
-  references_panel_open: Record<string, unknown>;
-  notifications_panel_open: Record<string, unknown>;
-  properties_panel_open: Record<string, unknown>;
+  references_panel_open: { blockType: string };
+  notifications_panel_open: { blockType: string };
+  properties_panel_open: { blockType: string };
+  share_menu_open: { blockType: string };
 
   copy_share_link: Record<string, unknown>;
   download: Record<string, unknown>;
-  comment: Record<string, unknown>;
-  upload_file: Record<string, unknown>;
+  comment_create: { blockType: string };
+  comment_update: { blockType: string };
+  comment_delete: { blockType: string };
+  upload_file: {
+    fileType?: string;
+    fileName?: string;
+    fileSize?: number;
+    destination: 'dss' | 'static';
+    folder?: boolean;
+  };
+  upload_error: {
+    type: string;
+    destination?: 'dss' | 'static';
+  };
 
-  command_menu_open: Record<string, unknown>;
-  command_menu_use: Record<string, unknown>; // payload - selected command or item
-  create_menu_open: Record<string, unknown>;
+  command_menu_open: { from: string };
+  command_menu_use: { itemType: string };
+  create_menu_open: { from: string };
   hotkey_use: Record<string, unknown>;
   preview_panel_use: Record<string, unknown>;
-  mentions_menu_use: Record<string, unknown>;
-  split_created: Record<string, unknown>;
+  mentions_menu_use: { itemType: string };
+  split_created: { from: string };
 
   share_entity: Record<string, unknown>; // payload - entity type, location
   create_entity: Record<string, unknown>; // payload - entity type
@@ -39,7 +52,7 @@ export type AppEvents = {
 
   search: Record<string, unknown>;
 
-  theme_changed: Record<string, unknown>;
+  theme_changed: { themeId: string };
 
   ai_message_sent: Record<string, unknown>;
   ai_attachment_add: Record<string, unknown>;
@@ -47,8 +60,10 @@ export type AppEvents = {
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
-  channel_reaction_sent: Record<string, unknown>;
-  channel_thread_reply: Record<string, unknown>;
+  channel_reaction: {
+    emoji: string;
+    action: 'add' | 'remove';
+  };
   channel_participant_add: Record<string, unknown>;
   channel_participant_remove: Record<string, unknown>;
 

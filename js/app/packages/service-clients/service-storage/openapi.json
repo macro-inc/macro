@@ -6976,6 +6976,10 @@
               "type": "string"
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedEmailFilter",
+            "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
           }
         }
       },
@@ -9652,6 +9656,11 @@
             ]
           }
         }
+      },
+      "SharedEmailFilter": {
+        "type": "string",
+        "description": "Controls whether shared email threads are included in results.",
+        "enum": ["exclude", "include", "only"]
       },
       "ShortIdResponse": {
         "type": "object",

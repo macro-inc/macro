@@ -3,8 +3,10 @@ use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
+use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use models_pagination::{Query, SimpleSortMethod};
+use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -16,6 +18,8 @@ struct QueryParams {
     cursor_timestamp: Option<DateTime<Utc>>,
     cursor_id_str: Option<String>,
     is_important: bool,
+    shared: SharedEmailFilter,
+    user_id: String,
 }
 
 /// Builds a dynamic email thread query with filters applied.
@@ -29,7 +33,49 @@ fn build_query(
     let view_thread_filter = build_view_thread_filter(view);
     let view_message_filter = build_view_message_filter(view);
 
-    let mut builder = sqlx::QueryBuilder::new(
+    let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
+
+    let mut builder = if needs_shared_cte {
+        let mut b = sqlx::QueryBuilder::new(
+            r#"
+        WITH RECURSIVE ProjectHierarchy AS (
+            SELECT p.id, uia.access_level
+            FROM "Project" p
+            JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
+            WHERE uia.user_id = "#,
+        );
+        b.push_bind(params.user_id.clone());
+        b.push(
+            r#" AND p."deletedAt" IS NULL
+            UNION ALL
+            SELECT p.id, ph.access_level
+            FROM "Project" p
+            JOIN ProjectHierarchy ph ON p."parentId" = ph.id
+            WHERE p."deletedAt" IS NULL
+        ),
+        SharedEmailThreads AS (
+            SELECT item_id::uuid AS thread_id
+            FROM "UserItemAccess"
+            WHERE user_id = "#,
+        );
+        b.push_bind(params.user_id.clone());
+        b.push(
+            r#" AND item_type = 'thread'
+            UNION
+            -- Find threads living in accessible projects.
+            -- project_id is text, ProjectHierarchy.id is uuid, so cast to text for comparison.
+            SELECT t.id AS thread_id
+            FROM email_threads t
+            WHERE t.project_id = ANY(ARRAY(SELECT id::text FROM ProjectHierarchy))
+        )
+        "#,
+        );
+        b
+    } else {
+        sqlx::QueryBuilder::new("")
+    };
+
+    builder.push(
         r#"
         SELECT
             t.id,
@@ -66,7 +112,8 @@ fn build_query(
             END AS is_important,
             c.email_address AS sender_email,
             c.name AS sender_name,
-            c.sfs_photo_url as sender_photo_url
+            c.sfs_photo_url as sender_photo_url,
+            el.macro_id AS owner_id
         FROM (
             -- Step 1: Efficiently find and sort candidate threads
             SELECT
@@ -100,11 +147,24 @@ fn build_query(
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
-                t.link_id = "#,
+                "#,
         sort_ts_field, sort_ts_field
     ));
 
-    builder.push_bind(params.link_id);
+    match params.shared {
+        SharedEmailFilter::Exclude => {
+            builder.push("t.link_id = ");
+            builder.push_bind(params.link_id);
+        }
+        SharedEmailFilter::Include => {
+            builder.push("(t.link_id = ");
+            builder.push_bind(params.link_id);
+            builder.push(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads))");
+        }
+        SharedEmailFilter::Only => {
+            builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
+        }
+    }
 
     // Add view-specific thread filters
     if !view_thread_filter.is_empty() {
@@ -187,11 +247,27 @@ fn build_query(
         ) AS lmp
         -- Step 3: Join to get the sender's details
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
+        -- Step 4: Join to get the thread owner's macro user ID
+        JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
     );
 
     builder
+}
+
+/// Extracts the [SharedEmailFilter] from the email filter AST, defaulting to Exclude.
+fn extract_shared_filter(ast: &Expr<EmailLiteral>) -> SharedEmailFilter {
+    ast.collapse_frames(
+        |frame: filter_ast::ExprFrame<SharedEmailFilter, EmailLiteral>| match frame {
+            filter_ast::ExprFrame::Literal(EmailLiteral::Shared(s)) => s,
+            filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => {
+                if !a.is_default() { a } else { b }
+            }
+            filter_ast::ExprFrame::Not(a) => a,
+            _ => SharedEmailFilter::Exclude,
+        },
+    )
 }
 
 /// Fetches a paginated list of thread previews with dynamic filtering based on EmailLiteral AST.
@@ -226,6 +302,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     limit: u32,
     view: &PreviewView,
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();
@@ -234,13 +311,14 @@ pub(crate) async fn dynamic_email_thread_cursor(
 
     // Extract email filter from query
     let email_filter = query.filter();
+    let shared = extract_shared_filter(email_filter);
 
     let is_important = matches!(
         view,
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
     );
 
-    build_query(
+    let mut qb = build_query(
         view,
         email_filter,
         QueryParams {
@@ -250,29 +328,32 @@ pub(crate) async fn dynamic_email_thread_cursor(
             cursor_timestamp: cursor_timestamp.copied(),
             cursor_id_str,
             is_important,
+            shared,
+            user_id: user_id.to_string(),
         },
-    )
-    .build()
-    .try_map(|row| {
-        Ok(ThreadPreviewCursorDbRow {
-            id: row.try_get("id")?,
-            provider_id: row.try_get("provider_id")?,
-            inbox_visible: row.try_get("inbox_visible")?,
-            is_read: row.try_get("is_read")?,
-            is_draft: row.try_get("is_draft")?,
-            is_important: row.try_get("is_important")?,
-            sort_ts: row.try_get("sort_ts")?,
-            name: row.try_get("name")?,
-            snippet: row.try_get("snippet")?,
-            sender_email: row.try_get("sender_email")?,
-            sender_name: row.try_get("sender_name")?,
-            sender_photo_url: row.try_get("sender_photo_url")?,
-            viewed_at: row.try_get("viewed_at")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-            project_id: row.try_get("project_id")?,
+    );
+    qb.build()
+        .try_map(|row| {
+            Ok(ThreadPreviewCursorDbRow {
+                id: row.try_get("id")?,
+                provider_id: row.try_get("provider_id")?,
+                inbox_visible: row.try_get("inbox_visible")?,
+                is_read: row.try_get("is_read")?,
+                is_draft: row.try_get("is_draft")?,
+                is_important: row.try_get("is_important")?,
+                sort_ts: row.try_get("sort_ts")?,
+                name: row.try_get("name")?,
+                snippet: row.try_get("snippet")?,
+                sender_email: row.try_get("sender_email")?,
+                sender_name: row.try_get("sender_name")?,
+                sender_photo_url: row.try_get("sender_photo_url")?,
+                viewed_at: row.try_get("viewed_at")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                project_id: row.try_get("project_id")?,
+                owner_id: row.try_get("owner_id")?,
+            })
         })
-    })
-    .fetch_all(pool)
-    .await
+        .fetch_all(pool)
+        .await
 }
