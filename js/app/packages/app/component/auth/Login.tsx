@@ -60,9 +60,6 @@ export function Login() {
       const session_code = searchParams.token;
       console.log({ session_code });
       unsetTokenPromise();
-      // Wait for sessionLogin to set cookies before invalidating queries.
-      // Previously, invalidateUserInfo() was called here before sessionLogin
-      // completed, causing the user info query to fire without cookies and fail.
       authServiceClient.sessionLogin({ session_code }).then((res) => {
         console.log({ res });
         if (isOk(res)) {
@@ -74,10 +71,6 @@ export function Login() {
 
   const onComplete = async () => {
     unsetTokenPromise();
-    // Invalidate ALL queries, not just user info. Global providers
-    // (channels, notifications, quick access, etc.) fire queries on mount
-    // before auth is established; those queries are stuck in error state
-    // and need to be flushed now that cookies are set.
     await invalidateAllAfterLogin();
     const user = userInfo();
 

@@ -41,29 +41,15 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
 
 /** Invalidate the user info query to trigger a refetch. */
 export function invalidateUserInfo() {
-  // Enable the query in case it was disabled (e.g., during unauthenticated flows)
   enableUserInfoQuery();
-
-  // Always invalidate — the query may be in error state (no cached data)
-  // from pre-auth requests, and needs to be explicitly refetched.
   return queryClient.invalidateQueries({
     queryKey: authKeys.userInfo.queryKey,
   });
 }
 
-/**
- * Invalidate all queries after a successful login.
- *
- * Global providers (channels, notifications, quick access, etc.) mount before
- * auth is established and their queries fail with 401. Since
- * `refetchOnWindowFocus` is disabled and retries are limited, these queries
- * stay in error state permanently unless explicitly invalidated.
- */
+/** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
   enableUserInfoQuery();
-
-  // Flush every query in the cache — any that failed pre-auth will refetch
-  // with the now-valid session cookies.
   return queryClient.invalidateQueries();
 }
 
