@@ -6,6 +6,7 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
@@ -57,9 +58,34 @@ const getDssImageBlob = async (documentId: string) => {
   return blob;
 };
 
+/** Max width for single image preview containers (matches MediaPreview max-w-[400px]) */
+const SINGLE_IMAGE_MAX_WIDTH = 400;
+
+/**
+ * Compute scaled dimensions that fit within a max width while
+ * maintaining aspect ratio. Returns undefined if dimensions are unavailable.
+ */
+function computeScaledDimensions(
+  width: string | number | undefined,
+  height: string | number | undefined,
+  maxWidth: number
+): { width: number; height: number } | undefined {
+  const w = typeof width === 'string' ? Number.parseInt(width, 10) : width;
+  const h = typeof height === 'string' ? Number.parseInt(height, 10) : height;
+  if (!w || !h || w <= 0 || h <= 0) return undefined;
+  return calculateEffectiveDimensions(w, h, maxWidth);
+}
+
 export function ImagePreview(props: ImagePreviewProps) {
   const [imageBlob, setImageBlob] = createSignal<Blob>();
   const [objectUrl, setObjectUrl] = createSignal<string>();
+
+  const scaledDimensions = () =>
+    computeScaledDimensions(
+      props.image.width,
+      props.image.height,
+      SINGLE_IMAGE_MAX_WIDTH
+    );
 
   const sfsImageUrl = () => {
     if (props.isDss) {
@@ -154,8 +180,8 @@ export function ImagePreview(props: ImagePreviewProps) {
               class={`${THEMES[props.variant]} select-none`}
               src={imageSrc()}
               alt="preview"
-              width={props.image.width}
-              height={props.image.height}
+              width={scaledDimensions()?.width ?? props.image.width}
+              height={scaledDimensions()?.height ?? props.image.height}
               style={{
                 '-webkit-touch-callout': 'none',
                 '-webkit-user-select': 'none',
@@ -163,6 +189,12 @@ export function ImagePreview(props: ImagePreviewProps) {
                 '-moz-user-select': 'none',
                 '-ms-user-select': 'none',
                 'user-select': 'none',
+                ...(scaledDimensions()
+                  ? {
+                      'aspect-ratio': `${scaledDimensions()!.width} / ${scaledDimensions()!.height}`,
+                      'max-width': `${scaledDimensions()!.width}px`,
+                    }
+                  : {}),
               }}
               draggable={!isTouchDevice()}
               onDragStart={(e) => {

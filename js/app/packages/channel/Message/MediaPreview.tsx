@@ -7,6 +7,8 @@ import { Match, Switch } from 'solid-js';
 
 type ImageAttachment = {
   id: string;
+  width?: number | undefined;
+  height?: number | undefined;
 };
 
 type SingleImageMediaPreviewProps = {

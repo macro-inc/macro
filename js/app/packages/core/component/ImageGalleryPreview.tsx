@@ -5,6 +5,7 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { type Component, createSignal, For, Show } from 'solid-js';
@@ -37,6 +38,25 @@ const THEMES = {
   dynamic:
     'min-w-[100px] max-h-[200px] object-contain w-full rounded-2xl select-none border border-edge hover:border-accent hover-transition-border',
 };
+
+/** Max dimensions for gallery image thumbnails */
+const GALLERY_MAX_WIDTH = 200;
+const GALLERY_MAX_HEIGHT = 200;
+
+function computeGalleryDimensions(
+  width: string | number | undefined,
+  height: string | number | undefined
+): { width: number; height: number } | undefined {
+  const w = typeof width === 'string' ? Number.parseInt(width, 10) : width;
+  const h = typeof height === 'string' ? Number.parseInt(height, 10) : height;
+  if (!w || !h || w <= 0 || h <= 0) return undefined;
+  return calculateEffectiveDimensions(
+    w,
+    h,
+    GALLERY_MAX_WIDTH,
+    GALLERY_MAX_HEIGHT
+  );
+}
 
 export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   props
@@ -140,26 +160,42 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                   onClick={() => setClickedIndex(index())}
                   disabled={props.isContext}
                 >
-                  <img
-                    class={`${THEMES[props.variant]} select-none`}
-                    src={getImageUrl(image.id)}
-                    alt="preview"
-                    style={{
-                      '-webkit-touch-callout': 'none',
-                      '-webkit-user-select': 'none',
-                      '-khtml-user-select': 'none',
-                      '-moz-user-select': 'none',
-                      '-ms-user-select': 'none',
-                      'user-select': 'none',
-                    }}
-                    draggable={!isTouchDevice()}
-                    onDragStart={(e) => {
-                      e.dataTransfer?.setData(
-                        'application/x-macro-internal',
-                        '1'
-                      );
-                    }}
-                  />
+                  {(() => {
+                    const dims = computeGalleryDimensions(
+                      image.width,
+                      image.height
+                    );
+                    return (
+                      <img
+                        class={`${THEMES[props.variant]} select-none`}
+                        src={getImageUrl(image.id)}
+                        alt="preview"
+                        width={dims?.width}
+                        height={dims?.height}
+                        style={{
+                          '-webkit-touch-callout': 'none',
+                          '-webkit-user-select': 'none',
+                          '-khtml-user-select': 'none',
+                          '-moz-user-select': 'none',
+                          '-ms-user-select': 'none',
+                          'user-select': 'none',
+                          ...(dims
+                            ? {
+                                'aspect-ratio': `${dims.width} / ${dims.height}`,
+                                'max-width': `${dims.width}px`,
+                              }
+                            : {}),
+                        }}
+                        draggable={!isTouchDevice()}
+                        onDragStart={(e) => {
+                          e.dataTransfer?.setData(
+                            'application/x-macro-internal',
+                            '1'
+                          );
+                        }}
+                      />
+                    );
+                  })()}
                 </Dialog.Trigger>
               </div>
             </div>
