@@ -57,7 +57,6 @@ function expandMentions(
 type BuildPostMessageRequestOptions = {
   snapshot: InputSnapshot;
   threadId?: string;
-  /** Channel participant user IDs — required for @here expansion. */
   participantIds?: string[];
 };
 

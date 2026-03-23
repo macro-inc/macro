@@ -29,7 +29,6 @@ export type ChannelInputProps = InputCallbacks & {
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
-  /** Channel participants — limits @mention suggestions and enables @here. */
   participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;

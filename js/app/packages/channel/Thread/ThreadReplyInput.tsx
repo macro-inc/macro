@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
-import { createMemo, type Accessor, type Setter } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
 import { buildPostMessageRequest } from '../Input/message-payload';
@@ -11,8 +11,7 @@ import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import { channelParticipantInfo } from '@core/user/util';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 
 type ThreadReplyInputProps = {
   channelId: string;
@@ -26,13 +25,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
 
-  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
-  const channelParticipants = createMemo(() =>
-    (participantsQuery.data ?? []).map(channelParticipantInfo)
-  );
-  const participantIds = createMemo(() =>
-    (participantsQuery.data ?? []).map((p) => p.user_id)
-  );
+  const participants = useChannelParticipants(() => props.channelId);
 
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
@@ -64,7 +57,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 isDraggingOverChannel: entityDropZone.isDraggingOver(),
                 mode: 'reply',
               }}
-              participants={channelParticipants}
+              participants={participants.users}
               attachmentTracker={tracker}
               persistenceKey={makeInputValuePersistenceKey({
                 channelId: props.channelId,
@@ -87,7 +80,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                   message: buildPostMessageRequest({
                     snapshot,
                     threadId: props.messageId,
-                    participantIds: participantIds(),
+                    participantIds: participants.ids(),
                   }),
                 });
 

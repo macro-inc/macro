@@ -43,6 +43,22 @@ describe('buildPostMessageRequest — @here expansion', () => {
     ]);
   });
 
+  it('deduplicates explicit user mention against earlier @here expansion', () => {
+    const result = buildPostMessageRequest({
+      snapshot: snap([
+        { itemType: 'group', itemId: 'here', groupAlias: 'here' },
+        { itemType: 'user', itemId: 'user-a' },
+      ]),
+      participantIds: ['user-a', 'user-b'],
+    });
+
+    // user-a and user-b from @here; trailing explicit user-a skipped
+    expect(result.mentions).toEqual([
+      { entity_type: 'user', entity_id: 'user-a' },
+      { entity_type: 'user', entity_id: 'user-b' },
+    ]);
+  });
+
   it('produces no user mentions when @here is used with empty participants', () => {
     const result = buildPostMessageRequest({
       snapshot: snap([

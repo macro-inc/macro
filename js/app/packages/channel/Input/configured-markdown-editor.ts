@@ -13,7 +13,6 @@ type CreateConfiguredChannelMarkdownEditorOptions = {
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
-  /** Override user mention suggestions (e.g. channel participants). */
   users?: () => IUser[];
   onChange?: (markdown: string) => void;
   onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
