@@ -1,13 +1,9 @@
 import type { JSX } from 'solid-js';
 
-// ── Constants ──────────────────────────────────────────────────────────
-
 /** How long after an input event we still consider the user to be interacting.
  *  300 ms gives async virtualizer scrolls (e.g. from hotkey-driven `scrollToId`)
  *  enough time to fire, even on slower devices or busy main threads. */
 const INTERACTION_TIMEOUT_MS = 300;
-
-// ── Types ──────────────────────────────────────────────────────────────
 
 export type ScrollDirection = 'up' | 'down';
 
@@ -37,12 +33,8 @@ type ScrollIntentHandlers = {
   onKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent>;
 };
 
-// ── Scroll keys ────────────────────────────────────────────────────────
-
 const SCROLL_UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
 const SCROLL_DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
-
-// ── Tracker factory ────────────────────────────────────────────────────
 
 /**
  * Creates a scroll-intent tracker that distinguishes user-initiated scroll
