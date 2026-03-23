@@ -22,7 +22,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
       if (!key) return;
 
       instance.init(key, {
-        api_host: 'https://us.i.posthog.com',
+        api_host: 'https://analytics-proxy.macroverse.workers.dev/ingest/ph',
         ui_host: 'https://us.posthog.com', // Keep UI host for session recordings link
         defaults: '2026-01-30',
       });
