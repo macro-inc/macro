@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, message_id, entity_type, entity_id, created_at\n            FROM comms_attachments\n            WHERE message_id = ANY($1)\n            ORDER BY created_at ASC\n            ",
+  "query": "\n            SELECT id, message_id, entity_type, entity_id,\n                   width AS \"width?\", height AS \"height?\", created_at\n            FROM comms_attachments\n            WHERE message_id = ANY($1)\n            ORDER BY created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -25,6 +25,16 @@
       },
       {
         "ordinal": 4,
+        "name": "width?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "height?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -39,8 +49,10 @@
       false,
       false,
       false,
+      true,
+      true,
       false
     ]
   },
-  "hash": "4760be157b671303b9a00690179b7fa85258f1fb5b0f73de16eaef3a683fcdf9"
+  "hash": "b0d3b6f03c4160e443a3fe91c870187c3178efdf6853a22ee319c0163b1f6013"
 }

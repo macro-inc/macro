@@ -201,7 +201,7 @@ pub async fn enable_gmail_sync(
 ) -> Result<Link, InitError> {
     let token = match gmail_access_token {
         Some(token) => token.to_string(),
-        None => email_service::util::gmail::auth::fetch_gmail_token_usercontext_response(
+        None => email_service::util::gmail::auth::fetch_gmail_token_no_cache(
             user_context,
             &ctx.redis_client,
             &ctx.auth_service_client,

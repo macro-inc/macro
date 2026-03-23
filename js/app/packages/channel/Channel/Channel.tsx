@@ -67,6 +67,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import { resetKeyboardModality } from './util';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 
 type ChannelProps = {
   channelId: string;
@@ -113,6 +114,8 @@ export function Channel(props: ChannelProps) {
   );
   const messages = createMemo(() => messageIndex().items);
   const messageById = createMemo(() => messageIndex().byId);
+
+  const participants = useChannelParticipants(() => props.channelId);
 
   const activity = useChannelActivity(props.channelId);
 
@@ -216,7 +219,10 @@ export function Channel(props: ChannelProps) {
       channelID: props.channelId,
       senderId,
       optimisticId: crypto.randomUUID(),
-      message: buildPostMessageRequest(snapshot),
+      message: buildPostMessageRequest({
+        snapshot,
+        participantIds: participants.ids(),
+      }),
     });
   };
 
@@ -334,6 +340,7 @@ export function Channel(props: ChannelProps) {
                   isDraggingOverChannel: dragState.isDraggingOverChannel(),
                   isValidChannelDrag: dragState.isValidChannelDrag(),
                 }}
+                participants={participants.users}
                 attachmentTracker={attachmentTracker}
                 persistenceKey={makeInputValuePersistenceKey({
                   channelId: props.channelId,

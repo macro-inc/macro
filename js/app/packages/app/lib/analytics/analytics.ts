@@ -30,7 +30,7 @@ const initializePosthog = (instance: PostHog) => {
   if (!key) return;
 
   instance.init(key, {
-    api_host: 'https://us.i.posthog.com',
+    api_host: 'https://analytics-proxy.macroverse.workers.dev/ingest/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
   });
