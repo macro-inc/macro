@@ -4,7 +4,7 @@ use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, 
 
 /// Get the user's own connection.
 /// Returns raw Gmail PersonResource - callers should map to service layer Contact.
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_self_connection(
     client: &GmailClient,
     access_token: &str,
@@ -39,7 +39,7 @@ pub(crate) async fn get_self_connection(
 /// If a sync_token is provided, it fetches only the changes since the last sync.
 /// Otherwise, it performs a full sync of all contacts.
 /// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
-#[tracing::instrument(skip(client, access_token, sync_token))]
+#[tracing::instrument(skip(client, access_token, sync_token), err)]
 pub(crate) async fn list_connections(
     client: &GmailClient,
     access_token: &str,
@@ -112,7 +112,7 @@ pub(crate) async fn list_connections(
 /// If a sync_token is provided, it fetches only the changes since the last sync.
 /// Otherwise, it performs a full sync of all "Other Contacts".
 /// Returns raw Gmail PersonResource objects and the next sync token - callers should map to service layer Contacts.
-#[tracing::instrument(skip(client, access_token, sync_token))]
+#[tracing::instrument(skip(client, access_token, sync_token), err)]
 pub(crate) async fn list_other_contacts(
     client: &GmailClient,
     access_token: &str,

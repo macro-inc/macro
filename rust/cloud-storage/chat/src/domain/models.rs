@@ -16,6 +16,9 @@ pub enum ChatErr {
     /// An unexpected error occurred.
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),
+    /// Bad request
+    #[error("bad request: {0}")]
+    BadRequest(String),
 }
 
 /// Arguments for creating a new chat.

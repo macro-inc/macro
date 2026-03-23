@@ -10,10 +10,10 @@ sqs = ["dep:aws-sdk-sqs"]
 
 [dependencies]
 aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+aws-sdk-sqs = { workspace = true, optional = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-aws-sdk-s3 = { workspace = true, optional = true }
-aws-sdk-sqs = { workspace = true, optional = true }

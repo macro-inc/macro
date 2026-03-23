@@ -213,10 +213,12 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             r#"
             UPDATE entity_properties
             SET values = $2
-            WHERE entity_id = $1;
+            WHERE entity_id = $1
+            AND property_definition_id = $3
             "#,
             task_id,
-            value
+            value,
+            SystemPropertyKey::Status.uuid(),
         )
         .execute(&self.pool)
         .await?;
