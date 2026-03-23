@@ -134,7 +134,7 @@ export const createAnalytics = () => {
   };
 
   const pageView = (pageTitle: string, opts?: PageViewOptions) => {
-    if (options.disabled) return;
+    if (disabled) return;
 
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
@@ -150,7 +150,7 @@ export const createAnalytics = () => {
         content_name: pageTitle,
       });
 
-      posthog.instance.capture('$pageview', {
+      posthog.capture('$pageview', {
         $current_url: pageLocation,
         $pathname: pagePath,
         $title: pageTitle,
