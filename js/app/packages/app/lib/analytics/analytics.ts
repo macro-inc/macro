@@ -57,6 +57,8 @@ export const createAnalytics = () => {
     tryInitialize(() => initializePosthog(posthog));
   };
 
+  initializeProviders();
+
   const sendEvent = (
     provider: AnalyticsProvider,
     event: EventName,
