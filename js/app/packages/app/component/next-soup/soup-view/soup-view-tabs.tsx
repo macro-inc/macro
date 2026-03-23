@@ -26,8 +26,14 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
 type TabItem = { value: string; label: string };
 
+/** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
+type TabbedListView = Extract<
+  ListView,
+  'inbox' | 'agents' | 'mail' | 'documents' | 'tasks' | 'channels' | 'folders'
+>;
+
 /** Tab definitions for each list view. */
-export const VIEW_TAB_LISTS: Partial<Record<ListView, TabItem[]>> = {
+export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   inbox: [
     { value: 'signal', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
@@ -116,13 +122,12 @@ export const useApplyPreset = () => {
 
 export const SoupViewTabs = () => {
   const listView = useCurrentListView();
-  const view = createMemo(() => listView());
 
   return (
     <Switch>
-      <For each={Object.keys(VIEW_TAB_LISTS) as ListView[]}>
+      <For each={Object.keys(VIEW_TAB_LISTS) as TabbedListView[]}>
         {(v) => (
-          <Match when={view() === v}>
+          <Match when={listView() === v}>
             <ViewTabs view={v} />
           </Match>
         )}
@@ -131,10 +136,10 @@ export const SoupViewTabs = () => {
   );
 };
 
-const ViewTabs = (props: { view: ListView }) => {
+const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-  const list = () => VIEW_TAB_LISTS[props.view] ?? [];
+  const list = () => VIEW_TAB_LISTS[props.view];
 
   return (
     <div>
@@ -156,7 +161,8 @@ export const CollapsedSoupViewTabs = () => {
 
   const list = createMemo(() => {
     const view = listView();
-    return view ? (VIEW_TAB_LISTS[view] ?? []) : [];
+    if (!view || !(view in VIEW_TAB_LISTS)) return [];
+    return VIEW_TAB_LISTS[view as TabbedListView];
   });
 
   const activeLabel = createMemo(() => {
