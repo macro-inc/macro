@@ -7,8 +7,8 @@ version = "0.1.0"
 [features]
 
 all = ["channel", "dcs", "document", "email", "static_file"]
-channel = ["comms_service_client", "comms_db_client", "models_comms", "dep:sqlx"]
-dcs = ["document_cognition_service_client"]
+channel = ["comms_db_client", "models_comms", "dep:sqlx"]
+dcs = ["dep:chat", "macro_db_client", "dep:sqlx"]
 default = []
 document = [
   "document_storage_service_client",
@@ -16,6 +16,9 @@ document = [
   "sync_service_client",
   "properties_db_client",
   "models_properties",
+  "macro_db_client",
+  "macro_user_id",
+  "models_permissions",
   "dep:sqlx",
   # TODO
   # "static_file_service_client??",
@@ -54,11 +57,13 @@ document_storage_service_client = { path = "../document_storage_service_client",
 lexical_client = { path = "../lexical_client", optional = true }
 sync_service_client = { path = "../sync_service_client", optional = true }
 
+chat = { path = "../chat", optional = true, default-features = false, features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
-comms_service_client = { path = "../comms_service_client", optional = true }
-document_cognition_service_client = { path = "../document_cognition_service_client", optional = true }
+macro_db_client = { path = "../macro_db_client", optional = true }
 email_service_client = { path = "../email_service_client", optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
 models_comms = { path = "../models_comms", optional = true }
+models_permissions = { path = "../models_permissions", optional = true }
 models_email = { path = "../models_email", optional = true }
 models_properties = { path = "../models_properties", optional = true }
 models_sfs = { path = "../models_sfs", optional = true }

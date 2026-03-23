@@ -1,6 +1,5 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
 /// Service context wrapper for shared state passed to tools.
 ///
@@ -28,7 +27,4 @@ impl<S> DerefMut for ServiceContext<S> {
 pub struct RequestContext {
     /// The ID of the user making the request.
     pub user_id: MacroUserIdStr<'static>,
-    /// The JWT token for the request.
-    #[deprecated(note = "Do not add new dependencies on this field")]
-    pub jwt: Arc<String>,
 }

@@ -4,7 +4,6 @@ use ai_tools::{
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
@@ -44,10 +43,7 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let search_url = std::env::var("SEARCH_SERVICE_URL")?;
     let email_url = std::env::var("EMAIL_SERVICE_URL")?;
     let sync_url = std::env::var("SYNC_SERVICE_URL")?;
-    let dcs_url = std::env::var("DOCUMENT_COGNITION_SERVICE_URL")?;
     let sfs_url = std::env::var("STATIC_FILE_SERVICE_URL")?;
-    let comms_url =
-        std::env::var("COMMS_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8080".into());
     let lexical_url =
         std::env::var("LEXICAL_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8096".into());
     let doc_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")?;
@@ -62,7 +58,6 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
         internal_auth_key.clone(),
         dss_url,
     ));
-    let comms_client = Arc::new(comms_service_client::CommsServiceClient::new(comms_url));
     let search_client = Arc::new(SearchServiceClient::new(
         internal_auth_key.clone(),
         search_url,
@@ -71,10 +66,6 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
     let email_client = Arc::new(EmailServiceClient::new(
         internal_auth_key.clone(),
         email_url.clone(),
-    ));
-    let dcs_client = Arc::new(DocumentCognitionServiceClient::new(
-        internal_auth_key.clone(),
-        dcs_url,
     ));
     let sfs_client = Arc::new(StaticFileServiceClient::new(
         internal_auth_key.clone(),
@@ -94,8 +85,8 @@ pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<To
                     .with_macro_db(pool.clone())
                     .build(),
             )
-            .with_channel_client_and_db(comms_client, pool.clone())
-            .with_dcs_client(dcs_client)
+            .with_channel_client(pool.clone())
+            .with_dcs_client(pool.clone())
             .with_email_client(email_client)
             .with_static_file_client(sfs_client),
     );

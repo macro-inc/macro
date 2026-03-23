@@ -7,7 +7,6 @@ use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
 use comms_service_client::CommsServiceClient;
 use config::{Config, EnvVars, Environment};
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
@@ -136,11 +135,6 @@ async fn main() -> anyhow::Result<()> {
         config.email_service_url.clone(),
     ));
 
-    let document_cognition_service_client = Arc::new(DocumentCognitionServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.document_cognition_service_url.clone(),
-    ));
-
     let static_file_service_client = Arc::new(StaticFileServiceClient::new(
         internal_auth_key.as_ref().to_string(),
         config.static_file_service_url.clone(),
@@ -262,8 +256,8 @@ async fn main() -> anyhow::Result<()> {
                     .with_macro_db(db.clone())
                     .build(),
             )
-            .with_channel_client_and_db(comms_service_client.clone(), db.clone())
-            .with_dcs_client(document_cognition_service_client)
+            .with_channel_client(db.clone())
+            .with_dcs_client(db.clone())
             .with_email_client(email_service_client)
             .with_static_file_client(static_file_service_client.clone()),
     );

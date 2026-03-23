@@ -59,7 +59,7 @@ pub async fn get_chat(
             AttachmentType::Channel => ctx
                 .scribe
                 .channel
-                .get_channel_metadata(attachment.attachment_id.as_str(), None)
+                .get_channel_metadata(attachment.attachment_id.as_str())
                 .await
                 .map(|channel_metadata| AttachmentMetadata::Channel {
                     channel_name: channel_metadata.name,
@@ -70,7 +70,7 @@ pub async fn get_chat(
                 let thread = ctx
                     .scribe
                     .email
-                    .get_email_messages_by_thread_id(&attachment.attachment_id, 0, 1, None)
+                    .get_email_messages_by_thread_id(&attachment.attachment_id, 0, 1)
                     .await;
 
                 thread

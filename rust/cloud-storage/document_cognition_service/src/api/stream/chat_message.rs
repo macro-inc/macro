@@ -246,6 +246,7 @@ pub async fn send_chat_message(
         toolset.prompt,
         &jwt_token,
         user_memory.as_deref(),
+        (*user_id).clone(),
     )
     .await
     .map_err(|err| {
@@ -366,10 +367,8 @@ fn stream_and_save_message(
         properties_tool_context: ctx.properties_tool_context.clone(),
     };
 
-    #[expect(deprecated)]
     let request_context = RequestContext {
         user_id: user_id.clone(),
-        jwt: Arc::new(jwt_token),
     };
     let ctx_outer = ctx.clone();
 
