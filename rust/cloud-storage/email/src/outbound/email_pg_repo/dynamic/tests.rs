@@ -260,6 +260,19 @@ fn test_get_sort_timestamp_field_default() {
 }
 
 #[test]
+fn test_build_query_shared_include_uses_union_instead_of_or() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("UNION"));
+    assert!(sql.contains("t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+    assert!(!sql.contains(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+}
+
+#[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));

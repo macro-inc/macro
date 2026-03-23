@@ -821,28 +821,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-dynamodbstreams"
-version = "1.92.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f1738cf234a9ae199475a533e9be05945e3e0b44d91ae1017c64e8197acdfff"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "fastrand 2.3.0",
- "http 0.2.12",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-ecs"
 version = "1.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5564,22 +5542,6 @@ name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
-
-[[package]]
-name = "local_stream_processor"
-version = "0.1.0"
-dependencies = [
- "aws-sdk-dynamodb",
- "aws-sdk-dynamodbstreams",
- "chrono",
- "macro_aws_config",
- "macro_env_var",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
 
 [[package]]
 name = "lock_api"
