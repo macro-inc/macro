@@ -166,7 +166,7 @@ pub async fn handler(
 
             #[expect(deprecated)]
             let request_context = RequestContext {
-                user_id: Arc::new(user.macro_user_id),
+                user_id: user.macro_user_id,
                 jwt: Arc::new(String::new()),
             };
 

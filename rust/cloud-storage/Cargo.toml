@@ -128,7 +128,7 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "user_quota",
-  "worker_trigger",
+  "worker_trigger", "memory",
 ]
 
 [workspace.dependencies]

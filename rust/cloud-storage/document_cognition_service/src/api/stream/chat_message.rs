@@ -351,7 +351,7 @@ fn stream_and_save_message(
 
     #[expect(deprecated)]
     let request_context = RequestContext {
-        user_id: user_id.clone(),
+        user_id: *user_id,
         jwt: Arc::new(jwt_token),
     };
     let ctx_outer = ctx.clone();
@@ -369,7 +369,7 @@ fn stream_and_save_message(
             yield json;
         }
 
-        let client = ToolLoop::new(toolset, tool_context);
+        let client = ToolLoop::new(Arc::new(toolset), tool_context);
         let mut chat = client.chat();
 
         // Create the AI stream - yield error if it fails

@@ -20,14 +20,13 @@ impl<T> ToolLoop<AnthropicClient, T>
 where
     T: Clone + Send + Sync,
 {
-    pub fn new(toolset: AsyncToolSet<T>, context: T) -> Self {
+    pub fn new(toolset: Arc<AsyncToolSet<T>>, context: T) -> Self {
         let extensions = AnthropicRequestExtensions(vec![
             AnthropicRequestExtension::WebSearchTool,
             AnthropicRequestExtension::FetchTool,
             AnthropicRequestExtension::CodeExecutionTool,
         ]);
         let client = AnthropicClient::new(extensions);
-        let toolset = Arc::new(toolset);
         Self {
             client,
             context,

@@ -93,7 +93,7 @@ where
         #[allow(deprecated)]
         let request_context = RequestContext {
             jwt: Arc::new(identity.jwt.clone()),
-            user_id: Arc::new(user_id),
+            user_id,
         };
 
         let arguments = request

@@ -6076,6 +6076,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "memory"
+version = "0.1.0"
+dependencies = [
+ "ai",
+ "ai_tools",
+ "ai_toolset",
+ "anyhow",
+ "comms",
+ "comms_service_client",
+ "document_cognition_service_client",
+ "document_storage_service_client",
+ "documents",
+ "email",
+ "email_service_client",
+ "entity_access",
+ "frecency",
+ "futures",
+ "lexical_client",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_user_id",
+ "macro_uuid",
+ "properties",
+ "scribe",
+ "search_service_client",
+ "serde",
+ "serde_json",
+ "soup",
+ "sqlx",
+ "static_file_service_client",
+ "sync_service_client",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
