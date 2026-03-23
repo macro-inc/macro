@@ -83,6 +83,7 @@ import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
   SoupViewTabs,
+  CollapsedSoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
@@ -229,7 +230,12 @@ export const SoupView = (props: SoupViewProps) => {
                   </h1>
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
-                  <SoupViewTabs />
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    expanded={<SoupViewTabs />}
+                    collapsed={<CollapsedSoupViewTabs />}
+                  />
                   <SoupViewCreateButton />
                 </Show>
                 <Show when={narrowSearchExpanded()}>
