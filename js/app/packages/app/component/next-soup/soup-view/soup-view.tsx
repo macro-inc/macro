@@ -233,7 +233,11 @@ export const SoupView = (props: SoupViewProps) => {
                   <CollapsibleHeaderItem
                     id="tabs"
                     priority={1}
-                    expanded={<SoupViewTabs />}
+                    expanded={
+                      <div classList={{ 'pr-1': isMobile() }}>
+                        <SoupViewTabs />
+                      </div>
+                    }
                     collapsed={<CollapsedSoupViewTabs />}
                   />
                   <SoupViewCreateButton />
