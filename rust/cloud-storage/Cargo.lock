@@ -3431,7 +3431,9 @@ dependencies = [
 name = "email"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "authentication_service_client",
  "axum",
  "axum-extra",
@@ -3464,6 +3466,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
 ]

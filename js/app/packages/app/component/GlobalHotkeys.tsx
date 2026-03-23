@@ -5,6 +5,9 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
+import { useLogout } from '@core/auth/logout';
+import LogoutIcon from '@icon/regular/sign-out.svg';
+import UserIcon from '@icon/regular/user.svg';
 import {
   monochromeIcons,
   setDarkModeTheme,
@@ -29,7 +32,8 @@ import Upload from '@icon/regular/upload.svg';
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
-  const { toggleSettings } = useSettingsState();
+  const { toggleSettings, openSettings } = useSettingsState();
+  const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
 
@@ -134,6 +138,28 @@ export default function GlobalShortcuts() {
     description: 'Toggle settings',
     keyDownHandler: () => {
       toggleSettings();
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Account',
+    icon: UserIcon,
+    keyDownHandler: () => {
+      openSettings('Account');
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Logout',
+    icon: LogoutIcon,
+    keyDownHandler: () => {
+      logout();
       return true;
     },
     runWithInputFocused: true,

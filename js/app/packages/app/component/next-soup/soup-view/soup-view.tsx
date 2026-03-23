@@ -44,6 +44,8 @@ import {
 } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -188,6 +190,21 @@ export const SoupView = (props: SoupViewProps) => {
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
 
+  const isMailView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'mail';
+  });
+
+  const emailLinksQuery = useEmailLinksQuery();
+  const hasLinkError = createMemo(() => {
+    if (!isMailView()) return false;
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
+  });
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -261,7 +278,15 @@ export const SoupView = (props: SoupViewProps) => {
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
-          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Show when={hasLinkError()}>
+            <EmailPermissionsBanner />
+          </Show>
+          <div
+            class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full"
+            classList={{
+              'pointer-events-none opacity-10': hasLinkError(),
+            }}
+          >
             <Suspense>
               <SoupViewFileDropzone>
                 <SoupViewList />

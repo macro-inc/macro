@@ -35,6 +35,28 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         github_key: GithubKey,
         task_ids: &[MacroTaskId],
     ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+
+    /// Looks up the macro user ID associated with a GitHub user ID via the `github_links` table.
+    /// Returns `None` if no link exists.
+    fn get_macro_id_by_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Returns all team IDs the given macro user belongs to.
+    fn get_user_team_ids(
+        &self,
+        macro_id: &str,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
+
+    /// Inserts associations between a GitHub App installation and the given teams.
+    /// Ignores conflicts (idempotent).
+    fn insert_installation_team_associations(
+        &self,
+        installation_id: &str,
+        team_ids: &[uuid::Uuid],
+        installed_by: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Client interface for making GitHub sync API calls.

@@ -217,25 +217,14 @@ pub async fn add_message_labels(
             })?;
         }
 
-        // conditionally update thread metadata, depending on the label getting added
-        if provider_label_ids.iter().any(|provider_id|
-            // marking a message as INBOX could change the latest_inbound_message_ts or inbox_visible status
-            provider_id == service::label::system_labels::INBOX
-                // marking a message as SPAM/TRASH could change the latest_non_spam_message_ts
-                || provider_id == service::label::system_labels::SPAM
-                || provider_id == service::label::system_labels::TRASH
-                // marking as marking a message as unread could change thread's is_read
-                || provider_id == service::label::system_labels::UNREAD)
-        {
-            update_thread_metadata(&mut tx, thread_db_id, link.id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to update thread metadata".to_string()),
-                    })
-                })?;
-        }
+        update_thread_metadata(&mut tx, thread_db_id, link.id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to update thread metadata".to_string()),
+                })
+            })?;
 
         Ok::<(), ProcessingError>(())
     }
@@ -290,22 +279,14 @@ pub async fn remove_message_labels(
             })?;
         }
 
-        // conditionally update thread metadata, depending on the label getting added
-        if provider_label_ids.iter().any(|provider_id| {
-            provider_id == service::label::system_labels::INBOX
-                || provider_id == service::label::system_labels::SPAM
-                || provider_id == service::label::system_labels::TRASH
-                || provider_id == service::label::system_labels::UNREAD
-        }) {
-            update_thread_metadata(&mut tx, thread_db_id, link.id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to update thread metadata"),
-                    })
-                })?;
-        }
+        update_thread_metadata(&mut tx, thread_db_id, link.id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to update thread metadata"),
+                })
+            })?;
 
         Ok::<(), ProcessingError>(())
     }

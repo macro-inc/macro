@@ -4,6 +4,7 @@
 mod test;
 
 mod handle_comment;
+mod handle_installation;
 mod handle_pr;
 
 use crate::domain::{
@@ -327,6 +328,13 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             | GithubWebhookEventType::PullRequestReviewComment => {
                 self.handle_comment_event(webhook_event).await
             }
+            GithubWebhookEventType::Installation => match action {
+                Some("created") => self.handle_installation_created(webhook_event).await,
+                _ => {
+                    tracing::debug!(action, "skipping unhandled installation action");
+                    Ok(())
+                }
+            },
         }
     }
 

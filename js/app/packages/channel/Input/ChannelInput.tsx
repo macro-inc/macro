@@ -20,14 +20,16 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import { Match, Show, Switch, type JSX } from 'solid-js';
+import { Match, Show, Switch, type Accessor, type JSX } from 'solid-js';
 import { isReplyInput } from './types';
+import type { IUser } from '@core/user/types';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
+  participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
 };
@@ -88,6 +90,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
+    users: props.participants,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
     },

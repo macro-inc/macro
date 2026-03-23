@@ -91,6 +91,13 @@ impl EmailService for MockEmail {
         }))
     }
 
+    async fn get_link_by_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -214,6 +221,13 @@ impl EmailService for MockEmailLinkResult {
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)()
+    }
+
+    async fn get_link_by_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
     async fn get_thread_with_messages(

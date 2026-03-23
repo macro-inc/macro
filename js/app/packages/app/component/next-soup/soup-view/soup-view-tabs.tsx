@@ -155,6 +155,7 @@ const MailTabs = () => {
           { value: 'noise', label: 'Noise' },
           { value: 'drafts', label: 'Drafts' },
           { value: 'sent', label: 'Sent' },
+          { value: 'shared', label: 'Shared' },
         ]}
         value={activeTab()}
         defaultValue={VIEW_TAB_PRESETS.mail.default}

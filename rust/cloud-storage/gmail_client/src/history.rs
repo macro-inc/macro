@@ -6,7 +6,7 @@ const MAX_RESULTS: usize = 500;
 
 /// Gets the changes to a user's inbox that have occurred since start_history_id.
 /// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_history(
     client: &GmailClient,
     access_token: &str,
@@ -79,6 +79,7 @@ pub(crate) async fn get_history(
 }
 
 /// returns the current history id for the user's inbox using the /profile endpoint
+#[tracing::instrument(skip(client, access_token), err)]
 pub async fn get_current_history_id(
     client: &GmailClient,
     access_token: &str,

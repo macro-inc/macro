@@ -74,6 +74,13 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
+    async fn link_by_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, Self::Err> {
+        link::link_by_macro_id(&self.pool, macro_id).await
+    }
+
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
         thread::thread_by_id(&self.pool, thread_id).await
     }

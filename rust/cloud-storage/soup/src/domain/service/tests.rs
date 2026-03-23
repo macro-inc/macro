@@ -47,6 +47,13 @@ impl EmailService for NoopEmailService {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 
+    async fn get_link_by_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,

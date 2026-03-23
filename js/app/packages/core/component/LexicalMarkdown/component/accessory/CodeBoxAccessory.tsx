@@ -3,8 +3,7 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
@@ -47,6 +46,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { autoRegister } from '../../plugins/shared/utils';
+import { Button } from '@ui/components/Button';
 
 false && glueToElement;
 
@@ -106,14 +106,19 @@ export function CodeLanguageSelector(props: {
           when={editable()}
           fallback={<StaticLabel language={validCurrentLanguage()} />}
         >
-          <DeprecatedTextButton
+          <Button
             // TODO: Icon mapping moved to frontend package
-            icon={LanguageIcons[validCurrentLanguage()]}
-            theme="extraMuted"
-            text={LanguageDefinitions[validCurrentLanguage()].label}
-            showChevron
+            variant="ghost"
+            size="sm"
+            class="text-ink-extra-muted/50 rounded-xs p-1.5"
             tabIndex={-1}
-          />
+          >
+            <Dynamic
+              component={LanguageIcons[validCurrentLanguage()]}
+              class="size-4"
+            />
+            <span>{LanguageDefinitions[validCurrentLanguage()].label}</span>
+          </Button>
         </Show>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -228,13 +233,13 @@ export function CodeBoxAccessory(props: {
           }));
         }}
       >
-        <div class="w-full flex justify-between content-center items-center p-1 pointer-events-auto text-ink-extra-muted">
+        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted">
           <CodeLanguageSelector
             language={language}
             setLanguage={setLanguageOnNode}
             editor={props.editor}
           />
-          <div class="flex gap-2 items-center">
+          <div class="flex gap-2 items-center h-full">
             <Show when={showPreviewToggle()}>
               <div class="flex items-center gap-2">
                 <div class="text-xs text-ink-extra-muted">Preview</div>
@@ -252,16 +257,19 @@ export function CodeBoxAccessory(props: {
                 </Switch>
               </div>
             </Show>
-            <DeprecatedIconButton
-              theme="extraMuted"
-              icon={Copy}
-              tooltip={{ label: 'Copy Code' }}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-ink-extra-muted rounded-xs h-full"
+              tooltip="Copy Code"
               on:click={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 copyCode();
               }}
-            />
+            >
+              <Copy />
+            </Button>
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
@@ -417,16 +425,19 @@ export const StaticCodeBoxAccessory = (props: {
               </Switch>
             </div>
           </Show>
-          <DeprecatedIconButton
-            theme="extraMuted"
-            icon={() => <Copy class={`size-5 ${textColor()}`} />}
-            tooltip={{ label: 'Copy Code' }}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="text-ink-extra-muted rounded-xs h-full"
+            tooltip="Copy Code"
             on:click={(e) => {
               e.stopPropagation();
               e.preventDefault();
               copyCode();
             }}
-          />
+          >
+            <Copy />
+          </Button>
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>
