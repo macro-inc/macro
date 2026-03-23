@@ -167,6 +167,13 @@ pub trait GmailTokenProvider: Send + Sync + 'static {
         &self,
         link: &Link,
     ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+
+    /// Fetch a Gmail OAuth access token directly from the auth service,
+    /// bypassing the Redis cache for reads but still caching the result.
+    fn fetch_gmail_access_token_no_cache(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
 }
 
 /// Axum state wrapper for a [`GmailTokenProvider`] implementation.
