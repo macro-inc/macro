@@ -5,6 +5,7 @@ use axum::extract::FromRequestParts;
 use axum::http::StatusCode;
 use axum::{Json, extract::State};
 use axum_extra::extract::Cached;
+use ip_extractor::ClientIp;
 use macro_user_id::email::EmailStr;
 use model_user::axum_extractor::MacroUserExtractor;
 use rate_limit::inbound::RateLimitExtractable;
@@ -86,5 +87,42 @@ where
     ) -> Result<Self, Self::Rejection> {
         let Cached(user): Cached<MacroUserExtractor> = parts.extract_with_state(state).await?;
         Ok(Self(user))
+    }
+}
+
+/// The struct which impl [RateLimitExtractable] to limit the number of per-ip requests
+/// for the send invite route
+pub struct PerIpReferralRateLimit(ClientIp);
+
+impl<S> RateLimitExtractable<S> for PerIpReferralRateLimit
+where
+    S: Send + Sync,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 50,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-ip-referral")
+            .append(&self.0.origin_ip())
+            .finish()
+    }
+}
+
+impl<S> FromRequestParts<S> for PerIpReferralRateLimit
+where
+    S: Send + Sync,
+{
+    type Rejection = <ClientIp as FromRequestParts<S>>::Rejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let ip: ClientIp = parts.extract_with_state(state).await?;
+        Ok(Self(ip))
     }
 }

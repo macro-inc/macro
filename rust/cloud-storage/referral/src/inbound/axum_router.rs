@@ -11,6 +11,7 @@ mod send_invite;
 
 use std::sync::Arc;
 
+use axum::extract::FromRef;
 use axum::{Json, Router, http::StatusCode, response::IntoResponse};
 use model_error_response::ErrorResponse;
 use rate_limit::RateLimitService;
@@ -75,10 +76,15 @@ where
             axum::routing::post(post_referral_invite_handler::<T, R>),
         )
         .layer(
-            ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                state.rate_limiter.clone(),
-                rate_limit_middleware::<R, PerUserReferralRateLimit, R>,
-            )),
+            ServiceBuilder::new()
+                .layer(axum::middleware::from_fn_with_state(
+                    state.rate_limiter.clone(),
+                    rate_limit_middleware::<R, PerUserReferralRateLimit, R>,
+                ))
+                .layer(axum::middleware::from_fn_with_state(
+                    state.rate_limiter.clone(),
+                    rate_limit_middleware::<R, PerIpReferralRateLimit, R>,
+                )),
         )
         .route(
             "/code",
