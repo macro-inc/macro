@@ -2931,6 +2931,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rmcp",
+ "roles_and_permissions",
  "schemars",
  "scribe",
  "search_service_client",

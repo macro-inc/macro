@@ -29,7 +29,9 @@ use model::user::UserContext;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use roles_and_permissions::domain::model::PermissionId;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 use stream::domain::{StreamId, StreamRepoExt};
@@ -96,6 +98,8 @@ pub struct SendChatMessageResponse {
 pub struct ChatMessageError {
     pub error: String,
     pub stream_id: Option<String>,
+    #[serde(skip)]
+    pub status: Option<StatusCode>,
 }
 
 impl fmt::Display for ChatMessageError {
@@ -106,7 +110,8 @@ impl fmt::Display for ChatMessageError {
 
 impl IntoResponse for ChatMessageError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, Json(self)).into_response()
+        let status = self.status.unwrap_or(StatusCode::BAD_REQUEST);
+        (status, Json(self)).into_response()
     }
 }
 
@@ -145,6 +150,7 @@ pub async fn send_chat_message(
         MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| ChatMessageError {
             error: "Invalid user ID".to_string(),
             stream_id: Some(stream_id.clone()),
+            status: None,
         })?;
     let user_id = Arc::new(user_id);
 
@@ -171,6 +177,7 @@ pub async fn send_chat_message(
                         return Err(ChatMessageError {
                             error: format!("Permission check failed: {:?}", e),
                             stream_id: Some(stream_id),
+                            status: None,
                         });
                     }
                     Ok(access) => match access {
@@ -178,6 +185,7 @@ pub async fn send_chat_message(
                             return Err(ChatMessageError {
                                 error: "Insufficient permissions to send messages".to_string(),
                                 stream_id: Some(stream_id),
+                                status: None,
                             });
                         }
                         _ => (),
@@ -196,11 +204,13 @@ pub async fn send_chat_message(
         }
     };
 
-    let model = if request.model == Model::Claude45Opus {
-        Model::Claude45Opus
-    } else {
-        FALLBACK_MODEL
-    };
+    let model = resolve_model_from_permissions(&user_context.permissions).ok_or_else(|| {
+        ChatMessageError {
+            error: "AI features require a paid subscription".to_string(),
+            stream_id: Some(stream_id.clone()),
+            status: Some(StatusCode::PAYMENT_REQUIRED),
+        }
+    })?;
 
     // Convert HTTP request to internal payload for existing functions
     let payload = SendChatMessagePayload {
@@ -225,6 +235,7 @@ pub async fn send_chat_message(
                 ChatMessageError {
                     error: "Failed to store message".to_string(),
                     stream_id: Some(stream_id.clone()),
+                    status: None,
                 }
             })?;
 
@@ -254,6 +265,7 @@ pub async fn send_chat_message(
         ChatMessageError {
             error: "Failed to build request".to_string(),
             stream_id: Some(stream_id.clone()),
+            status: None,
         }
     })?;
 
@@ -317,6 +329,7 @@ async fn create_new_chat(
         ChatMessageError {
             error: "Failed to create chat".to_string(),
             stream_id: Some(stream_id.to_string()),
+            status: None,
         }
     })?;
 
@@ -328,6 +341,7 @@ async fn create_new_chat(
             ChatMessageError {
                 error: "Failed to get chat".to_string(),
                 stream_id: Some(stream_id.to_string()),
+                status: None,
             }
         })?;
 
@@ -552,4 +566,20 @@ fn stream_and_save_message(
         Box::pin(payload_stream),
         Some(std::time::Duration::from_secs(30 * 60)),
     );
+}
+
+/// Returns the best AI model the user has permission to use, or `None` if
+/// the user has no AI permissions (free tier).
+fn resolve_model_from_permissions(permissions: &Option<HashSet<String>>) -> Option<Model> {
+    let perms = permissions.as_ref()?;
+
+    if perms.contains(&PermissionId::WriteOpus.to_string()) {
+        Some(Model::Claude46Opus)
+    } else if perms.contains(&PermissionId::WriteSonnet.to_string()) {
+        Some(Model::Claude46Sonnet)
+    } else if perms.contains(&PermissionId::WriteHaiku.to_string()) {
+        Some(FALLBACK_MODEL)
+    } else {
+        None
+    }
 }
