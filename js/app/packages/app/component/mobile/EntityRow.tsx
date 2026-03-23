@@ -223,12 +223,14 @@ export function EntityRowProvider(
   };
 
   const canSwipeRight = (entityId: string) => {
-    if (customRowSwipeHandlers.get(entityId)?.onSwipeRight !== undefined) return true;
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeRight !== undefined)
+      return true;
     if (!props.onSwipeRight) return false;
     return props.canSwipeRight ? props.canSwipeRight(entityId) : true;
   };
   const canSwipeLeft = (entityId: string) => {
-    if (customRowSwipeHandlers.get(entityId)?.onSwipeLeft !== undefined) return true;
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeLeft !== undefined)
+      return true;
     if (!props.onSwipeLeft) return false;
     return props.canSwipeLeft ? props.canSwipeLeft(entityId) : true;
   };

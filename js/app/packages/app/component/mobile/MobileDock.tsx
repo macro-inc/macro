@@ -32,7 +32,7 @@ type MobileDockButtonProps = {
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
   onTouchMove?: (e: TouchEvent) => void;
   onTouchEnd?: (e: TouchEvent) => void;
-  iconClass?: string;q
+  iconClass?: string;
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
