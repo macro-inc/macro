@@ -15,16 +15,6 @@ type AttachmentsProps = {
   class?: string;
 };
 
-/**
- * The API returns width/height on message attachments at runtime,
- * but the generated ApiMessageAttachment type doesn't include them.
- * This type reflects the actual runtime shape for image attachments.
- */
-type RuntimeMessageAttachment = ApiMessageAttachment & {
-  width?: number | null;
-  height?: number | null;
-};
-
 type MessageAttachmentBuckets = {
   imageAttachments: ApiMessageAttachment[];
   videoAttachments: ApiMessageAttachment[];
@@ -67,14 +57,11 @@ export function Attachments(props: AttachmentsProps) {
     partitionMessageAttachments(message().attachments ?? [])
   );
   const imagePreviewData = createMemo(() =>
-    buckets().imageAttachments.map((attachment) => {
-      const runtime = attachment as RuntimeMessageAttachment;
-      return {
-        id: attachment.entity_id,
-        width: runtime.width ?? undefined,
-        height: runtime.height ?? undefined,
-      };
-    })
+    buckets().imageAttachments.map((attachment) => ({
+      id: attachment.entity_id,
+      width: attachment.width ?? undefined,
+      height: attachment.height ?? undefined,
+    }))
   );
   const imageAttachmentIds = createMemo(() =>
     buckets().imageAttachments.map((attachment) => attachment.id)
