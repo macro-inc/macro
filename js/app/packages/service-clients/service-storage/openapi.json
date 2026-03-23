@@ -5228,10 +5228,20 @@
             "type": "string",
             "description": "Type of entity."
           },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height (for images)."
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "description": "Attachment id."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width (for images)."
           }
         }
       },

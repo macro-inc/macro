@@ -53,6 +53,8 @@ export * from './apiChannelMessagesPagePreviousCursor';
 export * from './apiChannelParticipant';
 export * from './apiCountedReaction';
 export * from './apiMessageAttachment';
+export * from './apiMessageAttachmentHeight';
+export * from './apiMessageAttachmentWidth';
 export * from './apiParticipantRole';
 export * from './apiThreadInfo';
 export * from './apiThreadInfoLatestReplyAt';
