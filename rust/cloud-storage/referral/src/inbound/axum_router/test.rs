@@ -1,6 +1,7 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{Extension, http::StatusCode};
+use axum::{Extension, extract::ConnectInfo, http::StatusCode};
 use http_body_util::BodyExt;
 use model_user::UserContext;
 use rate_limit::{
@@ -125,7 +126,12 @@ fn build_router(
         service: Arc::new(service),
         rate_limiter,
     };
-    referral_router(state).layer(Extension(test_user_context()))
+    referral_router(state)
+        .layer(Extension(ConnectInfo(SocketAddr::from((
+            [127, 0, 0, 1],
+            0,
+        )))))
+        .layer(Extension(test_user_context()))
 }
 
 fn ok_service() -> MockReferralService {

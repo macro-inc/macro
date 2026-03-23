@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, ops::Deref, time::Duration};
+use std::{collections::HashSet, ops::Deref};
 
 use macro_user_id::{
     email::EmailStr,
@@ -12,7 +12,6 @@ use macro_user_id::{
 };
 use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
-use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, domain::ports::RateLimitService};
 use rootcause::compat::boxed_error::IntoBoxedError;
 
 use crate::domain::{
@@ -21,13 +20,11 @@ use crate::domain::{
 };
 
 /// The concrete referral service implementation.
-pub struct ReferralServiceImpl<R, Dc, Rl, N> {
+pub struct ReferralServiceImpl<R, Dc, N> {
     ///  referral repo
     pub repo: R,
     /// discount client
     pub discount_client: Dc,
-    /// rate limiter service
-    pub rate_limit: Rl,
     /// the notification sender
     pub notification_ingress: N,
 }
@@ -35,11 +32,10 @@ pub struct ReferralServiceImpl<R, Dc, Rl, N> {
 impl<
     R: ReferralRepo,
     Dc: DiscountClient,
-    Rl: RateLimitService,
     // the constructor for this is Arc<NI> so we use a different bound here
     N: Deref<Target = NI> + Send + Sync + 'static,
     NI: NotificationIngress,
-> ReferralService for ReferralServiceImpl<R, Dc, Rl, N>
+> ReferralService for ReferralServiceImpl<R, Dc, N>
 {
     #[tracing::instrument(skip(self), err)]
     async fn get_referral_code_for_user<'a>(
@@ -102,6 +98,7 @@ impl<
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn send_referral_invite(
         &self,
         sending_user: MacroUserIdStr<'_>,

@@ -25,10 +25,7 @@ pub trait RateLimitPort: Send + Sync + 'static {
     /// Decrement the rate limit counter for a key.
     ///
     /// Used to roll back a previously counted request when the action fails.
-    fn decrement(
-        &self,
-        key: &RateLimitKey,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    fn decrement(&self, key: &RateLimitKey) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// The external facing service interface.

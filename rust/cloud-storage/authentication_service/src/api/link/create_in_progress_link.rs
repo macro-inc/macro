@@ -29,7 +29,7 @@ pub struct CreateInProgressLinkResponse {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=?ip_context, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=?ip_context, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

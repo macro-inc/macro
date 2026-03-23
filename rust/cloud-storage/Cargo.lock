@@ -5257,7 +5257,7 @@ name = "ip_extractor"
 version = "0.1.0"
 dependencies = [
  "axum",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "tokio",
 ]
 

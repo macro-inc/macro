@@ -29,7 +29,7 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=?ip_context))]
+#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=?ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

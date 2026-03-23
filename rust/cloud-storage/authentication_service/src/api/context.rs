@@ -43,7 +43,6 @@ type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
     StripeDiscountClient,
-    RateLimiter,
     Arc<SqsNotificationIngress<SqsIngressQueue>>,
 >;
 

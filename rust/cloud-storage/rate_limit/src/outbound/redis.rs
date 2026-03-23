@@ -10,6 +10,14 @@ use crate::domain::models::{
 };
 use crate::domain::ports::RateLimitPort;
 
+/// Redis key prefix for rate limit counters.
+const KEY_PREFIX: &str = "rtl";
+
+/// Format a [`RateLimitKey`] into the Redis key string used for storage.
+fn redis_key(key: &RateLimitKey) -> String {
+    format!("{KEY_PREFIX}:{}", key.to_hex_string())
+}
+
 /// Redis-based implementation of the rate limit port.
 ///
 /// This adapter uses Redis to store and check rate limit counters.
@@ -106,7 +114,7 @@ impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLi
         key: RateLimitKey,
         config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
-        let key_str = format!("rtl:{}", key.to_hex_string());
+        let key_str = redis_key(&key);
 
         let (allowed, current_count, ttl) = self
             .redis
@@ -131,7 +139,7 @@ impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLi
     }
 
     async fn decrement(&self, key: &RateLimitKey) -> Result<(), Report> {
-        let key_str = format!("rtl:{}", key.to_hex_string());
+        let key_str = redis_key(key);
         self.redis.decrement(&key_str).await
     }
 }

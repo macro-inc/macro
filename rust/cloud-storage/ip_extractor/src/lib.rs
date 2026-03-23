@@ -1,5 +1,10 @@
 #![deny(missing_docs)]
 //! Axum middleware for extracting client IP from requests.
+//!
+//! Extraction priority:
+//! 1. `CloudFront-Viewer-Address` — set by CloudFront to the real client IP
+//!    (cannot be spoofed by clients). Format: `ip:port`.
+//! 2. `ConnectInfo<SocketAddr>` — direct TCP peer address.
 
 #[cfg(test)]
 mod test;
@@ -16,12 +21,15 @@ use std::{
 };
 use thiserror::Error;
 
-/// The best guess at what the originating IP of a client request is
-/// uses the x-forwarded-for header if it exists, falling back to the client ip
+/// The best guess at what the originating IP of a client request is.
+///
+/// Behind CloudFront, uses the `CloudFront-Viewer-Address` header which
+/// cannot be spoofed by clients. Falls back to the direct connection IP
+/// for non-CloudFront environments (e.g. local development).
 #[derive(Debug)]
 pub enum ClientIp {
-    /// the leftmost x-forwarded-for value of the request
-    ForwardedFor(IpAddr),
+    /// IP from the CloudFront-Viewer-Address header
+    CloudFrontViewer(IpAddr),
     /// the direct ip of the client
     DirectIp(ConnectInfo<SocketAddr>),
 }
@@ -30,20 +38,20 @@ impl ClientIp {
     /// get the [IpAddr] of the client
     pub fn origin_ip(&self) -> IpAddr {
         match self {
-            ClientIp::ForwardedFor(ip) => *ip,
+            ClientIp::CloudFrontViewer(ip) => *ip,
             ClientIp::DirectIp(connect_info) => connect_info.ip(),
         }
     }
 }
 
-/// The errors that can occur while extracing a [ClientIp]
+/// The errors that can occur while extracting a [ClientIp]
 #[derive(Debug, Error)]
 pub enum ClientIpError {
-    /// the x-forwarded-for contained invalid ip address (v4/v6) values
+    /// the header contained an invalid ip address (v4/v6) value
     #[error("invalid ip address {0:?}")]
     ParseErr(#[from] AddrParseError),
     /// the header contained non-ascii chars
-    #[error("invalid asci {0:?}")]
+    #[error("invalid ascii {0:?}")]
     InvalidAscii(#[from] Utf8Error),
     /// the axum server did not call into_make_service_with_conn_info
     #[error("Internal server err")]
@@ -61,7 +69,7 @@ impl IntoResponse for ClientIpError {
     }
 }
 
-const X_FORWARDED_FOR_HEADER: HeaderName = HeaderName::from_static("x-forwarded-for");
+const CLOUDFRONT_VIEWER_ADDRESS: HeaderName = HeaderName::from_static("cloudfront-viewer-address");
 
 impl<S> FromRequestParts<S> for ClientIp
 where
@@ -73,30 +81,30 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        match parts.headers.get(X_FORWARDED_FOR_HEADER).map(parse_header) {
-            Some(Ok(ip)) => Ok(ClientIp::ForwardedFor(ip)),
-            Some(Err(e)) => Err(e),
-            None => {
-                let conn: ConnectInfo<SocketAddr> = parts.extract().await?;
-                Ok(ClientIp::DirectIp(conn))
-            }
+        // 1. Prefer CloudFront-Viewer-Address (unspoofable, set by CloudFront)
+        if let Some(header) = parts.headers.get(CLOUDFRONT_VIEWER_ADDRESS) {
+            let ip = parse_viewer_address(header)?;
+            return Ok(ClientIp::CloudFrontViewer(ip));
         }
+
+        // 2. Direct connection
+        let conn: ConnectInfo<SocketAddr> = parts.extract().await?;
+        Ok(ClientIp::DirectIp(conn))
     }
 }
 
-fn parse_header(header: &HeaderValue) -> Result<IpAddr, ClientIpError> {
-    let bytes = header.as_bytes();
+/// Parse the `CloudFront-Viewer-Address` header, which has the format `ip:port`.
+fn parse_viewer_address(header: &HeaderValue) -> Result<IpAddr, ClientIpError> {
+    let s = str::from_utf8(header.as_bytes())?.trim();
 
-    let comma_index = bytes
-        .iter()
-        .enumerate()
-        .find_map(|(idx, item)| match item {
-            b',' => Some(idx),
-            _ => None,
-        })
-        .unwrap_or(bytes.len());
-
-    let s = str::from_utf8(&bytes[..comma_index])?.trim();
-
-    Ok(IpAddr::from_str(s)?)
+    // The header format is `ip:port` for IPv4 or `[ip]:port` for IPv6.
+    if let Some(bracketed) = s.strip_prefix('[') {
+        // IPv6: [2001:db8::1]:12345
+        let ip_str = bracketed.split(']').next().unwrap_or(s);
+        Ok(IpAddr::from_str(ip_str)?)
+    } else {
+        // IPv4: 203.0.113.50:12345 — split on the last colon to separate port
+        let ip_str = s.rsplit_once(':').map_or(s, |(ip, _port)| ip);
+        Ok(IpAddr::from_str(ip_str)?)
+    }
 }

@@ -3,7 +3,7 @@ use crate::api::{
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -28,7 +28,7 @@ use tower_cookies::Cookies;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=?ip_context))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=?ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

@@ -258,7 +258,6 @@ async fn main() -> anyhow::Result<()> {
             stripe_client.clone(),
             10000, /*100$ credit, in cents*/
         ),
-        rate_limit: rate_limit.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
 

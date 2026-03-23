@@ -5,6 +5,7 @@ use axum::http::HeaderName;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use native_app_service::inbound::RouterState;
+use std::net::SocketAddr;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use utoipa::OpenApi;
@@ -60,9 +61,12 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         &env,
         &port
     );
-    axum::serve(listener, app.into_make_service())
-        .await
-        .context("error starting service")
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .context("error starting service")
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {

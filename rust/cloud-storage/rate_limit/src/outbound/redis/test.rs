@@ -59,7 +59,7 @@ async fn retry_after_is_populated_when_rate_limit_exceeded() {
                 config.window,
             );
         }
-        RateLimitResult::Ok { .. } => {
+        RateLimitResult::Ok(_) => {
             panic!("expected rate limit to be exceeded after max_count requests");
         }
     }
@@ -141,7 +141,7 @@ async fn check_atomically_increments_counter() {
 async fn denied_check_does_not_increment() {
     let client = redis_client();
     let key = unique_key("denied_no_incr");
-    let key_str = format!("rtl:{}", key.to_hex_string());
+    let key_str = super::redis_key(&key);
     let config = RateLimitConfig {
         max_count: 1,
         window: Duration::from_secs(30),
@@ -207,7 +207,7 @@ async fn rollback_does_not_go_below_zero() {
     let client = redis_client();
     let adapter = adapter();
     let key = unique_key("rollback_floor");
-    let key_str = format!("rtl:{}", key.to_hex_string());
+    let key_str = super::redis_key(&key);
 
     // Decrement on a key that was never incremented.
     adapter.decrement(&key).await.unwrap();
@@ -259,7 +259,7 @@ async fn concurrent_checks_do_not_exceed_limit() {
 async fn check_and_increment_sets_expiry_on_first_key() {
     let client = redis_client();
     let key = unique_key("expiry");
-    let key_str = format!("rtl:{}", key.to_hex_string());
+    let key_str = super::redis_key(&key);
     let config = RateLimitConfig {
         max_count: 10,
         window: Duration::from_secs(60),

@@ -12,7 +12,7 @@ use http_body_util::BodyExt;
 use macro_middleware::tracking::ClientIp;
 
 /// Rate limit for validating passwordless login code
-#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=?ip_context))]
+#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=?ip_context), err(Debug))]
 pub(in crate::api) async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

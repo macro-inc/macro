@@ -57,6 +57,7 @@ where
         let res = service
             .check_rate_limit(rate_limit_key, config)
             .await
+            .inspect_err(|e| tracing::error!(error=?e, "rate limit check failed"))
             .map_err(|_| Either3::E3(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
             Ok(ok) => Ok(RateLimitExtractor {

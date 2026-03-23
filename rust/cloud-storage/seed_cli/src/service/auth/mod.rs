@@ -34,7 +34,7 @@ impl SeedAuth {
             .create_user(
                 user,
                 true, /*skip_verification*/
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
             )
             .await?;
 

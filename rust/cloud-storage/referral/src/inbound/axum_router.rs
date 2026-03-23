@@ -3,26 +3,21 @@
 //! Provides routes:
 //! - `GET /code` — get the authenticated user's referral code
 
-#[cfg(test)]
-mod test;
-
-mod get_referral_code;
-mod send_invite;
-
-use std::sync::Arc;
-
-use axum::extract::FromRef;
+use crate::domain::models::ReferralError;
+use crate::domain::ports::ReferralService;
 use axum::{Json, Router, http::StatusCode, response::IntoResponse};
+pub use get_referral_code::*;
 use model_error_response::ErrorResponse;
 use rate_limit::RateLimitService;
 use rate_limit::inbound::rate_limit_middleware;
+pub use send_invite::*;
+use std::sync::Arc;
 use tower::ServiceBuilder;
 
-use crate::domain::models::ReferralError;
-use crate::domain::ports::ReferralService;
-
-pub use get_referral_code::*;
-pub use send_invite::*;
+mod get_referral_code;
+mod send_invite;
+#[cfg(test)]
+mod test;
 
 impl IntoResponse for ReferralError {
     fn into_response(self) -> axum::response::Response {

@@ -34,7 +34,7 @@ static VERIFY_EMAIL_TEMPLATE: &str = include_str!("./_verify_email_template.html
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=?ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=?ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
