@@ -27,6 +27,9 @@ mod organization_retention;
 #[cfg(feature = "search")]
 pub mod search;
 
+#[cfg(feature = "memory")]
+pub mod memory;
+
 #[cfg(feature = "upload_extractor")]
 pub mod upload_extractor;
 
@@ -85,6 +88,8 @@ pub struct SQS {
     email_sfs_uploader_queue: Option<String>,
     #[cfg(feature = "sfs_delete")]
     email_sfs_delete_queue: Option<String>,
+    #[cfg(feature = "memory")]
+    memory_generation_queue: Option<String>,
 }
 
 impl SQS {
@@ -121,6 +126,8 @@ impl SQS {
             email_sfs_uploader_queue: None,
             #[cfg(feature = "sfs_delete")]
             email_sfs_delete_queue: None,
+            #[cfg(feature = "memory")]
+            memory_generation_queue: None,
         }
     }
 }

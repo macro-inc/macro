@@ -1,0 +1,22 @@
+[package]
+name = "memory_worker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_tools = { path = "../ai_tools" }
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["sqs"] }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_user_id = { path = "../macro_user_id" }
+memory = { path = "../memory" }
+openssl = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", features = ["memory"], default-features = false }
+tokio = { workspace = true }
+tracing = { workspace = true }

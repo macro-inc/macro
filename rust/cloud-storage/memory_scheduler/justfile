@@ -1,0 +1,4 @@
+lambda_name := file_name(justfile_directory())
+
+build:
+    SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip

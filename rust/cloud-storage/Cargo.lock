@@ -6114,6 +6114,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "memory_scheduler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_entrypoint",
+ "memory",
+ "openssl",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "memory_worker"
+version = "0.1.0"
+dependencies = [
+ "ai_tools",
+ "anyhow",
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_entrypoint",
+ "macro_user_id",
+ "memory",
+ "openssl",
+ "serde_json",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
@@ -9744,6 +9783,7 @@ dependencies = [
  "chrono",
  "email",
  "futures",
+ "macro_user_id",
  "model",
  "models_email",
  "models_opensearch",

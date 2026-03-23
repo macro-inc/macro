@@ -1,0 +1,7 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  memory-generation:macro_db_proxy_secret_key: macrodb-rds-proxy-dev
+  memory-generation:anthropic_api_key: anthropic-api-key-dev
+  memory-generation:internal_auth_key: internal-auth-key-dev
+  memory-generation:open-router-api-key: open-router-api-key-dev
