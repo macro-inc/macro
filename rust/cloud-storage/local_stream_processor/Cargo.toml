@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 aws-sdk-dynamodb = { workspace = true }
-aws-sdk-dynamodbstreams = "1.10"
+aws-sdk-dynamodbstreams = { version = "1.10", default-features = false, features = ["rt-tokio"] }
 chrono = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_env_var = { path = "../macro_env_var" }

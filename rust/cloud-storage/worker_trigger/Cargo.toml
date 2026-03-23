@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-aws-sdk-ecs = "1.104.0"
+aws-sdk-ecs = { version = "1.104.0", default-features = false, features = ["rt-tokio"] }
 macro_aws_config = { path = "../macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }

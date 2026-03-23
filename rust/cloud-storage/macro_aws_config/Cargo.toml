@@ -10,6 +10,7 @@ sqs = ["dep:aws-sdk-sqs"]
 
 [dependencies]
 aws-config = { workspace = true }
+aws-smithy-http-client = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 thiserror = { workspace = true }
