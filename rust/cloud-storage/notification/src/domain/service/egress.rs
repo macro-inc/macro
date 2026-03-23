@@ -224,7 +224,8 @@ where
             RateLimitResult::Ok(ticket) => ticket,
         };
 
-        self.email
+        if let Err(e) = self
+            .email
             .send_email(recipient.clone(), &content)
             .await
             .inspect_err(|e| {
@@ -235,12 +236,16 @@ where
                     "Email delivery failed"
                 );
             })
-            .context(DeliveryFailure::Other)?;
-
-        self.rate_limiter
-            .increment_ticket(ticket_ok)
-            .await
-            .context(DeliveryFailure::Other)?;
+        {
+            let _ = self
+                .rate_limiter
+                .rollback_ticket(ticket_ok)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "Failed to rollback rate limit after email failure");
+                });
+            return Err(e.context(DeliveryFailure::Other));
+        }
 
         Ok(DeliverySuccess::Email)
     }

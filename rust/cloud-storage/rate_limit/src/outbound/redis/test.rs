@@ -31,14 +31,12 @@ async fn retry_after_is_populated_when_rate_limit_exceeded() {
         window: Duration::from_secs(30),
     };
 
-    // First request succeeds and increments the counter.
+    // First request succeeds (check atomically increments the counter).
     let ticket = svc
         .check_rate_limit(key.clone(), config.clone())
         .await
         .expect("check_rate_limit failed");
-    svc.increment_ticket(ticket.unwrap())
-        .await
-        .expect("increment_ticket failed");
+    assert!(ticket.is_ok(), "first request should be allowed");
 
     // Second request should be exceeded.
     let ticket = svc
@@ -74,12 +72,12 @@ async fn retry_after_decreases_over_time() {
         window: Duration::from_secs(30),
     };
 
-    // Exhaust the rate limit.
+    // Exhaust the rate limit (check atomically increments).
     let ticket = svc
         .check_rate_limit(key.clone(), config.clone())
         .await
         .unwrap();
-    svc.increment_ticket(ticket.unwrap()).await.unwrap();
+    assert!(ticket.is_ok(), "first request should be allowed");
 
     // Check immediately.
     let ticket = svc

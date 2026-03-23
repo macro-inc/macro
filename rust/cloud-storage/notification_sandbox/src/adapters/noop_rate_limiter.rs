@@ -17,11 +17,7 @@ impl RateLimitPort for NoOpRateLimitPort {
         )))
     }
 
-    async fn increment(
-        &self,
-        _key: &RateLimitKey,
-        _config: &RateLimitConfig,
-    ) -> Result<u64, Report> {
-        Ok(0)
+    async fn decrement(&self, _key: &RateLimitKey) -> Result<(), Report> {
+        Ok(())
     }
 }

@@ -84,12 +84,12 @@ where
     Svc: RateLimitService,
 {
     let response = next.run(req).await;
-    if response.status().is_success() {
+    if !response.status().is_success() {
         let _ = service
-            .increment_ticket(extractable.rate_limit_success)
+            .rollback_ticket(extractable.rate_limit_success)
             .await
             .inspect_err(|e| {
-                tracing::error!("Failed to increment rate limit counter in middleware {e:?}")
+                tracing::error!(error=?e, "Failed to rollback rate limit counter in middleware")
             });
     }
     response

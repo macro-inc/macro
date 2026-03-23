@@ -26,8 +26,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn increment_ticket(&self, ticket: RateLimitOk) -> Result<(), Report> {
-        self.repo.increment(&ticket.key, &ticket.config).await?;
-        Ok(())
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), Report> {
+        self.repo.decrement(&ticket.key).await
     }
 }

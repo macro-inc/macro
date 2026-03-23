@@ -87,12 +87,8 @@ impl rate_limit::RateLimitPort for MockRateLimitPort {
         }
     }
 
-    async fn increment(
-        &self,
-        _key: &RateLimitKey,
-        _config: &RateLimitConfig,
-    ) -> Result<u64, Report> {
-        Ok(1)
+    async fn decrement(&self, _key: &RateLimitKey) -> Result<(), Report> {
+        Ok(())
     }
 }
 
