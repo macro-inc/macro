@@ -23,11 +23,6 @@ interface UserIdentifyInfo {
   os: string;
 }
 
-interface CreateAnalyticsOptions {
-  initializeOnCreate?: boolean;
-  disabled?: boolean;
-}
-
 const GA_ID = 'G-52HPEL3FTV';
 
 const initializePosthog = (instance: PostHog) => {
@@ -41,31 +36,33 @@ const initializePosthog = (instance: PostHog) => {
   });
 };
 
-export const createAnalytics = (options: CreateAnalyticsOptions) => {
+const tryInitialize = (callback: VoidFunction) => {
+  try {
+    callback();
+  } catch (e) {
+    console.error('[Analytics] Failed to initialize providers:', e);
+  }
+};
+
+export const createAnalytics = () => {
   const posthog = new PostHog();
 
+  const disabled = import.meta.env.DEV === true;
+
   const initializeProviders = () => {
-    if (options.disabled) return;
+    if (disabled) return;
 
-    try {
-      initializeGoogleAnalytics();
-      initializeMetaPixel();
-      initializePosthog(posthog);
-    } catch (e) {
-      console.error('[Analytics] Failed to initialize providers:', e);
-    }
+    tryInitialize(initializeGoogleAnalytics);
+    tryInitialize(initializeMetaPixel);
+    tryInitialize(() => initializePosthog(posthog));
   };
-
-  if (options.initializeOnCreate !== false && !options.disabled) {
-    initializeProviders();
-  }
 
   const sendEvent = (
     provider: AnalyticsProvider,
     event: EventName,
     data?: Record<string, unknown>
   ) => {
-    if (options.disabled) return;
+    if (disabled) return;
 
     try {
       match(provider)
@@ -89,7 +86,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
     data?: Record<string, unknown>,
     providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
   ) => {
-    if (options.disabled) return;
+    if (disabled) return;
 
     for (const provider of providersToSendTo) {
       sendEvent(provider, event, data);
@@ -97,7 +94,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   };
 
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
-    if (options.disabled) return;
+    if (disabled) return;
 
     try {
       gtag('config', GA_ID, {
@@ -118,7 +115,7 @@ export const createAnalytics = (options: CreateAnalyticsOptions) => {
   };
 
   const reset = () => {
-    if (options.disabled) return;
+    if (disabled) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
@@ -152,6 +149,4 @@ export type AnalyticsInterface = {
  * `@app/component/analytics-context` instead. This singleton exists only for
  * standalone utility functions (e.g., upload.ts) that run outside Solid context.
  */
-export const analytics = createAnalytics({
-  disabled: import.meta.env.DEV,
-});
+export const analytics = createAnalytics();
