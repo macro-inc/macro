@@ -18,7 +18,7 @@ pub struct RequestWithEmail {
 
 /// Rate limit for passwordless logins
 /// For rate limiting, we use the key `rtl_passwordless:${email}`
-#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=?ip_context), err(Debug))]
+#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=%ip_context), err(Debug))]
 pub(in crate::api) async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

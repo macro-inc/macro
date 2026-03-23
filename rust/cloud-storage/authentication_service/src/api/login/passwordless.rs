@@ -30,7 +30,7 @@ use referral::domain::{models::ReferralCode, ports::ReferralService};
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=?ip_context), err(Debug))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

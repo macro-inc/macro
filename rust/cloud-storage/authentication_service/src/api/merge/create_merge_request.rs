@@ -39,7 +39,7 @@ static MERGE_REQUEST_TEMPLATE: &str = include_str!("./_merge_request_template.ht
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=?ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,

@@ -35,7 +35,7 @@ pub struct CreateUserRequest {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context, req), fields(client_ip=?ip_context), err(Debug))]
+#[tracing::instrument(skip(ctx, ip_context, req), fields(client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,

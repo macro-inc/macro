@@ -2,8 +2,8 @@
 //! Axum middleware for extracting client IP from requests.
 //!
 //! Extraction priority:
-//! 1. `CloudFront-Viewer-Address` — set by CloudFront to the real client IP
-//!    (cannot be spoofed by clients). Format: `ip:port`.
+//! 1. `X-Forwarded-For` — uses the last (rightmost) IP in the chain,
+//!    which is the one added by the closest trusted proxy.
 //! 2. `ConnectInfo<SocketAddr>` — direct TCP peer address.
 
 #[cfg(test)]
@@ -23,22 +23,33 @@ use thiserror::Error;
 
 /// The best guess at what the originating IP of a client request is.
 ///
-/// Behind CloudFront, uses the `CloudFront-Viewer-Address` header which
-/// cannot be spoofed by clients. Falls back to the direct connection IP
-/// for non-CloudFront environments (e.g. local development).
+/// Uses the last IP from the `X-Forwarded-For` header when present.
+/// Falls back to the direct connection IP for environments without
+/// a reverse proxy (e.g. local development).
 #[derive(Debug)]
 pub enum ClientIp {
-    /// IP from the CloudFront-Viewer-Address header
-    CloudFrontViewer(IpAddr),
+    /// IP from the X-Forwarded-For header
+    ForwardedFor(IpAddr),
     /// the direct ip of the client
     DirectIp(ConnectInfo<SocketAddr>),
+}
+
+impl std::fmt::Display for ClientIp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientIp::ForwardedFor(ip_addr) => write!(f, "{ip_addr}"),
+            ClientIp::DirectIp(connect_info) => {
+                write!(f, "{}:{}", connect_info.ip(), connect_info.port())
+            }
+        }
+    }
 }
 
 impl ClientIp {
     /// get the [IpAddr] of the client
     pub fn origin_ip(&self) -> IpAddr {
         match self {
-            ClientIp::CloudFrontViewer(ip) => *ip,
+            ClientIp::ForwardedFor(ip) => *ip,
             ClientIp::DirectIp(connect_info) => connect_info.ip(),
         }
     }
@@ -69,7 +80,7 @@ impl IntoResponse for ClientIpError {
     }
 }
 
-const CLOUDFRONT_VIEWER_ADDRESS: HeaderName = HeaderName::from_static("cloudfront-viewer-address");
+const X_FORWARDED_FOR_HEADER: HeaderName = HeaderName::from_static("x-forwarded-for");
 
 impl<S> FromRequestParts<S> for ClientIp
 where
@@ -81,30 +92,31 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        // 1. Prefer CloudFront-Viewer-Address (unspoofable, set by CloudFront)
-        if let Some(header) = parts.headers.get(CLOUDFRONT_VIEWER_ADDRESS) {
-            let ip = parse_viewer_address(header)?;
-            return Ok(ClientIp::CloudFrontViewer(ip));
+        match parts.headers.get(X_FORWARDED_FOR_HEADER).map(parse_header) {
+            Some(Ok(ip)) => Ok(ClientIp::ForwardedFor(ip)),
+            Some(Err(e)) => Err(e),
+            None => {
+                let conn: ConnectInfo<SocketAddr> = parts.extract().await?;
+                Ok(ClientIp::DirectIp(conn))
+            }
         }
-
-        // 2. Direct connection
-        let conn: ConnectInfo<SocketAddr> = parts.extract().await?;
-        Ok(ClientIp::DirectIp(conn))
     }
 }
 
-/// Parse the `CloudFront-Viewer-Address` header, which has the format `ip:port`.
-fn parse_viewer_address(header: &HeaderValue) -> Result<IpAddr, ClientIpError> {
-    let s = str::from_utf8(header.as_bytes())?.trim();
+fn parse_header(header: &HeaderValue) -> Result<IpAddr, ClientIpError> {
+    let bytes = header.as_bytes();
 
-    // The header format is `ip:port` for IPv4 or `[ip]:port` for IPv6.
-    if let Some(bracketed) = s.strip_prefix('[') {
-        // IPv6: [2001:db8::1]:12345
-        let ip_str = bracketed.split(']').next().unwrap_or(s);
-        Ok(IpAddr::from_str(ip_str)?)
-    } else {
-        // IPv4: 203.0.113.50:12345 — split on the last colon to separate port
-        let ip_str = s.rsplit_once(':').map_or(s, |(ip, _port)| ip);
-        Ok(IpAddr::from_str(ip_str)?)
-    }
+    let start = bytes
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(idx, item)| match item {
+            b',' => Some(idx + 1),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let s = str::from_utf8(&bytes[start..])?.trim();
+
+    Ok(IpAddr::from_str(s)?)
 }
