@@ -3,8 +3,7 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
@@ -426,16 +425,19 @@ export const StaticCodeBoxAccessory = (props: {
               </Switch>
             </div>
           </Show>
-          <DeprecatedIconButton
-            theme="extraMuted"
-            icon={() => <Copy class={`size-5 ${textColor()}`} />}
-            tooltip={{ label: 'Copy Code' }}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="text-ink-extra-muted rounded-xs h-full"
+            tooltip="Copy Code"
             on:click={(e) => {
               e.stopPropagation();
               e.preventDefault();
               copyCode();
             }}
-          />
+          >
+            <Copy />
+          </Button>
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>
