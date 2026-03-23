@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MessageData } from '../../Message';
 import { createChannelMessageActions } from '../create-channel-message-actions';
 
+// Mock analytics context
+vi.mock('@app/component/analytics-context', () => ({
+  useAnalytics: () => ({
+    track: vi.fn(),
+    identify: vi.fn(),
+    reset: vi.fn(),
+  }),
+}));
+
 type ActionMessage = MessageData & { thread_id?: string | null };
 
 function buildMessage(overrides?: Partial<ActionMessage>): ActionMessage {
