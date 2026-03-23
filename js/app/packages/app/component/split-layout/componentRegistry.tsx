@@ -129,7 +129,7 @@ registerComponent(
     const preset = getDefaultListViewPreset('mail');
     return (
       <SoupView
-        viewName="Mail"
+        viewName="Email"
         queryFilters={preset.queryFilters}
         initialClientFilters={preset.clientFilters}
       />
