@@ -26,6 +26,7 @@ pub(in crate::api) async fn attach_gmail_token(
 
 /// Like [`attach_gmail_token`] but always fetches a fresh token from the auth service,
 /// bypassing the Redis cache. Used only by the `/email/init` endpoint.
+#[tracing::instrument(skip(ctx, user_context, req, next))]
 pub(in crate::api) async fn attach_gmail_token_no_cache(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,

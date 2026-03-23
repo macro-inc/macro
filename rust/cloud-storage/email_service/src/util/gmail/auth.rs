@@ -107,6 +107,7 @@ pub async fn fetch_gmail_token_usercontext_response(
 
 /// Fetches a user's gmail token directly from the auth service, bypassing the Redis cache.
 /// Used by the init endpoint where we always want a fresh token.
+#[tracing::instrument(skip(user_context, redis_client, auth_service_client))]
 pub async fn fetch_gmail_token_no_cache(
     user_context: &UserContext,
     redis_client: &RedisClient,
