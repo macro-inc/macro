@@ -5,7 +5,20 @@ publish = false
 version = "0.1.0"
 
 [features]
+all = [
+  "ai_tools",
+  "gmail_token",
+  "inbound",
+  "outbound",
+  "ports",
+]
 ai_schema = ["dep:schemars"]
+ai_tools = [
+  "dep:ai",
+  "dep:async-trait",
+  "dep:schemars",
+  "ports",
+]
 axum = [
   "dep:axum",
   "dep:axum-extra",
@@ -21,7 +34,9 @@ outbound = ["dep:sqlx", "ports"]
 ports = ["dep:tokio", "frecency/ports"]
 
 [dependencies]
+ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
 entity_access = { path = "../entity_access" }
 futures = { workspace = true }
@@ -57,5 +72,11 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[[example]]
+name = "ai_tools_cli"
+required-features = ["all"]
