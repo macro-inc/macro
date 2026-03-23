@@ -496,7 +496,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const logout = useLogout();
   const logoutHandler = () => {
-    logout(window.location.origin);
+    logout();
   };
 
   const previewName = createMemo(() => {

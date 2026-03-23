@@ -209,7 +209,7 @@ export const SoupView = (props: SoupViewProps) => {
 
   const logout = useLogout();
   const logoutHandler = () => {
-    logout(window.location.origin);
+    logout();
   };
 
   return (
