@@ -13,6 +13,14 @@ import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter
 import { useUserContext } from '@core/context/user';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import type { SplitContent } from './layoutManager';
+import { useAnalytics } from '@app/component/analytics-context';
+
+function usePageViewTracking(pageTitle: string) {
+  const analytics = useAnalytics();
+  onMount(() => {
+    analytics.pageView(pageTitle);
+  });
+}
 
 /**
  * Guard that delays rendering until user is authenticated.
@@ -94,6 +102,7 @@ registerComponent('unified-list', () => (
 registerComponent(
   'inbox',
   withAuth(() => {
+    usePageViewTracking('inbox');
     const preset = getDefaultListViewPreset('inbox');
     return (
       <SoupView
@@ -108,6 +117,7 @@ registerComponent(
 registerComponent(
   'agents',
   withAuth(() => {
+    usePageViewTracking('agents');
     const user = useUserContext();
     const preset = getDefaultListViewPreset('agents', {
       userId: user.userId(),
@@ -126,6 +136,7 @@ registerComponent(
 registerComponent(
   'mail',
   withAuth(() => {
+    usePageViewTracking('mail');
     const preset = getDefaultListViewPreset('mail');
     return (
       <SoupView
@@ -140,6 +151,7 @@ registerComponent(
 registerComponent(
   'documents',
   withAuth(() => {
+    usePageViewTracking('documents');
     const user = useUserContext();
     const preset = getDefaultListViewPreset('documents', {
       userId: user.userId(),
@@ -158,6 +170,7 @@ registerComponent(
 registerComponent(
   'tasks',
   withAuth(() => {
+    usePageViewTracking('tasks');
     const user = useUserContext();
     const preset = getDefaultListViewPreset('tasks', {
       userId: user.userId(),
@@ -176,6 +189,7 @@ registerComponent(
 registerComponent(
   'channels',
   withAuth(() => {
+    usePageViewTracking('channels');
     const preset = getDefaultListViewPreset('channels');
     return (
       <SoupView
@@ -190,6 +204,7 @@ registerComponent(
 registerComponent(
   'folders',
   withAuth(() => {
+    usePageViewTracking('folders');
     const user = useUserContext();
     const preset = getDefaultListViewPreset('folders', {
       userId: user.userId(),
@@ -208,6 +223,7 @@ registerComponent(
 registerComponent(
   'search',
   withAuth(() => {
+    usePageViewTracking('search');
     const user = useUserContext();
     const preset = getDefaultListViewPreset('search', {
       userId: user.userId(),
