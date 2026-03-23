@@ -107,19 +107,21 @@ export function useDeleteComment() {
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
 
-  return createCallback((info: DeleteCommentInfo) => {
+  return createCallback(async (info: DeleteCommentInfo) => {
     const commentId = info.commentId;
 
     if (commentId === -1) {
       deleteNewComments();
-      return;
+      return false;
     }
 
-    const success = deleteComment(commentId, {
+    const success = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,
     });
 
-    analytics.track('comment_delete', { blockType: 'pdf' });
+    if (success) {
+      analytics.track('comment_delete', { blockType: 'pdf' });
+    }
     return success;
   });
 }
