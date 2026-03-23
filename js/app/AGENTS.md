@@ -8,7 +8,7 @@
 1. **Follow existing code styles** - check neighboring files for patterns.
 2. **Composability** - Write small testable pure function when possible.
 3. **Simplicity** - Prioritize the simplest correct solution, over introducing complexity.
-4. **Testing** - Write tests for your changes. When fixing bugs or regressions, identify the issue with a test before fixing it.
+4. **Testing**  — Write tests that earn their keep. Cover tricky business logic, edge cases, and invariants that would actually catch regressions. Don't test that the framework works or that straightforward code does what it obviously does. When fixing bugs, reproduce with a failing test first, then fix. If you can't articulate what future breakage a test guards against, delete it.
 5. **Decoupling** - Decouple pure business logic from UI and network layer.
 6. **Type-driven design** - Let types guide function composition. **DO NOT USE `any`**
 

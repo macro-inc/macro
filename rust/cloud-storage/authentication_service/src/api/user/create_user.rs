@@ -89,6 +89,7 @@ pub async fn handler(
                 username: Some(req.username.into()),
             },
             false,
+            &ip_context.client_ip,
         )
         .await
         .map_err(|e| {

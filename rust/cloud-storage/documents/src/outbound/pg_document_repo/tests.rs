@@ -308,10 +308,12 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
         .await
         .unwrap();
 
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+
     // All 3 team members should have access rows
     let rows = sqlx::query!(
         r#"
-        SELECT "user_id", "access_level"::text as "access_level"
+        SELECT "user_id", "access_level"::text as "access_level", "granted_from_team_id"
         FROM "UserItemAccess"
         WHERE "item_id" = 'document-one' AND "item_type" = 'document'
         ORDER BY "user_id"
@@ -323,25 +325,28 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
 
     assert_eq!(rows.len(), 3);
 
-    // Owner row should still be 'owner' (not downgraded)
+    // Owner row should still be 'owner' (not downgraded) and have no team grant
     let owner_row = rows
         .iter()
         .find(|r| r.user_id == "macro|user@user.com")
         .unwrap();
     assert_eq!(owner_row.access_level, Some("owner".to_string()));
+    assert_eq!(owner_row.granted_from_team_id, None);
 
-    // Teammates should have 'comment' access
+    // Teammates should have 'comment' access with granted_from_team_id set
     let t1 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate1@user.com")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+    assert_eq!(t1.granted_from_team_id, Some(team_id));
 
     let t2 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate2@user.com")
         .unwrap();
     assert_eq!(t2.access_level, Some("comment".to_string()));
+    assert_eq!(t2.granted_from_team_id, Some(team_id));
 }
 
 #[sqlx::test(
@@ -500,6 +505,8 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
 async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+
     // A teammate (not the owner) triggers the share — should still find the
     // same team and share with all members including the owner.
     repo.share_with_team("macro|teammate1@user.com", "document-one")
@@ -508,7 +515,7 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
 
     let rows = sqlx::query!(
         r#"
-        SELECT "user_id", "access_level"::text as "access_level"
+        SELECT "user_id", "access_level"::text as "access_level", "granted_from_team_id"
         FROM "UserItemAccess"
         WHERE "item_id" = 'document-one' AND "item_type" = 'document'
         ORDER BY "user_id"
@@ -532,12 +539,14 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
         .find(|r| r.user_id == "macro|teammate1@user.com")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+    assert_eq!(t1.granted_from_team_id, Some(team_id));
 
     let t2 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate2@user.com")
         .unwrap();
     assert_eq!(t2.access_level, Some("comment".to_string()));
+    assert_eq!(t2.granted_from_team_id, Some(team_id));
 }
 
 #[sqlx::test(

@@ -1563,6 +1563,12 @@ export const createTaskHandlerBody = zod
       )
       .nullish()
       .describe('Optional property values to set on the task.'),
+    shareWithTeam: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether to share the task with your team or not\nDefaults to true'
+      ),
     taskName: zod.string().describe('The name of the task.'),
   })
   .describe('Request body for creating a task.');

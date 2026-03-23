@@ -14,33 +14,36 @@ import type { ChatResponseUpdatedAt } from './chatResponseUpdatedAt';
 import type { ChatResponseWebCitationsItemItem1Item } from './chatResponseWebCitationsItemItem1Item';
 import type { Model } from './model';
 
+/**
+ * The full chat response, matching the DCS API response shape.
+ */
 export interface ChatResponse {
   /**
-   * attachment context - attachments not attached to messages
+   * Attachment context — attachments not attached to messages.
    * @deprecated
    */
   attachments: ChatAttachmentWithName[];
-  /** Available models for the chat */
+  /** Available models for the chat. */
   availableModels: Model[];
-  /** The time the chat was created */
+  /** The time the chat was created. */
   createdAt?: ChatResponseCreatedAt;
-  /** The chat uuid */
+  /** The chat uuid. */
   id: string;
-  /** whether the chat is persistent or not */
+  /** Whether the chat is persistent or not. */
   isPersistent: boolean;
-  /** The messages in the chat */
+  /** The messages in the chat. */
   messages: ChatMessageWithAttachments[];
   model?: ChatResponseModel;
-  /** The name of the Chat */
+  /** The name of the chat. */
   name: string;
-  /** The project id the chat belongs to */
+  /** The project id the chat belongs to. */
   projectId?: ChatResponseProjectId;
-  /** Current number of tokens in the chat */
+  /** Current number of tokens in the chat. */
   tokenCount?: ChatResponseTokenCount;
-  /** The time the chat was last updated */
+  /** The time the chat was last updated. */
   updatedAt?: ChatResponseUpdatedAt;
-  /** Who the chat belongs to */
+  /** Who the chat belongs to. */
   userId: string;
-  /** message_id - web citation list */
+  /** Message ID to web citation list. */
   webCitations: [string, ChatResponseWebCitationsItemItem1Item[]][];
 }

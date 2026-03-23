@@ -99,7 +99,9 @@ export function hasExplicitScrollDownGesture(distance: number): boolean {
   return distance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
 }
 
-function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
+export function getTargetAlign(
+  target: ThreadListScrollTarget
+): ScrollAlignment {
   if (target.align) return target.align;
   switch (target.tag) {
     case 'top':
@@ -108,7 +110,7 @@ function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
       return 'end';
     case 'index':
     case 'id':
-      return 'nearest';
+      return 'center';
   }
 }
 

@@ -144,6 +144,13 @@
         "rust/cloud-storage/image_proxy_service/**"
       ],
       "stack_path": "infra/stacks/image-proxy-service/**"
+    },
+    "mcp-server": {
+      "source_paths": [
+        "rust/cloud-storage/document_cognition_service/src/bin/mcp_server.rs",
+        "rust/cloud-storage/document_cognition_service/src/mcp_oauth/**"
+      ],
+      "stack_path": "infra/stacks/mcp-server/**"
     }
   }
 }

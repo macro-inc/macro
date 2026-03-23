@@ -14,9 +14,17 @@ pub struct Event {
     pub create_instant: i64,
     pub id: String,
     pub linked_object_id: String,
+    pub info: EventInfo,
     pub user: User,
     #[serde(rename = "type")]
     pub event_type: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EventInfo {
+    /// IP address of the user the event was initiated for
+    pub ip_address: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

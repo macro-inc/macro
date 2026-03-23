@@ -6,6 +6,7 @@ import type {
   InputData,
   InputSnapshot,
 } from './types';
+import { hasSendableInputContent } from './utils/sendable-content';
 
 type CreateInputCommandsDeps = {
   view: Accessor<InputData>;
@@ -34,6 +35,7 @@ export function createInputCommands(
       if (!deps.callbacks?.onSend) return false;
 
       const current = deps.snapshot();
+      if (!hasSendableInputContent(current)) return false;
       deps.setIsSending(true);
       try {
         await deps.callbacks.onSend(current);

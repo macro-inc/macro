@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "analytics-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-07-22",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "POSTHOG_HOST": "https://us.i.posthog.com"
+  },
+  "env": {
+    "local": {
+      "vars": {
+        "POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    },
+    "dev": {
+      "vars": {
+        "POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    },
+    "prod": {
+      "vars": {
+        "POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    }
+  },
+  "dev": {
+    "port": 8098
+  }
+}

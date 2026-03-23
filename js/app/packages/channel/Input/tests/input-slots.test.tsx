@@ -162,7 +162,7 @@ describe('Input slots', () => {
       (() => {
         return (
           <ChannelInput
-            input={{ ...baseInput, mode: 'reply' }}
+            input={{ ...baseInput, mode: 'reply', value: 'reply' }}
             onSend={onSend}
             onToggleFormatRibbon={onToggleFormatRibbon}
             onClose={onClose}
@@ -186,7 +186,7 @@ describe('Input slots', () => {
     clickSpy.mockRestore();
     expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
-    expect(onSend.mock.calls[0]?.[0]?.value).toBe('');
+    expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
   });
 
   it('omits the reply action for channel mode', () => {
@@ -229,6 +229,15 @@ describe('Input slots', () => {
         );
       })()
     );
+
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true
+    );
+  });
+
+  it('disables send when the input is empty', () => {
+    render(() => <ChannelInput input={{ ...baseInput, value: '   ' }} />);
 
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
       'disabled',

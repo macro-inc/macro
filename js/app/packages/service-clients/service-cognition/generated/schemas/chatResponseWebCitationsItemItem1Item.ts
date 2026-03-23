@@ -8,10 +8,18 @@ import type { ChatResponseWebCitationsItemItem1ItemDescription } from './chatRes
 import type { ChatResponseWebCitationsItemItem1ItemFaviconUrl } from './chatResponseWebCitationsItemItem1ItemFaviconUrl';
 import type { ChatResponseWebCitationsItemItem1ItemImageUrl } from './chatResponseWebCitationsItemItem1ItemImageUrl';
 
+/**
+ * A web citation associated with a chat message.
+ */
 export type ChatResponseWebCitationsItemItem1Item = {
+  /** A description of the cited page. */
   description?: ChatResponseWebCitationsItemItem1ItemDescription;
+  /** The URL of the page's favicon. */
   favicon_url?: ChatResponseWebCitationsItemItem1ItemFaviconUrl;
+  /** The URL of the page's image. */
   image_url?: ChatResponseWebCitationsItemItem1ItemImageUrl;
+  /** The title of the cited page. */
   title: string;
+  /** The URL of the citation. */
   url: string;
 };

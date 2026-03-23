@@ -137,7 +137,11 @@ export function Layout(props: RouteSectionProps) {
       </Show>
       <div class="max-h-full grow-1 flex">
         <Show
-          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          when={
+            !isMobile() &&
+            isAuthenticated() &&
+            !AUTH_URLS.includes(location.pathname)
+          }
         >
           <AppSidebar
             sidebarState={sidebarState()}
