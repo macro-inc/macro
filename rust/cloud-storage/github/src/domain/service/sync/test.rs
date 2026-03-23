@@ -199,8 +199,8 @@ struct StubSyncRepo {
     github_links: Mutex<HashMap<String, String>>,
     /// Maps macro_id -> team_ids for installation event lookups.
     user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
-    /// Recorded installation-team association inserts.
-    installation_associations: Mutex<Vec<(String, Vec<uuid::Uuid>)>>,
+    /// Recorded installation-team association inserts: (installation_id, team_ids, installed_by).
+    installation_associations: Mutex<Vec<(String, Vec<uuid::Uuid>, String)>>,
 }
 
 impl StubSyncRepo {
@@ -229,7 +229,7 @@ impl StubSyncRepo {
         self
     }
 
-    fn installation_associations(&self) -> Vec<(String, Vec<uuid::Uuid>)> {
+    fn installation_associations(&self) -> Vec<(String, Vec<uuid::Uuid>, String)> {
         self.installation_associations.lock().unwrap().clone()
     }
 }
@@ -307,12 +307,13 @@ impl GithubSyncRepo for StubSyncRepo {
         &self,
         installation_id: &str,
         team_ids: &[uuid::Uuid],
-        _installed_by: &str,
+        installed_by: &str,
     ) -> Result<(), Self::Err> {
-        self.installation_associations
-            .lock()
-            .unwrap()
-            .push((installation_id.to_string(), team_ids.to_vec()));
+        self.installation_associations.lock().unwrap().push((
+            installation_id.to_string(),
+            team_ids.to_vec(),
+            installed_by.to_string(),
+        ));
         Ok(())
     }
 }
@@ -1248,6 +1249,7 @@ async fn installation_created_associates_teams() {
     assert_eq!(associations[0].1.len(), 2);
     assert!(associations[0].1.contains(&team_a));
     assert!(associations[0].1.contains(&team_b));
+    assert_eq!(associations[0].2, "macro|user@user.com");
 }
 
 #[tokio::test]
@@ -1257,6 +1259,8 @@ async fn installation_created_no_github_link() {
 
     // No github link for sender — should succeed without inserting anything
     service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_associations().is_empty());
 }
 
 #[tokio::test]
@@ -1287,4 +1291,6 @@ async fn installation_deleted_is_skipped() {
 
     // Should not error — just skips
     service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_associations().is_empty());
 }

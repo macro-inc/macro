@@ -26,11 +26,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             GithubError::Internal(anyhow::anyhow!("missing sender.id in installation event"))
         })?;
 
-        tracing::info!(
-            installation_id,
-            sender_github_user_id,
-            "processing installation created event"
-        );
+        tracing::info!(installation_id, "processing installation created event");
 
         let macro_id = self
             .repo
@@ -42,7 +38,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             Some(id) => id,
             None => {
                 tracing::warn!(
-                    sender_github_user_id,
+                    installation_id,
                     "no github link found for sender, cannot associate installation with teams"
                 );
                 return Ok(());
@@ -57,7 +53,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
         if team_ids.is_empty() {
             tracing::info!(
-                macro_id,
+                installation_id,
                 "user has no teams, skipping installation association"
             );
             return Ok(());
@@ -65,7 +61,6 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
 
         tracing::info!(
             installation_id,
-            macro_id,
             team_count = team_ids.len(),
             "associating installation with user teams"
         );
