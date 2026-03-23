@@ -1,6 +1,4 @@
-use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
-};
+use ai_tools::{NoOpConnectionService, NoOpTaskProperties, ToolServiceContext};
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
@@ -18,8 +16,8 @@ use entity_access::outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
-use scribe::document::DocumentClient;
 use scribe::ScribeClient;
+use scribe::document::DocumentClient;
 use search_service_client::SearchServiceClient;
 use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
@@ -37,9 +35,7 @@ use sync_service_client::SyncServiceClient;
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`
 #[tracing::instrument(skip(pool), err)]
-pub async fn build_tool_service_context(
-    pool: sqlx::PgPool,
-) -> anyhow::Result<ToolServiceContext> {
+pub async fn build_tool_service_context(pool: sqlx::PgPool) -> anyhow::Result<ToolServiceContext> {
     let internal_auth_key =
         std::env::var("INTERNAL_API_SECRET_KEY").unwrap_or_else(|_| "local".into());
     let dss_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")?;
@@ -143,19 +139,9 @@ pub async fn build_tool_service_context(
         NoOpTaskProperties,
         NoOpConnectionService,
     );
-    let entity_access_service =
-        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
+    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
     let document_tool_context =
         DocumentToolContext::new(document_service, entity_access_service, lexical_client);
-
-    // Properties tool context
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(pool.clone())),
-        Some(NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
 
     Ok(ToolServiceContext {
         search_service_client: search_client,
@@ -163,6 +149,5 @@ pub async fn build_tool_service_context(
         scribe,
         soup_service,
         document_tool_context,
-        properties_tool_context,
     })
 }

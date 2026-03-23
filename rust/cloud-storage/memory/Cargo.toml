@@ -2,6 +2,8 @@
 name = "memory"
 version = "0.1.0"
 edition = "2024"
+publish = false
+
 
 [dependencies]
 macro_user_id = { path = "../macro_user_id" }
@@ -13,10 +15,14 @@ ai = { path = "../ai" }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
+axum = { workspace = true }
+model_user = { path = "../model_user", features = ["axum"] }
 tracing = { workspace = true }
+utoipa = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 
 # For building ToolServiceContext
@@ -26,7 +32,6 @@ email = { path = "../email" }
 entity_access = { path = "../entity_access" }
 frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }
-properties = { path = "../properties" }
 scribe = { path = "../scribe" }
 search_service_client = { path = "../search_service_client" }
 email_service_client = { path = "../email_service_client" }

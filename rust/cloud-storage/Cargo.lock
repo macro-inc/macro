@@ -2914,6 +2914,7 @@ dependencies = [
  "macro_share_permissions",
  "macro_user_id",
  "macro_uuid",
+ "memory",
  "model",
  "model-entity",
  "model_notifications",
@@ -6083,6 +6084,8 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "anyhow",
+ "axum",
+ "chrono",
  "comms",
  "comms_service_client",
  "document_cognition_service_client",
@@ -6099,7 +6102,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_user_id",
  "macro_uuid",
- "properties",
+ "model_user",
  "scribe",
  "search_service_client",
  "serde",
@@ -6111,45 +6114,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "memory_scheduler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-sdk-sqs",
- "aws_lambda_events",
- "lambda_runtime",
- "macro_aws_config",
- "macro_entrypoint",
- "memory",
- "openssl",
- "sqlx",
- "sqs_client",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "memory_worker"
-version = "0.1.0"
-dependencies = [
- "ai_tools",
- "anyhow",
- "aws-sdk-sqs",
- "aws_lambda_events",
- "lambda_runtime",
- "macro_aws_config",
- "macro_entrypoint",
- "macro_user_id",
- "memory",
- "openssl",
- "serde_json",
- "sqlx",
- "sqs_client",
- "tokio",
- "tracing",
+ "utoipa",
 ]
 
 [[package]]

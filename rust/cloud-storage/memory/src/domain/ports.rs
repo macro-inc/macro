@@ -1,16 +1,15 @@
 use ai::types::AiError;
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MemoryError {
-    #[error("not implemented")]
-    Todo,
-    #[error("ai error")]
+    #[error(transparent)]
     AiError(#[from] AiError),
-    #[error("memory message was not generated")]
-    NoMemory,
+    #[error("Nothing was generated")]
+    NoGeneration,
     #[error("memory rejected by judge: {0}")]
     Rejected(String),
     #[error(transparent)]
@@ -23,6 +22,14 @@ pub type Result<T> = std::result::Result<T, MemoryError>;
 
 pub type Memory = String;
 
+/// A memory record with its creation timestamp.
+pub struct MemoryRecord {
+    /// The memory text.
+    pub memory: Memory,
+    /// When this memory was generated.
+    pub created_at: DateTime<Utc>,
+}
+
 pub trait MemoryRepo: Send + Sync + 'static {
     fn save_memory(
         &self,
@@ -32,7 +39,7 @@ pub trait MemoryRepo: Send + Sync + 'static {
     fn get_latest_memory(
         &self,
         user: MacroUserIdStr,
-    ) -> impl Future<Output = Result<Memory>> + Send;
+    ) -> impl Future<Output = Result<Option<MemoryRecord>>> + Send;
     fn get_memory_by_id(
         &self,
         user: MacroUserIdStr,
@@ -40,13 +47,9 @@ pub trait MemoryRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Memory>> + Send;
 }
 
-pub trait MemoryService {
-    fn generate_memory(
+pub trait MemoryService: Send + Sync + 'static {
+    fn get_or_generate_memory(
         &self,
         user: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Memory>>;
-    fn get_latest_memory(
-        &self,
-        user: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Memory>>;
+    ) -> impl Future<Output = Result<Option<Memory>>> + Send;
 }

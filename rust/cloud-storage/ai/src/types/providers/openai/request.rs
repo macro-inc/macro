@@ -64,7 +64,7 @@ impl ChatCompletionRequest {
             .model(format!(
                 "{}/{}",
                 self.model.to_provider_model_string().0,
-                self.model.to_string()
+                self.model
             ))
             .messages(self.openai_messages())
             .response_format(response_format)

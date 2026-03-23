@@ -16,14 +16,12 @@ default = [
   "document_text_extractor",
   "email",
   "gmail",
-  "memory",
   "organization_retention",
   "search",
   "sfs_delete",
   "sfs_uploader",
   "upload_extractor",
 ]
-memory = ["dep:macro_user_id"]
 document = []
 document_text_extractor = []
 email = ["uuid", "models_email", "dep:email"]

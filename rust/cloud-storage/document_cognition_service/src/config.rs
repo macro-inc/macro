@@ -89,12 +89,7 @@ impl Config {
     pub fn from_env(env_vars: EnvVars) -> anyhow::Result<Self> {
         let maybe = MaybeEnvVars::new();
 
-        let port: usize = maybe
-            .port
-            .as_deref()
-            .unwrap_or("8080")
-            .parse()
-            .unwrap();
+        let port: usize = maybe.port.as_deref().unwrap_or("8080").parse().unwrap();
         let environment = Environment::new_or_prod();
 
         let document_batch_limit = maybe
