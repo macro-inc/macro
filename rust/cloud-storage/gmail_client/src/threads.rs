@@ -19,7 +19,7 @@ const MAX_RETRY_ATTEMPTS: usize = 5;
 const INITIAL_RETRY_DELAY_MS: u64 = 1000;
 
 /// lists thread provider ids up to the requested number, or all if none specified
-#[tracing::instrument(skip(client, access_token, next_page_token))]
+#[tracing::instrument(skip(client, access_token, next_page_token), err)]
 pub(crate) async fn list_threads(
     client: &GmailClient,
     access_token: &str,
@@ -82,7 +82,7 @@ pub(crate) async fn list_threads(
 
 /// Wrapper for get_threads that retries on GmailBatchError::RateLimitExceeded,
 /// reducing batch size each time with exponential backoff.
-#[tracing::instrument(skip(client, access_token, thread_ids), level = "info")]
+#[tracing::instrument(skip(client, access_token, thread_ids), level = "info", err)]
 pub async fn get_threads_with_retry(
     client: &GmailClient,
     access_token: &str,
@@ -142,7 +142,7 @@ pub async fn get_threads_with_retry(
 /// The Gmail batch API accepts a multipart/mixed request containing multiple individual requests consolidated into one.
 /// It returns a multipart/mixed response that needs to be parsed into individual thread responses.
 #[tracing::instrument(skip(client, access_token, thread_ids),
-    fields(thread_ids = ?thread_ids, batch_size = batch_size))]
+    fields(thread_ids = ?thread_ids, batch_size = batch_size), err)]
 pub(crate) async fn get_threads(
     client: &GmailClient,
     access_token: &str,
@@ -219,7 +219,7 @@ pub(crate) async fn get_threads(
 
 /// Gets all message IDs for a specific thread using the minimal format
 /// to reduce data transfer and processing time
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message_ids_for_thread(
     client: &GmailClient,
     access_token: &str,
