@@ -3,6 +3,7 @@ import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { PostMessageRequest } from '@service-comms/generated/models';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import type { InputAttachmentData, InputSnapshot } from './types';
+import { match } from 'ts-pattern';
 
 function attachmentEntityType(
   attachment: Pick<InputAttachmentData, 'kind'>
@@ -15,6 +16,25 @@ function attachmentEntityType(
     case 'document':
       return 'document';
   }
+}
+
+function expandGroupMention(
+  mention: ItemMention,
+  participantIds: string[],
+  seenUserIds: Set<string>
+): SimpleMention[] {
+  return match(mention.groupAlias)
+    .with('here', () => {
+      const result: SimpleMention[] = [];
+      for (const userId of participantIds) {
+        if (!seenUserIds.has(userId)) {
+          seenUserIds.add(userId);
+          result.push({ entity_type: 'user', entity_id: userId });
+        }
+      }
+      return result;
+    })
+    .otherwise(() => []);
 }
 
 /**
@@ -33,12 +53,7 @@ function expandMentions(
 
   for (const mention of mentions) {
     if (mention.itemType === 'group') {
-      for (const userId of participantIds) {
-        if (!seenUserIds.has(userId)) {
-          seenUserIds.add(userId);
-          result.push({ entity_type: 'user', entity_id: userId });
-        }
-      }
+      result.push(...expandGroupMention(mention, participantIds, seenUserIds));
     } else {
       if (mention.itemType === 'user') {
         if (seenUserIds.has(mention.itemId)) continue;
