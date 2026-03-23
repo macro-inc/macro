@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         models::{EmailErr, Link, PreviewView},
-        ports::EmailService,
+        ports::{EmailService, GmailTokenProvider},
     },
     inbound::{ApiSortMethod, EmailRouterState},
 };
@@ -13,7 +13,6 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
-use std::future::Future;
 use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
@@ -154,26 +153,6 @@ where
             .await?;
         Ok(Self(res, PhantomData))
     }
-}
-
-/// Port for fetching a Gmail access token for a given link.
-///
-/// This is an inbound concern — the domain service receives the token as an
-/// opaque `&str`.  The trait lives here (rather than in `domain::ports`)
-/// because only the axum extractor layer uses it.
-pub trait GmailTokenProvider: Send + Sync + 'static {
-    /// Fetch a Gmail OAuth access token for the given email link.
-    fn fetch_gmail_access_token(
-        &self,
-        link: &Link,
-    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
-
-    /// Fetch a Gmail OAuth access token directly from the auth service,
-    /// bypassing the Redis cache for reads but still caching the result.
-    fn fetch_gmail_access_token_no_cache(
-        &self,
-        link: &Link,
-    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
 }
 
 /// Axum state wrapper for a [`GmailTokenProvider`] implementation.

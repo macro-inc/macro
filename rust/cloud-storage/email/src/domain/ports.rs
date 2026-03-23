@@ -332,6 +332,13 @@ pub trait GmailTokenProvider: Send + Sync + 'static {
         &self,
         link: &Link,
     ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+
+    /// Fetch a Gmail OAuth access token directly from the auth service,
+    /// bypassing the Redis cache for reads but still caching the result.
+    fn fetch_gmail_access_token_no_cache(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
 }
 
 /// No-op token provider for callers that don't need Gmail token resolution.
@@ -340,6 +347,12 @@ pub struct NoOpGmailTokenProvider;
 
 impl GmailTokenProvider for NoOpGmailTokenProvider {
     async fn fetch_gmail_access_token(&self, _link: &Link) -> Result<String, EmailErr> {
+        Err(EmailErr::ProviderErr(anyhow::anyhow!(
+            "Gmail token provider not configured"
+        )))
+    }
+
+    async fn fetch_gmail_access_token_no_cache(&self, _link: &Link) -> Result<String, EmailErr> {
         Err(EmailErr::ProviderErr(anyhow::anyhow!(
             "Gmail token provider not configured"
         )))
