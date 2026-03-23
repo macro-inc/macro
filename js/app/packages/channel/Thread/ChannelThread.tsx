@@ -49,10 +49,7 @@ export function ChannelThread(props: ThreadProps) {
 
   const displayReplies = (): Array<ApiThreadReply> => {
     const preview = thread().preview ?? [];
-
     // When collapsed, use preview directly without reading query state.
-    // This avoids creating a reactive dependency on repliesQuery so that
-    // query resolution doesn't trigger re-renders for collapsed threads.
     if (!props.isExpanded()) {
       return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
         ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
