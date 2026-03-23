@@ -10,11 +10,16 @@ export function EmailPermissionsBanner() {
       <div class="flex items-center justify-between gap-2">
         <Caution class="size-4" />
         <span class="text-sm">
-          Email requires additional Google permissions. Select the permissions on
-          sign-in to enable.
+          Email requires additional Google permissions. Select the permissions
+          on sign-in to enable.
         </span>
         <span class="grow" />
-        <Button variant="secondary" size="sm" class="px-2" onClick={() => logout()}>
+        <Button
+          variant="secondary"
+          size="sm"
+          class="px-2"
+          onClick={() => logout()}
+        >
           Logout
         </Button>
       </div>
