@@ -244,7 +244,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { toggleSettings } = useSettingsState();
 
   const handleCommandPaletteClick = () => {
-    analytics.track('command_menu_open', { from: 'sidebar' });
+    if (!CommandState.isOpen()) {
+      analytics.track('command_menu_open', { from: 'sidebar' });
+    }
     CommandState.toggle();
   };
 

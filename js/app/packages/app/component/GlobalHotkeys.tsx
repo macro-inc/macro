@@ -69,7 +69,9 @@ export default function GlobalShortcuts() {
   const handleFileUpload = useHandleFileUpload();
 
   const handleCommandMenu = () => {
-    analytics.track('command_menu_open', { from: 'global_hotkey' });
+    if (!CommandState.isOpen()) {
+      analytics.track('command_menu_open', { from: 'global_hotkey' });
+    }
     CommandState.toggle();
   };
 
