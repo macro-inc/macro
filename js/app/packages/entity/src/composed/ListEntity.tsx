@@ -20,7 +20,9 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
+  For,
   Match,
   onCleanup,
   Show,
@@ -50,17 +52,30 @@ import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
 import { DraftBadge, InviteBadge, SharedBadge } from '../components/Badges';
-import { DisplayName, useDisplayName } from '../components/DisplayName';
+import { DisplayName } from '../components/DisplayName';
 import { useIsShared } from '../utils/shared';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import {
   filterNotDoneNotifications,
   filterValidNotifications,
+  extractMessageContent,
+  isNotificationUnread,
 } from '../utils/notification';
+import { getActionVerb } from '../extractors-notification/notification-description-helpers';
+import type { NotificationType } from '@core/types';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import {
+  type NotificationStack,
+  stackNotifications,
+  getMostRecentNotification,
+  getAllNotificationsFromGroup,
+} from '@notifications';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { isMobile } from '@core/mobile/isMobile';
+import { tryMacroId, useDisplayNameParts } from '@core/user';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -130,6 +145,13 @@ function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
   return chars;
 }
 
+type EntityRowConfig = {
+  swipeLeftColor?: string;
+  swipeLeftRevealedComponent?: JSX.Element;
+  swipeRightColor?: string;
+  swipeRightRevealedComponent?: JSX.Element;
+};
+
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
@@ -150,6 +172,7 @@ interface ListEntityProps {
     e: PointerEvent | MouseEvent,
     location?: SearchLocation
   ) => void;
+  entityRowConfig?: EntityRowConfig;
 }
 
 interface LayoutProps {
@@ -165,6 +188,12 @@ interface LayoutProps {
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+}
+
+function InboxDivider() {
+  return (
+    <div class="ml-(--soup-inbox-left-of-content) min-w-full min-h-[1px] max-h-[1px] bg-edge-muted col-span-3" />
+  )
 }
 
 function EmailIdentity(props: { entity: EmailEntity }) {
@@ -280,7 +309,7 @@ function NarrowLayout(props: LayoutProps) {
   );
 }
 
-function NarrowMessageLayout(props: LayoutProps) {
+function NarrowInboxLayout(props: LayoutProps) {
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
@@ -290,13 +319,17 @@ function NarrowMessageLayout(props: LayoutProps) {
   >();
   const chars = useCharacterCount(emailSnippetContainerRef);
 
-  const name =
+  const mostRecentMessageSenderName =
     isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
-      ? useDisplayName({
-          id: props.entity.latestMessage?.senderId,
-          format: 'firstName',
-        })
-      : () => undefined;
+      ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
+      : undefined;
+
+  const firstNotification = () => {
+    if (!isWithNotification(props.entity)) return undefined;
+    return filterNotDoneNotifications(
+      filterValidNotifications(props.entity.notifications?.())
+    )[0];
+  };
 
   return (
     <Entity.Layout
@@ -308,16 +341,16 @@ function NarrowMessageLayout(props: LayoutProps) {
           '"icon title timestamp" "icon body body" "icon body body"',
       }}
     >
-      <Entity.Slot placement="icon" class="flex items-center self-center pr-3">
-        <UnreadIndicator class="mx-2 size-2.75" active={props.unread} />
-        <div class="relative size-11 shrink-0 group">
+      <Entity.Slot placement="icon" class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)">
+        <UnreadIndicator class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)" active={props.unread} />
+        <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
           <Show when={!props.checked}>
             <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
               <Show
                 when={isDirectMessage()}
                 fallback={
-                  <div class="size-11 bg-edge-muted rounded-full flex items-center justify-center">
-                    <div class="size-6">
+                  <div class="size-(--soup-inbox-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
+                    <div class="size-[calc(var(--soup-inbox-icon-diameter)*var(--soup-inbox-icon-factor))]">
                       <Entity.Icon
                         entity={props.entity}
                         streamState={props.streamState}
@@ -355,14 +388,12 @@ function NarrowMessageLayout(props: LayoutProps) {
         placement="title"
         class="flex items-center gap-2 truncate font-semibold pt-3"
       >
-        <Switch>
-          <Match when={isChannelEntity(props.entity) && props.entity}>
-            {(entity) => <Entity.Title entity={entity()} />}
-          </Match>
-          <Match when={isEmailEntity(props.entity) && props.entity}>
-            {(entity) => <EmailIdentity entity={entity()} />}
-          </Match>
-        </Switch>
+        <Show
+          when={isEmailEntity(props.entity) && props.entity}
+          fallback={<Entity.Title entity={props.entity} />}
+        >
+          {(entity) => <EmailIdentity entity={entity()} />}
+        </Show>
       </Entity.Slot>
 
       <Entity.Slot
@@ -381,7 +412,7 @@ function NarrowMessageLayout(props: LayoutProps) {
           {(msg) => (
             <Entity.Slot
               placement="body"
-              class="text-ink-extra-muted line-clamp-2 pb-2 min-h-[2lh] pr-4 border-b border-edge-muted"
+              class="text-ink-extra-muted line-clamp-2 pb-2 min-h-[2lh] pr-4"
             >
               <Show
                 when={msg().content?.trim()}
@@ -390,8 +421,11 @@ function NarrowMessageLayout(props: LayoutProps) {
                 <StaticMarkdown
                   theme={twoLineClampMarkdownTheme}
                   markdown={
-                    (name() ? `**${name()}:** ` : '') + msg().content.trim()
+                    (mostRecentMessageSenderName
+                      ? `**${mostRecentMessageSenderName.firstName()}:** `
+                      : '') + msg().content.trim()
                   }
+                  singleLine
                 />
               </Show>
             </Entity.Slot>
@@ -401,7 +435,7 @@ function NarrowMessageLayout(props: LayoutProps) {
           {(entity) => (
             <Entity.Slot
               placement="body"
-              class="flex flex-col pb-2 min-h-[2lh] pr-4 border-b border-edge-muted"
+              class="flex flex-col pb-2 min-h-[2lh] pr-4"
             >
               <Entity.Title entity={props.entity} />
               <span
@@ -416,6 +450,36 @@ function NarrowMessageLayout(props: LayoutProps) {
               </span>
             </Entity.Slot>
           )}
+        </Match>
+        <Match when={isTaskEntity(props.entity)}>
+          <Entity.Slot
+            placement="body"
+            class="flex flex-col pb-2 min-h-[2lh] pr-4 "
+          >
+            <Entity.Properties entity={props.entity} />
+            <Show when={firstNotification()}>
+              {(notif) => (
+                <span class="text-ink-extra-muted font-normal truncate">
+                  <Show when={notif().sender_id}>
+                    {(senderId) => (
+                      <>
+                        <DisplayName id={senderId()} format="firstName" />{' '}
+                      </>
+                    )}
+                  </Show>
+                  {getActionVerb(
+                    notif().notification_event_type as NotificationType
+                  )}
+                </span>
+              )}
+            </Show>
+          </Entity.Slot>
+        </Match>
+        <Match when={true}>
+          <Entity.Slot
+            placement="body"
+            class="pb-2 min-h-[2lh] pr-4"
+          />
         </Match>
       </Switch>
     </Entity.Layout>
@@ -457,7 +521,6 @@ function WideLayout(props: LayoutProps) {
           />
         </div>
       </Entity.Slot>
-
       <Entity.Slot
         placement="content"
         class="font-semibold truncate items-center gap-2 flex"
@@ -505,7 +568,6 @@ function WideLayout(props: LayoutProps) {
           </Match>
         </Switch>
       </Entity.Slot>
-
       <Entity.Slot placement="meta" class="flex items-center gap-2">
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (
@@ -524,7 +586,6 @@ function WideLayout(props: LayoutProps) {
           {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
       </Entity.Slot>
-
       <Entity.Slot
         placement="timestamp"
         class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
@@ -534,6 +595,165 @@ function WideLayout(props: LayoutProps) {
         </Show>
       </Entity.Slot>
     </Entity.Layout>
+  );
+}
+
+function MaybeEntityRow(props: {
+  entityId: string;
+  children: JSX.Element;
+  config?: EntityRowConfig;
+}) {
+  const ctx = useContext(EntityRowContext);
+  return (
+    <Show when={ctx} fallback={props.children}>
+      <EntityRow
+        entityId={props.entityId}
+        swipeLeftColor={props.config?.swipeLeftColor}
+        swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
+        swipeRightColor={props.config?.swipeRightColor}
+        swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
+      >
+        {props.children}
+      </EntityRow>
+    </Show>
+  );
+}
+
+function StackRowLayout(props: {
+  stack: NotificationStack;
+  entity: WithNotification<EntityData>;
+  unread: boolean;
+}) {
+  const msgContent = () =>
+    extractMessageContent(getMostRecentNotification(props.stack));
+
+  return (
+    <Entity.Layout
+      class="w-full text-sm grid bg-edge/10 border-edge-muted"
+      style={{
+        'grid-template-columns': 'var(--soup-stack-row-unread-column-width) 1fr 8ch',
+        'grid-template-rows': 'auto auto',
+        'grid-template-areas':
+          '"unread title timestamp" "unread body body"',
+        'border-left-width': 'var(--soup-stack-row-border-l)'
+      }}
+    >
+      <Entity.Slot placement="unread" class="flex items-center justify-center">
+        <UnreadIndicator class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)" active={props.unread} />
+      </Entity.Slot>
+      <Entity.Slot
+        placement="title"
+        class="flex items-center gap-2 truncate font-semibold pt-3"
+      >
+        <Entity.Notification.Icon stack={props.stack} class="size-3.5" />
+        <Entity.Notification.Description stack={props.stack} />
+      </Entity.Slot>
+      <Entity.Slot
+        placement="timestamp"
+        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
+      >
+        <Entity.Timestamp entity={props.entity} />
+      </Entity.Slot>
+      <Entity.Slot
+        placement="body"
+        class="text-ink-extra-muted truncate pb-2 min-h-[1lh] pr-4"
+      >
+        <Show when={msgContent()}>
+          {(content) => (
+            <StaticMarkdown
+              theme={unifiedListMarkdownTheme}
+              markdown={content()}
+              singleLine
+            />
+          )}
+        </Show>
+      </Entity.Slot>
+    </Entity.Layout>
+  );
+}
+
+function StackRow(props: {
+  stack: NotificationStack;
+  entity: WithNotification<EntityData>;
+  entityRowConfig?: EntityRowConfig;
+}) {
+  const ctx = useContext(EntityRowContext);
+  const notificationSource = useGlobalNotificationSource();
+  const stackEntityId = getMostRecentNotification(props.stack).id;
+  const unread = () => isNotificationUnread(props.stack);
+
+  const handleSwipeLeft = () => {
+    void notificationSource.bulkMarkAsDone(
+      getAllNotificationsFromGroup(props.stack)
+    );
+    ctx?.collapseEntity(stackEntityId);
+  };
+
+  if (!ctx) {
+    return (
+      <StackRowLayout
+        stack={props.stack}
+        entity={props.entity}
+        unread={unread()}
+      />
+    );
+  }
+
+  return (
+    <EntityRow
+      entityId={stackEntityId}
+      onSwipeLeft={handleSwipeLeft}
+      swipeLeftColor={props.entityRowConfig?.swipeLeftColor}
+      swipeLeftRevealedComponent={
+        props.entityRowConfig?.swipeLeftRevealedComponent
+      }
+      swipeRightColor={props.entityRowConfig?.swipeRightColor}
+      swipeRightRevealedComponent={
+        props.entityRowConfig?.swipeRightRevealedComponent
+      }
+    >
+      <StackRowLayout
+        stack={props.stack}
+        entity={props.entity}
+        unread={unread()}
+      />
+    </EntityRow>
+  );
+}
+
+function MobileMultiStackLayout(props: {
+  stacks: NotificationStack[];
+  entity: WithNotification<EntityData>;
+  entityRowConfig?: EntityRowConfig;
+}) {
+  const isDirectMessage = () =>
+    isChannelEntity(props.entity) &&
+    props.entity.channelType === 'direct_message';
+
+  return (
+    <div class="pl-(--soup-stack-row-padding-l) pb-3">
+      {/* Non-swipeable header */}
+      <div class="grid grid-cols-[calc(var(--soup-inbox-left-of-content)-var(--soup-stack-row-padding-l))_auto] w-full text-sm items-center pr-4 py-3">
+        <div class="ml-(--soup-stack-header-icon-padding-l) mr-(--soup-inbox-icon-padding-r) shrink-0 size-(--soup-stack-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
+          <Entity.Icon entity={props.entity} class={cn(!isDirectMessage() && "size-[calc(var(--soup-stack-icon-diameter)*var(--soup-inbox-icon-factor))]")} />
+        </div>
+        <span class="flex-1 truncate font-semibold text-sm">
+          <Entity.Title entity={props.entity} />
+        </span>
+      </div>
+      {/* Stack rows */}
+      <div class="flex flex-col gap-3">
+        <For each={props.stacks}>
+          {(stack) => (
+            <StackRow
+              stack={stack}
+              entity={props.entity}
+              entityRowConfig={props.entityRowConfig}
+            />
+          )}
+        </For>
+      </div>
+    </div>
   );
 }
 
@@ -576,6 +796,18 @@ export function ListEntity(props: ListEntityProps) {
 
   const isWide = useListLayout()?.isWide ?? (() => true);
 
+  const mobileStacks = createMemo(() => {
+    if (!isMobile()) return [];
+    if (!props.showUnrollNotifications) return [];
+    const notifs = props.entity.notifications?.();
+    if (!notifs?.length) return [];
+    const validNotifs = filterNotDoneNotifications(
+      filterValidNotifications(notifs)
+    );
+    if (!validNotifs.length) return [];
+    return stackNotifications(validNotifs);
+  });
+
   return (
     <Entity.Root
       entity={props.entity}
@@ -605,18 +837,37 @@ export function ListEntity(props: ListEntityProps) {
 
       <Switch>
         <Match when={isWide()}>
-          <WideLayout {...layoutProps()} />
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <WideLayout {...layoutProps()} />
+          </MaybeEntityRow>
         </Match>
-        <Match
-          when={
-            isMobile() && (isChannelEntity(props.entity) ||
-              isEmailEntity(props.entity))
-          }
-        >
-          <NarrowMessageLayout {...layoutProps()} />
+        <Match when={isMobile() && mobileStacks().length > 1}>
+          <MobileMultiStackLayout
+            stacks={mobileStacks()}
+            entity={props.entity}
+            entityRowConfig={props.entityRowConfig}
+          />
+          <InboxDivider />
+        </Match>
+        <Match when={isMobile()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowInboxLayout {...layoutProps()} />
+          </MaybeEntityRow>
+          <InboxDivider />
         </Match>
         <Match when={true}>
-          <NarrowLayout {...layoutProps()} />
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowLayout {...layoutProps()} />
+          </MaybeEntityRow>
         </Match>
       </Switch>
 

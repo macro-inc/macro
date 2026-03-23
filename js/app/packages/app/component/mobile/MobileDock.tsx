@@ -4,7 +4,6 @@ import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
 import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { type Component, createSignal, For, type JSX } from 'solid-js';
@@ -19,6 +18,7 @@ import { SearchState } from './mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { setCreateMenuOpen } from '../Launcher';
 import { useLocation } from '@solidjs/router';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -32,7 +32,7 @@ type MobileDockButtonProps = {
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
   onTouchMove?: (e: TouchEvent) => void;
   onTouchEnd?: (e: TouchEvent) => void;
-  iconClass?: string;
+  iconClass?: string;q
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
@@ -63,7 +63,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-const PRIMARY_IDS = ['inbox', 'channels', 'files', 'search'] as const;
+const PRIMARY_IDS = ['inbox', 'channels', 'mail', 'search'] as const;
 
 const MORE_VIEWS = SIDEBAR_LINKS.filter(
   (l) => !(PRIMARY_IDS as readonly string[]).includes(l.id)
@@ -237,10 +237,10 @@ export function MobileDock() {
         onClick={() => navigate('channels')}
       />
       <MobileDockButton
-        icon={AnimatedFolderIcon}
-        label="Files"
-        active={isActive('files')}
-        onClick={() => navigate('files')}
+        icon={AnimatedEmailIcon}
+        label="Email"
+        active={isActive('mail')}
+        onClick={() => navigate('mail')}
       />
       <MorePopover
         active={isMoreActive()}

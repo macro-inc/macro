@@ -73,6 +73,11 @@ type EntityRowContextValue = {
   stateFor: (entityId: string) => EntityRowState;
   clearState: (entityId: string) => void;
   collapseEntity: (entityId: string) => Promise<void>;
+  registerRowHandler: (
+    entityId: string,
+    handlers: { onSwipeLeft?: () => void; onSwipeRight?: () => void }
+  ) => void;
+  unregisterRowHandler: (entityId: string) => void;
 };
 
 export const EntityRowContext = createContext<EntityRowContextValue>();
@@ -106,6 +111,11 @@ export function EntityRowProvider(
       return newState;
     });
   };
+  const customRowSwipeHandlers = new Map<
+    string,
+    { onSwipeLeft?: () => void; onSwipeRight?: () => void }
+  >();
+
   let touchState: SwipeTouchState = {
     startX: 0,
     startY: 0,
@@ -181,9 +191,15 @@ export function EntityRowProvider(
     if (!els) return;
     const direction = stateById()[entityId]?.direction;
     if (!direction) return;
-    const onSwipe =
-      direction === 'left' ? props.onSwipeLeft : props.onSwipeRight;
-    if (!onSwipe) return;
+    const defaultSwipeLeft = props.onSwipeLeft;
+    const defaultSwipeRight = props.onSwipeRight;
+    const swipeHandler =
+      direction === 'left'
+        ? (customRowSwipeHandlers.get(entityId)?.onSwipeLeft ??
+          (defaultSwipeLeft ? () => defaultSwipeLeft(entityId) : undefined))
+        : (customRowSwipeHandlers.get(entityId)?.onSwipeRight ??
+          (defaultSwipeRight ? () => defaultSwipeRight(entityId) : undefined));
+    if (!swipeHandler) return;
 
     // Cancel any pending animation frame
     if (rafId) cancelAnimationFrame(rafId);
@@ -194,7 +210,7 @@ export function EntityRowProvider(
     setState(entityId, { phase: 'triggered' });
 
     setTimeout(() => {
-      onSwipe(entityId);
+      swipeHandler();
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
 
     // If row has not been removed, reset it:
@@ -207,10 +223,12 @@ export function EntityRowProvider(
   };
 
   const canSwipeRight = (entityId: string) => {
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeRight !== undefined) return true;
     if (!props.onSwipeRight) return false;
     return props.canSwipeRight ? props.canSwipeRight(entityId) : true;
   };
   const canSwipeLeft = (entityId: string) => {
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeLeft !== undefined) return true;
     if (!props.onSwipeLeft) return false;
     return props.canSwipeLeft ? props.canSwipeLeft(entityId) : true;
   };
@@ -404,6 +422,12 @@ export function EntityRowProvider(
       stateById()[entityId] ?? { phase: 'idle', direction: null },
     clearState: (entityId) => clearState(entityId),
     collapseEntity,
+    registerRowHandler: (entityId, handlers) => {
+      customRowSwipeHandlers.set(entityId, handlers);
+    },
+    unregisterRowHandler: (entityId) => {
+      customRowSwipeHandlers.delete(entityId);
+    },
   };
 
   return (
@@ -420,6 +444,8 @@ export function EntityRow(
     swipeLeftRevealedComponent?: JSX.Element;
     swipeLeftColor?: string;
     swipeRightColor?: string;
+    onSwipeLeft?: () => void;
+    onSwipeRight?: () => void;
   }>
 ) {
   const ctx = useContext(EntityRowContext);
@@ -428,6 +454,16 @@ export function EntityRow(
   }
 
   const rowState = createMemo(() => ctx.stateFor(props.entityId));
+
+  onMount(() => {
+    if (props.onSwipeLeft || props.onSwipeRight) {
+      ctx.registerRowHandler(props.entityId, {
+        onSwipeLeft: props.onSwipeLeft,
+        onSwipeRight: props.onSwipeRight,
+      });
+      onCleanup(() => ctx.unregisterRowHandler(props.entityId));
+    }
+  });
 
   onCleanup(() => {
     ctx.clearState(props.entityId);
