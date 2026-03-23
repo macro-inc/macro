@@ -82,7 +82,7 @@ pub(crate) async fn list_threads(
 
 /// Wrapper for get_threads that retries on GmailBatchError::RateLimitExceeded,
 /// reducing batch size each time with exponential backoff.
-#[tracing::instrument(skip(client, access_token, thread_ids), level = "info", err)]
+#[tracing::instrument(skip(client, access_token, thread_ids), err)]
 pub async fn get_threads_with_retry(
     client: &GmailClient,
     access_token: &str,

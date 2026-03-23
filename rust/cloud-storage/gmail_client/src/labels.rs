@@ -12,7 +12,6 @@ use uuid::Uuid;
 #[tracing::instrument(
     skip(client, access_token),
     fields(provider_message_id = %provider_message_id),
-    level = "debug",
     err
 )]
 pub async fn modify_message_labels(
@@ -205,7 +204,6 @@ pub async fn create_label(
 #[tracing::instrument(
     skip(client, access_token),
     fields(label_id = %label_id),
-    level = "info",
     err
 )]
 pub async fn delete_gmail_label(

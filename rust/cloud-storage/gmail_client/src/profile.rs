@@ -2,7 +2,7 @@ use crate::GmailClient;
 use anyhow::Context;
 use models_email::gmail::GmailUserProfile;
 
-#[tracing::instrument(skip(client, access_token), level = "debug", err)]
+#[tracing::instrument(skip(client, access_token), err)]
 pub async fn get_profile_threads_total(
     client: &GmailClient,
     access_token: &str,

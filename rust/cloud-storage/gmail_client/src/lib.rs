@@ -148,7 +148,6 @@ impl GmailClient {
     #[tracing::instrument(
         skip(self, access_token),
         fields(provider_message_id = %provider_message_id),
-        level = "debug",
         err
     )]
     pub async fn modify_message_labels(
@@ -172,8 +171,7 @@ impl GmailClient {
     /// Returns a tuple of (successful_message_ids, failed_message_ids)
     #[tracing::instrument(
         skip(self, gmail_access_token),
-        fields(message_count = %db_provider_id_tuples.len()),
-        level = "debug"
+        fields(message_count = %db_provider_id_tuples.len())
     )]
     pub async fn batch_modify_labels(
         &self,
