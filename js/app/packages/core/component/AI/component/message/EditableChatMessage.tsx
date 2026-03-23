@@ -8,8 +8,8 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
-import { analytics } from '@app/lib/analytics';
 import { onMount } from 'solid-js';
+import { useAnalytics } from '@app/component/analytics-context';
 
 function EditableChatMessageInner(props: {
   chatId: string;
@@ -19,6 +19,8 @@ function EditableChatMessageInner(props: {
   onCancel: () => void;
   model: Model;
 }) {
+  const analytics = useAnalytics();
+
   const input = useChatInputContext();
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 

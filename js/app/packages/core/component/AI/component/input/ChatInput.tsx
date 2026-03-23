@@ -1,4 +1,3 @@
-import { analytics } from '@app/lib/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
@@ -23,6 +22,7 @@ import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
@@ -42,6 +42,8 @@ export type ChatInputComponentProps = {
 } & ChatInputProps;
 
 export function ChatInput(props: ChatInputComponentProps) {
+  const analytics = useAnalytics();
+
   const input = useChatInputContext();
   const uploadQueue = input.uploadQueue;
   const attachments = input.attachments;
