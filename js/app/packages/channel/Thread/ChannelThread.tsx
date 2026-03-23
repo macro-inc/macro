@@ -99,6 +99,7 @@ export function ChannelThread(props: ThreadProps) {
     const first = preview[0];
     return first ? props.isNewMessage?.(first) : false;
   };
+
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
   const collapsedRepliesContainsNewMessages = () =>
@@ -114,10 +115,6 @@ export function ChannelThread(props: ThreadProps) {
     hasReplies() && !props.isReplying() && !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
-
-  const expand = () => {
-    props.setIsExpanded(true);
-  };
 
   createEffect(
     on(
@@ -230,7 +227,7 @@ export function ChannelThread(props: ThreadProps) {
                           collapsedRepliesCount={collapsedRepliesCount()}
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
-                          onClick={expand}
+                          onClick={() => props.setIsExpanded(true)}
                           hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />
                       </Show>
