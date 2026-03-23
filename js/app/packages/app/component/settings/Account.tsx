@@ -76,7 +76,7 @@ export function Account() {
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
-  const { connect: connectEmail, disconnect: disconnectEmail } = useEmailLinks();
+  const { disconnect: disconnectEmail } = useEmailLinks();
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<

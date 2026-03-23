@@ -854,7 +854,8 @@ export function EmailCompose(props: EmailComposeProps) {
             <div class="flex items-center justify-between gap-2">
               <Caution class="size-4" />
               <span class="text-sm">
-                Email requires additional Google permissions. Select the permissions on sign-in to enable.
+                Email requires additional Google permissions. Select the
+                permissions on sign-in to enable.
               </span>
               <span class="grow" />
               <Button
