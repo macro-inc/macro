@@ -52,6 +52,7 @@ members = [
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
+  "local_stream_processor",
   "macro_auth",
   "macro_aws_config",
   "macro_cache_client",
@@ -135,15 +136,14 @@ anyhow = "1.0.93"
 async-openai = { version = "0.28.3", features = ["byot"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.8.12", default-features = false, features = ["behavior-version-latest", "rt-tokio", "credentials-process", "sso"] }
-aws-sdk-dynamodb = { version = "1.98.0", default-features = false, features = ["rt-tokio"] }
-aws-sdk-lambda = { version = "1.104.0", default-features = false, features = ["rt-tokio"] }
-aws-sdk-s3 = { version = "1.121.0", default-features = false, features = ["sigv4a", "http-1x", "rt-tokio"] }
-aws-sdk-secretsmanager = { version = "1.93.0", default-features = false, features = ["rt-tokio"] }
-aws-sdk-sesv2 = { version = "1.103.0", default-features = false, features = ["sigv4a", "rt-tokio"] }
-aws-sdk-sns = { version = "1.90.0", default-features = false, features = ["rt-tokio"] }
-aws-sdk-sqs = { version = "1.91.0", default-features = false, features = ["rt-tokio"] }
-aws-smithy-http-client = { version = "1.1.12", features = ["rustls-ring"] }
+aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.98.0"
+aws-sdk-lambda = "1.104.0"
+aws-sdk-s3 = "1.121.0"
+aws-sdk-secretsmanager = "1.93.0"
+aws-sdk-sesv2 = "1.103.0"
+aws-sdk-sns = "1.90.0"
+aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
