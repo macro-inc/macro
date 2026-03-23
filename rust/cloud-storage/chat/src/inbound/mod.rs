@@ -105,11 +105,14 @@ pub enum ChatHandlerErr {
     Internal,
     /// The requested resource was not found.
     NotFound,
+    /// The request was bad
+    BadRequest(String),
 }
 
 impl From<ChatErr> for ChatHandlerErr {
     fn from(err: ChatErr) -> Self {
         match err {
+            ChatErr::BadRequest(e) => ChatHandlerErr::BadRequest(e),
             ChatErr::NotFound => ChatHandlerErr::NotFound,
             ChatErr::Unknown(e) => {
                 tracing::error!(error=?e, "chat handler error");
@@ -122,11 +125,14 @@ impl From<ChatErr> for ChatHandlerErr {
 impl IntoResponse for ChatHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let (status, msg) = match self {
-            ChatHandlerErr::Internal => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-            }
-            ChatHandlerErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
+            ChatHandlerErr::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
+            ChatHandlerErr::NotFound => (StatusCode::NOT_FOUND, "Not found".to_string()),
+            ChatHandlerErr::BadRequest(e) => (StatusCode::BAD_REQUEST, e),
         };
+
         (status, msg).into_response()
     }
 }
