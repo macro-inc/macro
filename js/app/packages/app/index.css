@@ -516,8 +516,9 @@
 
 @theme default {
     /* Font families */
-    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    /*--font-mono: "Roboto Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;*/
+    --font-mono: "Roboto Mono Variable",  monospace;
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
@@ -615,20 +616,12 @@
         -moz-osx-font-smoothing: grayscale;
 
         color: var(--color-ink);
+        font-feature-settings: "dlig" 1, "calt" 1;
     }
 
     @font-face {
         font-family: "oooh-baby";
         src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
-    }
-
-    @font-face {
-      font-family: "Forma Macro Mono";
-      src: url("./asset/fonts/FormaMacroMonoVariable.woff2") format("woff2");
-      font-weight: 200 700;
-      font-style: normal italic;
-      font-display: swap;
-      font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
     }
 
     /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
