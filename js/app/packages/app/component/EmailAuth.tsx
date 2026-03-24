@@ -7,6 +7,7 @@ import { whenSettled } from '@core/util/whenSettled';
 import { updateUserInfo } from '@queries/auth/user-info';
 import { useNavigate } from '@solidjs/router';
 import { onMount, Suspense } from 'solid-js';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -85,6 +86,11 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 function EmailSignUp(props: EmailAuthParams) {
   const navigate = useNavigate();
   const { query: emailLinks } = useEmailLinks();
+  const analytics = useAnalytics();
+
+  onMount(() => {
+    analytics.pageView('signup');
+  });
 
   const withAppPrefix = (path: string) => `/app${path}`;
 

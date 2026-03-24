@@ -9,6 +9,7 @@ import {
   createSignal,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
@@ -29,6 +30,10 @@ export function Login() {
   const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
   const analytics = useAnalytics();
+
+  onMount(() => {
+    analytics.pageView('login');
+  });
 
   const identifyUser = () => {
     const user = userInfo();

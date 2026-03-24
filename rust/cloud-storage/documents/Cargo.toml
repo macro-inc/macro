@@ -37,6 +37,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
