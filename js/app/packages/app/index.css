@@ -260,7 +260,7 @@
   /* Cursor variables — override these to use custom cursors */
   --cursor-auto: auto;
   --cursor-default: default;
-  --cursor-pointer: pointer;
+  --cursor-pointer: default;
   --cursor-text: text;
   --cursor-move: move;
   --cursor-grab: grab;
