@@ -40,13 +40,10 @@ export const setupS3EventBridgeTriggers = () => {
     eventbridge: true,
   });
 
-  const searchUploadDlq = new aws.sqs.Queue(
-    `search-upload-dlq-${stack}`,
-    {
-      name: `search-upload-dlq-${stack}`,
-      messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
-    }
-  );
+  const searchUploadDlq = new aws.sqs.Queue(`search-upload-dlq-${stack}`, {
+    name: `search-upload-dlq-${stack}`,
+    messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
+  });
 
   new aws.sqs.QueuePolicy(`search-upload-dlq-policy-${stack}`, {
     queueUrl: searchUploadDlq.url,
