@@ -209,6 +209,89 @@ describe('mentionsPlugin callbacks', () => {
     cleanup();
   });
 
+  test('onCreateMention emits correct fileType and itemType for non-write document mentions', async () => {
+    const editor = createTestEditor();
+    const created: ItemMention[] = [];
+
+    const flush = () => editor.read(() => {});
+
+    const cleanup = mentionsPlugin({
+      onCreateMention: (m) => created.push(m),
+    })(editor);
+
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: 'doc-2',
+      documentName: 'Team Chat',
+      blockName: 'chat',
+      mentionUuid: 'uuid-doc-chat',
+    });
+    flush();
+
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: 'doc-3',
+      documentName: 'General',
+      blockName: 'channel',
+      mentionUuid: 'uuid-doc-channel',
+    });
+    flush();
+
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: 'doc-4',
+      documentName: 'My Project',
+      blockName: 'project',
+      mentionUuid: 'uuid-doc-project',
+    });
+    flush();
+
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: 'doc-5',
+      documentName: 'Inbox Thread',
+      blockName: 'email',
+      mentionUuid: 'uuid-doc-email',
+    });
+    flush();
+
+    expect(created).toHaveLength(4);
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'chat',
+        itemId: 'doc-2',
+        documentName: 'Team Chat',
+        fileType: 'chat',
+      })
+    );
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'channel',
+        itemId: 'doc-3',
+        documentName: 'General',
+        fileType: 'channel',
+      })
+    );
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'project',
+        itemId: 'doc-4',
+        documentName: 'My Project',
+        fileType: 'project',
+      })
+    );
+
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'thread',
+        itemId: 'doc-5',
+        documentName: 'Inbox Thread',
+        fileType: 'email',
+      })
+    );
+
+    cleanup();
+  });
+
   test('custom plugin passed to builder runs and cleans up', () => {
     const editor = createTestEditor();
     const pluginInit = vi.fn();
