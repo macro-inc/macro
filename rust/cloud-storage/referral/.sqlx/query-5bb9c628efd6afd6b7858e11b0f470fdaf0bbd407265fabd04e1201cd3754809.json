@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                CASE\n                    WHEN mui.profile_picture IS NOT NULL AND mui.profile_picture != ''\n                    THEN mui.profile_picture\n                    ELSE NULL\n                END AS \"profile_picture_url?: String\",\n                NULLIF(TRIM(CONCAT_WS(' ', NULLIF(first_name, 'N/A'), NULLIF(last_name, 'N/A'))), '') AS \"display_name?: String\"\n            FROM macro_user_info mui\n            JOIN \"User\" u ON u.macro_user_id = mui.macro_user_id\n            WHERE u.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "profile_picture_url?: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name?: String",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5bb9c628efd6afd6b7858e11b0f470fdaf0bbd407265fabd04e1201cd3754809"
+}
