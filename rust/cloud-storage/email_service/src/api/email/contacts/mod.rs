@@ -1,6 +1,6 @@
 use crate::api::ApiContext;
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{get, post};
 use tower::ServiceBuilder;
 
 pub(crate) mod block_sender;
@@ -21,8 +21,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             )),
         )
         .route(
-            "/block/{email_address}",
-            delete(unblock_sender::handler).layer(ServiceBuilder::new().layer(
+            "/unblock",
+            post(unblock_sender::handler).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn_with_state(
                     state.clone(),
                     crate::api::middleware::gmail_token::attach_gmail_token,

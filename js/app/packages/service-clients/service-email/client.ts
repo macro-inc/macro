@@ -346,11 +346,9 @@ export const emailClient = {
     );
   },
   async unblockSender(args: { email_address: string }) {
-    return emailFetch(
-      `/email/contacts/block/${encodeURIComponent(args.email_address)}`,
-      {
-        method: 'DELETE',
-      }
-    );
+    return emailFetch('/email/contacts/unblock', {
+      method: 'POST',
+      body: JSON.stringify({ email_address: args.email_address }),
+    });
   },
 };

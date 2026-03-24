@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
@@ -7,7 +7,7 @@ use gmail_client::GmailError;
 use model::response::ErrorResponse;
 use strum_macros::AsRefStr;
 use thiserror::Error;
-use utoipa::IntoParams;
+use utoipa::ToSchema;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum UnblockSenderError {
@@ -58,23 +58,25 @@ impl From<GmailError> for UnblockSenderError {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, IntoParams)]
-pub struct PathParams {
+/// Request to unblock a sender.
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+pub struct UnblockSenderRequest {
     /// The email address of the sender to unblock.
     pub email_address: String,
 }
 
 /// Unblock a sender by removing their block filter from Gmail.
 #[utoipa::path(
-    delete,
+    post,
     tag = "Contacts",
-    path = "/email/contacts/block/{email_address}",
+    path = "/email/contacts/unblock",
     operation_id = "unblock_sender",
-    params(PathParams),
+    request_body = UnblockSenderRequest,
     responses(
         (status = 204),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -83,14 +85,14 @@ pub struct PathParams {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     gmail_token: Extension<String>,
-    Path(PathParams { email_address }): Path<PathParams>,
+    Json(req): Json<UnblockSenderRequest>,
 ) -> Result<impl IntoResponse, UnblockSenderError> {
-    validate_email(&email_address)?;
+    validate_email(&req.email_address)?;
 
     // Check if sender is currently blocked
     let existing_filter = ctx
         .gmail_client
-        .find_block_filter_for_sender(&gmail_token, &email_address)
+        .find_block_filter_for_sender(&gmail_token, &req.email_address)
         .await?;
 
     if existing_filter.is_none() {
@@ -100,7 +102,7 @@ pub async fn handler(
     // Unblock the sender
     let was_unblocked = ctx
         .gmail_client
-        .unblock_sender(&gmail_token, &email_address)
+        .unblock_sender(&gmail_token, &req.email_address)
         .await?;
 
     if !was_unblocked {

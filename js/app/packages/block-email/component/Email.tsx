@@ -320,7 +320,6 @@ function EmailContent(props: EmailViewProps) {
   onMount(() => {
     registerEmailHotkeys(scopeId(), context.thread, {
       archiveThread: context.archiveThread,
-      blockSender: context.blockSender,
       navigateToPreviousMessage,
       navigateToNextMessage,
     });

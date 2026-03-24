@@ -5,6 +5,7 @@ use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfill
 use crate::api::email::contacts::block_sender::{BlockSenderRequest, BlockSenderResponse};
 use crate::api::email::contacts::list::ListContactsResponse;
 use crate::api::email::contacts::list_blocked::ListBlockedResponse;
+use crate::api::email::contacts::unblock_sender::UnblockSenderRequest;
 use crate::api::email::drafts::add_attachment::{
     AddDraftAttachmentRequest, AddDraftAttachmentResponse,
 };
@@ -144,6 +145,7 @@ use utoipa::OpenApi;
             ContactInfoWithInteraction,
             BlockSenderRequest,
             BlockSenderResponse,
+            UnblockSenderRequest,
             ListBlockedResponse,
             // Sort/filter types
             ApiSortMethod,

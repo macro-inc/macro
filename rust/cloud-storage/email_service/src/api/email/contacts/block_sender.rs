@@ -83,6 +83,7 @@ pub struct BlockSenderResponse {
         (status = 201, body = BlockSenderResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )

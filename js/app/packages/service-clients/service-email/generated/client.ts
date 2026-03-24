@@ -41,6 +41,7 @@ import type {
   PreviewsInboxCursorParams,
   SendMessageRequest,
   SendMessageResponse,
+  UnblockSenderRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -457,6 +458,11 @@ export type blockSenderResponse401 = {
   status: 401;
 };
 
+export type blockSenderResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type blockSenderResponse409 = {
   data: ErrorResponse;
   status: 409;
@@ -473,6 +479,7 @@ export type blockSenderResponseSuccess = blockSenderResponse201 & {
 export type blockSenderResponseError = (
   | blockSenderResponse400
   | blockSenderResponse401
+  | blockSenderResponse403
   | blockSenderResponse409
   | blockSenderResponse500
 ) & {
@@ -509,73 +516,6 @@ export const blockSender = async (
 };
 
 /**
- * @summary Unblock a sender by removing their block filter from Gmail.
- */
-export type unblockSenderResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type unblockSenderResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type unblockSenderResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type unblockSenderResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type unblockSenderResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type unblockSenderResponseSuccess = unblockSenderResponse204 & {
-  headers: Headers;
-};
-export type unblockSenderResponseError = (
-  | unblockSenderResponse400
-  | unblockSenderResponse401
-  | unblockSenderResponse404
-  | unblockSenderResponse500
-) & {
-  headers: Headers;
-};
-
-export type unblockSenderResponse =
-  | unblockSenderResponseSuccess
-  | unblockSenderResponseError;
-
-export const getUnblockSenderUrl = (emailAddress: string) => {
-  return `/email/contacts/block/${emailAddress}`;
-};
-
-export const unblockSender = async (
-  emailAddress: string,
-  options?: RequestInit
-): Promise<unblockSenderResponse> => {
-  const res = await fetch(getUnblockSenderUrl(emailAddress), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: unblockSenderResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as unblockSenderResponse;
-};
-
-/**
  * @summary List all blocked senders for the authenticated user.
  */
 export type listBlockedSendersResponse200 = {
@@ -586,6 +526,11 @@ export type listBlockedSendersResponse200 = {
 export type listBlockedSendersResponse401 = {
   data: ErrorResponse;
   status: 401;
+};
+
+export type listBlockedSendersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
 };
 
 export type listBlockedSendersResponse500 = {
@@ -599,6 +544,7 @@ export type listBlockedSendersResponseSuccess =
   };
 export type listBlockedSendersResponseError = (
   | listBlockedSendersResponse401
+  | listBlockedSendersResponse403
   | listBlockedSendersResponse500
 ) & {
   headers: Headers;
@@ -628,6 +574,81 @@ export const listBlockedSenders = async (
     status: res.status,
     headers: res.headers,
   } as listBlockedSendersResponse;
+};
+
+/**
+ * @summary Unblock a sender by removing their block filter from Gmail.
+ */
+export type unblockSenderResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type unblockSenderResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type unblockSenderResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type unblockSenderResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type unblockSenderResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type unblockSenderResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unblockSenderResponseSuccess = unblockSenderResponse204 & {
+  headers: Headers;
+};
+export type unblockSenderResponseError = (
+  | unblockSenderResponse400
+  | unblockSenderResponse401
+  | unblockSenderResponse403
+  | unblockSenderResponse404
+  | unblockSenderResponse500
+) & {
+  headers: Headers;
+};
+
+export type unblockSenderResponse =
+  | unblockSenderResponseSuccess
+  | unblockSenderResponseError;
+
+export const getUnblockSenderUrl = () => {
+  return `/email/contacts/unblock`;
+};
+
+export const unblockSender = async (
+  unblockSenderRequest: UnblockSenderRequest,
+  options?: RequestInit
+): Promise<unblockSenderResponse> => {
+  const res = await fetch(getUnblockSenderUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(unblockSenderRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockSenderResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unblockSenderResponse;
 };
 
 /**

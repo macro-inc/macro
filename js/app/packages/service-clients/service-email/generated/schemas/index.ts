@@ -237,6 +237,7 @@ export * from './threadPreviewCursorSnippet';
 export * from './threadPreviewCursorViewedAt';
 export * from './threadProviderId';
 export * from './threadSummary';
+export * from './unblockSenderRequest';
 export * from './updateLabelBatchRequest';
 export * from './updateLabelBatchResponse';
 export * from './updateThreadLabelRequest';

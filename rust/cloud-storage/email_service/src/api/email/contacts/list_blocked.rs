@@ -65,6 +65,7 @@ pub struct ListBlockedResponse {
     responses(
         (status = 200, body = ListBlockedResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]

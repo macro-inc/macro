@@ -5,7 +5,6 @@ import { optimisticUpdateSoupEntity } from '../soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
-  BlockSenderResponse,
   SendMessageResponse,
   ApiThread as Thread,
   UpsertScheduledResponse,

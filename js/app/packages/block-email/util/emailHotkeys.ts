@@ -5,7 +5,6 @@ import type { Accessor } from 'solid-js';
 
 export interface EmailHotkeyHandlers {
   archiveThread: () => boolean;
-  blockSender: () => boolean;
   navigateToPreviousMessage: () => boolean;
   navigateToNextMessage: () => boolean;
 }
@@ -59,13 +58,6 @@ export function registerEmailHotkeys(
     },
     hotkeyToken: TOKENS.email.forward,
     displayPriority: 7,
-  });
-  registerHotkey({
-    scopeId: scopeId,
-    description: 'Block sender',
-    keyDownHandler: handlers.blockSender,
-    hotkeyToken: TOKENS.email.blockSender,
-    displayPriority: 5,
   });
   registerHotkey({
     hotkey: 'arrowup',
