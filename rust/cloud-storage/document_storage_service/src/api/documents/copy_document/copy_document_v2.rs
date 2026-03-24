@@ -23,8 +23,7 @@ async fn resolve_source_key(
     document_version_id: i64,
     file_type_str: Option<&str>,
 ) -> anyhow::Result<String> {
-    let extensionless =
-        build_extensionless_document_key(owner, document_id, document_version_id);
+    let extensionless = build_extensionless_document_key(owner, document_id, document_version_id);
     if s3_client.exists(&extensionless).await? {
         Ok(extensionless)
     } else {
