@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
-use uuid::{NoContext, Timestamp, Uuid};
+pub use uuid::Uuid;
+use uuid::{NoContext, Timestamp};
 
 pub fn generate_uuid_v7() -> Uuid {
     Uuid::new_v7(Timestamp::now(NoContext))

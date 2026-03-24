@@ -6,6 +6,7 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
+import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
@@ -57,9 +58,43 @@ const getDssImageBlob = async (documentId: string) => {
   return blob;
 };
 
+/** Max width for single image preview containers (matches MediaPreview max-w-[400px]) */
+const SINGLE_IMAGE_MAX_WIDTH = 400;
+
+function ImagePlaceholder(props: {
+  dims: { width: number; height: number } | undefined;
+}) {
+  return (
+    <div
+      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      style={
+        props.dims
+          ? {
+              width: `${props.dims.width}px`,
+              height: `${props.dims.height}px`,
+            }
+          : {
+              width: '60px',
+              height: '60px',
+            }
+      }
+    >
+      <Spinner class="w-4 h-4 animate-spin" />
+    </div>
+  );
+}
+
 export function ImagePreview(props: ImagePreviewProps) {
   const [imageBlob, setImageBlob] = createSignal<Blob>();
   const [objectUrl, setObjectUrl] = createSignal<string>();
+  const [loaded, setLoaded] = createSignal(false);
+
+  const scaledDimensions = () =>
+    constrainImageDimensions(
+      props.image.width,
+      props.image.height,
+      SINGLE_IMAGE_MAX_WIDTH
+    );
 
   const sfsImageUrl = () => {
     if (props.isDss) {
@@ -142,20 +177,17 @@ export function ImagePreview(props: ImagePreviewProps) {
           </div>
         </Show>
         <Dialog.Trigger class="flex" disabled={props.isContext}>
-          <Show
-            when={imageSrc()}
-            fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
-                <Spinner class="w-4 h-4 animate-spin" />
-              </div>
-            }
-          >
+          <Show when={!loaded()}>
+            <ImagePlaceholder dims={scaledDimensions()} />
+          </Show>
+          <Show when={imageSrc()}>
             <img
               class={`${THEMES[props.variant]} select-none`}
+              classList={{ hidden: !loaded() }}
               src={imageSrc()}
               alt="preview"
-              width={props.image.width}
-              height={props.image.height}
+              width={scaledDimensions()?.width ?? props.image.width}
+              height={scaledDimensions()?.height ?? props.image.height}
               style={{
                 '-webkit-touch-callout': 'none',
                 '-webkit-user-select': 'none',
@@ -163,8 +195,15 @@ export function ImagePreview(props: ImagePreviewProps) {
                 '-moz-user-select': 'none',
                 '-ms-user-select': 'none',
                 'user-select': 'none',
+                ...(scaledDimensions()
+                  ? {
+                      'aspect-ratio': `${scaledDimensions()!.width} / ${scaledDimensions()!.height}`,
+                      'max-width': `${scaledDimensions()!.width}px`,
+                    }
+                  : {}),
               }}
               draggable={!isTouchDevice()}
+              onLoad={() => setLoaded(true)}
               onDragStart={(e) => {
                 e.dataTransfer?.setData('application/x-macro-internal', '1');
               }}

@@ -212,20 +212,20 @@ where
             .await
             .context(DeliveryFailure::Other)?;
 
-        match &*ticket {
-            RateLimitResult::Exceeded(exceeded) => {
+        let ticket_ok = match ticket {
+            RateLimitResult::Err(exceeded) => {
                 return Err(report!(
-                    "Rate limit key: {} was exceeded. Current count is {} but max count is {}",
-                    exceeded.key,
+                    "Rate limit key was exceeded. Current count is {} but max count is {}",
                     exceeded.current_count,
                     exceeded.max_count
                 )
-                .context(DeliveryFailure::RateLimit(exceeded.clone())));
+                .context(DeliveryFailure::RateLimit(exceeded)));
             }
-            RateLimitResult::Allowed { .. } => {}
-        }
+            RateLimitResult::Ok(ticket) => ticket,
+        };
 
-        self.email
+        if let Err(e) = self
+            .email
             .send_email(recipient.clone(), &content)
             .await
             .inspect_err(|e| {
@@ -236,12 +236,16 @@ where
                     "Email delivery failed"
                 );
             })
-            .context(DeliveryFailure::Other)?;
-
-        self.rate_limiter
-            .increment_ticket(ticket)
-            .await
-            .context(DeliveryFailure::Other)?;
+        {
+            let _ = self
+                .rate_limiter
+                .rollback_ticket(ticket_ok)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "Failed to rollback rate limit after email failure");
+                });
+            return Err(e.context(DeliveryFailure::Other));
+        }
 
         Ok(DeliverySuccess::Email)
     }

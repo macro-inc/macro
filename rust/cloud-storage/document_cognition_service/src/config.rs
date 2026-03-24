@@ -1,6 +1,5 @@
-use anyhow::Context;
 pub use macro_env::Environment;
-use macro_env_var::env_var;
+use macro_env_var::{env_var, maybe_env_var};
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 /// The configuration parameters for the application.
@@ -56,112 +55,100 @@ pub struct Config {
 
 env_var!(
     pub struct EnvVars {
+        pub DatabaseUrl,
+        pub DocumentStorageBucket,
+        pub DocumentTextExtractorQueue,
+        pub ChatDeleteQueue,
+        pub NotificationQueue,
+        pub DocumentStorageServiceUrl,
+        pub SearchEventQueue,
+        pub SyncServiceUrl,
+        pub SyncServiceAuthKey,
+        pub LexicalServiceUrl,
+        pub EmailServiceUrl,
+        pub StaticFileServiceUrl,
+        pub AuthenticationServiceUrl,
+        pub AuthenticationServiceSecretKey,
         pub RedisHost,
+        pub DocxDocumentUploadBucket,
+        pub DocumentStorageServiceCloudfrontDistributionUrl,
+        pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
+        pub DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+    }
+);
+
+maybe_env_var!(
+    pub struct MaybeEnvVars {
+        pub Port,
+        pub DocumentBatchLimit,
     }
 );
 
 impl Config {
     #[tracing::instrument(err, skip_all)]
     pub fn from_env(env_vars: EnvVars) -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .unwrap();
+        let maybe = MaybeEnvVars::new();
+
+        let port: usize = maybe.port.as_deref().unwrap_or("8080").parse().unwrap();
         let environment = Environment::new_or_prod();
 
-        let document_batch_limit = match std::env::var("DOCUMENT_BATCH_LIMIT") {
-            Ok(val) => val.parse::<i64>().unwrap_or(DEFAULT_DOCUMENT_BATCH_LIMIT),
-            Err(_) => DEFAULT_DOCUMENT_BATCH_LIMIT,
-        };
-
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .context("DOCUMENT_STORAGE_BUCKET environment variable not set")?;
-
-        let document_text_extractor_queue = std::env::var("DOCUMENT_TEXT_EXTRACTOR_QUEUE")
-            .context("DOCUMENT_TEXT_EXTRACTOR_QUEUE environment variable not set")?;
-
-        let chat_delete_queue = std::env::var("CHAT_DELETE_QUEUE")
-            .context("CHAT_DELETE_QUEUE environment variable not set")?;
-
-        let notification_queue =
-            std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
-
-        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
-            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
-
-        let search_event_queue =
-            std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
-
-        let sync_service_url =
-            std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
-
-        let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
-            .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
-
-        let lexical_service_url =
-            std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
-
-        let email_service_url =
-            std::env::var("EMAIL_SERVICE_URL").context("EMAIL_SERVICE_URL must be provided")?;
+        let document_batch_limit = maybe
+            .document_batch_limit
+            .as_deref()
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(DEFAULT_DOCUMENT_BATCH_LIMIT);
 
         let document_cognition_service_url = format!("http://127.0.0.1:{}", port);
 
-        let static_file_service_url = std::env::var("STATIC_FILE_SERVICE_URL")
-            .context("STATIC_FILE_SERVICE_URL must be provided")?;
-
-        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
-            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
-
-        let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
-            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
-
-        let docx_document_upload_bucket = std::env::var("DOCX_DOCUMENT_UPLOAD_BUCKET")
-            .context("DOCX_DOCUMENT_UPLOAD_BUCKET must be provided")?;
-
-        let cloudfront_distribution_url =
-            std::env::var("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")
-                .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL must be provided")?;
-
-        let cloudfront_signer_public_key_id = std::env::var(
-            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
-        )
-        .context("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID must be provided")?;
-
-        let cloudfront_signer_private_key = std::env::var(
-            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME",
-        )
-        .context(
-            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME must be provided",
-        )?;
-
-        let EnvVars { redis_host } = env_vars;
-
-        Ok(Config {
+        let EnvVars {
             database_url,
-            port,
-            environment,
-            document_batch_limit,
             document_storage_bucket,
-            document_storage_service_url,
             document_text_extractor_queue,
             chat_delete_queue,
             notification_queue,
+            document_storage_service_url,
             search_event_queue,
-            sync_service_auth_key,
             sync_service_url,
+            sync_service_auth_key,
             lexical_service_url,
             email_service_url,
-            document_cognition_service_url,
             static_file_service_url,
             authentication_service_url,
             authentication_service_secret_key,
             redis_host,
             docx_document_upload_bucket,
-            cloudfront_distribution_url,
-            cloudfront_signer_public_key_id,
-            cloudfront_signer_private_key,
+            document_storage_service_cloudfront_distribution_url,
+            document_storage_service_cloudfront_signer_public_key_id,
+            document_storage_service_cloudfront_signer_private_key_secret_name,
+        } = env_vars;
+
+        Ok(Config {
+            database_url: database_url.to_string(),
+            port,
+            environment,
+            document_batch_limit,
+            document_storage_bucket: document_storage_bucket.to_string(),
+            document_storage_service_url: document_storage_service_url.to_string(),
+            document_text_extractor_queue: document_text_extractor_queue.to_string(),
+            chat_delete_queue: chat_delete_queue.to_string(),
+            notification_queue: notification_queue.to_string(),
+            search_event_queue: search_event_queue.to_string(),
+            sync_service_auth_key: sync_service_auth_key.to_string(),
+            sync_service_url: sync_service_url.to_string(),
+            lexical_service_url: lexical_service_url.to_string(),
+            email_service_url: email_service_url.to_string(),
+            document_cognition_service_url,
+            static_file_service_url: static_file_service_url.to_string(),
+            authentication_service_url: authentication_service_url.to_string(),
+            authentication_service_secret_key: authentication_service_secret_key.to_string(),
+            redis_host,
+            docx_document_upload_bucket: docx_document_upload_bucket.to_string(),
+            cloudfront_distribution_url: document_storage_service_cloudfront_distribution_url
+                .to_string(),
+            cloudfront_signer_public_key_id:
+                document_storage_service_cloudfront_signer_public_key_id.to_string(),
+            cloudfront_signer_private_key:
+                document_storage_service_cloudfront_signer_private_key_secret_name.to_string(),
         })
     }
 

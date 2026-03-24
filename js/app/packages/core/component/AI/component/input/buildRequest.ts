@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
@@ -54,6 +55,11 @@ export function useSendChatMessage() {
     if (!connectionStream) {
       return { error: true };
     }
+
+    analytics.track('ai_message_sent', {
+      model: model ?? DEFAULT_MODEL,
+      attachmentCount: attachments.length,
+    });
 
     return {
       chat_id,

@@ -1,16 +1,12 @@
+use crate::api::{context::ApiContext, utils::default_redirect_url};
 use axum::{
     Extension,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
-
-use crate::api::{context::ApiContext, utils::default_redirect_url};
-
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
-};
+use macro_middleware::tracking::ClientIp;
+use model::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -30,10 +26,10 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Path(Params { verification_id }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_fusionauth_user_email");
@@ -42,7 +38,7 @@ pub async fn handler(
     // This will trigger the user.email.verify event in FusionAuth to call our webhook to update
     // macro_user_email_verification table
     ctx.auth_client
-        .verify_email(&verification_id, &ip_context.client_ip)
+        .verify_email(&verification_id, ip_context.origin_ip())
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to verify email");

@@ -57,7 +57,7 @@ camelCased rather than snake_cased (use `/dump-schema` or check the migration fi
 When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
 Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in
-`macro-api/cloud-storage/macro_db_client` to update the .sqlx.
+the root directory of the crate you made the changes in, to update the .sqlx directory.
 
 ## Development Commands
 

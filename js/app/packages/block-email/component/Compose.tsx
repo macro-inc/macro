@@ -7,10 +7,9 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { useEmailLinks } from '@core/email-link';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -20,7 +19,7 @@ import {
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import Caution from '@icon/regular/warning.svg';
+
 import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useSendMessageMutation,
@@ -494,8 +493,6 @@ export function EmailCompose(props: EmailComposeProps) {
     shouldReturnFocusOnClose: false,
   });
 
-  const { connect: connectEmail } = useEmailLinks();
-
   const previewName = createMemo(() => {
     const recipients = form.recipients().to;
     if (recipients.length === 0) {
@@ -847,20 +844,7 @@ export function EmailCompose(props: EmailComposeProps) {
         class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
         <Show when={hasLinkError()}>
-          <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
-            <div class="flex items-center justify-between gap-2">
-              <Caution class="size-4" />
-              <span class="text-sm">
-                You have not connected an email account.
-              </span>
-              <span class="grow" />
-              <DeprecatedTextButton
-                theme="base"
-                text="Connect Email"
-                onClick={connectEmail}
-              />
-            </div>
-          </div>
+          <EmailPermissionsBanner />
         </Show>
 
         <div

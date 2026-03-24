@@ -23,7 +23,7 @@ import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 
 export function TopBar() {

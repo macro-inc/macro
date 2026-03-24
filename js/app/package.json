@@ -18,7 +18,8 @@
 		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
 		"format": "bunx --bun biome format --write",
 		"fix": "bunx --bun biome lint --write",
-		"clean": "bun scripts/clean-env.js"
+		"clean": "bun scripts/clean-env.js",
+		"knip": "bunx --bun knip"
 	},
 	"dependencies": {
 		"@aws-crypto/sha256-js": "^5.2.0",
@@ -39,7 +40,7 @@
 		"@floating-ui/dom": "^1.7.4",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/roboto-mono": "^5.2.8",
-		"@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",
+		"@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#2b2257722f60458921eadf4a9ab4d9e1db36e34f",
 		"@kobalte/core": "^0.13.11",
 		"@leeoniya/ufuzzy": "^1.0.19",
 		"@lexical/history": "^0.32.1",
@@ -163,6 +164,7 @@
 		"json-refs": "^3.0.15",
 		"json-schema-to-typescript": "^15.0.4",
 		"json-schema-to-zod": "^2.6.1",
+		"knip": "^6.0.4",
 		"lightningcss": "^1.30.2",
 		"mock-socket": "^9.3.1",
 		"openai": "^6.25.0",

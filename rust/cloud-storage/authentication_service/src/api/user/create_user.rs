@@ -1,16 +1,14 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 
 use crate::api::context::ApiContext;
 
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
-};
+use model::response::{EmptyResponse, ErrorResponse};
 
 /// The request body to create a new user in fusionauth
 /// NOTE: Never derive debug here as we don't want to accidentally log the password
@@ -37,10 +35,10 @@ pub struct CreateUserRequest {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context, req), fields(client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, ip_context, req), fields(client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Json(req): extract::Json<CreateUserRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("create_user");
@@ -89,7 +87,7 @@ pub async fn handler(
                 username: Some(req.username.into()),
             },
             false,
-            &ip_context.client_ip,
+            ip_context.origin_ip(),
         )
         .await
         .map_err(|e| {

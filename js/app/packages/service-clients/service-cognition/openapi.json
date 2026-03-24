@@ -646,6 +646,39 @@
         }
       }
     },
+    "/memory": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Get the authenticated user's latest memory.",
+        "description": "Returns the current memory if one exists. If the memory is stale or missing,\na background generation is triggered and the endpoint returns the stale\nmemory (200) or 404 if none exists yet.",
+        "operationId": "get_memory_handler",
+        "responses": {
+          "200": {
+            "description": "Latest memory for the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No memory exists for this user yet (generation triggered)"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/models": {
       "get": {
         "tags": ["get_models"],
@@ -2346,6 +2379,27 @@
           }
         }
       },
+      "MemoryErrorBody": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error description."
+          }
+        }
+      },
+      "MemoryResponse": {
+        "type": "object",
+        "description": "The user's latest memory.",
+        "required": ["memory"],
+        "properties": {
+          "memory": {
+            "type": "string",
+            "description": "The generated memory text."
+          }
+        }
+      },
       "MessageWithAttachments": {
         "type": "object",
         "required": ["content", "date", "attachmentIds"],
@@ -2383,6 +2437,7 @@
           "claude-3-7-sonnet",
           "claude-sonnet-4",
           "claude-sonnet-4-5",
+          "claude-sonnet-4-6",
           "claude-haiku-4-5",
           "claude-opus-4-5",
           "claude-opus-4-6"

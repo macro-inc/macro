@@ -3,7 +3,7 @@ use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{EmailFilters, ast::ExpandErr};
+use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr};
 
 /// Possible email values in the ast
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +35,8 @@ pub enum EmailLiteral {
     NotificationDone(bool),
     /// This node value filters by notification seen state for emails.
     NotificationSeen(bool),
+    /// Controls whether shared email threads are included in results.
+    Shared(SharedEmailFilter),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {
@@ -51,6 +53,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             notification_filters,
             include_labels: _,
             exclude_labels: _,
+            shared,
         } = input;
 
         fn map_email(s: String) -> Email {
@@ -93,6 +96,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         let notification_seen_node = notification_filters
             .seen
             .map(|seen| Expr::Literal(EmailLiteral::NotificationSeen(seen)));
+        let shared_node = if shared.is_default() {
+            None
+        } else {
+            Some(Expr::Literal(EmailLiteral::Shared(shared)))
+        };
 
         Ok([
             sender_nodes,
@@ -104,6 +112,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             importance_node,
             notification_done_node,
             notification_seen_node,
+            shared_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

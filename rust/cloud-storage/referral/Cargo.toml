@@ -8,8 +8,10 @@ version = "0.1.0"
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:ip_extractor",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:tower",
   "dep:utoipa",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
@@ -33,14 +35,16 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 notification = { path = "../notification" }
-rate_limit = { path = "../rate_limit" }
+rate_limit = { path = "../rate_limit", features = ["axum"] }
 referral_invitation = { path = "../referral_invitation" }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
+ip_extractor = { path = "../ip_extractor", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
+tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 
@@ -53,10 +57,10 @@ sqlx = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
 [dev-dependencies]
-
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }

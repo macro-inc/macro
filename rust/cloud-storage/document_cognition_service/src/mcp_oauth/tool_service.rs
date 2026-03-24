@@ -13,13 +13,13 @@ use super::middleware::McpUserIdentity;
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
 pub struct AuthenticatedToolService<Context> {
-    toolset: AsyncToolSet<Context>,
+    toolset: Arc<AsyncToolSet<Context>>,
     context: Context,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
     /// Create a new authenticated tool service.
-    pub fn new(toolset: AsyncToolSet<Context>, context: Context) -> Self {
+    pub fn new(toolset: Arc<AsyncToolSet<Context>>, context: Context) -> Self {
         Self { toolset, context }
     }
 }
@@ -93,7 +93,7 @@ where
         #[allow(deprecated)]
         let request_context = RequestContext {
             jwt: Arc::new(identity.jwt.clone()),
-            user_id: Arc::new(user_id),
+            user_id,
         };
 
         let arguments = request

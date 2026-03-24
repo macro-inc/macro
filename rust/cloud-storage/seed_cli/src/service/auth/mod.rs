@@ -1,5 +1,7 @@
 //! Auth service wrapper.
 
+use std::net::{IpAddr, Ipv4Addr};
+
 #[cfg(test)]
 pub use MockSeedAuth as Auth;
 #[cfg(not(test))]
@@ -29,7 +31,11 @@ impl SeedAuth {
     ) -> anyhow::Result<String> {
         let result = self
             .inner
-            .create_user(user, true /*skip_verification*/, "127.0.0.1")
+            .create_user(
+                user,
+                true, /*skip_verification*/
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+            )
             .await?;
 
         Ok(result)

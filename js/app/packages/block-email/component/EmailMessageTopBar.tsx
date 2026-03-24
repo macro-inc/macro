@@ -2,7 +2,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import { EmailUserTooltip } from './EmailUserTooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
-import X from '@icon/regular/x.svg';
+import CaretUp from '@icon/regular/caret-up.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import {
@@ -142,7 +142,7 @@ function ExpandedHeader(props: {
         </Show>
         <DeprecatedIconButton
           theme="clear"
-          icon={X}
+          icon={CaretUp}
           onclick={props.onClose}
           iconSize={12}
         />
@@ -200,7 +200,7 @@ function CollapsedHeader(props: {
           <EmailUserTooltip recipient={props.message.from}>
             <span class="cursor-default">{props.senderName}</span>
           </EmailUserTooltip>
-          <span style={{ padding: '0 0.375em' }}>to</span>
+          <span style={{ padding: '0 0.275em' }}>to</span>
           <CollapsedRecipientList
             recipients={allRecipients()}
             currentUserEmail={props.currentUserEmail}

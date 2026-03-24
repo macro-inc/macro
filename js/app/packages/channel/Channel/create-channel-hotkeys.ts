@@ -67,6 +67,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
+        options.navigation()?.markUserIntent('up');
         options.navigation()?.scrollToId(id, { align: 'nearest' });
       }
       return true;
@@ -81,6 +82,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectNext();
       if (id) {
+        options.navigation()?.markUserIntent('down');
         options.navigation()?.scrollToId(id, { align: 'nearest' });
       } else {
         inputEl?.querySelector<HTMLElement>('[contenteditable]')?.focus();
@@ -97,6 +99,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       options.selection.clear();
       const id = options.selection.selectPrevious();
       if (!id) return false;
+      options.navigation()?.markUserIntent('down');
       options.navigation()?.scrollToId(id, { align: 'end' });
       return true;
     },
@@ -185,6 +188,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
+        options.navigation()?.markUserIntent('up');
         options.navigation()?.scrollToId(id, { align: 'nearest' });
         messageListEl?.focus();
       }

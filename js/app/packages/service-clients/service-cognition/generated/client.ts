@@ -17,6 +17,8 @@ import type {
   GetChatsForAttachmentResponse,
   GetModelsResponse,
   HttpSendChatMessageRequest,
+  MemoryErrorBody,
+  MemoryResponse,
   PatchChatRequest,
   SendChatMessageResponse,
   StringIDResponse,
@@ -743,6 +745,63 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * Returns the current memory if one exists. If the memory is stale or missing,
+a background generation is triggered and the endpoint returns the stale
+memory (200) or 404 if none exists yet.
+ * @summary Get the authenticated user's latest memory.
+ */
+export type getMemoryHandlerResponse200 = {
+  data: MemoryResponse;
+  status: 200;
+};
+
+export type getMemoryHandlerResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getMemoryHandlerResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type getMemoryHandlerResponseSuccess = getMemoryHandlerResponse200 & {
+  headers: Headers;
+};
+export type getMemoryHandlerResponseError = (
+  | getMemoryHandlerResponse404
+  | getMemoryHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMemoryHandlerResponse =
+  | getMemoryHandlerResponseSuccess
+  | getMemoryHandlerResponseError;
+
+export const getGetMemoryHandlerUrl = () => {
+  return `/memory`;
+};
+
+export const getMemoryHandler = async (
+  options?: RequestInit
+): Promise<getMemoryHandlerResponse> => {
+  const res = await fetch(getGetMemoryHandlerUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMemoryHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMemoryHandlerResponse;
 };
 
 /**

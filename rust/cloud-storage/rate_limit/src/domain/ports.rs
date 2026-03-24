@@ -4,42 +4,45 @@ use std::future::Future;
 
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitTicket};
+use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult};
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
-    /// Check if the action is allowed without incrementing the counter.
+    /// Atomically check and increment the rate limit counter.
+    ///
+    /// If the current count is below the limit, the counter is incremented and
+    /// `Ok(RateLimitOk)` is returned. If the limit is already reached,
+    /// `Err(RateLimitExceeded)` is returned without incrementing.
     ///
     /// The `RateLimitKey` is a hashed value - callers control what gets rate
     /// limited by constructing the key from relevant data.
     fn check(
         &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
+        key: RateLimitKey,
+        config: RateLimitConfig,
     ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
 
-    /// Increment the rate limit counter for a key.
+    /// Decrement the rate limit counter for a key.
     ///
-    /// Should only be called after a successful action.
-    fn increment(
-        &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
-    ) -> impl Future<Output = Result<u64, Report>> + Send;
+    /// Used to roll back a previously counted request when the action fails.
+    fn decrement(&self, key: &RateLimitKey) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-/// the external facing service interface, this signature enforces that users are incrementing at most 1 time per ticket read
+/// The external facing service interface.
+///
+/// `check_rate_limit` atomically checks and increments the counter.
+/// If the downstream action fails, call `rollback_ticket` to decrement.
 pub trait RateLimitService: Send + Sync + 'static {
-    /// check the rate limit, returning a ticket which can be used to increment the counter
+    /// Atomically check and increment the rate limit, returning a ticket on success.
     fn check_rate_limit(
         &self,
         key: RateLimitKey,
         config: RateLimitConfig,
-    ) -> impl Future<Output = Result<RateLimitTicket, Report>> + Send;
+    ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
 
-    /// increment the counter for a given ticket
-    fn increment_ticket(
+    /// Roll back a previously counted request when the action fails.
+    fn rollback_ticket(
         &self,
-        ticket: RateLimitTicket,
+        ticket: RateLimitOk,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

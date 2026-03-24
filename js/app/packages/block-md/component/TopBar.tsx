@@ -50,7 +50,7 @@ import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';
@@ -62,9 +62,13 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export function TopBar() {
+  const analytics = useAnalytics();
+
   const isAuth = useIsAuthenticated();
+
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -162,6 +166,10 @@ export function TopBar() {
         <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
           notificationSource={notificationSource}
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('notifications_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },
@@ -175,6 +183,10 @@ export function TopBar() {
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('references_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },

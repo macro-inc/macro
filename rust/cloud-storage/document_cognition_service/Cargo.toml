@@ -74,6 +74,7 @@ log = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 model-entity = { path = "../model-entity" }
 macro_cors = { path = "../macro_cors" }
+memory = { path = "../memory" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }

@@ -114,6 +114,10 @@ pub struct MessageAttachment {
     pub entity_type: String,
     /// Id of the attached entity.
     pub entity_id: String,
+    /// Optional width (for images).
+    pub width: Option<i32>,
+    /// Optional height (for images).
+    pub height: Option<i32>,
     /// When the attachment was created.
     pub created_at: DateTime<Utc>,
 }

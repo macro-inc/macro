@@ -105,6 +105,49 @@ pub async fn fetch_gmail_token_usercontext_response(
         })
 }
 
+/// Fetches a user's gmail token directly from the auth service, bypassing the Redis cache.
+/// Used by the init endpoint where we always want a fresh token.
+#[tracing::instrument(skip(user_context, redis_client, auth_service_client))]
+pub async fn fetch_gmail_token_no_cache(
+    user_context: &UserContext,
+    redis_client: &RedisClient,
+    auth_service_client: &AuthServiceClient,
+) -> Result<String, Response> {
+    let key = TokenCacheKey::new(
+        &user_context.fusion_user_id,
+        &user_context.user_id,
+        UserProvider::Gmail.as_str(),
+    );
+
+    let conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to connect to redis");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to get gmail access token",
+                }),
+            )
+                .into_response()
+        })?;
+
+    email::outbound::fetch_gmail_access_token_no_cache(&key, &conn, auth_service_client)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to get gmail access token from auth service");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to get gmail access token",
+                }),
+            )
+                .into_response()
+        })
+}
+
 /// Fetches the gmail access token, first looking in the redis cache then hitting the auth service.
 ///
 /// Delegates to [`email::outbound::fetch_gmail_access_token`].

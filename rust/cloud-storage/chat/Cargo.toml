@@ -1,21 +1,26 @@
 [package]
-name = "chat"
-version = "0.1.0"
 edition = "2024"
+name = "chat"
 publish = false
+version = "0.1.0"
 
 [features]
-default = ["ports", "inbound", "outbound"]
+default = ["inbound", "outbound", "ports"]
+inbound = ["dep:axum", "dep:model_user", "entity_access/inbound", "ports"]
+outbound = [
+  "dep:macro_share_permissions",
+  "dep:macro_uuid",
+  "dep:sqlx",
+  "ports",
+]
 ports = []
-inbound = ["ports", "dep:axum", "dep:model_user", "entity_access/inbound"]
-outbound = ["ports", "dep:sqlx", "dep:macro_share_permissions", "dep:macro_uuid"]
 
 [dependencies]
 # Domain (always included)
 ai = { path = "../ai" }
 anyhow = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false }
 chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
@@ -24,6 +29,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
 
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }

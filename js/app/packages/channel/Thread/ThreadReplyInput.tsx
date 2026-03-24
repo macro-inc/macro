@@ -11,6 +11,7 @@ import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 
 type ThreadReplyInputProps = {
   channelId: string;
@@ -23,6 +24,9 @@ type ThreadReplyInputProps = {
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
+
+  const participants = useChannelParticipants(() => props.channelId);
+
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
       channelId: props.channelId,
@@ -53,6 +57,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 isDraggingOverChannel: entityDropZone.isDraggingOver(),
                 mode: 'reply',
               }}
+              participants={participants.users}
               attachmentTracker={tracker}
               persistenceKey={makeInputValuePersistenceKey({
                 channelId: props.channelId,
@@ -72,7 +77,11 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                   channelID: props.channelId,
                   senderId,
                   optimisticId: crypto.randomUUID(),
-                  message: buildPostMessageRequest(snapshot, props.messageId),
+                  message: buildPostMessageRequest({
+                    snapshot,
+                    threadId: props.messageId,
+                    participantIds: participants.ids(),
+                  }),
                 });
 
                 props.setReplyInputState(undefined);

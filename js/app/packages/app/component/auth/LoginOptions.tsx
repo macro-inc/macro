@@ -72,7 +72,11 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
         token?: string;
         error?: string;
       }>('plugin:auth|authenticate', {
-        payload: { authUrl: authUrl.toString(), callbackScheme: 'macro' },
+        payload: {
+          authUrl: authUrl.toString(),
+          callbackScheme: 'macro',
+          ephemeralSession: true,
+        },
       });
 
       if (!result.success || !result.token) {

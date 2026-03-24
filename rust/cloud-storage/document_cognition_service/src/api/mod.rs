@@ -70,6 +70,8 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn api_router(api_context: ApiContext) -> Router {
+    let memory_service = api_context.memory_service.clone();
+
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router(api_context.clone()))
@@ -77,6 +79,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())
         .nest("/id_mapping", id_mapping::router())
+        .merge(memory::inbound::axum_router::memory_router(memory_service))
         .with_state(api_context.clone())
         .route(
             "/chat/completions",

@@ -59,6 +59,11 @@ pub trait EmailRepo: Send + Sync + 'static {
         provider: UserProvider,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
+    fn link_by_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+
     /// Fetch a thread by its database ID (without messages).
     fn thread_by_id(
         &self,
@@ -241,6 +246,12 @@ pub trait EmailService: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
+    /// Fetch the email link for a user by their macro ID only.
+    fn get_link_by_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
+
     /// Fetch a thread with paginated messages, verifying access via the provided receipt.
     fn get_thread_with_messages(
         &self,
@@ -309,6 +320,43 @@ pub trait GmailLabelModifier: Send + Sync + 'static {
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+}
+
+/// Port for fetching a Gmail access token for a given email link.
+///
+/// The domain service receives the token as an opaque `&str`. This trait
+/// allows the toolset layer to resolve tokens without depending on axum.
+pub trait GmailTokenProvider: Send + Sync + 'static {
+    /// Fetch a Gmail OAuth access token for the given email link.
+    fn fetch_gmail_access_token(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+
+    /// Fetch a Gmail OAuth access token directly from the auth service,
+    /// bypassing the Redis cache for reads but still caching the result.
+    fn fetch_gmail_access_token_no_cache(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+}
+
+/// No-op token provider for callers that don't need Gmail token resolution.
+#[derive(Clone)]
+pub struct NoOpGmailTokenProvider;
+
+impl GmailTokenProvider for NoOpGmailTokenProvider {
+    async fn fetch_gmail_access_token(&self, _link: &Link) -> Result<String, EmailErr> {
+        Err(EmailErr::ProviderErr(anyhow::anyhow!(
+            "Gmail token provider not configured"
+        )))
+    }
+
+    async fn fetch_gmail_access_token_no_cache(&self, _link: &Link) -> Result<String, EmailErr> {
+        Err(EmailErr::ProviderErr(anyhow::anyhow!(
+            "Gmail token provider not configured"
+        )))
+    }
 }
 
 /// No-op label modifier for callers that don't need Gmail label operations.

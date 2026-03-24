@@ -15,6 +15,7 @@ import {
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
 import { useUserId } from '@core/context/user';
+import { useAnalytics } from '@app/component/analytics-context';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
@@ -23,6 +24,8 @@ interface SoupEntityActionsMenuProps {
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
+  const analytics = useAnalytics();
+
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
 
@@ -76,6 +79,8 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
     const splitManager = globalSplitManager();
     if (!splitManager) return;
+
+    analytics.track('split_created', { from: 'soup_view_entity_actions_menu' });
 
     if (entity.type === 'document') {
       const { fileType, id, subType } = entity;

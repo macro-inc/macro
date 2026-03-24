@@ -454,8 +454,8 @@ export function Root() {
   return (
     <MaybeTauriProvider>
       <MetaProvider>
-        <PosthogProvider>
-          <AnalyticsContextProvider>
+        <AnalyticsContextProvider>
+          <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
                 <QuerySyncProviderWithUserId />
@@ -492,8 +492,8 @@ export function Root() {
                 </ConfiguredGlobalAppStateProvider>
               </UserContextProvider>
             </EntityProvider>
-          </AnalyticsContextProvider>
-        </PosthogProvider>
+          </PosthogProvider>
+        </AnalyticsContextProvider>
       </MetaProvider>
     </MaybeTauriProvider>
   );

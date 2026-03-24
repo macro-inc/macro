@@ -21,7 +21,7 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { setCreateMenuOpen } from '@app/component/Launcher';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@ui/components/Button';
@@ -37,6 +37,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 
 import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
+import { useAnalytics } from '@app/component/analytics-context';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 
 interface SidebarItem {
@@ -238,14 +239,22 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
+  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
 
   const handleCommandPaletteClick = () => {
+    if (!CommandState.isOpen()) {
+      analytics.track('command_menu_open', { from: 'sidebar' });
+    }
     CommandState.toggle();
   };
 
   const handleCreateClick = () => {
+    const willOpen = !createMenuOpen();
+    if (willOpen) {
+      analytics.track('create_menu_open', { from: 'sidebar' });
+    }
     setCreateMenuOpen((p) => !p);
   };
 
@@ -256,6 +265,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     const manager = globalSplitManager();
     if (!manager || !manager.canAppendSplit()) return;
 
+    analytics.track('split_created', { from: 'sidebar' });
     manager.createNewSplit({
       content: {
         type: 'component',
@@ -401,6 +411,7 @@ interface SidebarLinkProps extends SidebarItem {
 const SidebarLink = (props: SidebarLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
+  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const layoutManager = globalSplitManager();
 
@@ -438,6 +449,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const openInNewSplit = () => {
     const manager = globalSplitManager();
     if (!manager || !manager.canAppendSplit()) return;
+
+    analytics.track('split_created', { from: 'sidebar' });
 
     manager.createNewSplit({
       content: content(),
@@ -482,6 +495,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }
           onMouseLeave={() => setIsHovering(false)}
           onClick={(e) => {
+            analytics.track('sidebar_click', {
+              view: props.id,
+            });
             // Middle mouse handling
             if (e.button === 1) return;
 

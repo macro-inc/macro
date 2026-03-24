@@ -80,6 +80,8 @@ struct AttachmentRow {
     message_id: Uuid,
     entity_type: String,
     entity_id: String,
+    width: Option<i32>,
+    height: Option<i32>,
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -383,7 +385,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         let rows = sqlx::query_as!(
             AttachmentRow,
             r#"
-            SELECT id, message_id, entity_type, entity_id, created_at
+            SELECT id, message_id, entity_type, entity_id,
+                   width AS "width?", height AS "height?", created_at
             FROM comms_attachments
             WHERE message_id = ANY($1)
             ORDER BY created_at ASC
@@ -401,6 +404,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     id: r.id,
                     entity_type: r.entity_type,
                     entity_id: r.entity_id,
+                    width: r.width,
+                    height: r.height,
                     created_at: r.created_at,
                 });
         }

@@ -35,6 +35,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import { InlineEntity, type EntityData } from '@entity';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isListViewID } from '@app/constants/list-views';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -98,6 +99,8 @@ export function CommandMenuInner(props: {
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
 }) {
+  const analytics = useAnalytics();
+
   const { openWithSplit } = useSplitLayout();
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
@@ -133,6 +136,7 @@ export function CommandMenuInner(props: {
     if (!item) return;
 
     props.onSelect?.(item);
+    analytics.track('command_menu_use', { itemType: item.bucket });
 
     if (isCommandItem(item)) {
       const command = item.data;
