@@ -362,7 +362,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     const userEmail = currentUserEmail()?.toLowerCase();
     const senderEmail = thread.messages.find(
-      (m) => m.from?.email && m.from.email.toLowerCase() !== userEmail
+      (m) =>
+        m.from?.email &&
+        (!userEmail || m.from.email.toLowerCase() !== userEmail)
     )?.from?.email;
 
     if (!senderEmail) return false;
