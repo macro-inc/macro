@@ -8,7 +8,6 @@ import {
   createEffect,
   createSignal,
   onCleanup,
-  Suspense,
   useContext,
 } from 'solid-js';
 
@@ -101,7 +100,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
-            <Suspense>{props.content}</Suspense>
+            {props.content}
           </HoverCardPortalNestedPreviewOpenContext.Provider>
         </KobalteHoverCard.Content>
       </KobalteHoverCard.Portal>
