@@ -1080,7 +1080,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "directMessage"]
+        "enum": ["public", "organization", "private", "directMessage", "team"]
       },
       "CommonChannelMetadata": {
         "type": "object",

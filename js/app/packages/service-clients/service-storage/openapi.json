@@ -5623,7 +5623,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message"]
+        "enum": ["public", "organization", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "type": "object",
