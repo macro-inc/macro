@@ -28,6 +28,8 @@ function getNotificationIcon(
     .with('channel_mention', () => AtIcon)
     .with('document_mention', () => AtIcon)
     .with('mentioned_in_document_comment', () => AtIcon)
+    .with('replied_to_document_comment_thread', () => ArrowBendUpLeftIcon)
+    .with('commented_on_document', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
     .with('new_email', () => EnvelopeIcon)

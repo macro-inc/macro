@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type NotifEventOneOfOneoneTag =
-  (typeof NotifEventOneOfOneoneTag)[keyof typeof NotifEventOneOfOneoneTag];
+export type NotifEventOneOfTwothreeTag =
+  (typeof NotifEventOneOfTwothreeTag)[keyof typeof NotifEventOneOfTwothreeTag];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NotifEventOneOfOneoneTag = {
-  channel_invite: 'channel_invite',
+export const NotifEventOneOfTwothreeTag = {
+  ai_response: 'ai_response',
 } as const;

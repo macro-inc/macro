@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
+import type { CommentedOnDocumentMetadata } from './commentedOnDocumentMetadata';
 import type { NotifEventOneOfNineTag } from './notifEventOneOfNineTag';
 
 /**
- * A user sent a message in a channel.
+ * Someone commented on a document the user owns.
  */
 export type NotifEventOneOfNine = {
-  /** A user sent a message in a channel. */
-  content: ChannelMessageSendMetadata;
+  /** Someone commented on a document the user owns. */
+  content: CommentedOnDocumentMetadata;
   tag: NotifEventOneOfNineTag;
 };

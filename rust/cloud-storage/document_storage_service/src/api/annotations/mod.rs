@@ -19,7 +19,10 @@ use macro_db_client::annotations::CommentError;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::EntityType;
-use model_notifications::MentionedInDocumentCommentMetadata;
+use model_notifications::{
+    CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata,
+    RepliedToDocumentCommentThreadMetadata,
+};
 use notification::domain::models::SendNotificationRequestBuilder;
 use tower::ServiceBuilder;
 
@@ -151,6 +154,68 @@ fn build_mention_notif<'a>(
         .iter()
         .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
         .collect();
+
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_string(document_id),
+        notification,
+        sender_id,
+        recipient_ids,
+    }
+}
+
+fn build_thread_reply_notif<'a>(
+    text: String,
+    comment: &Comment,
+    thread_id: i64,
+    participant_ids: HashSet<MacroUserIdStr<'a>>,
+    document_name: String,
+    owner: MacroUserIdStr<'static>,
+    file_type: Option<String>,
+    sender_id: Option<MacroUserIdStr<'static>>,
+    document_id: String,
+    sender_profile_picture_url: Option<String>,
+) -> SendNotificationRequestBuilder<'a, RepliedToDocumentCommentThreadMetadata> {
+    let notification = RepliedToDocumentCommentThreadMetadata {
+        document_name,
+        owner,
+        file_type,
+        comment_id: comment.comment_id,
+        thread_id,
+        text,
+        sender_profile_picture_url,
+    };
+
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_string(document_id),
+        notification,
+        sender_id,
+        recipient_ids: participant_ids,
+    }
+}
+
+fn build_document_comment_notif(
+    text: String,
+    comment: &Comment,
+    thread_id: i64,
+    document_owner: MacroUserIdStr<'static>,
+    document_name: String,
+    file_type: Option<String>,
+    sender_id: Option<MacroUserIdStr<'static>>,
+    document_id: String,
+    sender_profile_picture_url: Option<String>,
+) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
+    let notification = CommentedOnDocumentMetadata {
+        document_name,
+        owner: document_owner.clone(),
+        file_type,
+        comment_id: comment.comment_id,
+        thread_id,
+        text,
+        sender_profile_picture_url,
+    };
+
+    let mut recipient_ids = HashSet::new();
+    recipient_ids.insert(document_owner);
 
     SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_string(document_id),

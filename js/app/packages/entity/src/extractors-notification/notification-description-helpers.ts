@@ -25,6 +25,8 @@ export function getActionVerb(type: NotificationType): string {
     .with('channel_mention', () => 'mentioned you')
     .with('document_mention', () => 'mentioned you')
     .with('mentioned_in_document_comment', () => 'mentioned you')
+    .with('replied_to_document_comment_thread', () => 'replied')
+    .with('commented_on_document', () => 'commented')
     .with('channel_message_reply', () => 'replied')
     .with('channel_message_send', () => 'sent a message')
     .with('ai_response', () => 'AI responded')
@@ -48,6 +50,12 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('document_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('mentioned_in_document_comment', () =>
       count === 1 ? 'mention' : 'mentions'
+    )
+    .with('replied_to_document_comment_thread', () =>
+      count === 1 ? 'reply' : 'replies'
+    )
+    .with('commented_on_document', () =>
+      count === 1 ? 'comment' : 'comments'
     )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))

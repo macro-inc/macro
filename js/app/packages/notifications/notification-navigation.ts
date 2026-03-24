@@ -150,6 +150,28 @@ function getSupportedHandler(
           newSplit
         );
     })
+    .with('replied_to_document_comment_thread', () => {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'replied_to_document_comment_thread') return null;
+      return async (lm: SplitManager, newSplit: boolean = false) =>
+        openSplitIfNotOpen(
+          lm,
+          safeFileTypeToBlockName(meta.content.fileType),
+          notification.entity_id,
+          newSplit
+        );
+    })
+    .with('commented_on_document', () => {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'commented_on_document') return null;
+      return async (lm: SplitManager, newSplit: boolean = false) =>
+        openSplitIfNotOpen(
+          lm,
+          safeFileTypeToBlockName(meta.content.fileType),
+          notification.entity_id,
+          newSplit
+        );
+    })
     .exhaustive();
 }
 

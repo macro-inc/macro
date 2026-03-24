@@ -10,5 +10,5 @@ export type NotifEventOneOfOnefiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnefiveTag = {
-  invite_to_team: 'invite_to_team',
+  channel_message_reply: 'channel_message_reply',
 } as const;

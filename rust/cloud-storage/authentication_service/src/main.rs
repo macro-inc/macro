@@ -176,7 +176,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = SqsIngressQueue {
         client: aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        queue_url: config.notification_queue.clone(),
+        queue_url: dbg!(config.notification_queue.clone()),
     };
     let notification_ingress_service = SqsNotificationIngress {
         queue: ingress_queue,

@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AiResponseMetadata } from './aiResponseMetadata';
+import type { InviteToTeamMetadata } from './inviteToTeamMetadata';
 import type { NotifEventOneOfOnenineTag } from './notifEventOneOfOnenineTag';
 
 /**
- * An AI assistant responded to a chat.
+ * A user was invited to a team.
  */
 export type NotifEventOneOfOnenine = {
-  /** An AI assistant responded to a chat. */
-  content: AiResponseMetadata;
+  /** A user was invited to a team. */
+  content: InviteToTeamMetadata;
   tag: NotifEventOneOfOnenineTag;
 };
