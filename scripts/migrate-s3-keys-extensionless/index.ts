@@ -120,8 +120,8 @@ async function main() {
     );
 
     const keys = (response.Contents ?? [])
-      .map((obj) => obj.Key!)
-      .filter(Boolean);
+      .filter((obj) => obj.Key)
+      .map((obj) => obj.Key!);
 
     stats.scanned += keys.length;
 
