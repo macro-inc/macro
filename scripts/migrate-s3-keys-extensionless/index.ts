@@ -26,6 +26,7 @@ const s3 = new S3Client({});
 const CURSOR_FILE = `cursor-${S3_BUCKET}.txt`;
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const LOG_FILE = `migration-${S3_BUCKET}-${timestamp}.log`;
+const COPIED_KEYS_FILE = `copied-keys-${S3_BUCKET}-${timestamp}.txt`;
 
 function log(message: string) {
   const line = `[${new Date().toISOString()}] ${message}`;
@@ -120,7 +121,7 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
         Key: newKey,
       })
     );
-    // Only log individual copies at debug level to keep log size manageable
+    appendFileSync(COPIED_KEYS_FILE, oldKey + "\n");
     stats.copied++;
   } catch (err) {
     log(`ERROR copying ${oldKey}: ${err}`);
@@ -142,6 +143,7 @@ async function main() {
   if (DOCUMENT_ID) log(`Document: ${DOCUMENT_ID}`);
   if (DRY_RUN) log(`=== DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
   log(`Log file: ${LOG_FILE}`);
+  if (!DRY_RUN) log(`Copied keys file: ${COPIED_KEYS_FILE}`);
 
   const startAfter = loadCursor();
 
