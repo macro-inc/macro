@@ -18,18 +18,18 @@ use system_properties::SystemPropertiesService;
 
 async fn resolve_source_key(
     s3_client: &S3,
-    url_encoded_owner: &str,
+    owner: &str,
     document_id: &str,
     document_version_id: i64,
     file_type_str: Option<&str>,
 ) -> anyhow::Result<String> {
     let extensionless =
-        build_extensionless_document_key(url_encoded_owner, document_id, document_version_id);
+        build_extensionless_document_key(owner, document_id, document_version_id);
     if s3_client.exists(&extensionless).await? {
         Ok(extensionless)
     } else {
         Ok(build_cloud_storage_bucket_document_key(
-            url_encoded_owner,
+            owner,
             document_id,
             document_version_id,
             file_type_str,
@@ -154,7 +154,6 @@ pub async fn copy_document<'a>(
             })?
             .0;
 
-            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
             let dest_key = build_extensionless_document_key(
@@ -165,7 +164,7 @@ pub async fn copy_document<'a>(
 
             let source_key = resolve_source_key(
                 &ctx.s3_client,
-                &url_encoded_owner,
+                original_document_metadata.owner.as_ref(),
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
@@ -240,7 +239,6 @@ pub async fn copy_document<'a>(
                 .0
             };
 
-            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
             let dest_key = build_extensionless_document_key(
@@ -251,7 +249,7 @@ pub async fn copy_document<'a>(
 
             let source_key = resolve_source_key(
                 &ctx.s3_client,
-                &url_encoded_owner,
+                original_document_metadata.owner.as_ref(),
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
