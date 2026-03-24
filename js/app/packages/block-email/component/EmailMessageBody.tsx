@@ -132,7 +132,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     }
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'var(--cursor-auto)';
-    messageDiv.style.overflow = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });
@@ -213,6 +212,45 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       '--macro-email-img-display',
       shouldHide ? 'none' : 'initial'
     );
+  });
+
+  // Scale down wide HTML emails to fit the container width (like Gmail on mobile)
+  createEffect(() => {
+    const container = host();
+    if (!props.isBodyExpanded()) return;
+    // Re-run when source changes
+    source();
+
+    const applyScale = () => {
+      const root = container.shadowRoot;
+      if (!root) return;
+      const messageDiv = root.querySelector('div');
+      if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
+
+      // Reset any previous scaling
+      messageDiv.style.transform = '';
+      messageDiv.style.transformOrigin = '';
+      container.style.height = '';
+      messageDiv.style.overflow = '';
+
+      const containerWidth = container.clientWidth;
+      const contentWidth = messageDiv.scrollWidth;
+
+      if (containerWidth > 0 && contentWidth > containerWidth) {
+        const scale = containerWidth / contentWidth;
+        messageDiv.style.transform = `scale(${scale})`;
+        messageDiv.style.transformOrigin = 'top left';
+        messageDiv.style.overflow = 'visible';
+        container.style.height = `${messageDiv.scrollHeight * scale}px`;
+      } else {
+        messageDiv.style.overflow = 'auto';
+      }
+    };
+
+    // Need to wait for the element to be in the DOM and laid out
+    requestAnimationFrame(() => {
+      applyScale();
+    });
   });
 
   return (
