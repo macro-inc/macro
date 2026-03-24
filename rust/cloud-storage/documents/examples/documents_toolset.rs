@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! CLI example for testing documents AI tools interactively.
 //!
 //! This example creates a CLI interface to test the documents toolset with real database connections.
