@@ -15,5 +15,10 @@ pub async fn get_document_file_type(
     .fetch_one(db)
     .await?;
 
-    Ok(file_type.and_then(|ft| FileType::from_str(&ft).ok()))
+    match file_type {
+        None => Ok(None),
+        Some(ft) => FileType::from_str(&ft)
+            .map(Some)
+            .map_err(|e| anyhow::anyhow!("invalid fileType value '{}': {}", ft, e)),
+    }
 }
