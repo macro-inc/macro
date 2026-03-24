@@ -17,6 +17,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   Show,
   Switch,
   untrack,
@@ -217,9 +218,23 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   // Scale down wide HTML emails to fit the container width (like Gmail on mobile)
   createEffect(() => {
     const container = host();
-    if (!props.isBodyExpanded()) return;
     // Re-run when source changes
     source();
+
+    const clearScale = () => {
+      const root = container.shadowRoot;
+      if (!root) return;
+      const messageDiv = root.querySelector('div');
+      if (messageDiv instanceof HTMLElement) {
+        messageDiv.style.zoom = '';
+        messageDiv.style.overflow = '';
+      }
+    };
+
+    if (!props.isBodyExpanded()) {
+      clearScale();
+      return;
+    }
 
     const applyScale = () => {
       const root = container.shadowRoot;
@@ -227,7 +242,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       const messageDiv = root.querySelector('div');
       if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
 
-      // Reset any previous scaling
+      // Reset any previous scaling before measuring
       messageDiv.style.zoom = '';
       messageDiv.style.overflow = '';
 
@@ -244,9 +259,28 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }
     };
 
-    // Need to wait for the element to be in the DOM and laid out
-    requestAnimationFrame(() => {
-      applyScale();
+    // Re-run on container resize (e.g. orientation change, split resize)
+    const resizeObserver = new ResizeObserver(() => applyScale());
+    resizeObserver.observe(container);
+
+    // Re-run when images inside the shadow DOM finish loading
+    const root = container.shadowRoot;
+    const images = root ? Array.from(root.querySelectorAll('img')) : [];
+    const onImageLoad = () => applyScale();
+    for (const img of images) {
+      if (!img.complete) {
+        img.addEventListener('load', onImageLoad);
+      }
+    }
+
+    // Initial measurement after layout
+    requestAnimationFrame(() => applyScale());
+
+    onCleanup(() => {
+      resizeObserver.disconnect();
+      for (const img of images) {
+        img.removeEventListener('load', onImageLoad);
+      }
     });
   });
 
