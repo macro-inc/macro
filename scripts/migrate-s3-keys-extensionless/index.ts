@@ -52,8 +52,11 @@ async function exists(key: string): Promise<boolean> {
   try {
     await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
     return true;
-  } catch {
-    return false;
+  } catch (err: any) {
+    if (err?.$metadata?.httpStatusCode === 404 || err?.name === "NotFound") {
+      return false;
+    }
+    throw err;
   }
 }
 
