@@ -4,6 +4,7 @@ import {
   CopyObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import { appendFileSync, readFileSync, existsSync } from "fs";
 
 const S3_BUCKET = process.env.S3_BUCKET;
 const DRY_RUN = process.env.DRY_RUN === "true";
@@ -13,6 +14,7 @@ const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "100", 10);
 const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
 const DOCUMENT_ID = process.env.DOCUMENT_ID;
+const RESET = process.env.RESET === "true";
 
 if (!S3_BUCKET) {
   console.error("S3_BUCKET is required");
@@ -20,6 +22,36 @@ if (!S3_BUCKET) {
 }
 
 const s3 = new S3Client({});
+
+const CURSOR_FILE = `cursor-${S3_BUCKET}.txt`;
+const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+const LOG_FILE = `migration-${S3_BUCKET}-${timestamp}.log`;
+
+function log(message: string) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
+  appendFileSync(LOG_FILE, line + "\n");
+}
+
+function loadCursor(): string | undefined {
+  if (RESET || USER || DOCUMENT_ID) return undefined;
+  if (!existsSync(CURSOR_FILE)) return undefined;
+  const cursor = readFileSync(CURSOR_FILE, "utf-8").trim();
+  if (!cursor) return undefined;
+  log(`Resuming from cursor: ${cursor}`);
+  return cursor;
+}
+
+function saveCursor(lastKey: string) {
+  if (DRY_RUN || USER || DOCUMENT_ID) return;
+  appendFileSync(CURSOR_FILE, lastKey + "\n");
+}
+
+function clearCursor() {
+  if (existsSync(CURSOR_FILE)) {
+    Bun.write(CURSOR_FILE, "");
+  }
+}
 
 // Matches keys in the format: {owner}/{uuid_v4}/{version_id}.{extension}
 // e.g. macro|user@foo.com/12f9a0ac-d445-45e3-94c1-5e8c02f0a6d8/564457.pdf
@@ -69,19 +101,19 @@ async function exists(key: string): Promise<boolean> {
 
 async function copyKey(oldKey: string, newKey: string): Promise<void> {
   if (await exists(newKey)) {
-    if (DRY_RUN) console.log(`  [dry run] SKIP (exists): ${newKey}`);
+    if (DRY_RUN) log(`[dry run] SKIP (exists): ${newKey}`);
     stats.skipped++;
     return;
   }
 
   if (!(await exists(oldKey))) {
-    console.warn(`  WARNING: source missing: ${oldKey}`);
+    log(`WARNING: source missing: ${oldKey}`);
     stats.missing++;
     return;
   }
 
   if (DRY_RUN) {
-    console.log(`  [dry run] ${oldKey} -> ${newKey}`);
+    log(`[dry run] ${oldKey} -> ${newKey}`);
     stats.copied++;
     return;
   }
@@ -94,10 +126,10 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
         Key: newKey,
       })
     );
-    console.log(`  Copied: ${oldKey} -> ${newKey}`);
+    log(`COPIED: ${oldKey} -> ${newKey}`);
     stats.copied++;
   } catch (err) {
-    console.error(`  ERROR copying ${oldKey}:`, err);
+    log(`ERROR copying ${oldKey}: ${err}`);
     stats.errors++;
   }
 }
@@ -108,15 +140,16 @@ async function processBatch(keys: string[]): Promise<void> {
 }
 
 async function main() {
-  console.log("=== Migrating S3 keys to extensionless convention ===");
-  console.log(`  Bucket: ${S3_BUCKET}`);
-  console.log(`  Prefix: ${PREFIX || "<all>"}`);
-  console.log(`  Concurrency: ${CONCURRENCY}`);
-  if (USER) console.log(`  User: ${USER}`);
-  if (DOCUMENT_ID) console.log(`  Document: ${DOCUMENT_ID}`);
-  if (DRY_RUN) console.log(`  === DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
+  log("=== Migrating S3 keys to extensionless convention ===");
+  log(`Bucket: ${S3_BUCKET}`);
+  log(`Prefix: ${PREFIX || "<all>"}`);
+  log(`Concurrency: ${CONCURRENCY}`);
+  if (USER) log(`User: ${USER}`);
+  if (DOCUMENT_ID) log(`Document: ${DOCUMENT_ID}`);
+  if (DRY_RUN) log(`=== DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
+  log(`Log file: ${LOG_FILE}`);
 
-  console.log();
+  const startAfter = loadCursor();
 
   let continuationToken: string | undefined;
 
@@ -127,6 +160,7 @@ async function main() {
         Prefix: buildPrefix(),
         MaxKeys: PAGE_SIZE,
         ContinuationToken: continuationToken,
+        ...(startAfter && !continuationToken ? { StartAfter: startAfter } : {}),
       })
     );
 
@@ -150,27 +184,31 @@ async function main() {
       await processBatch(batch);
     }
 
+    // Save cursor to last scanned key for resumability
+    const lastKey = keys[keys.length - 1];
+    if (lastKey) saveCursor(lastKey);
+
     continuationToken = response.IsTruncated
       ? response.NextContinuationToken
       : undefined;
 
     if (continuationToken) {
-      console.log(
-        `  ... scanned=${stats.scanned} copied=${stats.copied} skipped=${stats.skipped}`
-      );
+      log(`... scanned=${stats.scanned} copied=${stats.copied} skipped=${stats.skipped}`);
     }
   } while (continuationToken);
 
-  console.log();
-  console.log("=== Migration complete ===");
-  console.log(`  Scanned: ${stats.scanned}`);
-  console.log(`  Copied:  ${stats.copied}`);
-  console.log(`  Skipped: ${stats.skipped} (extensionless key already exists)`);
-  console.log(`  Missing: ${stats.missing} (source key not found)`);
-  console.log(`  Errors:  ${stats.errors}`);
+  // Clear cursor on successful completion
+  if (!DRY_RUN && !USER && !DOCUMENT_ID) clearCursor();
+
+  log("=== Migration complete ===");
+  log(`Scanned: ${stats.scanned}`);
+  log(`Copied:  ${stats.copied}`);
+  log(`Skipped: ${stats.skipped} (extensionless key already exists)`);
+  log(`Missing: ${stats.missing} (source key not found)`);
+  log(`Errors:  ${stats.errors}`);
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  log(`Fatal error: ${err}`);
   process.exit(1);
 });
