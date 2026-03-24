@@ -112,25 +112,18 @@ export const setupS3EventBridgeTriggers = () => {
   pulumi
     .all([bucketId, documentTextExtractorLambdaArn])
     .apply(([bucketId, extractorArn]) => {
-      // Rule for document text extractor Lambda (PDF files only)
+      // Rule for document text extractor Lambda (the lambda will read the db file type to check if it's a PDF)
       const textExtractorRule = new aws.cloudwatch.EventRule(
         `text-extractor-rule-${stack}`,
         {
           name: textExtractorRuleName,
-          description: 'Triggers text extractor Lambda for PDF files',
+          description: 'Triggers text extractor Lambda for all files',
           eventPattern: JSON.stringify({
             source: ['aws.s3'],
             'detail-type': ['Object Created'],
             detail: {
               bucket: {
                 name: [bucketId],
-              },
-              object: {
-                key: [
-                  {
-                    suffix: '.pdf',
-                  },
-                ],
               },
             },
           }),
