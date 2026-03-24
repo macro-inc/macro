@@ -1,4 +1,4 @@
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 
 use crate::{
     OpensearchClient, Result,
@@ -21,7 +21,7 @@ impl OpensearchClient {
     pub async fn delete_entity_name(
         &self,
         entity_id: &str,
-        entity_type: &SearchEntityType,
+        entity_type: &OpenSearchEntityType,
     ) -> Result<()> {
         delete_entity_name(&self.inner, entity_id, entity_type).await
     }
@@ -31,7 +31,7 @@ impl OpensearchClient {
     pub async fn delete_entity_names_bulk(
         &self,
         entity_ids: &[String],
-        entity_type: &SearchEntityType,
+        entity_type: &OpenSearchEntityType,
     ) -> Result<()> {
         delete_entity_name_bulk(&self.inner, entity_ids, entity_type).await
     }
@@ -47,7 +47,7 @@ impl OpensearchClient {
     pub async fn delete_entities_for_user_by_entity_type(
         &self,
         user_id: &str,
-        entity_type: &SearchEntityType,
+        entity_type: &OpenSearchEntityType,
     ) -> Result<()> {
         delete_entity_name_bulk_for_user_by_entity_type(&self.inner, user_id, entity_type).await
     }

@@ -5,11 +5,10 @@ use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
-use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
-    email::SimpleEmailSearchResponseBaseItem, project::SimpleProjectSearchResponseBaseItem,
+    email::SimpleEmailSearchResponseBaseItem,
 };
 use item_filters::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
@@ -187,7 +186,6 @@ pub enum UnifiedSearchResponseItem {
     Chat(ChatSearchResponseItemWithMetadata),
     Email(EmailSearchResponseItemWithMetadata),
     Channel(ChannelSearchResponseItemWithMetadata),
-    Project(ProjectSearchResponseItemWithMetadata),
 }
 
 impl UnifiedSearchResponseItem {
@@ -197,7 +195,6 @@ impl UnifiedSearchResponseItem {
             Self::Chat(item) => item.extra.id,
             Self::Email(item) => item.extra.id,
             Self::Channel(item) => item.extra.id,
-            Self::Project(item) => item.extra.id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -218,7 +215,6 @@ impl UnifiedSearchResponseItem {
                 // Use max from results, or fall back to metadata.updated_at
                 max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
             }
-            Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
         }
     }
 }
@@ -238,7 +234,6 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
     Chat(SimpleChatSearchResponseBaseItem<T>),
     Email(SimpleEmailSearchResponseBaseItem<T>),
     Channel(SimpleChannelSearchReponseBaseItem<T>),
-    Project(SimpleProjectSearchResponseBaseItem<T>),
 }
 
 pub type SimpleUnifiedSearchResponseItem =

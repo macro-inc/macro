@@ -1,6 +1,6 @@
 use anyhow::Context;
 use model::document::FileTypeExt;
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_client::OpensearchClient;
 use sqs_client::search::document::{DocumentId, SearchExtractorMessage};
 
@@ -18,7 +18,7 @@ pub async fn process_remove_message(
     opensearch_client
         .delete_entity_name(
             remove_message.document_id.as_str(),
-            &SearchEntityType::Documents,
+            &OpenSearchEntityType::Documents,
         )
         .await?;
 

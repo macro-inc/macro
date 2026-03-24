@@ -1,12 +1,12 @@
 use crate::{Result, error::ResponseExt};
-use models_opensearch::{SearchEntityType, SearchIndex};
+use models_opensearch::{OpenSearchEntityType, SearchIndex};
 
 /// Deletes all name documents with the specified entity_id and entity_type
 #[tracing::instrument(skip(client))]
 pub async fn delete_entity_name(
     client: &opensearch::OpenSearch,
     entity_id: &str,
-    entity_type: &SearchEntityType,
+    entity_type: &OpenSearchEntityType,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
@@ -45,7 +45,7 @@ pub async fn delete_entity_name(
 pub async fn delete_entity_name_bulk(
     client: &opensearch::OpenSearch,
     entity_ids: &[String],
-    entity_type: &SearchEntityType,
+    entity_type: &OpenSearchEntityType,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
@@ -119,7 +119,7 @@ pub async fn delete_entity_name_bulk_for_user(
 pub async fn delete_entity_name_bulk_for_user_by_entity_type(
     client: &opensearch::OpenSearch,
     user_id: &str,
-    entity_type: &SearchEntityType,
+    entity_type: &OpenSearchEntityType,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {

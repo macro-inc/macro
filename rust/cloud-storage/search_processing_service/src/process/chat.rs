@@ -1,5 +1,5 @@
 use anyhow::Context;
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::chat_message::UpsertChatMessageArgs,
 };
@@ -57,7 +57,10 @@ pub async fn remove_chat_message(
             .await?;
 
         opensearch_client
-            .delete_entity_name(remove_message.chat_id.as_str(), &SearchEntityType::Chats)
+            .delete_entity_name(
+                remove_message.chat_id.as_str(),
+                &OpenSearchEntityType::Chats,
+            )
             .await?;
     }
 

@@ -29,11 +29,6 @@ use models_search::unified::{
     UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 
-use models_search::project::{
-    ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
-    ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
-};
-
 use models_search::{MatchType, SearchHighlight};
 
 #[derive(OpenApi)]
@@ -74,9 +69,6 @@ use models_search::{MatchType, SearchHighlight};
                         EntityFilters, DocumentFilters, ChatFilters, EmailFilters, ChannelFilters, ProjectFilters,
                         PropertyFilter, NotificationFilters, TaskFilters, SharedEmailFilter,
 
-                        // Project
-                        ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem, ProjectSearchResult, ProjectSearchMetadata,
-
                         // Simple
                         // SimpleDocument
                         SimpleDocumentSearchResponseItem, SimpleDocumentSearchResponse,
@@ -86,8 +78,6 @@ use models_search::{MatchType, SearchHighlight};
                         SimpleEmailSearchResponseItem, SimpleEmailSearchResponse,
                         // SimpleChannel
                         SimpleChannelSearchReponseItem, SimpleChannelSearchResponse,
-                        // SimpleProject
-                        SimpleProjectSearchResponseItem, SimpleProjectSearchResponse,
                         // SimpleUnified
                         SimpleUnifiedSearchResponseItem, SimpleUnifiedSearchResponse
                 ),

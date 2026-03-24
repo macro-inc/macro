@@ -1,6 +1,6 @@
 //! This module handles the upserting of entity names into the opensearch index
 
-use models_opensearch::{SearchEntityType, SearchIndex};
+use models_opensearch::{OpenSearchEntityType, SearchIndex};
 
 use crate::{Result, error::ResponseExt};
 
@@ -14,7 +14,7 @@ pub struct UpsertEntityNameArgs {
     /// The entity name
     pub name: String,
     /// The entity type
-    pub entity_type: SearchEntityType,
+    pub entity_type: OpenSearchEntityType,
 }
 
 #[tracing::instrument(skip(client), err)]

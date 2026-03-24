@@ -26,7 +26,7 @@ use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use tracing::Instrument;
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::*;
 
 impl UnifiedSearchArgs {
@@ -49,7 +49,7 @@ pub struct UnifiedSearchArgs {
     /// The cursor to use
     pub cursor: SearchCursorOption,
     /// The indices to search over
-    pub search_indices: HashSet<SearchEntityType>,
+    pub search_indices: HashSet<OpenSearchEntityType>,
     /// The document search args
     pub document_search_args: UnifiedDocumentSearchArgs,
     /// The email search args. If None, we do not search emails
@@ -189,7 +189,6 @@ pub struct SplitUnifiedSearchResponseValues {
     pub chat: Vec<SearchHit>,
     pub document: Vec<SearchHit>,
     pub email: Vec<SearchHit>,
-    pub project: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -201,9 +200,9 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![]),
-            |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
+        let (channel_message, chat, document, email) = self.into_iter().fold(
+            (vec![], vec![], vec![], vec![]),
+            |(mut channel_message, mut chat, mut document, mut email), item| {
                 match item.entity_type {
                     SearchEntityType::Channels => {
                         channel_message.push(item);
@@ -217,11 +216,9 @@ where
                     SearchEntityType::Emails => {
                         email.push(item);
                     }
-                    SearchEntityType::Projects => {
-                        project.push(item);
-                    }
+                    _ => {}
                 }
-                (channel_message, chat, document, email, project)
+                (channel_message, chat, document, email)
             },
         );
 
@@ -230,7 +227,6 @@ where
             chat,
             document,
             email,
-            project,
         }
     }
 }
@@ -365,7 +361,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     // There will always be 1 query as the indices are never empty
     bool_query.minimum_should_match(1);
 
-    if args.search_indices.contains(&SearchEntityType::Documents) {
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Documents)
+    {
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
         let document_bool_query = document_query_builder.build_bool_query()?;
@@ -373,7 +372,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Emails) {
+    if args.search_indices.contains(&OpenSearchEntityType::Emails) {
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
         let email_bool_query = email_query_builder.build_bool_query()?;
@@ -381,7 +380,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Channels) {
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Channels)
+    {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
@@ -390,7 +392,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Chats) {
+    if args.search_indices.contains(&OpenSearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
         let chat_bool_query = chat_query_builder.build_bool_query()?;
@@ -459,18 +461,7 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    // We cannot search over the projects index in opensearch as it doesn't exist
-    let search_indices: Vec<&str> = args
-        .search_indices
-        .iter()
-        .filter(|i| **i != SearchEntityType::Projects)
-        .map(|i| i.index_name())
-        .collect();
-
-    // After we filter out invalid search entities if we have nothing we should return that the cursor is exhausted
-    if search_indices.is_empty() {
-        return Ok((Vec::new(), SearchCursorOption::Done));
-    }
+    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
     let response = async {
         client
