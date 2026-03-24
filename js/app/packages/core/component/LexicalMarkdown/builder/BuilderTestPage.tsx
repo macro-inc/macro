@@ -38,8 +38,8 @@ function Editor() {
     .withMedia()
     .withMentions({
       onCreate: (args) => {
-        console.log('CREATE MENTION', args)
-      }
+        console.log('CREATE MENTION', args);
+      },
     })
     .withActions()
     .onEscape(() => {

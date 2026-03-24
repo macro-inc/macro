@@ -630,7 +630,9 @@ function registerMentionsPlugin(
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
           const node = nodeByKey(
-            editor.getEditorState(),
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
             nodeKey
           ) as DocumentMentionNode | null;
 
