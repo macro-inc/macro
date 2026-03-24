@@ -4530,7 +4530,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-auth"
 version = "0.1.0"
-source = "git+https://github.com/seanaye/tauri-plugins?branch=main#5863bef82f3327e3358d0c1a13f5994c25c5ce3e"
+source = "git+https://github.com/seanaye/tauri-plugins?branch=main#2b2257722f60458921eadf4a9ab4d9e1db36e34f"
 dependencies = [
  "serde",
  "tauri",
