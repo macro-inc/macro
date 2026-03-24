@@ -4,7 +4,7 @@ import {
   CopyObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
-import { appendFileSync, readFileSync, existsSync } from "fs";
+import { appendFileSync, writeFileSync, readFileSync, existsSync } from "fs";
 
 const S3_BUCKET = process.env.S3_BUCKET;
 const DRY_RUN = process.env.DRY_RUN === "true";
@@ -45,7 +45,7 @@ function loadCursor(): string | undefined {
 
 function saveCursor(lastKey: string) {
   if (DRY_RUN || USER || DOCUMENT_ID) return;
-  appendFileSync(CURSOR_FILE, lastKey + "\n");
+  writeFileSync(CURSOR_FILE, lastKey + "\n");
 }
 
 function clearCursor() {

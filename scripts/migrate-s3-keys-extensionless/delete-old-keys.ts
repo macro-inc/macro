@@ -6,6 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   appendFileSync,
+  writeFileSync,
   readFileSync,
   createReadStream,
   existsSync,
@@ -172,7 +173,7 @@ function loadCursor(): string | undefined {
 
 function saveCursor(lastKey: string) {
   if (DRY_RUN || USER || DOCUMENT_ID) return;
-  appendFileSync(CURSOR_FILE, lastKey + "\n");
+  writeFileSync(CURSOR_FILE, lastKey + "\n");
 }
 
 function clearCursor() {
