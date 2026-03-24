@@ -4,6 +4,7 @@ import { MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
 import {
+  makeBlockSenderAction,
   makeCopyAction,
   makeCopyBranchNameAction,
   makeCopyLinkAction,
@@ -51,6 +52,8 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const shareAction = makeShareAction();
+
+  const blockSenderAction = makeBlockSenderAction();
 
   const canExecuteAny = (canExecute: (e: EntityData) => boolean) =>
     props.entities.some(canExecute);
@@ -158,6 +161,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
           !shareAction.canExecute(props.entities[0])
         }
         onClick={() => handleAction(shareAction.executeWithSoup)}
+      />
+
+      <MenuItem
+        text="Block Sender"
+        disabled={!canExecuteAll(blockSenderAction.canExecute)}
+        onClick={() => handleAction(blockSenderAction.executeWithSoup)}
       />
 
       <Divider />

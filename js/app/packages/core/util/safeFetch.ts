@@ -16,6 +16,7 @@ export type BaseFetchErrorCode =
   | 'HTTP_ERROR'
   | 'NOT_FOUND'
   | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
   | 'SERVER_ERROR'
   | 'INVALID_JSON'
   | 'UNKNOWN_ERROR'
@@ -195,6 +196,8 @@ export async function safeFetch<
             return err('NOT_FOUND', 'Resource not found');
           case 401:
             return err('UNAUTHORIZED', 'Unauthorized access');
+          case 403:
+            return err('FORBIDDEN', 'Forbidden');
           case 410:
             return err('GONE', 'Resource deleted');
           case 500:

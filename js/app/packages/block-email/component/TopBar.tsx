@@ -22,6 +22,7 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CheckIcon from '@icon/regular/check.svg';
 import IconShared from '@icon/regular/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
+import ProhibitIcon from '@icon/regular/prohibit.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import {
   EmailPropertiesButton,
@@ -111,6 +112,12 @@ export function TopBar(props: {
       label: 'Trash',
       icon: TrashIcon,
       action: trashThread,
+      condition: isOwnThread,
+    },
+    {
+      label: 'Block Sender',
+      icon: ProhibitIcon,
+      action: () => emailCtx.blockSender(),
       condition: isOwnThread,
     },
     {

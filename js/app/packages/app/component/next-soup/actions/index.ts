@@ -1,3 +1,4 @@
+export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeDeleteAction } from './make-delete-action';
 export { makeRenameAction } from './make-rename-action';

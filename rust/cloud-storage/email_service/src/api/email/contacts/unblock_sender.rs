@@ -17,6 +17,9 @@ pub enum UnblockSenderError {
     #[error("Sender is not blocked")]
     NotBlocked,
 
+    #[error("Insufficient Gmail permissions. Please re-authenticate to grant the required scope.")]
+    Forbidden,
+
     #[error("Gmail API error: {0}")]
     GmailError(String),
 
@@ -29,6 +32,7 @@ impl IntoResponse for UnblockSenderError {
         let status_code = match &self {
             UnblockSenderError::Validation(_) => StatusCode::BAD_REQUEST,
             UnblockSenderError::NotBlocked => StatusCode::NOT_FOUND,
+            UnblockSenderError::Forbidden => StatusCode::FORBIDDEN,
             UnblockSenderError::GmailError(_) | UnblockSenderError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -48,6 +52,7 @@ impl From<GmailError> for UnblockSenderError {
     fn from(e: GmailError) -> Self {
         match e {
             GmailError::NotFound(_) => UnblockSenderError::NotBlocked,
+            GmailError::Forbidden => UnblockSenderError::Forbidden,
             _ => UnblockSenderError::GmailError(e.to_string()),
         }
     }

@@ -1,9 +1,11 @@
+import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
+  BlockSenderResponse,
   SendMessageResponse,
   ApiThread as Thread,
   UpsertScheduledResponse,
@@ -368,4 +370,45 @@ export function useUnscheduleMessageMutation(
       callbacks
     ),
   }));
+}
+
+/**
+ * Blocks a sender and shows appropriate toasts with undo support.
+ * Shared by the email thread view and soup context menu.
+ */
+export async function blockSenderWithToast(senderEmail: string) {
+  const result = await emailClient.blockSender({
+    email_address: senderEmail,
+  });
+
+  if (isErr(result)) {
+    if (result[0].some((e) => e.code === 'FORBIDDEN')) {
+      toast.failure(
+        'Insufficient permissions',
+        'Enable new email permissions on sign-in.',
+        5_000
+      );
+    } else {
+      toast.failure('Failed to block sender', senderEmail);
+    }
+    return;
+  }
+
+  toast.success(
+    'Sender blocked',
+    `All new messages will be trashed for ${senderEmail}`,
+    {
+      text: 'Undo',
+      onClick: async () => {
+        const undoResult = await emailClient.unblockSender({
+          email_address: senderEmail,
+        });
+        if (isErr(undoResult)) {
+          toast.failure('Failed to unblock sender', senderEmail);
+        } else {
+          toast.success('Sender unblocked');
+        }
+      },
+    }
+  );
 }
