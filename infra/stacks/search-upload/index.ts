@@ -13,7 +13,7 @@ const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
-    secretId: config.get('document_storage_service_auth_key') ?? '',
+    secretId: config.require('document_storage_service_auth_key'),
   })
   .apply((secret) => secret.secretString);
 
