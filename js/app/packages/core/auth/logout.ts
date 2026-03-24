@@ -33,7 +33,6 @@ export function useLogout() {
     analytics.track('sign_out');
     analytics.reset();
 
-    track(TrackingEvents.AUTH.LOGOUT);
     if (isNativeMobilePlatform()) {
       await fetch(SERVER_HOSTS['auth-logout'], {
         credentials: 'include',
