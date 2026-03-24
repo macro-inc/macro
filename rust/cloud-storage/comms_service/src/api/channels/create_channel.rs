@@ -73,12 +73,7 @@ pub async fn create_channel_handler(
                 )
             })?;
 
-        if teams
-            .into_iter()
-            .filter(|t| team_id.eq(&t.id))
-            .collect::<Vec<_>>()
-            .is_empty()
-        {
+        if !teams.into_iter().any(|t| team_id.eq(&t.id)) {
             return Err((
                 StatusCode::FORBIDDEN,
                 "you do not have access to that team".to_string(),
