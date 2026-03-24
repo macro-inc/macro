@@ -9,6 +9,23 @@ use crate::domain::model::{
     TeamMember, TeamRole, TeamWithMembers,
 };
 
+/// The TeamChannelsRepository defines a set of actions related to team channels
+pub trait TeamChannelsRepository: Clone + Send + Sync + 'static {
+    /// Adds a team member to all team channels
+    fn add_team_member_to_channels(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Removes a team member from all team channels
+    fn remove_team_member_from_channels(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+}
+
 /// The TeamRepository defines a set of actions to perform on teams data
 pub trait TeamRepository: Clone + Send + Sync + 'static {
     /// Gets the stripe customer id for a user

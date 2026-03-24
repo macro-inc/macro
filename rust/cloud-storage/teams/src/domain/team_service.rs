@@ -22,15 +22,16 @@ use crate::domain::{
         RemoveTeamInviteError, RemoveUserFromTeamError, RevokePermissionsForTeamMembersError, Team,
         TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
     },
-    team_repo::{TeamRepository, TeamService},
+    team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
-pub struct TeamServiceImpl<TR, CR, URPS, NI>
+pub struct TeamServiceImpl<TR, CR, TCR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
@@ -38,16 +39,19 @@ where
     team_repository: TR,
     /// The underlying customer repository
     customer_repository: CR,
+    /// The team channels repository
+    team_channels_repository: TCR,
     /// The underlying user roles and permissions service
     user_roles_and_permissions_service: URPS,
     /// The notification ingress service
     notification_ingress: Arc<NI>,
 }
 
-impl<TR, CR, URPS, NI> Clone for TeamServiceImpl<TR, CR, URPS, NI>
+impl<TR, CR, TCR, URPS, NI> Clone for TeamServiceImpl<TR, CR, TCR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
@@ -55,16 +59,18 @@ where
         Self {
             team_repository: self.team_repository.clone(),
             customer_repository: self.customer_repository.clone(),
+            team_channels_repository: self.team_channels_repository.clone(),
             user_roles_and_permissions_service: self.user_roles_and_permissions_service.clone(),
             notification_ingress: self.notification_ingress.clone(),
         }
     }
 }
 
-impl<TR, CR, URPS, NI> TeamServiceImpl<TR, CR, URPS, NI>
+impl<TR, CR, TCR, URPS, NI> TeamServiceImpl<TR, CR, TCR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
@@ -72,22 +78,25 @@ where
     pub fn new(
         team_repository: TR,
         customer_repository: CR,
+        team_channels_repository: TCR,
         user_roles_and_permissions_service: URPS,
         notification_ingress: Arc<NI>,
     ) -> Self {
         Self {
             team_repository,
             customer_repository,
+            team_channels_repository,
             user_roles_and_permissions_service,
             notification_ingress,
         }
     }
 }
 
-impl<TR, CR, URPS, NI> TeamServiceImpl<TR, CR, URPS, NI>
+impl<TR, CR, TCR, URPS, NI> TeamServiceImpl<TR, CR, TCR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
@@ -129,10 +138,11 @@ where
     }
 }
 
-impl<TR, CR, URPS, NI> TeamService for TeamServiceImpl<TR, CR, URPS, NI>
+impl<TR, CR, TCR, URPS, NI> TeamService for TeamServiceImpl<TR, CR, TCR, URPS, NI>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
@@ -241,6 +251,10 @@ where
 
         // The user was part of the team and was removed
         if result.is_ok() {
+            self.team_channels_repository
+                .remove_team_member_from_channels(team_id, user_id)
+                .await?;
+
             let subscription_id = self
                 .team_repository
                 .get_team_subscription_id(team_id)
@@ -395,6 +409,10 @@ where
             .dangerous_upsert_roles_for_user(user_id, roles)
             .await
             .map_err(JoinTeamError::AddRolesToUserError)?;
+
+        self.team_channels_repository
+            .add_team_member_to_channels(&team_member.team_id, user_id)
+            .await?;
 
         Ok(team_member)
     }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM comms_channel_participants\n            WHERE user_id = $2\n            AND channel_id IN (\n                SELECT id FROM comms_channels WHERE team_id = $1\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "63b8a0bc87e00d95ca046f0602a14ef73e9c8ebffb19a40ed7e059004d9bdb9a"
+}

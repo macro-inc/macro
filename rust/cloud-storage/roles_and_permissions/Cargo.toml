@@ -4,14 +4,19 @@ name = "roles_and_permissions"
 publish = false
 version = "0.1.0"
 
+[features]
+default = ["outbound", "ports"]
+outbound = ["dep:sqlx", "ports"]
+ports = []
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-sqlx = { workspace = true }
+non_empty = { path = "../non_empty" }
+sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-non_empty = { path = "../non_empty" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
