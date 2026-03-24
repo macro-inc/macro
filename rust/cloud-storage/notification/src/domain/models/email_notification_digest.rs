@@ -124,7 +124,7 @@ impl NotificationSet {
 ///     IsNewEmail -->|YES| DontSend
 ///
 ///     HasAccount -->|YES| HasPush
-///     HasAccount -->|NO| BatchSend
+///     HasAccount -->|NO| DontSend
 ///
 ///     HasPush -->|NO| IsOnline
 ///     HasPush -->|YES| GotPush
@@ -182,7 +182,7 @@ impl<T> AllowedNotification<T> {
     /// Check if the notification recipient has a Macro account.
     ///
     /// Returns [`AccountExists`] if the user has an account (check push settings next),
-    /// or [`BatchSend`] if they don't (no account means batch send immediately).
+    /// or [`DontSend`] if they don't (no account means skip email entirely).
     pub async fn check_user_existence(
         self,
         checker: &impl UserExistenceChecker,
