@@ -271,6 +271,7 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
   return (
     <div
       class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
+      classList={{ 'animate-pulse': query.isLoading }}
     >
       <Show when={query.data}>
         {(url) => (
