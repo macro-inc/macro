@@ -52,30 +52,49 @@ export const setupS3EventBridgeTriggers = () => {
   const textExtractorRuleName = `text-extractor-rule-${stack}`;
 
   const searchUploadRuleArn = getEventRuleArn(searchUploadRuleName);
+  const textExtractorRuleArn = getEventRuleArn(textExtractorRuleName);
 
-  new aws.sqs.QueuePolicy(`search-upload-dlq-policy-${stack}`, {
-    queueUrl: searchUploadDlq.url,
-    policy: pulumi
-      .all([searchUploadDlq.arn, searchUploadRuleArn])
-      .apply(([queueArn, ruleArn]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'events.amazonaws.com' },
-              Action: 'sqs:SendMessage',
-              Resource: queueArn,
-              Condition: {
-                ArnEquals: {
-                  'aws:SourceArn': ruleArn,
+  const createDlqPolicy = (
+    name: string,
+    dlq: aws.sqs.Queue,
+    ruleArn: pulumi.Output<string>
+  ) => {
+    new aws.sqs.QueuePolicy(`${name}-dlq-policy-${stack}`, {
+      queueUrl: dlq.url,
+      policy: pulumi
+        .all([dlq.arn, ruleArn])
+        .apply(([queueArn, ruleArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: { Service: 'events.amazonaws.com' },
+                Action: 'sqs:SendMessage',
+                Resource: queueArn,
+                Condition: {
+                  ArnEquals: {
+                    'aws:SourceArn': ruleArn,
+                  },
                 },
               },
-            },
-          ],
-        })
-      ),
-  });
+            ],
+          })
+        ),
+    });
+  };
+
+  createDlqPolicy('search-upload', searchUploadDlq, searchUploadRuleArn);
+
+  const textExtractorDlq = new aws.sqs.Queue(
+    `text-extractor-dlq-${stack}`,
+    {
+      name: `text-extractor-dlq-${stack}`,
+      messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
+    }
+  );
+
+  createDlqPolicy('text-extractor', textExtractorDlq, textExtractorRuleArn);
 
   // Configure EventBridge rules for each Lambda
   pulumi
@@ -110,8 +129,8 @@ export const setupS3EventBridgeTriggers = () => {
     });
 
   pulumi
-    .all([bucketId, documentTextExtractorLambdaArn])
-    .apply(([bucketId, extractorArn]) => {
+    .all([bucketId, documentTextExtractorLambdaArn, textExtractorDlq.arn])
+    .apply(([bucketId, extractorArn, dlqArn]) => {
       // Rule for document text extractor Lambda (the lambda will read the db file type to check if it's a PDF)
       const textExtractorRule = new aws.cloudwatch.EventRule(
         `text-extractor-rule-${stack}`,
@@ -130,10 +149,13 @@ export const setupS3EventBridgeTriggers = () => {
         }
       );
 
-      // Add the Lambda as a target
+      // Add the Lambda as a target with DLQ
       new aws.cloudwatch.EventTarget('text-extractor-target', {
         rule: textExtractorRule.name,
         arn: extractorArn,
+        deadLetterConfig: {
+          arn: dlqArn,
+        },
       });
     });
 
