@@ -561,7 +561,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             }
         }
         .map_err(|e| {
-            tracing::error!(error=?e, key=?key, document_id=?document_id, "unable to generate presigned url");
+            tracing::error!(error=?e, document_id=?document_id, "unable to generate presigned url");
             DocumentError::Internal(anyhow!("unable to generate presigned url"))
         })?;
 
