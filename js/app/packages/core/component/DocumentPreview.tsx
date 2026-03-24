@@ -594,7 +594,7 @@ export function PopupPreview(props: {
                         </div>
                         <Show when={accessories()}>
                           {(acc) => (
-                            <div class="text-[0.8em] text-current/60 mt-1 select-none">
+                            <div class="text-[0.8em] text-ink-muted mt-1 select-none">
                               {`${acc().note} `}
                               {getMentionsIcon(acc().icon)}
                             </div>
