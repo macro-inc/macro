@@ -1,9 +1,10 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 
 use std::borrow::Cow;
 
@@ -13,7 +14,6 @@ use macro_user_id::user_id::MacroUserId;
 use model::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
     response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
 };
 use referral::domain::{models::ReferralCode, ports::ReferralService};
 
@@ -30,10 +30,10 @@ use referral::domain::{models::ReferralCode, ports::ReferralService};
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Json(req): extract::Json<PasswordlessRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("passwordless_login_request");
@@ -102,7 +102,7 @@ pub async fn handler(
                         email: (&lowercase_email).into(),
                         password: generate_random_password().into(),
                         username: None,
-                    }, true, &ip_context.client_ip)
+                    }, true, ip_context.origin_ip())
                     .await
                     .map_err(|e| {
                         tracing::error!(error=?e, email=%lowercase_email, "unable to create user");

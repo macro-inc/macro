@@ -22,6 +22,105 @@ struct QueryParams {
     user_id: String,
 }
 
+enum ThreadCandidateSource {
+    Owned,
+    Shared,
+}
+
+fn push_thread_candidate_select(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    sort_ts_field: &str,
+    source: ThreadCandidateSource,
+) {
+    builder.push(
+        r#"
+                SELECT
+                    t.id,
+                    t.provider_id,
+                    t.link_id,
+                    t.inbox_visible,
+                    t.is_read,
+                    t.project_id,
+        "#,
+    );
+
+    builder.push(format!(
+        r#"
+                    {} AS created_at,
+                    t.updated_at AS updated_at,
+                    uh.updated_at AS viewed_at,
+                    CASE "#,
+        sort_ts_field
+    ));
+
+    builder.push_bind(params.sort_method_str.clone());
+
+    builder.push(format!(
+        r#"
+                        WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
+                        WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
+                        ELSE {}
+                    END AS effective_ts
+                FROM email_threads t
+                LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
+                WHERE
+                    "#,
+        sort_ts_field, sort_ts_field
+    ));
+
+    match source {
+        ThreadCandidateSource::Owned => {
+            builder.push("t.link_id = ");
+            builder.push_bind(params.link_id);
+        }
+        ThreadCandidateSource::Shared => {
+            builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
+        }
+    }
+
+    let view_thread_filter = build_view_thread_filter(view);
+    if !view_thread_filter.is_empty() {
+        view_thread_filter.push_into(builder);
+    }
+
+    if has_thread_literals(email_filter) {
+        build_thread_email_filter(email_filter).push_into(builder);
+    }
+
+    builder.push(
+        r#"
+                  -- Cursor logic
+                  AND (("#,
+    );
+
+    builder.push_bind(params.cursor_timestamp);
+
+    builder.push(
+        r#"::timestamptz IS NULL) OR (
+                      CASE "#,
+    );
+
+    builder.push_bind(params.sort_method_str.clone());
+
+    builder.push(format!(
+        r#"
+                          WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
+                          WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
+                          ELSE {}
+                      END, t.id
+                  ) < ("#,
+        sort_ts_field, sort_ts_field
+    ));
+
+    builder.push_bind(params.cursor_timestamp);
+    builder.push("::timestamptz, ");
+    builder.push_bind(params.cursor_id_str.clone());
+    builder.push("::uuid))");
+}
+
 /// Builds a dynamic email thread query with filters applied.
 /// All user-controlled values are parameterized via `push_bind`.
 fn build_query(
@@ -30,7 +129,6 @@ fn build_query(
     params: QueryParams,
 ) -> QueryBuilder<'static, Postgres> {
     let sort_ts_field = get_sort_timestamp_field(view);
-    let view_thread_filter = build_view_thread_filter(view);
     let view_message_filter = build_view_message_filter(view);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
@@ -116,98 +214,58 @@ fn build_query(
             el.macro_id AS owner_id
         FROM (
             -- Step 1: Efficiently find and sort candidate threads
-            SELECT
-                t.id,
-                t.provider_id,
-                t.link_id,
-                t.inbox_visible,
-                t.is_read,
-                t.project_id,
+            SELECT *
+            FROM (
         "#,
     );
 
-    // Add the appropriate timestamp fields based on view
-    builder.push(format!(
-        r#"
-                {} AS created_at,
-                {} AS updated_at,
-                uh.updated_at AS viewed_at,
-                CASE "#,
-        sort_ts_field, sort_ts_field
-    ));
-
-    builder.push_bind(params.sort_method_str.clone());
-
-    builder.push(format!(
-        r#"
-                    WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
-                    ELSE {}
-                END AS effective_ts
-            FROM email_threads t
-            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
-            WHERE
-                "#,
-        sort_ts_field, sort_ts_field
-    ));
-
     match params.shared {
-        SharedEmailFilter::Exclude => {
-            builder.push("t.link_id = ");
-            builder.push_bind(params.link_id);
-        }
+        SharedEmailFilter::Exclude => push_thread_candidate_select(
+            &mut builder,
+            view,
+            email_filter,
+            &params,
+            sort_ts_field,
+            ThreadCandidateSource::Owned,
+        ),
         SharedEmailFilter::Include => {
-            builder.push("(t.link_id = ");
-            builder.push_bind(params.link_id);
-            builder.push(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads))");
+            push_thread_candidate_select(
+                &mut builder,
+                view,
+                email_filter,
+                &params,
+                sort_ts_field,
+                ThreadCandidateSource::Owned,
+            );
+            builder.push(
+                r#"
+                UNION
+                "#,
+            );
+            push_thread_candidate_select(
+                &mut builder,
+                view,
+                email_filter,
+                &params,
+                sort_ts_field,
+                ThreadCandidateSource::Shared,
+            );
         }
-        SharedEmailFilter::Only => {
-            builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
-        }
-    }
-
-    // Add view-specific thread filters
-    if !view_thread_filter.is_empty() {
-        view_thread_filter.push_into(&mut builder);
-    }
-
-    if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter).push_into(&mut builder);
+        SharedEmailFilter::Only => push_thread_candidate_select(
+            &mut builder,
+            view,
+            email_filter,
+            &params,
+            sort_ts_field,
+            ThreadCandidateSource::Shared,
+        ),
     }
 
     builder.push(
         r#"
-              -- Cursor logic
-              AND (("#,
-    );
-
-    builder.push_bind(params.cursor_timestamp);
-
-    builder.push(
-        r#"::timestamptz IS NULL) OR (
-                  CASE "#,
-    );
-
-    builder.push_bind(params.sort_method_str);
-
-    builder.push(format!(
-        r#"
-                      WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
-                      ELSE {}
-                  END, t.id
-              ) < ("#,
-        sort_ts_field, sort_ts_field
-    ));
-
-    builder.push_bind(params.cursor_timestamp);
-
-    builder.push("::timestamptz, ");
-
-    builder.push_bind(params.cursor_id_str);
-
-    builder.push(
-        "::uuid))\n            ORDER BY effective_ts DESC, t.updated_at DESC\n            LIMIT ",
+            ) AS candidate_threads
+            ORDER BY effective_ts DESC, id DESC
+            LIMIT "#,
     );
 
     builder.push_bind(params.query_limit);
@@ -249,11 +307,43 @@ fn build_query(
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID
         JOIN email_links el ON t.link_id = el.id
-        ORDER BY t.effective_ts DESC, t.updated_at DESC
+        ORDER BY t.effective_ts DESC, t.id DESC
         "#,
     );
 
     builder
+}
+
+#[cfg(test)]
+pub(super) fn debug_build_query_sql(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+) -> String {
+    use sqlx::Execute;
+
+    let shared = extract_shared_filter(email_filter);
+    let is_important = matches!(
+        view,
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
+    );
+
+    build_query(
+        view,
+        email_filter,
+        QueryParams {
+            link_id: Uuid::nil(),
+            sort_method_str: SimpleSortMethod::UpdatedAt.to_string(),
+            query_limit: 50,
+            cursor_timestamp: None,
+            cursor_id_str: None,
+            is_important,
+            shared,
+            user_id: "test-user".to_string(),
+        },
+    )
+    .build()
+    .sql()
+    .to_string()
 }
 
 /// Extracts the [SharedEmailFilter] from the email filter AST, defaulting to Exclude.

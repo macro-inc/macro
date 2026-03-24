@@ -87,6 +87,8 @@ export function buildPostMessageRequest(
     attachments: snapshot.attachments.map((attachment) => ({
       entity_id: attachment.id,
       entity_type: attachmentEntityType(attachment),
+      width: attachment.width ?? null,
+      height: attachment.height ?? null,
     })),
   };
 }

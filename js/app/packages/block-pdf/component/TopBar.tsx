@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
@@ -58,6 +59,7 @@ import {
 } from '@app/component/ResponsiveBlockToolbar';
 
 export function TopBar() {
+  const analytics = useAnalytics();
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
   const blockName = useBlockName();
@@ -204,7 +206,15 @@ export function TopBar() {
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
-      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+      buttonComponent: () => (
+        <DocumentPropertiesButton
+          buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('properties_panel_open', { blockType: 'pdf' })
+          }
+        />
+      ),
     },
     {
       label: 'Share',

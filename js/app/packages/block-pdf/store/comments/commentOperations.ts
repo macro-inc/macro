@@ -1,7 +1,6 @@
 import { useGetRootViewer } from '@block-pdf/signal/pdfViewer';
 import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import type { PdfRootLayout } from '@block-pdf/type/comments';
-import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
@@ -23,10 +22,11 @@ import {
 import { highlightsUuidMap } from '../highlight';
 import { newThreadPlaceable, useDeleteNewFreeComment } from './freeComments';
 import { useDeleteNewHighlightComment } from './highlightComments';
-
-const { track, TrackingEvents } = withAnalytics();
+import { useAnalytics } from '@app/component/analytics-context';
 
 export function useCreateComment() {
+  const analytics = useAnalytics();
+
   const deleteNewComments = useDeleteNewComments();
   const createFreeComment = useCreateFreeCommentResource();
   const createHighlightComment = useCreateHighlightCommentResource();
@@ -35,7 +35,7 @@ export function useCreateComment() {
 
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
-      track(TrackingEvents.BLOCKPDF.COMMENT.CREATE);
+      analytics.track('comment_create', { blockType: 'pdf' });
       const { threadId, text } = info;
 
       // new thread + anchor
@@ -91,31 +91,37 @@ export function useCreateComment() {
 }
 
 export function useUpdateComment() {
+  const analytics = useAnalytics();
+
   const editComment = useEditCommentResource();
 
   return createCallback((commentId: number, info: EditCommentRequest) => {
-    track(TrackingEvents.BLOCKPDF.COMMENT.UPDATE);
+    analytics.track('comment_update', { blockType: 'pdf' });
     return editComment(commentId, info);
   });
 }
 
 export function useDeleteComment() {
+  const analytics = useAnalytics();
+
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
 
-  return createCallback((info: DeleteCommentInfo) => {
+  return createCallback(async (info: DeleteCommentInfo) => {
     const commentId = info.commentId;
 
     if (commentId === -1) {
       deleteNewComments();
-      return;
+      return false;
     }
 
-    const success = deleteComment(commentId, {
+    const success = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,
     });
 
-    track(TrackingEvents.BLOCKPDF.COMMENT.DELETE);
+    if (success) {
+      analytics.track('comment_delete', { blockType: 'pdf' });
+    }
     return success;
   });
 }

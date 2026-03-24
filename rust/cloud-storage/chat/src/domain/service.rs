@@ -9,6 +9,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Concrete service implementation that delegates to a [`ChatRepo`].
 pub struct ChatServiceImpl<R> {
@@ -39,7 +40,7 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
     ) -> Result<String, ChatErr> {
-        if args.name.chars().count() > 100 {
+        if args.name.graphemes(true).count() > 100 {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
 
@@ -111,7 +112,7 @@ impl<R: ChatRepo> ChatService for ChatServiceImpl<R> {
         args: PatchChatArgs,
     ) -> Result<(), ChatErr> {
         if let Some(name) = args.name.as_ref()
-            && name.chars().count() > 100
+            && name.graphemes(true).count() > 100
         {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }

@@ -1,5 +1,6 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { PostHog, type JsonType } from 'posthog-js';
+import type { JsonType } from 'posthog-js';
 import {
   type Accessor,
   createMemo,
@@ -9,32 +10,14 @@ import {
   Show,
 } from 'solid-js';
 
-export const posthogInstance = new PostHog();
-
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   'PosthogProvider',
   () => {
-    const instance = posthogInstance;
-
-    const initialize = () => {
-      const key = import.meta.env.VITE_POSTHOG_API_KEY;
-
-      if (!key) return;
-
-      instance.init(key, {
-        api_host: 'https://analytics-proxy.macroverse.workers.dev/ingest/ph',
-        ui_host: 'https://us.posthog.com', // Keep UI host for session recordings link
-        defaults: '2026-01-30',
-      });
-    };
-
-    if (!import.meta.env.DEV) {
-      initialize();
-    }
+    const analytics = useAnalytics();
 
     const [featureFlags, setFeatureFlags] = createSignal<string[]>([]);
 
-    const unsub = instance.onFeatureFlags((flags, _, ctx) => {
+    const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
       if (ctx?.errorsLoading) return;
 
       setFeatureFlags(flags);
@@ -42,7 +25,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
 
     onCleanup(unsub);
 
-    return { instance, featureFlags };
+    return { instance: analytics.posthog, featureFlags };
   }
 );
 

@@ -3,22 +3,21 @@
 //! Provides routes:
 //! - `GET /code` — get the authenticated user's referral code
 
-#[cfg(test)]
-mod test;
+use crate::domain::models::ReferralError;
+use crate::domain::ports::ReferralService;
+use axum::{Json, Router, http::StatusCode, response::IntoResponse};
+pub use get_referral_code::*;
+use model_error_response::ErrorResponse;
+use rate_limit::RateLimitService;
+use rate_limit::inbound::rate_limit_middleware;
+pub use send_invite::*;
+use std::sync::Arc;
+use tower::ServiceBuilder;
 
 mod get_referral_code;
 mod send_invite;
-
-use std::sync::Arc;
-
-use axum::{Json, Router, http::StatusCode, response::IntoResponse};
-use model_error_response::ErrorResponse;
-
-use crate::domain::models::ReferralError;
-use crate::domain::ports::ReferralService;
-
-pub use get_referral_code::*;
-pub use send_invite::*;
+#[cfg(test)]
+mod test;
 
 impl IntoResponse for ReferralError {
     fn into_response(self) -> axum::response::Response {
@@ -43,30 +42,48 @@ impl IntoResponse for ReferralError {
 }
 
 /// Router state containing the referral service.
-pub struct ReferralRouterState<T> {
+pub struct ReferralRouterState<T, R> {
     /// The referral service implementation.
     pub service: Arc<T>,
+    /// the rate limiter service implementation
+    pub rate_limiter: R,
 }
 
-impl<T> Clone for ReferralRouterState<T> {
+impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            rate_limiter: self.rate_limiter.clone(),
         }
     }
 }
 
 /// Build the referral router with all endpoints.
-pub fn referral_router<T, S>(state: ReferralRouterState<T>) -> Router<S>
+pub fn referral_router<T, S, R>(state: ReferralRouterState<T, R>) -> Router<S>
 where
     T: ReferralService,
+    R: RateLimitService + Clone,
     S: Send + Sync + 'static,
 {
     Router::new()
         .route(
             "/send",
-            axum::routing::post(post_referral_invite_handler::<T>),
+            axum::routing::post(post_referral_invite_handler::<T, R>),
         )
-        .route("/code", axum::routing::get(get_referral_code_handler::<T>))
+        .layer(
+            ServiceBuilder::new()
+                .layer(axum::middleware::from_fn_with_state(
+                    state.rate_limiter.clone(),
+                    rate_limit_middleware::<R, PerUserReferralRateLimit, R>,
+                ))
+                .layer(axum::middleware::from_fn_with_state(
+                    state.rate_limiter.clone(),
+                    rate_limit_middleware::<R, PerIpReferralRateLimit, R>,
+                )),
+        )
+        .route(
+            "/code",
+            axum::routing::get(get_referral_code_handler::<T, R>),
+        )
         .with_state(state)
 }

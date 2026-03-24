@@ -1,11 +1,12 @@
 use rootcause::Report;
 
 use crate::{
-    RateLimitConfig, RateLimitKey, RateLimitPort,
-    domain::{models::RateLimitTicket, ports::RateLimitService},
+    RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult,
+    domain::{models::RateLimitOk, ports::RateLimitService},
 };
 
 /// a concrete struct which implements [RateLimitService]
+#[derive(Clone)]
 pub struct RateLimitServiceImpl<R> {
     /// the inner impl of [RateLimitPort]
     pub repo: R,
@@ -19,18 +20,13 @@ where
         &self,
         key: RateLimitKey,
         config: RateLimitConfig,
-    ) -> Result<RateLimitTicket, Report> {
-        let result = self.repo.check(&key, &config).await?;
-        Ok(RateLimitTicket {
-            result,
-            key,
-            config,
-        })
+    ) -> Result<RateLimitResult, Report> {
+        let result = self.repo.check(key, config).await?;
+        Ok(result)
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn increment_ticket(&self, ticket: RateLimitTicket) -> Result<(), Report> {
-        self.repo.increment(&ticket.key, &ticket.config).await?;
-        Ok(())
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), Report> {
+        self.repo.decrement(&ticket.key).await
     }
 }

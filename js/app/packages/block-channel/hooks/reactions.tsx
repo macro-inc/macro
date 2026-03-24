@@ -1,5 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useUserId } from '@core/context/user';
 import {
   useAddReactionMutation,
@@ -7,6 +5,7 @@ import {
 } from '@queries/channel/reaction';
 import type { Accessor } from 'solid-js';
 import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type CountedReaction = {
   emoji: string;
@@ -20,7 +19,7 @@ export function useReactToMessage(
   channelId: Accessor<string>,
   reactions: Accessor<GetChannelResponseReactions>
 ) {
-  const { track } = withAnalytics();
+  const analytics = useAnalytics();
   const userId_ = useUserId();
 
   const addReaction = useAddReactionMutation();
@@ -53,10 +52,9 @@ export function useReactToMessage(
       });
     }
 
-    track(TrackingEvents.BLOCKCHANNEL.MESSAGE.REACTION, {
-      channelId: channelIdValue,
+    analytics.track('channel_reaction', {
       emoji,
-      action: hasReacted ? 'Remove' : 'Add',
+      action: hasReacted ? 'remove' : 'add',
     });
   };
 }

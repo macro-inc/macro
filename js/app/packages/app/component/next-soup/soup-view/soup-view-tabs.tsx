@@ -45,11 +45,12 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'shared', label: 'Shared' },
   ],
   mail: [
-    { value: 'important', label: 'Important' },
+    { value: 'important', label: 'Signal' },
     { value: 'noise', label: 'Noise' },
-    { value: 'drafts', label: 'Drafts' },
     { value: 'sent', label: 'Sent' },
+    { value: 'drafts', label: 'Drafts' },
     { value: 'shared', label: 'Shared' },
+    { value: 'all', label: 'All' },
   ],
   documents: [
     { value: 'owned', label: 'Owned' },

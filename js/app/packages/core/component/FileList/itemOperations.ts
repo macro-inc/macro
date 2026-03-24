@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
@@ -471,6 +472,7 @@ export async function permanentlyDelete(args: {
     return false;
   }
 
+  analytics.track('delete_entity', { entityType: itemType });
   return true;
 }
 

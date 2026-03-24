@@ -38,10 +38,11 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     NotificationIngressType,
 >;
 
+type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
+
 pub(crate) type ReferralServiceType = ReferralServiceImpl<
     PgReferralRepo,
     StripeDiscountClient,
-    RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>,
     Arc<SqsNotificationIngress<SqsIngressQueue>>,
 >;
 
@@ -71,6 +72,7 @@ pub(crate) struct ApiContext {
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    pub rate_limit_service: RateLimiter,
     /// The stripe price ids
     pub stripe_price_ids: StripePriceIds,
 }

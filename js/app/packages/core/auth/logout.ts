@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import { authServiceClient } from '@service-auth/client';
 import { authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -7,8 +6,6 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useAnalytics } from '@app/component/analytics-context';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useNavigate } from '@solidjs/router';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export function useLogout() {
   const analytics = useAnalytics();
@@ -33,6 +30,7 @@ export function useLogout() {
     });
 
     await authServiceClient.logout();
+    analytics.track('sign_out');
     analytics.reset();
 
     track(TrackingEvents.AUTH.LOGOUT);
