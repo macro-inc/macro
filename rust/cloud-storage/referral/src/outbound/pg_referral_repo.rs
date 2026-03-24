@@ -186,10 +186,9 @@ impl ReferralRepo for PgReferralRepo {
             user_id.as_ref()
         )
         .fetch_optional(&self.pool)
-        .await?;
+        .await?
+        .map(|r| (r.profile_picture_url, r.display_name));
 
-        Ok(row
-            .map(|r| (r.profile_picture_url, r.display_name))
-            .unwrap_or((None, None)))
+        Ok(row.unwrap_or((None, None)))
     }
 }
