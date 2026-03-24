@@ -8,7 +8,10 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
-        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => true,
+        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_)) => {
+            true
+        }
+        filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
         filter_ast::ExprFrame::Literal(_) => false,
     })
 }
@@ -17,7 +20,9 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
-        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => false,
+        filter_ast::ExprFrame::Literal(
+            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_) | EmailLiteral::Shared(_),
+        ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
     })
 }
@@ -54,7 +59,9 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
         filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(
+            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_),
+        ) => SqlFragment::raw("TRUE"),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Sender(email)) => build_email_match(
             r#"EXISTS (
@@ -141,6 +148,7 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
         filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(_)) => {
             SqlFragment::raw("TRUE")
         }
+        filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
     });
 
     fragment.with_and_prefix()
@@ -159,6 +167,12 @@ pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment
             f
         }
 
+        filter_ast::ExprFrame::Literal(EmailLiteral::ProjectId(id)) => {
+            let mut f = SqlFragment::raw("t.project_id = ");
+            f.extend(SqlFragment::bind_string(id));
+            f
+        }
+
         filter_ast::ExprFrame::Literal(
             EmailLiteral::Sender(_)
             | EmailLiteral::Cc(_)
@@ -166,7 +180,8 @@ pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment
             | EmailLiteral::Recipient(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::NotificationDone(_)
-            | EmailLiteral::NotificationSeen(_),
+            | EmailLiteral::NotificationSeen(_)
+            | EmailLiteral::Shared(_),
         ) => SqlFragment::raw("TRUE"),
     });
 

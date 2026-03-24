@@ -1,4 +1,4 @@
-import { For, createMemo, type Accessor } from 'solid-js';
+import { For, createMemo, onMount, type Accessor } from 'solid-js';
 import {
   ChannelMessage,
   type MessageActions,
@@ -43,12 +43,14 @@ export function ThreadReplyList(props: {
   const scrollToIndex = (index: number): boolean => {
     const element = getReplyElementAtIndex(replyElements, index);
     if (!element) return false;
-    element.scrollIntoView({ block: 'nearest' });
+    element.scrollIntoView({ block: 'center' });
     return true;
   };
 
-  props.onReady?.({
-    scrollToIndex,
+  onMount(() => {
+    props.onReady?.({
+      scrollToIndex,
+    });
   });
 
   return (

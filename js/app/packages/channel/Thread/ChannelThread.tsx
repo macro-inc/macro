@@ -1,12 +1,5 @@
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import {
-  createEffect,
-  createSignal,
-  on,
-  Show,
-  Suspense,
-  type Accessor,
-} from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
@@ -23,15 +16,7 @@ import {
 } from './utils/thread-reply-indicator-helpers';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { createThreadHotkeys } from './create-thread-hotkeys';
-
-function sliceIf<T>(
-  val: Array<T>,
-  start: number,
-  end: number,
-  should: boolean
-): Array<T> {
-  return should ? val.slice(start, end) : val;
-}
+import { DebugSuspense } from '@channel/DebugSuspense';
 
 export function ChannelThread(props: ThreadProps) {
   const userId = useUserId();
@@ -50,18 +35,31 @@ export function ChannelThread(props: ThreadProps) {
     fetchRepliesEnabled
   );
 
-  const sliceIfNotExpanded =
-    <T,>(val: Accessor<Array<T>>) =>
-    () =>
-      sliceIf(val(), 0, DEFAULT_VISIBLE_REPLY_COUNT, !props.isExpanded());
+  const queryReplies = (): Array<ApiThreadReply> | undefined => {
+    if (repliesQuery.isLoading) return undefined;
+    return repliesQuery.data;
+  };
 
-  const previewReplies = sliceIfNotExpanded(() => thread().preview ?? []);
-  const fetchedReplies = sliceIfNotExpanded(() => repliesQuery.data ?? []);
-  const hasFetchedReplies = () => repliesQuery.data !== undefined;
-  const activeReplies = () => {
-    const replies = repliesQuery.data;
-    if (replies && !repliesQuery.isLoading) return replies;
-    return thread().preview ?? [];
+  const loadedReplies = () => queryReplies() ?? [];
+  const canScrollToTargetReply = () => queryReplies() !== undefined;
+
+  const activeReplies = (): Array<ApiThreadReply> => {
+    return queryReplies() ?? thread().preview ?? [];
+  };
+
+  const displayReplies = (): Array<ApiThreadReply> => {
+    const preview = thread().preview ?? [];
+    // When collapsed, use preview directly without reading query state.
+    if (!props.isExpanded()) {
+      return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
+        ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
+        : preview;
+    }
+
+    // When expanded, prefer fetched data (full reply list).
+    const fetched = queryReplies();
+    if (fetched) return fetched;
+    return preview;
   };
 
   // Thread-local reply selection
@@ -75,6 +73,7 @@ export function ChannelThread(props: ThreadProps) {
     messageListScopeId: props.messageListScopeId!,
     replySelection,
     isThreadFocused,
+    isEditing: () => !!props.messageEditor?.state(),
     activeReplies,
     threadId: () => props.data().id,
     getMessageActions: (msg) => props.getMessageActions?.(msg),
@@ -88,10 +87,16 @@ export function ChannelThread(props: ThreadProps) {
     setIsReplying: (v) => props.setIsReplying(v),
   });
 
+  // NOTE: Intentionally reads from `thread().preview` instead of `activeReplies()`.
+  // `activeReplies()` can access `repliesQuery.data` which triggers Suspense.
+  // Preview data is always available synchronously and is sufficient here
+  // since this only controls the reply rail connector color.
   const firstReplyIsNewMessage = () => {
-    const first = activeReplies()[0];
+    const preview = thread().preview ?? [];
+    const first = preview[0];
     return first ? props.isNewMessage?.(first) : false;
   };
+
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
   const collapsedRepliesContainsNewMessages = () =>
@@ -108,20 +113,18 @@ export function ChannelThread(props: ThreadProps) {
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
 
-  const expand = () => {
-    props.setIsExpanded(true);
-  };
-
   createEffect(
     on(
       [
         () => props.targetReplyId,
-        activeReplies,
+        canScrollToTargetReply,
+        loadedReplies,
         props.isExpanded,
         replyListHandle,
       ],
-      ([targetReplyId, replies, isExpanded, handle]) => {
+      ([targetReplyId, canScroll, replies, isExpanded, handle]) => {
         if (!targetReplyId) return;
+        if (!canScroll) return;
 
         const targetReplyIndex = replies.findIndex(
           (reply) => reply.id === targetReplyId
@@ -133,13 +136,14 @@ export function ChannelThread(props: ThreadProps) {
           return;
         }
 
-        handle?.scrollToIndex(targetReplyIndex);
+        if (!handle?.scrollToIndex(targetReplyIndex)) return;
+        props.onTargetReplyScrolled?.(targetReplyId);
       }
     )
   );
 
   return (
-    <Suspense>
+    <DebugSuspense name="ChannelThread.root">
       <Thread.Row
         message={props.data()}
         listMeta={props.listMeta}
@@ -150,62 +154,46 @@ export function ChannelThread(props: ThreadProps) {
             messageId={props.data().id}
             channelId={props.channelId()}
           >
-            <ChannelMessage
-              channelId={props.channelId()}
-              message={props.data()}
-              actions={props.getMessageActions?.(props.data())}
-              listMeta={props.listMeta}
-              messageEditor={props.messageEditor}
-              highlighted={
-                props.highlighted || (isSelected() && !isThreadFocused())
-              }
-              selectionState={
-                isSelected() && !isThreadFocused()
-                  ? { isSelected: true }
-                  : undefined
-              }
-            />
+            <DebugSuspense name="ChannelThread.message">
+              <ChannelMessage
+                channelId={props.channelId()}
+                message={props.data()}
+                actions={props.getMessageActions?.(props.data())}
+                listMeta={props.listMeta}
+                messageEditor={props.messageEditor}
+                highlighted={
+                  props.highlighted || (isSelected() && !isThreadFocused())
+                }
+                selectionState={
+                  isSelected() && !isThreadFocused()
+                    ? { isSelected: true }
+                    : undefined
+                }
+              />
+            </DebugSuspense>
           </MarkMessaageNotifications>
           <Show when={hasReplies() || props.isReplying()}>
             <div class="relative w-full">
-              <Thread.ReplyRailDecorations
-                isReplying={props.isReplying}
-                firstThreadReplyNewMessage={firstReplyIsNewMessage()}
-              />
-              <Suspense>
+              <DebugSuspense name="ChannelThread.reply-rail">
+                <Thread.ReplyRailDecorations
+                  isReplying={props.isReplying}
+                  firstThreadReplyNewMessage={firstReplyIsNewMessage()}
+                />
+              </DebugSuspense>
+              <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
-                  <Show
-                    when={!repliesQuery.isLoading && hasFetchedReplies()}
-                    fallback={
-                      <Thread.ReplyList
-                        channelId={props.channelId()}
-                        threadId={props.data().id}
-                        replies={previewReplies()}
-                        getMessageActions={props.getMessageActions}
-                        messageEditor={props.messageEditor}
-                        isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.targetReplyId}
-                        onReady={setReplyListHandle}
-                        selectedReplyId={replySelection.selectedId}
-                        isThreadFocused={isThreadFocused}
-                      />
-                    }
-                  >
-                    <Suspense>
-                      <Thread.ReplyList
-                        channelId={props.channelId()}
-                        threadId={props.data().id}
-                        replies={fetchedReplies()}
-                        getMessageActions={props.getMessageActions}
-                        messageEditor={props.messageEditor}
-                        isNewMessage={props.isNewMessage}
-                        highlightedReplyId={props.targetReplyId}
-                        onReady={setReplyListHandle}
-                        selectedReplyId={replySelection.selectedId}
-                        isThreadFocused={isThreadFocused}
-                      />
-                    </Suspense>
-                  </Show>
+                  <Thread.ReplyList
+                    channelId={props.channelId()}
+                    threadId={props.data().id}
+                    replies={displayReplies()}
+                    getMessageActions={props.getMessageActions}
+                    messageEditor={props.messageEditor}
+                    isNewMessage={props.isNewMessage}
+                    highlightedReplyId={props.highlightedReplyId}
+                    onReady={setReplyListHandle}
+                    selectedReplyId={replySelection.selectedId}
+                    isThreadFocused={isThreadFocused}
+                  />
 
                   <Show when={props.isReplying()}>
                     <div ref={attachReplyInputRef}>
@@ -236,7 +224,7 @@ export function ChannelThread(props: ThreadProps) {
                           collapsedRepliesCount={collapsedRepliesCount()}
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
-                          onClick={expand}
+                          onClick={() => props.setIsExpanded(true)}
                           hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />
                       </Show>
@@ -249,11 +237,11 @@ export function ChannelThread(props: ThreadProps) {
                     </Thread.ActionsFooter>
                   </Show>
                 </Thread.RepliesContainer>
-              </Suspense>
+              </DebugSuspense>
             </div>
           </Show>
         </div>
       </Thread.Row>
-    </Suspense>
+    </DebugSuspense>
   );
 }

@@ -44,6 +44,8 @@ import {
 } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -81,6 +83,7 @@ import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
   SoupViewTabs,
+  CollapsedSoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
@@ -188,6 +191,21 @@ export const SoupView = (props: SoupViewProps) => {
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
 
+  const isMailView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'mail';
+  });
+
+  const emailLinksQuery = useEmailLinksQuery();
+  const hasLinkError = createMemo(() => {
+    if (!isMailView()) return false;
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
+  });
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -212,7 +230,16 @@ export const SoupView = (props: SoupViewProps) => {
                   </h1>
                 </Show>
                 <Show when={!narrowSearchExpanded()}>
-                  <SoupViewTabs />
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    expanded={
+                      <div classList={{ 'pr-1': isMobile() }}>
+                        <SoupViewTabs />
+                      </div>
+                    }
+                    collapsed={<CollapsedSoupViewTabs />}
+                  />
                   <SoupViewCreateButton />
                 </Show>
                 <Show when={narrowSearchExpanded()}>
@@ -261,7 +288,15 @@ export const SoupView = (props: SoupViewProps) => {
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
-          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Show when={hasLinkError()}>
+            <EmailPermissionsBanner />
+          </Show>
+          <div
+            class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full"
+            classList={{
+              'pointer-events-none opacity-10': hasLinkError(),
+            }}
+          >
             <Suspense>
               <SoupViewFileDropzone>
                 <SoupViewList />

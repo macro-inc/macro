@@ -24,6 +24,12 @@ export interface MentionsOptions {
   showOpenTabs?: boolean;
   useSnapshotForDocuments?: boolean;
   sourceDocumentId?: string;
+  /** Override entity data source (e.g. sandbox data for onboarding). Bypasses quickAccess. */
+  entities?: () => import('@core/context/quickAccess').EntityItem[];
+  /** Override users data source (e.g. sandbox contacts for onboarding). */
+  users?: () => import('@core/user/types').IUser[];
+  /** Skip backend mention tracking (e.g. for sandbox/onboarding). */
+  disableMentionTracking?: boolean;
 }
 
 /** Intentional extension point — no options yet. */
@@ -117,6 +123,8 @@ export interface EditorConfig {
   withIds: boolean;
   selectionData: boolean;
   actions: ActionsOptions | false;
+  /** When true, decorator components skip backend fetches (e.g. preview API). */
+  skipPreviewFetch: boolean;
 }
 
 /** @internal consumed by MarkdownShell; do not access directly */

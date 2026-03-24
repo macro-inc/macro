@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "referral_invitation"
+publish = false
+version = "0.1.0"
+
+
+[dependencies]
+macro_user_id = { path = "../macro_user_id" }
+notification = { path = "../notification" }
+serde = { workspace = true }

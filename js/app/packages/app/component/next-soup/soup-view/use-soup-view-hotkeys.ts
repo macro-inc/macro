@@ -17,6 +17,7 @@ import type { SoupState } from '../create-soup-state';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -43,6 +44,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     activeTab,
     applyTabPreset,
   } = options;
+
+  const analytics = useAnalytics();
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
@@ -241,9 +244,15 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const multiSelectEntities = soup.selection.selected();
 
       if (multiSelectEntities.length > 0) {
+        analytics.track('command_menu_open', {
+          from: 'soup_view_entity_action',
+        });
         // Open in entity action mode with selection
         CommandState.openForEntityAction(multiSelectEntities.slice());
       } else {
+        analytics.track('command_menu_open', {
+          from: 'soup_view',
+        });
         // Normal toggle
         CommandState.toggle();
       }

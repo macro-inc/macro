@@ -32,15 +32,7 @@ export function useOpenChatForAttachment() {
       (!recent_id || !data?.recent_chat?.isPersistent) &&
       callerBlock?.name === 'image'
     ) {
-      const res = await cognitionApiServiceClient.createChat({
-        attachments: [
-          {
-            attachment_type: 'image',
-            attachment_id: attachmentId,
-          },
-        ],
-        isPersistent: true,
-      });
+      const res = await cognitionApiServiceClient.createChat({});
 
       if (isPaymentError(res)) {
         showPaywall();
@@ -52,15 +44,7 @@ export function useOpenChatForAttachment() {
       const [, data] = res;
       recent_id = data?.id;
     } else if (!recent_id || !data?.recent_chat?.isPersistent) {
-      const res = await cognitionApiServiceClient.createChat({
-        attachments: [
-          {
-            attachment_type: 'document',
-            attachment_id: attachmentId,
-          },
-        ],
-        isPersistent: true,
-      });
+      const res = await cognitionApiServiceClient.createChat({});
 
       if (isPaymentError(res)) {
         showPaywall();

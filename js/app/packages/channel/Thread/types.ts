@@ -35,6 +35,8 @@ export type ThreadProps = {
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
   targetReplyId?: string;
+  highlightedReplyId?: string;
+  onTargetReplyScrolled?: (replyId: string) => void;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   highlighted?: boolean;
   selectedMessageId?: Accessor<string | undefined>;

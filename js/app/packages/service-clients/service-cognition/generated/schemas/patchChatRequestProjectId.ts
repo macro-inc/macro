@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * New project ID for the chat. Empty string clears the project.
+ */
 export type PatchChatRequestProjectId = string | null;

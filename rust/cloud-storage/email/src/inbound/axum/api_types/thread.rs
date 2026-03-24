@@ -40,6 +40,7 @@ pub struct ApiThread {
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub project_id: Option<String>,
     pub messages: Vec<ApiMessage>,
 }
 
@@ -57,6 +58,7 @@ impl ApiThread {
             latest_non_spam_message_ts: t.row.latest_non_spam_message_ts,
             created_at: t.row.created_at,
             updated_at: t.row.updated_at,
+            project_id: t.row.project_id,
             messages: t.messages.into_iter().map(ApiMessage::from).collect(),
         }
     }

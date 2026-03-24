@@ -1,0 +1,16 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  mcp-server:fusionauth_base_url: https://auth.macro.com
+  mcp-server:fusionauth_client_id: fusionauth-client-id-key-prod
+  mcp-server:fusionauth_client_secret: fusionauth-client-secret-prod
+  mcp-server:fusionauth_tenant_id: a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be
+  mcp-server:fusionauth_api_key: fusionauth-api-key-prod
+  mcp-server:fusionauth_issuer: auth.macro.com
+  mcp-server:google_client_id: google-client-id-prod
+  mcp-server:google_client_secret: google-client-secret-prod
+  mcp-server:internal_auth_key: document-storage-service-auth-key-prod
+  mcp-server:jwt_secret_key: fusionauth-jwt-secret-prod
+  mcp-server:macro_db_secret_key: macro-db-prod
+  mcp-server:sync_service_auth_key: sync-service-key-prod
+  datadog:validate: "false"

@@ -1,5 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
@@ -78,6 +76,7 @@ import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
+import { useAnalytics } from '@app/component/analytics-context';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
@@ -174,7 +173,7 @@ interface ShareModalProps {
 
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
-  const { track } = withAnalytics();
+  const analytics = useAnalytics();
   const isBlockContext = isInBlock();
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -285,7 +284,6 @@ export function ShareModal(props: ShareModalProps) {
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
     navigate(`/channel/${channelId}`);
-    track(TrackingEvents.SHARE.CLOSE);
     props.setIsSharePermOpen(false); // Close the dialog after navigation
   });
 
@@ -456,6 +454,7 @@ export function ShareModal(props: ShareModalProps) {
         });
         if (!isErr(result)) {
           refetch();
+
           if (accessLevel === null) {
             toast.success(
               'Made chat private',
@@ -466,6 +465,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this chat`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'chat',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change chat access', 'Please try again');
@@ -491,6 +496,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this document`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'document',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change document access', 'Please try again');
@@ -516,6 +527,12 @@ export function ShareModal(props: ShareModalProps) {
               'Updated public link sharing',
               `Anyone with the link can ${accessLevel} this folder`
             );
+
+            analytics.track('share_entity', {
+              entityType: 'project',
+              accessLevel,
+              isPublic: true,
+            });
           }
         } else {
           toast.alert('Failed to change folder access', 'Please try again');
@@ -704,7 +721,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   const isAuthenticated = useIsAuthenticated();
   const blockType = useBlockAliasedName();
   const blockId = useBlockId();
-  const { track } = withAnalytics();
+  const analytics = useAnalytics();
 
   onMount(() => {
     const blockScopeId = blockHotkeyScopeSignal.get;
@@ -713,7 +730,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         if (!isAuthenticated()) {
           openLoginModal();
         } else {
-          track(TrackingEvents.SHARE.OPEN);
+          analytics.track('share_menu_open', { blockType });
           shareCtx.open();
         }
         return true;
@@ -740,6 +757,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
     navigator.clipboard.writeText(defaultUrl());
+    analytics.track('copy_share_link', { blockType });
     toast.success(
       'Link copied to clipboard.',
       'Sending this link in a Macro message will automatically update permissions to include recipients.'
@@ -791,7 +809,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
             if (!isAuthenticated()) {
               openLoginModal();
             } else {
-              track(TrackingEvents.SHARE.OPEN);
+              analytics.track('share_menu_open', { blockType });
               shareCtx.open();
             }
           }}

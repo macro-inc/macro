@@ -205,11 +205,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
-        "test-notification-ingress-queue".to_string(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::from_conf(sqs_config),
+        queue_url: "test-notification-ingress-queue".to_string(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue,
+    });
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()

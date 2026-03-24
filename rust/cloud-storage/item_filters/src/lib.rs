@@ -176,6 +176,27 @@ impl IsEmpty for ChatFilters {
     }
 }
 
+/// Controls whether shared email threads are included in results.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum SharedEmailFilter {
+    /// Only show the user's own threads (default)
+    #[default]
+    Exclude,
+    /// Show both own and shared threads
+    Include,
+    /// Show only threads shared with the user
+    Only,
+}
+
+impl SharedEmailFilter {
+    /// Returns true if this is the default (Exclude) variant.
+    pub fn is_default(&self) -> bool {
+        matches!(self, SharedEmailFilter::Exclude)
+    }
+}
+
 /// The email filters used to filter down what emails you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -197,6 +218,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
+    /// A list of project ids to search within. Empty to ignore project filtering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_ids: Vec<String>,
+
     /// Filter by email importance. None to not filter. True to show only important emails
     /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
     /// (those categorized as promotions, social, updates, or forums).
@@ -216,6 +241,11 @@ pub struct EmailFilters {
     /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_labels: Vec<String>,
+
+    /// Controls whether shared email threads are included in results.
+    /// Defaults to "exclude" (only the user's own threads).
+    #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
+    pub shared: SharedEmailFilter,
 }
 
 impl IsEmpty for EmailFilters {
@@ -226,20 +256,24 @@ impl IsEmpty for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            project_ids,
             importance,
             notification_filters,
             include_labels,
             exclude_labels,
+            shared,
         } = self;
         senders.is_empty()
             && cc.is_empty()
             && bcc.is_empty()
             && recipients.is_empty()
             && email_thread_ids.is_empty()
+            && project_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
+            && shared.is_default()
     }
 }
 

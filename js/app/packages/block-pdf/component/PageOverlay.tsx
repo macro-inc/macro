@@ -25,7 +25,6 @@ import { useCreateHighlightCommentAtSelection } from '@block-pdf/store/comments/
 import { useCreatePlaceable } from '@block-pdf/store/placeables';
 import { PayloadMode, type PayloadType } from '@block-pdf/type/placeables';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
-import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId, useIsNestedBlock } from '@core/block';
 import type { Completion } from '@core/client/completion';
@@ -79,14 +78,13 @@ import {
   UserHighlight,
   useResetUserHighlights,
 } from './UserHighlight';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export interface IPageOverlayProps {
   pageIndex: number;
   viewport: PageViewport;
   pageViewDiv: PDFPageView['div'];
 }
-
-const { track, TrackingEvents } = withAnalytics();
 
 export interface IHighlightObj {
   left: number;
@@ -111,6 +109,8 @@ export const PDFPopupCompletionSignal = createBlockSignal<
 
 // This is where all the page-specifc overlays should reside, like placeables, etc.
 export function PageOverlay(props: IPageOverlayProps) {
+  const analytics = useAnalytics();
+
   const isNestedBlock = useIsNestedBlock();
   let pageOverlayRef!: HTMLDivElement;
   const pageViewDivProp = () => props.pageViewDiv;
@@ -183,7 +183,7 @@ export function PageOverlay(props: IPageOverlayProps) {
         element: targetNode,
         pageWidth: getRootViewer()?.pageDimensions(pageIndex, true)?.width ?? 0,
       });
-      track(TrackingEvents.BLOCKPDF.DEFINITION.OPEN);
+      analytics.track('block_pdf_definition_open');
     } else if (secID) {
       // display section popup
       e.stopPropagation();
@@ -195,7 +195,7 @@ export function PageOverlay(props: IPageOverlayProps) {
         idToSectionMap,
       });
 
-      track(TrackingEvents.BLOCKPDF.SECTION.OPEN);
+      analytics.track('block_pdf_section_open');
 
       getPopupViewer()?.scrollTo({ pageNumber: page + 1, yPos: y });
       if (!isPopup) getRootViewer()?.showPopupAt(tgt as HTMLElement);

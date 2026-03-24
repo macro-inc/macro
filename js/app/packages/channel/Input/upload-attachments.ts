@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 import {
   getAttachmentKindFromFile,
   iconTypeFromFilename,
@@ -8,6 +9,27 @@ import {
 import type { InputAttachmentTracker } from './types';
 
 export { getAttachmentKindFromFile } from './utils/file-helpers';
+
+/**
+ * Resolve media dimensions from a File for image/video attachments.
+ * Returns undefined for documents or on failure.
+ */
+async function resolveMediaDimensions(
+  file: File,
+  kind: 'image' | 'video' | 'document'
+): Promise<{ width: number; height: number } | undefined> {
+  if (kind === 'document') return undefined;
+  try {
+    const dims =
+      kind === 'image'
+        ? await getImageDimensions(file)
+        : await getVideoDimensions(file);
+    if (dims.width > 0 && dims.height > 0) return dims;
+  } catch {
+    // Dimension extraction is best-effort
+  }
+  return undefined;
+}
 
 export async function uploadInputAttachments(options: {
   files: File[];
@@ -30,7 +52,10 @@ export async function uploadInputAttachments(options: {
     });
 
     try {
-      const result = await options.uploadFile(file);
+      const [result, dims] = await Promise.all([
+        options.uploadFile(file),
+        resolveMediaDimensions(file, pendingKind),
+      ]);
 
       if (result.failed) {
         options.tracker.removeAttachment(pendingId);
@@ -43,6 +68,11 @@ export async function uploadInputAttachments(options: {
         options.tracker.removeAttachment(pendingId);
         toast.failure(`Failed to upload ${file.name}`);
         continue;
+      }
+
+      if (dims) {
+        uploaded.width = dims.width;
+        uploaded.height = dims.height;
       }
 
       options.tracker.removeAttachment(pendingId);

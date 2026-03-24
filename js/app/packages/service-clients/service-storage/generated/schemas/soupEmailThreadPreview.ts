@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupEmailThreadPreviewName } from './soupEmailThreadPreviewName';
+import type { SoupEmailThreadPreviewProjectId } from './soupEmailThreadPreviewProjectId';
 import type { SoupEmailThreadPreviewProviderId } from './soupEmailThreadPreviewProviderId';
 import type { SoupEmailThreadPreviewSenderEmail } from './soupEmailThreadPreviewSenderEmail';
 import type { SoupEmailThreadPreviewSenderName } from './soupEmailThreadPreviewSenderName';
@@ -21,6 +22,7 @@ export interface SoupEmailThreadPreview {
   isRead: boolean;
   name?: SoupEmailThreadPreviewName;
   ownerId: string;
+  projectId?: SoupEmailThreadPreviewProjectId;
   providerId?: SoupEmailThreadPreviewProviderId;
   senderEmail?: SoupEmailThreadPreviewSenderEmail;
   senderName?: SoupEmailThreadPreviewSenderName;

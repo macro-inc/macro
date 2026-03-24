@@ -17,8 +17,11 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsIngressQueue;
+use notification::{
+    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
+};
+use rate_limit::domain::service::RateLimitServiceImpl;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -161,18 +164,20 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let redis_client_for_github =
+    let redis_client =
         redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
-    let redis_multiplexed_conn = redis_client_for_github
+    let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection")?;
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        config.notification_queue.clone(),
-    );
-    let notification_ingress_service = SqsNotificationIngress::new(ingress_queue);
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        queue_url: config.notification_queue.clone(),
+    };
+    let notification_ingress_service = SqsNotificationIngress {
+        queue: ingress_queue,
+    };
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -242,10 +247,19 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
-    let referral_service = ReferralServiceImpl::new(
-        PgReferralRepo::new(db.clone()),
-        StripeDiscountClient::new(stripe_client.clone(), 10000 /*100$ credit, in cents*/),
-    );
+    let rate_limit = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
+    let referral_service = ReferralServiceImpl {
+        repo: PgReferralRepo::new(db.clone()),
+        discount_client: StripeDiscountClient::new(
+            stripe_client.clone(),
+            10000, /*100$ credit, in cents*/
+        ),
+        notification_ingress: notification_ingress_service.clone(),
+    };
 
     api::setup_and_serve(
         ApiContext {
@@ -256,9 +270,10 @@ async fn main() -> anyhow::Result<()> {
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             ses_client: Arc::new(ses_client),
-            notification_ingress_service: notification_ingress_service.clone(),
+            notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
+            rate_limit_service: rate_limit,
             jwt_args,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,

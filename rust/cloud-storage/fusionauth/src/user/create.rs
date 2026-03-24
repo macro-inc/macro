@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, net::IpAddr};
 
 use crate::{
     AuthedClient, Result,
@@ -56,10 +56,12 @@ pub(crate) async fn create_user(
     client: &AuthedClient,
     base_url: &str,
     request: CreateUserRequest<'_>,
+    client_ip: IpAddr,
 ) -> Result<String> {
     let res = client
         .client()
         .post(format!("{base_url}/api/user"))
+        .header("X-Forwarded-For", &client_ip.to_string())
         .json(&request)
         .send()
         .await

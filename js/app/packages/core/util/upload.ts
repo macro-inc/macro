@@ -5,7 +5,7 @@
  * with standardized validation, conversion, and error handling.
  */
 
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import {
   DirectoryFileCountExceededError,
   DirectoryFileSizeExceededError,
@@ -26,8 +26,6 @@ import {
   upload as dssUpload,
 } from '@service-storage/util/upload';
 import { toast } from 'core/component/Toast/Toast';
-
-const { track, TrackingEvents } = withAnalytics();
 
 const MAX_FILE_BYTE_SIZE = 2 * 1000 * 1000 * 1000; // 2GB
 
@@ -241,9 +239,8 @@ export class FileSizeExceededError extends Error {
     this.fileName = fileName;
     this.sizeString = sizeString;
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 
@@ -267,9 +264,8 @@ export class UnsupportedFileTypeError extends Error {
     this.fileName = fileName;
     this.fileType = fileType;
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
     });
   }
 }
@@ -291,9 +287,8 @@ export class UploadError extends Error {
 
     this.name = 'UploadError';
 
-    track(TrackingEvents.UPLOAD.ERROR, {
+    analytics.track('upload_error', {
       type: this.name,
-      error: this.toString(),
       destination,
     });
   }

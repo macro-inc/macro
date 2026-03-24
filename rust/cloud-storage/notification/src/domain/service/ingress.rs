@@ -135,11 +135,7 @@ where
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
-    fn send_notification<
-        'a,
-        T: Notification + Clone + 'static,
-        U: Serialize + Send + Sync + 'static,
-    >(
+    fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync + 'static>(
         &'a self,
         request: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
@@ -369,21 +365,16 @@ where
 ///
 /// `send_notification` always returns `Ok(None)` because the actual
 /// processing is deferred to the worker.
+#[derive(Clone)]
 pub struct SqsNotificationIngress<Q> {
-    queue: Q,
-}
-
-impl<Q> SqsNotificationIngress<Q> {
-    /// Create a new queue-backed notification ingress.
-    pub fn new(queue: Q) -> Self {
-        Self { queue }
-    }
+    /// the inner queue
+    pub queue: Q,
 }
 
 impl<Q: NotificationIngressQueue> NotificationIngress for SqsNotificationIngress<Q> {
     async fn send_notification<
         'a,
-        T: Notification + Clone + 'static,
+        T: Notification + Clone,
         U: Serialize + Send + Sync + 'static,
     >(
         &'a self,

@@ -1108,12 +1108,55 @@
           "200": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReferralCode"
+                  "type": "string"
                 }
               }
             }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/referral/send": {
+      "post": {
+        "tags": ["referral"],
+        "summary": "Handler for `POST /referral/send`.",
+        "description": "Sends a referral code via email to a user",
+        "operationId": "send_referral_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInviteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
           },
           "401": {
             "description": "",
@@ -3380,10 +3423,6 @@
           }
         }
       },
-      "ReferralCode": {
-        "type": "string",
-        "description": "Wrapper for the referral code to make it type safe"
-      },
       "ResendFusionauthVerifyUserEmailRequest": {
         "type": "object",
         "required": ["email"],
@@ -3391,6 +3430,17 @@
           "email": {
             "type": "string",
             "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "SendInviteBody": {
+        "type": "object",
+        "description": "The body which is used to describe the recipient email",
+        "required": ["recipient"],
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "the recipient of the referral email"
           }
         }
       },

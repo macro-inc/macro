@@ -13,8 +13,8 @@ use model_entity::EntityType;
 use model_notifications::ChannelMessageSendMetadata;
 use notification::domain::models::email_notification_digest::ports::MessageId;
 use notification::domain::models::email_notification_digest::{
-    EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDecisionC,
-    StateMachineDriverA, StateMachineDriverB, StateMachineDriverC,
+    EmailBlockList, NotificationSetBuilder, StateMachineDecisionC, StateMachineDriverA,
+    StateMachineDriverB, StateMachineDriverC,
 };
 use notification::domain::models::{DeviceEndpoint, SendNotificationRequestBuilder};
 use notification::domain::ports::NotificationEgress;
@@ -36,7 +36,7 @@ use adapters::interactive_mobile::{
 };
 use adapters::logging_websocket::LoggingWebSocketSender;
 use adapters::mpsc_queue::MpscQueue;
-use adapters::noop_rate_limiter::NoOpRateLimiter;
+use adapters::noop_rate_limiter::NoOpRateLimitPort;
 use adapters::sandbox_repository::SandboxNotificationRepository;
 
 /// Configuration collected from the interactive wizard.
@@ -44,7 +44,6 @@ struct SandboxConfig {
     digest_window: Duration,
     online_threshold: Duration,
     is_blocked: bool,
-    is_invite: bool,
     sns_mode: SnsMode,
     num_endpoints: usize,
 }
@@ -116,19 +115,12 @@ async fn main() -> Result<(), Report> {
         EmailBlockList::new::<NeverMatchNotification>()
     };
 
-    let invite_list = if config.is_invite {
-        ExplicitInviteAllowList::new::<SandboxNotification>()
-    } else {
-        ExplicitInviteAllowList::new::<NeverMatchNotification>()
-    };
-
     let state_machine_a = StateMachineDriverA {
         user_checker: interactive::user_existence::InteractiveUserExistenceChecker,
         notification_checker: interactive::push_checker::InteractivePushNotificationChecker,
         online_checker: interactive::last_online::InteractiveLastOnlineChecker,
         digest_batcher: RedisDigestBatcher::new(redis_conn.clone()),
         block_list,
-        invite_list,
         digest_window: config.digest_window,
         online_duration_threshold: config.online_threshold,
     };
@@ -160,7 +152,9 @@ async fn main() -> Result<(), Report> {
         websocket: LoggingWebSocketSender,
         mobile: mobile_sender,
         email: email_adapter,
-        rate_limiter: NoOpRateLimiter,
+        rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: NoOpRateLimitPort,
+        },
         state_machine: StateMachineDriverB {
             message_receipt_repo: DbMessageReceiptRepository::new(db.clone()),
             digest_batcher: RedisDigestBatcher::new(redis_conn.clone()),
@@ -433,10 +427,6 @@ async fn run_config_wizard() -> Result<SandboxConfig, Report> {
         .with_default(false)
         .prompt()?;
 
-    let is_invite = inquire::Confirm::new("Is this notification type an invite?")
-        .with_default(false)
-        .prompt()?;
-
     let sns_options = vec!["Mock (interactive)", "Real (AWS)"];
     let sns_choice = inquire::Select::new("SNS mode?", sns_options).prompt()?;
 
@@ -459,7 +449,6 @@ async fn run_config_wizard() -> Result<SandboxConfig, Report> {
         digest_window: Duration::from_secs(digest_minutes * 60),
         online_threshold: Duration::from_secs(online_minutes * 60),
         is_blocked,
-        is_invite,
         sns_mode,
         num_endpoints,
     })

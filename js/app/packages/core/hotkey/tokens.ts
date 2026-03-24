@@ -206,6 +206,7 @@ export const TOKENS = {
     moveUp: 'channel.moveUp',
     moveDown: 'channel.moveDown',
     editMessage: 'channel.editMessage',
+    deleteMessage: 'channel.deleteMessage',
     replyToMessage: 'channel.replyToMessage',
     expandThread: 'channel.expandThread',
     collapseThread: 'channel.collapseThread',
@@ -221,6 +222,7 @@ export const TOKENS = {
     threadCollapse: 'channel.threadCollapse',
     threadReply: 'channel.threadReply',
     threadEditReply: 'channel.threadEditReply',
+    threadDeleteReply: 'channel.threadDeleteReply',
   },
 
   // drawer

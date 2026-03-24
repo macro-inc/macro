@@ -47,6 +47,7 @@ function createController(
             navigatePrevious: () => false,
             navigateNext: () => false,
             isNearBottom: () => true,
+            markUserIntent: () => {},
           }
         : undefined,
   });

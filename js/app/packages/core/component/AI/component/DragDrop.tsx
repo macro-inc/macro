@@ -1,8 +1,6 @@
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { fileDrop } from '@core/directive/fileDrop';
-
-const { track, TrackingEvents } = withAnalytics();
 
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
@@ -39,7 +37,7 @@ export const DragDropWrapper: Component<DragDropWrapperProps> = (props) => {
         onDragStart: () => setIsFileDragging(true),
         onDragEnd: () => setIsFileDragging(false),
         onDrop: (files) => {
-          track(TrackingEvents.CHAT.ATTACHMENT.DROP);
+          analytics.track('ai_attachment_add');
           uploadQueue.upload(files);
         },
       }}

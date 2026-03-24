@@ -1,5 +1,6 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
+use uuid::Uuid;
 
 use crate::domain::models::{GithubKey, MacroTaskId};
 use crate::domain::ports::GithubSyncRepo;
@@ -184,4 +185,120 @@ async fn test_filter_duplicate_tasks_different_key_not_filtered(pool: Pool<Postg
 
     assert_eq!(new_only.len(), 1);
     assert_eq!(new_only[0].short_uuid, "s61deeZUHehUjkNT8rxB3S");
+}
+
+// ---------------------------------------------------------------------------
+// get_macro_id_by_github_user_id
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_get_macro_id_by_github_user_id_found(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let macro_id = repo.get_macro_id_by_github_user_id("12345").await.unwrap();
+
+    assert_eq!(macro_id.as_deref(), Some("macro|user@user.com"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_macro_id_by_github_user_id_not_found(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let macro_id = repo.get_macro_id_by_github_user_id("99999").await.unwrap();
+
+    assert!(macro_id.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// get_user_team_ids
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_get_user_team_ids(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let team_ids = repo.get_user_team_ids("macro|user@user.com").await.unwrap();
+
+    assert_eq!(team_ids.len(), 2);
+    let expected: Vec<Uuid> = vec![
+        "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap(),
+        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap(),
+    ];
+    for id in &expected {
+        assert!(team_ids.contains(id));
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_user_team_ids_no_teams(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let team_ids = repo
+        .get_user_team_ids("macro|nobody@test.com")
+        .await
+        .unwrap();
+
+    assert!(team_ids.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// insert_installation_team_associations
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_insert_installation_team_associations(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool.clone());
+
+    let team_ids: Vec<Uuid> = vec![
+        "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap(),
+        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap(),
+    ];
+
+    repo.insert_installation_team_associations("123456", &team_ids, "macro|user@user.com")
+        .await
+        .unwrap();
+
+    let rows: Vec<(String, Uuid)> =
+        sqlx::query_as("SELECT id, team_id FROM github_app_installation_team ORDER BY team_id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|r| r.0 == "123456"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_insert_installation_team_associations_idempotent(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool.clone());
+
+    let team_ids: Vec<Uuid> = vec!["dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap()];
+
+    repo.insert_installation_team_associations("123456", &team_ids, "macro|user@user.com")
+        .await
+        .unwrap();
+    // Insert again — should not error
+    repo.insert_installation_team_associations("123456", &team_ids, "macro|user@user.com")
+        .await
+        .unwrap();
+
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM github_app_installation_team WHERE id = '123456'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert_eq!(count.0, 1);
 }

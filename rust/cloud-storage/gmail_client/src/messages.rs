@@ -9,7 +9,7 @@ use models_email::gmail::{
     MessageResource, MinimalMessageResource, SendMessagePayload, SentMessageResource,
 };
 
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message(
     client: &GmailClient,
     access_token: &str,
@@ -55,7 +55,7 @@ pub(crate) async fn get_message(
 }
 
 // gets a message without the body using ?format=minimal in the gmail api call
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message_thread_id(
     client: &GmailClient,
     access_token: &str,
@@ -100,7 +100,7 @@ pub(crate) async fn get_message_thread_id(
 }
 
 // gets a message without the body using ?format=minimal in the gmail api call
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message_label_ids(
     client: &GmailClient,
     access_token: &str,
@@ -145,7 +145,7 @@ pub(crate) async fn get_message_label_ids(
 }
 
 /// sends a message
-#[tracing::instrument(skip(client, access_token, message), fields(link_id=%message.link_id))]
+#[tracing::instrument(skip(client, access_token, message), fields(link_id=%message.link_id), err)]
 pub(crate) async fn send_message(
     client: &GmailClient,
     access_token: &str,

@@ -49,3 +49,42 @@ export function useEntityMention(
     allEntities: entitiesList,
   };
 }
+
+export type UseEntityMentionFromListOptions = {
+  items: Accessor<EntityItem[]>;
+  searchTerm: Accessor<string>;
+  buckets: EntityBucket[];
+};
+
+/**
+ * Like useEntityMention but takes a pre-built list of EntityItems
+ * instead of reading from quickAccess. Useful for sandbox/onboarding scenarios.
+ */
+export function useEntityMentionFromList(
+  options: UseEntityMentionFromListOptions
+): UseEntityMentionResult {
+  const { items, searchTerm, buckets } = options;
+  const bucketSet = new Set<string>(buckets);
+
+  const entitiesList = createLazyMemo(() =>
+    items().filter((item) => bucketSet.has(item.bucket))
+  );
+
+  const entitySearch = createFreshSearch<EntityItem>({
+    config: { useViewedAt: true },
+    getName: (item) => item.searchText,
+    isChannelItem: (item) => item.bucket === 'channel',
+    getTimestamp: (item) => item.timestamps,
+  });
+
+  const entities = createLazyMemo(() => {
+    const term = searchTerm();
+    if (!term) return entitiesList();
+    return entitySearch(entitiesList(), term).map(({ item }) => item);
+  });
+
+  return {
+    searchedEntities: entities,
+    allEntities: entitiesList,
+  };
+}

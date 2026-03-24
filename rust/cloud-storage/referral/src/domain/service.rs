@@ -1,31 +1,42 @@
 //! Referral service implementation.
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+#[cfg(test)]
+mod test;
+
+use std::{collections::HashSet, ops::Deref};
+
+use macro_user_id::{
+    email::EmailStr,
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
+use model_entity::EntityType;
+use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
+use rootcause::compat::boxed_error::IntoBoxedError;
 
 use crate::domain::{
-    models::{ReferralCode, ReferralError},
+    models::{InviteToMacro, ReferralCode, ReferralError},
     ports::{DiscountClient, ReferralRepo, ReferralService},
 };
 
 /// The concrete referral service implementation.
-pub struct ReferralServiceImpl<R: ReferralRepo, Dc: DiscountClient> {
+pub struct ReferralServiceImpl<R, Dc, N> {
     ///  referral repo
-    repo: R,
+    pub repo: R,
     /// discount client
-    discount_client: Dc,
+    pub discount_client: Dc,
+    /// the notification sender
+    pub notification_ingress: N,
 }
 
-impl<R: ReferralRepo, Dc: DiscountClient> ReferralServiceImpl<R, Dc> {
-    /// Create a new referral service.
-    pub fn new(repo: R, discount_client: Dc) -> Self {
-        Self {
-            repo,
-            discount_client,
-        }
-    }
-}
-
-impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImpl<R, Dc> {
+impl<
+    R: ReferralRepo,
+    Dc: DiscountClient,
+    // the constructor for this is Arc<NI> so we use a different bound here
+    N: Deref<Target = NI> + Send + Sync + 'static,
+    NI: NotificationIngress,
+> ReferralService for ReferralServiceImpl<R, Dc, N>
+{
     #[tracing::instrument(skip(self), err)]
     async fn get_referral_code_for_user<'a>(
         &self,
@@ -83,6 +94,42 @@ impl<R: ReferralRepo, Dc: DiscountClient> ReferralService for ReferralServiceImp
             .apply_discount(&customer_id)
             .await
             .map_err(|e| ReferralError::Internal(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn send_referral_invite(
+        &self,
+        sending_user: MacroUserIdStr<'_>,
+        recipient: EmailStr<'static>,
+    ) -> Result<(), ReferralError> {
+        let referral_code = self.get_referral_code_for_user(&sending_user.0).await?;
+
+        let notification = InviteToMacro {
+            recipient_email: recipient.clone(),
+            referral_code,
+        };
+
+        let _res = self
+            .notification_ingress
+            .send_notification(
+                SendNotificationRequestBuilder {
+                    notification_entity: EntityType::User
+                        .with_entity_string(sending_user.as_ref().to_string()),
+                    notification,
+                    sender_id: Some(sending_user),
+                    recipient_ids: HashSet::from([MacroUserIdStr::try_from_email(
+                        recipient.0.as_ref(),
+                    )
+                    .map_err(anyhow::Error::from)?]),
+                }
+                .into_request()
+                .with_email(),
+            )
+            .await
+            .map_err(|r| r.into_boxed_error())
+            .map_err(anyhow::Error::from_boxed)?;
 
         Ok(())
     }

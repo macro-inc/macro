@@ -11,6 +11,7 @@ import { Button } from './button';
 import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export const SoupFiltersBar = () => {
   const {
@@ -20,6 +21,9 @@ export const SoupFiltersBar = () => {
     replaceFilter,
     isOptionActive,
   } = useFilterRefinements();
+
+  const analytics = useAnalytics();
+
   const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
 
   const soup = useSoup();
@@ -36,6 +40,7 @@ export const SoupFiltersBar = () => {
 
     if (!focused) return;
 
+    analytics.track('preview_panel_use');
     soup.setPreviewEntity(focused);
   };
 
@@ -69,7 +74,7 @@ export const SoupFiltersBar = () => {
         </div>
       </Match>
       <Match when={true}>
-        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
+        <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted/50 w-full">
           <UnifiedFilterDropdown />
           <ActiveFilterChips
             filters={activeFiltersList()}

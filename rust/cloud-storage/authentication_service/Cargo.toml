@@ -89,8 +89,9 @@ non_empty = { path = "../non_empty" }
 notification = { path = "../notification" }
 openssl = { workspace = true }
 rand = { workspace = true }
-referral = { path = "../referral" }
+rate_limit = { path = "../rate_limit" }
 redis = { workspace = true }
+referral = { path = "../referral" }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }

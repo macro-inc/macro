@@ -33,9 +33,9 @@ function LoginOption(props: {
         e.preventDefault();
         props.onClick();
       }}
-      class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer"
+      class="grid items-center justify-center p-4 border-b border-edge-muted [transition:color_var(--transition)] hover:bg-hover/60 hover:text-accent hover:transition-none cursor-pointer"
     >
-      <div class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center">
+      <div class="flex gap-2.5 items-center justify-center">
         {props.icon}
         <div class="whitespace-nowrap">{props.label}</div>
       </div>
@@ -107,7 +107,7 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
   };
 
   return (
-    <div class="grid select-none">
+    <div class="grid select-none border-t border-edge-muted">
       <Show when={getNativeMobilePlatform() === 'ios'}>
         <LoginOption
           icon={<IconApple />}
@@ -136,14 +136,14 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
         onClick={() => props.setStage(Stage.Email)}
       />
 
-      <div class="p-5 border border-dashed border-[var(--color-ink)] border-t-0 text-center text-xs">
+      <div class="p-4 text-center text-xs text-ink/50">
         By signing up, you agree to our
         <br />
-        <a class="underline" href="/terms">
+        <a class="underline hover:text-ink/70" href="/terms">
           terms
         </a>{' '}
         and{' '}
-        <a class="underline" href="/privacy">
+        <a class="underline hover:text-ink/70" href="/privacy">
           privacy policy
         </a>
         .

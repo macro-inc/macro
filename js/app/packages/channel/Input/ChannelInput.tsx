@@ -6,7 +6,11 @@ import { createConfiguredChannelMarkdownEditor } from './configured-markdown-edi
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createInputState } from './create-input-state';
 import { createMentionsTracker } from './mentions-tracker';
-import { chatRuleset, uploadFile } from '@core/util/upload';
+import {
+  chatRuleset,
+  handleFileFolderDrop,
+  uploadFile,
+} from '@core/util/upload';
 import { uploadInputAttachments } from './upload-attachments';
 import type {
   InputAttachmentTracker,
@@ -16,14 +20,16 @@ import type {
   InputPersistenceKey,
 } from './types';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import { Match, Show, Switch, type JSX } from 'solid-js';
+import { Match, Show, Switch, type Accessor, type JSX } from 'solid-js';
 import { isReplyInput } from './types';
+import type { IUser } from '@core/user/types';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
+  participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
 };
@@ -84,6 +90,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
+    users: props.participants,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
     },
@@ -97,6 +104,11 @@ export function ChannelInput(props: ChannelInputProps) {
       if (isMobile()) return false;
       inputState.commands.send();
       return true;
+    },
+    onPasteFilesAndDirs: (files, directories) => {
+      void handleFileFolderDrop(files, directories, (entries) =>
+        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      );
     },
   });
   clearComposer = () => markdownEditor.controls.clear();

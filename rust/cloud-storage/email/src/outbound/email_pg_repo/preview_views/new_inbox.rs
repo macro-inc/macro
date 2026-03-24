@@ -35,6 +35,7 @@ pub(crate) async fn new_inbox_preview_cursor(
             t.effective_ts AS "sort_ts!",
             t.created_at AS "created_at!",
             t.updated_at AS "updated_at!",
+            t.project_id,
             t.viewed_at AS "viewed_at?",
             lmp.subject AS "name?",
             lmp.snippet AS "snippet?",
@@ -48,7 +49,8 @@ pub(crate) async fn new_inbox_preview_cursor(
             ) AS "is_important!",
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
-            c.sfs_photo_url as "sender_photo_url?"
+            c.sfs_photo_url as "sender_photo_url?",
+            el.macro_id AS "owner_id!"
         FROM (
             -- Step 1: Efficiently find and sort ONLY the top N+1 candidate threads.
             -- This subquery is fast as it only touches `threads` and `user_history`.
@@ -57,6 +59,7 @@ pub(crate) async fn new_inbox_preview_cursor(
                 t.provider_id,
                 t.link_id,
                 t.is_read,
+                t.project_id,
                 t.latest_inbound_message_ts AS created_at,
                 t.latest_inbound_message_ts AS updated_at,
                 uh.updated_at AS viewed_at,
@@ -104,6 +107,7 @@ pub(crate) async fn new_inbox_preview_cursor(
         ) AS lmp
         -- Step 3: Join to get the sender's details for the final result set.
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
+        JOIN email_links el ON t.link_id = el.id
         -- Final ordering is preserved because the input `t` is already sorted.
         ORDER BY t.effective_ts DESC, t.updated_at DESC -- fall back to updated_at if effective_ts is the same
         "#,

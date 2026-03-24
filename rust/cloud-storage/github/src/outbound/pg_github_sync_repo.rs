@@ -106,4 +106,66 @@ impl GithubSyncRepo for PgGithubSyncRepo {
             .cloned()
             .collect())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_macro_id_by_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        let macro_id = sqlx::query_scalar!(
+            r#"
+            SELECT macro_id
+            FROM github_links
+            WHERE github_user_id = $1
+            "#,
+            github_user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(macro_id)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_team_ids(&self, macro_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
+        let team_ids = sqlx::query_scalar!(
+            r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            "#,
+            macro_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(team_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn insert_installation_team_associations(
+        &self,
+        installation_id: &str,
+        team_ids: &[uuid::Uuid],
+        installed_by: &str,
+    ) -> Result<(), Self::Err> {
+        let installation_ids: Vec<&str> =
+            std::iter::repeat_n(installation_id, team_ids.len()).collect();
+        let installed_bys: Vec<&str> = std::iter::repeat_n(installed_by, team_ids.len()).collect();
+
+        sqlx::query!(
+            r#"
+            INSERT INTO github_app_installation_team (id, team_id, installed_by)
+            SELECT * FROM UNNEST($1::text[], $2::uuid[], $3::text[])
+            ON CONFLICT (id, team_id) DO NOTHING
+            "#,
+            &installation_ids as &[&str],
+            team_ids,
+            &installed_bys as &[&str],
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

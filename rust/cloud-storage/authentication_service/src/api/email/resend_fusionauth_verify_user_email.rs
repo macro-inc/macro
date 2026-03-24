@@ -4,14 +4,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 use utoipa::ToSchema;
 
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
-};
+use model::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize, serde::Serialize, ToSchema)]
 pub struct ResendFusionauthVerifyUserEmailRequest {
@@ -29,10 +27,10 @@ pub struct ResendFusionauthVerifyUserEmailRequest {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context,req), fields(client_ip=%ip_context.client_ip, email=%req.email))]
+#[tracing::instrument(skip(ctx, ip_context,req), fields(client_ip=%ip_context, email=%req.email), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Json(req): extract::Json<ResendFusionauthVerifyUserEmailRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("resend_fusionauth_verify_user_email");

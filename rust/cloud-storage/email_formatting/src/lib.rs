@@ -97,6 +97,6 @@ impl NotificationExtEmail for EmailDigestNotification {
 
     fn rate_limit_key(&self) -> RateLimitKey {
         // NB: this key is currently intentionally shared across all users out of an abundance of caution to limit over-sending on SES
-        RateLimitKey::from_str_hashed(Self::TYPE_NAME)
+        RateLimitKey::from_str_hashed(&Self::TYPE_NAME)
     }
 }
