@@ -57,14 +57,6 @@ async function exists(key: string): Promise<boolean> {
   }
 }
 
-function encodeCopySource(bucket: string, key: string): string {
-  const encodedKey = key
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-  return `${bucket}/${encodedKey}`;
-}
-
 async function copyKey(oldKey: string, newKey: string): Promise<void> {
   if (await exists(newKey)) {
     if (DRY_RUN) console.log(`  [dry run] SKIP (exists): ${newKey}`);
@@ -88,7 +80,7 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
     await s3.send(
       new CopyObjectCommand({
         Bucket: S3_BUCKET,
-        CopySource: encodeCopySource(S3_BUCKET!, oldKey),
+        CopySource: `${S3_BUCKET}/${oldKey}`,
         Key: newKey,
       })
     );
