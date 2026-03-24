@@ -541,11 +541,9 @@ export function PopupPreview(props: {
     ));
   };
 
-  const isImageType = () => props.documentInfo.type === 'image';
-
   return (
     <div
-      class={`select-none overflow-hidden w-80 text-ink${isImageType() ? ' h-[220px]' : ''}`}
+      class="select-none overflow-hidden w-80 text-ink"
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
@@ -553,13 +551,7 @@ export function PopupPreview(props: {
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
-            <div
-              class={
-                isImageType()
-                  ? 'h-full flex items-center justify-center'
-                  : 'p-3'
-              }
-            >
+            <div class="p-3 flex items-center justify-center">
               <Loading />
             </div>
           </Match>
@@ -580,7 +572,7 @@ export function PopupPreview(props: {
               };
 
               return (
-                <div class="w-full flex flex-col h-full">
+                <div class="w-full flex flex-col">
                   {/* Header: icon + filename + action buttons */}
                   <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
                     <div class="flex items-center gap-2 min-w-0">
@@ -608,7 +600,7 @@ export function PopupPreview(props: {
                   <Show when={props.documentInfo.type === 'image'}>
                     <ImageCoverStrip
                       documentId={accessibleItem().id}
-                      class="flex-1 min-h-0"
+                      class="shrink-0 h-32"
                     />
                   </Show>
 

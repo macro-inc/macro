@@ -594,6 +594,14 @@
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
 
+/* Hide Kobalte's popper positioner until floating-UI has computed the position.
+   Without this, the card briefly appears at top:0 left:0 on first open. */
+[data-popper-positioner]:not([style*='translate']) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    will-change: transform, opacity;
+}
+
 @layer base {
     html {
         overscroll-behavior: none;
