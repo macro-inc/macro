@@ -8077,9 +8077,12 @@ dependencies = [
 name = "referral_invitation"
 version = "0.1.0"
 dependencies = [
+ "askama",
+ "macro_env",
  "macro_user_id",
  "notification",
  "serde",
+ "url",
 ]
 
 [[package]]

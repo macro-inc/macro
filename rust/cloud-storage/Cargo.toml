@@ -133,6 +133,7 @@ members = [
 
 [workspace.dependencies]
 anyhow = "1.0.93"
+askama = "0.14"
 async-openai = { version = "0.28.3", features = ["byot"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
