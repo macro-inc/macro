@@ -29,6 +29,7 @@ import {
 } from './EmailPropertiesModal';
 import { useEmailContext } from './EmailContext';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function TopBar(props: {
   id: string;
@@ -134,7 +135,7 @@ export function TopBar(props: {
       <SplitHeaderLeft>
         <StaticSplitLabel
           iconType={isInvite() ? 'emailInvite' : 'email'}
-          label={props.title}
+          label={isMobile() ? '' : props.title}
           badges={
             props.isDraft
               ? [
