@@ -49,7 +49,7 @@ impl TryFrom<String> for DocumentKeyParts {
 }
 
 /// Handles the Eventbridge event
-#[tracing::instrument(skip(sqs_client, dss_client))]
+#[tracing::instrument(skip(sqs_client, dss_client), err)]
 pub async fn handler(
     sqs_client: &sqs_client::SQS,
     dss_client: &DocumentStorageServiceClient,
