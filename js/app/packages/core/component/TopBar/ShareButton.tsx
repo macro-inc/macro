@@ -9,7 +9,7 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { DropdownMenuContent } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -33,11 +33,15 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import IconLink from '@icon/regular/link.svg';
-import IconShared from '@macro-icons/wide/share.svg';
 import User from '@icon/regular/user.svg';
 import IconUsers from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
+import IconShared from '@macro-icons/wide/share.svg';
+import IconComment from '@macro-icons/wide/comment.svg';
+import IconEdit from '@macro-icons/wide/edit.svg';
+import IconEye from '@macro-icons/wide/eye.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -864,6 +868,12 @@ export function ShareBlockModal(props: {
   );
 }
 
+const PERMISSION_ICONS = {
+  comment: IconComment,
+  view: IconEye,
+  edit: IconEdit,
+} as const;
+
 export function ShareOptions(props: {
   setPermissions: (accessLevel: AccessLevel | null) => void;
   permissions?: AccessLevel | null;
@@ -938,14 +948,26 @@ export function ShareOptions(props: {
             onChange={handleChange}
           >
             <For each={options()}>
-              {(option) => (
-                <MenuItem
-                  groupValue={currentValue()}
-                  value={option.value}
-                  selectorType="radio"
-                  text={option.label}
-                />
-              )}
+              {(option) => {
+                const Icon =
+                  PERMISSION_ICONS[
+                    option.value as keyof typeof PERMISSION_ICONS
+                  ];
+                return (
+                  <DropdownMenu.RadioItem
+                    value={option.value}
+                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                  >
+                    <div class="w-4 h-4 shrink-0">
+                      {Icon && <Icon class="w-full h-full" />}
+                    </div>
+                    <div class="flex-1 truncate">{option.label}</div>
+                    <Show when={currentValue() === option.value}>
+                      <CheckIcon class="w-3 h-3 text-accent" />
+                    </Show>
+                  </DropdownMenu.RadioItem>
+                );
+              }}
             </For>
           </DropdownMenu.RadioGroup>
         </DropdownMenuContent>
