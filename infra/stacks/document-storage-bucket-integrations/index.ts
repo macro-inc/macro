@@ -2,6 +2,9 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
+const getEventRuleArn = (ruleName: string) =>
+  pulumi.interpolate`arn:aws:events:${aws.config.region}:569036502058:rule/${ruleName}`;
+
 // Main configuration setup
 export const setupS3EventBridgeTriggers = () => {
   const stack = pulumi.getStack();
@@ -45,21 +48,33 @@ export const setupS3EventBridgeTriggers = () => {
     messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
   });
 
+  const searchUploadRuleName = `search-upload-rule-${stack}`;
+  const textExtractorRuleName = `text-extractor-rule-${stack}`;
+
+  const searchUploadRuleArn = getEventRuleArn(searchUploadRuleName);
+
   new aws.sqs.QueuePolicy(`search-upload-dlq-policy-${stack}`, {
     queueUrl: searchUploadDlq.url,
-    policy: searchUploadDlq.arn.apply((arn) =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: { Service: 'events.amazonaws.com' },
-            Action: 'sqs:SendMessage',
-            Resource: arn,
-          },
-        ],
-      })
-    ),
+    policy: pulumi
+      .all([searchUploadDlq.arn, searchUploadRuleArn])
+      .apply(([queueArn, ruleArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'events.amazonaws.com' },
+              Action: 'sqs:SendMessage',
+              Resource: queueArn,
+              Condition: {
+                ArnEquals: {
+                  'aws:SourceArn': ruleArn,
+                },
+              },
+            },
+          ],
+        })
+      ),
   });
 
   // Configure EventBridge rules for each Lambda
@@ -70,7 +85,7 @@ export const setupS3EventBridgeTriggers = () => {
       const uploadNotificationRule = new aws.cloudwatch.EventRule(
         `search-upload-rule-${stack}`,
         {
-          name: `search-upload-rule-${stack}`,
+          name: searchUploadRuleName,
           description: 'Triggers search upload Lambda for all files',
           eventPattern: JSON.stringify({
             source: ['aws.s3'],
@@ -101,7 +116,7 @@ export const setupS3EventBridgeTriggers = () => {
       const textExtractorRule = new aws.cloudwatch.EventRule(
         `text-extractor-rule-${stack}`,
         {
-          name: `text-extractor-rule-${stack}`,
+          name: textExtractorRuleName,
           description: 'Triggers text extractor Lambda for PDF files',
           eventPattern: JSON.stringify({
             source: ['aws.s3'],
@@ -130,12 +145,12 @@ export const setupS3EventBridgeTriggers = () => {
     });
 
   // Add necessary permissions for EventBridge to invoke Lambda functions
-  const createLambdaPermission = (functionArn: string, ruleId: string) => {
-    return new aws.lambda.Permission(`eventbridge-permission-${ruleId}`, {
+  const createLambdaPermission = (functionArn: string, ruleName: string) => {
+    return new aws.lambda.Permission(`eventbridge-permission-${ruleName}`, {
       action: 'lambda:InvokeFunction',
       function: functionArn,
       principal: 'events.amazonaws.com',
-      sourceArn: pulumi.interpolate`arn:aws:events:${aws.config.region}:569036502058:rule/${ruleId}`,
+      sourceArn: getEventRuleArn(ruleName),
     });
   };
 
@@ -145,9 +160,9 @@ export const setupS3EventBridgeTriggers = () => {
     .apply(([searchUploadHandlerLambdaArn, extractorArn]) => {
       createLambdaPermission(
         searchUploadHandlerLambdaArn,
-        `search-upload-rule-${stack}`
+        searchUploadRuleName
       );
-      createLambdaPermission(extractorArn, `text-extractor-rule-${stack}`);
+      createLambdaPermission(extractorArn, textExtractorRuleName);
     });
 };
 
