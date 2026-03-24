@@ -541,16 +541,6 @@
    --animate-swipe-out: swipeOut 100ms ease-out;
    --animate-typing-dot: typing-dot 1s infinite;
 
-    @keyframes fade-in {
-        from {
-            opacity: 0;
-        }
-
-        to {
-            opacity: 1;
-        }
-    }
-
     @keyframes hide {
         from {
             opacity: 1;

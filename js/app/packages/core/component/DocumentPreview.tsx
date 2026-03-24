@@ -14,7 +14,6 @@ import {
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  type AccessiblePreviewItem,
   isAccessiblePreviewItem,
   isChannelPreviewItem,
   type PreviewItemNoAccess,
@@ -290,7 +289,12 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
           <img
             src={url()}
             class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
-            onLoad={(e) => ((e.target as HTMLImageElement).style.opacity = '1')}
+            onLoad={(e) => {
+              const img = e.target as HTMLImageElement;
+              requestAnimationFrame(() => {
+                img.style.opacity = '1';
+              });
+            }}
             alt=""
           />
         )}
