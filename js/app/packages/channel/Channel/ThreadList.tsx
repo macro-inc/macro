@@ -6,6 +6,9 @@ import {
   type ScrollDirection,
 } from '@core/util/scroll-intent';
 
+const BASE_ITEM_SIZE = 62;
+const BASE_BUFFER_SIZE = BASE_ITEM_SIZE * 10;
+
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
 export type ThreadListScrollTarget =
@@ -295,6 +298,8 @@ export function ThreadList(props: ThreadListProps) {
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
+        itemSize={BASE_ITEM_SIZE}
+        bufferSize={BASE_BUFFER_SIZE}
         data={props.keys()}
         onScroll={handleScroll}
         shift={props.shift?.() ?? false}
