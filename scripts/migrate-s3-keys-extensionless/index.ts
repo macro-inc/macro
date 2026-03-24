@@ -35,7 +35,11 @@ function log(message: string) {
 }
 
 function loadCursor(): string | undefined {
-  if (RESET || USER || DOCUMENT_ID) return undefined;
+  if (RESET) {
+    clearCursor();
+    return undefined;
+  }
+  if (USER || DOCUMENT_ID) return undefined;
   if (!existsSync(CURSOR_FILE)) return undefined;
   const cursor = readFileSync(CURSOR_FILE, "utf-8").trim();
   if (!cursor) return undefined;
@@ -50,7 +54,7 @@ function saveCursor(lastKey: string) {
 
 function clearCursor() {
   if (existsSync(CURSOR_FILE)) {
-    Bun.write(CURSOR_FILE, "");
+    writeFileSync(CURSOR_FILE, "");
   }
 }
 

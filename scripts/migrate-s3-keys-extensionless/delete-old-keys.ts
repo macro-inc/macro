@@ -178,7 +178,7 @@ function saveCursor(lastKey: string) {
 
 function clearCursor() {
   if (existsSync(CURSOR_FILE)) {
-    Bun.write(CURSOR_FILE, "");
+    writeFileSync(CURSOR_FILE, "");
   }
 }
 
