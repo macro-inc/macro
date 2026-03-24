@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::{api::context::ApiContext, service::s3::S3};
 use axum::{http::StatusCode, response::Response};
 use document_sub_type::DocumentSubType;
 use macro_db_client::history::upsert_user_history;
@@ -9,12 +9,32 @@ use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
         BomPart, CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-        build_cloud_storage_bucket_document_key,
+        build_cloud_storage_bucket_document_key, build_extensionless_document_key,
     },
     response::GenericResponse,
 };
 use models_permissions::share_permission::SharePermissionV2;
 use system_properties::SystemPropertiesService;
+
+async fn resolve_source_key(
+    s3_client: &S3,
+    owner: &str,
+    document_id: &str,
+    document_version_id: i64,
+    file_type_str: Option<&str>,
+) -> anyhow::Result<String> {
+    let extensionless = build_extensionless_document_key(owner, document_id, document_version_id);
+    if s3_client.exists(&extensionless).await? {
+        Ok(extensionless)
+    } else {
+        Ok(build_cloud_storage_bucket_document_key(
+            owner,
+            document_id,
+            document_version_id,
+            file_type_str,
+        ))
+    }
+}
 
 #[tracing::instrument(skip(ctx))]
 pub async fn copy_document<'a>(
@@ -133,23 +153,30 @@ pub async fn copy_document<'a>(
             })?
             .0;
 
-            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
-            // Get the source document key
-            let source_key = build_cloud_storage_bucket_document_key(
-                &url_encoded_owner,
-                &original_document_metadata.document_id,
-                document_version_id,
-                file_type_str,
-            );
-
-            let dest_key = build_cloud_storage_bucket_document_key(
+            let dest_key = build_extensionless_document_key(
                 user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
-                file_type_str,
             );
+
+            let source_key = resolve_source_key(
+                &ctx.s3_client,
+                original_document_metadata.owner.as_ref(),
+                &original_document_metadata.document_id,
+                document_version_id,
+                file_type_str,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to resolve source key");
+                (
+                    Some(updated_document_metadata.document_id.clone()),
+                    e,
+                    "unable to resolve source key",
+                )
+            })?;
 
             let _ = ctx
                 .s3_client
@@ -211,23 +238,30 @@ pub async fn copy_document<'a>(
                 .0
             };
 
-            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
-            // Get the source document key
-            let source_key = build_cloud_storage_bucket_document_key(
-                &url_encoded_owner,
-                &original_document_metadata.document_id,
-                document_version_id,
-                file_type_str,
-            );
-
-            let dest_key = build_cloud_storage_bucket_document_key(
+            let dest_key = build_extensionless_document_key(
                 user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
-                file_type_str,
             );
+
+            let source_key = resolve_source_key(
+                &ctx.s3_client,
+                original_document_metadata.owner.as_ref(),
+                &original_document_metadata.document_id,
+                document_version_id,
+                file_type_str,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to resolve source key");
+                (
+                    Some(updated_document_metadata.document_id.clone()),
+                    e,
+                    "unable to resolve source key",
+                )
+            })?;
 
             // handle non live collab
             ctx.s3_client

@@ -48,6 +48,7 @@ static CHANNEL_SELECT: &str = r#"
         uc.name as "name",
         uc.channel_type as "channel_type",
         uc.org_id as "org_id",
+        uc.team_id as "team_id",
         uc.created_at as "created_at",
         uc.updated_at as "updated_at",
         uc.owner_id as "owner_id",
@@ -135,6 +136,9 @@ fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChannelLiteral::OrganizationId(org_id)) => {
             format!("c.org_id = {org_id}")
         }
+        filter_ast::ExprFrame::Literal(ChannelLiteral::TeamId(team_id)) => {
+            format!("c.team_id = '{team_id}'")
+        }
         filter_ast::ExprFrame::Literal(ChannelLiteral::ChannelType(ct)) => {
             format!("c.channel_type = '{ct}'")
         }
@@ -177,6 +181,7 @@ struct ChannelRow {
     name: Option<String>,
     channel_type: super::ChannelType,
     org_id: Option<i64>,
+    team_id: Option<uuid::Uuid>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     owner_id: String,
@@ -192,6 +197,7 @@ impl ChannelRow {
             name: self.name,
             channel_type: super::ChannelType::mirror(self.channel_type),
             org_id: self.org_id.map(|id| OrganizationId(id as u32)),
+            team_id: self.team_id,
             created_at: self.created_at,
             updated_at: self.updated_at,
             owner_id: MacroUserIdStr::parse_from_str(&self.owner_id)
@@ -243,6 +249,7 @@ pub async fn get_user_channels_dynamic(
                 name: row.try_get("name")?,
                 channel_type: row.try_get("channel_type")?,
                 org_id: row.try_get("org_id")?,
+                team_id: row.try_get("team_id")?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
                 owner_id: row.try_get("owner_id")?,

@@ -2,6 +2,7 @@ export { authKeys } from './keys';
 export {
   useUserInfoQuery,
   invalidateUserInfo,
+  invalidateAllAfterLogin,
   updateUserInfo,
   type UserInfoData,
 } from './user-info';

@@ -34,6 +34,7 @@ pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
+    teams::outbound::team_channels_repo::TeamChannelsRepositoryImpl,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
 >;

@@ -87,6 +87,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./github/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./referral/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./chat/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./memory/.env
 
 setup_macrodb:
     just macro_db_client/create_db

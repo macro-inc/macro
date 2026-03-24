@@ -12,7 +12,7 @@ export const initializeGoogleAnalytics = () => {
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', '${G_ID}');
+    gtag('config', '${G_ID}', { send_page_view: false });
   `;
   document.head.appendChild(gaInit);
 
@@ -41,8 +41,8 @@ export const initializeMetaPixel = () => {
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
+      fbq.disablePushState = true;
       fbq('init', '${PIXEL_ID}');
-      fbq('track', 'PageView');
     `;
 
   document.head.appendChild(fbqInit);
@@ -51,7 +51,7 @@ export const initializeMetaPixel = () => {
 
   pixelImage.width = 1;
   pixelImage.height = 1;
-  pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`;
+  pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=ViewContent&cd[content_name]=App%20NoScript&ev=PageView&noscript=1`;
   pixelImage.style.display = 'none';
 
   const pixelImageInit = document.createElement('noscript');

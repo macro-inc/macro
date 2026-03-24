@@ -137,6 +137,8 @@ export * from './httpSendChatMessageRequestAdditionalInstructions';
 export * from './httpSendChatMessageRequestAttachments';
 export * from './httpSendChatMessageRequestChatId';
 export * from './jwtPayload';
+export * from './memoryErrorBody';
+export * from './memoryResponse';
 export * from './messageWithAttachments';
 export * from './model';
 export * from './modelMetadata';

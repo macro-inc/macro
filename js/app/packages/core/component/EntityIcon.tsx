@@ -124,6 +124,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Direct Message',
   },
+  team: {
+    icon: Users,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Team Channel',
+  },
   email: {
     icon: Email,
     foreground: 'text-email',
@@ -267,6 +273,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   organization: Building,
   private: WideChannel,
   direct_message: WideChat,
+  team: WideChannel,
   email: WideEmail,
   code: WideFileCode,
   csv: WideCsv,

@@ -78,9 +78,7 @@ impl Default for Cli<(), fn() -> RequestContext> {
             model: Model::Claude45Opus,
             #[allow(deprecated)]
             request_context_fn: || RequestContext {
-                user_id: Arc::new(
-                    MacroUserIdStr::try_from_email("cli@localhost").expect("valid email"),
-                ),
+                user_id: MacroUserIdStr::try_from_email("cli@localhost").expect("valid email"),
                 jwt: Arc::new(String::new()),
             },
         }
@@ -145,7 +143,7 @@ where
         }
         println!("---");
 
-        let tool_loop = ToolLoop::new(self.toolset, self.service_context);
+        let tool_loop = ToolLoop::new(Arc::new(self.toolset), self.service_context);
 
         let stdin = io::stdin();
         let mut stdout = io::stdout();

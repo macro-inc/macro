@@ -12,6 +12,8 @@ import type { TeamRole } from './teamRole';
 export interface TeamMember {
   /** The role of the team member */
   role: TeamRole;
+  /** The id of the team */
+  team_id: string;
   /** The user id of the team member */
   user_id: string;
 }

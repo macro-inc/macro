@@ -12,8 +12,8 @@ use axum::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     document::{
-        ContentType, DocumentMetadata, FileType, build_cloud_storage_bucket_document_key,
-        build_docx_staging_bucket_document_key,
+        ContentType, DocumentMetadata, FileType, build_docx_staging_bucket_document_key,
+        build_extensionless_document_key,
     },
     folder::{
         FileSystemNode, S3Destination, S3DestinationMap, UploadFolderRequest,
@@ -273,11 +273,10 @@ async fn build_documents(
             .transpose()?;
         let sha = document.sha.clone().context("document needs a sha")?;
         if file_type != Some(FileType::Docx) {
-            let key = build_cloud_storage_bucket_document_key(
+            let key = build_extensionless_document_key(
                 document.owner.as_ref(),
                 &document.document_id,
                 document.document_version_id,
-                file_type.as_ref().map(|s| s.as_str()),
             );
 
             match internal {

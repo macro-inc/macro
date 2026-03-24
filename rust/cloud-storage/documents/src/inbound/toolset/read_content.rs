@@ -80,7 +80,7 @@ where
         let entity_access_receipt = service_context
             .entity_access_service
             .generate_entity_access_receipt(
-                request_context.user_id.as_ref(),
+                &request_context.user_id,
                 None,
                 &self.document_id.to_string(),
                 EntityType::Document,

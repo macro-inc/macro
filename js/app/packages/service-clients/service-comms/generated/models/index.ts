@@ -50,6 +50,7 @@ export * from './communicationServiceApiVersion';
 export * from './countedReaction';
 export * from './createChannelRequest';
 export * from './createChannelRequestName';
+export * from './createChannelRequestTeamId';
 export * from './createChannelResponse';
 export * from './createEntityMentionRequest';
 export * from './createEntityMentionResponse';

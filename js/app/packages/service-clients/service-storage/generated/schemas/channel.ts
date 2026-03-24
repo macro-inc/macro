@@ -7,6 +7,7 @@
 
 import type { ChannelName } from './channelName';
 import type { ChannelOrgId } from './channelOrgId';
+import type { ChannelTeamId } from './channelTeamId';
 import type { ChannelType } from './channelType';
 
 export interface Channel {
@@ -17,5 +18,6 @@ export interface Channel {
   /** @minimum 0 */
   org_id?: ChannelOrgId;
   owner_id: string;
+  team_id?: ChannelTeamId;
   updated_at: string;
 }

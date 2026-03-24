@@ -14,6 +14,7 @@ use crate::model::{
     },
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
@@ -64,7 +65,8 @@ use utoipa::OpenApi;
             get_batch_preview::handler,
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
-            chat_message::send_chat_message
+            chat_message::send_chat_message,
+            memory_api::get_memory_handler
         ),
         components(
             schemas(
@@ -132,6 +134,10 @@ use utoipa::OpenApi;
                 ChatMessageError,
                 StreamError,
                 ToolSet,
+
+                // Memory
+                MemoryResponse,
+                MemoryErrorBody,
 
                 // Tools
                 ai::tool::schema::ToolSchema,

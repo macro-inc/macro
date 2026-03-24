@@ -1,5 +1,6 @@
+import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { getSearchEventQueue, stack } from '../../packages/shared';
+import { config, getSearchEventQueue, stack } from '../../packages/shared';
 import { SearchUploadHandler } from './search-upload-lambda';
 
 const tags = {
@@ -10,6 +11,12 @@ const tags = {
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
+const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('document_storage_service_auth_key'),
+  })
+  .apply((secret) => secret.secretString);
+
 const BASE_NAME = 'search-upload';
 
 const searchUploadHandler = new SearchUploadHandler(
@@ -19,6 +26,8 @@ const searchUploadHandler = new SearchUploadHandler(
       ENVIRONMENT: pulumi.interpolate`${stack}`,
       RUST_LOG: 'search_upload_handler=info',
       SEARCH_EVENT_QUEUE: pulumi.interpolate`${searchEventQueueName}`,
+      DOCUMENT_STORAGE_SERVICE_URL: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      DOCUMENT_STORAGE_SERVICE_AUTH_KEY: pulumi.interpolate`${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}`,
     },
     searchEventQueueArn,
     tags,

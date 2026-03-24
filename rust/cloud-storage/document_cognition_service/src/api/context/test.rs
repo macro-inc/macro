@@ -249,13 +249,31 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         test_lexical_client,
     );
 
+    let search_service_client = Arc::new(search_service_client);
+    let scribe = Arc::new(content_client);
+
+    let memory_tool_context = ai_tools::ToolServiceContext {
+        search_service_client: search_service_client.clone(),
+        email_service_client: email_service_client_external.clone(),
+        scribe: scribe.clone(),
+        soup_service: soup_service.clone(),
+        document_tool_context: document_tool_context.clone(),
+    };
+    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
+    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
+        pool.clone(),
+        memory_repo,
+        memory_tool_context,
+        ai_tools::all_tools(),
+    ));
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         comms_service_client,
-        search_service_client: Arc::new(search_service_client),
-        scribe: Arc::new(content_client),
+        search_service_client,
+        scribe,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
@@ -265,6 +283,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         soup_service,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
+        memory_service,
     };
     Arc::new(api_context)
 }

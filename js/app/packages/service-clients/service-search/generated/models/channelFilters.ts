@@ -6,6 +6,7 @@
  */
 import type { ChannelFiltersImportance } from './channelFiltersImportance';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
+import type { ChannelFiltersTeamId } from './channelFiltersTeamId';
 import type { NotificationFilters } from './notificationFilters';
 
 /**
@@ -26,6 +27,8 @@ export interface ChannelFilters {
   org_id?: ChannelFiltersOrgId;
   /** Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders. */
   sender_ids?: string[];
+  /** Channel team ID to search within. Empty to ignore team filtering. */
+  team_id?: ChannelFiltersTeamId;
   /** Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads. */
   thread_ids?: string[];
 }

@@ -20,7 +20,7 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CheckIcon from '@icon/regular/check.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import {
@@ -29,6 +29,7 @@ import {
 } from './EmailPropertiesModal';
 import { useEmailContext } from './EmailContext';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function TopBar(props: {
   id: string;
@@ -134,7 +135,7 @@ export function TopBar(props: {
       <SplitHeaderLeft>
         <StaticSplitLabel
           iconType={isInvite() ? 'emailInvite' : 'email'}
-          label={props.title}
+          label={isMobile() ? '' : props.title}
           badges={
             props.isDraft
               ? [

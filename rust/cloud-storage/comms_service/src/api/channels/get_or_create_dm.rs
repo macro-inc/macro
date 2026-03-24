@@ -96,6 +96,7 @@ pub async fn handler(
                     org_id: None,
                     channel_type: ChannelType::DirectMessage,
                     participants: vec![user_id.clone(), recipient_id.clone()],
+                    team_id: None,
                 },
             )
             .await

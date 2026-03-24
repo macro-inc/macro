@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! CLI example for testing documents AI tools interactively.
 //!
 //! This example creates a CLI interface to test the documents toolset with real database connections.
@@ -146,7 +147,7 @@ async fn main() {
     let toolset = document_toolset();
 
     let context = RequestContext {
-        user_id: Arc::new(user_id),
+        user_id,
         // Remove this later
         #[allow(deprecated)]
         jwt: Arc::new(String::new()),

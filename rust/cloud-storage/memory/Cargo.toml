@@ -1,0 +1,47 @@
+[package]
+name = "memory"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+
+[dependencies]
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+thiserror = { workspace = true }
+ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
+ai = { path = "../ai" }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+model_user = { path = "../model_user", features = ["axum"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+
+# For building ToolServiceContext
+comms = { path = "../comms" }
+documents = { path = "../documents" }
+email = { path = "../email" }
+entity_access = { path = "../entity_access" }
+frecency = { path = "../frecency" }
+lexical_client = { path = "../lexical_client" }
+scribe = { path = "../scribe" }
+search_service_client = { path = "../search_service_client" }
+email_service_client = { path = "../email_service_client" }
+document_storage_service_client = { path = "../document_storage_service_client" }
+comms_service_client = { path = "../comms_service_client" }
+document_cognition_service_client = { path = "../document_cognition_service_client" }
+static_file_service_client = { path = "../static_file_service_client" }
+sync_service_client = { path = "../sync_service_client" }
+soup = { path = "../soup", features = ["all"] }
+macro_aws_config = { path = "../macro_aws_config" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

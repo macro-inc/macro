@@ -22,6 +22,8 @@ pub enum ChannelTypeFilter {
     Private,
     /// a direct message channel
     DirectMessage,
+    /// a team channel
+    Team,
 }
 
 impl ParseFromStr for ChannelTypeFilter {
@@ -31,6 +33,7 @@ impl ParseFromStr for ChannelTypeFilter {
             "organization" => Ok(Self::Organization),
             "private" => Ok(Self::Private),
             "direct_message" => Ok(Self::DirectMessage),
+            "team" => Ok(Self::Team),
             _ => Err(UnknownValue(
                 s.as_ref().to_string(),
                 std::marker::PhantomData,
@@ -48,6 +51,8 @@ pub enum ChannelLiteral {
     Mention(MacroUserIdStr<'static>),
     /// the message is in some organization
     OrganizationId(i64),
+    /// the message is in some team
+    TeamId(Uuid),
     /// the message is in some channel id
     ChannelId(Uuid),
     /// the message comes from some sender x
@@ -72,6 +77,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             thread_ids,
             mentions,
             org_id,
+            team_id,
             channel_ids,
             sender_ids,
             channel_types,
@@ -92,6 +98,11 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
         let organizations = org_id
             .into_iter()
             .expand(ChannelLiteral::OrganizationId, Expr::or);
+
+        let teams = team_id
+            .into_iter()
+            .map(|s| Uuid::parse_str(&s))
+            .try_expand(|r| r.map(ChannelLiteral::TeamId), Expr::or)?;
 
         let channel_ids = channel_ids
             .iter()
@@ -120,6 +131,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             thread_ids,
             mentions,
             organizations,
+            teams,
             channel_ids,
             sender_ids,
             channel_type_nodes,
