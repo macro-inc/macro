@@ -23,7 +23,7 @@
         "@floating-ui/dom": "^1.7.4",
         "@fontsource-variable/inter": "^5.2.8",
         "@fontsource-variable/roboto-mono": "^5.2.8",
-        "@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",
+        "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#2b2257722f60458921eadf4a9ab4d9e1db36e34f",
         "@kobalte/core": "^0.13.11",
         "@leeoniya/ufuzzy": "^1.0.19",
         "@lexical/history": "^0.32.1",
@@ -757,7 +757,7 @@
 
     "@iconify/utils": ["@iconify/utils@2.3.0", "", { "dependencies": { "@antfu/install-pkg": "^1.0.0", "@antfu/utils": "^8.1.0", "@iconify/types": "^2.0.0", "debug": "^4.4.0", "globals": "^15.14.0", "kolorist": "^1.8.0", "local-pkg": "^1.0.0", "mlly": "^1.7.4" } }, "sha512-GmQ78prtwYW6EtzXRU1rY+KwOKfz32PD7iJh6Iyqw68GiKuoZ2A6pRtzWONz5VQJbp50mEjXh/7NkumtrAgRKA=="],
 
-    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:seanaye/tauri-plugins#0c932ff", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "seanaye-tauri-plugins-0c932ff"],
+    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:macro-inc/tauri-plugins#2b22577", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "macro-inc-tauri-plugins-2b22577"],
 
     "@internationalized/date": ["@internationalized/date@3.5.6", "", { "dependencies": { "@swc/helpers": "^0.5.0" } }, "sha512-jLxQjefH9VI5P9UQuqB6qNKnvFt1Ky1TPIzHGsIlCi7sZZoMR8SdYbBGRvM0y+Jtb+ez4ieBzmiAUcpmPYpyOw=="],
 
