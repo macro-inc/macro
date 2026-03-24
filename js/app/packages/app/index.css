@@ -270,6 +270,8 @@
   --cursor-row-resize: row-resize;
   --cursor-ew-resize: ew-resize;
   --cursor-ns-resize: ns-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-nesw-resize: nesw-resize;
 }
 
 .bg-accent {
