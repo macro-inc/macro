@@ -19,6 +19,7 @@ const searchUploadHandler = new SearchUploadHandler(
       ENVIRONMENT: pulumi.interpolate`${stack}`,
       RUST_LOG: 'search_upload_handler=info',
       SEARCH_EVENT_QUEUE: pulumi.interpolate`${searchEventQueueName}`,
+      DOCUMENT_STORAGE_SERVICE_URL: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
     },
     searchEventQueueArn,
     tags,
