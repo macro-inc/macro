@@ -147,8 +147,7 @@ pub async fn update_search_with_raw_document(
     );
     let key = if s3_client
         .exists(document_storage_bucket, &extensionless_key)
-        .await
-        .unwrap_or(false)
+        .await?
     {
         extensionless_key
     } else {

@@ -22,18 +22,18 @@ async fn resolve_source_key(
     document_id: &str,
     document_version_id: i64,
     file_type_str: Option<&str>,
-) -> String {
+) -> anyhow::Result<String> {
     let extensionless =
         build_extensionless_document_key(url_encoded_owner, document_id, document_version_id);
-    if s3_client.exists(&extensionless).await.unwrap_or(false) {
-        extensionless
+    if s3_client.exists(&extensionless).await? {
+        Ok(extensionless)
     } else {
-        build_cloud_storage_bucket_document_key(
+        Ok(build_cloud_storage_bucket_document_key(
             url_encoded_owner,
             document_id,
             document_version_id,
             file_type_str,
-        )
+        ))
     }
 }
 
@@ -170,7 +170,15 @@ pub async fn copy_document<'a>(
                 document_version_id,
                 file_type_str,
             )
-            .await;
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to resolve source key");
+                (
+                    Some(updated_document_metadata.document_id.clone()),
+                    e,
+                    "unable to resolve source key",
+                )
+            })?;
 
             let _ = ctx
                 .s3_client
@@ -248,7 +256,15 @@ pub async fn copy_document<'a>(
                 document_version_id,
                 file_type_str,
             )
-            .await;
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to resolve source key");
+                (
+                    Some(updated_document_metadata.document_id.clone()),
+                    e,
+                    "unable to resolve source key",
+                )
+            })?;
 
             // handle non live collab
             ctx.s3_client

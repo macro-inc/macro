@@ -85,12 +85,17 @@ pub async fn get_document_key_handler(
                 &document_id,
                 document_version_id,
             );
-            if state
-                .s3_client
-                .exists(&extensionless_key)
-                .await
-                .unwrap_or(false)
-            {
+            let extensionless_exists = match state.s3_client.exists(&extensionless_key).await {
+                Ok(exists) => exists,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to check if extensionless key exists");
+                    return GenericResponse::builder()
+                        .message("unable to check document key")
+                        .is_error(true)
+                        .send(StatusCode::INTERNAL_SERVER_ERROR);
+                }
+            };
+            if extensionless_exists {
                 extensionless_key
             } else {
                 build_cloud_storage_bucket_document_key(

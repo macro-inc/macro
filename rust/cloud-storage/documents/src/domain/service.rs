@@ -124,8 +124,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         let document_key = if self
             .upload_url_service
             .document_key_exists(&extensionless_key)
-            .await
-            .unwrap_or(false)
+            .await?
         {
             build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
         } else {
@@ -161,8 +160,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         let document_key = if self
             .upload_url_service
             .document_key_exists(&extensionless_key)
-            .await
-            .unwrap_or(false)
+            .await?
         {
             build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
         } else {

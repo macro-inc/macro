@@ -131,10 +131,8 @@ async fn get_editable_url(
     // Try extensionless key first, fall back to legacy key with extension
     let extensionless_key =
         build_extensionless_document_key(owner, document_id, document_version_id);
-    let document_key = if verify_file_exists(&state.s3_client, &extensionless_key)
-        .await
-        .unwrap_or(false)
-    {
+    let extensionless_exists = verify_file_exists(&state.s3_client, &extensionless_key).await?;
+    let document_key = if extensionless_exists {
         build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
     } else {
         build_cloud_storage_bucket_document_key(
@@ -153,8 +151,7 @@ async fn get_editable_url(
             &state.s3_client,
             &build_extensionless_document_key(owner, document_id, document_version_id),
         )
-        .await
-        .unwrap_or(false)
+        .await?
         {
             build_extensionless_document_key(owner, document_id, document_version_id)
         } else {
@@ -213,10 +210,8 @@ pub(in crate::api::documents) async fn get_static_url(
     let extensionless_key =
         build_extensionless_document_key(owner, document_id, document_version_id);
     let file_type_str = file_type.as_ref().map(|s| s.as_str());
-    let document_key = if verify_file_exists(&state.s3_client, &extensionless_key)
-        .await
-        .unwrap_or(false)
-    {
+    let extensionless_exists = verify_file_exists(&state.s3_client, &extensionless_key).await?;
+    let document_key = if extensionless_exists {
         build_extensionless_document_key(&url_encoded_owner, document_id, document_version_id)
     } else {
         build_cloud_storage_bucket_document_key(
@@ -235,8 +230,7 @@ pub(in crate::api::documents) async fn get_static_url(
             &state.s3_client,
             &build_extensionless_document_key(owner, document_id, document_version_id),
         )
-        .await
-        .unwrap_or(false)
+        .await?
         {
             build_extensionless_document_key(owner, document_id, document_version_id)
         } else {
