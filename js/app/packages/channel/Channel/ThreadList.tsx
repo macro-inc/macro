@@ -6,6 +6,9 @@ import {
   type ScrollDirection,
 } from '@core/util/scroll-intent';
 
+const BASE_ITEM_SIZE: number = 64;
+const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
+
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
 export type ThreadListScrollTarget =
@@ -205,20 +208,17 @@ export function ThreadList(props: ThreadListProps) {
 
   function scrollOnMount(handle: VirtualizerHandle) {
     const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-    requestAnimationFrame(() => {
-      scrollToTarget(handle, target);
-      requestAnimationFrame(() => {
-        // Run a second pass after layout settles to avoid partial initial anchoring.
-        scrollToTarget(handle, target);
-        setDidInitialScroll(true);
-        emitScrollState(handle, false);
-      });
-    });
+    scrollToTarget(handle, target);
+    setDidInitialScroll(true);
+    emitScrollState(handle, false);
   }
 
   const handleScroll = () => {
     const handle = virtualHandle();
-    if (!handle) return;
+    if (!handle) {
+      console.warn("Channel.ThreadList: handle scroll but the handle is undefined");
+      return;
+    };
 
     const distanceFromTop = handle.scrollOffset;
     const distanceFromBottom =
@@ -285,6 +285,8 @@ export function ThreadList(props: ThreadListProps) {
         'flex-direction': 'column',
       }}
     >
+
+      <div style={{ 'flex-grow': 1 }} />
       <Virtualizer
         ref={(ref) => {
           if (!ref) return;
@@ -295,6 +297,8 @@ export function ThreadList(props: ThreadListProps) {
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
+        itemSize={BASE_ITEM_SIZE}
+        bufferSize={BASE_BUFFER_SIZE}
         data={props.keys()}
         onScroll={handleScroll}
         shift={props.shift?.() ?? false}

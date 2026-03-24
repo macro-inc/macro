@@ -26,7 +26,6 @@ export function ChannelThread(props: ThreadProps) {
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
-
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
   const repliesQuery = useThreadRepliesQuery(
