@@ -584,10 +584,12 @@ export function PopupPreview(props: {
                   props.documentInfo.type,
                   props.documentInfo.params
                 );
-              const messageContext = () =>
-                isChannelPreviewItem(accessibleItem())
-                  ? accessibleItem().messageContext
+              const messageContext = () => {
+                const item = accessibleItem();
+                return isChannelPreviewItem(item)
+                  ? item.messageContext
                   : undefined;
+              };
 
               return (
                 <div class="w-full flex flex-col h-full">
