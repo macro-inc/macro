@@ -61,38 +61,33 @@ export const setupS3EventBridgeTriggers = () => {
   ) => {
     new aws.sqs.QueuePolicy(`${name}-dlq-policy-${stack}`, {
       queueUrl: dlq.url,
-      policy: pulumi
-        .all([dlq.arn, ruleArn])
-        .apply(([queueArn, ruleArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: { Service: 'events.amazonaws.com' },
-                Action: 'sqs:SendMessage',
-                Resource: queueArn,
-                Condition: {
-                  ArnEquals: {
-                    'aws:SourceArn': ruleArn,
-                  },
+      policy: pulumi.all([dlq.arn, ruleArn]).apply(([queueArn, ruleArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'events.amazonaws.com' },
+              Action: 'sqs:SendMessage',
+              Resource: queueArn,
+              Condition: {
+                ArnEquals: {
+                  'aws:SourceArn': ruleArn,
                 },
               },
-            ],
-          })
-        ),
+            },
+          ],
+        })
+      ),
     });
   };
 
   createDlqPolicy('search-upload', searchUploadDlq, searchUploadRuleArn);
 
-  const textExtractorDlq = new aws.sqs.Queue(
-    `text-extractor-dlq-${stack}`,
-    {
-      name: `text-extractor-dlq-${stack}`,
-      messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
-    }
-  );
+  const textExtractorDlq = new aws.sqs.Queue(`text-extractor-dlq-${stack}`, {
+    name: `text-extractor-dlq-${stack}`,
+    messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
+  });
 
   createDlqPolicy('text-extractor', textExtractorDlq, textExtractorRuleArn);
 
