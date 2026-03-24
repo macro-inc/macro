@@ -59,6 +59,7 @@ pub async fn create_channel_handler(
         let teams = macro_db_client::team::get::get_user_teams(&ctx.db, &user_context.user_id)
             .await
             .map_err(|e| {
+                tracing::error!(error=?e, "unable to get_user_teams");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "unable to validate team".to_string(),
