@@ -51,7 +51,7 @@ export const initializeMetaPixel = () => {
 
   pixelImage.width = 1;
   pixelImage.height = 1;
-  pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`;
+  pixelImage.src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=ViewContent&cd[content_name]=App%20NoScript&ev=PageView&noscript=1`;
   pixelImage.style.display = 'none';
 
   const pixelImageInit = document.createElement('noscript');
