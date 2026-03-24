@@ -40,11 +40,35 @@ export const setupS3EventBridgeTriggers = () => {
     eventbridge: true,
   });
 
+  const searchUploadDlq = new aws.sqs.Queue(
+    `search-upload-dlq-${stack}`,
+    {
+      name: `search-upload-dlq-${stack}`,
+      messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
+    }
+  );
+
+  new aws.sqs.QueuePolicy(`search-upload-dlq-policy-${stack}`, {
+    queueUrl: searchUploadDlq.url,
+    policy: searchUploadDlq.arn.apply((arn) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'events.amazonaws.com' },
+            Action: 'sqs:SendMessage',
+            Resource: arn,
+          },
+        ],
+      })
+    ),
+  });
+
   // Configure EventBridge rules for each Lambda
-  // Corrected code for EventBridge rules and Lambda integration
   pulumi
-    .all([bucketId, searchUploadHandlerLambdaArn])
-    .apply(([bucketId, lambdaArn]) => {
+    .all([bucketId, searchUploadHandlerLambdaArn, searchUploadDlq.arn])
+    .apply(([bucketId, lambdaArn, dlqArn]) => {
       // Rule for upload notification Lambda (handles all files)
       const uploadNotificationRule = new aws.cloudwatch.EventRule(
         `search-upload-rule-${stack}`,
@@ -63,10 +87,13 @@ export const setupS3EventBridgeTriggers = () => {
         }
       );
 
-      // Add the Lambda as a target
+      // Add the Lambda as a target with DLQ
       new aws.cloudwatch.EventTarget('search-upload-target', {
         rule: uploadNotificationRule.name,
         arn: lambdaArn,
+        deadLetterConfig: {
+          arn: dlqArn,
+        },
       });
     });
 
