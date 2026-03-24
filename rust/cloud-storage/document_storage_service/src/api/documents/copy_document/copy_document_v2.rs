@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::{api::context::ApiContext, service::s3::S3};
 use axum::{http::StatusCode, response::Response};
 use document_sub_type::DocumentSubType;
 use macro_db_client::history::upsert_user_history;
@@ -15,6 +15,27 @@ use model::{
 };
 use models_permissions::share_permission::SharePermissionV2;
 use system_properties::SystemPropertiesService;
+
+async fn resolve_source_key(
+    s3_client: &S3,
+    url_encoded_owner: &str,
+    document_id: &str,
+    document_version_id: i64,
+    file_type_str: Option<&str>,
+) -> String {
+    let extensionless =
+        build_extensionless_document_key(url_encoded_owner, document_id, document_version_id);
+    if s3_client.exists(&extensionless).await.unwrap_or(false) {
+        extensionless
+    } else {
+        build_cloud_storage_bucket_document_key(
+            url_encoded_owner,
+            document_id,
+            document_version_id,
+            file_type_str,
+        )
+    }
+}
 
 #[tracing::instrument(skip(ctx))]
 pub async fn copy_document<'a>(
@@ -142,30 +163,14 @@ pub async fn copy_document<'a>(
                 updated_document_metadata.document_version_id,
             );
 
-            // Get the source document key
-            // Try extensionless key first, then fall back to legacy key with extension
-            let extensionless_source = build_extensionless_document_key(
-                &url_encoded_owner,
-                &original_document_metadata.document_id,
-                document_version_id,
-            );
-            let legacy_source = build_cloud_storage_bucket_document_key(
+            let source_key = resolve_source_key(
+                &ctx.s3_client,
                 &url_encoded_owner,
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
-            );
-
-            let source_key = if ctx
-                .s3_client
-                .exists(&extensionless_source)
-                .await
-                .unwrap_or(false)
-            {
-                extensionless_source
-            } else {
-                legacy_source
-            };
+            )
+            .await;
 
             let _ = ctx
                 .s3_client
@@ -236,30 +241,14 @@ pub async fn copy_document<'a>(
                 updated_document_metadata.document_version_id,
             );
 
-            // Get the source document key
-            // Try extensionless key first, then fall back to legacy key with extension
-            let extensionless_source = build_extensionless_document_key(
-                &url_encoded_owner,
-                &original_document_metadata.document_id,
-                document_version_id,
-            );
-            let legacy_source = build_cloud_storage_bucket_document_key(
+            let source_key = resolve_source_key(
+                &ctx.s3_client,
                 &url_encoded_owner,
                 &original_document_metadata.document_id,
                 document_version_id,
                 file_type_str,
-            );
-
-            let source_key = if ctx
-                .s3_client
-                .exists(&extensionless_source)
-                .await
-                .unwrap_or(false)
-            {
-                extensionless_source
-            } else {
-                legacy_source
-            };
+            )
+            .await;
 
             // handle non live collab
             ctx.s3_client
