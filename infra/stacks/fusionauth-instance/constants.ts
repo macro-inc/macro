@@ -27,10 +27,10 @@ export const FUSIONAUTH_CLIENT_SECRET =
   stack === 'local'
     ? undefined
     : aws.secretsmanager
-        .getSecretVersionOutput({
-          secretId: config.require('fusionauth-client-secret-key'),
-        })
-        .apply((secret) => secret.secretString);
+      .getSecretVersionOutput({
+        secretId: config.require('fusionauth-client-secret-key'),
+      })
+      .apply((secret) => secret.secretString);
 
 // The auth service url
 export const AUTHENTICATION_SERVICE_DOMAIN = config.require(
@@ -48,10 +48,10 @@ export const AUTHENTICATION_SERVICE_INTERNAL_SECRET = config.get(
   'authentication-service-internal-secret-key'
 )
   ? aws.secretsmanager
-      .getSecretVersionOutput({
-        secretId: config.require('authentication-service-internal-secret-key'),
-      })
-      .apply((secret) => secret.secretString)
+    .getSecretVersionOutput({
+      secretId: config.require('authentication-service-internal-secret-key'),
+    })
+    .apply((secret) => secret.secretString)
   : 'local';
 
 // Fusionauth license key grabbed from aws secrets manager
@@ -84,3 +84,10 @@ export const fusionAuthProvider = new Provider('fusion-auth-provider', {
   host: fusionauthHost,
   apiKey: fusionauthApiKey,
 });
+
+
+
+/**
+The fusionauth custom theme. This is just a theme with a custom oauth redirect
+*/
+export const FUSIONAUTH_THEME_ID = stack === 'prod' ? 'e486f9ac-e63f-4549-8244-ee8ed641f8a0' : stack === 'dev' ? '87cf78dd-03ba-478a-9211-3da0cdba9c3f' : undefined;

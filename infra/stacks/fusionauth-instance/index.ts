@@ -24,8 +24,10 @@ import {
   fusionAuthProvider,
   FUSIONAUTH_LICENSE_KEY,
   SMTP_CREDENTIALS,
+  FUSIONAUTH_THEME_ID,
 } from './constants';
 import { ALLOWED_ORIGINS } from './origins';
+
 
 // The main fusionauth provider, this will be passed around when creating various components
 
@@ -131,6 +133,7 @@ const defaultTenant = new FusionAuthTenant(
     tenantId: DEFAULT_FUSIONAUTH_TENANT_ID,
     name: 'Default Tenant - DO NOT TOUCH',
     issuer: FUSIONAUTH_ISSUER,
+    themeId: FUSIONAUTH_THEME_ID,
     emailConfiguration: {
       host: 'email-smtp.us-east-1.amazonaws.com',
       port: 587,
@@ -147,6 +150,7 @@ const defaultTenant = new FusionAuthTenant(
       verificationEmailTemplateId: emailVerificationTemplate.id,
       verificationStrategy: 'ClickableLink',
     },
+    logoutUrl: `https://${stack === 'prod' ? '' : `${stack}.`}macro.com`,
     // Delete unverified users
     userDeletePolicy: {
       unverifiedEnabled: true,
