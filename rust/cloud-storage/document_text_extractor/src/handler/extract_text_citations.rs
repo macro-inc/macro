@@ -157,7 +157,7 @@ pub async fn extract_text_from_document(
 
     // For legacy keys with extension, check the extension directly
     // For extensionless keys, look up file type from DB
-    if key.contains('.') {
+    if document_key_parts.has_extension {
         if !key.ends_with(".pdf") {
             tracing::info!("skipping non-pdf file for extraction");
             return Ok(None);
