@@ -273,6 +273,18 @@ fn test_build_query_shared_include_uses_union_instead_of_or() {
 }
 
 #[test]
+fn test_build_query_projects_real_updated_at_for_candidate_threads() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.updated_at AS updated_at"));
+    assert!(!sql.contains("COALESCE(t.latest_non_spam_message_ts, t.updated_at) AS updated_at"));
+}
+
+#[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));

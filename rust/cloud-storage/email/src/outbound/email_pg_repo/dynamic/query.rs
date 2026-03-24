@@ -50,10 +50,10 @@ fn push_thread_candidate_select(
     builder.push(format!(
         r#"
                     {} AS created_at,
-                    {} AS updated_at,
+                    t.updated_at AS updated_at,
                     uh.updated_at AS viewed_at,
                     CASE "#,
-        sort_ts_field, sort_ts_field
+        sort_ts_field
     ));
 
     builder.push_bind(params.sort_method_str.clone());
