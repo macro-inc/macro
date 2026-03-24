@@ -35,7 +35,8 @@ pub struct InviteToMacro {
     /// The sender's display name, if they have set one.
     pub sender_name: Option<String>,
     /// The sender's email address.
-    pub sender_email: String,
+    #[serde(default)]
+    pub sender_email: Option<String>,
 }
 
 impl InviteToMacro {
@@ -68,7 +69,11 @@ fn get_url(env: Environment, code: &ReferralCode) -> Url {
 
 impl NotificationExtEmail for InviteToMacro {
     fn format_email(&self) -> EmailContent {
-        let sender = self.sender_name.as_deref().unwrap_or(&self.sender_email);
+        let sender = self
+            .sender_name
+            .as_deref()
+            .or(self.sender_email.as_deref())
+            .unwrap_or("A Macro user");
         EmailContent {
             subject: format!("{} has invited you to join Macro", sender),
             body: self

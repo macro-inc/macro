@@ -6,7 +6,7 @@ fn make_invite() -> InviteToMacro {
         referral_code: ReferralCode("ABC123".to_string()),
         sender_profile_picture_url: None,
         sender_name: Some("Test User".to_string()),
-        sender_email: "test@example.com".to_string(),
+        sender_email: Some("test@example.com".to_string()),
     }
 }
 

@@ -115,7 +115,7 @@ impl<
                 (None, None)
             });
 
-        let sender_email = sending_user.email_part().email_str().to_string();
+        let sender_email = Some(sending_user.email_part().email_str().to_string());
 
         let notification = InviteToMacro {
             recipient_email: recipient.clone(),
