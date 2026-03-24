@@ -1819,6 +1819,7 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "unicode-segmentation",
  "utoipa",
 ]
 
@@ -3058,6 +3059,7 @@ dependencies = [
  "tower 0.5.2",
  "tower-http",
  "tracing",
+ "unicode-segmentation",
  "urlencoding",
  "utoipa",
  "utoipa-swagger-ui",
@@ -3161,6 +3163,7 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "unicode-segmentation",
  "urlencoding",
  "utoipa",
  "uuid",
