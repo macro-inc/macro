@@ -46,7 +46,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { formatDate } from '../util/date';
@@ -93,6 +93,22 @@ function Spinner() {
  */
 function Loading() {
   return <MentionContainer icon={<Spinner />} text="Loading" />;
+}
+
+/**
+ * Skeleton fallback for PopupPreview — matches the card dimensions and styling.
+ * Use as `suspenseFallback` on HoverCard when the content is a PopupPreview.
+ */
+export function PopupPreviewSkeleton() {
+  return (
+    <div class="select-none overflow-hidden w-80 text-ink">
+      <ClippedPanel tl={!beveledCorners()} active>
+        <div class="p-3 flex items-center justify-center">
+          <Spinner />
+        </div>
+      </ClippedPanel>
+    </div>
+  );
 }
 
 /**
@@ -271,23 +287,30 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
   return (
     <div
       class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
-      classList={{ 'animate-pulse': query.isLoading }}
     >
-      <Show when={query.data}>
-        {(url) => (
-          <img
-            src={url()}
-            class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
-            onLoad={(e) => {
-              const img = e.target as HTMLImageElement;
-              requestAnimationFrame(() => {
-                img.style.opacity = '1';
-              });
-            }}
-            alt=""
-          />
-        )}
-      </Show>
+      <Suspense
+        fallback={
+          <div class="absolute inset-0 flex items-center justify-center">
+            <LoadingSpinner class="size-5 animate-spin text-ink-muted" />
+          </div>
+        }
+      >
+        <Show when={query.data}>
+          {(url) => (
+            <img
+              src={url()}
+              class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                requestAnimationFrame(() => {
+                  img.style.opacity = '1';
+                });
+              }}
+              alt=""
+            />
+          )}
+        </Show>
+      </Suspense>
     </div>
   );
 }

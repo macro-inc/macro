@@ -26,6 +26,8 @@ export type HoverCardComponentProps = {
   trigger: JSX.Element;
   /** The content to show in the hover card */
   content: JSX.Element;
+  /** Fallback to render inside the Suspense while content is loading */
+  suspenseFallback?: JSX.Element;
   /** Additional class for content */
   anchorRef?: HTMLElement;
   /** Open delay in ms (default: 100) */
@@ -101,7 +103,9 @@ export function HoverCard(props: HoverCardComponentProps) {
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
-            <Suspense>{props.content}</Suspense>
+            <Suspense fallback={props.suspenseFallback}>
+              {props.content}
+            </Suspense>
           </HoverCardPortalNestedPreviewOpenContext.Provider>
         </KobalteHoverCard.Content>
       </KobalteHoverCard.Portal>
