@@ -28,7 +28,6 @@ import {
 } from './constants';
 import { ALLOWED_ORIGINS } from './origins';
 
-
 // The main fusionauth provider, this will be passed around when creating various components
 
 // Give access to premium features
