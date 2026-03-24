@@ -33,6 +33,7 @@ impl ParseFromStr for ChannelTypeFilter {
             "organization" => Ok(Self::Organization),
             "private" => Ok(Self::Private),
             "direct_message" => Ok(Self::DirectMessage),
+            "team" => Ok(Self::Team),
             _ => Err(UnknownValue(
                 s.as_ref().to_string(),
                 std::marker::PhantomData,

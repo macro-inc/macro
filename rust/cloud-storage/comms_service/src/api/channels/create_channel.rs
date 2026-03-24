@@ -42,6 +42,7 @@ pub fn to_lowercase(strings: &[String]) -> Vec<String> {
             (status = 201, body=CreateChannelResponse),
             (status = 400, body=String),
             (status = 401, body=String),
+            (status = 403, body=String),
             (status = 404, body=String),
             (status = 500, body=String),
         )
@@ -52,10 +53,16 @@ pub async fn create_channel_handler(
     user_context: Extension<UserContext>,
     extract::Json(req): extract::Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), (StatusCode, String)> {
-    if let Some(team_id) = req.team_id.as_ref()
-        && req.channel_type == ChannelType::Team
-    {
-        // TODO assert team access for user
+    if req.channel_type == ChannelType::Team {
+        let team_id = if let Some(team_id) = req.team_id.as_ref() {
+            team_id
+        } else {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "team id missing for team channel type".to_string(),
+            ));
+        };
+
         let teams = macro_db_client::team::get::get_user_teams(&ctx.db, &user_context.user_id)
             .await
             .map_err(|e| {
@@ -78,6 +85,15 @@ pub async fn create_channel_handler(
             ));
         }
     }
+
+    if req.team_id.is_some() && req.channel_type != ChannelType::Team {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "cannot have a team channel without team id".to_string(),
+        ));
+    }
+
+    // safety check to make sure you don't provide a team id in a non-team id channel
 
     // We only need to define the org_id for organization channels
     let org_id_for_channel = match req.channel_type {
