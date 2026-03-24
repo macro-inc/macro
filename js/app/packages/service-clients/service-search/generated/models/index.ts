@@ -8,6 +8,7 @@
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';
+export * from './channelFiltersTeamId';
 export * from './channelMetadata';
 export * from './channelMetadataInteractedAt';
 export * from './channelMetadataViewedAt';

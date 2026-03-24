@@ -4009,6 +4009,7 @@ export const getItemsSoupResponse = zod.object({
                   .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
                   .nullish(),
                 owner_id: zod.string(),
+                team_id: zod.string().uuid().nullish(),
                 updated_at: zod.string().datetime({}),
               }),
               participants: zod.array(
@@ -4148,6 +4149,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          ),
+        team_id: zod
+          .string()
+          .nullish()
+          .describe(
+            'Channel team ID to search within. Empty to ignore team filtering.'
           ),
         thread_ids: zod
           .array(zod.string())
@@ -5608,6 +5615,7 @@ export const postItemsSoupResponse = zod.object({
                   .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
                   .nullish(),
                 owner_id: zod.string(),
+                team_id: zod.string().uuid().nullish(),
                 updated_at: zod.string().datetime({}),
               }),
               participants: zod.array(
