@@ -228,9 +228,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
 
       // Reset any previous scaling
-      messageDiv.style.transform = '';
-      messageDiv.style.transformOrigin = '';
-      container.style.height = '';
+      messageDiv.style.zoom = '';
       messageDiv.style.overflow = '';
 
       const containerWidth = container.clientWidth;
@@ -238,10 +236,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
       if (containerWidth > 0 && contentWidth > containerWidth) {
         const scale = containerWidth / contentWidth;
-        messageDiv.style.transform = `scale(${scale})`;
-        messageDiv.style.transformOrigin = 'top left';
-        messageDiv.style.overflow = 'visible';
-        container.style.height = `${messageDiv.scrollHeight * scale}px`;
+        // Use zoom instead of transform: scale() so that backgrounds,
+        // borders, and layout all shrink together without clipping.
+        messageDiv.style.zoom = `${scale}`;
       } else {
         messageDiv.style.overflow = 'auto';
       }
