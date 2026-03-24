@@ -166,37 +166,30 @@ impl ReferralRepo for PgReferralRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_sender_profile_picture_url<'a>(
+    async fn get_sender_info<'a>(
         &self,
-        user_id: &'a str,
-    ) -> Result<Option<String>, Self::Err> {
-        sqlx::query_scalar::<_, String>(
+        user_id: &MacroUserId<Lowercase<'a>>,
+    ) -> Result<(Option<String>, Option<String>), Self::Err> {
+        let row = sqlx::query!(
             r#"
-            SELECT mui.profile_picture
+            SELECT
+                CASE
+                    WHEN mui.profile_picture IS NOT NULL AND mui.profile_picture != ''
+                    THEN mui.profile_picture
+                    ELSE NULL
+                END AS "profile_picture_url?: String",
+                NULLIF(TRIM(CONCAT_WS(' ', NULLIF(first_name, 'N/A'), NULLIF(last_name, 'N/A'))), '') AS "display_name?: String"
             FROM macro_user_info mui
             JOIN "User" u ON u.macro_user_id = mui.macro_user_id
             WHERE u.id = $1
-            AND mui.profile_picture IS NOT NULL
             "#,
+            user_id.as_ref()
         )
-        .bind(user_id)
         .fetch_optional(&self.pool)
-        .await
-    }
+        .await?;
 
-    #[tracing::instrument(skip(self), err)]
-    async fn get_sender_name<'a>(&self, user_id: &'a str) -> Result<Option<String>, Self::Err> {
-        sqlx::query_scalar::<_, String>(
-            r#"
-            SELECT TRIM(CONCAT_WS(' ', NULLIF(first_name, 'N/A'), NULLIF(last_name, 'N/A')))
-            FROM macro_user_info mui
-            JOIN "User" u ON u.macro_user_id = mui.macro_user_id
-            WHERE u.id = $1
-            AND (NULLIF(first_name, 'N/A') IS NOT NULL OR NULLIF(last_name, 'N/A') IS NOT NULL)
-            "#,
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await
+        Ok(row
+            .map(|r| (r.profile_picture_url, r.display_name))
+            .unwrap_or((None, None)))
     }
 }

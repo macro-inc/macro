@@ -53,18 +53,12 @@ pub trait ReferralRepo: Send + Sync + 'static {
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 
-    /// Gets the profile picture URL for the given user, if one exists.
-    fn get_sender_profile_picture_url<'a>(
+    /// Gets the sender's profile picture URL and display name in a single query.
+    /// Returns `(profile_picture_url, display_name)`, either of which may be `None`.
+    fn get_sender_info<'a>(
         &self,
-        user_id: &'a str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
-
-    /// Gets the display name for the given user, if one exists.
-    /// Returns None if the user has not set a name.
-    fn get_sender_name<'a>(
-        &self,
-        user_id: &'a str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+        user_id: &MacroUserId<Lowercase<'a>>,
+    ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
 }
 
 /// Repository to handle applying discounts to the referrer when a referral is

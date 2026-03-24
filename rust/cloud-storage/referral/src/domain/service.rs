@@ -106,25 +106,16 @@ impl<
     ) -> Result<(), ReferralError> {
         let referral_code = self.get_referral_code_for_user(&sending_user.0).await?;
 
-        let sender_profile_picture_url = self
+        let (sender_profile_picture_url, sender_name) = self
             .repo
-            .get_sender_profile_picture_url(sending_user.as_ref())
+            .get_sender_info(&sending_user.0)
             .await
             .unwrap_or_else(|e| {
-                tracing::warn!(error=?e, "failed to fetch sender profile picture");
-                None
+                tracing::warn!(error=?e, "failed to fetch sender info");
+                (None, None)
             });
 
         let sender_email = sending_user.email_part().email_str().to_string();
-
-        let sender_name = self
-            .repo
-            .get_sender_name(sending_user.as_ref())
-            .await
-            .unwrap_or_else(|e| {
-                tracing::warn!(error=?e, "failed to fetch sender name");
-                None
-            });
 
         let notification = InviteToMacro {
             recipient_email: recipient.clone(),
