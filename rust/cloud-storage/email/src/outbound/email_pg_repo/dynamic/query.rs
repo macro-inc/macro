@@ -264,7 +264,7 @@ fn build_query(
     builder.push(
         r#"
             ) AS candidate_threads
-            ORDER BY effective_ts DESC, updated_at DESC
+            ORDER BY effective_ts DESC, id DESC
             LIMIT "#,
     );
 
@@ -307,7 +307,7 @@ fn build_query(
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID
         JOIN email_links el ON t.link_id = el.id
-        ORDER BY t.effective_ts DESC, t.updated_at DESC
+        ORDER BY t.effective_ts DESC, t.id DESC
         "#,
     );
 

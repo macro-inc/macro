@@ -285,6 +285,20 @@ fn test_build_query_projects_real_updated_at_for_candidate_threads() {
 }
 
 #[test]
+fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("ORDER BY effective_ts DESC, id DESC"));
+    assert!(sql.contains("ORDER BY t.effective_ts DESC, t.id DESC"));
+    assert!(!sql.contains("ORDER BY effective_ts DESC, updated_at DESC"));
+    assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
+}
+
+#[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
