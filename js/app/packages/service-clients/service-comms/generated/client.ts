@@ -291,6 +291,11 @@ export type createChannelResponse401 = {
   status: 401;
 };
 
+export type createChannelResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type createChannelResponse404 = {
   data: string;
   status: 404;
@@ -307,6 +312,7 @@ export type createChannelResponseSuccess = createChannelResponse201 & {
 export type createChannelResponseError = (
   | createChannelResponse400
   | createChannelResponse401
+  | createChannelResponse403
   | createChannelResponse404
   | createChannelResponse500
 ) & {
