@@ -16,7 +16,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
   isChannelPreviewItem,
-  type PreviewItemNoAccess,
+  isPreviewItemNoAccess,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
@@ -39,8 +39,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
-import { maybeThrow } from '@core/util/maybeResult';
-import { storageServiceClient } from '@service-storage/client';
+import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
@@ -48,7 +47,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { formatDate } from '../util/date';
@@ -268,23 +267,13 @@ function UserInfo(props: { userId: string }) {
  * Popup preview component for document references
  */
 function ImageCoverStrip(props: { documentId: string; class?: string }) {
-  const [blobUrl, setBlobUrl] = createSignal<string | undefined>();
-  createEffect(() => {
-    const id = props.documentId;
-    storageServiceClient
-      .getBinaryDocument({ documentId: id })
-      .then((result) => {
-        const data = maybeThrow(result);
-        setBlobUrl(data.blobUrl);
-      })
-      .catch(() => {});
-  });
+  const query = useBinaryDocumentQuery(() => props.documentId);
 
   return (
     <div
       class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
     >
-      <Show when={blobUrl()}>
+      <Show when={query.data}>
         {(url) => (
           <img
             src={url()}
@@ -697,20 +686,17 @@ export function PopupPreview(props: {
             }}
           </Match>
 
-          {/* No access error */}
-          <Match when={(item() as PreviewItemNoAccess).access === 'no_access'}>
-            <div class="text-sm p-4">
-              <Unauthorized />
-            </div>
-          </Match>
-
-          {/* Does not exist error */}
-          <Match
-            when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}
-          >
-            <div class="text-sm p-4">
-              <NotFound />
-            </div>
+          {/* No access / does not exist errors */}
+          <Match when={matches(item(), isPreviewItemNoAccess)}>
+            {(noAccessItem) => (
+              <div class="text-sm p-4">
+                {noAccessItem().access === 'no_access' ? (
+                  <Unauthorized />
+                ) : (
+                  <NotFound />
+                )}
+              </div>
+            )}
           </Match>
         </Switch>
       </ClippedPanel>
