@@ -541,7 +541,7 @@
    --animate-swipe-out: swipeOut 100ms ease-out;
    --animate-typing-dot: typing-dot 1s infinite;
 
-    @keyframes popupIn {
+    @keyframes fade-in {
         from {
             opacity: 0;
         }
@@ -602,31 +602,6 @@
 
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
-
-/* Hide Kobalte's popper positioner until floating-UI has computed and written
-   the final transform. The sequence is:
-   1) Positioner mounts at position:absolute; top:0; left:0 — we hide it via
-      transform:-9999px (visual-only, no layout footprint) + opacity/visibility.
-      will-change pre-promotes the compositing layer on mount so the browser
-      doesn't need to promote it later (at animation start), which would otherwise
-      cause a brief repaint that can make nearby elements (e.g. the trigger link)
-      flicker.
-   2) autoUpdate fires immediately, computePosition() runs, and writes a
-      translate3d. With fixed card dimensions the first result is already correct.
-   3) At 20ms the animation delay ends and the card fades in at the correct position.
-   Using transform:-9999px (not top:-9999px) avoids extending document scroll area
-   since CSS transforms don't affect layout position. */
-[data-popper-positioner]:not([style*='translate']) {
-    transform: translate3d(-9999px, -9999px, 0) !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    will-change: transform, opacity;
-}
-
-[data-popper-positioner][style*='translate'] {
-    animation: popupIn 80ms ease 20ms both;
-}
 
 @layer base {
     html {

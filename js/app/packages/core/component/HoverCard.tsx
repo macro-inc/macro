@@ -96,7 +96,9 @@ export function HoverCard(props: HoverCardComponentProps) {
       </KobalteHoverCard.Trigger>
 
       <KobalteHoverCard.Portal>
-        <KobalteHoverCard.Content class={props.contentClass}>
+        <KobalteHoverCard.Content
+          class={`animate-[fade-in_80ms_ease_both] ${props.contentClass ?? ''}`}
+        >
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
