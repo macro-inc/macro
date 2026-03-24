@@ -17,6 +17,8 @@ pub struct CreateChannelRequest {
     pub name: Option<String>,
     /// The type of channel
     pub channel_type: ChannelType,
+    /// If the channel_type is team, provide the id of the team you are creating the channel for
+    pub team_id: Option<uuid::Uuid>,
     /// list of participants not including the owner
     pub participants: Vec<String>,
 }
@@ -50,6 +52,32 @@ pub async fn create_channel_handler(
     user_context: Extension<UserContext>,
     extract::Json(req): extract::Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), (StatusCode, String)> {
+    if let Some(team_id) = req.team_id.as_ref()
+        && req.channel_type == ChannelType::Team
+    {
+        // TODO assert team access for user
+        let teams = macro_db_client::team::get::get_user_teams(&ctx.db, &user_context.user_id)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to validate team".to_string(),
+                )
+            })?;
+
+        if teams
+            .into_iter()
+            .filter(|t| team_id.eq(&t.id))
+            .collect::<Vec<_>>()
+            .is_empty()
+        {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "you do not have access to that team".to_string(),
+            ));
+        }
+    }
+
     // We only need to define the org_id for organization channels
     let org_id_for_channel = match req.channel_type {
         ChannelType::Organization => user_context.organization_id.map(|org_id| org_id as i64),
@@ -83,6 +111,7 @@ pub async fn create_channel_handler(
             owner_id: user_context.user_id.clone(),
             org_id: org_id_for_channel,
             channel_type: req.channel_type,
+            team_id: req.team_id,
             participants: participants.clone(),
         },
     )

@@ -12,6 +12,7 @@ pub struct CreateChannelOptions {
     pub org_id: Option<i64>,
     pub channel_type: ChannelType,
     pub participants: Vec<String>,
+    pub team_id: Option<uuid::Uuid>,
 }
 
 pub async fn create_channel(db: &Pool<Postgres>, options: CreateChannelOptions) -> Result<Uuid> {
@@ -21,14 +22,15 @@ pub async fn create_channel(db: &Pool<Postgres>, options: CreateChannelOptions) 
     // create the channel
     let channel = sqlx::query!(
         r#"
-        INSERT INTO comms_channels (id, name, owner_id, org_id, channel_type)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         "#,
         channel_id,
         options.name,
         options.owner_id,
         options.org_id,
+        options.team_id,
         options.channel_type as ChannelType
     )
     .fetch_one(&mut *transaction)
