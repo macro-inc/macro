@@ -90,6 +90,7 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    blockSender: 'email.blockSender',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',
