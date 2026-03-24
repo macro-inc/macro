@@ -24,6 +24,8 @@ import {
   sandboxEntities,
   addSandboxEntity,
   createSandboxEntity,
+  setSidebarFilter,
+  sidebarFilter,
   type SandboxEntityType,
 } from '../sandbox/sandbox-store';
 
@@ -42,10 +44,9 @@ const BLOCK_TO_SANDBOX: Record<string, SandboxEntityType> = {
 const [sharedSoup, setSharedSoup] = createSignal<SoupState | undefined>();
 const [onCreated, setOnCreated] = createSignal<(() => void) | undefined>();
 const [launcherOpen, setLauncherOpen] = createSignal(false);
+const [completed, setCompleted] = createSignal(false);
 
 function CreateEntityContent(props: LessonContentProps) {
-  const [completed, setCompleted] = createSignal(false);
-
   setOnCreated(() => () => {
     if (!completed()) {
       setCompleted(true);
@@ -81,6 +82,7 @@ function CreateEntityContent(props: LessonContentProps) {
     group.dispose();
     setLauncherOpen(false);
     setOnCreated(undefined);
+    setCompleted(false);
   });
 
   return (
@@ -90,7 +92,11 @@ function CreateEntityContent(props: LessonContentProps) {
       class="flex flex-col gap-3 outline-none onboarding-stagger"
     >
       <div class="bracket-never">
-        <HotkeyCallout keys={['C']} label="to open the Create menu" />
+        <HotkeyCallout
+          keys={['C']}
+          label="to open the Create menu"
+          completed={completed()}
+        />
       </div>
     </div>
   );
@@ -103,6 +109,10 @@ function CreateEntityDemo(props: LessonContentProps) {
   });
 
   setSharedSoup(soup);
+
+  // Ensure we always start in the All Items view
+  const previousFilter = sidebarFilter();
+  setSidebarFilter(null);
 
   useListNavigation(soup, props.scopeId);
 
@@ -128,6 +138,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   onCleanup(() => {
     setSharedSoup(undefined);
+    setSidebarFilter(previousFilter);
   });
 
   return (

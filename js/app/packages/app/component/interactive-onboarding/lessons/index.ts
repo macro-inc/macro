@@ -1,6 +1,6 @@
 import type { LessonDefinition } from '../types';
 import { welcomeLesson } from './welcome';
-import { homeLesson } from './home';
+import { sidebarNavLesson } from './sidebar-nav';
 import { navigateListLesson } from './navigate-list';
 import { commandKLesson } from './command-k';
 import { createEntityLesson } from './create-entity';
@@ -11,7 +11,7 @@ import { choosePlanLesson } from './choose-plan';
 
 export const LESSONS: LessonDefinition[] = [
   welcomeLesson,
-  homeLesson,
+  sidebarNavLesson,
   navigateListLesson,
   commandKLesson,
   createEntityLesson,

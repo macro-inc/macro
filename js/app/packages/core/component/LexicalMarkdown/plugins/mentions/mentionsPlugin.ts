@@ -697,25 +697,30 @@ function registerMentionsPlugin(
       UserMentionNode,
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(prevEditorState, nodeKey) as UserMentionNode;
-          if (node && mutation === 'destroyed') {
-            const mentionUuid = node.getMentionUuid();
-            if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
-            }
-            if (onRemoveMention) {
-              onRemoveMention({
-                itemType: 'user',
-                itemId: node.getUserId(),
-              });
-            }
-          }
-          if (node && mutation === 'created') {
-            if (onCreateMention) {
+          if (mutation === 'created') {
+            const node = nodeByKey(
+              editor.getEditorState(),
+              nodeKey
+            ) as UserMentionNode;
+            if (node && onCreateMention) {
               onCreateMention({
                 itemType: 'user',
                 itemId: node.getUserId(),
               });
+            }
+          } else if (mutation === 'destroyed') {
+            const node = nodeByKey(prevEditorState, nodeKey) as UserMentionNode;
+            if (node) {
+              const mentionUuid = node.getMentionUuid();
+              if (mentionUuid && sourceDocumentId) {
+                untrackMention(sourceDocumentId, mentionUuid);
+              }
+              if (onRemoveMention) {
+                onRemoveMention({
+                  itemType: 'user',
+                  itemId: node.getUserId(),
+                });
+              }
             }
           }
         }
@@ -727,28 +732,33 @@ function registerMentionsPlugin(
       ContactMentionNode,
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(
-            prevEditorState,
-            nodeKey
-          ) as ContactMentionNode;
-          if (node && mutation === 'destroyed') {
-            const mentionUuid = node.getMentionUuid();
-            if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
-            }
-            if (onRemoveMention) {
-              onRemoveMention({
-                itemType: 'contact',
-                itemId: node.getContactId(),
-              });
-            }
-          }
-          if (node && mutation === 'created') {
-            if (onCreateMention) {
+          if (mutation === 'created') {
+            const node = nodeByKey(
+              editor.getEditorState(),
+              nodeKey
+            ) as ContactMentionNode;
+            if (node && onCreateMention) {
               onCreateMention({
                 itemType: 'contact',
                 itemId: node.getContactId(),
               });
+            }
+          } else if (mutation === 'destroyed') {
+            const node = nodeByKey(
+              prevEditorState,
+              nodeKey
+            ) as ContactMentionNode;
+            if (node) {
+              const mentionUuid = node.getMentionUuid();
+              if (mentionUuid && sourceDocumentId) {
+                untrackMention(sourceDocumentId, mentionUuid);
+              }
+              if (onRemoveMention) {
+                onRemoveMention({
+                  itemType: 'contact',
+                  itemId: node.getContactId(),
+                });
+              }
             }
           }
         }
@@ -760,25 +770,30 @@ function registerMentionsPlugin(
       DateMentionNode,
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(prevEditorState, nodeKey) as DateMentionNode;
-          if (node && mutation === 'destroyed') {
-            const mentionUuid = node.getMentionUuid();
-            if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
-            }
-            if (onRemoveMention) {
-              onRemoveMention({
-                itemType: 'date',
-                itemId: node.getDate(),
-              });
-            }
-          }
-          if (node && mutation === 'created') {
-            if (onCreateMention) {
+          if (mutation === 'created') {
+            const node = nodeByKey(
+              editor.getEditorState(),
+              nodeKey
+            ) as DateMentionNode;
+            if (node && onCreateMention) {
               onCreateMention({
                 itemType: 'date',
                 itemId: node.getDate(),
               });
+            }
+          } else if (mutation === 'destroyed') {
+            const node = nodeByKey(prevEditorState, nodeKey) as DateMentionNode;
+            if (node) {
+              const mentionUuid = node.getMentionUuid();
+              if (mentionUuid && sourceDocumentId) {
+                untrackMention(sourceDocumentId, mentionUuid);
+              }
+              if (onRemoveMention) {
+                onRemoveMention({
+                  itemType: 'date',
+                  itemId: node.getDate(),
+                });
+              }
             }
           }
         }
@@ -790,19 +805,25 @@ function registerMentionsPlugin(
       GroupMentionNode,
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(prevEditorState, nodeKey) as GroupMentionNode;
-          if (node && mutation === 'destroyed') {
-            if (onRemoveMention) {
-              onRemoveMention({
+          if (mutation === 'created') {
+            const node = nodeByKey(
+              editor.getEditorState(),
+              nodeKey
+            ) as GroupMentionNode;
+            if (node && onCreateMention) {
+              onCreateMention({
                 itemType: 'group',
                 itemId: node.getGroupAlias(),
                 groupAlias: node.getGroupAlias(),
               });
             }
-          }
-          if (node && mutation === 'created') {
-            if (onCreateMention) {
-              onCreateMention({
+          } else if (mutation === 'destroyed') {
+            const node = nodeByKey(
+              prevEditorState,
+              nodeKey
+            ) as GroupMentionNode;
+            if (node && onRemoveMention) {
+              onRemoveMention({
                 itemType: 'group',
                 itemId: node.getGroupAlias(),
                 groupAlias: node.getGroupAlias(),

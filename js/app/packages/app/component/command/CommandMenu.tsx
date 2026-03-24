@@ -95,6 +95,8 @@ export function CommandMenuInner(props: {
   commandMenuRef: () => HTMLDivElement | undefined;
   /** Override items source with custom data (e.g. sandbox entities for tutorial) */
   items?: () => CommandMenuItem[];
+  /** Called when the user selects an item from the menu */
+  onSelect?: (item: CommandMenuItem) => void;
 }) {
   const { openWithSplit } = useSplitLayout();
 
@@ -129,6 +131,8 @@ export function CommandMenuInner(props: {
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
+
+    props.onSelect?.(item);
 
     if (isCommandItem(item)) {
       const command = item.data;

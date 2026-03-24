@@ -8,8 +8,8 @@ function WelcomeContent(props: LessonContentProps) {
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
         Macro is a unified system for work – built for <strong>speed</strong>{' '}
-        and <strong>focus</strong>. This brief walk-through will introduce some
-        core features and <strong>hotkeys</strong>.
+        and <strong>focus</strong>. This short walk-through will introduce a few
+        core features.
       </p>
     </div>
   );

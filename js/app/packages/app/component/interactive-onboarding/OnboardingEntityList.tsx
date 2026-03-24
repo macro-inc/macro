@@ -1,7 +1,7 @@
 import { Entity } from '@entity/entity';
 import type { EntityData } from '@entity';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import { createEffect, For } from 'solid-js';
+import { createEffect, For, Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
 interface OnboardingEntityListProps {
@@ -47,7 +47,33 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
               <div class="size-4 shrink-0">
                 <Entity.Icon entity={entity as EntityData} />
               </div>
-              <Entity.Title entity={entity as EntityData} />
+              <Show
+                when={entity.type === 'email'}
+                fallback={
+                  <>
+                    <Entity.Title entity={entity as EntityData} />
+                    <span class="ml-auto font-mono font-light uppercase tracking-wide text-xs text-ink/40 shrink-0">
+                      <Entity.Timestamp entity={entity as EntityData} />
+                    </span>
+                  </>
+                }
+              >
+                {/* Email row: sender | subject · snippet */}
+                <span class="w-[20ch] shrink-0 truncate text-ink/80">
+                  {(entity as EntityData & { senderName: string }).senderName}
+                </span>
+                <span class="flex-1 flex items-baseline gap-2 min-w-0 truncate">
+                  <span class="truncate shrink-0 max-w-[40%]">
+                    <Entity.Title entity={entity as EntityData} />
+                  </span>
+                  <span class="truncate text-ink/50 font-normal">
+                    {(entity as EntityData & { snippet: string }).snippet}
+                  </span>
+                </span>
+                <span class="ml-auto font-mono font-light uppercase tracking-wide text-xs text-ink/40 shrink-0">
+                  <Entity.Timestamp entity={entity as EntityData} />
+                </span>
+              </Show>
             </Entity.Root>
           );
         }}
