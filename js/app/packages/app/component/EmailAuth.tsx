@@ -88,7 +88,9 @@ function EmailSignUp(props: EmailAuthParams) {
   const { query: emailLinks } = useEmailLinks();
   const analytics = useAnalytics();
 
-  analytics.pageView('signup');
+  onMount(() => {
+    analytics.pageView('signup');
+  });
 
   const withAppPrefix = (path: string) => `/app${path}`;
 
