@@ -26,7 +26,7 @@ impl DBClient {
         Self { inner }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn create_document_text(
         &self,
         document_id: &str,
@@ -42,7 +42,7 @@ impl DBClient {
         .await
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn insert_references(
         &self,
         references: &Vec<TextReference>,
@@ -52,7 +52,7 @@ impl DBClient {
             .await
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_document_file_type(
         &self,
         document_id: &str,
