@@ -216,9 +216,11 @@ export function ThreadList(props: ThreadListProps) {
   const handleScroll = () => {
     const handle = virtualHandle();
     if (!handle) {
-      console.warn("Channel.ThreadList: handle scroll but the handle is undefined");
+      console.warn(
+        'Channel.ThreadList: handle scroll but the handle is undefined'
+      );
       return;
-    };
+    }
 
     const distanceFromTop = handle.scrollOffset;
     const distanceFromBottom =
@@ -285,7 +287,6 @@ export function ThreadList(props: ThreadListProps) {
         'flex-direction': 'column',
       }}
     >
-
       <div style={{ 'flex-grow': 1 }} />
       <Virtualizer
         ref={(ref) => {
