@@ -164,4 +164,39 @@ impl ReferralRepo for PgReferralRepo {
         .fetch_one(&self.pool)
         .await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_sender_profile_picture_url<'a>(
+        &self,
+        user_id: &'a str,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT mui.profile_picture
+            FROM macro_user_info mui
+            JOIN "User" u ON u.macro_user_id = mui.macro_user_id
+            WHERE u.id = $1
+            AND mui.profile_picture IS NOT NULL
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_sender_name<'a>(&self, user_id: &'a str) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT TRIM(CONCAT_WS(' ', NULLIF(first_name, 'N/A'), NULLIF(last_name, 'N/A')))
+            FROM macro_user_info mui
+            JOIN "User" u ON u.macro_user_id = mui.macro_user_id
+            WHERE u.id = $1
+            AND (NULLIF(first_name, 'N/A') IS NOT NULL OR NULLIF(last_name, 'N/A') IS NOT NULL)
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
 }

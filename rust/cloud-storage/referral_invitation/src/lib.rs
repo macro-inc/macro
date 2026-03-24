@@ -30,6 +30,12 @@ pub struct InviteToMacro {
     /// The referral code which is templated into the email to track the sender
     /// and reward them.
     pub referral_code: ReferralCode,
+    /// The sender's profile picture URL, if available.
+    pub sender_profile_picture_url: Option<String>,
+    /// The sender's display name, if they have set one.
+    pub sender_name: Option<String>,
+    /// The sender's email address.
+    pub sender_email: String,
 }
 
 impl InviteToMacro {
@@ -62,8 +68,9 @@ fn get_url(env: Environment, code: &ReferralCode) -> Url {
 
 impl NotificationExtEmail for InviteToMacro {
     fn format_email(&self) -> EmailContent {
+        let sender = self.sender_name.as_deref().unwrap_or(&self.sender_email);
         EmailContent {
-            subject: "You have been invited to join Macro".to_string(),
+            subject: format!("{} has invited you to join Macro", sender),
             body: self
                 .render()
                 .expect("InviteToMacro template render failed in format_email"),
