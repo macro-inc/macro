@@ -186,11 +186,11 @@ impl<T> AllowedNotification<T> {
     pub async fn check_user_existence(
         self,
         checker: &impl UserExistenceChecker,
-    ) -> Result<Either<AccountExists<T>, BatchSend<UserNotificationRow<Arc<T>>>>, Report> {
+    ) -> Result<Either<AccountExists<T>, DontSend>, Report> {
         let owner = self.inner.owner_id.copied();
         match checker.user_exists(owner).await {
             Ok(true) => Ok(Either::Left(AccountExists { prev: self })),
-            Ok(false) => Ok(Either::Right(BatchSend(self.inner))),
+            Ok(false) => Ok(Either::Right(DontSend(()))),
             Err(e) => Err(e),
         }
     }
@@ -371,9 +371,7 @@ where
                     .await?
             }
             Either::Right(r) => {
-                return Ok(StateMachineDecisionA::BatchWasQueued(
-                    self.inner_store_batch(r).await?,
-                ));
+                return Ok(StateMachineDecisionA::DontSend(r));
             }
         };
         let last_online = match push_notification_state {
