@@ -96,22 +96,6 @@ function Loading() {
 }
 
 /**
- * Skeleton fallback for PopupPreview — matches the card dimensions and styling.
- * Use as `suspenseFallback` on HoverCard when the content is a PopupPreview.
- */
-export function PopupPreviewSkeleton() {
-  return (
-    <div class="select-none overflow-hidden w-80 text-ink">
-      <ClippedPanel tl={!beveledCorners()} active>
-        <div class="p-3 flex items-center justify-center">
-          <Spinner />
-        </div>
-      </ClippedPanel>
-    </div>
-  );
-}
-
-/**
  * Returns the appropriate icon component based on the icon name
  * @param icon - Icon identifier string
  * @returns JSX element for the icon or undefined
