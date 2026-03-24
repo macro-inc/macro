@@ -137,7 +137,7 @@ fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
             format!("c.org_id = {org_id}")
         }
         filter_ast::ExprFrame::Literal(ChannelLiteral::TeamId(team_id)) => {
-            format!("c.team_id = {team_id}")
+            format!("c.team_id = '{team_id}'")
         }
         filter_ast::ExprFrame::Literal(ChannelLiteral::ChannelType(ct)) => {
             format!("c.channel_type = '{ct}'")

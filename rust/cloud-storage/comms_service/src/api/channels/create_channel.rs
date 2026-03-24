@@ -89,7 +89,7 @@ pub async fn create_channel_handler(
     if req.team_id.is_some() && req.channel_type != ChannelType::Team {
         return Err((
             StatusCode::BAD_REQUEST,
-            "cannot have a team channel without team id".to_string(),
+            "team channels need team channel type".to_string(),
         ));
     }
 
