@@ -18,7 +18,12 @@ if (!S3_BUCKET) {
 
 const s3 = new S3Client({});
 
-const EXTENSION_REGEX = /\/[^/]+\.[^./]+$/;
+// Matches keys in the format: {owner}/{uuid_v4}/{version_id}.{extension}
+// e.g. macro|user@foo.com/12f9a0ac-d445-45e3-94c1-5e8c02f0a6d8/564457.pdf
+const UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const VERSION_WITH_EXT_REGEX = new RegExp(
+  `${UUID_V4}/(\\d+)\\..+$`
+);
 const SKIP_PATTERNS = [/converted\.pdf$/, /^temp_files\//, /^ONBOARDING_DOCUMENTS\//];
 
 interface Stats {
@@ -32,11 +37,12 @@ interface Stats {
 const stats: Stats = { scanned: 0, copied: 0, skipped: 0, missing: 0, errors: 0 };
 
 function stripExtension(key: string): string {
-  return key.replace(/\.[^./]+$/, "");
+  // Strip everything after the version_id (handles multipart extensions like .js.map)
+  return key.replace(/(\d+)\..+$/, "$1");
 }
 
 function shouldProcess(key: string): boolean {
-  if (!EXTENSION_REGEX.test(key)) return false;
+  if (!VERSION_WITH_EXT_REGEX.test(key)) return false;
   return !SKIP_PATTERNS.some((p) => p.test(key));
 }
 
