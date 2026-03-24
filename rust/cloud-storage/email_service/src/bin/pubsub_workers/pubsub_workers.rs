@@ -169,11 +169,13 @@ async fn main() -> anyhow::Result<()> {
         })
         .context("failed to connect to redis")?;
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&aws_config),
+        queue_url: config.notification_queue.clone(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue,
+    });
 
     let redis_client = email_service::util::redis::RedisClient::new(
         redis_inner_client,

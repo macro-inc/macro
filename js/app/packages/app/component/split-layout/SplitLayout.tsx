@@ -23,7 +23,11 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
-import { SplitLayoutContext, SplitPanelContext } from './context';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from './context';
 import { useSplitLayout } from './layout';
 import {
   createSplitLayout,
@@ -36,6 +40,7 @@ import {
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
+import { createHeaderCollapser } from './utils/createHeaderCollapser';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
 import { isListViewID } from '@app/constants/list-views';
 import { isMobile } from '@core/mobile/isMobile';
@@ -361,6 +366,12 @@ function SplitPanel(props: SplitPanelProps) {
 
   const [previewState, setPreviewState] = createSignal(false);
 
+  const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
+  const headerCollapser = createHeaderCollapser(
+    () => layoutRefs.headerLeft,
+    () => panelSize.width
+  );
+
   const splitLayoutHelpers = useSplitLayout();
   registerSplitHotkeys({
     splitHotkeyScope,
@@ -393,10 +404,11 @@ function SplitPanel(props: SplitPanelProps) {
           isPanelActive: () => props.active,
           panelRef,
           panelSize,
-          layoutRefs: {},
+          layoutRefs,
           contentOffsetTop,
           setContentOffsetTop,
           previewState: [previewState, setPreviewState],
+          headerCollapser,
         }}
       >
         <SplitContainer

@@ -7,7 +7,7 @@ import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 export const makeMoveToProjectAction = () => {
   const canExecute = (entity: EntityData): boolean => {
-    return entity.type !== 'channel' && entity.type !== 'email';
+    return entity.type !== 'channel';
   };
 
   const execute = async (entities: EntityData[]) => {

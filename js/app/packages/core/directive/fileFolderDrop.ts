@@ -61,6 +61,11 @@ export function fileFolderDrop(
 
       if (!hasFiles) {
         const types = e.dataTransfer?.types || [];
+        // Skip internal drags (images dragged from within the app)
+        if (types.includes('application/x-macro-internal')) {
+          options?.onDragStart?.(false);
+          return;
+        }
         // If we have HTML data, it might be an image element
         if (types.includes('text/html')) {
           // Assume valid for now - we'll validate on drop
@@ -128,6 +133,11 @@ export function fileFolderDrop(
     }
 
     // If no files but we have HTML data, try to extract image URLs
+    // Skip if the drag originated from within the app to prevent replication
+    if (dataTransfer.types.includes('application/x-macro-internal')) {
+      return;
+    }
+
     const html = dataTransfer.getData('text/html');
     if (html) {
       const parser = new DOMParser();

@@ -26,7 +26,7 @@ pub use tool_context::*;
 pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
-    pub toolset: AiToolSet,
+    pub toolset: Arc<AiToolSet>,
     pub prompt: &'static str,
 }
 
@@ -50,6 +50,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .expect("failed to add document toolset");
     let prompt = prompts::TOOLS_PROMPT;
+    let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }
 }
 
@@ -67,6 +68,6 @@ pub fn all_tool_schemas() -> ToolSchemas {
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: prompts::BASE_PROMPT,
-        toolset: AsyncToolSet::new(),
+        toolset: Arc::new(AsyncToolSet::new()),
     }
 }

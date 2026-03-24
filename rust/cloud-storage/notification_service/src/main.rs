@@ -6,6 +6,7 @@ use ::notification::outbound::email::EmailAdapter;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
+use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
 use email_formatting::EmailDigestNotification;
@@ -166,7 +167,11 @@ pub async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for egress state machine")?;
-    let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+    let rate_limit_adapter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
 
     let egress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverB {
@@ -232,8 +237,7 @@ pub async fn main() -> anyhow::Result<()> {
                 ),
             ),
             ::notification::outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
-            model_notifications::digest_state::common_email_block_list(),
-            model_notifications::digest_state::common_explicit_invite_allow_list(),
+            model_notifications::digest_state::digest_email_block_list(),
         );
 
     let ingress_repository =
@@ -248,10 +252,10 @@ pub async fn main() -> anyhow::Result<()> {
         ingress_state_machine,
     );
 
-    let ingress_queue = ::notification::outbound::queue::SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        vars.notification_ingress_queue.as_ref().to_string(),
-    );
+    let ingress_queue = ::notification::outbound::queue::SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&aws_config),
+        queue_url: vars.notification_ingress_queue.as_ref().to_string(),
+    };
     let ingress_worker =
         ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);
 

@@ -2306,6 +2306,76 @@
         }
       }
     },
+    "/email/threads/{thread_id}/project": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Update the project assignment for a thread.",
+        "operationId": "update_thread_project",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThreadProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateThreadProjectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["Health"],
@@ -3113,6 +3183,9 @@
             "items": {
               "$ref": "#/components/schemas/ApiMessage"
             }
+          },
+          "project_id": {
+            "type": ["string", "null"]
           },
           "provider_id": {
             "type": ["string", "null"]
@@ -4432,6 +4505,26 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "UpdateThreadProjectRequest": {
+        "type": "object",
+        "description": "Request body for updating a thread's project.",
+        "properties": {
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The project ID to assign to the thread, or null to remove from project."
+          }
+        }
+      },
+      "UpdateThreadProjectResponse": {
+        "type": "object",
+        "description": "Response body for updating a thread's project.",
+        "properties": {
+          "oldProjectId": {
+            "type": ["string", "null"],
+            "description": "The previous project ID of the thread."
           }
         }
       },

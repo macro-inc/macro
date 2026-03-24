@@ -1,4 +1,4 @@
-import { withAnalytics } from '@coparse/analytics';
+import { analytics } from '@app/lib/analytics';
 import type { FileTypeString, MimeType } from '@core/block';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -12,8 +12,6 @@ import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl
 import { storageWS } from '@service-storage/websocket';
 import { createUploadToast, toast } from 'core/component/Toast/Toast';
 import { uploadDocx } from './uploadDocx';
-
-const { track, TrackingEvents } = withAnalytics();
 
 const dismissToast = (toastId: number | null) => {
   if (toastId !== null) toaster.dismiss(toastId);
@@ -105,10 +103,11 @@ export async function upload(
   const isZip = fileTypeOrExtension === 'zip';
 
   if (!options?.skipAnalytics) {
-    track(TrackingEvents.UPLOAD.FILE, {
+    analytics.track('upload_file', {
       fileType: fileTypeOrExtension,
       fileName: file.name,
       fileSize: file.size,
+      destination: 'dss',
       folder: isZip,
     });
   }

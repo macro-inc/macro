@@ -7,7 +7,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
-import ShareFat from '@icon/regular/share-fat.svg';
+import ShareFat from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';

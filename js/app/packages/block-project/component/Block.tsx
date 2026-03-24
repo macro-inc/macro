@@ -30,12 +30,13 @@ import {
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
 import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
+import { SharedEmailFilter } from '@service-storage/generated/schemas';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project', 'email'];
 
 const Block: Component = () => {
   useBlockEntityCommands();
@@ -197,7 +198,8 @@ const ProjectEntityList = (props: {
             project_ids: [props.projectId],
           },
           email_filters: {
-            recipients: [NIL_UUID],
+            project_ids: [props.projectId],
+            shared: SharedEmailFilter.include,
           },
         }}
       >

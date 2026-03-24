@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+use analytics_client::{AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig};
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -16,8 +17,11 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsIngressQueue;
+use notification::{
+    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
+};
+use rate_limit::domain::service::RateLimitServiceImpl;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
@@ -126,15 +130,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let stripe_price_id = match config.environment {
-        Environment::Local => config.stripe_price_id.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.stripe_price_id)
-            .await
-            .context("unable to get stripe price id")?
-            .to_string(),
-    };
-
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
@@ -169,18 +164,20 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let redis_client_for_github =
+    let redis_client =
         redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
-    let redis_multiplexed_conn = redis_client_for_github
+    let redis_multiplexed_conn = redis_client
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection")?;
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        config.notification_queue.clone(),
-    );
-    let notification_ingress_service = SqsNotificationIngress::new(ingress_queue);
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        queue_url: config.notification_queue.clone(),
+    };
+    let notification_ingress_service = SqsNotificationIngress {
+        queue: ingress_queue,
+    };
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -188,6 +185,34 @@ async fn main() -> anyhow::Result<()> {
     ))
     .search_event_queue(&config.search_event_queue);
     tracing::trace!("initialized sqs client");
+
+    // Initialize analytics client with configured providers
+    let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
+        google_analytics: config
+            .ga_measurement_id
+            .as_ref()
+            .zip(config.ga_api_secret.as_ref())
+            .map(|(measurement_id, api_secret)| {
+                tracing::info!("configuring Google Analytics");
+                GoogleAnalyticsConfig {
+                    measurement_id: measurement_id.clone(),
+                    api_secret: api_secret.clone(),
+                }
+            }),
+        meta: config
+            .meta_pixel_id
+            .as_ref()
+            .zip(config.meta_access_token.as_ref())
+            .map(|(pixel_id, access_token)| {
+                tracing::info!("configuring Meta Conversions API");
+                MetaConfig {
+                    pixel_id: pixel_id.clone(),
+                    access_token: access_token.clone(),
+                    test_event_code: config.meta_test_event_code.clone(),
+                }
+            }),
+    });
+    tracing::trace!("initialized analytics client");
 
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
@@ -197,7 +222,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone(), &stripe_price_id);
+    let customer_repo_impl = CustomerRepositoryImpl::new(
+        stripe_client.clone(),
+        &config.stripe_price_ids.stripe_price_id_haiku,
+    );
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
@@ -219,10 +247,19 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
-    let referral_service = ReferralServiceImpl::new(
-        PgReferralRepo::new(db.clone()),
-        StripeDiscountClient::new(stripe_client.clone(), 10000 /*100$ credit, in cents*/),
-    );
+    let rate_limit = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
+    let referral_service = ReferralServiceImpl {
+        repo: PgReferralRepo::new(db.clone()),
+        discount_client: StripeDiscountClient::new(
+            stripe_client.clone(),
+            10000, /*100$ credit, in cents*/
+        ),
+        notification_ingress: notification_ingress_service.clone(),
+    };
 
     api::setup_and_serve(
         ApiContext {
@@ -233,9 +270,10 @@ async fn main() -> anyhow::Result<()> {
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             ses_client: Arc::new(ses_client),
-            notification_ingress_service: notification_ingress_service.clone(),
+            notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
+            rate_limit_service: rate_limit,
             jwt_args,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,
@@ -258,6 +296,8 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
+            analytics_client: Arc::new(analytics_client),
+            stripe_price_ids: config.stripe_price_ids,
         },
         config.port,
     )

@@ -9,6 +9,7 @@ import type { ApiMessage } from './apiMessage';
 import type { ApiThreadLatestInboundMessageTs } from './apiThreadLatestInboundMessageTs';
 import type { ApiThreadLatestNonSpamMessageTs } from './apiThreadLatestNonSpamMessageTs';
 import type { ApiThreadLatestOutboundMessageTs } from './apiThreadLatestOutboundMessageTs';
+import type { ApiThreadProjectId } from './apiThreadProjectId';
 import type { ApiThreadProviderId } from './apiThreadProviderId';
 
 /**
@@ -25,6 +26,7 @@ export interface ApiThread {
   latest_outbound_message_ts?: ApiThreadLatestOutboundMessageTs;
   link_id: string;
   messages: ApiMessage[];
+  project_id?: ApiThreadProjectId;
   provider_id?: ApiThreadProviderId;
   updated_at: string;
 }

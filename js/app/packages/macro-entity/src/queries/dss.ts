@@ -175,7 +175,12 @@ export function createBulkCopyDssEntityMutation() {
 export function createBulkMoveToProjectDssEntityMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
-    return type !== 'chat' && type !== 'document' && type !== 'project';
+    return (
+      type !== 'chat' &&
+      type !== 'document' &&
+      type !== 'project' &&
+      type !== 'email'
+    );
   };
 
   return useMutation(() => ({
@@ -193,7 +198,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       const results = await Promise.all(
         entities.map((entity) =>
           moveToFolder({
-            itemType: entity.type as 'document' | 'chat' | 'project',
+            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
             id: entity.id,
             folderId: project.id,
           })
@@ -215,13 +220,14 @@ export function createBulkMoveToProjectDssEntityMutation() {
       project: { id: string; name: string };
     }) => {
       const moveableEntities = entities.filter(
-        (e): e is typeof e & { type: 'document' | 'chat' } =>
-          e.type === 'document' || e.type === 'chat'
+        (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
+          e.type === 'document' || e.type === 'chat' || e.type === 'email'
       );
       return moveableEntities.map((e) => {
         const current = getSoupEntityById(e.id);
+        const tag = e.type === 'email' ? 'emailThread' : e.type;
         return optimisticUpdateSoupEntity({
-          tag: e.type,
+          tag,
           data: { id: e.id, projectId: project.id },
           frecency_score: current?.frecency_score ?? 0,
         });

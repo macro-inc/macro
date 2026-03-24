@@ -5,7 +5,7 @@ use models_email::gmail::error::GmailError;
 use models_email::gmail::history::WatchResponse;
 
 /// Registers a user for Gmail push notifications to the specified Pub/Sub topic
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn register_watch(
     client: &GmailClient,
     access_token: &str,
@@ -55,7 +55,7 @@ pub(crate) async fn register_watch(
 }
 
 /// Stops push notifications for a user's Gmail inbox
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn stop_watch(client: &GmailClient, access_token: &str) -> anyhow::Result<()> {
     let url = format!("{}/users/me/stop", client.base_url);
 

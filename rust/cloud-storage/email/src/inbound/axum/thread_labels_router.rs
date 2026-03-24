@@ -9,9 +9,12 @@ use model_error_response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::domain::{models::EmailErr, ports::EmailService};
+use crate::domain::{
+    models::EmailErr,
+    ports::{EmailService, GmailTokenProvider},
+};
 
-use super::{EmailRouterState, GmailAccessTokenExtractor, GmailTokenProvider, GmailTokenState};
+use super::{EmailRouterState, GmailAccessTokenExtractor, GmailTokenState};
 
 /// Request body for updating a thread's labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]

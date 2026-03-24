@@ -20,7 +20,7 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CheckIcon from '@icon/regular/check.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import {
@@ -40,6 +40,11 @@ export function TopBar(props: {
   const emailCtx = useEmailContext();
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
+
+  const isInvite = () => {
+    const entity = soup?.items.get(props.id);
+    return entity?.type === 'email' && entity.hasIcsAttachment === true;
+  };
 
   const isOwnThread = () => {
     const thread = emailCtx.thread();
@@ -128,7 +133,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          iconType="email"
+          iconType={isInvite() ? 'emailInvite' : 'email'}
           label={props.title}
           badges={
             props.isDraft

@@ -147,7 +147,7 @@ async fn main() {
     let toolset = document_toolset();
 
     let context = RequestContext {
-        user_id: Arc::new(user_id),
+        user_id,
         // Remove this later
         #[allow(deprecated)]
         jwt: Arc::new(String::new()),

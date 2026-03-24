@@ -40,6 +40,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}onboarding`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
+  `${ROUTER_BASE_CONCAT}welcome`,
 ];
 
 export const [sidebarState, setSidebarState] = makePersisted(
@@ -135,7 +136,13 @@ export function Layout(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow-1 flex">
-        <Show when={isAuthenticated() && !isMobile()}>
+        <Show
+          when={
+            !isMobile() &&
+            isAuthenticated() &&
+            !AUTH_URLS.includes(location.pathname)
+          }
+        >
           <AppSidebar
             sidebarState={sidebarState()}
             onOpenChange={(open) => {

@@ -459,6 +459,7 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         latest_non_spam_message_ts: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        project_id: None,
     };
 
     repo.insert_message(&input, &contacts, link_id, Some(new_thread), true)

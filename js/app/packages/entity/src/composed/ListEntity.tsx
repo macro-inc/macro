@@ -50,7 +50,6 @@ import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
 import { DraftBadge, InviteBadge, SharedBadge } from '../components/Badges';
-import { DisplayName } from '../components/DisplayName';
 import { useIsShared } from '../utils/shared';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import {
@@ -60,6 +59,8 @@ import {
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { DisplayName } from '@entity/components/DisplayName';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
@@ -338,6 +339,12 @@ function NarrowMessageLayout(props: LayoutProps) {
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
+
+  const name =
+    isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
+      ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
+      : undefined;
+
   return (
     <Entity.Layout
       class="w-full text-sm grid"
@@ -424,7 +431,11 @@ function NarrowMessageLayout(props: LayoutProps) {
                   >
                     <StaticMarkdown
                       theme={twoLineClampMarkdownTheme}
-                      markdown={msg().content.trim()}
+                      markdown={
+                        (name ? `**${name.firstName()}:** ` : '') +
+                        msg().content.trim()
+                      }
+                      singleLine
                     />
                   </Show>
                 </Entity.Slot>

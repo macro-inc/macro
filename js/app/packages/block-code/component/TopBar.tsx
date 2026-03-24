@@ -9,7 +9,8 @@ import type { FileOperation } from '@app/component/split-layout/components/Split
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
-import { withAnalytics } from '@coparse/analytics';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
@@ -23,6 +24,7 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockTextSignal } from '@core/signal/load';
 import {
@@ -32,7 +34,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
@@ -40,13 +42,15 @@ import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
 import { TabbedControl } from '@ui/components/TabbedControl';
 
-const { track, TrackingEvents } = withAnalytics();
-
 export const TopBar: Component<{
   isHtmlFile: boolean;
   mode: CodeBlockMode;
   onModeChange: (mode: CodeBlockMode) => void;
 }> = (props) => {
+  const analytics = useAnalytics();
+
+  const isAuth = useIsAuthenticated();
+
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
@@ -61,7 +65,7 @@ export const TopBar: Component<{
     if (!text || !name) return;
     const file = new Blob([content ?? ''], { type: 'text/plain' });
     downloadFile(file, downloadName());
-    track(TrackingEvents.BLOCKCODE.FILEMENU.DOWNLOAD);
+    analytics.track('download', { blockType: 'code' });
   });
 
   const ops: FileOperation[] = [
@@ -82,6 +86,7 @@ export const TopBar: Component<{
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}
@@ -94,7 +99,15 @@ export const TopBar: Component<{
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
-      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+      buttonComponent: () => (
+        <DocumentPropertiesButton
+          buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('properties_panel_open', { blockType: 'code' })
+          }
+        />
+      ),
     },
     {
       label: 'Share',

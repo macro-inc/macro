@@ -1,4 +1,7 @@
-export const AnimatedNoiseIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedNoiseIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -8,7 +11,7 @@ export const AnimatedNoiseIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       overflow="visible"
       xmlns="http://www.w3.org/2000/svg"
-      class={`animated-noise-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-noise-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated noise icon</title>*/}
       <style>{`

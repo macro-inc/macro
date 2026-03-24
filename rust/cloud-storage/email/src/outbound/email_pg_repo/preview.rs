@@ -27,8 +27,15 @@ pub(super) async fn previews_for_view_cursor(
 
     Ok(match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor(pool, &link_id, limit, &view, dynamic_query)
-                .await?
+            super::dynamic::dynamic_email_thread_cursor(
+                pool,
+                &link_id,
+                limit,
+                &view,
+                dynamic_query,
+                user_id.as_ref(),
+            )
+            .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
             super::preview_views::new_inbox::new_inbox_preview_cursor(pool, &link_id, limit, &query)
@@ -71,7 +78,7 @@ pub(super) async fn previews_for_view_cursor(
         }
     }
     .into_iter()
-    .map(|row: ThreadPreviewCursorDbRow| row.with_user_id(user_id.clone()))
+    .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
     .collect())
 }
 

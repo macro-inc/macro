@@ -1,31 +1,35 @@
 pub mod chat_history;
 pub mod chat_history_batch_messages;
-pub mod copy_chat;
-pub mod create_user_chat;
-pub mod delete_chat;
-pub mod get_chat;
-pub mod get_chat_permissions;
-pub mod patch_chat;
-pub mod revert_delete_chat;
 pub mod tool;
 
 use super::context::ApiContext;
 use axum::{
     Router,
-    routing::{delete, get, patch, post, put},
+    routing::{get, post},
 };
+use chat::domain::service::ChatServiceImpl;
+use chat::inbound::{ChatRouterState, chat_create_router, chat_id_router};
+use chat::outbound::postgres::PgChatRepo;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
 use tower::ServiceBuilder;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
+    let access_repo = PgAccessRepository::new(state.db.clone());
+    let access_service = EntityAccessServiceImpl::new(access_repo);
+    let chat_repo = PgChatRepo::new(state.db.clone());
+    let chat_service = ChatServiceImpl::new(chat_repo);
+    let chat_state = ChatRouterState::new(chat_service, access_service);
+
     let ensure_chat_exists = axum::middleware::from_fn_with_state(
         state.clone(),
         macro_middleware::cloud_storage::chat::ensure_chat_exists::handler,
     );
 
     Router::new()
-        .route(
-            "/",
-            post(create_user_chat::create_chat_handler).layer(
+        // Create route — needs ensure_user_exists + quota middleware, no ensure_chat_exists
+        .merge(
+            chat_create_router(chat_state.clone()).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),
@@ -41,64 +45,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     )),
             ),
         )
-        .route(
-            "/{chat_id}/copy",
-            post(copy_chat::copy_chat_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .route(
-            "/{chat_id}",
-            get(get_chat::get_chat_handler)
-                .layer(ServiceBuilder::new().layer(ensure_chat_exists.clone())),
-        )
-        .route(
-            "/{chat_id}/revert_delete",
-            put(revert_delete_chat::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .route(
-            "/{chat_id}",
-            delete(delete_chat::delete_chat_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .route(
-            "/{chat_id}/permanent",
-            delete(delete_chat::permanently_delete_chat_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .route(
-            "/{chat_id}",
-            patch(patch_chat::patch_chat_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        .route(
-            "/{chat_id}/permissions",
-            get(get_chat_permissions::get_chat_permissions_handler).layer(
+        // All /{chat_id} routes — need ensure_chat_exists for ChatAccessLevelExtractor
+        .merge(
+            chat_id_router(chat_state).layer(
                 ServiceBuilder::new()
                     .layer(axum::middleware::from_fn(
                         macro_middleware::auth::ensure_user_exists::handler,
@@ -116,6 +65,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     .layer(ensure_chat_exists.clone()),
             ),
         )
+        // History routes — remain in DCS
         .route(
             "/history/{chat_id}",
             get(chat_history::get_chat_history_handler).layer(

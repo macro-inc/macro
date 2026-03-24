@@ -6,13 +6,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 
 use crate::api::context::ApiContext;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 use model::{
     response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
     user::UserContext,
 };
 
@@ -35,10 +35,10 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context), fields(client_ip=%ip_context.client_ip, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, ip_context), fields(client_ip=%ip_context, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     user_context: Extension<UserContext>,
     extract::Path(Params { code }): extract::Path<Params>,
 ) -> Result<Response, Response> {

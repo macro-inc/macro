@@ -4,8 +4,9 @@ use uuid::Uuid;
 /// Share a document with all members of the given user's team.
 ///
 /// Finds team members via the `team_user` join table, then bulk-inserts
-/// `UserItemAccess` rows with `comment` access and a NULL
-/// `granted_from_channel_id`. Skips users who already have a direct
+/// `UserItemAccess` rows with `comment` access, a NULL
+/// `granted_from_channel_id`, and the originating `granted_from_team_id`.
+/// Skips users who already have a direct
 /// (non-channel) access row so existing permissions (e.g. the owner's
 /// `owner` row) are never downgraded. Channel-granted rows are left
 /// untouched and may coexist.
@@ -15,15 +16,31 @@ pub async fn share_with_team(
     user_id: &str,
     document_id: &str,
 ) -> Result<(), sqlx::Error> {
-    // Find all users on the same team(s) as the given user.
-    let team_members: Vec<String> = sqlx::query_scalar!(
+    // Find the team_id for the given user.
+    let team_id: Option<Uuid> = sqlx::query_scalar!(
         r#"
-        SELECT tu2.user_id
-        FROM team_user tu1
-        JOIN team_user tu2 ON tu1.team_id = tu2.team_id
-        WHERE tu1.user_id = $1
+        SELECT team_id
+        FROM team_user
+        WHERE user_id = $1
+        LIMIT 1
         "#,
         user_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(team_id) = team_id else {
+        return Ok(());
+    };
+
+    // Find all users on the same team.
+    let team_members: Vec<String> = sqlx::query_scalar!(
+        r#"
+        SELECT user_id
+        FROM team_user
+        WHERE team_id = $1
+        "#,
+        team_id,
     )
     .fetch_all(pool)
     .await?;
@@ -45,7 +62,8 @@ pub async fn share_with_team(
         r#"
         INSERT INTO "UserItemAccess" (
             "id", "user_id", "item_id", "item_type", "access_level",
-            "granted_from_channel_id", "created_at", "updated_at"
+            "granted_from_channel_id", "granted_from_team_id",
+            "created_at", "updated_at"
         )
         SELECT
             u.id,
@@ -54,6 +72,7 @@ pub async fn share_with_team(
             'document' AS item_type,
             'comment' AS access_level,
             NULL AS granted_from_channel_id,
+            $4 AS granted_from_team_id,
             NOW() AS created_at,
             NOW() AS updated_at
         FROM UNNEST($2::uuid[], $3::text[]) AS u(id, user_id)
@@ -68,6 +87,7 @@ pub async fn share_with_team(
         document_id,
         &ids,
         &team_members,
+        team_id,
     )
     .execute(pool)
     .await?;

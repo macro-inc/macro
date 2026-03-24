@@ -19,6 +19,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
@@ -269,6 +270,8 @@ type SendMessageParams = { message: ApiDraftInput };
 export function useSendMessageMutation(
   callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageParams>
 ) {
+  const analytics = useAnalytics();
+
   return useMutation(() => ({
     mutationFn: async (vars: SendMessageParams) =>
       await throwOnErr(
@@ -277,6 +280,7 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (data) => {
+          analytics.track('email_message_sent');
           const threadID = data.message.thread_db_id;
           if (threadID) {
             queryClient.invalidateQueries({

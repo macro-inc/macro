@@ -55,9 +55,6 @@ impl<T> BatchSend<T> {
     }
 }
 
-/// Send immediately as a single notification email.
-pub struct SingleSend<T>(T);
-
 /// Do not send an email for this notification.
 pub struct DontSend(());
 
@@ -72,7 +69,7 @@ impl DontSend {
 struct NotificationSet(HashSet<&'static str>);
 
 /// trait used to create a set of notifications.
-/// implemented by [EmailBlockList] and [ExplicitInviteAllowList]
+/// implemented by [EmailBlockList]
 pub trait NotificationSetBuilder {
     /// create a new instance of self, blocking notifications of a specific value
     /// from being sent via email digest
@@ -118,10 +115,8 @@ impl NotificationSet {
 ///     HasPush{"Push notifications on?"}
 ///     IsOnline{"Online recently?"}
 ///     GotPush{"Got push notification?"}
-///     IsInvite{"Explicit invite?"}
 ///
 ///     DontSend(["DON'T SEND"]):::red
-///     Send(["SEND"]):::green
 ///     BatchSend(["BATCH SEND"]):::blue
 ///
 ///     Start --> IsNewEmail
@@ -129,7 +124,7 @@ impl NotificationSet {
 ///     IsNewEmail -->|YES| DontSend
 ///
 ///     HasAccount -->|YES| HasPush
-///     HasAccount -->|NO| IsInvite
+///     HasAccount -->|NO| BatchSend
 ///
 ///     HasPush -->|NO| IsOnline
 ///     HasPush -->|YES| GotPush
@@ -140,11 +135,7 @@ impl NotificationSet {
 ///     GotPush -->|YES| DontSend
 ///     GotPush -->|NO| BatchSend
 ///
-///     IsInvite -->|YES| Send
-///     IsInvite -->|NO| BatchSend
-///
 ///     classDef red fill:#8B0000,stroke:#FF6B6B,color:#fff
-///     classDef green fill:#006400,stroke:#90EE90,color:#fff
 ///     classDef blue fill:#00008B,stroke:#6495ED,color:#fff
 /// ```
 pub struct EmailBlockList(NotificationSet);
@@ -175,7 +166,7 @@ impl EmailBlockList {
     }
 }
 
-/// represents a notification that is allowed to be sent as part of a [EmailSendDecision]
+/// A notification that has passed the block-list check and may proceed through the state machine.
 pub struct AllowedNotification<T> {
     inner: UserNotificationRow<Arc<T>>,
 }
@@ -187,64 +178,20 @@ pub struct AccountExists<T> {
     prev: AllowedNotification<T>,
 }
 
-/// State indicating the notification recipient does not have a Macro account.
-///
-/// Next step: decide between single send (for invites) or batch send.
-pub struct AccountDoesNotExist<T> {
-    prev: AllowedNotification<T>,
-}
-
 impl<T> AllowedNotification<T> {
     /// Check if the notification recipient has a Macro account.
     ///
     /// Returns [`AccountExists`] if the user has an account (check push settings next),
-    /// or [`AccountDoesNotExist`] if they don't (decide batch vs single send).
+    /// or [`BatchSend`] if they don't (no account means batch send immediately).
     pub async fn check_user_existence(
         self,
         checker: &impl UserExistenceChecker,
-    ) -> Result<Either<AccountExists<T>, AccountDoesNotExist<T>>, Report> {
+    ) -> Result<Either<AccountExists<T>, BatchSend<UserNotificationRow<Arc<T>>>>, Report> {
         let owner = self.inner.owner_id.copied();
         match checker.user_exists(owner).await {
             Ok(true) => Ok(Either::Left(AccountExists { prev: self })),
-            Ok(false) => Ok(Either::Right(AccountDoesNotExist { prev: self })),
+            Ok(false) => Ok(Either::Right(BatchSend(self.inner))),
             Err(e) => Err(e),
-        }
-    }
-}
-
-/// A set of notification types that should be sent immediately (not batched).
-///
-/// These are typically invite notifications where timely delivery matters
-/// more than batching for digest efficiency.
-pub struct ExplicitInviteAllowList(NotificationSet);
-
-impl NotificationSetBuilder for ExplicitInviteAllowList {
-    fn new<T: Notification>() -> Self {
-        Self(NotificationSet::new::<T>())
-    }
-
-    fn append<T: Notification>(self) -> Self {
-        Self(NotificationSet::append::<T>(self.0))
-    }
-}
-
-/// type alias for the data returned from [AccountDoesNotExist::batch_or_single_send]
-pub type EmailSendDecision<T> = Either<SingleSend<T>, BatchSend<T>>;
-impl<T> AccountDoesNotExist<T> {
-    /// Decide whether to send immediately or batch for digest.
-    ///
-    /// Returns [`EmailSendDecision::SingleSend`] for explicit invite notifications,
-    /// or [`EmailSendDecision::BatchSend`] for all other notification types.
-    pub fn batch_or_single_send(
-        self,
-        invite_list: &ExplicitInviteAllowList,
-    ) -> EmailSendDecision<UserNotificationRow<Arc<T>>> {
-        match invite_list
-            .0
-            .is_member(&self.prev.inner.dangerous_get_typename())
-        {
-            true => EmailSendDecision::Left(SingleSend(self.prev.inner)),
-            false => EmailSendDecision::Right(BatchSend(self.prev.inner)),
         }
     }
 }
@@ -337,7 +284,7 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
     fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
-    ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send;
+    ) -> impl Future<Output = Result<StateMachineDecisionA, Report>> + Send;
 }
 
 /// a struct which is able to drive the state machine to a decision on a given notification
@@ -355,8 +302,6 @@ pub struct StateMachineDriverA<U, N, O, B> {
     pub digest_batcher: B,
     /// The blocklist for notifications which are never forwarded to bulk.
     pub block_list: EmailBlockList,
-    /// The allow list for checking if a notification is analogous to an "invite to macro" notification.
-    pub invite_list: ExplicitInviteAllowList,
     /// The window of time in which the digest emails are collected for before sending.
     pub digest_window: Duration,
     /// The duration for how recently a user has been online.
@@ -372,7 +317,6 @@ impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
         online_checker: O,
         digest_batcher: B,
         block_list: EmailBlockList,
-        invite_list: ExplicitInviteAllowList,
     ) -> Self {
         Self {
             user_checker,
@@ -380,7 +324,6 @@ impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
             online_checker,
             digest_batcher,
             block_list,
-            invite_list,
             digest_window: std::time::Duration::from_mins(30),
             online_duration_threshold: std::time::Duration::from_mins(60),
         }
@@ -388,7 +331,7 @@ impl<U, N, O, B> StateMachineDriverA<U, N, O, B> {
 }
 
 /// the initial decision created during notification ingress
-pub enum StateMachineDecisionA<T> {
+pub enum StateMachineDecisionA {
     /// we will not send a batch email
     DontSend(DontSend),
     /// we already queued a batch email to send
@@ -398,10 +341,7 @@ pub enum StateMachineDecisionA<T> {
     ///
     /// This allows the egress worker to continue the state machine after we know what the status
     /// of the push notification is.
-    Indeterminate(BatchSend<PushNotificationsEnabled>),
-    /// we should template the contained notification into an email to send immediately.
-    /// The caller is responsible for templating this notification into an email and queuing it for delivery
-    SendImmediate(SingleSend<UserNotificationRow<Arc<T>>>),
+    Indeterminate(Box<BatchSend<PushNotificationsEnabled>>),
 }
 
 impl<U, N, O, B> StateMachineDriverA<U, N, O, B>
@@ -417,34 +357,28 @@ where
     pub async fn ingest<T: Serialize>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
-    ) -> Result<StateMachineDecisionA<T>, Report> {
+    ) -> Result<StateMachineDecisionA, Report> {
         let allowed = match self.block_list.notification_is_allowed(notif) {
             Either::Left(l) => l,
             Either::Right(r) => {
                 return Ok(StateMachineDecisionA::DontSend(r));
             }
         };
-        let push_notification_state = match allowed
-            .check_user_existence(&self.user_checker)
-            .await?
-            .map_right(|r| r.batch_or_single_send(&self.invite_list))
+        let push_notification_state = match allowed.check_user_existence(&self.user_checker).await?
         {
             Either::Left(l) => {
                 l.push_notifications_enabled(&self.notification_checker)
                     .await?
             }
-            Either::Right(Either::Left(rl)) => {
-                return Ok(StateMachineDecisionA::SendImmediate(rl));
-            }
-            Either::Right(Either::Right(rr)) => {
+            Either::Right(r) => {
                 return Ok(StateMachineDecisionA::BatchWasQueued(
-                    self.inner_store_batch(rr).await?,
+                    self.inner_store_batch(r).await?,
                 ));
             }
         };
         let last_online = match push_notification_state {
             Either::Left(l) => {
-                return Ok(StateMachineDecisionA::Indeterminate(BatchSend(l)));
+                return Ok(StateMachineDecisionA::Indeterminate(Box::new(BatchSend(l))));
             }
             Either::Right(r) => {
                 r.check_last_online_time(&self.online_checker, self.online_duration_threshold)
@@ -484,7 +418,7 @@ where
     fn ingest<T: Serialize + Send + Sync + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
-    ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send {
+    ) -> impl Future<Output = Result<StateMachineDecisionA, Report>> + Send {
         self.ingest(notif)
     }
 }

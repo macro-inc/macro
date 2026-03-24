@@ -4,14 +4,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
+use macro_middleware::tracking::ClientIp;
 
 use crate::api::{context::ApiContext, utils::default_redirect_url};
 use authentication_service::service::user::create_user::create_user_profile;
 
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
-};
+use model::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -31,10 +29,10 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, ip_context), fields(client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Path(Params { verification_id }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_email_link");

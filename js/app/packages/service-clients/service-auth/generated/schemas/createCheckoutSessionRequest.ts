@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateCheckoutSessionRequestDiscount } from './createCheckoutSessionRequestDiscount';
+import type { CreateCheckoutSessionRequestGaClientId } from './createCheckoutSessionRequestGaClientId';
+import type { StripeProductTier } from './stripeProductTier';
 
 /**
  * Request body for creating a Stripe checkout session
@@ -14,6 +16,10 @@ export interface CreateCheckoutSessionRequest {
   cancelUrl: string;
   /** Optional discount/promo code to apply */
   discount?: CreateCheckoutSessionRequestDiscount;
+  /** Google Analytics client ID for conversion tracking */
+  gaClientId?: CreateCheckoutSessionRequestGaClientId;
   /** The URL to redirect to on successful checkout */
   successUrl: string;
+  /** The tier, defaults to haiku */
+  tier?: StripeProductTier;
 }

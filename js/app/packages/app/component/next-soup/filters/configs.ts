@@ -386,6 +386,16 @@ export const createSoupFilters = (
       label: 'Task assigned to user',
       predicate: taskAssignedToUserFilter(getUserID),
     },
+    {
+      id: 'not-task',
+      label: 'Not Task',
+      predicate: (entity) => !taskFilter(entity),
+    },
+    {
+      id: 'task-not-completed',
+      label: 'Not Completed',
+      predicate: (entity) => taskFilter(entity) && !isCompleted(entity),
+    },
     ...TASK_STATUS_FILTERS,
     ...TASK_PRIORITY_FILTERS,
     ...DOCUMENT_CONTEXTUAL_FILTERS,

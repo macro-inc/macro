@@ -32,6 +32,7 @@ import { useChannelContext } from '@block-channel/hooks/channel';
 import { isChannelAdminOrOwner } from '@queries/channel/derived';
 import { useChannelModals } from './ModalsProvider';
 import { ParticipantManagerButton } from './ParticipantManager';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -65,7 +66,40 @@ type TopProps = {
   channelId: string;
 };
 
+type ChannelTopLeftProps = TopProps & {
+  lockRename?: boolean;
+};
+
+export function ChannelTopLeft(props: ChannelTopLeftProps) {
+  const blockId = useBlockId();
+  const channelName = useChannelName(
+    blockId,
+    props.channelName ?? 'New Channel'
+  );
+
+  return (
+    <SplitHeaderLeft>
+      <div class="h-full my-auto flex gap-2 justify-start items-center">
+        <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
+          <TopIcon
+            channelType={props.channelType}
+            participants={props.participants}
+          />
+          <SplitLabel
+            label={channelName() ?? 'New Channel'}
+            id={props.channelId}
+            itemType="channel"
+            lockRename={props.lockRename}
+          />
+        </div>
+      </div>
+    </SplitHeaderLeft>
+  );
+}
+
 export function Top(props: TopProps) {
+  const analytics = useAnalytics();
+
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
   const channelContext = useChannelContext();
@@ -111,6 +145,12 @@ export function Top(props: TopProps) {
         <NotificationsButton
           entity={{ id: blockId, type: 'channel' }}
           notificationSource={notificationSource}
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('notifications_panel_open', {
+              blockType: 'channel',
+            })
+          }
         />
       ),
     },
@@ -135,25 +175,16 @@ export function Top(props: TopProps) {
 
   return (
     <>
-      <SplitHeaderLeft>
-        <div class="h-full my-auto flex gap-2 justify-start items-center">
-          <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
-            <TopIcon
-              channelType={props.channelType}
-              participants={props.participants}
-            />
-            <SplitLabel
-              label={channelName() ?? 'New Channel'}
-              id={props.channelId}
-              itemType="channel"
-              lockRename={
-                props.channelType === ChannelTypeEnum.DirectMessage ||
-                !isAdminOrOwner()
-              }
-            />
-          </div>
-        </div>
-      </SplitHeaderLeft>
+      <ChannelTopLeft
+        channelId={props.channelId}
+        channelType={props.channelType}
+        participants={props.participants}
+        channelName={props.channelName}
+        lockRename={
+          props.channelType === ChannelTypeEnum.DirectMessage ||
+          !isAdminOrOwner()
+        }
+      />
 
       <SplitHeaderRight>
         <BlockLiveIndicators />

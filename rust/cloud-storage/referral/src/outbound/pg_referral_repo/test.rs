@@ -285,6 +285,32 @@ async fn test_complete_referral_not_tracked(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("referral_users"))
 )]
+async fn test_complete_referral_already_complete(pool: Pool<Postgres>) {
+    let repo = PgReferralRepo::new(pool);
+
+    let referred_user_id = MacroUserIdStr::parse_from_str("macro|referred@test.com")
+        .unwrap()
+        .into_owned();
+    let code = referrer_referral_code();
+
+    // Track and complete the referral
+    repo.track_referral(&referred_user_id.0, &code)
+        .await
+        .unwrap();
+    repo.complete_referral(&referred_user_id.0, &code)
+        .await
+        .unwrap();
+
+    // Second completion should fail — already complete
+    let result = repo.complete_referral(&referred_user_id.0, &code).await;
+
+    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("referral_users"))
+)]
 async fn test_get_referred_by_found(pool: Pool<Postgres>) {
     let repo = PgReferralRepo::new(pool);
 

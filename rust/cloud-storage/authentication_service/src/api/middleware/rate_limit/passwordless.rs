@@ -1,8 +1,5 @@
-use std::borrow::Cow;
-
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 use axum::{
-    Extension,
     body::Body,
     extract::{Request, State},
     http::StatusCode,
@@ -10,7 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http_body_util::BodyExt;
-use model::tracking::IPContext;
+use macro_middleware::tracking::ClientIp;
+use std::borrow::Cow;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct RequestWithEmail {
@@ -20,10 +18,10 @@ pub struct RequestWithEmail {
 
 /// Rate limit for passwordless logins
 /// For rate limiting, we use the key `rtl_passwordless:${email}`
-#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=%ip_context), err(Debug))]
 pub(in crate::api) async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     req: Request,
     next: Next,
 ) -> Result<Response, Response> {

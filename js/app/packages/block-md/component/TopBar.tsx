@@ -22,6 +22,7 @@ import {
   showCommentsPreference,
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
+import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsButton } from '@core/component/NotificationsModal';
@@ -35,6 +36,7 @@ import {
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit } from '@core/signal/permissions';
@@ -48,7 +50,7 @@ import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';
@@ -60,8 +62,13 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { createEffect, For, on, Show, type JSX } from 'solid-js';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export function TopBar() {
+  const analytics = useAnalytics();
+
+  const isAuth = useIsAuthenticated();
+
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -154,10 +161,15 @@ export function TopBar() {
       label: 'Notifications',
       icon: Bell,
       action: notificationsControl.toggle,
+      condition: () => !!isAuth(),
       buttonComponent: () => (
         <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
           notificationSource={notificationSource}
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('notifications_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },
@@ -165,11 +177,16 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('references_panel_open', { blockType: 'md' })
+          }
         />
       ),
     },

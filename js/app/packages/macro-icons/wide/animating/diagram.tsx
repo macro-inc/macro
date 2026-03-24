@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedDiagramIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedDiagramIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -11,7 +14,7 @@ export const AnimatedDiagramIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-diagram-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-diagram-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated diagram icon</title>*/}
       <style>{`

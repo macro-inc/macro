@@ -218,6 +218,7 @@ async fn test_insert_thread_new(pool: Pool<Postgres>) -> anyhow::Result<()> {
         latest_non_spam_message_ts: None,
         created_at: now,
         updated_at: now,
+        project_id: None,
     };
 
     let mut tx = pool.begin().await?;
@@ -259,6 +260,7 @@ async fn test_insert_thread_conflict_with_provider_id(pool: Pool<Postgres>) -> a
         latest_non_spam_message_ts: None,
         created_at: now,
         updated_at: now,
+        project_id: None,
     };
 
     let mut tx = pool.begin().await?;

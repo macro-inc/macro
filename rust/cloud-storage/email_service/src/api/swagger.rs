@@ -27,7 +27,10 @@ use ::email::inbound::{
     CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
-use ::email::inbound::{UpdateThreadLabelRequest, UpdateThreadLabelsResponse};
+use ::email::inbound::{
+    UpdateThreadLabelRequest, UpdateThreadLabelsResponse, UpdateThreadProjectRequest,
+    UpdateThreadProjectResponse,
+};
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
 use models_email::email::service;
@@ -72,6 +75,7 @@ use utoipa::OpenApi;
         inbound::update_thread_labels_handler,
         inbound::cursor_handler,
         inbound::get_thread_handler,
+        inbound::update_thread_project_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
@@ -118,6 +122,8 @@ use utoipa::OpenApi;
             ArchiveThreadRequest,
             UpdateThreadLabelRequest,
             UpdateThreadLabelsResponse,
+            UpdateThreadProjectRequest,
+            UpdateThreadProjectResponse,
             ThreadPreviewCursor,
             GetThreadResponse,
             ApiThread,

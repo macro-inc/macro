@@ -6,6 +6,7 @@ mod tests;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
+use unicode_segmentation::UnicodeSegmentation;
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
@@ -499,6 +500,10 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
+        if args.document_name.graphemes(true).count() > 100 {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
@@ -606,6 +611,12 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         document_context: DocumentBasic,
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
+        if let Some(name) = args.document_name.as_ref()
+            && name.graphemes(true).count() > 100
+        {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
         // Check owner-only restrictions for authenticated users
         if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
             entity_access_receipt.entity_permission()
@@ -734,13 +745,15 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .document_id
             .clone();
 
-        let _ = self
-            .repo
-            .share_with_team(&plain_user_id, &document_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to share task with team");
-            });
+        if request.share_with_team {
+            let _ = self
+                .repo
+                .share_with_team(&plain_user_id, &document_id)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to share task with team");
+                });
+        }
 
         if let Some(properties) = request.property_values {
             for property_input in properties {

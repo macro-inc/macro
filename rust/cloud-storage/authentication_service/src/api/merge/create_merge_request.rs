@@ -5,13 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 use utoipa::ToSchema;
 
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 
 use model::{
     response::{EmptyResponse, ErrorResponse},
-    tracking::IPContext,
     user::UserContext,
 };
 
@@ -39,11 +39,11 @@ static MERGE_REQUEST_TEMPLATE: &str = include_str!("./_merge_request_template.ht
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=%ip_context.client_ip, email=%req.email, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, ip_context,req), fields(client_ip=%ip_context, email=%req.email, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Json(mut req): extract::Json<CreateAccountMergeRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("create_merge_request");

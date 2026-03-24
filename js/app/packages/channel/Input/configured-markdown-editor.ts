@@ -6,14 +6,20 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { IUser } from '@core/user/types';
 
 type CreateConfiguredChannelMarkdownEditorOptions = {
   namespace: string;
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
+  users?: () => IUser[];
   onChange?: (markdown: string) => void;
   onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
 };
 
 export function createConfiguredChannelMarkdownEditor(
@@ -25,6 +31,14 @@ export function createConfiguredChannelMarkdownEditor(
     editor.withMentions({
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
+      users: options.users,
+      block: 'channel',
+    });
+  }
+
+  if (options.onPasteFilesAndDirs) {
+    editor.withFilePaste({
+      onPasteFilesAndDirs: options.onPasteFilesAndDirs,
     });
   }
 

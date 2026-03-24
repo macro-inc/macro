@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "referral_invitation"
+publish = false
+version = "0.1.0"
+
+
+[dependencies]
+askama = { workspace = true }
+macro_env = { path = "../macro_env" }
+macro_user_id = { path = "../macro_user_id" }
+notification = { path = "../notification" }
+serde = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

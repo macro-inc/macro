@@ -32,6 +32,7 @@ import WideChat from '@macro-icons/wide/chat.svg';
 import WideCsv from '@macro-icons/wide/csv.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideDocx from '@macro-icons/wide/docx.svg';
+import WideCalendar from '@macro-icons/wide/calendar.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
@@ -70,6 +71,7 @@ export type EntityWithValidIcon =
   | 'default'
   | 'sharedProject'
   | 'emailRead'
+  | 'emailInvite'
   | 'archive'
   | 'html';
 
@@ -218,6 +220,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Read Email',
   },
+  emailInvite: {
+    icon: WideCalendar,
+    foreground: 'text-email',
+    background: 'bg-email-bg',
+    prettyName: 'Calendar Invite',
+  },
   task: {
     icon: Check,
     foreground: 'text-task',
@@ -275,6 +283,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   contact: WideUser,
   default: WideUnknown,
   emailRead: WideEmail,
+  emailInvite: WideCalendar,
   task: WideTask,
 };
 

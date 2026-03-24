@@ -15,6 +15,7 @@ models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification" }
 paste = { workspace = true }
+referral_invitation = { path = "../referral_invitation" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

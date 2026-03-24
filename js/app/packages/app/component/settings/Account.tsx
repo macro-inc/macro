@@ -25,6 +25,7 @@ import {
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
 import Logout from '@icon/regular/sign-out.svg';
+import QuestionCircle from '@icon/regular/question.svg';
 import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
@@ -39,6 +40,7 @@ import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '@notifications';
+import { useAnalytics } from '@app/component/analytics-context';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -75,7 +77,7 @@ export function Account() {
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
-  const { connect: connectEmail, disconnect: disconnectEmail } = useEmailLinks();
+  const { disconnect: disconnectEmail } = useEmailLinks();
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -109,14 +111,12 @@ export function Account() {
   };
 
   const logoutHandler = () => {
-    let redirectUrl = window.location.origin;
-    logout(redirectUrl);
+    logout();
   };
 
   const deleteAccountHandler = async () => {
     await authServiceClient.deleteUser();
-    let redirectUrl = window.location.origin;
-    logout(redirectUrl);
+    logout();
   };
 
   return (
@@ -203,13 +203,13 @@ export function Account() {
           </Show>
         </div>
         <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
-          <div
-            class={`flex items-center justify-between ${!showEmailModal() && 'mb-[18px]'}`}
-          >
-            <div class="text-sm">Email</div>
-            <Show
-              when={!emailActive()}
-              fallback={
+          <Show
+            when={!emailActive()}
+            fallback={
+              <div
+                class={`flex items-center justify-between ${!showEmailModal() && 'mb-[18px]'}`}
+              >
+                <div class="text-sm">Email</div>
                 <DeprecatedTextButton
                   theme="base"
                   text="Disable"
@@ -217,38 +217,37 @@ export function Account() {
                     setShowEmailModal(true);
                   }}
                 />
-              }
-            >
-              <Popover.Root open={showTooltip()} gutter={10} placement={'left'}>
-                <Popover.Anchor>
-                  <div
-                    class="flex flex-col items-center"
-                    onPointerEnter={() => {
-                      setShowTooltip(true);
-                    }}
-                    onPointerLeave={() => {
-                      setShowTooltip(false);
-                    }}
-                  >
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Enable"
-                      onClick={connectEmail}
-                    />
-                  </div>
-                </Popover.Anchor>
-                <Popover.Portal>
-                  <Popover.Content class="z-modal">
-                    <BetaTooltip
-                      text={
-                        "Enabling an email address different from the current Macro user's will result in session termination"
-                      }
-                    />
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-            </Show>
-          </div>
+              </div>
+            }
+          >
+            <TabContentRow text="Email" subtext={
+              <div class="flex items-center gap-1">
+                <span>Disabled</span>
+                <Popover.Root open={showTooltip()} gutter={10} placement={'top'}>
+                  <Popover.Anchor>
+                    <button
+                      type="button"
+                      aria-label="Why email is disabled"
+                      class="inline-flex items-center cursor-help"
+                      onPointerEnter={() => setShowTooltip(true)}
+                      onPointerLeave={() => setShowTooltip(false)}
+                      onFocus={() => setShowTooltip(true)}
+                      onBlur={() => setShowTooltip(false)}
+                    >
+                      <QuestionCircle class="size-5 text-ink-muted" />
+                    </button>
+                  </Popover.Anchor>
+                  <Popover.Portal>
+                    <Popover.Content class="z-modal">
+                      <BetaTooltip
+                        text="Email requires additional Google permissions. Select the permissions on sign-in to enable."
+                      />
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+              </div>
+            } />
+          </Show>
         </Show>
         <Show when={showEmailModal()}>
           <div class="flex flex-row items-center">
@@ -352,13 +351,21 @@ function NotificationToggle() {
 function NotificationSettings(props: {
   settings: SupportedNotificationSettings;
 }) {
+  const analytics = useAnalytics()
+
+  const handleToggle = () =>  {
+    analytics.track('notifications_toggled')
+    props.settings.toggle(!props.settings.isEnabled())
+  }
+
+
   return (
     <div class="flex items-center justify-between mb-[18px]">
       <div class="text-sm">Notifications</div>
       <DeprecatedTextButton
         theme="base"
         text={props.settings.isEnabled() ? "Disable" : "Enable"}
-        onClick={() => props.settings.toggle(!props.settings.isEnabled())}
+        onClick={handleToggle}
       />
     </div>
   );

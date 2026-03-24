@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "ip_extractor"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+axum = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

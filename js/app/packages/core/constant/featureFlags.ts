@@ -1,3 +1,5 @@
+import { analytics } from '@app/lib/analytics';
+
 /**
  * This constant reflects whether the app is running locally with hot reload enabled
  *
@@ -234,10 +236,6 @@ export const ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
-export const ENABLE_CREATE_TASK = resolveFeatureFlag(
-  'ENABLE_CREATE_TASK',
-  true
-);
 export const ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
@@ -282,10 +280,17 @@ export const ENABLE_FEATURED_SEARCH_RESULTS = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_NEW_CHANNELS = resolveFeatureFlag(
-  'ENABLE_NEW_CHANNELS',
-  false
+const ENABLE_NEW_CHANNELS_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_NEW_CHANNELS'
 );
+
+export function ENABLE_NEW_CHANNELS(): boolean {
+  if (ENABLE_NEW_CHANNELS_OVERRIDE !== undefined) {
+    return ENABLE_NEW_CHANNELS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled('enable-new-channels') ?? false;
+}
 
 export const ENABLE_PROXY_EMAIL_IMAGES = resolveFeatureFlag(
   'ENABLE_PROXY_EMAIL_IMAGES',

@@ -48,7 +48,7 @@ impl SharePermissionV2 {
 
     /// Creates a new share permission object for an ai chat
     pub fn new_chat_share_permission() -> Self {
-        Self::new(false, None)
+        Self::new(true, Some(AccessLevel::View))
     }
 
     /// Creates a new share permission object for a project

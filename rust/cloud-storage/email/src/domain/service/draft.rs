@@ -225,6 +225,7 @@ where
             latest_non_spam_message_ts: None,
             created_at: now,
             updated_at: now,
+            project_id: None,
         };
 
         let thread_db_id = thread.db_id;

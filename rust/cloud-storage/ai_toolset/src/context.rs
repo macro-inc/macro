@@ -27,7 +27,7 @@ impl<S> DerefMut for ServiceContext<S> {
 #[derive(Clone)]
 pub struct RequestContext {
     /// The ID of the user making the request.
-    pub user_id: Arc<MacroUserIdStr<'static>>,
+    pub user_id: MacroUserIdStr<'static>,
     /// The JWT token for the request.
     #[deprecated(note = "Do not add new dependencies on this field")]
     pub jwt: Arc<String>,

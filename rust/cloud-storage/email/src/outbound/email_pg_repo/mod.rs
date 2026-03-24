@@ -74,6 +74,13 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
+    async fn link_by_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, Self::Err> {
+        link::link_by_macro_id(&self.pool, macro_id).await
+    }
+
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
         thread::thread_by_id(&self.pool, thread_id).await
     }
@@ -236,5 +243,17 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
     ) -> Result<(), Self::Err> {
         label::delete_scheduled_messages_batch(&self.pool, message_ids, link_id).await
+    }
+
+    async fn update_thread_project(
+        &self,
+        thread_id: Uuid,
+        project_id: Option<&str>,
+    ) -> Result<bool, Self::Err> {
+        thread::update_thread_project(&self.pool, thread_id, project_id).await
+    }
+
+    async fn get_thread_project_id(&self, thread_id: Uuid) -> Result<Option<String>, Self::Err> {
+        thread::get_thread_project_id(&self.pool, thread_id).await
     }
 }

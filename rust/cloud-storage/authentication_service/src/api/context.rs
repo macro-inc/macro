@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
@@ -11,8 +12,11 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsIngressQueue;
+use notification::{
+    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
+};
+use rate_limit::domain::service::RateLimitServiceImpl;
 use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
@@ -23,6 +27,8 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 
+use crate::config::StripePriceIds;
+
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
@@ -32,7 +38,13 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     NotificationIngressType,
 >;
 
-pub(crate) type ReferralServiceType = ReferralServiceImpl<PgReferralRepo, StripeDiscountClient>;
+type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
+
+pub(crate) type ReferralServiceType = ReferralServiceImpl<
+    PgReferralRepo,
+    StripeDiscountClient,
+    Arc<SqsNotificationIngress<SqsIngressQueue>>,
+>;
 
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
@@ -58,7 +70,11 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
+    pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    pub rate_limit_service: RateLimiter,
+    /// The stripe price ids
+    pub stripe_price_ids: StripePriceIds,
 }
 
 env_var! {

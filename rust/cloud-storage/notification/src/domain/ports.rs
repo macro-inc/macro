@@ -20,9 +20,9 @@ use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
-    DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey, RateLimitConfig,
-    RateLimitKey, RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
-    android::FCMMessage, apple::APNSPushNotification, mobile::MessageAttributes,
+    DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey,
+    SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
+    apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -48,27 +48,7 @@ pub trait NotificationSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
-/// Port for rate limiting operations.
-pub trait RateLimitPort: Send + Sync + 'static {
-    /// Check if the action is allowed without incrementing the counter.
-    ///
-    /// The `RateLimitKey` is a hashed value - callers control what gets rate
-    /// limited by constructing the key from relevant data.
-    fn check(
-        &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
-    ) -> impl Future<Output = Result<RateLimitResult, Report>> + Send;
-
-    /// Increment the rate limit counter for a key.
-    ///
-    /// Should only be called after a successful action.
-    fn increment(
-        &self,
-        key: &RateLimitKey,
-        config: &RateLimitConfig,
-    ) -> impl Future<Output = Result<u64, Report>> + Send;
-}
+pub use rate_limit::{RateLimitPort, RateLimitService};
 
 /// Port for notification persistence operations.
 pub trait NotificationRepository: Send + Sync + 'static {
@@ -262,6 +242,16 @@ pub trait NotificationQueue: Send + Sync + 'static {
     fn delete_message(
         &self,
         receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Delay a message by changing its visibility timeout.
+    ///
+    /// The message will not be redelivered to consumers until the duration elapses.
+    /// Uses SQS `ChangeMessageVisibility` under the hood.
+    fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
