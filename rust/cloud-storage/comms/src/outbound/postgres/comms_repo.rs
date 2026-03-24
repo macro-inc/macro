@@ -24,6 +24,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[tracing::instrument(skip(db))]

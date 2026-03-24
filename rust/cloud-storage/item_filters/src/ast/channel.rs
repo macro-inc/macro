@@ -22,6 +22,8 @@ pub enum ChannelTypeFilter {
     Private,
     /// a direct message channel
     DirectMessage,
+    /// a team channel
+    Team,
 }
 
 impl ParseFromStr for ChannelTypeFilter {

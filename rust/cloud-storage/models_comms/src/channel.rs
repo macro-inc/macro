@@ -14,6 +14,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[derive(Debug, Clone)]

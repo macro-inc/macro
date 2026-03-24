@@ -73,6 +73,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]
