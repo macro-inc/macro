@@ -12,3 +12,6 @@ macro_user_id = { path = "../macro_user_id" }
 notification = { path = "../notification" }
 serde = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

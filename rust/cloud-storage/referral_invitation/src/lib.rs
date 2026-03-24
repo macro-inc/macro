@@ -3,6 +3,9 @@
 //!
 //! Contains the [`InviteToMacro`] notification type and the [`ReferralCode`] newtype.
 
+#[cfg(test)]
+mod test;
+
 use askama::Template;
 use macro_env::Environment;
 use macro_user_id::email::EmailStr;
@@ -49,7 +52,7 @@ fn get_url(env: Environment, code: &ReferralCode) -> Url {
         Environment::Local => "http://localhost:3000",
     };
     let mut url = Url::parse(host).expect("all the inputs are static, valid values");
-    url.set_path("/app/login");
+    url.set_path("/app/signup");
     url.query_pairs_mut()
         .clear()
         .append_pair("referral_code", &code.0)
@@ -61,7 +64,9 @@ impl NotificationExtEmail for InviteToMacro {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: "You have been invited to join Macro".to_string(),
-            body: self.render().expect("This cant fail, it is tested"),
+            body: self
+                .render()
+                .expect("InviteToMacro template render failed in format_email"),
         }
     }
 
