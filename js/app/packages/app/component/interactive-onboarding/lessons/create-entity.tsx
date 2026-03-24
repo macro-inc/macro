@@ -21,11 +21,11 @@ import { MockAppChrome } from '../components/MockAppChrome';
 import { HotkeyCallout } from '../components-lib';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import {
-  sandboxEntities,
+  filteredSandboxEntities,
   addSandboxEntity,
   createSandboxEntity,
-  setSidebarFilter,
   sidebarFilter,
+  setSidebarFilter,
   type SandboxEntityType,
 } from '../sandbox/sandbox-store';
 
@@ -63,7 +63,7 @@ function CreateEntityContent(props: LessonContentProps) {
       hotkey: 'c',
       description: 'Open Create menu',
       keyDownHandler: () => {
-        setLauncherOpen(true);
+        setLauncherOpen((open) => !open);
         return true;
       },
     }).withGroup(group);
@@ -91,20 +91,22 @@ function CreateEntityContent(props: LessonContentProps) {
       tabIndex={0}
       class="flex flex-col gap-3 outline-none onboarding-stagger"
     >
-      <div class="bracket-never">
-        <HotkeyCallout
-          keys={['C']}
-          label="to open the Create menu"
-          completed={completed()}
-        />
-      </div>
+      <p>
+        The <strong>Create Launcher</strong> lets you create Macro Editor
+        quickly, from anywhere. Press <strong>C</strong> to open the Launcher.
+      </p>
+      <HotkeyCallout
+        keys={['C']}
+        label="to open the Create menu"
+        completed={completed()}
+      />
     </div>
   );
 }
 
 function CreateEntityDemo(props: LessonContentProps) {
   const soup = createSoupState({
-    initialData: sandboxEntities(),
+    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
@@ -118,7 +120,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   // Keep soup synced with sandbox store
   createEffect(() => {
-    soup.setData(sandboxEntities());
+    soup.setData(filteredSandboxEntities());
   });
 
   // Build sandbox versions of all creatable blocks
@@ -143,7 +145,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   return (
     <div class="flex flex-col h-full relative">
-      <MockAppChrome viewTitle="Documents">
+      <MockAppChrome>
         <Show when={sharedSoup()}>
           {(s) => <OnboardingEntityList soup={s()} />}
         </Show>

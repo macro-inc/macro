@@ -2,6 +2,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { sandboxToCommandItems, SANDBOX_USERS } from '../sandbox/sandbox-store';
 import { createSignal, onCleanup } from 'solid-js';
+import { sidebarFilter, setSidebarFilter } from '../sandbox/sandbox-store';
 import { HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
 import type { LessonContentProps, LessonDefinition } from '../types';
@@ -28,7 +29,13 @@ function MarkdownMentionsContent(_props: LessonContentProps) {
 function MarkdownMentionsDemo(props: LessonContentProps) {
   const [mentioned, setMentioned] = createSignal(false);
 
-  onCleanup(() => setCompleted(false));
+  const previousFilter = sidebarFilter();
+  setSidebarFilter(null);
+
+  onCleanup(() => {
+    setCompleted(false);
+    setSidebarFilter(previousFilter);
+  });
 
   const sandboxEntities = () =>
     sandboxToCommandItems().map((item) => ({
@@ -55,7 +62,7 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
     .withSkipPreviewFetch();
 
   return (
-    <MockAppChrome viewTitle="Daily Note">
+    <MockAppChrome>
       <div class="px-8 py-6">
         <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell

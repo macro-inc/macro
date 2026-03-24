@@ -5,7 +5,7 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import {
-  sandboxEntities,
+  filteredSandboxEntities,
   sandboxToCommandItems,
 } from '../sandbox/sandbox-store';
 import {
@@ -131,18 +131,18 @@ function CommandKDemo(props: LessonContentProps) {
   let contentEl: HTMLDivElement | undefined;
 
   const soup = createSoupState({
-    initialData: sandboxEntities(),
+    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
   createEffect(() => {
-    soup.setData(sandboxEntities());
+    soup.setData(filteredSandboxEntities());
   });
 
   return (
     <>
       {/* Entity list visible behind the modal */}
-      <MockAppChrome viewTitle="Documents">
+      <MockAppChrome>
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>
 

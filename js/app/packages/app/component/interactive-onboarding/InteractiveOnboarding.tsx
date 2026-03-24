@@ -40,9 +40,23 @@ export default function InteractiveOnboarding() {
     clearCompletedLessons();
   }
 
+  const params = new URLSearchParams(location.search);
+  const slideParam = params.get('slide');
+  const slideIndex =
+    slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
+
+  const sortedLessons = [...LESSONS].sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  );
+  const debugCompleted =
+    slideIndex !== null
+      ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
+      : undefined;
+
   const state = createOnboardingState({
     definitions: LESSONS,
-    initialCompleted: testMode ? new Set() : loadCompletedLessons(),
+    initialCompleted:
+      debugCompleted ?? (testMode ? new Set() : loadCompletedLessons()),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -330,19 +344,21 @@ export default function InteractiveOnboarding() {
                           scopeId={scopeId}
                         />
                       </div>
-                      <div class="mt-8 pt-4 flex flex-col gap-2">
-                        <ContinueButton
-                          ref={(el) => {
-                            continueButtonRef = el;
-                          }}
-                          onClick={handleContinue}
-                          label={continueLabel()}
-                          disabled={!readyToContinue()}
-                        />
-                        <Show when={lesson().definition.skippable}>
-                          <SkipButton onClick={handleSkip} />
-                        </Show>
-                      </div>
+                      <Show when={!lesson().definition.hideContinue}>
+                        <div class="mt-8 pt-4 flex flex-col gap-2">
+                          <ContinueButton
+                            ref={(el) => {
+                              continueButtonRef = el;
+                            }}
+                            onClick={handleContinue}
+                            label={continueLabel()}
+                            disabled={!readyToContinue()}
+                          />
+                          <Show when={lesson().definition.skippable}>
+                            <SkipButton onClick={handleSkip} />
+                          </Show>
+                        </div>
+                      </Show>
                     </div>
 
                     {/* Footer */}

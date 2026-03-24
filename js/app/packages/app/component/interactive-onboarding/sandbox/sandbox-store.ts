@@ -49,14 +49,15 @@ function seedEmail(
   senderName: string,
   senderEmail: string,
   snippet: string,
-  updatedAt: Date
+  updatedAt: Date,
+  isRead = false
 ): EntityData {
   return {
     type: 'email',
     id,
     name,
     ownerId: 'sandbox',
-    isRead: false,
+    isRead,
     isDraft: false,
     isImportant: false,
     done: false,
@@ -151,7 +152,8 @@ const SEED_ENTITIES: EntityData[] = [
     'Jordan Rivera',
     'jordan@example.com',
     'Attaching the draft deck for your review. Key highlights: ARR up 34%, churn down to 2.1%.',
-    ago(60 * 44)
+    ago(60 * 44),
+    true
   ),
   seedChannel('seed_channel_3', 'announcements', ago(60 * 52)),
   seedTask('seed_task_3', 'Set up CI pipeline', ago(60 * 60)),
@@ -165,7 +167,8 @@ const SEED_ENTITIES: EntityData[] = [
     'Alex Kim',
     'alex@example.com',
     'Your annual subscription renews in 7 days. Please confirm billing details to avoid interruption.',
-    ago(60 * 144)
+    ago(60 * 144),
+    true
   ),
   seedTask('seed_task_4', 'Fix login page regression', ago(60 * 168)),
   seedChannel('seed_channel_4', 'product', ago(60 * 200)),
@@ -179,7 +182,8 @@ const SEED_ENTITIES: EntityData[] = [
     'Emily Zhang',
     'emily@example.com',
     'Overall looking great! Left a few comments on the nav and the mobile breakpoints.',
-    ago(60 * 400)
+    ago(60 * 400),
+    true
   ),
   seedTask('seed_task_5', 'Update dependencies', ago(60 * 480)),
   seedChannel('seed_channel_5', 'random', ago(60 * 560)),
@@ -197,7 +201,8 @@ const SEED_ENTITIES: EntityData[] = [
     'Alice Johnson',
     'alice@example.com',
     "Sending the agenda ahead of Thursday's session. Please come with your top 3 priorities.",
-    ago(60 * 1700)
+    ago(60 * 1700),
+    true
   ),
   seedChannel('seed_channel_6', 'general', ago(60 * 1900)),
 ];

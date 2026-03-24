@@ -1,4 +1,5 @@
-import { createSignal, For, onCleanup, onMount } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import { cn } from '@ui/utils/classname';
 
 const DISPLAY_TO_EVENT_KEY: Record<string, string> = {
@@ -41,7 +42,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
       // When a modifier is released the OS swallows subsequent keyup events,
       // so clear everything to prevent keys getting stuck.
       if (released === 'meta' || released === 'control' || released === 'alt') {
-        setPressedKeys(new Set());
+        setPressedKeys(new Set([]));
         return;
       }
       setPressedKeys((prev) => {
@@ -55,7 +56,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
       });
     };
     const clearAll = () => {
-      if (!props.completed) setPressedKeys(new Set());
+      if (!props.completed) setPressedKeys(new Set([]));
     };
     const onVisibilityChange = () => {
       if (document.hidden) clearAll();
@@ -83,7 +84,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
           animation: hotkey-pulse 1.4s cubic-bezier(0.2, 0.8, 0.4, 1);
         }
       `}</style>
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center gap-1.5 bracket-never">
         <For each={props.keys}>
           {(key, i) => {
             let keyRef: HTMLSpanElement | undefined;
@@ -138,6 +139,11 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
         </For>
       </div>
       <span class="text-sm text-muted">{props.label}</span>
+      <Show when={props.completed}>
+        <div class="bg-accent text-panel size-5 rounded xs flex items-center justify-center ml-auto">
+          <CheckIcon class="size-4" />
+        </div>
+      </Show>
     </div>
   );
 }
