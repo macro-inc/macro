@@ -12,6 +12,7 @@ const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "20", 10);
 const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "100", 10);
 const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
+const DOCUMENT_ID = process.env.DOCUMENT_ID;
 
 if (!S3_BUCKET) {
   console.error("S3_BUCKET is required");
@@ -37,6 +38,12 @@ interface Stats {
 }
 
 const stats: Stats = { scanned: 0, copied: 0, skipped: 0, missing: 0, errors: 0 };
+
+function buildPrefix(): string | undefined {
+  if (USER && DOCUMENT_ID) return `${USER}/${DOCUMENT_ID}/`;
+  if (USER) return `${USER}/`;
+  return PREFIX || undefined;
+}
 
 function stripExtension(key: string): string {
   // Strip everything after the version_id (handles multipart extensions like .js.map)
@@ -106,6 +113,7 @@ async function main() {
   console.log(`  Prefix: ${PREFIX || "<all>"}`);
   console.log(`  Concurrency: ${CONCURRENCY}`);
   if (USER) console.log(`  User: ${USER}`);
+  if (DOCUMENT_ID) console.log(`  Document: ${DOCUMENT_ID}`);
   if (DRY_RUN) console.log(`  === DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
 
   console.log();
@@ -116,7 +124,7 @@ async function main() {
     const response = await s3.send(
       new ListObjectsV2Command({
         Bucket: S3_BUCKET,
-        Prefix: USER ? `${USER}/` : PREFIX || undefined,
+        Prefix: buildPrefix(),
         MaxKeys: PAGE_SIZE,
         ContinuationToken: continuationToken,
       })
