@@ -61,7 +61,7 @@ def main() -> None:
     tmpl = env.from_string(converted)
 
     html = tmpl.render(
-        sender_profile_picture_url="https://placehold.co/40x40/888888/ffffff",
+        sender_profile_picture_url="https://placehold.co/40x40/888888/ffffff", # set to None to test the email-only fallback path
         sender_name="Peter Chinman",  # set to None to test the email-only fallback path
         sender_email="peter.chinman@gmail.com",
     )
