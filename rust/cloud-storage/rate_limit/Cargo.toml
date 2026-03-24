@@ -4,7 +4,13 @@ name = "rate_limit"
 publish = false
 version = "0.1.0"
 
+[features]
+axum = ["dep:axum", "dep:axum-extra"]
+testing = []
+
 [dependencies]
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
 hex = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
@@ -14,6 +20,7 @@ redis = { workspace = true, features = [
 rootcause = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+
 tracing = { workspace = true }
 twox-hash = { version = "2" }
 

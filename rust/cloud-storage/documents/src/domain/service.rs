@@ -6,6 +6,7 @@ mod tests;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
+use unicode_segmentation::UnicodeSegmentation;
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
@@ -476,7 +477,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        if args.document_name.chars().count() > 100 {
+        if args.document_name.graphemes(true).count() > 100 {
             return Err(DocumentError::BadRequest("name too long".to_string()));
         }
 
@@ -582,7 +583,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
         if let Some(name) = args.document_name.as_ref()
-            && name.chars().count() > 100
+            && name.graphemes(true).count() > 100
         {
             return Err(DocumentError::BadRequest("name too long".to_string()));
         }

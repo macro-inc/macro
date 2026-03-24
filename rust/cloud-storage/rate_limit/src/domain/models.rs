@@ -56,42 +56,45 @@ impl RateLimitKey {
     }
 }
 
-/// Result of a rate limit check.
-#[derive(Debug)]
-pub enum RateLimitResult {
-    /// The action is allowed. Contains the current count after increment.
-    Allowed {
-        /// The current count after increment.
-        current_count: u64,
-    },
-    /// The rate limit has been exceeded.
-    Exceeded(RateLimitExceeded),
-}
+/// The result of checking the rate limit
+pub type RateLimitResult = Result<RateLimitOk, RateLimitExceeded>;
 
-/// The return value from the rate limit service
+/// The Ok value for passing the rate limit
 #[derive(Debug)]
-pub struct RateLimitTicket {
-    pub(crate) result: RateLimitResult,
+pub struct RateLimitOk {
+    /// the current count of the rate limit key
+    #[allow(dead_code)]
+    pub(crate) current_count: u64,
+    /// the key that was used to create this value
     pub(crate) key: RateLimitKey,
+    /// the config that was used to create this value
+    #[expect(dead_code)]
     pub(crate) config: RateLimitConfig,
 }
 
-impl std::ops::Deref for RateLimitTicket {
-    type Target = RateLimitResult;
-
-    fn deref(&self) -> &Self::Target {
-        &self.result
+#[cfg(feature = "testing")]
+impl RateLimitOk {
+    /// function which should only be used in downstream tests
+    /// constructs the value from raw parts
+    pub fn new_testing_value(
+        current_count: u64,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Self {
+        RateLimitOk {
+            current_count,
+            key,
+            config,
+        }
     }
 }
 
 /// Error returned when a rate limit is exceeded.
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error, Clone, Copy)]
 #[error(
-    "Rate limit key: {key} was exceeded. Current count is {current_count} but max count is {max_count}"
+    "Rate limit key was exceeded. Current count is {current_count} but max count is {max_count}"
 )]
 pub struct RateLimitExceeded {
-    /// The key that is exceeded.
-    pub key: String,
     /// The current count.
     pub current_count: u64,
     /// The maximum allowed count.

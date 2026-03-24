@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
@@ -66,6 +67,11 @@ const createBlock = async (spec: {
     const id = await createFn();
     if (!id) return;
 
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
+
     const block = { type: blockName, id };
 
     openWithSplit(block, {
@@ -88,6 +94,11 @@ const createBlock = async (spec: {
       split?.goBack();
       return;
     }
+
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
 
     if (split)
       split.replace({

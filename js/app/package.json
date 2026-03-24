@@ -18,7 +18,8 @@
 		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
 		"format": "bunx --bun biome format --write",
 		"fix": "bunx --bun biome lint --write",
-		"clean": "bun scripts/clean-env.js"
+		"clean": "bun scripts/clean-env.js",
+		"knip": "bunx --bun knip"
 	},
 	"dependencies": {
 		"@aws-crypto/sha256-js": "^5.2.0",
@@ -163,6 +164,7 @@
 		"json-refs": "^3.0.15",
 		"json-schema-to-typescript": "^15.0.4",
 		"json-schema-to-zod": "^2.6.1",
+		"knip": "^6.0.4",
 		"lightningcss": "^1.30.2",
 		"mock-socket": "^9.3.1",
 		"openai": "^6.25.0",

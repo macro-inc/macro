@@ -12,6 +12,7 @@ use model::{
 };
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Creates a new project.
 /// The project can be created as a sub-project of another project or as a top-level project.
@@ -59,7 +60,7 @@ async fn create_project_v2(
     user_context: MacroUserExtractor,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
-    if req.name.chars().count() > 100 {
+    if req.name.graphemes(true).count() > 100 {
         return Err((StatusCode::BAD_REQUEST, "name too long".to_string()));
     }
 

@@ -1,4 +1,3 @@
-import { withAnalytics } from '@coparse/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
@@ -23,8 +22,7 @@ import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
-
-const { track, TrackingEvents } = withAnalytics();
+import { useAnalytics } from '@app/component/analytics-context';
 
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
@@ -44,6 +42,8 @@ export type ChatInputComponentProps = {
 } & ChatInputProps;
 
 export function ChatInput(props: ChatInputComponentProps) {
+  const analytics = useAnalytics();
+
   const input = useChatInputContext();
   const uploadQueue = input.uploadQueue;
   const attachments = input.attachments;
@@ -64,7 +64,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     uploaded
       .filter((upload) => upload.type === 'ok')
       .forEach((upload) => {
-        track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+        analytics.track('ai_attachment_add');
         attachments.addAttachment(upload.attachment);
       });
   });
@@ -194,7 +194,6 @@ export function ChatInput(props: ChatInputComponentProps) {
           <AttachmentList
             attached={attachments.attached}
             removeAttachment={(id) => {
-              track(TrackingEvents.CHAT.ATTACHMENT.REMOVE);
               attachments.removeAttachment(id);
             }}
             uploading={() =>
@@ -211,7 +210,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           containerRef={containerRef}
           open={showAttachMenu()}
           onAttach={(attachment) => {
-            track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+            analytics.track('ai_attachment_add');
             attachments.addAttachment(attachment);
           }}
         />

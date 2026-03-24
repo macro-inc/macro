@@ -22,8 +22,8 @@ use crate::domain::ports::ReferralService;
     )
 )]
 #[tracing::instrument(skip(state, user_context), err)]
-pub async fn get_referral_code_handler<T: ReferralService>(
-    State(state): State<ReferralRouterState<T>>,
+pub async fn get_referral_code_handler<T: ReferralService, R>(
+    State(state): State<ReferralRouterState<T, R>>,
     user_context: MacroUserExtractor,
 ) -> Result<Json<ReferralCode>, ReferralError> {
     let code = state

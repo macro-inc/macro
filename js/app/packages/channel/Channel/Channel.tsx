@@ -10,7 +10,6 @@ import {
   on,
   onMount,
   Show,
-  Suspense,
   type Accessor,
 } from 'solid-js';
 import { useBeforeLeave } from '@solidjs/router';
@@ -67,6 +66,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import { resetKeyboardModality } from './util';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 
 type ChannelProps = {
@@ -251,7 +251,7 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <Suspense>
+    <DebugSuspense name="Channel.root">
       <StaticMarkdownContext>
         <ChannelDropZone dragState={dragState}>
           <Show when={messages().length > 0}>
@@ -330,7 +330,7 @@ export function Channel(props: ChannelProps) {
               />
             </div>
           </Show>
-          <Suspense>
+          <DebugSuspense name="Channel.input">
             <div class="pb-2 w-full flex justify-center" ref={attachInputRef}>
               <ChannelInput
                 input={{
@@ -352,9 +352,9 @@ export function Channel(props: ChannelProps) {
                 onSend={onSend}
               />
             </div>
-          </Suspense>
+          </DebugSuspense>
         </ChannelDropZone>
       </StaticMarkdownContext>
-    </Suspense>
+    </DebugSuspense>
   );
 }

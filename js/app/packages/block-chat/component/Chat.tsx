@@ -39,15 +39,13 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { withAnalytics } from '@coparse/analytics';
+import { useAnalytics } from '@app/component/analytics-context';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, Show } from 'solid-js';
-
-const { track, TrackingEvents } = withAnalytics();
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -71,6 +69,7 @@ function ChatInner(props: {
   data: ChatData;
   loadedInputText: string | undefined;
 }) {
+  const analytics = useAnalytics();
   const input = useChatInputContext();
   const chat = useChatContext();
   const canEdit = useCanEdit();
@@ -88,7 +87,7 @@ function ChatInner(props: {
 
   const editor = buildChatEditor().withMentions({
     onCreate: (mention) => {
-      track(TrackingEvents.CHAT.MENTION.SELECT);
+      analytics.track('mentions_menu_use', { itemType: 'chat' });
       const attachment = getAttachmentFromMention(mention);
       if (attachment) input.attachments.addAttachment(attachment);
     },

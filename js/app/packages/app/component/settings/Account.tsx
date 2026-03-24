@@ -40,6 +40,7 @@ import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '@notifications';
+import { useAnalytics } from '@app/component/analytics-context';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -350,13 +351,21 @@ function NotificationToggle() {
 function NotificationSettings(props: {
   settings: SupportedNotificationSettings;
 }) {
+  const analytics = useAnalytics()
+
+  const handleToggle = () =>  {
+    analytics.track('notifications_toggled')
+    props.settings.toggle(!props.settings.isEnabled())
+  }
+
+
   return (
     <div class="flex items-center justify-between mb-[18px]">
       <div class="text-sm">Notifications</div>
       <DeprecatedTextButton
         theme="base"
         text={props.settings.isEnabled() ? "Disable" : "Enable"}
-        onClick={() => props.settings.toggle(!props.settings.isEnabled())}
+        onClick={handleToggle}
       />
     </div>
   );

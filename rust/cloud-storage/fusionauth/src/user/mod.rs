@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, net::IpAddr};
 
 use crate::{FusionAuthClient, Result};
 
@@ -24,7 +24,7 @@ impl FusionAuthClient {
         &self,
         user: create::User<'_>,
         skip_verification: bool,
-        client_ip: &str,
+        client_ip: IpAddr,
     ) -> Result<String> {
         create::create_user(
             &self.auth_client,
@@ -84,7 +84,7 @@ impl FusionAuthClient {
 
     /// Verifies a user's email with the given verification ID.
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub async fn verify_email(&self, verification_id: &str, client_ip: &str) -> Result<()> {
+    pub async fn verify_email(&self, verification_id: &str, client_ip: IpAddr) -> Result<()> {
         verify::verify_email(
             &self.auth_client,
             &self.fusion_auth_base_url,

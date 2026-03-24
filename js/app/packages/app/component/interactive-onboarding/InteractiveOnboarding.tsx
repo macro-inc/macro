@@ -27,8 +27,11 @@ import {
 
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export default function InteractiveOnboarding() {
+  const analytics = useAnalytics();
+
   const splitPanel = useSplitPanel();
   const completeTutorial = useCompleteTutorialMutation();
   const location = useLocation();
@@ -67,6 +70,12 @@ export default function InteractiveOnboarding() {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
 
+    analytics.track('onboarding_step', {
+      id: current.definition.id,
+      index: current.index,
+      state: 'completed',
+    });
+
     state.completeLesson(current.definition.id);
     if (!testMode) {
       saveCompletedLesson(current.definition.id);
@@ -78,12 +87,20 @@ export default function InteractiveOnboarding() {
 
   const handleSkip = () => {
     const current = state.currentLesson();
-    if (current) {
-      state.skipLesson(current.definition.id);
-      setReadyToContinue(false);
-      setContinueLabel(undefined);
-      setLessonKey((k) => k + 1);
-    }
+
+    if (!current) return;
+
+    analytics.track('onboarding_step', {
+      id: current.definition.id,
+      index: current.index,
+      state: 'skipped',
+    });
+
+    state.skipLesson(current.definition.id);
+
+    setReadyToContinue(false);
+    setContinueLabel(undefined);
+    setLessonKey((k) => k + 1);
   };
 
   // cmd+enter hotkey to continue
@@ -180,12 +197,19 @@ export default function InteractiveOnboarding() {
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
+          analytics.track('onboarding_completed');
           completeTutorial.mutate(undefined);
           navigateAway();
         }
       }
     )
   );
+
+  onMount(() => {
+    if (state.currentIndex() > 0) return;
+
+    analytics.track('onboarding_start');
+  });
 
   createEffect(
     on(

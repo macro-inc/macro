@@ -821,28 +821,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-dynamodbstreams"
-version = "1.92.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f1738cf234a9ae199475a533e9be05945e3e0b44d91ae1017c64e8197acdfff"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "fastrand 2.3.0",
- "http 0.2.12",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-ecs"
 version = "1.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1841,6 +1819,7 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "unicode-segmentation",
  "utoipa",
 ]
 
@@ -3080,6 +3059,7 @@ dependencies = [
  "tower 0.5.2",
  "tower-http",
  "tracing",
+ "unicode-segmentation",
  "urlencoding",
  "utoipa",
  "utoipa-swagger-ui",
@@ -3183,6 +3163,7 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "unicode-segmentation",
  "urlencoding",
  "utoipa",
  "uuid",
@@ -5253,6 +5234,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ip_extractor"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5566,22 +5556,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
-name = "local_stream_processor"
-version = "0.1.0"
-dependencies = [
- "aws-sdk-dynamodb",
- "aws-sdk-dynamodbstreams",
- "chrono",
- "macro_aws_config",
- "macro_env_var",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5835,6 +5809,7 @@ dependencies = [
  "anyhow",
  "axum",
  "http-body-util",
+ "ip_extractor",
  "macro_auth",
  "macro_db_client",
  "macro_env",
@@ -7917,6 +7892,8 @@ dependencies = [
 name = "rate_limit"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "axum-extra",
  "hex",
  "redis",
  "rootcause",
@@ -8072,6 +8049,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "http-body-util",
+ "ip_extractor",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",

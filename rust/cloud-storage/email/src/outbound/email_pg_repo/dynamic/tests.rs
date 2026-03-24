@@ -260,6 +260,45 @@ fn test_get_sort_timestamp_field_default() {
 }
 
 #[test]
+fn test_build_query_shared_include_uses_union_instead_of_or() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("UNION"));
+    assert!(sql.contains("t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+    assert!(!sql.contains(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+}
+
+#[test]
+fn test_build_query_projects_real_updated_at_for_candidate_threads() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.updated_at AS updated_at"));
+    assert!(!sql.contains("COALESCE(t.latest_non_spam_message_ts, t.updated_at) AS updated_at"));
+}
+
+#[test]
+fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("ORDER BY effective_ts DESC, id DESC"));
+    assert!(sql.contains("ORDER BY t.effective_ts DESC, t.id DESC"));
+    assert!(!sql.contains("ORDER BY effective_ts DESC, updated_at DESC"));
+    assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
+}
+
+#[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
