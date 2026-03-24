@@ -8,9 +8,6 @@ pub(in crate::service::s3) async fn exists(
     bucket: &str,
     key: &str,
 ) -> anyhow::Result<bool> {
-    if cfg!(feature = "local") {
-        return Ok(true);
-    }
     let resp = client.head_object().bucket(bucket).key(key).send().await;
 
     match resp {
