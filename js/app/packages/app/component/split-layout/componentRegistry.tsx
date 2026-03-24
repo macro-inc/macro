@@ -241,11 +241,18 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
-registerComponent('channel-compose', () => <ChannelCompose />);
-registerComponent('email-compose', (params) => (
-  <EmailCompose draftID={params?.draftID} />
-));
-registerComponent('task-compose', () => <ComposeTask />);
+registerComponent('channel-compose', () => {
+  usePageViewTracking('channel-compose');
+  return <ChannelCompose />;
+});
+registerComponent('email-compose', (params) => {
+  usePageViewTracking('email-compose');
+  return <EmailCompose draftID={params?.draftID} />;
+});
+registerComponent('task-compose', () => {
+  usePageViewTracking('task-compose');
+  return <ComposeTask />;
+});
 registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))

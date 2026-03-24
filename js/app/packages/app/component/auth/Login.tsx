@@ -30,6 +30,8 @@ export function Login() {
   const [searchParams] = useSearchParams();
   const analytics = useAnalytics();
 
+  analytics.pageView('login');
+
   const identifyUser = () => {
     const user = userInfo();
 
