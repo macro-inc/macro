@@ -10,6 +10,8 @@ const DRY_RUN = process.env.DRY_RUN === "true";
 const PREFIX = process.env.PREFIX ?? "macro|";
 const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "20", 10);
 const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "100", 10);
+const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
+const USER = process.env.USER_PREFIX;
 
 if (!S3_BUCKET) {
   console.error("S3_BUCKET is required");
@@ -55,14 +57,17 @@ async function exists(key: string): Promise<boolean> {
   }
 }
 
-async function copyKey(oldKey: string, newKey: string): Promise<void> {
-  if (DRY_RUN) {
-    console.log(`  [dry run] ${oldKey} -> ${newKey}`);
-    stats.copied++;
-    return;
-  }
+function encodeCopySource(bucket: string, key: string): string {
+  const encodedKey = key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${bucket}/${encodedKey}`;
+}
 
+async function copyKey(oldKey: string, newKey: string): Promise<void> {
   if (await exists(newKey)) {
+    if (DRY_RUN) console.log(`  [dry run] SKIP (exists): ${newKey}`);
     stats.skipped++;
     return;
   }
@@ -73,11 +78,17 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
     return;
   }
 
+  if (DRY_RUN) {
+    console.log(`  [dry run] ${oldKey} -> ${newKey}`);
+    stats.copied++;
+    return;
+  }
+
   try {
     await s3.send(
       new CopyObjectCommand({
         Bucket: S3_BUCKET,
-        CopySource: `${S3_BUCKET}/${oldKey}`,
+        CopySource: encodeCopySource(S3_BUCKET!, oldKey),
         Key: newKey,
       })
     );
@@ -99,7 +110,9 @@ async function main() {
   console.log(`  Bucket: ${S3_BUCKET}`);
   console.log(`  Prefix: ${PREFIX || "<all>"}`);
   console.log(`  Concurrency: ${CONCURRENCY}`);
-  if (DRY_RUN) console.log("  === DRY RUN MODE ===");
+  if (USER) console.log(`  User: ${USER}`);
+  if (DRY_RUN) console.log(`  === DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
+
   console.log();
 
   let continuationToken: string | undefined;
@@ -108,7 +121,7 @@ async function main() {
     const response = await s3.send(
       new ListObjectsV2Command({
         Bucket: S3_BUCKET,
-        Prefix: PREFIX || undefined,
+        Prefix: USER ? `${USER}/` : PREFIX || undefined,
         MaxKeys: PAGE_SIZE,
         ContinuationToken: continuationToken,
       })
@@ -120,7 +133,13 @@ async function main() {
 
     stats.scanned += keys.length;
 
-    const toMigrate = keys.filter(shouldProcess);
+    let toMigrate = keys.filter(shouldProcess);
+
+    if (LIMIT !== undefined) {
+      const remaining = LIMIT - stats.copied - stats.skipped - stats.missing;
+      if (remaining <= 0) break;
+      toMigrate = toMigrate.slice(0, remaining);
+    }
 
     // Process in concurrent batches
     for (let i = 0; i < toMigrate.length; i += CONCURRENCY) {
