@@ -3,12 +3,18 @@
 //!
 //! Contains the [`InviteToMacro`] notification type and the [`ReferralCode`] newtype.
 
+#[cfg(test)]
+mod test;
+
+use askama::Template;
+use macro_env::Environment;
 use macro_user_id::email::EmailStr;
 use notification::domain::models::{
     Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, queue_message::EmailContent,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use url::Url;
 
 /// Wrapper for the referral code to make it type safe
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,7 +22,8 @@ use std::time::Duration;
 pub struct ReferralCode(pub String);
 
 /// The metadata for a referral-to-macro notification.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Template)]
+#[template(path = "invite.html")]
 pub struct InviteToMacro {
     /// The recipient email.
     pub recipient_email: EmailStr<'static>,
@@ -25,17 +32,41 @@ pub struct InviteToMacro {
     pub referral_code: ReferralCode,
 }
 
+impl InviteToMacro {
+    fn referral_url(&self) -> Url {
+        let env = Environment::new_or_prod();
+        get_url(env, &self.referral_code)
+    }
+}
+
 impl Notification for InviteToMacro {
     const TYPE_NAME: &'static str = "invite_to_macro";
 }
 
 const MINUTES_PER_WEEK: u64 = 60 * 24 * 7;
 
+fn get_url(env: Environment, code: &ReferralCode) -> Url {
+    let host = match env {
+        Environment::Production => "https://macro.com",
+        Environment::Develop => "https://dev.macro.com",
+        Environment::Local => "http://localhost:3000",
+    };
+    let mut url = Url::parse(host).expect("all the inputs are static, valid values");
+    url.set_path("/app/signup");
+    url.query_pairs_mut()
+        .clear()
+        .append_pair("referral_code", &code.0)
+        .finish();
+    url
+}
+
 impl NotificationExtEmail for InviteToMacro {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: "You have been invited to join Macro".to_string(),
-            body: "Temporary email body placeholder".to_string(),
+            body: self
+                .render()
+                .expect("InviteToMacro template render failed in format_email"),
         }
     }
 
