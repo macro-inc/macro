@@ -36,7 +36,11 @@ function Editor() {
     .withHistory()
     .withEmojis()
     .withMedia()
-    .withMentions()
+    .withMentions({
+      onCreate: (args) => {
+        console.log('CREATE MENTION', args);
+      },
+    })
     .withActions()
     .onEscape(() => {
       console.log('ESCAPE');

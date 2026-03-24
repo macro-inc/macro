@@ -630,7 +630,9 @@ function registerMentionsPlugin(
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
           const node = nodeByKey(
-            editor.getEditorState(),
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
             nodeKey
           ) as DocumentMentionNode | null;
 
@@ -656,36 +658,7 @@ function registerMentionsPlugin(
             }
           } else if (mutation === 'created') {
             if (onCreateMention) {
-              let fileType = '';
-              const documentName = node.getDocumentName();
-              const blockName = node.getBlockName();
-              if (blockName === 'pdf') fileType = 'pdf';
-              else if (blockName === 'write') fileType = 'docx';
-              else if (blockName === 'md') fileType = 'md';
-              else if (blockName === 'canvas') fileType = 'canvas';
-              else if (blockName === 'code') {
-                const blockParams = node.getBlockParams();
-                fileType = blockParams?.fileType || 'txt';
-              } else if (blockName === 'image') {
-                fileType = 'png'; // Default to png
-              } else if (blockName === 'channel') {
-                fileType = 'channel';
-              } else if (blockName === 'project') {
-                fileType = 'project';
-              } else if (blockName === 'rss') {
-                fileType = 'rss';
-              } else if (blockName === 'email') {
-                fileType = 'email';
-              } else if (blockName === 'unknown') {
-                fileType = 'unknown';
-              }
-              onCreateMention({
-                itemType: blockName === 'email' ? 'thread' : itemType,
-                itemId: node.getDocumentId(),
-                fileType,
-                documentName,
-                channelType: node.getChannelType(),
-              });
+              onCreateMention($mentionItemFromNode(node));
             }
           }
         }
