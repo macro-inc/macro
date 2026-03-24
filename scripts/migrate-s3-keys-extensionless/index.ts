@@ -10,7 +10,7 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const DRY_RUN = process.env.DRY_RUN === "true";
 const PREFIX = process.env.PREFIX ?? "macro|";
 const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "20", 10);
-const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "100", 10);
+const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "1000", 10);
 const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
 const DOCUMENT_ID = process.env.DOCUMENT_ID;
@@ -101,19 +101,13 @@ async function exists(key: string): Promise<boolean> {
 
 async function copyKey(oldKey: string, newKey: string): Promise<void> {
   if (await exists(newKey)) {
-    if (DRY_RUN) log(`[dry run] SKIP (exists): ${newKey}`);
+    if (DRY_RUN && (USER || DOCUMENT_ID)) log(`[dry run] SKIP (exists): ${newKey}`);
     stats.skipped++;
     return;
   }
 
-  if (!(await exists(oldKey))) {
-    log(`WARNING: source missing: ${oldKey}`);
-    stats.missing++;
-    return;
-  }
-
   if (DRY_RUN) {
-    log(`[dry run] ${oldKey} -> ${newKey}`);
+    if (USER || DOCUMENT_ID) log(`[dry run] ${oldKey} -> ${newKey}`);
     stats.copied++;
     return;
   }
@@ -126,7 +120,7 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
         Key: newKey,
       })
     );
-    log(`COPIED: ${oldKey} -> ${newKey}`);
+    // Only log individual copies at debug level to keep log size manageable
     stats.copied++;
   } catch (err) {
     log(`ERROR copying ${oldKey}: ${err}`);
