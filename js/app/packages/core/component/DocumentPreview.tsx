@@ -37,7 +37,6 @@ import MapPinIcon from '@icon/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
-import UserIcon from '@icon/regular/user.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -633,12 +632,8 @@ export function PopupPreview(props: {
                       <Show
                         when={messageContext()}
                         fallback={
-                          <Show when={item().owner}>
-                            {(owner) => (
-                              <MetadataInfo icon={UserIcon} align="left">
-                                {owner().replace('macro|', '')}
-                              </MetadataInfo>
-                            )}
+                          <Show when={accessibleItem().owner}>
+                            {(owner) => <UserInfo userId={owner()} />}
                           </Show>
                         }
                       >
@@ -648,7 +643,7 @@ export function PopupPreview(props: {
                       <Show
                         when={messageContext()}
                         fallback={
-                          <Show when={item().updatedAt}>
+                          <Show when={accessibleItem().updatedAt}>
                             {(time) => (
                               <MetadataInfo icon={ClockIcon} align="right">
                                 {formatDate(time())}
