@@ -2,7 +2,7 @@ use anyhow::Context;
 use aws_sdk_s3::{self as s3};
 
 /// Checks if a given key exists in the bucket
-#[tracing::instrument(skip(client))]
+#[tracing::instrument(skip(client), err)]
 pub(in crate::service::s3) async fn exists(
     client: &s3::Client,
     bucket: &str,
