@@ -36,7 +36,7 @@ export function useLogout() {
     analytics.reset();
 
     track(TrackingEvents.AUTH.LOGOUT);
-    if (isNativeMobilePlatform()) {.
+    if (isNativeMobilePlatform()) {
       await fetch(SERVER_HOSTS['auth-logout'], {
         credentials: 'include',
         mode: 'no-cors',
