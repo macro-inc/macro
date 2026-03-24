@@ -70,7 +70,7 @@ mod tests {
     async fn test_createdoc_text() {
         let mock = DB::default();
         let data = String::new();
-        let r = mock
+        let _r = mock
             .create_document_text("document-id", data.as_str(), 0)
             .await;
     }
