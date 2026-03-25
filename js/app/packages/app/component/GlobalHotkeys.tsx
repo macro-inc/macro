@@ -4,7 +4,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createMemo } from 'solid-js';
+import { createMemo, onCleanup } from 'solid-js';
 import { useLogout } from '@core/auth/logout';
 import LogoutIcon from '@icon/regular/sign-out.svg';
 import UserIcon from '@icon/regular/user.svg';
@@ -52,7 +52,7 @@ function useHotkeyAnalytics(): void {
     });
   };
 
-  const debouncedTrack = debounce(track, 125);
+  const debouncedTrack = debounce(track, 250);
 
   let lastFired: string | undefined;
   useSubscribeToKeypress((context) => {
@@ -72,9 +72,17 @@ function useHotkeyAnalytics(): void {
     // can just track normally for unique events
     let trackFn = lastFired === pressedKeysString ? debouncedTrack : track;
 
+    if (lastFired !== pressedKeysString) {
+      debouncedTrack.clear();
+    }
+
     trackFn(description, command.hotkeyToken, pressedKeysString);
 
     lastFired = pressedKeysString;
+  });
+
+  onCleanup(() => {
+    debouncedTrack.clear();
   });
 }
 
