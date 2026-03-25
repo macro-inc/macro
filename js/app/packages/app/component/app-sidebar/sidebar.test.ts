@@ -6,6 +6,11 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   registerHotkey: vi.fn(),
 }));
 
+vi.mock('@app/signal/hotkeyRoot', () => ({
+  useSubscribeToKeypress: vi.fn(),
+  useHotkeyInterceptor: vi.fn(),
+}));
+
 describe('registerSidebarHotkeys', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -16,6 +21,10 @@ describe('registerSidebarHotkeys', () => {
       isSlim: () => false,
       onOpenChange: vi.fn(),
       openWithSplit: vi.fn(),
+      hotkeyVisible: () => false,
+      setHotkeyVisible: vi.fn(),
+      resetHotkeysState: vi.fn(),
+      debounceResetHotkeysState: vi.fn(),
     });
 
     expect(registerHotkey).toHaveBeenCalledWith(
@@ -34,6 +43,10 @@ describe('registerSidebarHotkeys', () => {
       isSlim: () => slim,
       onOpenChange,
       openWithSplit: vi.fn(),
+      hotkeyVisible: () => false,
+      setHotkeyVisible: vi.fn(),
+      resetHotkeysState: vi.fn(),
+      debounceResetHotkeysState: vi.fn(),
     });
 
     const toggleRegistration = vi
