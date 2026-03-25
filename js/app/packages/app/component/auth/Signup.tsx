@@ -40,7 +40,12 @@ export function Signup() {
   };
 
   return (
-    <Show when={!userInfo()?.authenticated} fallback={<Navigate href="/" />}>
+    <Show
+      when={!userInfo()?.authenticated}
+      fallback={
+        <Navigate href={userInfo()?.tutorialComplete ? '/' : '/welcome'} />
+      }
+    >
       <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
         <style>
           {

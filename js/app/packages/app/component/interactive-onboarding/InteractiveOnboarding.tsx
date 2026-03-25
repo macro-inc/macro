@@ -1,7 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useLocation } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { useTutorialCompleted } from '@core/context/user';
 import { CommandState } from '@app/component/command';
 import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
@@ -19,11 +20,7 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton, SkipButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import {
-  clearCompletedLessons,
-  loadCompletedLessons,
-  saveCompletedLesson,
-} from './persistence';
+import { clearCompletedLessons, saveCompletedLesson } from './persistence';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -33,6 +30,7 @@ export default function InteractiveOnboarding() {
 
   const splitPanel = useSplitPanel();
   const completeTutorial = useCompleteTutorialMutation();
+  const tutorialCompleted = useTutorialCompleted();
   const location = useLocation();
 
   const testMode = new URLSearchParams(location.search).has('test');
@@ -55,8 +53,7 @@ export default function InteractiveOnboarding() {
 
   const state = createOnboardingState({
     definitions: LESSONS,
-    initialCompleted:
-      debugCompleted ?? (testMode ? new Set() : loadCompletedLessons()),
+    initialCompleted: debugCompleted ?? new Set(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -70,6 +67,18 @@ export default function InteractiveOnboarding() {
       next: { type: 'component', id: 'unified-list' },
     });
   };
+
+  // Redirect away if the backend already marks the tutorial as complete
+  const navigate = useNavigate();
+  createEffect(() => {
+    if (tutorialCompleted() && !testMode) {
+      if (splitPanel) {
+        navigateAway();
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  });
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
