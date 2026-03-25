@@ -12,21 +12,6 @@ import { type Service, services } from './services';
 
 const MAX_CONCURRENCY = 6;
 
-async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await fn(items[i]);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
-
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
@@ -48,20 +33,23 @@ const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../package
 // Parse arguments
 const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--check');
 
-// Build all OpenAPI binaries in a single cargo invocation (parallelized internally by cargo)
+// Build OpenAPI binaries in batches of MAX_CONCURRENCY
 async function buildOpenApiBinaries(crateNames: string[], rustCloudStorageDir = getRustCloudStorageDir()): Promise<void> {
   if (crateNames.length === 0) return;
 
-  const packageArgs = crateNames.flatMap(crate => ['-p', crate]);
-  const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
+  for (let i = 0; i < crateNames.length; i += MAX_CONCURRENCY) {
+    const batch = crateNames.slice(i, i + MAX_CONCURRENCY);
+    const packageArgs = batch.flatMap(crate => ['-p', crate]);
+    const binArgs = batch.flatMap(crate => ['--bin', `${crate}_openapi`]);
 
-  // Also build the DCS models binary if document_cognition_service is included
-  if (crateNames.includes('document_cognition_service')) {
-    binArgs.push('--bin', 'document_cognition_service_models');
+    // Also build the DCS models binary if document_cognition_service is included
+    if (batch.includes('document_cognition_service')) {
+      binArgs.push('--bin', 'document_cognition_service_models');
+    }
+
+    console.log(`Building batch ${Math.floor(i / MAX_CONCURRENCY) + 1}/${Math.ceil(crateNames.length / MAX_CONCURRENCY)} (${batch.length} crates)...`);
+    await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
   }
-
-  console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
-  await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
   console.log('Build complete.\n');
 }
 
@@ -189,10 +177,10 @@ async function main() {
   // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
   await buildOpenApiBinaries(crateNames);
 
-  // Phase 2: Run binaries and generate TypeScript (max 6 at a time)
-  console.log(`Generating TypeScript clients (max ${MAX_CONCURRENCY} concurrent)...\n`);
-  const results = await mapWithConcurrency(servicesToProcess, MAX_CONCURRENCY, service =>
-    processService(service, { serviceClientsDir })
+  // Phase 2: Run binaries and generate TypeScript in parallel
+  console.log('Generating TypeScript clients in parallel...\n');
+  const results = await Promise.all(
+    servicesToProcess.map(service => processService(service, { serviceClientsDir }))
   );
 
   // Summary report
