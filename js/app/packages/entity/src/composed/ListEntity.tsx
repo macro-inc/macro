@@ -893,7 +893,14 @@ export function ListEntity(props: ListEntityProps) {
           />
           <InboxDivider />
         </Match>
-        <Match when={isMobile()}>
+        <Match
+          when={
+            isMobile() &&
+            (isChannelEntity(props.entity) ||
+              isEmailEntity(props.entity) ||
+              props.showUnrollNotifications)
+          }
+        >
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
