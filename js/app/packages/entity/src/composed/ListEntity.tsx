@@ -1,3 +1,4 @@
+import './ListEntity.css';
 import type { DateValue } from '@core/util/date';
 import {
   visibleLength,
@@ -838,7 +839,7 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
-      class={cn('@container/entity w-full relative group/narrow', {
+      class={cn('soup-list-entity @container/entity w-full relative group/narrow', {
         'bg-accent/5': props.checked,
         'hover:bg-hover/30':
           !props.checked && !props.highlighted && !props.hovered,
