@@ -121,7 +121,7 @@ async function copyKey(oldKey: string, newKey: string): Promise<void> {
     await s3.send(
       new CopyObjectCommand({
         Bucket: S3_BUCKET,
-        CopySource: `${S3_BUCKET}/${oldKey}`,
+        CopySource: `${S3_BUCKET}/${oldKey.split("/").map(encodeURIComponent).join("/")}`,
         Key: newKey,
       })
     );
