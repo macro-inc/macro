@@ -294,7 +294,12 @@ function NarrowLayout(props: LayoutProps) {
         <Entity.Title entity={props.entity} />
       </Entity.Slot>
 
-      <Show when={!props.hasNotifications}>
+      <Show
+        when={
+          !props.hasNotifications &&
+          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+        }
+      >
         <Entity.Slot
           placement="timestamp"
           class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
@@ -408,7 +413,12 @@ function NarrowInboxLayout(props: LayoutProps) {
         placement="timestamp"
         class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
       >
-        <Show when={!props.hasNotifications}>
+        <Show
+          when={
+            !props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          }
+        >
           <Entity.Timestamp entity={props.entity} />
         </Show>
       </Entity.Slot>
@@ -596,7 +606,12 @@ function WideLayout(props: LayoutProps) {
         placement="timestamp"
         class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
       >
-        <Show when={!props.hasNotifications}>
+        <Show
+          when={
+            !props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          }
+        >
           <Entity.Timestamp entity={props.entity} />
         </Show>
       </Entity.Slot>

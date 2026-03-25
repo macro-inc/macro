@@ -439,6 +439,9 @@ export function EntityRowProvider(
   );
 }
 
+/**
+ * Container for swipe gesture capabilities on touch devices.
+ */
 export function EntityRow(
   props: ParentProps<{
     entityId: string;
