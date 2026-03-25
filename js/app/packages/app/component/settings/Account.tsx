@@ -283,7 +283,7 @@ export function Account() {
             <div class="text-sm select-none">Logout</div>
           </div>
           </div>
-        {/*<Show when={isNativeMobilePlatform()}>*/}
+        <Show when={isNativeMobilePlatform()}>
           <div class="border-t border-edge pt-4">
             <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
               Delete Account
@@ -328,7 +328,7 @@ export function Account() {
               </Content>
             </Modal>
           </div>
-        {/*</Show>*/}
+        </Show>
         </div>
       </div>
     </div>
