@@ -1478,7 +1478,7 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={`ph-no-capture cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
@@ -1516,7 +1516,7 @@ export function BaseInput(props: {
               );
             }}
           />
-          <div class="flex gap-1 flex-wrap w-full py-2">
+          <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
             <For each={form().attachments.list()}>
               {(attachment) => (
                 <Switch>

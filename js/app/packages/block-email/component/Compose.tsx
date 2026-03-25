@@ -824,6 +824,7 @@ export function EmailCompose(props: EmailComposeProps) {
       <Show when={!isMobile()}>
         <SplitHeaderLeft>
           <StaticSplitLabel
+            class="ph-no-capture"
             label={form.subject() || previewName()}
             iconType={isMobile() ? undefined : 'email'}
             badges={

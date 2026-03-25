@@ -292,7 +292,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="pr-2 flex items-center -mt-1 sm:mt-0"
+      class="ph-no-capture pr-2 flex items-center -mt-1 sm:mt-0"
       style={{ 'min-height': 'var(--user-icon-width)' }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}

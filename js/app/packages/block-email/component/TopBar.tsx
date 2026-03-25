@@ -141,6 +141,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
+          class="ph-no-capture"
           iconType={isInvite() ? 'emailInvite' : 'email'}
           label={isMobile() ? '' : props.title}
           badges={
