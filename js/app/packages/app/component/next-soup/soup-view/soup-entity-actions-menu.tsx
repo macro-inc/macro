@@ -17,6 +17,7 @@ import {
 import type { SoupState } from '../create-soup-state';
 import { useUserId } from '@core/context/user';
 import { useAnalytics } from '@app/component/analytics-context';
+import { Show } from 'solid-js';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
@@ -107,77 +108,91 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   return (
     <>
-      <MenuItem
-        text="Mark Done"
-        disabled={!canExecuteAny(markDone.canExecute)}
-        onClick={() => handleAction(markDone.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Open in new split"
-        disabled={!canOpenInSplit()}
-        onClick={openInNewSplit}
-      />
-
-      <Divider />
-
-      <MenuItem
-        text="Rename"
-        disabled={!canExecuteAll(renameAction.canExecute)}
-        onClick={() => handleAction(renameAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Move to folder"
-        disabled={!canExecuteAny(moveToProjectAction.canExecute)}
-        onClick={() => handleAction(moveToProjectAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Duplicate"
-        disabled={!canExecuteAny(copyAction.canExecute)}
-        onClick={() => handleAction(copyAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Copy Link"
-        disabled={props.entities.length !== 1}
-        onClick={() => handleAction(copyLinkAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Copy Branch Name"
-        disabled={
-          props.entities.length !== 1 ||
-          !copyBranchNameAction.canExecute(props.entities[0])
-        }
-        onClick={() => handleAction(copyBranchNameAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Share"
-        disabled={
-          props.entities.length !== 1 ||
-          !shareAction.canExecute(props.entities[0])
-        }
-        onClick={() => handleAction(shareAction.executeWithSoup)}
-      />
-
-      <MenuItem
-        text="Block Sender"
-        disabled={!canExecuteAll(blockSenderAction.canExecute)}
-        onClick={() => handleAction(blockSenderAction.executeWithSoup)}
-      />
-
-      <Divider />
-
-      <div class="text-failure-ink w-full">
+      <Show when={canExecuteAny(markDone.canExecute)}>
         <MenuItem
-          text="Delete"
-          disabled={!canExecuteAll(deleteAction.canExecute)}
-          onClick={() => handleAction(deleteAction.executeWithSoup)}
+          text="Mark Done"
+          onClick={() => handleAction(markDone.executeWithSoup)}
         />
-      </div>
+      </Show>
+
+      <Show when={canOpenInSplit()}>
+        <MenuItem
+          text="Open in new split"
+          onClick={openInNewSplit}
+        />
+      </Show>
+
+      <Divider />
+
+      <Show when={canExecuteAll(renameAction.canExecute)}>
+        <MenuItem
+          text="Rename"
+          onClick={() => handleAction(renameAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show when={canExecuteAny(moveToProjectAction.canExecute)}>
+        <MenuItem
+          text="Move to folder"
+          onClick={() => handleAction(moveToProjectAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show when={canExecuteAny(copyAction.canExecute)}>
+        <MenuItem
+          text="Duplicate"
+          onClick={() => handleAction(copyAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show when={props.entities.length === 1}>
+        <MenuItem
+          text="Copy Link"
+          onClick={() => handleAction(copyLinkAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show
+        when={
+          props.entities.length === 1 &&
+          copyBranchNameAction.canExecute(props.entities[0])
+        }
+      >
+        <MenuItem
+          text="Copy Branch Name"
+          onClick={() => handleAction(copyBranchNameAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show
+        when={
+          props.entities.length === 1 &&
+          shareAction.canExecute(props.entities[0])
+        }
+      >
+        <MenuItem
+          text="Share"
+          onClick={() => handleAction(shareAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Show when={canExecuteAll(blockSenderAction.canExecute)}>
+        <MenuItem
+          text="Block Sender"
+          onClick={() => handleAction(blockSenderAction.executeWithSoup)}
+        />
+      </Show>
+
+      <Divider />
+
+      <Show when={canExecuteAll(deleteAction.canExecute)}>
+        <div class="text-failure-ink w-full">
+          <MenuItem
+            text="Delete"
+            onClick={() => handleAction(deleteAction.executeWithSoup)}
+          />
+        </div>
+      </Show>
     </>
   );
 };
