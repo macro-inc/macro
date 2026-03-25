@@ -77,7 +77,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 
       if (ENABLE_NEW_CHANNELS()) {
         if (payload.deleted_at) {
-          // Message was deleted by another user — remove from new channel caches
           removeMessageFromTargetCaches(
             payload.channel_id,
             resolveMessageTarget({
@@ -92,9 +91,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
             messageId: payload.id,
             threadId: payload.thread_id ?? undefined,
           });
-
-          // If the message already exists, update its state in place
-          // (handles edits from other users). Otherwise insert as new.
           const existingState = getTargetMessageState(
             payload.channel_id,
             target
