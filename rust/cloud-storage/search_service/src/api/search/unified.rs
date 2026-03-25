@@ -49,8 +49,6 @@ pub async fn handler(
         "unified_search"
     );
 
-    tracing::info!("performing unified search");
-
     let (results, next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
