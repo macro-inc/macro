@@ -347,6 +347,27 @@ export type ValidHotkey =
   | `opt+shift+cmd+${BaseKeyboardValue}`;
 
 /**
+ * Context object passed to hotkey interceptor subscribers before hotkey command
+ * lookup. Runs before normal hotkey processing. Return true from the
+ * callback to capture the event and prevent normal hotkey command lookup
+ * and propagation.
+ */
+export interface HotkeyInterceptorContext {
+  /** The normalized hotkey string (e.g., 'cmd+j', 'j') */
+  pressedKeysString: ValidHotkey;
+  /** Set of currently pressed keys */
+  pressedKeys: Set<string>;
+  /** The raw keyboard event */
+  event: KeyboardEvent;
+  /** The currently active scope ID */
+  activeScopeId: string;
+  /** Whether an editable input element is currently focused */
+  isEditableFocused: boolean;
+  /** The event type ('keydown' or 'keyup') */
+  eventType: 'keydown' | 'keyup';
+}
+
+/**
  * Context object passed to keypress subscribers containing all relevant
  * information about the current keypress event. Subscribers can use this
  * information to implement their own filtering logic.
