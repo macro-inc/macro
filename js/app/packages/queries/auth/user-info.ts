@@ -1,5 +1,6 @@
 import { catchToResult, throwOnErr } from '@core/util/maybeResult';
 import { hasLoginCookie } from '@core/util/cookies';
+import { enableUserInfoQuery } from '@core/context/user-info-gate';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -39,23 +40,17 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
 }
 
 /** Invalidate the user info query to trigger a refetch. */
-export async function invalidateUserInfo() {
-  // Import dynamically to avoid circular dependency
-  const { enableUserInfoQuery } = await import('@core/context/user');
-
-  // Check if query already has data (was previously enabled and fetched)
-  const existingData = queryClient.getQueryData(authKeys.userInfo.queryKey);
-
-  // Enable the query in case it was disabled (e.g., during unauthenticated flows)
+export function invalidateUserInfo() {
   enableUserInfoQuery();
+  return queryClient.invalidateQueries({
+    queryKey: authKeys.userInfo.queryKey,
+  });
+}
 
-  // Only invalidate if there's existing data to refresh.
-  // If newly enabled with no data, the query will fetch automatically.
-  if (existingData !== undefined) {
-    return queryClient.invalidateQueries({
-      queryKey: authKeys.userInfo.queryKey,
-    });
-  }
+/** Invalidate all queries after a successful login. */
+export function invalidateAllAfterLogin() {
+  enableUserInfoQuery();
+  return queryClient.invalidateQueries();
 }
 
 /** Ensure user info is in the query cache. Fetches if not present. */

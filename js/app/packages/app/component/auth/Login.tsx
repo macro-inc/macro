@@ -2,13 +2,17 @@ import { cn } from '@ui/utils/classname';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo } from '@queries/auth/user-info';
+import {
+  invalidateAllAfterLogin,
+  invalidateUserInfo,
+} from '@queries/auth/user-info';
 import { Navigate, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
@@ -29,6 +33,10 @@ export function Login() {
   const userInfo = useUserInfo();
   const [searchParams] = useSearchParams();
   const analytics = useAnalytics();
+
+  onMount(() => {
+    analytics.pageView('login');
+  });
 
   const identifyUser = () => {
     const user = userInfo();
@@ -57,11 +65,10 @@ export function Login() {
       const session_code = searchParams.token;
       console.log({ session_code });
       unsetTokenPromise();
-      invalidateUserInfo();
       authServiceClient.sessionLogin({ session_code }).then((res) => {
         console.log({ res });
         if (isOk(res)) {
-          invalidateUserInfo();
+          invalidateAllAfterLogin();
         }
       });
     }
@@ -69,7 +76,7 @@ export function Login() {
 
   const onComplete = async () => {
     unsetTokenPromise();
-    await invalidateUserInfo();
+    await invalidateAllAfterLogin();
     const user = userInfo();
 
     if (!user || !user.authenticated) return;

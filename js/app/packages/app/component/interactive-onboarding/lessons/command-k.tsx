@@ -5,17 +5,17 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import {
-  sandboxEntities,
+  filteredSandboxEntities,
   sandboxToCommandItems,
 } from '../sandbox/sandbox-store';
 import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
 } from 'solid-js';
+import { Hotkey } from '@core/component/Hotkey';
 import { HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
 import { OnboardingEntityList } from '../OnboardingEntityList';
@@ -23,6 +23,9 @@ import type { LessonContentProps, LessonDefinition } from '../types';
 
 /** Module-level signal toggled by the onboarding shell's cmd+k handler. */
 export const [commandKOpen, setCommandKOpen] = createSignal(false);
+
+/** Shared completion state between content and demo panels. */
+const [completed, setCompleted] = createSignal(false);
 
 /** Map category filter to the bucket values used by sandbox items. */
 const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
@@ -38,34 +41,43 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
   people: [], // sandbox has no people — show nothing
 };
 
-function CommandKContent(props: LessonContentProps) {
-  const [completed, setCompleted] = createSignal(false);
-
-  // Complete as soon as the user opens the command menu
-  createEffect(
-    on(commandKOpen, (open) => {
-      if (open && !completed()) {
-        setCompleted(true);
-        props.onComplete();
-      }
-    })
-  );
-
+function CommandKContent(_props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <HotkeyCallout keys={['⌘', 'K']} label="to open the command menu" />
       <p>
-        Search for anything — documents, emails, tasks, channels — and navigate
-        to it instantly.
+        The Command Menu is another way to quickly find items in your workspace.
+        Search for documents, tasks, channels, and more — and navigate to them
+        instantly.
       </p>
-      <p>
-        Press <strong>⌘K</strong> to try it out.
+      <HotkeyCallout
+        keys={['⌘', 'K']}
+        label="to open the command menu"
+        completed={completed()}
+      />
+      <p class="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-fg-muted">
+        <strong>Tip:</strong> Search and use
+        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <Hotkey shortcut="ctrl+j" class="space-x-1" />
+        </span>
+        /
+        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <Hotkey shortcut="ctrl+k" class="space-x-1" />
+        </span>
+        or
+        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <Hotkey shortcut="arrowup" class="space-x-1" />
+        </span>
+        /
+        <span class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <Hotkey shortcut="arrowdown" class="space-x-1" />
+        </span>
+        to move the cursor, then select an item to continue.
       </p>
     </div>
   );
 }
 
-function CommandKDemo(_props: LessonContentProps) {
+function CommandKDemo(props: LessonContentProps) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
 
   onMount(() => {
@@ -75,6 +87,7 @@ function CommandKDemo(_props: LessonContentProps) {
   onCleanup(() => {
     CommandState.forceReset();
     setCommandKOpen(false);
+    setCompleted(false);
   });
 
   const allItems = () => sandboxToCommandItems();
@@ -115,63 +128,42 @@ function CommandKDemo(_props: LessonContentProps) {
     return items;
   });
 
-  // Capture the initial height on first render so the top offset stays fixed
-  // even as the list shrinks from filtering.
-  const [topOffset, setTopOffset] = createSignal<number | undefined>(undefined);
   let contentEl: HTMLDivElement | undefined;
 
-  const measureOnce = () => {
-    if (topOffset() !== undefined || !contentEl) return;
-    // Wait a frame for the menu to fully render
-    requestAnimationFrame(() => {
-      if (!contentEl) return;
-      const h = contentEl.getBoundingClientRect().height;
-      setTopOffset(Math.max(0, (window.innerHeight - h) / 2));
-    });
-  };
-
-  // Re-measure each time the dialog opens
-  createEffect(() => {
-    if (commandKOpen()) {
-      setTopOffset(undefined);
-      requestAnimationFrame(measureOnce);
-    }
-  });
-
   const soup = createSoupState({
-    initialData: sandboxEntities(),
+    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
   createEffect(() => {
-    soup.setData(sandboxEntities());
+    soup.setData(filteredSandboxEntities());
   });
 
   return (
     <>
       {/* Entity list visible behind the modal */}
-      <MockAppChrome viewTitle="Documents">
+      <MockAppChrome>
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>
 
       <Dialog open={commandKOpen()} onOpenChange={setCommandKOpen}>
         <Dialog.Portal>
           <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
-          <div class="z-modal fixed inset-0 flex items-start justify-center">
+          <div class="z-modal fixed inset-0 flex items-start justify-center pt-[15vh]">
             <Dialog.Content
               ref={contentEl}
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
-              style={{
-                width: '800px',
-                'margin-top':
-                  topOffset() !== undefined ? `${topOffset()}px` : '20vh',
-              }}
+              style={{ width: '800px' }}
             >
               <ClippedPanel active cornerRadius="4px">
                 <div class="[&>*]:max-h-[75vh]" ref={setCommandMenuRef}>
                   <CommandMenuInner
                     commandMenuRef={commandMenuRef}
                     items={filteredItems}
+                    onSelect={() => {
+                      setCompleted(true);
+                      props.onComplete();
+                    }}
                   />
                 </div>
               </ClippedPanel>

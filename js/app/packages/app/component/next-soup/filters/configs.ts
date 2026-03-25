@@ -248,18 +248,27 @@ export const FILE_TYPE_FILTERS = [
     },
   },
   {
+    id: 'file-docx',
+    label: 'DOCX',
+    predicate: (entity) => {
+      if (entity.type !== 'document') return false;
+      return entity.fileType === 'docx';
+    },
+  },
+  {
     id: 'file-other',
     label: 'Other',
     predicate: (entity) => {
       if (entity.type !== 'document') return false;
       const fileType = entity.fileType ?? '';
-      // Exclude markdown, canvas, code, images, and PDFs
+      // Exclude markdown, canvas, code, images, PDFs, and DOCX
       if (['md', 'canvas'].includes(fileType)) return false;
       if ((codeFileExtensions as readonly string[]).includes(fileType))
         return false;
       if ((IMAGE_EXTENSIONS as readonly string[]).includes(fileType))
         return false;
       if (fileType === 'pdf') return false;
+      if (fileType === 'docx') return false;
       return true;
     },
   },

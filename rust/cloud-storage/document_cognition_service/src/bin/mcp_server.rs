@@ -4,7 +4,9 @@
 //! tools that are available in the DCS chat/stream API, with OAuth 2.1
 //! authentication backed by FusionAuth.
 
-use ai_tools::{NoOpConnectionService, NoOpTaskProperties, ToolServiceContext};
+use ai_tools::{
+    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+};
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -234,6 +236,15 @@ async fn main() -> anyhow::Result<()> {
         lexical_client_for_tools,
     );
 
+    // Build properties tool context
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(db.clone()),
+        Some(properties::PermissionServiceImpl::new(db.clone())),
+        Some(NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
     // Build the ToolServiceContext
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
@@ -260,6 +271,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         soup_service,
         document_tool_context,
+        properties_tool_context,
     };
 
     tracing::info!("initialized tool context");

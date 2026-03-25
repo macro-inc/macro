@@ -98,7 +98,7 @@ async fn main() {
 
     #[expect(deprecated)]
     let context = RequestContext {
-        user_id: Arc::new(user_id),
+        user_id,
         jwt: Arc::new(String::new()),
     };
 

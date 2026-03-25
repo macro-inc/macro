@@ -151,7 +151,7 @@ where
                 soup_type: SoupType::Expanded,
                 limit: RESULT_LIMIT,
                 cursor: SoupQuery::new_sort_simple(sort_method, Default::default()),
-                user: (*request_context.user_id).clone(),
+                user: request_context.user_id,
                 email_preview_view: PreviewView::default(),
                 link_id: None,
             })

@@ -162,11 +162,12 @@ pub async fn handler(
                 scribe: state.scribe.clone(),
                 soup_service: state.soup_service.clone(),
                 document_tool_context: state.document_tool_context.clone(),
+                properties_tool_context: state.properties_tool_context.clone(),
             };
 
             #[expect(deprecated)]
             let request_context = RequestContext {
-                user_id: Arc::new(user.macro_user_id),
+                user_id: user.macro_user_id,
                 jwt: Arc::new(String::new()),
             };
 

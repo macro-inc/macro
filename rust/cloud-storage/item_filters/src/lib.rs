@@ -290,6 +290,9 @@ pub struct ChannelFilters {
     /// Channel organization ID to search within. Empty to ignore organization filtering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub org_id: Option<i64>,
+    /// Channel team ID to search within. Empty to ignore team filtering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     /// Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel_ids: Vec<String>,
@@ -316,6 +319,7 @@ impl IsEmpty for ChannelFilters {
             thread_ids,
             mentions,
             org_id,
+            team_id,
             channel_ids,
             sender_ids,
             channel_types,
@@ -325,6 +329,7 @@ impl IsEmpty for ChannelFilters {
         thread_ids.is_empty()
             && mentions.is_empty()
             && org_id.is_none()
+            && team_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
             && channel_types.is_empty()

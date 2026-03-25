@@ -4,7 +4,7 @@ use anyhow::Context;
 use chrono::Utc;
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
-    build_cloud_storage_bucket_document_key,
+    build_cloud_storage_bucket_document_key, build_extensionless_document_key,
 };
 use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
@@ -138,12 +138,26 @@ pub async fn update_search_with_raw_document(
         }
     }
 
-    let key = build_cloud_storage_bucket_document_key(
+    // Try extensionless key first, fall back to legacy key with extension
+    // document_version_id will be "converted" or document version id
+    let extensionless_key = build_extensionless_document_key(
         &search_extractor_message.user_id,
         &search_extractor_message.document_id,
-        document_version_id, // will be "converted" or document version id
-        Some(search_extractor_message.file_type.as_str()),
+        &document_version_id,
     );
+    let key = if s3_client
+        .exists(document_storage_bucket, &extensionless_key)
+        .await?
+    {
+        extensionless_key
+    } else {
+        build_cloud_storage_bucket_document_key(
+            &search_extractor_message.user_id,
+            &search_extractor_message.document_id,
+            document_version_id,
+            Some(search_extractor_message.file_type.as_str()),
+        )
+    };
 
     let content = s3_client
         .get(document_storage_bucket, &key)

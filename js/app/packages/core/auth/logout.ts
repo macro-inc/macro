@@ -4,9 +4,12 @@ import { queryClient } from '@queries/client';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { createCallback } from '@solid-primitives/rootless';
 import { useAnalytics } from '@app/component/analytics-context';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { useNavigate } from '@solidjs/router';
 
 export function useLogout() {
   const analytics = useAnalytics();
+  const navigate = useNavigate();
 
   return createCallback(async () => {
     document.cookie =
@@ -30,6 +33,15 @@ export function useLogout() {
     analytics.track('sign_out');
     analytics.reset();
 
-    window.location.href = SERVER_HOSTS['auth-logout'];
+    if (isNativeMobilePlatform()) {
+      await fetch(SERVER_HOSTS['auth-logout'], {
+        credentials: 'include',
+        mode: 'no-cors',
+        redirect: 'manual',
+      }).catch(() => {});
+      navigate('/login');
+    } else {
+      window.location.href = SERVER_HOSTS['auth-logout'];
+    }
   });
 }

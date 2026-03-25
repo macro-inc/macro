@@ -2,28 +2,35 @@ import type { EntityData } from '@entity';
 import type { IUser } from '@core/user/types';
 import {
   MOCK_DOCUMENT_BASIC,
-  MOCK_EMAIL_UNREAD,
-  MOCK_TASK_TODO,
-  MOCK_CHANNEL_PUBLIC,
   MOCK_PROJECT_1,
 } from '../../../../entity/mocks/mockEntityData';
 import { createSignal } from 'solid-js';
 
 const now = new Date();
 
-function seedDoc(id: string, name: string, fileType = 'md'): EntityData {
+/** Returns a Date that is `minutesAgo` minutes before `now`. */
+function ago(minutesAgo: number): Date {
+  return new Date(now.getTime() - minutesAgo * 60_000);
+}
+
+function seedDoc(
+  id: string,
+  name: string,
+  updatedAt: Date,
+  fileType = 'md'
+): EntityData {
   return {
     type: 'document',
     id,
     name,
     ownerId: 'sandbox',
     fileType,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
-function seedTask(id: string, name: string): EntityData {
+function seedTask(id: string, name: string, updatedAt: Date): EntityData {
   return {
     type: 'document',
     id,
@@ -31,8 +38,8 @@ function seedTask(id: string, name: string): EntityData {
     ownerId: 'sandbox',
     fileType: 'md',
     subType: { type: 'task', is_completed: false },
-    createdAt: now,
-    updatedAt: now,
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
@@ -40,122 +47,228 @@ function seedEmail(
   id: string,
   name: string,
   senderName: string,
-  senderEmail: string
+  senderEmail: string,
+  snippet: string,
+  updatedAt: Date,
+  isRead = false
 ): EntityData {
   return {
     type: 'email',
     id,
     name,
     ownerId: 'sandbox',
-    isRead: false,
+    isRead,
     isDraft: false,
     isImportant: false,
     done: false,
     senderEmail,
     senderName,
-    snippet: '',
+    snippet,
     participants: [],
-    createdAt: now,
-    updatedAt: now,
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
-function seedChannel(id: string, name: string): EntityData {
+function seedChannel(id: string, name: string, updatedAt: Date): EntityData {
   return {
     type: 'channel',
     id,
     name,
     ownerId: 'sandbox',
-    channelType: 'public',
-    createdAt: now,
-    updatedAt: now,
+    channelType: 'private',
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
-function seedProject(id: string, name: string): EntityData {
+function seedProject(id: string, name: string, updatedAt: Date): EntityData {
   return {
     type: 'project',
     id,
     name,
     ownerId: 'sandbox',
-    createdAt: now,
-    updatedAt: now,
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
-function seedChat(id: string, name: string): EntityData {
+function seedChat(id: string, name: string, updatedAt: Date): EntityData {
   return {
     type: 'chat',
     id,
     name,
     ownerId: 'sandbox',
-    createdAt: now,
-    updatedAt: now,
+    createdAt: updatedAt,
+    updatedAt,
+    frecencyScore: 1,
+  };
+}
+function seedDM(id: string, name: string, updatedAt: Date): EntityData {
+  return {
+    type: 'channel',
+    id,
+    name,
+    ownerId: 'sandbox',
+    channelType: 'direct_message',
+    createdAt: updatedAt,
+    updatedAt,
     frecencyScore: 1,
   };
 }
 
+// Sorted by updatedAt descending so the "all" view is interleaved by type.
 const SEED_ENTITIES: EntityData[] = [
-  MOCK_PROJECT_1,
-  seedDoc('seed_doc_1', 'Q3 Product Roadmap'),
-  seedTask('seed_task_1', 'Review design mockups'),
+  seedChannel('seed_channel_1', 'engineering', ago(5)),
   seedEmail(
     'seed_email_1',
     'Re: Launch checklist',
     'Sarah Chen',
-    'sarah@example.com'
+    'sarah@example.com',
+    'Just reviewed the checklist — a few items still need sign-off before we go live on Friday.',
+    ago(35)
   ),
-  seedChannel('seed_channel_1', 'engineering'),
-  seedDoc('seed_doc_2', 'Architecture Decision Record'),
-  seedTask('seed_task_2', 'Write release notes'),
-  seedProject('seed_project_2', 'Website Redesign'),
-  seedChat('seed_chat_1', 'Brainstorm: onboarding flow'),
+  seedChat('seed_chat_1', 'Brainstorm: onboarding flow', ago(90)),
+  seedTask('seed_task_1', 'Review design mockups', ago(180)),
+  seedDM('seed_dm_1', 'Sarah Chen', ago(300)),
+  seedDoc('seed_doc_1', 'Q3 Product Roadmap', ago(480)),
   seedEmail(
     'seed_email_2',
     'Budget approval needed',
     'Marcus Lee',
-    'marcus@example.com'
+    'marcus@example.com',
+    'The Q4 vendor contracts are ready. We need approval by EOD Thursday to avoid delays.',
+    ago(720)
   ),
-  seedDoc('seed_doc_3', 'Meeting Notes — All Hands'),
-  seedTask('seed_task_3', 'Set up CI pipeline'),
-  seedChannel('seed_channel_2', 'design'),
-  seedDoc('seed_doc_4', 'Customer Interview Summary', 'canvas'),
+  seedChannel('seed_channel_2', 'design', ago(960)),
+  seedChat('seed_chat_2', 'Draft: pricing page copy', ago(60 * 20)),
+  seedTask('seed_task_2', 'Write release notes', ago(60 * 26)),
+  MOCK_PROJECT_1,
+  seedDM('seed_dm_2', 'Marcus Lee', ago(60 * 30)),
+  seedDoc('seed_doc_2', 'Architecture Decision Record', ago(60 * 36)),
   seedEmail(
     'seed_email_3',
     'Investor update Q3',
     'Jordan Rivera',
-    'jordan@example.com'
+    'jordan@example.com',
+    'Attaching the draft deck for your review. Key highlights: ARR up 34%, churn down to 2.1%.',
+    ago(60 * 44),
+    true
   ),
-  seedTask('seed_task_4', 'Fix login page regression'),
-  seedProject('seed_project_3', 'Mobile App v2'),
-  seedDoc('seed_doc_5', 'API Reference', 'py'),
-  seedChat('seed_chat_2', 'Draft: pricing page copy'),
-  seedChannel('seed_channel_3', 'announcements'),
+  seedChannel('seed_channel_3', 'announcements', ago(60 * 52)),
+  seedTask('seed_task_3', 'Set up CI pipeline', ago(60 * 60)),
+  seedChat('seed_chat_3', 'Debug: auth token expiry', ago(60 * 72)),
+  seedDoc('seed_doc_3', 'Meeting Notes — All Hands', ago(60 * 84)),
+  seedDM('seed_dm_3', 'Jordan Rivera', ago(60 * 96)),
+  seedProject('seed_project_2', 'Website Redesign', ago(60 * 120)),
   seedEmail(
     'seed_email_4',
     'Contract renewal — action required',
     'Alex Kim',
-    'alex@example.com'
+    'alex@example.com',
+    'Your annual subscription renews in 7 days. Please confirm billing details to avoid interruption.',
+    ago(60 * 144),
+    true
   ),
-  seedTask('seed_task_5', 'Update dependencies'),
-  seedDoc('seed_doc_6', 'Brand Guidelines'),
-  seedTask('seed_task_6', 'Schedule user research sessions'),
+  seedTask('seed_task_4', 'Fix login page regression', ago(60 * 168)),
+  seedChannel('seed_channel_4', 'product', ago(60 * 200)),
+  seedChat('seed_chat_4', 'Summarize: customer feedback Q3', ago(60 * 240)),
+  seedDoc('seed_doc_4', 'Customer Interview Summary', ago(60 * 288), 'canvas'),
+  seedDM('seed_dm_4', 'Priya Patel', ago(60 * 336)),
   MOCK_DOCUMENT_BASIC,
-  MOCK_EMAIL_UNREAD,
-  MOCK_TASK_TODO,
-  MOCK_CHANNEL_PUBLIC,
+  seedEmail(
+    'seed_email_5',
+    'Design review feedback',
+    'Emily Zhang',
+    'emily@example.com',
+    'Overall looking great! Left a few comments on the nav and the mobile breakpoints.',
+    ago(60 * 400),
+    true
+  ),
+  seedTask('seed_task_5', 'Update dependencies', ago(60 * 480)),
+  seedChannel('seed_channel_5', 'random', ago(60 * 560)),
+  seedChat('seed_chat_5', 'Code review: payments module', ago(60 * 650)),
+  seedDoc('seed_doc_5', 'API Reference', ago(60 * 750), 'py'),
+  seedDM('seed_dm_5', 'Alex Kim', ago(60 * 840)),
+  seedProject('seed_project_3', 'Mobile App v2', ago(60 * 960)),
+  seedTask('seed_task_6', 'Schedule user research sessions', ago(60 * 1100)),
+  seedTask('seed_task_7', 'Review Q1 Budget', ago(60 * 1200)),
+  seedDoc('seed_doc_6', 'Brand Guidelines', ago(60 * 1300)),
+  seedChat('seed_chat_6', 'Research: competitor analysis', ago(60 * 1500)),
+  seedEmail(
+    'seed_email_6',
+    'Q1 Planning Session',
+    'Alice Johnson',
+    'alice@example.com',
+    "Sending the agenda ahead of Thursday's session. Please come with your top 3 priorities.",
+    ago(60 * 1700),
+    true
+  ),
+  seedChannel('seed_channel_6', 'general', ago(60 * 1900)),
 ];
 
 const [entities, setEntities] = createSignal<EntityData[]>([...SEED_ENTITIES]);
 
 let entityCounter = 0;
 
+// -- Sidebar filter --
+
+export type SandboxSidebarFilter =
+  | 'agents'
+  | 'mail'
+  | 'documents'
+  | 'tasks'
+  | 'channels'
+  | 'folders'
+  | 'empty'
+  | null;
+
+const [sidebarFilter, setSidebarFilter] =
+  createSignal<SandboxSidebarFilter>('empty');
+
+export { sidebarFilter, setSidebarFilter };
+
+function matchesFilter(
+  entity: EntityData,
+  filter: SandboxSidebarFilter
+): boolean {
+  if (!filter) return true;
+  switch (filter) {
+    case 'empty':
+      return false;
+    case 'agents':
+      return entity.type === 'chat';
+    case 'mail':
+      return entity.type === 'email';
+    case 'documents':
+      return entity.type === 'document' && entity.subType?.type !== 'task';
+    case 'tasks':
+      return entity.type === 'document' && entity.subType?.type === 'task';
+    case 'channels':
+      return entity.type === 'channel';
+    case 'folders':
+      return entity.type === 'project';
+    default:
+      return true;
+  }
+}
+
 export function sandboxEntities() {
   return entities();
 }
 
+export function filteredSandboxEntities() {
+  const filter = sidebarFilter();
+  if (!filter) return entities();
+  return entities().filter((e) => matchesFilter(e, filter));
+}
+
 export function addSandboxEntity(entity: EntityData) {
   setEntities((prev) => [entity, ...prev]);
+}
+
+export function removeSandboxEntity(id: string) {
+  setEntities((prev) => prev.filter((e) => e.id !== id));
 }
 
 export type SandboxEntityType =
@@ -219,7 +332,7 @@ export function createSandboxEntity(type: SandboxEntityType): EntityData {
         participants: [],
       };
     case 'channel':
-      return { ...base, type: 'channel', channelType: 'public' };
+      return { ...base, type: 'channel', channelType: 'private' };
     case 'chat':
       return { ...base, type: 'chat' };
     case 'project':
@@ -230,6 +343,7 @@ export function createSandboxEntity(type: SandboxEntityType): EntityData {
 export function resetSandbox() {
   entityCounter = 0;
   setEntities([...SEED_ENTITIES]);
+  setSidebarFilter('empty');
 }
 
 // -- Command menu helpers --
@@ -251,7 +365,7 @@ function entityToBucket(entity: EntityData): EntityBucketType {
     case 'email':
       return 'email';
     case 'channel':
-      return 'channel';
+      return entity.channelType === 'direct_message' ? 'dm' : 'channel';
     case 'chat':
       return 'chat';
     case 'project':

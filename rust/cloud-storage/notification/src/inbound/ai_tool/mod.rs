@@ -15,6 +15,7 @@ use ai::tool::{
 };
 use async_trait::async_trait;
 use cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::CreatedAt;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
@@ -142,7 +143,7 @@ where
         let paginated = service_context
             .service
             .get_user_notifications::<serde_json::Value>(
-                (*request_context.user_id).copied(),
+                MacroUserIdStr((*request_context.user_id).copied()),
                 Some(limit),
                 models_pagination::Query::Sort(CreatedAt, ()),
             )
@@ -209,7 +210,7 @@ where
         service_context
             .service
             .update_notifications(UpdateNotificationsRequest {
-                user_id: (*request_context.user_id).clone(),
+                user_id: MacroUserIdStr((*request_context.user_id).clone()),
                 notification_ids: &self.notification_ids,
                 status: NotificationStatus::Seen,
             })
@@ -263,7 +264,7 @@ where
         service_context
             .service
             .update_notifications(UpdateNotificationsRequest {
-                user_id: (*request_context.user_id).clone(),
+                user_id: MacroUserIdStr((*request_context.user_id).clone()),
                 notification_ids: &self.notification_ids,
                 status: NotificationStatus::Done(self.done),
             })

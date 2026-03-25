@@ -1,6 +1,6 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { sandboxEntities } from '../sandbox/sandbox-store';
-import { onMount } from 'solid-js';
+import { filteredSandboxEntities } from '../sandbox/sandbox-store';
+import { createEffect, onMount } from 'solid-js';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import { MockAppChrome } from '../components/MockAppChrome';
 import type { LessonContentProps, LessonDefinition } from '../types';
@@ -11,9 +11,12 @@ function HomeContent(props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        The Macro workspace has a the left-hand <strong>Sidebar</strong>
-        and <strong>Splits</strong> which can contain{' '}
+        The Macro workspace has a <strong>Sidebar</strong> and{' '}
+        <strong>Splits</strong>. Each split can contain{' '}
         <strong>List Views</strong> or content.
+      </p>
+      <p class="text-sm text-ink/50">
+        Try clicking the sidebar icons on the right to filter the list.
       </p>
     </div>
   );
@@ -21,12 +24,16 @@ function HomeContent(props: LessonContentProps) {
 
 function HomeDemo() {
   const soup = createSoupState({
-    initialData: sandboxEntities(),
+    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
+  createEffect(() => {
+    soup.setData(filteredSandboxEntities());
+  });
+
   return (
-    <MockAppChrome viewTitle="Documents">
+    <MockAppChrome>
       <OnboardingEntityList soup={soup} />
     </MockAppChrome>
   );

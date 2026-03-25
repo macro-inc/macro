@@ -5476,6 +5476,10 @@
           "owner_id": {
             "type": "string"
           },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -5526,6 +5530,10 @@
               "type": "string"
             },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "description": "Channel team ID to search within. Empty to ignore team filtering."
           },
           "thread_ids": {
             "type": "array",
@@ -5623,7 +5631,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message"]
+        "enum": ["public", "organization", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "type": "object",

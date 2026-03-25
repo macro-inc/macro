@@ -1,6 +1,6 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedShareIcon = (props: {
+export const AnimatedUsersIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
@@ -16,9 +16,9 @@ export const AnimatedShareIcon = (props: {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-share-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
+      class={`animated-users-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      {/*<title>Animated share icon</title>*/}
+      {/*<title>Animated users icon</title>*/}
       <defs>
         {/* Mask for right person - hides areas behind left person and bottom */}
         <mask id={maskRightPersonId} maskUnits="userSpaceOnUse">
@@ -60,18 +60,18 @@ export const AnimatedShareIcon = (props: {
           }
         }
 
-        .animated-share-icon .head-left,
-        .animated-share-icon .head-right,
-        .animated-share-icon .mask-left-head {
+        .animated-users-icon .head-left,
+        .animated-users-icon .head-right,
+        .animated-users-icon .mask-left-head {
           transition: transform 0.4s ease;
         }
 
-        .animated-share-icon.animating .head-left,
-        .animated-share-icon.animating .mask-left-head {
+        .animated-users-icon.animating .head-left,
+        .animated-users-icon.animating .mask-left-head {
           animation: head-bounce 0.25s ease-out;
         }
 
-        .animated-share-icon.animating .head-right {
+        .animated-users-icon.animating .head-right {
           animation: head-bounce 0.25s ease-out 0.15s;
         }
       `}</style>

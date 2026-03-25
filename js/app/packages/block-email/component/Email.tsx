@@ -480,7 +480,7 @@ function EmailContent(props: EmailViewProps) {
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <h1 class="text-3xl font-semibold text-ink pt-3 pb-4">
+                        <h1 class="text-3xl font-semibold text-ink pt-3 pb-2">
                           {props.title}
                         </h1>
                       </div>

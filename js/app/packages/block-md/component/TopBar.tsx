@@ -50,7 +50,7 @@ import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import TagIcon from '@icon/regular/tag.svg';

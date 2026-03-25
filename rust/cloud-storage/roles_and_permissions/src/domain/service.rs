@@ -96,4 +96,18 @@ where
             .remove_roles_from_user(user_id, role_ids.as_ref())
             .await
     }
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<std::collections::HashSet<super::model::PermissionId>, UserRolesAndPermissionsError>
+    {
+        Ok(self
+            .user_roles_and_permissions_repository
+            .get_user_permissions(user_id)
+            .await?
+            .into_iter()
+            .map(|p| p.id)
+            .collect())
+    }
 }

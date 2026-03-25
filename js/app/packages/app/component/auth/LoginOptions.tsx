@@ -8,7 +8,7 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import IconApple from '@macro-icons/macro-apple.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
-import { invalidateUserInfo } from '@queries/auth/user-info';
+import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
@@ -72,7 +72,11 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
         token?: string;
         error?: string;
       }>('plugin:auth|authenticate', {
-        payload: { authUrl: authUrl.toString(), callbackScheme: 'macro' },
+        payload: {
+          authUrl: authUrl.toString(),
+          callbackScheme: 'macro',
+          ephemeralSession: true,
+        },
       });
 
       if (!result.success || !result.token) {
@@ -87,7 +91,7 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
       });
 
       if (isOk(res)) {
-        invalidateUserInfo();
+        invalidateAllAfterLogin();
       }
 
       return;

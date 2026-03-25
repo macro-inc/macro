@@ -3550,11 +3550,16 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["user_id", "role"],
+        "required": ["team_id", "user_id", "role"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The role of the team member"
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team"
           },
           "user_id": {
             "type": "string",

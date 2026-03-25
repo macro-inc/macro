@@ -34,6 +34,8 @@ pub enum ChannelType {
     Private,
     #[serde(alias = "DirectMessage", alias = "direct_message")]
     DirectMessage,
+    #[serde(alias = "Team", alias = "team")]
+    Team,
 }
 
 impl ChannelType {
@@ -43,6 +45,7 @@ impl ChannelType {
             ChannelType::Organization => models_comms::channel::ChannelType::Organization,
             ChannelType::Private => models_comms::channel::ChannelType::Private,
             ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
+            ChannelType::Team => models_comms::channel::ChannelType::Team,
         }
     }
 }

@@ -182,7 +182,7 @@ export function SplitFileMenu(props: {
         <ThreeDots />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="bg-menu w-44 p-1 border border-edge mt-2">
+        <DropdownMenu.Content class="bg-menu w-fit p-1 border border-edge-muted rounded-xs mt-2 shadow">
           <For each={ops()}>
             {(op, i) => (
               <>

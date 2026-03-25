@@ -1,5 +1,5 @@
 use crate::config::Config;
-use ai_tools::{ToolDocumentToolContext, ToolSoupService};
+use ai_tools::{ToolDocumentToolContext, ToolPropertiesToolContext, ToolSoupService};
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -27,6 +27,9 @@ pub type DcsScribe =
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
+pub type DcsMemoryService =
+    memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub db: PgPool,
@@ -44,6 +47,8 @@ pub struct ApiContext {
     pub soup_service: Arc<ToolSoupService>,
     pub stream_repo: Arc<dyn StreamRepo>,
     pub document_tool_context: ToolDocumentToolContext,
+    pub memory_service: Arc<DcsMemoryService>,
+    pub properties_tool_context: ToolPropertiesToolContext,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

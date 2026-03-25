@@ -6,7 +6,7 @@ use axum::{
 use futures::StreamExt;
 use macro_user_id::cowlike::CowLike;
 use model::{
-    document::{BasicDocument, build_cloud_storage_bucket_document_key},
+    document::{BasicDocument, build_extensionless_document_key},
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
 use model_user::axum_extractor::MacroUserExtractor;
@@ -168,11 +168,10 @@ pub async fn handler(
                     None => format!("{ONBOARDING_FOLDER_NAME}/{}", uri_document_name),
                 };
 
-                let target_key = build_cloud_storage_bucket_document_key(
+                let target_key = build_extensionless_document_key(
                     user_id.as_ref(),
                     &document.document_id,
                     document.document_version_id,
-                    deref_file_type,
                 );
 
                 match deref_file_type {

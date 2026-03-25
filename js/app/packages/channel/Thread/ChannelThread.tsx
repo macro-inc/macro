@@ -30,6 +30,7 @@ export function ChannelThread(props: ThreadProps) {
     () => props.data().thread.reply_count > 0,
     300
   );
+
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
   const repliesQuery = useThreadRepliesQuery(

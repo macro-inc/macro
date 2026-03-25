@@ -5,4 +5,5 @@
 pub mod domain;
 
 /// Contains the outbound logic for roles and permissions
+#[cfg(feature = "outbound")]
 pub mod outbound;

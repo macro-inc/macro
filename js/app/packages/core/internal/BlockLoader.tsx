@@ -27,6 +27,7 @@ import type { Source, SourcePreload } from '../source';
 import { err, isErr, type ObjectLike, ok } from '../util/maybeResult';
 import { useQueryClient } from '@queries/client';
 import { SplitPanelContext } from '@app/component/split-layout/context';
+import { useAnalytics } from '@app/component/analytics-context';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -78,6 +79,7 @@ export function BlockLoader<
   const splitPanelContext = useContext(SplitPanelContext);
   // NOTE: not reactive but PreviewPanel component manually creates a true signal for the context provider
   const isPreview = splitPanelContext?.previewState?.[0]() ?? false;
+  const analytics = useAnalytics();
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
@@ -152,6 +154,8 @@ Check that the load function does not return a preload source when the intent is
       if (blockOpenEvent) {
         track(blockOpenEvent);
       }
+
+      analytics.pageView(data.__block);
     }
 
     setData(() => data);

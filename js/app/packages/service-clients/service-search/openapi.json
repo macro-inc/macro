@@ -218,6 +218,10 @@
             },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
+          "team_id": {
+            "type": ["string", "null"],
+            "description": "Channel team ID to search within. Empty to ignore team filtering."
+          },
           "thread_ids": {
             "type": "array",
             "items": {

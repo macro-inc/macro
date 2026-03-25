@@ -150,17 +150,34 @@ pub async fn extract_text_from_document(
     s3_client: Arc<service::s3::S3>,
     db: Arc<service::db::DB>,
 ) -> Result<Option<DocumentKeyParts>, Error> {
-    // If the key does not end with .pdf, we don't care about it
-    // No need to error out, since this is the expected behavior
-    if !key.ends_with(".pdf") {
-        tracing::info!("skipping non-pdf file for extraction");
-        return Ok(None);
-    }
-
     let document_key_parts = DocumentKeyParts::from_s3_key(key).map_err(|e| {
         tracing::error!(error=?e, "invalid key format");
         Error::from("invalid key format")
     })?;
+
+    // For legacy keys with extension, check the extension directly
+    // For extensionless keys, look up file type from DB
+    if document_key_parts.has_extension {
+        if !key.ends_with(".pdf") {
+            tracing::info!("skipping non-pdf file for extraction");
+            return Ok(None);
+        }
+    } else {
+        let file_type = db
+            .get_document_file_type(&document_key_parts.document_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to get file type from db");
+                Error::from("unable to get file type from db")
+            })?;
+        match file_type {
+            Some(model::document::FileType::Pdf) => {}
+            _ => {
+                tracing::info!(file_type=?file_type, "skipping non-pdf file for extraction");
+                return Ok(None);
+            }
+        }
+    }
 
     let document_id = &document_key_parts.document_id;
     tracing::info!(document_id=%document_id, "starting extracting text process for document");

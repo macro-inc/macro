@@ -9,7 +9,6 @@ export type AppEvents = {
   subscription_start: Record<string, unknown>;
   subscription_success: Record<string, unknown>;
 
-  page_view: Record<string, unknown>;
   sidebar_click: Record<string, unknown>;
   notifications_toggled: Record<string, unknown>;
 
