@@ -4,7 +4,8 @@ import {
   CopyObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
-import { appendFileSync, writeFileSync, readFileSync, existsSync } from "fs";
+import { appendFileSync, writeFileSync, readFileSync, existsSync, createReadStream } from "fs";
+import { createInterface } from "readline";
 
 const S3_BUCKET = process.env.S3_BUCKET;
 const DRY_RUN = process.env.DRY_RUN === "true";
@@ -14,6 +15,7 @@ const PAGE_SIZE = parseInt(process.env.PAGE_SIZE ?? "50", 10);
 const LIMIT = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
 const USER = process.env.USER_PREFIX;
 const DOCUMENT_ID = process.env.DOCUMENT_ID;
+const KEYS_FILE = process.env.KEYS_FILE;
 const RESET = process.env.RESET === "true";
 
 if (!S3_BUCKET) {
@@ -138,31 +140,56 @@ async function processBatch(keys: string[]): Promise<void> {
   await Promise.all(tasks);
 }
 
-async function main() {
-  log("=== Migrating S3 keys to extensionless convention ===");
-  log(`Bucket: ${S3_BUCKET}`);
-  log(`Prefix: ${PREFIX || "<all>"}`);
-  log(`Concurrency: ${CONCURRENCY}`);
-  if (USER) log(`User: ${USER}`);
-  if (DOCUMENT_ID) log(`Document: ${DOCUMENT_ID}`);
-  if (DRY_RUN) log(`=== DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
-  log(`Log file: ${LOG_FILE}`);
-  if (!DRY_RUN) log(`Copied keys file: ${COPIED_KEYS_FILE}`);
+async function migrateFromFile(filePath: string) {
+  log(`Reading keys from: ${filePath}`);
 
+  const rl = createInterface({
+    input: createReadStream(filePath),
+    crlfDelay: Infinity,
+  });
+
+  let batch: string[] = [];
+  for await (const line of rl) {
+    const key = line.trim();
+    if (!key) continue;
+    stats.scanned++;
+    batch.push(key);
+
+    if (batch.length >= CONCURRENCY) {
+      if (LIMIT !== undefined && stats.copied + stats.skipped >= LIMIT) break;
+      await processBatch(batch);
+      batch = [];
+
+      if (stats.scanned % 1000 === 0) {
+        log(`... scanned=${stats.scanned} copied=${stats.copied} skipped=${stats.skipped}`);
+      }
+    }
+  }
+
+  if (batch.length > 0) await processBatch(batch);
+}
+
+async function migrateFromScan() {
   const startAfter = loadCursor();
 
   let continuationToken: string | undefined;
 
   do {
-    const response = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: S3_BUCKET,
-        Prefix: buildPrefix(),
-        MaxKeys: PAGE_SIZE,
-        ContinuationToken: continuationToken,
-        ...(startAfter && !continuationToken ? { StartAfter: startAfter } : {}),
-      })
-    );
+    let response;
+    try {
+      response = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: S3_BUCKET,
+          Prefix: buildPrefix(),
+          MaxKeys: PAGE_SIZE,
+          ContinuationToken: continuationToken,
+          ...(startAfter && !continuationToken ? { StartAfter: startAfter } : {}),
+        })
+      );
+    } catch (err) {
+      log(`ERROR listing objects: ${err}`);
+      throw err;
+    }
 
     const keys = (response.Contents ?? [])
       .filter((obj) => obj.Key)
@@ -199,6 +226,25 @@ async function main() {
 
   // Clear cursor on successful completion
   if (!DRY_RUN && !USER && !DOCUMENT_ID) clearCursor();
+}
+
+async function main() {
+  log("=== Migrating S3 keys to extensionless convention ===");
+  log(`Bucket: ${S3_BUCKET}`);
+  if (KEYS_FILE) log(`Keys file: ${KEYS_FILE}`);
+  if (!KEYS_FILE) log(`Prefix: ${PREFIX || "<all>"}`);
+  log(`Concurrency: ${CONCURRENCY}`);
+  if (USER) log(`User: ${USER}`);
+  if (DOCUMENT_ID) log(`Document: ${DOCUMENT_ID}`);
+  if (DRY_RUN) log(`=== DRY RUN MODE ===${LIMIT ? ` (limit: ${LIMIT})` : ""}`);
+  log(`Log file: ${LOG_FILE}`);
+  if (!DRY_RUN) log(`Copied keys file: ${COPIED_KEYS_FILE}`);
+
+  if (KEYS_FILE) {
+    await migrateFromFile(KEYS_FILE);
+  } else {
+    await migrateFromScan();
+  }
 
   log("=== Migration complete ===");
   log(`Scanned: ${stats.scanned}`);
@@ -207,6 +253,11 @@ async function main() {
   log(`Missing: ${stats.missing} (source key not found)`);
   log(`Errors:  ${stats.errors}`);
 }
+
+process.on("unhandledRejection", (err) => {
+  log(`Unhandled rejection: ${err}`);
+  process.exit(1);
+});
 
 main().catch((err) => {
   log(`Fatal error: ${err}`);
