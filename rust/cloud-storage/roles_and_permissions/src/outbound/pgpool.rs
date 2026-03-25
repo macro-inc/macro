@@ -137,6 +137,27 @@ impl From<sqlx::Error> for UserRolesAndPermissionsError {
 }
 
 impl UserRolesAndPermissionsRepository for MacroDB {
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_roles(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<HashSet<RoleId>, UserRolesAndPermissionsError> {
+        let user_roles: Vec<RoleId> = sqlx::query!(
+            r#"
+            SELECT
+                ru."roleId" as role_id
+            FROM "RolesOnUsers" ru
+            WHERE ru."userId" = $1
+            "#,
+            user_id.as_ref()
+        )
+        .map(|r| r.role_id.parse().unwrap())
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(user_roles.into_iter().collect::<HashSet<_>>())
+    }
+
     async fn get_user_permissions(
         &self,
         user_id: &MacroUserIdStr<'_>,
