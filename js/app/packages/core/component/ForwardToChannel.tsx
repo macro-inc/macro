@@ -293,6 +293,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             hideBorder
             noPadding
             focusOnMount
+            mobileHorizontalScroll
           />
         </div>
         <Show
@@ -301,7 +302,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             !props.hideAccessLevelSelector
           }
         >
-          <div class="shrink-0 pr-2">
+          <div class="shrink-0 pr-2 flex items-center">
+            <Show when={selectedOptions().length > 0}>
+              <span class="text-sm text-ink-muted pr-2">can</span>
+            </Show>
             <ShareOptions
               setPermissions={(accessLevel) =>
                 setSubmitAccessLevel(accessLevel)
@@ -309,6 +313,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               permissions={submitAccessLevel()}
               label="Permission"
               hideNoAccess
+              noBorder
             />
           </div>
         </Show>

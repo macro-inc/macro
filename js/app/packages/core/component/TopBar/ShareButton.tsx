@@ -36,7 +36,8 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import IconLink from '@icon/regular/link.svg';
 import UserCircle from '@macro-icons/wide/user-circle.svg';
-import IconUsers from '@icon/regular/users.svg';
+import WideCopy from '@macro-icons/wide/copy.svg';
+import WideUsers from '@macro-icons/wide/users.svg';
 import IconX from '@icon/bold/x-bold.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import IconComment from '@macro-icons/wide/comment.svg';
@@ -81,6 +82,7 @@ import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 import { useAnalytics } from '@app/component/analytics-context';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
@@ -174,6 +176,77 @@ interface ShareModalProps {
   owner?: string;
   name: string;
   id: string;
+}
+
+function DmRecipientIcon(props: { channelId: string }) {
+  const currentUserId = useUserId();
+  const { ids } = useChannelParticipants(() => props.channelId);
+  const dmPartnerId = createMemo(() =>
+    ids().find((id) => id !== currentUserId())
+  );
+  return (
+    <Show
+      when={dmPartnerId()}
+      fallback={<UserCircle class="flex-shrink-0 w-4 h-4" />}
+    >
+      {(id) => (
+        <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
+      )}
+    </Show>
+  );
+}
+
+function shortName(user: { name: string; email: string }): string {
+  const display = user.name || user.email;
+  if (display.includes('@')) return display.split('@')[0];
+  return display.split(' ')[0];
+}
+
+function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
+  const currentUserId = useUserId();
+  const { users } = useChannelParticipants(() => props.channelId);
+  const others = createMemo(() =>
+    users().filter((u) => u.id !== currentUserId())
+  );
+
+  const label = createMemo(() => {
+    const rest = others();
+    if (rest.length === 0) return props.fallbackName;
+
+    const MAX_CHARS = 20;
+    const names: string[] = [];
+    let charsUsed = 0;
+
+    for (const user of rest) {
+      const name = shortName(user);
+      const separator = names.length > 0 ? ', ' : '';
+      if (charsUsed + separator.length + name.length > MAX_CHARS) break;
+      names.push(name);
+      charsUsed += separator.length + name.length;
+    }
+
+    const remaining = rest.length - names.length;
+    const base = names.join(', ');
+    if (remaining === 0) return base;
+    return `${base} +${remaining} ${remaining === 1 ? 'other' : 'others'}`;
+  });
+
+  const tooltipContent = createMemo(() =>
+    others()
+      .map((u) => u.name || u.email)
+      .join('\n')
+  );
+
+  return (
+    <Show when={others().length > 0} fallback={<>{props.fallbackName}</>}>
+      <Tooltip
+        placement="bottom"
+        tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}
+      >
+        <span>{label()}</span>
+      </Tooltip>
+    </Show>
+  );
 }
 
 export function ShareModal(props: ShareModalProps) {
@@ -561,10 +634,10 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
-        <div class="z-modal fixed inset-0">
+        <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4 pointer-events-none" />
+        <div class="z-modal fixed inset-0 flex flex-col items-center justify-center py-8">
           <Dialog.Content
-            class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto portal-scope flex flex-col gap-2"
+            class="max-w-[calc(100vw-16px)] max-h-[calc(100vh-64px)] overflow-y-auto scrollbar-hidden mx-auto portal-scope flex flex-col gap-2"
             style={{ width: '533px' }}
           >
             {/* Card 1: Share form — gradient border */}
@@ -656,20 +729,47 @@ export function ShareModal(props: ShareModalProps) {
                               >
                                 <Switch
                                   fallback={
-                                    <IconUsers class="flex-shrink-0 w-4 h-4" />
+                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
                                   }
                                 >
+                                  <Match
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type === 'direct_message'
+                                    }
+                                  >
+                                    <DmRecipientIcon
+                                      channelId={recipient.channel_id}
+                                    />
+                                  </Match>
                                   <Match
                                     when={channelNameMap().get(
                                       recipient.channel_id
                                     )}
                                   >
-                                    <UserCircle class="flex-shrink-0 w-4 h-4" />
+                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
                                   </Match>
                                 </Switch>
                                 <div class="font-medium truncate">
-                                  {channelNameMap().get(recipient.channel_id)
-                                    ?.name || recipient.channel_id}
+                                  <Show
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
+                                    }
+                                    fallback={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.name || recipient.channel_id
+                                    }
+                                  >
+                                    <GroupChannelLabel
+                                      channelId={recipient.channel_id}
+                                      fallbackName={
+                                        channelNameMap().get(
+                                          recipient.channel_id
+                                        )?.name || recipient.channel_id
+                                      }
+                                    />
+                                  </Show>
                                 </div>
                               </div>
                               <div class="flex items-center">
@@ -716,48 +816,25 @@ export function ShareModal(props: ShareModalProps) {
                   >
                     <div class="flex items-center gap-2">
                       Public link
-                      <DropdownMenu>
-                        <DropdownMenu.Trigger>
-                          <div
-                            class="px-2 rounded-xl border-1 py-0.5 flex justify-center items-center cursor-pointer"
-                            classList={{
-                              'border-accent/30 bg-accent/10':
-                                publicAccessLevel() != null,
-                              'border-edge-muted bg-edge-muted/20':
-                                publicAccessLevel() == null,
-                            }}
-                          >
-                            <span
-                              class="text-xs font-medium whitespace-nowrap"
-                              classList={{
-                                'text-accent-ink': publicAccessLevel() != null,
-                                'text-ink-extra-muted':
-                                  publicAccessLevel() == null,
-                              }}
-                            >
-                              {publicAccessLevel() != null
-                                ? 'ENABLED'
-                                : 'DISABLED'}
-                            </span>
-                          </div>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenuContent>
-                            <DropdownMenu.Item
-                              class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
-                              onSelect={() =>
-                                setPublicPermissions(
-                                  publicAccessLevel() != null ? null : 'view'
-                                )
-                              }
-                            >
-                              {publicAccessLevel() != null
-                                ? 'Disable public link'
-                                : 'Enable public link'}
-                            </DropdownMenu.Item>
-                          </DropdownMenuContent>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu>
+                      <div
+                        class="px-2 rounded-xl border-1 py-0.5 flex justify-center items-center"
+                        classList={{
+                          'border-accent/30 bg-accent/10':
+                            publicAccessLevel() != null,
+                          'border-edge-muted bg-edge-muted/20':
+                            publicAccessLevel() == null,
+                        }}
+                      >
+                        <span
+                          class="text-xs font-medium whitespace-nowrap"
+                          classList={{
+                            'text-accent-ink': publicAccessLevel() != null,
+                            'text-ink-extra-muted': publicAccessLevel() == null,
+                          }}
+                        >
+                          {publicAccessLevel() != null ? 'ENABLED' : 'DISABLED'}
+                        </span>
+                      </div>
                     </div>
                     <MiniToggleSwitch
                       size="Base"
@@ -776,11 +853,14 @@ export function ShareModal(props: ShareModalProps) {
                         class="flex items-center gap-1 rounded-xs px-2"
                         onClick={copyPublicLink}
                       >
-                        <IconLink class="size-4" />
-                        Copy Link
+                        <WideCopy class="size-4" />
+                        <span class="hidden sm:inline">Copy Link</span>
                       </Button>
                       <span class="text-sm text-ink-muted flex items-center">
-                        <span class="px-2">Anyone with the link can</span>
+                        <span class="px-2 hidden sm:inline">
+                          Anyone with the link can
+                        </span>
+                        <span class="px-2 sm:hidden">Permissions:</span>
                         <ShareOptions
                           permissions={publicAccessLevel() ?? null}
                           hideNoAccess={true}
@@ -961,6 +1041,7 @@ export function ShareOptions(props: {
   hideNoAccess?: boolean;
   label?: string | '';
   disabled?: boolean;
+  noBorder?: boolean;
 }) {
   const editPermissionEnabled = isInBlock()
     ? blockEditPermissionEnabledSignal()
@@ -1018,7 +1099,7 @@ export function ShareOptions(props: {
       <DropdownMenu.Trigger disabled={props.disabled}>
         <Button
           disabled={props.disabled}
-          class="min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1"
+          class={`min-w-[67px] h-[22px] py-2 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
           variant="secondary"
         >
           {currentValueText()}
