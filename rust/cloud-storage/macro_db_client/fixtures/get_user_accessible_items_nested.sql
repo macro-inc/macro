@@ -10,9 +10,12 @@ SET session_replication_role = 'replica';
 INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Org', 'PILOT')
 ON CONFLICT DO NOTHING;
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('user-1', 'user1@test.com', 'stripe_1', 1), -- The user being tested (gains access)
-       ('user-2', 'user2@test.com', 'stripe_2', 1);
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2@test.com', 'user2@test.com', 'stripe_2');
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('user-1', 'user1@test.com', 'stripe_1', 1, 'a1111111-1111-1111-1111-111111111111'), -- The user being tested (gains access)
+       ('user-2', 'user2@test.com', 'stripe_2', 1, 'a2222222-2222-2222-2222-222222222222');
 -- The owner of the items
 
 -- === Project Hierarchy (A -> B -> C, owned by user-2) ===

@@ -31,6 +31,10 @@ pub fn resolve_channel_name(
             ChannelType::DirectMessage => match resolve_direct_message_channel_name(channel_name, participants, &channel_id.0, user_id, name_lookup) {
                 Ok(c) | Err(c) => c,
             }
+            ChannelType::Team => channel_name.map(|name| name.to_string()).unwrap_or_else(|| {
+                tracing::warn!(channel_id=?channel_id, "team channel should have a name");
+                "Team".to_string()
+            }),
         }
 }
 

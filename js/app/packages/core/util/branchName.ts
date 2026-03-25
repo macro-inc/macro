@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
@@ -28,5 +29,6 @@ export const copyBranchNameToClipboard = async (
     MAX_BRANCH_LENGTH
   );
   await navigator.clipboard.writeText(branchName);
+  analytics.track('task_copy_branch_name');
   toast.success('Branch name copied to clipboard');
 };

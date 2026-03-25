@@ -14,7 +14,7 @@ jobs:
     outputs:
       web-app: ${{ steps.changes.outputs.web-app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: whutchinson98/diff-checker-action@v1.0.2
         id: changes
         with:
@@ -37,4 +37,5 @@ jobs:
       DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
       DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       NPMRC_GH_TOKEN: ${{ secrets.NPMRC_GH_TOKEN }}

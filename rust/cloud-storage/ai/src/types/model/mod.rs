@@ -82,6 +82,10 @@ pub enum Model {
     #[strum(serialize = "claude-sonnet-4-5")]
     Claude45Sonnet,
 
+    #[serde(rename = "claude-sonnet-4-6")]
+    #[strum(serialize = "claude-sonnet-4-6")]
+    Claude46Sonnet,
+
     #[serde(rename = "claude-haiku-4-5")]
     #[strum(serialize = "claude-haiku-4-5")]
     #[default]
@@ -115,6 +119,7 @@ pub mod constants {
         pub const CLAUDE_37_SONNET: &str = "claude-3.7-sonnet";
         pub const CLAUDE_4_SONNET: &str = "claude-sonnet-4";
         pub const CLAUDE_45_SONNET: &str = "claude-4.5-sonnet";
+        pub const CLAUDE_46_SONNET: &str = "claude-4.6-sonnet";
         pub const CLAUDE_45_HAIKU: &str = "claude-4.5-haiku";
         pub const CLAUDE_45_OPUS: &str = "claude-4.5-opus";
         pub const CLAUDE_46_OPUS: &str = "claude-4.6-opus";
@@ -148,6 +153,7 @@ impl Model {
             Model::Claude37Sonnet => (ANTHROPIC, CLAUDE_37_SONNET),
             Model::Claude4Sonnet => (ANTHROPIC, CLAUDE_4_SONNET),
             Model::Claude45Sonnet => (ANTHROPIC, CLAUDE_45_SONNET),
+            Model::Claude46Sonnet => (ANTHROPIC, CLAUDE_46_SONNET),
             Model::Claude45Haiku => (ANTHROPIC, CLAUDE_45_HAIKU),
             Model::Claude45Opus => (ANTHROPIC, CLAUDE_45_OPUS),
             Model::Claude46Opus => (ANTHROPIC, CLAUDE_46_OPUS),

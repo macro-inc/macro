@@ -120,15 +120,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
-    use notification::domain::models::email_notification_digest::{
-        EmailBlockList, ExplicitInviteAllowList, NotificationSetBuilder, StateMachineDriverA,
-    };
-    use notification::domain::service::NotificationIngressService;
-    use notification::outbound::{
-        digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-        push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-        repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
-    };
+    use notification::domain::service::SqsNotificationIngress;
+    use notification::outbound::queue::SqsIngressQueue;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -212,40 +205,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
-    let redis_client = redis::Client::open("redis://localhost:6379").unwrap();
-    let redis_multiplexed_conn = redis_client
-        .get_multiplexed_async_connection()
-        .await
-        .unwrap();
-
-    let notification_ingress_service = Arc::new({
-        let notification_repository = DbNotificationRepository::new(pool.clone());
-        let notification_queue = SqsNotificationQueue::new(
-            aws_sdk_sqs::Client::from_conf(sqs_config),
-            "test-notification-queue".to_string(),
-        );
-        let state_machine = StateMachineDriverA {
-            user_checker: DbUserExistenceChecker::new(pool.clone()),
-            notification_checker: PushNotificationCheckerImpl::new(DbNotificationRepository::new(
-                pool.clone(),
-            )),
-            online_checker: LastOnlineCheckerImpl::new(
-                last_online_tracker::domain::services::LastOnlineService::new(
-                    last_online_tracker::outbound::time::DefaultTime,
-                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                        redis_multiplexed_conn.clone(),
-                    ),
-                ),
-            ),
-            digest_batcher: RedisDigestBatcher::new(redis_multiplexed_conn),
-            block_list: EmailBlockList::new::<model_notifications::NewEmailMetadata>(),
-            invite_list: ExplicitInviteAllowList::new::<model_notifications::InviteToTeamMetadata>(
-            )
-            .append::<model_notifications::ChannelInviteMetadata>(),
-            digest_window: std::time::Duration::from_secs(30 * 60),
-            online_duration_threshold: std::time::Duration::from_secs(60 * 60),
-        };
-        NotificationIngressService::new(notification_repository, notification_queue, state_machine)
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::from_conf(sqs_config),
+        queue_url: "test-notification-ingress-queue".to_string(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue,
     });
 
     // Build document tool context for AI tools
@@ -284,13 +249,31 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         test_lexical_client,
     );
 
+    let search_service_client = Arc::new(search_service_client);
+    let scribe = Arc::new(content_client);
+
+    let memory_tool_context = ai_tools::ToolServiceContext {
+        search_service_client: search_service_client.clone(),
+        email_service_client: email_service_client_external.clone(),
+        scribe: scribe.clone(),
+        soup_service: soup_service.clone(),
+        document_tool_context: document_tool_context.clone(),
+    };
+    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
+    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
+        pool.clone(),
+        memory_repo,
+        memory_tool_context,
+        ai_tools::all_tools(),
+    ));
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         comms_service_client,
-        search_service_client: Arc::new(search_service_client),
-        scribe: Arc::new(content_client),
+        search_service_client,
+        scribe,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
@@ -300,6 +283,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         soup_service,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
+        memory_service,
     };
     Arc::new(api_context)
 }

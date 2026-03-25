@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
@@ -11,45 +12,39 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::domain::models::email_notification_digest::StateMachineDriverA;
-use notification::domain::service::NotificationIngressService;
-use notification::outbound::{
-    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
-    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
-    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+use notification::outbound::queue::SqsIngressQueue;
+use notification::{
+    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
+};
+use rate_limit::domain::service::RateLimitServiceImpl;
+use referral::{
+    domain::service::ReferralServiceImpl,
+    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
-use teams::{
-    domain::team_service::TeamServiceImpl, outbound::customer_repo::CustomerRepositoryImpl,
-    outbound::team_repo::TeamRepositoryImpl,
-};
 
-type StateMachine = StateMachineDriverA<
-    DbUserExistenceChecker,
-    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
-    LastOnlineCheckerImpl<
-        last_online_tracker::outbound::time::DefaultTime,
-        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
-    >,
-    RedisDigestBatcher,
->;
+use crate::config::StripePriceIds;
 
-pub(crate) type NotificationIngressType = NotificationIngressService<
-    DbNotificationRepository<PgPool>,
-    SqsNotificationQueue,
-    StateMachine,
->;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
 
-#[expect(dead_code, reason = "used by utoipa in swagger.rs")]
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
+    teams::outbound::team_channels_repo::TeamChannelsRepositoryImpl,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
+>;
+
+type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
+
+pub(crate) type ReferralServiceType = ReferralServiceImpl<
+    PgReferralRepo,
+    StripeDiscountClient,
+    Arc<SqsNotificationIngress<SqsIngressQueue>>,
 >;
 
 pub(crate) type GithubLinkServiceType =
@@ -74,15 +69,13 @@ pub(crate) struct ApiContext {
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
-    pub teams_service: Arc<
-        TeamServiceImpl<
-            TeamRepositoryImpl,
-            CustomerRepositoryImpl,
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
-            NotificationIngressType,
-        >,
-    >,
+    pub teams_service: Arc<TeamsServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
+    pub analytics_client: Arc<AnalyticsClient>,
+    pub referral_service: Arc<ReferralServiceType>,
+    pub rate_limit_service: RateLimiter,
+    /// The stripe price ids
+    pub stripe_price_ids: StripePriceIds,
 }
 
 env_var! {

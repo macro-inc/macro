@@ -415,7 +415,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         ]
         .into_iter()
         .collect(),
-        terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -423,10 +422,12 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
         collapse: true,
         document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
         email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["test".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],
@@ -436,12 +437,14 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
+            terms: vec!["test".to_string()],
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             mentions: vec!["id1".to_string(), "id2".to_string()],
             sender_ids: vec!["id1".to_string(), "id2".to_string()],
         },
         chat_search_args: UnifiedChatSearchArgs {
+            terms: vec!["test".to_string()],
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -651,7 +654,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       ]
                     }
                   }
-                ],
+                ]
               }
             },
             {
@@ -784,7 +787,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         ]
         .into_iter()
         .collect(),
-        terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -792,10 +794,12 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
         collapse: true,
         document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
         email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["test".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],
@@ -805,12 +809,14 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ..Default::default()
         },
         channel_message_search_args: UnifiedChannelMessageSearchArgs {
+            terms: vec!["test".to_string()],
             channel_ids: vec!["id1".to_string(), "id2".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             mentions: vec!["id1".to_string(), "id2".to_string()],
             sender_ids: vec!["id1".to_string(), "id2".to_string()],
         },
         chat_search_args: UnifiedChatSearchArgs {
+            terms: vec!["test".to_string()],
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
@@ -832,7 +838,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![SearchEntityType::Documents].into_iter().collect(),
-        terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -840,6 +845,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
 
         collapse: true,
         document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["test".to_string()],
             document_ids: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },

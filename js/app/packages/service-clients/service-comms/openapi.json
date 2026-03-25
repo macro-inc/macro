@@ -283,6 +283,16 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -1882,7 +1892,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message"]
+        "enum": ["public", "organization", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "allOf": [
@@ -1940,6 +1950,11 @@
               "type": "string"
             },
             "description": "list of participants not including the owner"
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "If the channel_type is team, provide the id of the team you are creating the channel for"
           }
         }
       },

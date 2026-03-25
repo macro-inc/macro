@@ -1,16 +1,18 @@
 //! Queue message models for notification delivery via SQS.
 
 use crate::domain::models::{
-    Notification, NotificationExtEmail, RateLimitConfig, RateLimitKey, SendNotificationRequest,
+    Notification, NotificationExtEmail, NotificationTypeName, RateLimitConfig, RateLimitKey,
     TaggedContent,
     apple::APNSPushNotification,
     email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
+    request::SendNotificationRequest,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rate_limit::RateLimitExceeded;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,7 +29,7 @@ pub struct UserApnsEndpoints {
     pub endpoints: Vec<String>,
     /// State machine data if the ingress decision was indeterminate for this user.
     #[serde(default)]
-    pub digest_state: Option<BatchSend<PushNotificationsEnabled>>,
+    pub digest_state: Option<Box<BatchSend<PushNotificationsEnabled>>>,
 }
 
 /// APNS push notification targets.
@@ -42,7 +44,7 @@ pub struct APNSTargets<T> {
 }
 
 /// Email notification payload.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmailContent {
     /// The email subject line.
     pub subject: String,
@@ -54,15 +56,16 @@ pub struct EmailContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
-    to: MacroUserIdStr<'a>,
+    pub(crate) to: MacroUserIdStr<'a>,
     /// The email content (subject and body).
     pub content: EmailContent,
 
-    rate_limit_config: RateLimitConfig,
+    pub(crate) rate_limit_config: RateLimitConfig,
 
-    rate_limit_key: RateLimitKey,
+    pub(crate) rate_limit_key: RateLimitKey,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EmailCreateBundle {
     /// The email content (subject and body).
     content: EmailContent,
@@ -106,11 +109,6 @@ impl<'a> EmailNotification<'a> {
     pub fn to(&'a self) -> MacroUserIdStr<'a> {
         self.to.copied()
     }
-
-    /// return the rate limit configuration
-    pub fn rate_limit(&self) -> (&RateLimitConfig, &RateLimitKey) {
-        (&self.rate_limit_config, &self.rate_limit_key)
-    }
 }
 
 /// the value of the inner payload inside [ConnGatewayNotification]
@@ -151,12 +149,12 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
     pub(crate) recipients: Vec<MacroUserIdStr<'a>>,
 }
 
-impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
+impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
     pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
         ConnGatewayNotification {
             notif: ConnGatewayInnerNotif {
                 notification_id: id,
-                notification_event_type: T::TYPE_NAME.to_string(),
+                notification_event_type: req.req.notification.tag.as_ref().to_string(),
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 done: false,
@@ -164,7 +162,7 @@ impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
                 viewed_at: None,
                 updated_at: None,
                 deleted_at: None,
-                notification_metadata: TaggedContent::new(req.req.notification.clone()),
+                notification_metadata: req.req.notification.clone(),
                 sender_id: req.req.sender_id.as_ref().map(|x| x.clone().into_owned()),
             },
             recipients: req.req.recipient_ids.iter().cloned().collect(),
@@ -237,14 +235,29 @@ pub struct QueueMessage<'a, T, U> {
     content: NotificationChannel<'a, T, U>,
 }
 
-impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
+impl<'a, T, U> QueueMessage<'a, T, U> {
     /// Create a new queue message. Only valid notification types can be published.
-    ///
-    /// The `message_type` is derived from [`Notification::TYPE_NAME`].
-    pub(crate) fn new(content: NotificationChannel<'a, T, U>) -> Self {
+    pub(crate) fn new_from_conn_gateway(content: ConnGatewayNotification<'a, T>) -> Self {
         Self {
-            message_type: T::TYPE_NAME.to_string(),
-            content,
+            message_type: content.notif.notification_metadata.tag.as_ref().to_string(),
+            content: NotificationChannel::ConnGateway(content),
+        }
+    }
+
+    pub(crate) fn new_from_email(
+        content: EmailNotification<'a>,
+        typename: &NotificationTypeName,
+    ) -> Self {
+        Self {
+            message_type: typename.as_ref().to_string(),
+            content: NotificationChannel::Email(content),
+        }
+    }
+
+    pub(crate) fn new_from_apns(content: APNSTargets<U>, typename: &NotificationTypeName) -> Self {
+        Self {
+            message_type: typename.as_ref().to_string(),
+            content: NotificationChannel::Ios(Box::new(content)),
         }
     }
 }
@@ -278,24 +291,25 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
     /// open the inner container by applying the state machine output to the necessary fields
     pub fn with_state_decisions(
         self,
-        states: Vec<Result<StateMachineDecisionA<T>, Report>>,
+        states: Vec<Result<StateMachineDecisionA, Report>>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
         // Collect indeterminate decisions keyed by owner_id
-        let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
-            states
-                .into_iter()
-                .filter_map(|v| match v {
-                    Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
-                    Err(_)
-                    | Ok(StateMachineDecisionA::DontSend(_))
-                    | Ok(StateMachineDecisionA::BatchWasQueued(_))
-                    | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
-                })
-                .map(|batch| {
-                    let owner = batch.inner().owner_id().clone();
-                    (owner, batch)
-                })
-                .collect();
+        let indeterminates: HashMap<
+            MacroUserIdStr<'static>,
+            Box<BatchSend<PushNotificationsEnabled>>,
+        > = states
+            .into_iter()
+            .filter_map(|v| match v {
+                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                Err(_)
+                | Ok(StateMachineDecisionA::DontSend(_))
+                | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
+            })
+            .map(|batch| {
+                let owner = batch.inner().owner_id().clone();
+                (owner, batch)
+            })
+            .collect();
 
         let mut indeterminates = Some(indeterminates);
 
@@ -363,7 +377,7 @@ pub enum DeliverySuccess {
 pub enum DeliveryFailure {
     /// The rate limit for this notification type was exceeded.
     #[error("The rate limit was exceeded")]
-    RateLimit,
+    RateLimit(RateLimitExceeded),
     /// a timeout limit was reached trying to deliver the notif
     #[error("A timeout was reached")]
     Timeout,
@@ -373,4 +387,35 @@ pub enum DeliveryFailure {
     /// A delivery error occurred.
     #[error("A delivery error occured")]
     Other,
+}
+
+/// Message published to the ingress SQS queue.
+///
+/// Wraps a type-erased [`SendNotificationRequest`] so callers can push
+/// notification requests to a queue without needing database or state-machine
+/// dependencies. A worker in `notification_service` picks up these messages
+/// and processes them through [`crate::domain::service::NotificationIngressService`].
+#[derive(Serialize, Deserialize)]
+pub struct IngressQueueMessage {
+    /// The type-erased notification request.
+    pub request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value>,
+}
+
+impl IngressQueueMessage {
+    /// Type-erase a typed request via serde round-trip.
+    pub fn from_request<T: Serialize, U: Serialize>(
+        req: &SendNotificationRequest<'_, T, U>,
+    ) -> Result<Self, serde_json::Error> {
+        let value = serde_json::to_value(req)?;
+        let request = serde_json::from_value(value)?;
+        Ok(Self { request })
+    }
+}
+
+/// Raw message received from the ingress SQS queue.
+pub struct RawIngressQueueMessage {
+    /// The deserialized ingress queue message body.
+    pub body: IngressQueueMessage,
+    /// The receipt handle for deleting the message after processing.
+    pub receipt_handle: String,
 }

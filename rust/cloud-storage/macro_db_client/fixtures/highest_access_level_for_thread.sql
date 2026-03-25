@@ -1,11 +1,17 @@
 -- Clean up all relevant tables to ensure a fresh state for each test.
 TRUNCATE TABLE public."User", public."Project", public."SharePermission", public."EmailThreadPermission", public."ProjectPermission", public."UserItemAccess" RESTART IDENTITY CASCADE;
 
+-- Create macro_user entries (must exist before User rows).
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'stripe_user1'),
+       ('a2222222-2222-2222-2222-222222222222', 'user2@test.com', 'user2@test.com', 'stripe_user2'),
+       ('a3333333-3333-3333-3333-333333333333', 'user3@test.com', 'user3@test.com', 'stripe_user3');
+
 -- Create users with different permission profiles.
-INSERT INTO public."User" ("id", "email")
-VALUES ('user-1', 'user1@test.com'), -- Has deep explicit access grants.
-       ('user-2', 'user2@test.com'), -- Has a single, lower-level explicit grant.
-       ('user-public-access-only', 'user3@test.com');
+INSERT INTO public."User" ("id", "email", "macro_user_id")
+VALUES ('user-1', 'user1@test.com', 'a1111111-1111-1111-1111-111111111111'), -- Has deep explicit access grants.
+       ('user-2', 'user2@test.com', 'a2222222-2222-2222-2222-222222222222'), -- Has a single, lower-level explicit grant.
+       ('user-public-access-only', 'user3@test.com', 'a3333333-3333-3333-3333-333333333333');
 -- Has no explicit grants, relies on public access.
 
 -- Create a nested project hierarchy: p-grandparent -> p-parent.

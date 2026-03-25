@@ -1,6 +1,9 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::channel_share_permission::{
+    UpdateChannelSharePermission, UpdateOperation,
+};
 use sqlx::{Pool, Postgres};
 
 use crate::domain::models::EditDocumentRepoArgs;
@@ -305,10 +308,12 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
         .await
         .unwrap();
 
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+
     // All 3 team members should have access rows
     let rows = sqlx::query!(
         r#"
-        SELECT "user_id", "access_level"::text as "access_level"
+        SELECT "user_id", "access_level"::text as "access_level", "granted_from_team_id"
         FROM "UserItemAccess"
         WHERE "item_id" = 'document-one' AND "item_type" = 'document'
         ORDER BY "user_id"
@@ -320,25 +325,28 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
 
     assert_eq!(rows.len(), 3);
 
-    // Owner row should still be 'owner' (not downgraded)
+    // Owner row should still be 'owner' (not downgraded) and have no team grant
     let owner_row = rows
         .iter()
         .find(|r| r.user_id == "macro|user@user.com")
         .unwrap();
     assert_eq!(owner_row.access_level, Some("owner".to_string()));
+    assert_eq!(owner_row.granted_from_team_id, None);
 
-    // Teammates should have 'comment' access
+    // Teammates should have 'comment' access with granted_from_team_id set
     let t1 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate1@user.com")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+    assert_eq!(t1.granted_from_team_id, Some(team_id));
 
     let t2 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate2@user.com")
         .unwrap();
     assert_eq!(t2.access_level, Some("comment".to_string()));
+    assert_eq!(t2.granted_from_team_id, Some(team_id));
 }
 
 #[sqlx::test(
@@ -497,6 +505,8 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
 async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
+    let team_id = uuid::Uuid::parse_str("a0000000-0000-0000-0000-000000000001").unwrap();
+
     // A teammate (not the owner) triggers the share — should still find the
     // same team and share with all members including the owner.
     repo.share_with_team("macro|teammate1@user.com", "document-one")
@@ -505,7 +515,7 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
 
     let rows = sqlx::query!(
         r#"
-        SELECT "user_id", "access_level"::text as "access_level"
+        SELECT "user_id", "access_level"::text as "access_level", "granted_from_team_id"
         FROM "UserItemAccess"
         WHERE "item_id" = 'document-one' AND "item_type" = 'document'
         ORDER BY "user_id"
@@ -529,10 +539,137 @@ async fn test_share_with_team_called_by_teammate(pool: Pool<Postgres>) {
         .find(|r| r.user_id == "macro|teammate1@user.com")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+    assert_eq!(t1.granted_from_team_id, Some(team_id));
 
     let t2 = rows
         .iter()
         .find(|r| r.user_id == "macro|teammate2@user.com")
         .unwrap();
     assert_eq!(t2.access_level, Some("comment".to_string()));
+    assert_eq!(t2.granted_from_team_id, Some(team_id));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let channel_id = "c0000000-0000-0000-0000-000000000001";
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            is_public: None,
+            public_access_level: None,
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: channel_id.to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+    })
+    .await
+    .unwrap();
+
+    // Verify ChannelSharePermission was created
+    let csp_count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM "ChannelSharePermission"
+        WHERE "channel_id" = $1::text
+        "#,
+        channel_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        csp_count, 1,
+        "Should have created one ChannelSharePermission"
+    );
+
+    // Verify UserItemAccess rows were created for all 3 active channel participants
+    let channel_uuid = uuid::Uuid::parse_str(channel_id).unwrap();
+
+    let access_rows = sqlx::query!(
+        r#"
+        SELECT "user_id", "access_level"::text as "access_level", "granted_from_channel_id"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one'
+          AND "item_type" = 'document'
+          AND "granted_from_channel_id" = $1
+        ORDER BY "user_id"
+        "#,
+        channel_uuid,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        access_rows.len(),
+        3,
+        "All 3 channel participants should have UserItemAccess rows"
+    );
+
+    for row in &access_rows {
+        assert_eq!(row.access_level, Some("view".to_string()));
+        assert_eq!(row.granted_from_channel_id, Some(channel_uuid));
+    }
+
+    let user_ids: Vec<&str> = access_rows.iter().map(|r| r.user_id.as_str()).collect();
+    assert!(user_ids.contains(&"macro|user@user.com"));
+    assert!(user_ids.contains(&"macro|teammate1@user.com"));
+    assert!(user_ids.contains(&"macro|teammate2@user.com"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let channel_id = "c0000000-0000-0000-0000-000000000001";
+    let channel_uuid = uuid::Uuid::parse_str(channel_id).unwrap();
+
+    let make_args = || EditDocumentRepoArgs {
+        document_id: "document-one".to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            is_public: None,
+            public_access_level: None,
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: channel_id.to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+    };
+
+    // Call twice — second call should upsert without duplicates
+    repo.edit_document(make_args()).await.unwrap();
+    repo.edit_document(make_args()).await.unwrap();
+
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM "UserItemAccess"
+        WHERE "item_id" = 'document-one'
+          AND "item_type" = 'document'
+          AND "granted_from_channel_id" = $1
+        "#,
+        channel_uuid,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        count, 3,
+        "Should still have exactly 3 rows after idempotent upsert"
+    );
 }

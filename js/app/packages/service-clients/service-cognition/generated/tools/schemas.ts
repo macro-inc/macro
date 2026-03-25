@@ -324,8 +324,9 @@ export const SearchToolResponse = z.object({
 export const CreateDocument = z
   .object({
     documentName: z.string(),
-    fileContentBytes: z.array(z.number().int().gte(0).lte(255)),
+    fileContent: z.string(),
     fileExtension: z.string(),
+    isTask: z.boolean().default(false),
   })
   .strict();
 
@@ -482,7 +483,9 @@ export const ReadThread = z
       'project',
     ]),
     ids: z.array(z.string()),
-    messagesSince: z.union([z.string().datetime({ offset: true }), z.null()]),
+    messagesSince: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .default(null),
   })
   .strict();
 

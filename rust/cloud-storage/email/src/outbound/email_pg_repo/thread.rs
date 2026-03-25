@@ -11,12 +11,13 @@ pub(super) async fn thread_by_id(
     pool: &PgPool,
     thread_id: Uuid,
 ) -> Result<Option<ThreadRow>, sqlx::Error> {
-    let row = sqlx::query_as!(
+    let row: Option<DbThreadRow> = sqlx::query_as!(
         DbThreadRow,
         r#"
         SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                t.latest_inbound_message_ts, t.latest_outbound_message_ts,
-               t.latest_non_spam_message_ts, t.created_at, t.updated_at
+               t.latest_non_spam_message_ts, t.created_at, t.updated_at,
+               t.project_id
         FROM email_threads t
         WHERE t.id = $1
         "#,
@@ -354,6 +355,48 @@ async fn update_db_thread_metadata(
     .await?;
 
     Ok(())
+}
+
+/// Update the project assignment for a thread. Returns `false` if the thread was not found.
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn update_thread_project(
+    pool: &PgPool,
+    thread_id: Uuid,
+    project_id: Option<&str>,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE email_threads
+        SET project_id = $2, updated_at = NOW()
+        WHERE id = $1
+        "#,
+        thread_id,
+        project_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// Get the current project_id for a thread.
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn get_thread_project_id(
+    pool: &PgPool,
+    thread_id: Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<Option<String>> = sqlx::query_scalar!(
+        r#"
+        SELECT project_id
+        FROM email_threads
+        WHERE id = $1
+        "#,
+        thread_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.flatten())
 }
 
 /// Upsert user history for thread interaction tracking.

@@ -1,19 +1,21 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_middleware::tracking::ClientIp;
 
 use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
 use fusionauth::error::FusionAuthClientError;
+use macro_user_id::user_id::MacroUserId;
 use model::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
-    response::EmptyResponse,
-    tracking::IPContext,
+    response::{EmptyResponse, ErrorResponse},
 };
+use referral::domain::{models::ReferralCode, ports::ReferralService};
 
 /// Initiates a passwordless login
 #[utoipa::path(
@@ -28,10 +30,10 @@ use model::{
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     extract::Json(req): extract::Json<PasswordlessRequest>,
 ) -> Result<Response, Response> {
     tracing::info!("passwordless_login_request");
@@ -100,7 +102,7 @@ pub async fn handler(
                         email: (&lowercase_email).into(),
                         password: generate_random_password().into(),
                         username: None,
-                    }, true)
+                    }, true, ip_context.origin_ip())
                     .await
                     .map_err(|e| {
                         tracing::error!(error=?e, email=%lowercase_email, "unable to create user");
@@ -108,6 +110,34 @@ pub async fn handler(
                     })?;
 
                     tracing::trace!(fusionauth_user_id, "created new fusionauth user");
+
+                    if let Some(referral_code) = req.referral_code {
+                        tracing::trace!(referral_code, "referral code found");
+                        let macro_user_id = format!("macro|{}", req.email.to_lowercase());
+                        let referrerd_user_id = MacroUserId::parse_from_str(&macro_user_id)
+                            .map_err(|_| {
+                                (
+                                    StatusCode::BAD_REQUEST,
+                                    Json(ErrorResponse {
+                                        message: "invalid macro user id",
+                                    }),
+                                )
+                                    .into_response()
+                            })?
+                            .lowercase();
+
+                        // initiates tracking the referral
+                        let _ = ctx
+                            .referral_service
+                            .track_referral(
+                                &referrerd_user_id,
+                                &ReferralCode(referral_code.clone()),
+                            )
+                            .await
+                            .inspect_err(|e| {
+                                tracing::error!(error=?e, "unable to track referral");
+                            });
+                    }
                 }
                 _ => {
                     tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");

@@ -333,3 +333,27 @@ pub(crate) async fn update_message_starred_status_batch(
 
     Ok(())
 }
+
+#[tracing::instrument(skip(pool), err)]
+pub(crate) async fn delete_scheduled_messages_batch(
+    pool: &PgPool,
+    message_ids: &[Uuid],
+    link_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    if message_ids.is_empty() {
+        return Ok(());
+    }
+
+    sqlx::query!(
+        r#"
+        DELETE FROM email_scheduled_messages
+        WHERE message_id = ANY($1) AND link_id = $2 AND sent = false
+        "#,
+        message_ids,
+        link_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}

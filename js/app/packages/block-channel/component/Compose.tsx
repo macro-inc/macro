@@ -15,6 +15,7 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
+import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { handleFileUpload } from '../utils/inputAttachments';
@@ -152,6 +153,15 @@ export function ChannelCompose() {
               triedToSubmit={triedToSubmit}
               focusOnMount
             />
+            <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
+              <InfoIcon class="shrink-0 size-8 mr-4 fill-edge" />
+              <p class="text-xs">
+                Send a Macro message to anyone. Share your files, tasks, emails;
+                you can <code>@mention</code> anything. If your message
+                recipient is not already a Macro user, they will receive an
+                email letting them know they received a message on Macro.
+              </p>
+            </div>
           </div>
         </div>
         <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">

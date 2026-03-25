@@ -1,5 +1,7 @@
 //! Contains the domain logic for teams
 
+use std::collections::HashSet;
+
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
@@ -8,6 +10,23 @@ use crate::domain::model::{
     RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
     TeamMember, TeamRole, TeamWithMembers,
 };
+
+/// The TeamChannelsRepository defines a set of actions related to team channels
+pub trait TeamChannelsRepository: Clone + Send + Sync + 'static {
+    /// Adds a team member to all team channels
+    fn add_team_member_to_channels(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Removes a team member from all team channels
+    fn remove_team_member_from_channels(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+}
 
 /// The TeamRepository defines a set of actions to perform on teams data
 pub trait TeamRepository: Clone + Send + Sync + 'static {
@@ -269,4 +288,12 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamRole>, TeamError>> + Send;
+
+    /// Gets the team users permissions
+    fn get_team_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<
+        Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
+    > + Send;
 }

@@ -661,6 +661,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "referral_code",
+            "in": "query",
+            "description": "**OPTIONAL**. If the user opened a link with a referral code.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -909,9 +918,9 @@
           "400": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -919,9 +928,9 @@
           "401": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -929,9 +938,9 @@
           "500": {
             "description": "",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1082,6 +1091,89 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/referral/code": {
+      "get": {
+        "tags": ["referral"],
+        "summary": "Handler for `GET /referral-code`.",
+        "description": "Returns the authenticated user's referral code.",
+        "operationId": "get_referral_code",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/referral/send": {
+      "post": {
+        "tags": ["referral"],
+        "summary": "Handler for `POST /referral/send`.",
+        "description": "Sends a referral code via email to a user",
+        "operationId": "send_referral_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInviteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2933,9 +3025,17 @@
             "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
+          "gaClientId": {
+            "type": ["string", "null"],
+            "description": "Google Analytics client ID for conversion tracking"
+          },
           "successUrl": {
             "type": "string",
             "description": "The URL to redirect to on successful checkout"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/StripeProductTier",
+            "description": "The tier, defaults to haiku"
           }
         }
       },
@@ -3035,7 +3135,8 @@
           "tutorialComplete",
           "hasChromeExt",
           "hasTrialed",
-          "aiDataConsent"
+          "aiDataConsent",
+          "referralCode"
         ],
         "properties": {
           "aiDataConsent": {
@@ -3079,6 +3180,10 @@
               "type": "string"
             },
             "description": "The permissions the user has"
+          },
+          "referralCode": {
+            "type": "string",
+            "description": "The referral code for the user"
           },
           "tutorialComplete": {
             "type": "boolean",
@@ -3199,6 +3304,10 @@
           "redirect_uri": {
             "type": "string",
             "description": "The redirect uri to redirect to after login"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "The referral code"
           }
         }
       },
@@ -3324,6 +3433,17 @@
           }
         }
       },
+      "SendInviteBody": {
+        "type": "object",
+        "description": "The body which is used to describe the recipient email",
+        "required": ["recipient"],
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "the recipient of the referral email"
+          }
+        }
+      },
       "SsoRequiredResponse": {
         "type": "object",
         "required": ["idp_id"],
@@ -3333,6 +3453,10 @@
             "description": "The idp_id you need to perform sso login with."
           }
         }
+      },
+      "StripeProductTier": {
+        "type": "string",
+        "enum": ["haiku", "sonnet", "opus"]
       },
       "StripeSessionResponse": {
         "type": "object",
@@ -3426,11 +3550,16 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["user_id", "role"],
+        "required": ["team_id", "user_id", "role"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The role of the team member"
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team"
           },
           "user_id": {
             "type": "string",

@@ -20,6 +20,7 @@ const createDocumentMentionXML = (documentId: string) => {
     }
     return jsonToXML('m-document-mention', {
       documentId,
+      blockName: 'md',
       documentName: '',
       blockParams: {},
     });
@@ -151,9 +152,12 @@ const getMdNodeCitationInfo = (documentId: string, nodeId: string) => {
   const blockParams = {
     [MD_URL_PARAMS.nodeId]: nodeId,
   };
+  const history = getHistoryItems();
+  const item = history.find((item) => item.id === documentId);
+  const blockName = item ? (itemToBlockName(item) ?? 'md') : 'md';
   return jsonToXML('m-document-mention', {
     documentId,
-    blockName: 'md',
+    blockName,
     documentName: '',
     blockParams,
     collapsed: true,

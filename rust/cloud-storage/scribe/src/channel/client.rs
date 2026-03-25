@@ -73,6 +73,7 @@ impl ChannelClient {
                 model::comms::ChannelType::DirectMessage => {
                     models_comms::channel::ChannelType::DirectMessage
                 }
+                model::comms::ChannelType::Team => models_comms::channel::ChannelType::Team,
             },
         })
     }

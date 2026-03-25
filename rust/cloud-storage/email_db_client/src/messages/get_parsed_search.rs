@@ -71,6 +71,92 @@ pub async fn get_parsed_search_message_by_id(
     )))
 }
 
+/// Get parsed search messages for multiple threads at once.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_parsed_search_messages_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> anyhow::Result<Vec<message::ParsedSearchMessage>> {
+    let mut conn = pool.acquire().await?;
+
+    let db_messages: Vec<db::message::Message> = sqlx::query_as!(
+        db::message::Message,
+        r#"
+        SELECT
+            id,
+            provider_id,
+            global_id,
+            thread_id,
+            provider_thread_id,
+            replying_to_id,
+            link_id,
+            provider_history_id,
+            internal_date_ts,
+            snippet,
+            size_estimate,
+            subject,
+            from_name,
+            from_contact_id,
+            sent_at,
+            has_attachments,
+            is_read,
+            is_starred,
+            is_sent,
+            is_draft,
+            headers_jsonb,
+            created_at,
+            updated_at,
+            body_text as body_text,
+            body_html_sanitized as body_html_sanitized,
+            NULL::TEXT as body_macro
+        FROM email_messages
+        WHERE thread_id = ANY($1)
+        ORDER BY internal_date_ts DESC NULLS LAST
+        "#,
+        thread_ids
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    if db_messages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
+
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids).await?;
+    let recipients_map =
+        contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
+    let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+
+    let tasks: Vec<_> = db_messages
+        .into_iter()
+        .map(|message| {
+            let senders_map = &senders_map;
+            let recipients_map = &recipients_map;
+            let labels_map = &labels_map;
+
+            async move {
+                let sender = message
+                    .from_contact_id
+                    .and_then(|id| senders_map.get(&id).cloned());
+                let recipients = recipients_map.get(&message.id).cloned().unwrap_or_default();
+                let labels = labels_map.get(&message.id).cloned().unwrap_or_default();
+
+                let service_message = db_to_service::map_attachmentless_db_message_to_service(
+                    message, sender, recipients, None, labels,
+                );
+
+                ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message))
+            }
+        })
+        .collect();
+
+    let result = join_all(tasks).await;
+
+    Ok(result)
+}
+
 /// get a paginated number of messages for a given thread.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_paginated_parsed_search_messages_by_thread_id(

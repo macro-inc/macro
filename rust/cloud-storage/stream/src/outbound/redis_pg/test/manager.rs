@@ -310,7 +310,7 @@ async fn test_unsub_during_stream() {
 
     // Unsubscribe via the manager
     manager
-        .unsubscribe(sender_id.into())
+        .unsubscribe(sender_id.into(), entity_id.into())
         .await
         .expect("unsubscribe should succeed");
 
@@ -356,7 +356,7 @@ async fn test_unsub_no_items_after() {
 
     // Unsubscribe
     manager
-        .unsubscribe(sender_id.into())
+        .unsubscribe(sender_id.into(), entity_id.into())
         .await
         .expect("unsubscribe should succeed");
 
@@ -402,7 +402,7 @@ async fn test_connection_closed() {
         .await
         .expect("subscribe should succeed");
     manager
-        .unsubscribe("sender_1".into())
+        .unsubscribe("sender_1".into(), entity_id.into())
         .await
         .expect("unsubscribe should succeed");
 

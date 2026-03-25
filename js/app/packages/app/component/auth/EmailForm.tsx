@@ -6,13 +6,7 @@ import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';
 import { platformFetch } from 'core/util/platformFetch';
-import {
-  createEffect,
-  createSignal,
-  type Setter,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -60,6 +54,9 @@ export const sendEmailCode = action(async (formData: FormData) => {
     return 'LoggedIn';
   }
 
+  const url = new URL(window.location.href);
+  const referral_code = url.searchParams.get('referral_code');
+
   const response = await platformFetch(
     `${SERVER_HOSTS['auth-service']}/login/passwordless`,
     {
@@ -68,6 +65,7 @@ export const sendEmailCode = action(async (formData: FormData) => {
       body: JSON.stringify({
         redirect_uri: REDIRECT_URI,
         email,
+        ...(referral_code && { referral_code }),
       }),
     }
   );
@@ -79,16 +77,18 @@ export const sendEmailCode = action(async (formData: FormData) => {
   if (response.status === 202) {
     const body = await response.json();
     const idp_id = body.idp_id;
-    // form dumb
-    const urlEncodedEmail = encodeURIComponent((email ?? '').toString());
-    window.location.href = `${SERVER_HOSTS['auth-service']}/login/sso?idp_id=${idp_id}&login_hint=${urlEncodedEmail}`;
+    const ssoUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
+    ssoUrl.searchParams.set('idp_id', idp_id);
+    ssoUrl.searchParams.set('login_hint', (email ?? '').toString());
+    if (referral_code) ssoUrl.searchParams.set('referral_code', referral_code);
+    window.location.href = ssoUrl.toString();
     return false; // passwordless login flow is not reached
   }
 
   return true;
 }, 'passwordless-login');
 
-export function useResetEmailCode(setStage: Setter<Stage>) {
+export function useResetEmailCode(setStage: (next: Stage) => void) {
   const submission = useSubmission(sendEmailCode);
   return createCallback(() => {
     submission.clear();
@@ -96,7 +96,7 @@ export function useResetEmailCode(setStage: Setter<Stage>) {
   });
 }
 
-export function EmailForm(props: { setStage: Setter<Stage> }) {
+export function EmailForm(props: { setStage: (next: Stage) => void }) {
   const [isPasswordLogin, setIsPasswordLogin] = createSignal(false);
   const submission = useSubmission(sendEmailCode);
   const [searchParams] = useSearchParams();
@@ -125,8 +125,8 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
       <form action={sendEmailCode} method="post" class="m-0">
         <div
           class={cn(
-            'flex items-center justify-center text-center py-5 px-10 border border-dashed border-ink border-t-0',
-            virtualKeyboardVisible() && 'border-t'
+            'flex items-center justify-center text-center py-4 px-6 border-t border-b border-edge-muted',
+            virtualKeyboardVisible() && 'border-t border-edge-muted'
           )}
         >
           <Input
@@ -138,7 +138,7 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
         </div>
 
         <Show when={isPasswordLogin()}>
-          <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer">
+          <div class="grid items-center justify-center py-4 px-6 border-b border-edge-muted">
             <Input
               required={isPasswordLogin()}
               placeholder="Password"
@@ -148,9 +148,9 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
           </div>
         </Show>
 
-        <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
+        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             onClick={() => {
               if (isTouchDevice()) return;
               handleBack();
@@ -169,7 +169,7 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
           </button>
 
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             type="submit"
             disabled={submission.pending}
             onClick={(e) => {

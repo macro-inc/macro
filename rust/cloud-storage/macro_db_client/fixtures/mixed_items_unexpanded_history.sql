@@ -10,8 +10,12 @@ SET session_replication_role = 'replica';
 INSERT INTO public."Organization" ("id", "name", "status")
 VALUES (1, 'Test Organization', 'PILOT')
 ON CONFLICT DO NOTHING;
-INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
-VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 1)
+
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+VALUES ('a1111111-1111-1111-1111-111111111111', 'user@user.com', 'user@user.com', 'stripe_id');
+
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 1, 'a1111111-1111-1111-1111-111111111111')
 ON CONFLICT DO NOTHING;
 INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
 VALUES ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Test Project', 'macro|user@user.com', '2023-01-17 12:00:00', '2023-01-17 12:00:00');

@@ -3,15 +3,9 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { action, useAction, useSubmission } from '@solidjs/router';
-import {
-  createEffect,
-  createSignal,
-  onCleanup,
-  type Setter,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
-import { ErrorMsg, Input, identifyUser, Stage } from './Shared';
+import { ErrorMsg, Input, Stage } from './Shared';
 import { cn } from '@ui/utils/classname';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
@@ -34,19 +28,12 @@ const verifyCode = action(async (formData: FormData) => {
     throw new Error('Unable to perform verification.');
   }
 
-  await identifyUser();
-
-  const url = new URL(window.location.href);
-  const searchParams = new URLSearchParams(url.search);
-  const referral = searchParams.get('referral');
-  if (referral) window.location.href = `/app?referral=${referral}`;
-
   return true;
 }, 'verify-code');
 
 const RESEND_TIMER = 45;
 
-export function VerifyForm(props: { setStage: Setter<Stage> }) {
+export function VerifyForm(props: { setStage: (next: Stage) => void }) {
   const [resendError, setResendError] = createSignal<string>();
   const [showResendCode, setShowResendCode] = createSignal(false);
   const [resendTimer, setResendTimer] = createSignal(RESEND_TIMER);
@@ -96,7 +83,14 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
   };
 
   createEffect(() => {
-    if (submission.result) props.setStage(Stage.Done);
+    if (submission.result) {
+      props.setStage(Stage.Done);
+
+      const url = new URL(window.location.href);
+      const searchParams = new URLSearchParams(url.search);
+      const referral = searchParams.get('referral');
+      if (referral) window.location.href = `/app?referral=${referral}`;
+    }
   });
 
   const resetEmailCode = useResetEmailCode(props.setStage);
@@ -107,18 +101,21 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
       <form ref={formEl} action={verifyCode} method="post" class="mt-1">
         <div
           class={cn(
-            'grid items-center justify-center pt-5 pr-10 pb-5 pl-10 border border-dashed border-ink border-t-0 max-w-full',
-            virtualKeyboardVisible() && 'border-t'
+            'flex items-center justify-center py-4 px-6 border-b border-edge-muted',
+            virtualKeyboardVisible() && 'border-t border-edge-muted'
           )}
         >
-          <label for="one-time-code" class="block text-sm font-medium text-ink">
+          <label
+            for="one-time-code"
+            class="block text-sm text-ink-muted text-center"
+          >
             A 6-digit code has been sent to
             <br />
-            <span class="underline">{email()}</span>
+            <span class="underline text-ink">{email()}</span>
           </label>
         </div>
 
-        <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
+        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <Input
             id="one-time-code"
             type="text"
@@ -148,9 +145,9 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
           </button>
         </div>
 
-        <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
+        <div class="border-b border-edge-muted py-4 px-6 flex flex-none justify-between items-center">
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             onClick={resetEmailCode}
             type="button"
           >
@@ -159,7 +156,7 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
           </button>
 
           <button
-            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
+            class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] gap-1.5 items-center w-min"
             type="submit"
             disabled={submission.pending}
           >

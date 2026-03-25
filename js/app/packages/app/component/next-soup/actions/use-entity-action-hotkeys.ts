@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { EntityData } from '@entity';
+import { isTaskEntity, type EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,
@@ -16,6 +16,13 @@ import {
 import { isShareableEntityType } from '@app/component/global-share-modal/GlobalShareModal';
 import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
+import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
+import type {
+  Property,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
@@ -26,12 +33,14 @@ type UseEntityActionHotkeysOptions = {
   soup: SoupState;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
+  /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
+  getEntityFallback?: () => EntityData | undefined;
 };
 
 export const useEntityActionHotkeys = (
   options: UseEntityActionHotkeysOptions
 ) => {
-  const { scopeId, soup, splitHandle, condition } = options;
+  const { scopeId, soup, splitHandle, condition, getEntityFallback } = options;
 
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -69,7 +78,15 @@ export const useEntityActionHotkeys = (
     }
 
     const focused = soup.focus.item();
-    return focused ? [focused] : [];
+    if (focused) return [focused];
+
+    // Fallback: use provided entity getter (e.g., for block views)
+    if (getEntityFallback) {
+      const entity = getEntityFallback();
+      if (entity) return [entity];
+    }
+
+    return [];
   };
 
   const openNextEntity = (entity: EntityData) => {
@@ -77,6 +94,24 @@ export const useEntityActionHotkeys = (
     const handleContent = splitHandle.content().type;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, { splitHandle });
+  };
+
+  // Property editor setup
+  const allProperties = useAllProperties();
+  const propertyById = (propertyId: string) =>
+    allProperties().find(({ id }) => id === propertyId);
+  const status = () => propertyById(SYSTEM_PROPERTY_IDS.STATUS);
+  const priority = () => propertyById(SYSTEM_PROPERTY_IDS.PRIORITY);
+  const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
+
+  const openPropertyEditorIfSelected = (
+    mode: 'selector' | 'direct' = 'selector',
+    property?: Property | PropertyDefinitionDomain
+  ) => {
+    const entities = getEntitiesForAction();
+    if (entities.length > 0) {
+      openPropertyEditor(entities, mode, property);
+    }
   };
 
   const group = createHotkeyGroup();
@@ -275,5 +310,95 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
+  // Open property selector - shift+cmd+o
+  registerHotkey({
+    hotkey: ['shift+cmd+o'],
+    hotkeyToken: TOKENS.entity.action.properties,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: 'Open property editor',
+    keyDownHandler: () => {
+      openPropertyEditorIfSelected('selector');
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(isTaskEntity);
+    },
+    scopeId,
+  }).withGroup(group);
+
+  // Set priority - shift+cmd+p
+  registerHotkey({
+    hotkey: ['shift+cmd+p'],
+    hotkeyToken: TOKENS.entity.action.priority,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: 'Set priority',
+    keyDownHandler: () => {
+      openPropertyEditorIfSelected('direct', priority());
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 &&
+        entities.every(isTaskEntity) &&
+        Boolean(priority())
+      );
+    },
+    scopeId,
+  }).withGroup(group);
+
+  // Set assignee - shift+cmd+a
+  registerHotkey({
+    hotkey: ['shift+cmd+a'],
+    hotkeyToken: TOKENS.entity.action.assignee,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: 'Set assignee',
+    keyDownHandler: () => {
+      openPropertyEditorIfSelected('direct', assignees());
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 &&
+        entities.every(isTaskEntity) &&
+        Boolean(assignees())
+      );
+    },
+    scopeId,
+  }).withGroup(group);
+
+  // Set status - shift+cmd+s
+  registerHotkey({
+    hotkey: ['shift+cmd+s'],
+    hotkeyToken: TOKENS.entity.action.status,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: 'Set status',
+    keyDownHandler: () => {
+      openPropertyEditorIfSelected('direct', status());
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 && entities.every(isTaskEntity) && Boolean(status())
+      );
+    },
+    scopeId,
+  }).withGroup(group);
+
   onCleanup(() => group.dispose());
+
+  return {
+    openPropertyEditor: openPropertyEditorIfSelected,
+  };
 };

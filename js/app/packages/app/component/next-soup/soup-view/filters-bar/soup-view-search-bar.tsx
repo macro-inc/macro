@@ -13,13 +13,14 @@ type SearchbarVariant = 'filled' | 'secondary';
 interface SoupSearchbarProps {
   variant?: SearchbarVariant;
   autoFocus?: boolean;
+  onDismiss?: () => void;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
     'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-transparent focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
-    'bg-transparent text-ink-muted border-edge-muted hover:bg-ink/5 hover:text-ink focus-within:bg-ink/5 focus-within:text-ink',
+    'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
@@ -109,6 +110,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               ) {
                 e.preventDefault();
                 e.currentTarget.blur();
+                if (e.key === 'Escape') props.onDismiss?.();
               }
             }}
             class="peer p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default w-full"
@@ -119,12 +121,12 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               Search
             </span>
           </Show>
-          <Show when={!searchText()}>
+          <Show when={!searchText() && !props.onDismiss}>
             <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px peer-focus:hidden">
               <Hotkey shortcut="cmd+f" />
             </div>
           </Show>
-          <Show when={searchText()}>
+          <Show when={searchText() || props.onDismiss}>
             <button
               type="button"
               class="ml-auto size-4 shrink-0 hover:opacity-60"
@@ -132,6 +134,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setSearchText('');
+                props.onDismiss?.();
               }}
             >
               <XIcon class="size-4" />

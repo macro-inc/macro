@@ -461,6 +461,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     Ok(TeamMember {
                         user_id,
                         role: row.team_role,
+                        team_id: *team_id,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -528,6 +529,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let team_member: TeamMember = TeamMember {
             user_id: user_id.clone().into_owned(),
             role: team_member.role,
+            team_id: invite.team_id,
         };
 
         Ok(team_member)
@@ -577,6 +579,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     Ok(TeamMember {
                         user_id,
                         role: row.team_role,
+                        team_id: *team_id,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -662,6 +665,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map(|id| TeamMember {
                         user_id: id.into_owned(),
                         role: row.team_role,
+                        team_id: *team_id,
                     })
                     .ok()
             })

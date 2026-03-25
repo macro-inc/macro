@@ -14,6 +14,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +59,7 @@ pub struct Channel {
     pub name: Option<String>,
     pub channel_type: ChannelType,
     pub org_id: Option<OrganizationId>,
+    pub team_id: Option<uuid::Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub owner_id: MacroUserIdStr<'static>,

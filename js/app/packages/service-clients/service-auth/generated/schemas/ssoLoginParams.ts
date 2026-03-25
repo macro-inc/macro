@@ -26,4 +26,8 @@ export type SsoLoginParams = {
    * **OPTIONAL**. If the authentication request is from a mobile device.
    */
   is_mobile: string;
+  /**
+   * **OPTIONAL**. If the user opened a link with a referral code.
+   */
+  referral_code: string;
 };

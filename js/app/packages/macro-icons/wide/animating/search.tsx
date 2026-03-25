@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSearchIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const clipId = createUniqueId();
   return (
     <svg
@@ -11,7 +14,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-search-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-search-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated search icon</title>*/}
       <defs>
@@ -25,7 +28,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
           .magnifying-glass {
             transform-origin: 5.25px 5.25px;
             transition: transform 0.4s ease;
-            transform: rotate(-45deg);
+            transform: translate(3px, 0.75px) rotate(-45deg);
 
             .line-west {
               transform-origin: -0.25px 5px;
@@ -49,6 +52,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
               transition: transform 0.4s ease;
               transform: translate(0, 0);
             }
+
           }
         }
         .animated-search-icon.animating {
@@ -67,6 +71,7 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
             .line-south {
               transform: translate(0, -2px);
             }
+
           }
         }
       `}</style>
@@ -122,12 +127,6 @@ export const AnimatedSearchIcon = (props: { triggerAnimation?: boolean }) => {
           stroke-linecap="round"
         />
       </g>
-
-      {/* Handle */}
-      {/* <path
-        class="handle"
-        d="M11.25,12c-.19,0-.38-.07-.53-.22l-2.5-2.5c-.29-.29-.29-.77,0-1.06s.77-.29,1.06,0l2.5,2.5c.29.29.29.77,0,1.06-.15.15-.34.22-.53.22Z"
-      /> */}
 
       {/* Reflection shine effect - clipped to the glass circle */}
       <g clip-path={`url(#${clipId})`}>

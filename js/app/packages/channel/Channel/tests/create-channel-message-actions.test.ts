@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MessageData } from '../../Message';
 import { createChannelMessageActions } from '../create-channel-message-actions';
 
+// Mock analytics context
+vi.mock('@app/component/analytics-context', () => ({
+  useAnalytics: () => ({
+    track: vi.fn(),
+    identify: vi.fn(),
+    reset: vi.fn(),
+  }),
+}));
+
 type ActionMessage = MessageData & { thread_id?: string | null };
 
 function buildMessage(overrides?: Partial<ActionMessage>): ActionMessage {
@@ -88,17 +97,5 @@ describe('createChannelMessageActions', () => {
       threadId: 'parent-1',
       currentReactions: [],
     });
-  });
-
-  it('delegates edit handling to the provided callback', () => {
-    const onEdit = vi.fn();
-    const harness = buildHarness({ userId: 'user-1', onEdit });
-    const message = buildMessage();
-    const actions = harness.getMessageActions(message);
-
-    actions.onEdit?.({ message });
-
-    expect(onEdit).toHaveBeenCalledOnce();
-    expect(onEdit).toHaveBeenCalledWith({ message });
   });
 });

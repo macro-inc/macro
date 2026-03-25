@@ -35,6 +35,8 @@ impl std::fmt::Display for TeamRole {
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct TeamMember<'a> {
+    /// The id of the team
+    pub team_id: uuid::Uuid,
     /// The user id of the team member
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub user_id: MacroUserIdStr<'a>,

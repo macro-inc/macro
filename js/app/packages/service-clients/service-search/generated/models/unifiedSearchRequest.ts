@@ -10,8 +10,6 @@ import type { SearchOn } from './searchOn';
 import type { UnifiedSearchIndex } from './unifiedSearchIndex';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 import type { UnifiedSearchRequestFilters } from './unifiedSearchRequestFilters';
-import type { UnifiedSearchRequestQuery } from './unifiedSearchRequestQuery';
-import type { UnifiedSearchRequestTerms } from './unifiedSearchRequestTerms';
 
 export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;
@@ -20,9 +18,8 @@ export interface UnifiedSearchRequest {
   include?: UnifiedSearchIndex[];
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
-  query?: UnifiedSearchRequestQuery;
+  /** The search query string. Must be at least 3 characters. */
+  query: string;
   /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
-  /** Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content. */
-  terms?: UnifiedSearchRequestTerms;
 }

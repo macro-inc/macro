@@ -38,6 +38,7 @@ import type {
   PutProfilePictureParams,
   PutUserNameParams,
   ResendFusionauthVerifyUserEmailRequest,
+  SendInviteBody,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -1075,17 +1076,17 @@ export type oauthRedirectResponse200 = {
 };
 
 export type oauthRedirectResponse400 = {
-  data: string;
+  data: ErrorResponse;
   status: 400;
 };
 
 export type oauthRedirectResponse401 = {
-  data: string;
+  data: ErrorResponse;
   status: 401;
 };
 
 export type oauthRedirectResponse500 = {
-  data: string;
+  data: ErrorResponse;
   status: 500;
 };
 
@@ -1306,6 +1307,119 @@ export const getUserPermissions = async (
     status: res.status,
     headers: res.headers,
   } as getUserPermissionsResponse;
+};
+
+/**
+ * Returns the authenticated user's referral code.
+ * @summary Handler for `GET /referral-code`.
+ */
+export type getReferralCodeResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type getReferralCodeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getReferralCodeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getReferralCodeResponseSuccess = getReferralCodeResponse200 & {
+  headers: Headers;
+};
+export type getReferralCodeResponseError = (
+  | getReferralCodeResponse401
+  | getReferralCodeResponse500
+) & {
+  headers: Headers;
+};
+
+export type getReferralCodeResponse =
+  | getReferralCodeResponseSuccess
+  | getReferralCodeResponseError;
+
+export const getGetReferralCodeUrl = () => {
+  return `/referral/code`;
+};
+
+export const getReferralCode = async (
+  options?: RequestInit
+): Promise<getReferralCodeResponse> => {
+  const res = await fetch(getGetReferralCodeUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getReferralCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getReferralCodeResponse;
+};
+
+/**
+ * Sends a referral code via email to a user
+ * @summary Handler for `POST /referral/send`.
+ */
+export type sendReferralCodeResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type sendReferralCodeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendReferralCodeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendReferralCodeResponseSuccess = sendReferralCodeResponse204 & {
+  headers: Headers;
+};
+export type sendReferralCodeResponseError = (
+  | sendReferralCodeResponse401
+  | sendReferralCodeResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendReferralCodeResponse =
+  | sendReferralCodeResponseSuccess
+  | sendReferralCodeResponseError;
+
+export const getSendReferralCodeUrl = () => {
+  return `/referral/send`;
+};
+
+export const sendReferralCode = async (
+  sendInviteBody: SendInviteBody,
+  options?: RequestInit
+): Promise<sendReferralCodeResponse> => {
+  const res = await fetch(getSendReferralCodeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendInviteBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendReferralCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendReferralCodeResponse;
 };
 
 /**

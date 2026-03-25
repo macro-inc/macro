@@ -32,24 +32,6 @@ impl Notification for BlockedNotification {
     const TYPE_NAME: &'static str = "blocked_notification";
 }
 
-/// An invite notification that should be sent immediately (single send).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct InviteNotification {
-    workspace_name: String,
-}
-
-impl Notification for InviteNotification {
-    const TYPE_NAME: &'static str = "invite_notification";
-}
-
-/// A workspace invite notification for testing multiple invite types.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct WorkspaceInviteNotification;
-
-impl Notification for WorkspaceInviteNotification {
-    const TYPE_NAME: &'static str = "workspace_invite_notification";
-}
-
 // ============================================================================
 // Mock Implementations
 // ============================================================================
@@ -146,6 +128,49 @@ impl PushNotificationChecker for MockPushNotificationChecker {
     }
 }
 
+/// Mock digest batcher that tracks calls.
+struct MockDigestBatcher {
+    call_count: Arc<std::sync::atomic::AtomicUsize>,
+    should_error: bool,
+}
+
+impl MockDigestBatcher {
+    fn new() -> (Self, Arc<std::sync::atomic::AtomicUsize>) {
+        let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        (
+            Self {
+                call_count: Arc::clone(&call_count),
+                should_error: false,
+            },
+            call_count,
+        )
+    }
+}
+
+impl DigestBatcher for MockDigestBatcher {
+    fn add_to_digest(
+        &self,
+        _notification: &UserNotificationRow<serde_json::Value>,
+        _send_after: Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        self.call_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let should_error = self.should_error;
+        async move {
+            if should_error {
+                rootcause::bail!("digest batcher error");
+            }
+            Ok(())
+        }
+    }
+
+    fn claim_ready_digest(
+        &self,
+    ) -> impl Future<Output = Result<ports::ClaimResult<ports::DigestBatch>, Report>> + Send {
+        async { Ok(ports::ClaimResult::Empty) }
+    }
+}
+
 /// Mock last online checker with configurable behavior.
 struct MockLastOnlineChecker {
     last_online: Option<Duration>,
@@ -193,11 +218,11 @@ fn test_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("test@example.com").unwrap()
 }
 
-fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<Arc<T>> {
+fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificationRow<Arc<T>> {
     UserNotificationRow {
         owner_id: test_user_id(),
         notification_id: uuid::Uuid::now_v7(),
-        notification_event_type: "test".to_string(),
+        notification_event_type: T::TYPE_NAME.to_string(),
         entity: EntityType::Document.with_entity_str("doc_123"),
         sent: false,
         done: false,
@@ -212,10 +237,6 @@ fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<Arc<T>> {
 
 fn create_block_list() -> EmailBlockList {
     EmailBlockList::new::<BlockedNotification>()
-}
-
-fn create_invite_list() -> ExplicitInviteAllowList {
-    ExplicitInviteAllowList::new::<InviteNotification>().append::<WorkspaceInviteNotification>()
 }
 
 // ============================================================================
@@ -292,7 +313,7 @@ async fn test_check_user_existence_returns_account_does_not_exist() {
 
     assert!(
         result.is_right(),
-        "Should return AccountDoesNotExist when user does not exist"
+        "Should return DontSend when user does not exist"
     );
 }
 
@@ -686,96 +707,6 @@ async fn test_check_last_online_time_edge_case_zero_last_online() {
 }
 
 // ============================================================================
-// AccountDoesNotExist::batch_or_single_send Tests
-// ============================================================================
-
-#[tokio::test]
-async fn test_batch_or_single_send_returns_single_send_for_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(InviteNotification {
-        workspace_name: "Test Workspace".to_string(),
-    });
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Should return SingleSend for invite notifications"
-    );
-}
-
-#[tokio::test]
-async fn test_batch_or_single_send_returns_batch_send_for_non_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(TestNotification {
-        message: "hello".to_string(),
-    });
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_right(),
-        "Should return BatchSend for non-invite notifications"
-    );
-}
-
-#[tokio::test]
-async fn test_batch_or_single_send_with_multiple_invite_types() {
-    // Test that workspace invite also gets single send
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(WorkspaceInviteNotification);
-
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Should return SingleSend for workspace invite notifications"
-    );
-}
-
-// ============================================================================
 // Full Flow Integration Tests
 // ============================================================================
 
@@ -918,39 +849,7 @@ async fn test_full_flow_user_exists_push_disabled_offline() {
 }
 
 #[tokio::test]
-async fn test_full_flow_user_not_exists_invite() {
-    let block_list = create_block_list();
-    let notif = create_test_notification_row(InviteNotification {
-        workspace_name: "Test Workspace".to_string(),
-    });
-
-    // Step 1: Check if allowed
-    let allowed = block_list
-        .notification_is_allowed(notif)
-        .left()
-        .expect("Should be allowed");
-
-    // Step 2: Check user existence - does not exist
-    let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    // Step 3: Decide batch vs single - invite should be single
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
-
-    assert!(
-        result.is_left(),
-        "Full flow: user does not exist, invite notification should return SingleSend"
-    );
-}
-
-#[tokio::test]
-async fn test_full_flow_user_not_exists_non_invite() {
+async fn test_full_flow_user_not_exists() {
     let block_list = create_block_list();
     let notif = create_test_notification_row(TestNotification {
         message: "hello".to_string(),
@@ -962,21 +861,162 @@ async fn test_full_flow_user_not_exists_non_invite() {
         .left()
         .expect("Should be allowed");
 
-    // Step 2: Check user existence - does not exist
+    // Step 2: Check user existence - does not exist → DontSend (no account = no email)
     let user_checker = MockUserExistenceChecker::with_user_not_exists();
-    let account_not_exists = allowed
-        .check_user_existence(&user_checker)
-        .await
-        .unwrap()
-        .right()
-        .expect("Should be AccountDoesNotExist");
-
-    // Step 3: Decide batch vs single - non-invite should be batch
-    let invite_list = create_invite_list();
-    let result = account_not_exists.batch_or_single_send(&invite_list);
+    let result = allowed.check_user_existence(&user_checker).await.unwrap();
 
     assert!(
         result.is_right(),
-        "Full flow: user does not exist, non-invite notification should return BatchSend"
+        "Full flow: user does not exist should return DontSend"
+    );
+}
+
+// ============================================================================
+// StateMachineDriverA::ingest Tests
+// ============================================================================
+
+fn create_driver(
+    user_checker: MockUserExistenceChecker,
+    notification_checker: MockPushNotificationChecker,
+    online_checker: MockLastOnlineChecker,
+) -> (
+    StateMachineDriverA<
+        MockUserExistenceChecker,
+        MockPushNotificationChecker,
+        MockLastOnlineChecker,
+        MockDigestBatcher,
+    >,
+    Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let (batcher, call_count) = MockDigestBatcher::new();
+    (
+        StateMachineDriverA::new_with_defaults(
+            user_checker,
+            notification_checker,
+            online_checker,
+            batcher,
+            create_block_list(),
+        ),
+        call_count,
+    )
+}
+
+#[tokio::test]
+async fn test_ingest_blocked_notification_returns_dont_send() {
+    let (driver, digest_calls) = create_driver(
+        MockUserExistenceChecker::with_user_exists(),
+        MockPushNotificationChecker::with_push_disabled(),
+        MockLastOnlineChecker::with_last_online(Duration::from_secs(0)),
+    );
+    let notif = create_test_notification_row(BlockedNotification);
+
+    let result = driver.ingest(notif).await.unwrap();
+
+    assert!(
+        matches!(result, StateMachineDecisionA::DontSend(_)),
+        "Blocked notification should return DontSend"
+    );
+    assert_eq!(
+        digest_calls.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "Blocked notification should not queue a digest"
+    );
+}
+
+#[tokio::test]
+async fn test_ingest_user_not_exists_returns_dont_send() {
+    let (driver, digest_calls) = create_driver(
+        MockUserExistenceChecker::with_user_not_exists(),
+        MockPushNotificationChecker::with_push_disabled(),
+        MockLastOnlineChecker::with_last_online(Duration::from_secs(0)),
+    );
+    let notif = create_test_notification_row(TestNotification {
+        message: "hello".to_string(),
+    });
+
+    let result = driver.ingest(notif).await.unwrap();
+
+    assert!(
+        matches!(result, StateMachineDecisionA::DontSend(_)),
+        "User without account should return DontSend"
+    );
+    assert_eq!(
+        digest_calls.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "No-account path should not queue a digest"
+    );
+}
+
+#[tokio::test]
+async fn test_ingest_user_exists_push_enabled_returns_indeterminate() {
+    let (driver, digest_calls) = create_driver(
+        MockUserExistenceChecker::with_user_exists(),
+        MockPushNotificationChecker::with_push_enabled(),
+        MockLastOnlineChecker::with_last_online(Duration::from_secs(0)),
+    );
+    let notif = create_test_notification_row(TestNotification {
+        message: "hello".to_string(),
+    });
+
+    let result = driver.ingest(notif).await.unwrap();
+
+    assert!(
+        matches!(result, StateMachineDecisionA::Indeterminate(_)),
+        "User with push enabled should return Indeterminate (awaiting push delivery result)"
+    );
+    assert_eq!(
+        digest_calls.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "Indeterminate path should not queue a digest yet"
+    );
+}
+
+#[tokio::test]
+async fn test_ingest_user_exists_push_disabled_recently_online_returns_dont_send() {
+    let (driver, digest_calls) = create_driver(
+        MockUserExistenceChecker::with_user_exists(),
+        MockPushNotificationChecker::with_push_disabled(),
+        // Online 5 mins ago, threshold is 60 mins (default)
+        MockLastOnlineChecker::with_last_online(Duration::from_secs(5 * 60)),
+    );
+    let notif = create_test_notification_row(TestNotification {
+        message: "hello".to_string(),
+    });
+
+    let result = driver.ingest(notif).await.unwrap();
+
+    assert!(
+        matches!(result, StateMachineDecisionA::DontSend(_)),
+        "Recently online user with push disabled should return DontSend"
+    );
+    assert_eq!(
+        digest_calls.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "Recently online user should not queue a digest"
+    );
+}
+
+#[tokio::test]
+async fn test_ingest_user_exists_push_disabled_offline_returns_batch_was_queued() {
+    let (driver, digest_calls) = create_driver(
+        MockUserExistenceChecker::with_user_exists(),
+        MockPushNotificationChecker::with_push_disabled(),
+        // Offline for 2 hours, threshold is 60 mins (default)
+        MockLastOnlineChecker::with_last_online(Duration::from_secs(2 * 60 * 60)),
+    );
+    let notif = create_test_notification_row(TestNotification {
+        message: "hello".to_string(),
+    });
+
+    let result = driver.ingest(notif).await.unwrap();
+
+    assert!(
+        matches!(result, StateMachineDecisionA::BatchWasQueued(_)),
+        "Offline user with push disabled should return BatchWasQueued"
+    );
+    assert_eq!(
+        digest_calls.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "Offline user should have queued exactly one digest"
     );
 }

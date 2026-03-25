@@ -1,6 +1,9 @@
 use crate::{
     traits::TextAttachment,
-    types::{ChatCompletionRequest, ChatMessage, ImageData, Model, Role, SystemPrompt},
+    types::{
+        ChatCompletionRequest, ChatMessage, ChatMessageContent, ImageData, Model, Role,
+        SystemPrompt,
+    },
 };
 
 #[derive(Default)]
@@ -185,6 +188,17 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
             self.attachments = Some(vec![wrapped].into());
         }
         self
+    }
+
+    pub fn user_message(
+        self,
+        message: impl Into<String>,
+    ) -> RequestBuilder<ChatModel, Vec<ChatMessage>, Prompt> {
+        self.messages(vec![ChatMessage {
+            content: ChatMessageContent::Text(message.into()),
+            image_urls: None,
+            role: Role::User,
+        }])
     }
 
     // set messages

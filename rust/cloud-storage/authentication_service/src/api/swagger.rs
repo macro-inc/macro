@@ -26,7 +26,8 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::{
-    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeSessionResponse,
+    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeProductTier,
+    StripeSessionResponse,
 };
 use crate::api::{
     email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, user,
@@ -122,6 +123,10 @@ use model::user::{
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType>,
 
+                /// /referral
+                referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
+                referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType>,
+
                 /// /merge
                 merge::create_merge_request::handler,
                 merge::verify_merge_request::handler,
@@ -158,6 +163,7 @@ use model::user::{
                         PatchUserTutorialRequest,
 
                         // Stripe
+                        StripeProductTier,
                         CreateCheckoutSessionRequest,
                         CreatePortalSessionRequest,
                         StripeSessionResponse,

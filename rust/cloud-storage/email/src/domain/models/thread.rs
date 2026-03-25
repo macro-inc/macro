@@ -25,6 +25,8 @@ pub struct ThreadRow {
     pub created_at: DateTime<Utc>,
     /// When the thread was last updated.
     pub updated_at: DateTime<Utc>,
+    /// The project this thread belongs to, if any.
+    pub project_id: Option<String>,
 }
 
 /// A fully assembled email thread with paginated messages.

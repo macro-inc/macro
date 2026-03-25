@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * The URL of the page's image.
+ */
 export type ChatResponseWebCitationsItemItem1ItemImageUrl = string | null;

@@ -5228,10 +5228,20 @@
             "type": "string",
             "description": "Type of entity."
           },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height (for images)."
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "description": "Attachment id."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width (for images)."
           }
         }
       },
@@ -5466,6 +5476,10 @@
           "owner_id": {
             "type": "string"
           },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -5516,6 +5530,10 @@
               "type": "string"
             },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "description": "Channel team ID to search within. Empty to ignore team filtering."
           },
           "thread_ids": {
             "type": "array",
@@ -5613,7 +5631,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message"]
+        "enum": ["public", "organization", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "type": "object",
@@ -6061,6 +6079,10 @@
             },
             "description": "Optional property values to set on the task."
           },
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether to share the task with your team or not\nDefaults to true"
+          },
           "taskName": {
             "type": "string",
             "description": "The name of the task."
@@ -6305,6 +6327,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "is_email_attachment": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by document notification state."
@@ -6322,6 +6348,13 @@
               "type": "string"
             },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "sub_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
           },
           "task_filters": {
             "$ref": "#/components/schemas/TaskFilters",
@@ -6931,6 +6964,13 @@
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
           },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Empty to ignore project filtering."
+          },
           "recipients": {
             "type": "array",
             "items": {
@@ -6944,6 +6984,10 @@
               "type": "string"
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedEmailFilter",
+            "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
           }
         }
       },
@@ -6974,6 +7018,13 @@
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
             "description": "the bundled [ProjectFilters]"
+          },
+          "property_filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyFilter"
+            },
+            "description": "property-based filters applied across entity types"
           }
         }
       },
@@ -9086,6 +9137,35 @@
           }
         }
       },
+      "PropertyFilter": {
+        "type": "object",
+        "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
+        "required": ["property_definition_id"],
+        "properties": {
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity reference IDs to match. Multiple values are OR'd together."
+          },
+          "entity_type": {
+            "type": ["string", "null"],
+            "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option UUIDs to match. Multiple values are OR'd together."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "description": "The UUID of the property definition to filter on."
+          }
+        }
+      },
       "PropertyInput": {
         "type": "object",
         "description": "Property input for setting a property value on a task.",
@@ -9585,6 +9665,11 @@
           }
         }
       },
+      "SharedEmailFilter": {
+        "type": "string",
+        "description": "Controls whether shared email threads are included in results.",
+        "enum": ["exclude", "include", "only"]
+      },
       "ShortIdResponse": {
         "type": "object",
         "description": "Short ID response.",
@@ -9923,6 +10008,9 @@
           },
           "ownerId": {
             "type": "string"
+          },
+          "projectId": {
+            "type": ["string", "null"]
           },
           "providerId": {
             "type": ["string", "null"]

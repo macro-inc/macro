@@ -43,7 +43,7 @@ export const AssigneeFilter = () => {
 
     const noAssigneeOption: Option = {
       value: NO_ASSIGNEE,
-      label: 'No Assignee',
+      label: 'No assignee',
       icon: () => <CircleDashedIcon class="size-4 text-ink-muted" />,
     };
 
@@ -226,7 +226,7 @@ export const EntityTypeFilter = () => {
   );
 };
 
-type FolderFilterTarget = 'chat' | 'document';
+type FolderFilterTarget = 'chat' | 'document' | 'email';
 
 interface FolderFilterProps {
   target: FolderFilterTarget;
@@ -254,7 +254,9 @@ export const FolderFilter = (props: FolderFilterProps) => {
     const projectIds =
       props.target === 'chat'
         ? filters.chat_filters?.project_ids
-        : filters.document_filters?.project_ids;
+        : props.target === 'email'
+          ? filters.email_filters?.project_ids
+          : filters.document_filters?.project_ids;
 
     if (!projectIds?.length) return [];
 
@@ -274,6 +276,16 @@ export const FolderFilter = (props: FolderFilterProps) => {
           ...prev,
           chat_filters: {
             ...prev.chat_filters,
+            project_ids: newProjectIds,
+          },
+        };
+      }
+
+      if (props.target === 'email') {
+        return {
+          ...prev,
+          email_filters: {
+            ...prev.email_filters,
             project_ids: newProjectIds,
           },
         };
@@ -311,7 +323,7 @@ export const StatusFilter = () => {
   const statusOptions: Option[] = [
     { value: 'unread', label: 'Unread' },
     { value: 'read', label: 'Read' },
-    { value: 'not-done', label: 'Not Done' },
+    { value: 'not-done', label: 'Not done' },
     { value: 'done', label: 'Done' },
   ];
 
@@ -395,7 +407,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-high-priority',
-      label: 'High Priority',
+      label: 'High priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.HIGH}
@@ -405,7 +417,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-medium-priority',
-      label: 'Medium Priority',
+      label: 'Medium priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.MEDIUM}
@@ -415,7 +427,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-low-priority',
-      label: 'Low Priority',
+      label: 'Low priority',
       icon: () => (
         <PropertyValueIcon
           optionId={PROPERTY_OPTION_IDS.PRIORITY.LOW}
@@ -425,7 +437,7 @@ export const TaskPriorityFilter = () => {
     },
     {
       value: 'task-no-priority',
-      label: 'No Priority',
+      label: 'No priority',
     },
   ];
 
@@ -576,7 +588,7 @@ export const FromSenderFilter = () => {
 
 export const HasCalendarInviteFilter = () => {
   const calendarInviteOptions: Option[] = [
-    { value: 'has-calendar-invite', label: 'Has Calendar Invite' },
+    { value: 'has-calendar-invite', label: 'Has calendar invite' },
   ];
 
   const calendarInvite = useFilterOptions(calendarInviteOptions);
@@ -592,7 +604,7 @@ export const HasCalendarInviteFilter = () => {
 
 export const HasAttachmentFilter = () => {
   const attachmentOptions: Option[] = [
-    { value: 'has-attachment', label: 'Has Attachment' },
+    { value: 'has-attachment', label: 'Has attachment' },
   ];
 
   const attachment = useFilterOptions(attachmentOptions, { target: 'and' });

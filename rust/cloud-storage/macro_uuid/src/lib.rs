@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
-use uuid::{NoContext, Timestamp, Uuid};
+pub use uuid::Uuid;
+use uuid::{NoContext, Timestamp};
 
 pub fn generate_uuid_v7() -> Uuid {
     Uuid::new_v7(Timestamp::now(NoContext))
@@ -12,6 +13,7 @@ pub fn string_to_uuid(s: &str) -> Result<Uuid> {
 // Flickr's base58 alphabet as used in short-uuid
 const FLICKR_BASE58: &str = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
+#[derive(Clone)]
 pub struct ShortUuidConverter {
     alphabet: String,
     base: u128,

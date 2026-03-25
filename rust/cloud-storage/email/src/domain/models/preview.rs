@@ -86,6 +86,7 @@ pub struct EmailThreadPreview {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
+    pub project_id: Option<String>,
 }
 
 #[non_exhaustive]

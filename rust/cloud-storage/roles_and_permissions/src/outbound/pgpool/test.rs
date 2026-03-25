@@ -56,7 +56,7 @@ async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .map(|p| p.id.to_string())
         .collect::<Vec<String>>();
 
-    assert_eq!(permissions.len(), 2);
+    assert_eq!(permissions.len(), 3);
     assert!(permissions.contains(&"read:professional_features".to_string()));
 
     // add role to user that already has role
@@ -76,7 +76,7 @@ async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .map(|p| p.id.to_string())
         .collect::<Vec<String>>();
 
-    assert_eq!(permissions.len(), 2);
+    assert_eq!(permissions.len(), 3);
 
     // add role to user that doesn't exist
     let err = macro_db
@@ -119,7 +119,7 @@ async fn test_remove_roles_from_user(pool: Pool<Postgres>) -> anyhow::Result<()>
         .map(|p| p.id.to_string())
         .collect::<Vec<String>>();
 
-    assert_eq!(permissions.len(), 1);
+    assert_eq!(permissions.len(), 2);
     assert!(permissions.contains(&"read:professional_features".to_string()));
 
     // Remove role that doesn't exist
@@ -139,7 +139,7 @@ async fn test_remove_roles_from_user(pool: Pool<Postgres>) -> anyhow::Result<()>
         .map(|p| p.id.to_string())
         .collect::<Vec<String>>();
 
-    assert_eq!(permissions.len(), 1);
+    assert_eq!(permissions.len(), 2);
     assert!(permissions.contains(&"read:professional_features".to_string()));
 
     Ok(())

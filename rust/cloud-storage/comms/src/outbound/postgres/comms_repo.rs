@@ -24,6 +24,7 @@ pub enum ChannelType {
     Organization,
     Private,
     DirectMessage,
+    Team,
 }
 
 #[tracing::instrument(skip(db))]
@@ -60,6 +61,7 @@ pub async fn get_user_channels_with_participants(
             uc.id as "id!",
             uc.name as "name",
             uc.channel_type as "channel_type!: ChannelType",
+            uc.team_id,
             uc.org_id,
             uc.created_at as "created_at!",
             uc.updated_at as "updated_at!",
@@ -77,6 +79,7 @@ pub async fn get_user_channels_with_participants(
             name: row.name,
             channel_type: ChannelType::mirror(row.channel_type),
             org_id: row.org_id.map(|id| OrganizationId(id as u32)),
+            team_id: row.team_id,
             created_at: row.created_at,
             updated_at: row.updated_at,
             owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)

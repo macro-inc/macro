@@ -4,7 +4,17 @@
 //! and persisted. The main work (rate limiting, filtering) is done pre-queue,
 //! so this worker focuses on delivery.
 
-use crate::domain::ports::NotificationEgress;
+use std::time::Duration;
+
+use rootcause::Report;
+
+use crate::domain::{
+    models::{
+        NotificationExtEmail,
+        email_notification_digest::ports::{ClaimResult, DigestBatch},
+    },
+    ports::NotificationEgress,
+};
 
 /// Worker that processes notifications from the queue and delivers them.
 ///
@@ -27,7 +37,7 @@ where
     ///
     /// Polls the queue and delivers notifications. Returns the number of
     /// delivery results (may include failures).
-    async fn poll_and_process(&self) -> usize {
+    async fn poll_and_process_notifications(&self) -> usize {
         let results = self.service.poll_and_deliver().await;
         let count = results.len();
 
@@ -45,9 +55,9 @@ where
     ///
     /// This method runs forever, polling the queue and processing messages.
     /// It includes a small delay between empty polls to avoid hammering the queue.
-    pub async fn run(&self) -> ! {
+    pub async fn run_notifications(&self) -> ! {
         loop {
-            let count = self.poll_and_process().await;
+            let count = self.poll_and_process_notifications().await;
 
             if count == 0 {
                 // No messages, wait a bit before next poll
@@ -55,6 +65,24 @@ where
             } else {
                 tracing::debug!(count, "processed delivery results");
             }
+        }
+    }
+
+    /// runs the digest worker forever which will pick digest batch messages out of redis
+    /// template them into emails via the templater fn f
+    /// then place the formatted messages into the queue to be delievered
+    pub async fn run_digests<T: NotificationExtEmail>(
+        &self,
+        f: fn(DigestBatch) -> Result<T, Report>,
+    ) -> ! {
+        loop {
+            let sleep_duration = match self.service.poll_email_digests(f).await {
+                Ok(ClaimResult::Empty) => Duration::from_secs(5),
+                Ok(ClaimResult::Wait(duration)) => duration,
+                Ok(ClaimResult::Ready(())) => Duration::default(),
+                Err(_) => Duration::from_secs(1),
+            };
+            tokio::time::sleep(sleep_duration).await;
         }
     }
 }

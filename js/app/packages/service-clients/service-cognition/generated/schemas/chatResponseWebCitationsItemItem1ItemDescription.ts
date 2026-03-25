@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * A description of the cited page.
+ */
 export type ChatResponseWebCitationsItemItem1ItemDescription = string | null;

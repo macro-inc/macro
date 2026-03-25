@@ -1,4 +1,5 @@
 use crate::{DocumentFilters, ast::ExpandErr};
+use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -41,6 +42,12 @@ pub enum DocumentLiteral {
     /// include tasks that are created by me, assigned to me, and not completed.
     #[serde(rename = "cbm")]
     IncludeCbmAtmNc(bool),
+    /// this node value filters by document sub type
+    #[serde(rename = "dst")]
+    SubType(DocumentSubType),
+    /// this node value filters by email attachment status
+    #[serde(rename = "iea")]
+    IsEmailAttachment(bool),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -144,6 +151,8 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             importance,
             notification_filters,
             task_filters,
+            sub_types,
+            is_email_attachment,
         } = filter_request;
 
         let file_types_node = file_types
@@ -175,6 +184,14 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             .seen
             .map(|seen| Expr::Literal(DocumentLiteral::NotificationSeen(seen)));
 
+        let sub_types_node = sub_types
+            .iter()
+            .map(|s| DocumentSubType::from_str(s))
+            .try_expand(|r| r.map(DocumentLiteral::SubType), Expr::or)?;
+
+        let is_email_attachment_node =
+            is_email_attachment.map(|v| Expr::Literal(DocumentLiteral::IsEmailAttachment(v)));
+
         let normal_expr = [
             file_types_node,
             document_id_nodes,
@@ -183,6 +200,8 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             importance_node,
             notification_done_node,
             notification_seen_node,
+            sub_types_node,
+            is_email_attachment_node,
         ]
         .into_iter()
         .fold_with(Expr::and);

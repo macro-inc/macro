@@ -3,16 +3,16 @@ use crate::api::{
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use fusionauth::error::FusionAuthClientError;
+use macro_middleware::tracking::ClientIp;
 use model::{
     authentication::login::request::PasswordRequest,
     response::{ErrorResponse, UserTokensResponse},
-    tracking::IPContext,
 };
 use tower_cookies::Cookies;
 
@@ -28,10 +28,10 @@ use tower_cookies::Cookies;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     cookies: Cookies,
     extract::Json(req): extract::Json<PasswordRequest>,
 ) -> Result<Response, Response> {

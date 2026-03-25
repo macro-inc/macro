@@ -11,7 +11,8 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
-import { withAnalytics } from '@coparse/analytics';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId } from '@core/block';
 import {
   DocumentPropertiesButton,
@@ -36,7 +37,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
@@ -46,11 +47,13 @@ import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 
-const { track, TrackingEvents } = withAnalytics();
-
 export const connectorTypeMenuTriggerSignal = createBlockSignal(false);
 
 export function TopBar() {
+  const analytics = useAnalytics();
+
+  const isAuth = useIsAuthenticated();
+
   const toolManager = useToolManager();
   const { getLocation } = useRenderState();
   const getCurrentSavedFile = currentSavedFile.get;
@@ -73,7 +76,7 @@ export function TopBar() {
     if (!file) return;
 
     downloadFile(file, downloadName());
-    track(TrackingEvents.BLOCKCANVAS.FILEMENU.DOWNLOAD);
+    analytics.track('download', { blockType: 'canvas' });
   });
 
   const copyLink = () => {
@@ -96,7 +99,7 @@ export function TopBar() {
     }
     navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard');
-    track(TrackingEvents.BLOCKCANVAS.FILEMENU.SHARE);
+    analytics.track('copy_share_link', { blockType: 'canvas' });
   };
 
   const ops: FileOperation[] = [
@@ -117,7 +120,7 @@ export function TopBar() {
       label: 'References',
       icon: Quotes,
       action: referencesControl.toggle,
-      condition: () => ENABLE_REFERENCES_MODAL,
+      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
       buttonComponent: () => (
         <ReferencesButton
           documentId={documentId}
@@ -130,7 +133,15 @@ export function TopBar() {
       label: 'Properties',
       icon: TagIcon,
       action: propertiesControl.toggle,
-      buttonComponent: () => <DocumentPropertiesButton buttonSize="sm" />,
+      buttonComponent: () => (
+        <DocumentPropertiesButton
+          buttonSize="sm"
+          onOpenChange={(open) =>
+            open &&
+            analytics.track('properties_panel_open', { blockType: 'canvas' })
+          }
+        />
+      ),
     },
     {
       label: 'Share',

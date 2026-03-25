@@ -1,4 +1,20 @@
 /**
+ * Parse a loose width/height value and scale it to fit within constraints.
+ * Returns undefined when dimensions are missing or invalid.
+ */
+export function constrainImageDimensions(
+  width: string | number | undefined,
+  height: string | number | undefined,
+  maxWidth?: number,
+  maxHeight?: number
+): { width: number; height: number } | undefined {
+  const w = typeof width === 'string' ? Number.parseInt(width, 10) : width;
+  const h = typeof height === 'string' ? Number.parseInt(height, 10) : height;
+  if (!w || !h || w <= 0 || h <= 0) return undefined;
+  return calculateEffectiveDimensions(w, h, maxWidth, maxHeight);
+}
+
+/**
  * Calculates the effective dimensions based on constrained width and height.
  * Uses the more constrained dimension to maintain aspect ratio.
  */

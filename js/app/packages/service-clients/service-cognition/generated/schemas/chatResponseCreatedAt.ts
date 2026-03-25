@@ -6,6 +6,6 @@
  */
 
 /**
- * The time the chat was created
+ * The time the chat was created.
  */
 export type ChatResponseCreatedAt = string | null;

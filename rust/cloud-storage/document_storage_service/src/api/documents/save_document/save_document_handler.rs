@@ -18,7 +18,7 @@ use macro_middleware::cloud_storage::ensure_access::{
 };
 use model::document::response::DocumentResponseMetadata;
 use model::{
-    document::{DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key},
+    document::{DocumentBasic, FileType, FileTypeExt},
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -124,8 +124,6 @@ pub async fn save_document_handler(
           // a sha
     }
 
-    let sha = req.sha.clone();
-
     let document_metadata: DocumentResponseMetadata = match save_document(
         &ctx.db,
         &ctx.redis_client,
@@ -156,46 +154,10 @@ pub async fn save_document_handler(
         }
     };
 
-    // If the document is a monaco file, we will need to generate a presigned url to save the file
-    let presigned_url: Option<String> = if file_type == FileType::Py || file_type == FileType::Js {
-        let key = build_cloud_storage_bucket_document_key(
-            document_metadata.owner.as_ref(),
-            &document_metadata.document_id,
-            document_metadata.document_version_id,
-            Some(file_type.as_str()),
-        );
-        // We've already validated that the sha is present for monaco files
-        let sha = sha.unwrap();
-        match ctx
-            .s3_client
-            .put_document_storage_presigned_url(&key, &sha, file_type.into())
-            .await
-        {
-            Ok(presigned_url) => Some(presigned_url),
-            Err(e) => {
-                tracing::error!(error=?e, "unable to generate presigned url");
-                // Cleanup document version on error
-                utils::cleanup_document_version_on_error(
-                    &ctx.db,
-                    &document_metadata.document_id,
-                    document_metadata.document_version_id,
-                    file_type.as_str(),
-                )
-                .await;
-                return GenericResponse::builder()
-                    .message("unable to save document")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        }
-    } else {
-        None
-    };
-
     GenericResponse::builder()
         .data(&SaveDocumentResponseData {
             document_metadata,
-            presigned_url,
+            presigned_url: None,
         })
         .send(StatusCode::OK)
 }

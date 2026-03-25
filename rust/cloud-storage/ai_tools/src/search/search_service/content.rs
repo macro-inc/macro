@@ -50,8 +50,7 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
         }
 
         let search_request = UnifiedSearchRequest {
-            query: Some(self.query.to_owned()),
-            terms: None,
+            query: self.query.to_owned(),
             match_type: MatchType::Partial,
             filters: Some(UnifiedSearchFilters {
                 email: Some(EmailFilters {

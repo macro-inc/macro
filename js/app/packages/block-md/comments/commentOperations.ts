@@ -1,5 +1,4 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
@@ -28,10 +27,11 @@ import {
   useDeleteCommentResource,
   useEditCommentResource,
 } from './commentsResource';
-
-const { track, TrackingEvents } = withAnalytics();
+import { useAnalytics } from '@app/component/analytics-context';
 
 export function useCreateComment() {
+  const analytics = useAnalytics();
+
   const deleteNewComments = useDeleteNewComments();
   const createHighlightComment = useCreateHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
@@ -42,7 +42,7 @@ export function useCreateComment() {
 
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
-      track(TrackingEvents.BLOCKMARKDOWN.COMMENT.CREATE);
+      analytics.track('comment_create', { blockType: 'md' });
       const { threadId, text } = info;
 
       if (threadId === -1) {
@@ -77,10 +77,12 @@ export function useCreateComment() {
 }
 
 export function useUpdateComment() {
+  const analytics = useAnalytics();
+
   const editComment = useEditCommentResource();
 
   return createCallback((commentId: number, info: EditCommentRequest) => {
-    track(TrackingEvents.BLOCKMARKDOWN.COMMENT.UPDATE);
+    analytics.track('comment_update', { blockType: 'md' });
 
     return editComment(commentId, info);
   });
@@ -91,13 +93,15 @@ export function useCreatePendingComment() {
 }
 
 export function useDeleteComment() {
+  const analytics = useAnalytics();
+
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
   const editor = mdStore.get.editor;
   const comments = commentsStore.get;
 
   return createCallback(async (info: DeleteCommentInfo) => {
-    track(TrackingEvents.BLOCKMARKDOWN.COMMENT.DELETE);
+    analytics.track('comment_delete', { blockType: 'md' });
     editor?.dispatchCommand(DISCARD_DRAFT_COMMENT_COMMAND, undefined);
     const commentId = info.commentId;
 

@@ -3299,9 +3299,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.13"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "bytes",
  "getrandom 0.3.4",
@@ -3740,9 +3740,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.8"
+version = "0.103.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ffdfa2f5286e2247234e03f680868ac2815974dc39e00ea15adc445d0aafe52"
+checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -4530,7 +4530,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-auth"
 version = "0.1.0"
-source = "git+https://github.com/seanaye/tauri-plugins?branch=main#5863bef82f3327e3358d0c1a13f5994c25c5ce3e"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=2b2257722f60458921eadf4a9ab4d9e1db36e34f#2b2257722f60458921eadf4a9ab4d9e1db36e34f"
 dependencies = [
  "serde",
  "tauri",
@@ -4662,7 +4662,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-notifications"
 version = "0.1.0"
-source = "git+https://github.com/seanaye/tauri-plugins?branch=seanaye%2Bmnlphlp%2Fadd%2Fandroid-notifications#8a1be0b1efe16d8819f681c0f9939fc1ba7fe44f"
+source = "git+https://github.com/macro-inc/tauri-plugins?rev=2b2257722f60458921eadf4a9ab4d9e1db36e34f#2b2257722f60458921eadf4a9ab4d9e1db36e34f"
 dependencies = [
  "serde",
  "tauri",

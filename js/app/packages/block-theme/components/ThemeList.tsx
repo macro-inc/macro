@@ -2,8 +2,11 @@ import { For } from 'solid-js';
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
+import { useAnalytics } from 'app/component/analytics-context';
 
 export function ThemeList() {
+  const analytics = useAnalytics()
+
   return (
     <>
       <style>{`
@@ -101,7 +104,10 @@ export function ThemeList() {
             {(theme) => (
               <div
                 class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
-                onPointerDown={() => {applyTheme(theme.id)}}
+                onClick={() => {
+                  analytics.track('theme_changed', {themeId: theme.id})
+                  applyTheme(theme.id)
+                }}
                 style="
                   grid-template-columns: min-content 1fr min-content;
                   background-color: var(--b1);

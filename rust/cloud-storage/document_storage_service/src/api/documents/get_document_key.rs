@@ -1,16 +1,17 @@
 use std::str::FromStr;
 
+use crate::api::context::ApiContext;
 use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocumentKeyResponseData};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, FileType, build_cloud_storage_bucket_document_key,
+    build_extensionless_document_key,
 };
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse, user::UserContext};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
-use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -33,10 +34,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, document_context, _access), fields(user_id=?user_context.user_id, file_type=?document_context.file_type))]
+#[tracing::instrument(skip(state, user_context, document_context, _access), fields(user_id=?user_context.user_id, file_type=?document_context.file_type))]
 pub async fn get_document_key_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel>,
-    State(db): State<PgPool>,
+    State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,
     Path(Params {
@@ -65,7 +66,9 @@ pub async fn get_document_key_handler(
     let key = match file_type {
         FileType::Pdf => {
             let document_version_id =
-                match macro_db_client::document::get_document_version_id(&db, &document_id).await {
+                match macro_db_client::document::get_document_version_id(&state.db, &document_id)
+                    .await
+                {
                     Ok(document_version_id) => document_version_id.0,
                     Err(e) => {
                         tracing::error!(error=?e, "unable to get document version id");
@@ -76,12 +79,32 @@ pub async fn get_document_key_handler(
                     }
                 };
 
-            build_cloud_storage_bucket_document_key(
+            // Try extensionless key first, fall back to legacy key with extension
+            let extensionless_key = build_extensionless_document_key(
                 document_context.owner.as_ref(),
                 &document_id,
                 document_version_id,
-                Some(file_type.as_str()),
-            )
+            );
+            let extensionless_exists = match state.s3_client.exists(&extensionless_key).await {
+                Ok(exists) => exists,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to check if extensionless key exists");
+                    return GenericResponse::builder()
+                        .message("unable to check document key")
+                        .is_error(true)
+                        .send(StatusCode::INTERNAL_SERVER_ERROR);
+                }
+            };
+            if extensionless_exists {
+                extensionless_key
+            } else {
+                build_cloud_storage_bucket_document_key(
+                    document_context.owner.as_ref(),
+                    &document_id,
+                    document_version_id,
+                    Some(file_type.as_str()),
+                )
+            }
         }
         FileType::Docx => {
             format!(

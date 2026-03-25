@@ -1,6 +1,5 @@
-use axum::{body::to_bytes, extract::FromRequestParts, http::Request};
+use axum::{extract::FromRequestParts, http::Request};
 use cool_asserts::assert_matches;
-use serde_utils::Container;
 
 use super::*;
 
@@ -8,6 +7,7 @@ use super::*;
 async fn it_should_deserialize_query_params() {
     let sso_state = SsoState {
         original_url: Some("https://example.com".parse().unwrap()),
+        referral_code: Some("test".to_string()),
         is_mobile: true,
     };
 
@@ -30,8 +30,9 @@ async fn it_should_deserialize_query_params() {
 
     assert_matches!(data, OAuthCbParams { code, state: Some(container) } => {
         assert_eq!(code, "test123");
-        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true } => {
+        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code) } => {
             assert_eq!(url.as_str(), "https://example.com/");
+            assert_eq!(code.as_str(), "test");
         })
     });
 }
@@ -56,14 +57,7 @@ impl DummyCb {
 #[tokio::test]
 async fn no_state_is_default_url() {
     let mut dummy = DummyCb::default();
-    let res = get_redirect_url(
-        OAuthCbParams {
-            code: "code".into(),
-            state: None,
-        },
-        async |x| dummy.cb(x).await,
-    )
-    .await;
+    let res = get_redirect_url(&None, async |x| dummy.cb(x).await).await;
     assert_eq!(dummy.called, 0);
     assert_eq!(res.unwrap(), default_redirect_url());
 }
@@ -72,16 +66,11 @@ async fn no_state_is_default_url() {
 async fn it_writes_session_code_to_db() {
     let mut dummy = DummyCb::default();
     let res = get_redirect_url(
-        OAuthCbParams {
-            code: "code".into(),
-            state: Some(
-                Container::new(&SsoState {
-                    original_url: Some("https://example.com".parse().unwrap()),
-                    is_mobile: true,
-                })
-                .unwrap(),
-            ),
-        },
+        &Some(SsoState {
+            original_url: Some("https://example.com".parse().unwrap()),
+            is_mobile: true,
+            referral_code: None,
+        }),
         async |x| dummy.cb(x).await,
     )
     .await

@@ -61,6 +61,7 @@ pub fn resolve_previews(
                     model::comms::ChannelType::DirectMessage => {
                         models_comms::channel::ChannelType::DirectMessage
                     }
+                    model::comms::ChannelType::Team => models_comms::channel::ChannelType::Team,
                 },
                 preview.channel_name.as_deref(),
                 &participants,

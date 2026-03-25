@@ -4,10 +4,13 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PasswordlessRequestReferralCode } from './passwordlessRequestReferralCode';
 
 export interface PasswordlessRequest {
   /** The email to initiate passwordless authentication for */
   email: string;
   /** The redirect uri to redirect to after login */
   redirect_uri: string;
+  /** The referral code */
+  referral_code?: PasswordlessRequestReferralCode;
 }

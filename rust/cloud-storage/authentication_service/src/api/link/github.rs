@@ -5,10 +5,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
+use macro_middleware::tracking::ClientIp;
 
 use crate::api::{context::ApiContext, oauth2::OAuthState};
 
-use model::{response::ErrorResponse, tracking::IPContext, user::UserContext};
+use model::{response::ErrorResponse, user::UserContext};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGithubLinkResponse {
@@ -66,10 +67,10 @@ impl IntoResponse for InitGithubLinkError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context.client_ip, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id), err)]
 pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
-    ip_context: Extension<IPContext>,
+    ip_context: ClientIp,
     user_context: Extension<UserContext>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     // TODO: this should probably be a middleware or extractor

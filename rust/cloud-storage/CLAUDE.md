@@ -52,12 +52,12 @@ connection tracking.
 DB migration files are located in `rust/cloud-storage/macro_db_client`. Use the `/dump-schema` skill to dump the current Postgres schema for reference.
 If you are still getting migration errors after running `just setup_macrodb`, you may need to run `just force_drop_db`
 in `macro-api/cloud-storage/macro_db_client` to drop the database and re-create it
-with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that when you are reading the database columns, the
-names are camelCased and not snake_cased (use `/dump-schema` or check the migration files for actual column names).
-So you need to cast as the snake_cased version of the column name when reading from the database. E.g.
+with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that some database table and column names may be
+camelCased rather than snake_cased (use `/dump-schema` or check the migration files for actual column names).
+When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
 Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in
-`macro-api/cloud-storage/macro_db_client` to update the .sqlx.
+the root directory of the crate you made the changes in, to update the .sqlx directory.
 
 ## Development Commands
 
@@ -260,15 +260,18 @@ Place tests in a separate `test.rs` file within the same module directory, rathe
 - Implementation: `foo/mod.rs` or `foo.rs`
 - Tests: `foo/test.rs`
 
+Note: You do NOT need to convert a file module (`foo.rs`) into a directory module (`foo/mod.rs`) to add tests.
+Rust supports `foo.rs` alongside a `foo/` directory — just create `foo/test.rs` and it works as a submodule of `foo.rs`.
+
 **Example structure:**
 ```
 src/
+  user.rs       # Contains: mod test;  (with #[cfg(test)]) + implementation
   user/
-    mod.rs      # Contains: mod test;  (with #[cfg(test)])
     test.rs     # Contains: use super::*; and test functions
 ```
 
-**In `mod.rs`:**
+**In `user.rs`:**
 ```rust
 #[cfg(test)]
 mod test;

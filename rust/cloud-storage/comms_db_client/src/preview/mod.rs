@@ -44,7 +44,7 @@ pub async fn batch_get_channel_preview(
                 OR
                 (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)
                 OR
-                (c.channel_type IN ('private', 'direct_message') AND EXISTS (
+                (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (
                     SELECT 1 FROM comms_channel_participants cp 
                     WHERE cp.channel_id = c.id 
                     AND cp.user_id = $2

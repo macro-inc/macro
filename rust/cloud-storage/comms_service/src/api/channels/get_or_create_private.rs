@@ -99,6 +99,7 @@ pub async fn handler(
                     org_id: None,
                     channel_type: ChannelType::Private,
                     participants: recipients.clone(),
+                    team_id: None,
                 },
             )
             .await

@@ -5,6 +5,9 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
+import { useLogout } from '@core/auth/logout';
+import LogoutIcon from '@icon/regular/sign-out.svg';
+import UserIcon from '@icon/regular/user.svg';
 import {
   monochromeIcons,
   setDarkModeTheme,
@@ -17,7 +20,11 @@ import {
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
+import {
+  CREATABLE_BLOCKS,
+  createMenuOpen,
+  setCreateMenuOpen,
+} from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 import {
   openFilePicker,
@@ -26,14 +33,45 @@ import {
 } from '@core/util/upload';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import Upload from '@icon/regular/upload.svg';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+
+function useHotkeyAnalytics(): void {
+  const analytics = useAnalytics();
+
+  useSubscribeToKeypress((context) => {
+    // Only track when a command was actually executed
+    if (!context.commandCaptured) return;
+
+    const command = context.commandCaptured;
+    const description =
+      typeof command.description === 'function'
+        ? command.description()
+        : command.description;
+
+    analytics.track('hotkey_use', {
+      action: description,
+      token: command.hotkeyToken,
+    });
+  });
+}
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
-  const { toggleSettings } = useSettingsState();
+
+  const analytics = useAnalytics();
+
+  useHotkeyAnalytics();
+
+  const { toggleSettings, openSettings } = useSettingsState();
+  const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
 
   const handleCommandMenu = () => {
+    if (!CommandState.isOpen()) {
+      analytics.track('command_menu_open', { from: 'global_hotkey' });
+    }
     CommandState.toggle();
   };
 
@@ -43,6 +81,12 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
+      const willOpen = !createMenuOpen();
+
+      if (willOpen) {
+        analytics.track('create_menu_open', { from: 'global_hotkey' });
+      }
+
       setCreateMenuOpen((prev) => !prev);
       return true;
     },
@@ -86,6 +130,7 @@ export default function GlobalShortcuts() {
       return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
     keyDownHandler: () => {
+      console.log('## CMD K - global');
       handleCommandMenu();
       return true;
     },
@@ -97,12 +142,15 @@ export default function GlobalShortcuts() {
   const { openWithSplit } = useSplitLayout();
 
   const createNewSplit = () => {
-    const active = globalSplitManager()?.activeSplit()?.content();
-    openWithSplit(active ?? { type: 'component', id: 'inbox' }, {
-      referredFrom: 'hotkey',
-      allowDuplicate: true,
-      preferNewSplit: true,
-    });
+    analytics.track('split_created', { from: 'global_hotkey' });
+    openWithSplit(
+      { type: 'component', id: 'inbox' },
+      {
+        referredFrom: 'hotkey',
+        allowDuplicate: true,
+        preferNewSplit: true,
+      }
+    );
     return true;
   };
 
@@ -131,6 +179,28 @@ export default function GlobalShortcuts() {
     description: 'Toggle settings',
     keyDownHandler: () => {
       toggleSettings();
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Account',
+    icon: UserIcon,
+    keyDownHandler: () => {
+      openSettings('Account');
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Logout',
+    icon: LogoutIcon,
+    keyDownHandler: () => {
+      logout();
       return true;
     },
     runWithInputFocused: true,
@@ -166,6 +236,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         applyTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,
@@ -188,6 +259,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         setLightModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,
@@ -210,6 +282,7 @@ export default function GlobalShortcuts() {
       description: `${theme.name}`,
       keyDownHandler: () => {
         setDarkModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
       runWithInputFocused: true,

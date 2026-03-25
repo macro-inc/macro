@@ -27,7 +27,7 @@ jobs:
       services: ${{ steps.detect.outputs.services }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v47

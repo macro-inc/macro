@@ -28,7 +28,9 @@ chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }
-roles_and_permissions = { path = "../roles_and_permissions" }
+roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
+  "ports",
+] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

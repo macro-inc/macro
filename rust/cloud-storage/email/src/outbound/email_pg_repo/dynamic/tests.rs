@@ -46,6 +46,16 @@ fn test_build_message_email_filter_importance_true_includes_drafts() {
 }
 
 #[test]
+fn test_build_message_email_filter_importance_true_excludes_trash() {
+    let expr = Expr::Literal(EmailLiteral::Importance(true));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("l.name = 'TRASH'"));
+    assert!(debug.contains("NOT EXISTS"));
+}
+
+#[test]
 fn test_build_message_email_filter_recipient() {
     let email = Email::Complete(
         EmailStr::parse_from_str("recipient@example.com")
@@ -250,6 +260,45 @@ fn test_get_sort_timestamp_field_default() {
 }
 
 #[test]
+fn test_build_query_shared_include_uses_union_instead_of_or() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("UNION"));
+    assert!(sql.contains("t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+    assert!(!sql.contains(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+}
+
+#[test]
+fn test_build_query_projects_real_updated_at_for_candidate_threads() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.updated_at AS updated_at"));
+    assert!(!sql.contains("COALESCE(t.latest_non_spam_message_ts, t.updated_at) AS updated_at"));
+}
+
+#[test]
+fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("ORDER BY effective_ts DESC, id DESC"));
+    assert!(sql.contains("ORDER BY t.effective_ts DESC, t.id DESC"));
+    assert!(!sql.contains("ORDER BY effective_ts DESC, updated_at DESC"));
+    assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
+}
+
+#[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
@@ -380,6 +429,90 @@ fn test_has_both_literals_in_combined_ast() {
     );
     assert!(has_thread_literals(&expr));
     assert!(has_message_literals(&expr));
+}
+
+#[test]
+fn test_build_thread_email_filter_single_project_id() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.project_id = "));
+    assert!(result.has_bind_string("project-123"));
+    assert!(result.has_no_raw_containing("project-123"));
+}
+
+#[test]
+fn test_build_thread_email_filter_multiple_project_ids() {
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId("project-1".to_string())),
+        Expr::Literal(EmailLiteral::ProjectId("project-2".to_string())),
+    );
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("OR"));
+    assert!(result.has_bind_string("project-1"));
+    assert!(result.has_bind_string("project-2"));
+    assert!(result.has_no_raw_containing("project-1"));
+    assert!(result.has_no_raw_containing("project-2"));
+}
+
+#[test]
+fn test_build_message_email_filter_maps_project_id_to_true() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("project_id"));
+}
+
+#[test]
+fn test_has_thread_literals_true_when_project_id_present() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_has_message_literals_false_when_only_project_id() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
+    assert!(!has_message_literals(&expr));
+}
+
+#[test]
+fn test_combined_project_id_and_sender_splits_correctly() {
+    let email = Email::Complete(
+        EmailStr::parse_from_str("sender@example.com")
+            .unwrap()
+            .into_owned(),
+    );
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId("project-123".to_string())),
+        Expr::Literal(EmailLiteral::Sender(email)),
+    );
+
+    let thread_result = build_thread_email_filter(&expr);
+    let thread_debug = thread_result.to_debug_sql();
+    assert!(thread_debug.contains("t.project_id = "));
+    assert!(thread_result.has_bind_string("project-123"));
+    assert!(!thread_debug.contains("from_contact_id"));
+
+    let message_result = build_message_email_filter(&expr);
+    let message_debug = message_result.to_debug_sql();
+    assert!(message_debug.contains("from_contact_id"));
+    assert!(message_result.has_bind_string("sender@example.com"));
+    assert!(!message_result.has_bind_string("project-123"));
+}
+
+#[test]
+fn test_sql_injection_project_id_not_in_raw_sql() {
+    let expr = Expr::Literal(EmailLiteral::ProjectId("'; DROP TABLE--".to_string()));
+    let result = build_thread_email_filter(&expr);
+
+    assert!(result.has_bind_string("'; DROP TABLE--"));
+    assert!(result.has_no_raw_containing("DROP"));
+    assert!(result.has_no_raw_containing("';"));
 }
 
 #[test]

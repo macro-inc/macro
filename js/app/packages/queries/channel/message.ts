@@ -1,4 +1,3 @@
-import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
 import type { DateValue } from '@core/util/date';
@@ -34,6 +33,7 @@ import {
   resolveMessageTarget,
   type DeleteTargetSnapshot,
 } from './reconcile';
+import { useAnalytics } from '@app/component/analytics-context';
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -204,7 +204,7 @@ export function optimisticInsertChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     if (target.kind === 'thread_reply') {
       const optimisticReply = makeOptimisticThreadReply(
         vars,
@@ -249,7 +249,7 @@ export function rollbackInsertChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     removeMessageFromTargetCaches(channelId, context.target);
   }
 }
@@ -304,7 +304,7 @@ export function replaceOptimisticMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetMessageId(
       vars.channelId,
       resolveMessageTarget({
@@ -378,7 +378,7 @@ export function optimisticDeleteChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     context.targetSnapshot = captureDeleteSnapshotForTarget(
       vars.channelId,
       target
@@ -418,7 +418,7 @@ export function rollbackDeleteChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS && context.targetSnapshot) {
+  if (ENABLE_NEW_CHANNELS() && context.targetSnapshot) {
     restoreMessageInTargetCaches(
       channelId,
       context.target,
@@ -499,7 +499,7 @@ export function optimisticUpdateChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS && context) {
+  if (ENABLE_NEW_CHANNELS() && context) {
     replaceTargetMessageState(vars.channelId, target, {
       content: vars.content,
       editedAt: now,
@@ -549,7 +549,7 @@ export function rollbackUpdateChannelMessage(
     }
   );
 
-  if (ENABLE_NEW_CHANNELS) {
+  if (ENABLE_NEW_CHANNELS()) {
     replaceTargetMessageState(channelId, context.target, {
       content: context.previousContent,
       editedAt: normalizeDateValue(context.previousEditedAt),
@@ -558,8 +558,6 @@ export function rollbackUpdateChannelMessage(
     });
   }
 }
-
-const { track } = withAnalytics();
 
 type SendMessageParams = {
   channelID: string;
@@ -581,6 +579,8 @@ export function useSendMessageMutation(
     SendMessageContext
   >
 ) {
+  const analytics = useAnalytics();
+
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
@@ -619,11 +619,10 @@ export function useSendMessageMutation(
             realId: data.id,
             threadId: variables.message.thread_id ?? undefined,
           });
-          track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-            channelId: variables.channelID,
+          analytics.track('channel_message_sent', {
             contentLength: variables.message.content?.length ?? 0,
             attachmentsLength: variables.message.attachments.length,
-            inThread: variables.message.thread_id !== undefined,
+            isThreadReply: variables.message.thread_id !== undefined,
           });
         },
         onError(error, vars, context) {
@@ -635,7 +634,7 @@ export function useSendMessageMutation(
         },
         onSettled: (_data, _error, variables) => {
           softInvalidateChannelWithID(variables.channelID);
-          if (ENABLE_NEW_CHANNELS) {
+          if (ENABLE_NEW_CHANNELS()) {
             softInvalidateTargetCaches(
               variables.channelID,
               resolveMessageTarget({
@@ -711,7 +710,7 @@ export function useDeleteMessageMutation(
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
-          if (ENABLE_NEW_CHANNELS) {
+          if (ENABLE_NEW_CHANNELS()) {
             softInvalidateTargetCaches(
               vars.channelID,
               resolveMessageTarget({
@@ -796,7 +795,7 @@ export function usePatchMessageMutation(
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelID);
-          if (ENABLE_NEW_CHANNELS) {
+          if (ENABLE_NEW_CHANNELS()) {
             softInvalidateTargetCaches(
               vars.channelID,
               resolveMessageTarget({

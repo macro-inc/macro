@@ -2,7 +2,7 @@
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::{
-    model::{RoleId, SubscriptionStatus, UserRolesAndPermissionsError},
+    model::{ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError},
     port::{UserRepository, UserRolesAndPermissionsRepository, UserRolesAndPermissionsService},
 };
 
@@ -46,19 +46,29 @@ where
         &self,
         email: Email<Lowercase<'_>>,
         subscription_status: SubscriptionStatus,
+        product_tier: ProductTier,
     ) -> Result<(), UserRolesAndPermissionsError> {
         let user_id = self.user_repository.get_user_id_by_email(&email).await?;
+
+        let sub_role = match product_tier {
+            ProductTier::Haiku => RoleId::SubHaiku,
+            ProductTier::Sonnet => RoleId::SubSonnet,
+            ProductTier::Opus => RoleId::SubOpus,
+        };
+
+        let roles = [RoleId::ProfessionalSubscriber, sub_role];
+
         match subscription_status {
             SubscriptionStatus::Active => {
                 self.user_roles_and_permissions_repository
-                    .add_roles_to_user(&user_id, &[RoleId::ProfessionalSubscriber])
+                    .add_roles_to_user(&user_id, &roles)
                     .await
             }
             SubscriptionStatus::Canceled
             | SubscriptionStatus::Paused
             | SubscriptionStatus::Unpaid => {
                 self.user_roles_and_permissions_repository
-                    .remove_roles_from_user(&user_id, &[RoleId::ProfessionalSubscriber])
+                    .remove_roles_from_user(&user_id, &roles)
                     .await
             }
             _ => Err(UserRolesAndPermissionsError::InvalidSubscriptionStatus(
@@ -85,5 +95,19 @@ where
         self.user_roles_and_permissions_repository
             .remove_roles_from_user(user_id, role_ids.as_ref())
             .await
+    }
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<std::collections::HashSet<super::model::PermissionId>, UserRolesAndPermissionsError>
+    {
+        Ok(self
+            .user_roles_and_permissions_repository
+            .get_user_permissions(user_id)
+            .await?
+            .into_iter()
+            .map(|p| p.id)
+            .collect())
     }
 }

@@ -41,6 +41,8 @@ export type LexicalWrapperBase = {
   cleanup: () => void;
   isInteractable: () => boolean;
   selection?: Store<SelectionData>;
+  /** When true, decorator components should skip backend fetches (e.g. preview API). */
+  skipPreviewFetch?: boolean;
 };
 
 export type LexicalWrapperWithMapping = LexicalWrapperBase & {
