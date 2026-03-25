@@ -39,6 +39,7 @@ impl TeamRepositoryImpl {
 
 impl TeamRepositoryImpl {
     /// Bumps the teams seat count by the quantity number (positive or negative)
+    #[tracing::instrument(skip(transaction), err)]
     async fn bump_seat_count<'t>(
         transaction: &mut sqlx::Transaction<'t, sqlx::Postgres>,
         team_id: &uuid::Uuid,
@@ -60,6 +61,7 @@ impl TeamRepositoryImpl {
     }
 
     /// Gets the owner of a team
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_owner(
         &self,
         team_id: &uuid::Uuid,
@@ -79,6 +81,7 @@ impl TeamRepositoryImpl {
         Ok(MacroUserIdStr::parse_from_str(owner_id.as_str()).map(|id| id.into_owned())?)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn create_team_inner(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -163,6 +166,7 @@ impl From<sqlx::Error> for RemoveTeamInviteError {
 }
 
 impl TeamRepository for TeamRepositoryImpl {
+    #[tracing::instrument(skip(self), err)]
     async fn get_stripe_customer_id(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -192,6 +196,7 @@ impl TeamRepository for TeamRepositoryImpl {
         }
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_subscription_id(
         &self,
         team_id: &uuid::Uuid,
@@ -220,6 +225,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(team_subscription_id)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -235,6 +241,7 @@ impl TeamRepository for TeamRepositoryImpl {
             .map_err(|e| e.into())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
@@ -312,6 +319,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(created_emails)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
@@ -348,6 +356,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(tier)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_invite_by_id(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -381,6 +390,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(team_invite.to_owned())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_team_invite(
         &self,
         team_id: &uuid::Uuid,
@@ -407,6 +417,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn update_team_subscription(
         &self,
         team_id: &uuid::Uuid,
@@ -427,6 +438,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
         sqlx::query!(
             r#"
@@ -441,6 +453,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_all_team_members(
         &self,
         team_id: &uuid::Uuid,
@@ -485,6 +498,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(members)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -548,6 +562,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(team_member)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn is_user_member_of_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -566,6 +581,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(team_member.is_some())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_members(
         &self,
         team_id: &uuid::Uuid,
@@ -610,6 +626,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(members)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn bulk_is_member_of_other_team(
         &self,
         ignore_team_ids: non_empty::NonEmpty<&[uuid::Uuid]>,
@@ -648,6 +665,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(members)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
@@ -699,6 +717,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(TeamWithMembers { team, members })
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
@@ -724,6 +743,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(teams)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_user_team_invites(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -760,6 +780,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(invites)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_invites(
         &self,
         team_id: &uuid::Uuid,
@@ -794,6 +815,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(invites)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_name(&self, team_id: &uuid::Uuid) -> Result<String, TeamError> {
         let name = sqlx::query!(
             r#"
@@ -810,6 +832,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(name)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,
@@ -832,6 +855,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_invite_details_by_id(
         &self,
         invite_id: &uuid::Uuid,
@@ -870,6 +894,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(invite)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn update_team_invite_last_sent_at(
         &self,
         invite_id: &uuid::Uuid,
@@ -888,6 +913,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_role(
         &self,
         team_id: &uuid::Uuid,

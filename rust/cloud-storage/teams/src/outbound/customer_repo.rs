@@ -1,6 +1,6 @@
 //! Implementation for CustomerRepository using Stripe.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use stripe::{CreateSubscription, CreateSubscriptionItems, UpdateSubscription};
 
@@ -148,5 +148,48 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn convert_subscription_to_team(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        team_id: &uuid::Uuid,
+        team_owner_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), CustomerError> {
+        let mut metadata = HashMap::new();
+        metadata.insert("team_id".to_string(), team_id.to_string());
+        metadata.insert("owner_id".to_string(), team_owner_id.to_string());
+
+        let mut params = UpdateSubscription::new();
+        params.metadata = Some(metadata);
+
+        stripe::Subscription::update(&self.client, subscription_id, params)
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_subscription_id_for_customer(
+        &self,
+        customer_id: &stripe::CustomerId,
+    ) -> Result<stripe::SubscriptionId, CustomerError> {
+        let mut params = stripe::ListSubscriptions::new();
+        params.customer = Some(customer_id.clone());
+        params.status = Some(stripe::SubscriptionStatusFilter::Active);
+        params.limit = Some(1);
+
+        let subscriptions = stripe::Subscription::list(&self.client, &params)
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+
+        subscriptions
+            .data
+            .into_iter()
+            .next()
+            .map(|sub| sub.id)
+            .ok_or(CustomerError::SubscriptionNotActive)
     }
 }

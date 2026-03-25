@@ -2,6 +2,7 @@
 
 use std::{collections::HashSet, str::FromStr, sync::Arc};
 
+use anyhow::Context;
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
@@ -17,11 +18,10 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        CreateSubscriptionArgs, CreateTeamError, CustomerError, DeleteTeamError,
-        InviteUsersToTeamError, JoinTeamError, PatchTeamRequest, ReinviteError,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
-        TeamWithMembers,
+        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
+        ReinviteError, RemoveTeamInviteError, RemoveUserFromTeamError,
+        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
+        TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
@@ -101,7 +101,54 @@ where
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
+    /// Gets the teams subscription id
+    /// If the team doesn't have a subscription yet, it will convert the owners personal subscription into a team subscription
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_subscription(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> anyhow::Result<stripe::SubscriptionId> {
+        let subscription_id = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await?;
+
+        // stripe subscription is already tracked for team
+        if let Some(subscription_id) = subscription_id {
+            return Ok(subscription_id);
+        }
+
+        tracing::info!("no subscription found for team");
+
+        // Get the team to get owner
+        let team = self.team_repository.get_team_by_id(team_id).await?;
+
+        let customer_id = self
+            .team_repository
+            .get_stripe_customer_id(&team.team.owner_id)
+            .await?
+            .context("expected customer id")?;
+
+        let customer_subscription_id = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await?;
+
+        // update the customers subscription to a team sub
+        self.team_repository
+            .update_team_subscription(team_id, &customer_subscription_id)
+            .await?;
+
+        // convert the customers subscription to a team subscription
+        self.customer_repository
+            .convert_subscription_to_team(&customer_subscription_id, team_id, &team.team.owner_id)
+            .await?;
+
+        Ok(customer_subscription_id)
+    }
+
     /// Sends an invite notification for a team invite
+    #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
         &self,
         team_id: &uuid::Uuid,
@@ -147,6 +194,7 @@ where
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
 {
+    #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -166,6 +214,7 @@ where
             .await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
@@ -203,6 +252,7 @@ where
         Ok(invited)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
@@ -219,19 +269,12 @@ where
                 .remove_team_member_from_channels(team_id, user_id)
                 .await?;
 
-            let subscription_id = self
-                .team_repository
-                .get_team_subscription_id(team_id)
-                .await?;
+            let subscription_id = self.get_team_subscription(team_id).await?;
 
-            if let Some(subscription_id) = subscription_id {
-                // Decrement the quantity of the subscription
-                self.customer_repository
-                    .decrease_subscription_quantity(&subscription_id, 1)
-                    .await?;
-            } else {
-                return Err(RemoveUserFromTeamError::NoSubscription);
-            }
+            // Decrement the quantity of the subscription
+            self.customer_repository
+                .decrease_subscription_quantity(&subscription_id, 1)
+                .await?;
 
             if !self.team_repository.is_user_member_of_team(user_id).await? {
                 let roles = vec![RoleId::TeamSubscriber, RoleId::from(tier)];
@@ -246,6 +289,7 @@ where
         tier.map(|_| ())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn reject_invitation(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -267,6 +311,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_team_invite(
         &self,
         team_id: &uuid::Uuid,
@@ -279,26 +324,21 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), DeleteTeamError> {
         let members = self.team_repository.get_all_team_members(team_id).await?;
 
-        let subscription_id = self
-            .team_repository
-            .get_team_subscription_id(team_id)
-            .await?;
+        let subscription_id = self.get_team_subscription(team_id).await?;
 
-        if let Some(subscription_id) = subscription_id {
-            // Cancel subscription
-            let subscription_id =
-                stripe::SubscriptionId::from_str(&subscription_id).map_err(|_| {
-                    DeleteTeamError::StorageLayerError(anyhow::anyhow!("Invalid subscription id"))
-                })?;
+        // Cancel subscription
+        let subscription_id = stripe::SubscriptionId::from_str(&subscription_id).map_err(|_| {
+            DeleteTeamError::StorageLayerError(anyhow::anyhow!("Invalid subscription id"))
+        })?;
 
-            self.customer_repository
-                .cancel_subscription(&subscription_id)
-                .await
-                .map_err(DeleteTeamError::CustomerError)?;
-        }
+        self.customer_repository
+            .cancel_subscription(&subscription_id)
+            .await
+            .map_err(DeleteTeamError::CustomerError)?;
 
         self.team_repository
             .delete_team(team_id)
@@ -326,6 +366,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn join_team(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -351,60 +392,21 @@ where
             .add_team_member_to_channels(&team_member.team_id, user_id)
             .await?;
 
-        let subscription_id = self
-            .team_repository
-            .get_team_subscription_id(&team_member.team_id)
-            .await?;
+        let subscription_id = self.get_team_subscription(&team_member.team_id).await?;
 
         // Increase the quantity of the subscription
-        if let Some(subscription_id) = subscription_id {
-            let subscription_id = stripe::SubscriptionId::from_str(&subscription_id)
-                .map_err(|e| JoinTeamError::StorageLayerError(e.into()))?;
+        let subscription_id = stripe::SubscriptionId::from_str(&subscription_id)
+            .map_err(|e| JoinTeamError::StorageLayerError(e.into()))?;
 
-            // Increment the quantity of the subscription by the number of emails
-            self.customer_repository
-                .increase_subscription_quantity(&subscription_id, 1)
-                .await?;
-        } else {
-            let team = self
-                .team_repository
-                .get_team_by_id(&team_member.team_id)
-                .await?;
-
-            // Create new subscription
-            let customer_id = self
-                .team_repository
-                .get_stripe_customer_id(&team.team.owner_id)
-                .await?
-                .ok_or(JoinTeamError::CustomerError(
-                    CustomerError::NoStripeCustomerId,
-                ))?;
-
-            let subscription_id = self
-                .customer_repository
-                .create_subscription(CreateSubscriptionArgs {
-                    customer_id,
-                    quantity: 1,
-                    metadata: Some(
-                        vec![
-                            ("team_id".to_string(), team.team.id.to_string()),
-                            ("owner_id".to_string(), team.team.owner_id.to_string()),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    ),
-                })
-                .await?;
-
-            // Update team with the new subscription id
-            self.team_repository
-                .update_team_subscription(&team.team.id, &subscription_id)
-                .await?;
-        }
+        // Increment the quantity of the subscription by the number of emails
+        self.customer_repository
+            .increase_subscription_quantity(&subscription_id, 1)
+            .await?;
 
         Ok(team_member)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn revoke_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
@@ -453,14 +455,17 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         self.team_repository.get_team_by_id(team_id).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         self.team_repository.get_user_teams(user_id).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_user_invites(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -468,6 +473,7 @@ where
         self.team_repository.get_user_team_invites(user_id).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_invites(
         &self,
         team_id: &uuid::Uuid,
@@ -475,6 +481,7 @@ where
         self.team_repository.get_team_invites(team_id).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,
@@ -483,6 +490,7 @@ where
         self.team_repository.patch_team(team_id, req).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn reinvite_to_team(
         &self,
         team_invite_id: &uuid::Uuid,
@@ -530,6 +538,7 @@ where
         Ok(invite)
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_role(
         &self,
         team_id: &uuid::Uuid,

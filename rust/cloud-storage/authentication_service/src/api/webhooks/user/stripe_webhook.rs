@@ -363,12 +363,16 @@ async fn handle_team_subscription_event(
     team_id: &uuid::Uuid,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
+    tracing::trace!("handling team subscription");
+
     if subscription_status == "trialing" {
         anyhow::bail!("unexpected trialing status for team subscription");
     }
 
     match subscription_status {
         "active" => {
+            // TODO: ensure all users have permissions now that status is active again
+
             track_stripe_subscription(ctx.analytics_client.clone(), subscription_id, tracking_data);
             Ok(())
         }

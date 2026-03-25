@@ -1,9 +1,25 @@
 //! Contains the domain logic for teams handling the customers
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::domain::model::{CreateSubscriptionArgs, CustomerError};
 
 /// The CustomerRepository defines a set of actions to perform on customer data
 pub trait CustomerRepository: Clone + Send + Sync + 'static {
+    /// Mark subscription as a team subscription
+    fn convert_subscription_to_team(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        team_id: &uuid::Uuid,
+        team_owner_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Get the customers subscription id
+    fn get_subscription_id_for_customer(
+        &self,
+        customer_id: &stripe::CustomerId,
+    ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
+
     /// Create a new subscription for a customer
     fn create_subscription(
         &self,
