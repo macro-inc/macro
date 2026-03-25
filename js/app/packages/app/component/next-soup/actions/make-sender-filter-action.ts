@@ -11,8 +11,9 @@ export const makeSenderFilterAction = (
     const seen = new Set<string>();
     for (const entity of entities) {
       if (entity.type !== 'email' || !entity.senderEmail) continue;
-      if (seen.has(entity.senderEmail)) continue;
-      seen.add(entity.senderEmail);
+      const key = entity.senderEmail.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
       await action(entity.senderEmail);
     }
   };

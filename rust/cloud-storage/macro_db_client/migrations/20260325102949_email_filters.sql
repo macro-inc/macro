@@ -8,9 +8,13 @@ CREATE TABLE IF NOT EXISTS email_filters
     created_at    timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT email_filters_pkey PRIMARY KEY (id),
     CONSTRAINT email_filters_address_xor_domain_chk
-        CHECK ((email_address IS NOT NULL) <> (email_domain IS NOT NULL)),
+        CHECK (
+            (email_address IS NOT NULL AND trim(email_address) <> '')
+            <>
+            (email_domain IS NOT NULL AND trim(email_domain) <> '')
+        ),
     CONSTRAINT email_filters_email_domain_format_chk
-        CHECK (email_domain IS NULL OR position('@' IN email_domain) = 0)
+        CHECK (email_domain IS NULL OR (trim(email_domain) <> '' AND position('@' IN email_domain) = 0))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS email_filters_link_id_email_address_uq

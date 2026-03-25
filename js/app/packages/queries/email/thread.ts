@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
+import { invalidateAllSoup } from '../soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -429,6 +430,7 @@ async function upsertSenderFilterWithToast(
   }
 
   const filterId = result[1].filter.id;
+  invalidateAllSoup();
 
   toast.success(
     `Sender marked as ${label}`,
@@ -442,6 +444,7 @@ async function upsertSenderFilterWithToast(
         if (isErr(undoResult)) {
           toast.failure('Failed to undo', senderEmail);
         } else {
+          invalidateAllSoup();
           toast.success('Sender filter removed');
         }
       },
