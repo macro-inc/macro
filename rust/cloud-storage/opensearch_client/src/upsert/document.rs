@@ -30,6 +30,9 @@ pub struct UpsertDocumentArgs {
     pub content: String,
     /// The updated at time of the document
     pub updated_at_seconds: EpochSeconds,
+    /// The sub type of the document (e.g. task)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<String>,
 }
 
 /// Process a single chunk of documents

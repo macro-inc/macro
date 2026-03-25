@@ -96,6 +96,7 @@ pub async fn update_search_with_raw_document(
     };
 
     let document_name = document_info.document_name;
+    let sub_type = document_info.sub_type.map(|st| st.to_string());
 
     let document_version_id = match search_extractor_message.file_type {
         // For static/converted files, we want to use the version from the search extractor message since
@@ -190,6 +191,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 })
                 .collect()
         }
@@ -205,6 +207,7 @@ pub async fn update_search_with_raw_document(
                 owner_id: search_extractor_message.user_id.clone(),
                 file_type: file_type.to_string(),
                 updated_at_seconds: updated_at,
+                sub_type: sub_type.clone(),
             }]
         }
         FileType::Md => {
@@ -224,6 +227,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
@@ -241,6 +245,7 @@ pub async fn update_search_with_raw_document(
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
+                    sub_type: sub_type.clone(),
                 }]
             }
         }
@@ -264,6 +269,7 @@ fn generate_upserts(
             .as_str(),
     )?;
     let document_name = document_info.document_name;
+    let sub_type = document_info.sub_type.map(|st| st.to_string());
 
     let upserts = result
         .into_iter()
@@ -276,6 +282,7 @@ fn generate_upserts(
             owner_id: document_info.owner.to_string(),
             file_type: file_type.to_string(),
             updated_at_seconds: updated_at,
+            sub_type: sub_type.clone(),
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -383,5 +390,6 @@ mod tests {
 
         assert!(!upserts.is_empty());
         assert_eq!(upserts.len(), 2);
+        assert_eq!(upserts[0].sub_type, None);
     }
 }
