@@ -159,6 +159,29 @@ impl EmailService for MockEmail {
     ) -> Result<Option<String>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
+
+    async fn upsert_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::UpsertEmailFilterInput,
+    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _filter_id: Uuid,
+    ) -> Result<bool, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_email_filters(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::EmailFilter>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 fn mock_router() -> Router {
@@ -289,6 +312,29 @@ impl EmailService for MockEmailLinkResult {
             EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         >,
     ) -> Result<Option<String>, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn upsert_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _input: email::domain::models::UpsertEmailFilterInput,
+    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_email_filter(
+        &self,
+        _link: &email::domain::models::Link,
+        _filter_id: Uuid,
+    ) -> Result<bool, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn list_email_filters(
+        &self,
+        _link: &email::domain::models::Link,
+    ) -> Result<Vec<email::domain::models::EmailFilter>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 }
