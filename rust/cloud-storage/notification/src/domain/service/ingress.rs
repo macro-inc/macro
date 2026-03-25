@@ -128,14 +128,14 @@ pub trait NotificationReader: Send + Sync + 'static {
     fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
-        notification_event_type: &str,
+        type_name: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Re-enable a notification type for a user.
     fn enable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
-        notification_event_type: &str,
+        type_name: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -747,10 +747,10 @@ where
     async fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
-        notification_event_type: &str,
+        type_name: &str,
     ) -> Result<(), Report> {
         self.repository
-            .disable_notification_type(user_id, notification_event_type)
+            .disable_notification_type(user_id, type_name)
             .await
     }
 
@@ -758,10 +758,10 @@ where
     async fn enable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
-        notification_event_type: &str,
+        type_name: &str,
     ) -> Result<(), Report> {
         self.repository
-            .enable_notification_type(user_id, notification_event_type)
+            .enable_notification_type(user_id, type_name)
             .await
     }
 }
