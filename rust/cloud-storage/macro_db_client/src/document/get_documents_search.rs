@@ -69,7 +69,7 @@ pub async fn get_documents_for_search(
             AND ($4::text IS NULL OR dst.sub_type::text = $4)
             AND ($5::timestamptz IS NULL OR d."createdAt" >= $5)
             AND ($6::timestamptz IS NULL OR d."createdAt" < $6)
-        ORDER BY d."createdAt" ASC
+        ORDER BY d."createdAt" ASC, d.id ASC
         LIMIT $1 OFFSET $2
     "#,
         limit,
