@@ -1,6 +1,7 @@
 pub mod attachment;
 pub mod contact;
 pub mod draft;
+pub mod email_filter;
 pub mod error;
 pub mod label;
 pub mod link;
@@ -18,6 +19,7 @@ pub use draft::{
     CreateDraftInput, CreatedDraft, ParsedAddresses, ResolvedDraftInput, SimpleMessageInfo,
     UpsertedContacts, UpsertedRecipient,
 };
+pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
     Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,

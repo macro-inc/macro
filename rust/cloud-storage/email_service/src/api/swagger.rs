@@ -29,8 +29,9 @@ use ::email::inbound::{
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
 use ::email::inbound::{
-    UpdateThreadLabelRequest, UpdateThreadLabelsResponse, UpdateThreadProjectRequest,
-    UpdateThreadProjectResponse,
+    ApiEmailFilter, ListEmailFiltersResponse, UpdateThreadLabelRequest, UpdateThreadLabelsResponse,
+    UpdateThreadProjectRequest, UpdateThreadProjectResponse, UpsertEmailFilterRequest,
+    UpsertEmailFilterResponse,
 };
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
@@ -81,6 +82,9 @@ use utoipa::OpenApi;
         email::labels::create::handler,
         email::labels::delete::handler,
         inbound::list_labels_handler,
+        inbound::upsert_email_filter_handler,
+        inbound::delete_email_filter_handler,
+        inbound::list_email_filters_handler,
         email::contacts::list::list_contacts_handler,
         email::contacts::block_sender::handler,
         email::contacts::unblock_sender::handler,
@@ -147,6 +151,11 @@ use utoipa::OpenApi;
             BlockSenderResponse,
             UnblockSenderRequest,
             ListBlockedResponse,
+            // Email filter types
+            UpsertEmailFilterRequest,
+            UpsertEmailFilterResponse,
+            ListEmailFiltersResponse,
+            ApiEmailFilter,
             // Sort/filter types
             ApiSortMethod,
             // Legacy service types (keeping for backward compatibility)

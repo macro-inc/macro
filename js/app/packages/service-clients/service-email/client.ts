@@ -21,6 +21,7 @@ import type {
   GetAttachmentResponse,
   GetThreadResponse,
   ListContactsResponse,
+  ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
   SendMessageRequest,
@@ -29,6 +30,8 @@ import type {
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
   UpdateThreadLabelsResponse,
+  UpsertEmailFilterRequest,
+  UpsertEmailFilterResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
@@ -349,6 +352,28 @@ export const emailClient = {
     return emailFetch('/email/contacts/unblock', {
       method: 'POST',
       body: JSON.stringify({ email_address: args.email_address }),
+    });
+  },
+  async listEmailFilters() {
+    return mapOk(
+      await emailFetch<ListEmailFiltersResponse>('/email/filters', {
+        method: 'GET',
+      }),
+      (result) => result
+    );
+  },
+  async upsertEmailFilter(args: UpsertEmailFilterRequest) {
+    return mapOk(
+      await emailFetch<UpsertEmailFilterResponse>('/email/filters', {
+        method: 'PUT',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+  async deleteEmailFilter(args: { id: string }) {
+    return emailFetch(`/email/filters/${args.id}`, {
+      method: 'DELETE',
     });
   },
 };

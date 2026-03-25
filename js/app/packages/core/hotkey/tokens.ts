@@ -91,6 +91,8 @@ export const TOKENS = {
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
     blockSender: 'email.blockSender',
+    markSenderSignal: 'email.markSenderSignal',
+    markSenderNoise: 'email.markSenderNoise',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',

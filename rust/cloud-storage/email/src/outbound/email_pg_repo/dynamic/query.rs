@@ -7,7 +7,7 @@ use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use models_pagination::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{Execute, PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -422,7 +422,9 @@ pub(crate) async fn dynamic_email_thread_cursor(
             user_id: user_id.to_string(),
         },
     );
-    qb.build()
+    let built = qb.build();
+    println!("asdf {}", built.sql());
+    built
         .try_map(|row| {
             Ok(ThreadPreviewCursorDbRow {
                 id: row.try_get("id")?,

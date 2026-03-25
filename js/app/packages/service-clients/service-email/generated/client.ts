@@ -32,6 +32,7 @@ import type {
   InitResponse,
   ListBlockedResponse,
   ListContactsResponse,
+  ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksParams,
   ListLinksResponse,
@@ -48,6 +49,8 @@ import type {
   UpdateThreadLabelsResponse,
   UpdateThreadProjectRequest,
   UpdateThreadProjectResponse,
+  UpsertEmailFilterRequest,
+  UpsertEmailFilterResponse,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -1262,6 +1265,184 @@ export const removeForwardedAttachment = async (
     status: res.status,
     headers: res.headers,
   } as removeForwardedAttachmentResponse;
+};
+
+/**
+ * @summary List all email filters for the current user.
+ */
+export type listEmailFiltersResponse200 = {
+  data: ListEmailFiltersResponse;
+  status: 200;
+};
+
+export type listEmailFiltersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listEmailFiltersResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listEmailFiltersResponseSuccess = listEmailFiltersResponse200 & {
+  headers: Headers;
+};
+export type listEmailFiltersResponseError = (
+  | listEmailFiltersResponse401
+  | listEmailFiltersResponse500
+) & {
+  headers: Headers;
+};
+
+export type listEmailFiltersResponse =
+  | listEmailFiltersResponseSuccess
+  | listEmailFiltersResponseError;
+
+export const getListEmailFiltersUrl = () => {
+  return `/email/filters`;
+};
+
+export const listEmailFilters = async (
+  options?: RequestInit
+): Promise<listEmailFiltersResponse> => {
+  const res = await fetch(getListEmailFiltersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listEmailFiltersResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listEmailFiltersResponse;
+};
+
+/**
+ * @summary Create or update an email filter.
+ */
+export type upsertEmailFilterResponse200 = {
+  data: UpsertEmailFilterResponse;
+  status: 200;
+};
+
+export type upsertEmailFilterResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type upsertEmailFilterResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type upsertEmailFilterResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type upsertEmailFilterResponseSuccess = upsertEmailFilterResponse200 & {
+  headers: Headers;
+};
+export type upsertEmailFilterResponseError = (
+  | upsertEmailFilterResponse400
+  | upsertEmailFilterResponse401
+  | upsertEmailFilterResponse500
+) & {
+  headers: Headers;
+};
+
+export type upsertEmailFilterResponse =
+  | upsertEmailFilterResponseSuccess
+  | upsertEmailFilterResponseError;
+
+export const getUpsertEmailFilterUrl = () => {
+  return `/email/filters`;
+};
+
+export const upsertEmailFilter = async (
+  upsertEmailFilterRequest: UpsertEmailFilterRequest,
+  options?: RequestInit
+): Promise<upsertEmailFilterResponse> => {
+  const res = await fetch(getUpsertEmailFilterUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(upsertEmailFilterRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertEmailFilterResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertEmailFilterResponse;
+};
+
+/**
+ * @summary Delete an email filter by ID.
+ */
+export type deleteEmailFilterResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteEmailFilterResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteEmailFilterResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteEmailFilterResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteEmailFilterResponseSuccess = deleteEmailFilterResponse204 & {
+  headers: Headers;
+};
+export type deleteEmailFilterResponseError = (
+  | deleteEmailFilterResponse401
+  | deleteEmailFilterResponse404
+  | deleteEmailFilterResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteEmailFilterResponse =
+  | deleteEmailFilterResponseSuccess
+  | deleteEmailFilterResponseError;
+
+export const getDeleteEmailFilterUrl = (id: string) => {
+  return `/email/filters/${id}`;
+};
+
+export const deleteEmailFilter = async (
+  id: string,
+  options?: RequestInit
+): Promise<deleteEmailFilterResponse> => {
+  const res = await fetch(getDeleteEmailFilterUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteEmailFilterResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteEmailFilterResponse;
 };
 
 /**

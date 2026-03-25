@@ -634,6 +634,107 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_email_filters")
+    )
+)]
+async fn test_dynamic_query_importance_true_email_filters_domain_with_address_override(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000012-0000-0000-0000-000000000012"),
+        "Should include thread 12 via sender domain important rule"
+    );
+    assert!(
+        !result_ids.contains("20000013-0000-0000-0000-000000000013"),
+        "Should exclude thread 13 because sender address override beats important domain rule"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_email_filters")
+    )
+)]
+async fn test_dynamic_query_importance_true_email_filters_excludes_trashed_messages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        !result_ids.contains("20000016-0000-0000-0000-000000000016"),
+        "Should exclude thread 16 because the sender is important but the only matching message is trashed"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_email_filters")
+    )
+)]
+async fn test_dynamic_query_importance_false_email_filters_domain_with_address_override(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(false)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000014-0000-0000-0000-000000000014"),
+        "Should include thread 14 via sender domain not-important rule"
+    );
+    assert!(
+        !result_ids.contains("20000015-0000-0000-0000-000000000015"),
+        "Should exclude thread 15 because sender address important override beats not-important domain rule"
+    );
+
+    Ok(())
+}
+
 // ── Project ID filter tests ──────────────────────────────────────────
 
 #[sqlx::test(

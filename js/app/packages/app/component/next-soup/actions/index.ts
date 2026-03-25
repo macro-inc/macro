@@ -1,4 +1,6 @@
 export { makeBlockSenderAction } from './make-block-sender-action';
+export { makeMarkSenderSignalAction } from './make-mark-sender-important-action';
+export { makeMarkSenderNoiseAction } from './make-mark-sender-noise-action';
 export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeDeleteAction } from './make-delete-action';
 export { makeRenameAction } from './make-rename-action';

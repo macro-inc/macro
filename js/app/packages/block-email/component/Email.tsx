@@ -321,6 +321,8 @@ function EmailContent(props: EmailViewProps) {
     registerEmailHotkeys(scopeId(), context.thread, {
       archiveThread: context.archiveThread,
       blockSender: context.blockSender,
+      markSenderSignal: context.markSenderSignal,
+      markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,
       navigateToNextMessage,
     });

@@ -1185,6 +1185,156 @@
         }
       }
     },
+    "/email/filters": {
+      "get": {
+        "tags": ["Email Filters"],
+        "summary": "List all email filters for the current user.",
+        "operationId": "list_email_filters",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEmailFiltersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Email Filters"],
+        "summary": "Create or update an email filter.",
+        "operationId": "upsert_email_filter",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertEmailFilterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertEmailFilterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/filters/{id}": {
+      "delete": {
+        "tags": ["Email Filters"],
+        "summary": "Delete an email filter by ID.",
+        "operationId": "delete_email_filter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Filter ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/init": {
       "post": {
         "tags": ["Init"],
@@ -2834,6 +2984,30 @@
           }
         }
       },
+      "ApiEmailFilter": {
+        "type": "object",
+        "description": "A single email filter in API responses.",
+        "required": ["id", "is_important", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email_address": {
+            "type": ["string", "null"]
+          },
+          "email_domain": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_important": {
+            "type": "boolean"
+          }
+        }
+      },
       "ApiLabel": {
         "type": "object",
         "required": [
@@ -3937,6 +4111,19 @@
           }
         }
       },
+      "ListEmailFiltersResponse": {
+        "type": "object",
+        "description": "Response body for listing email filters.",
+        "required": ["filters"],
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiEmailFilter"
+            }
+          }
+        }
+      },
       "ListLabelsResponse": {
         "type": "object",
         "description": "Response body for listing labels.",
@@ -4565,6 +4752,35 @@
           "oldProjectId": {
             "type": ["string", "null"],
             "description": "The previous project ID of the thread."
+          }
+        }
+      },
+      "UpsertEmailFilterRequest": {
+        "type": "object",
+        "description": "Request body for creating or updating an email filter.",
+        "required": ["is_important"],
+        "properties": {
+          "email_address": {
+            "type": ["string", "null"],
+            "description": "Exact email address to match. Mutually exclusive with `email_domain`."
+          },
+          "email_domain": {
+            "type": ["string", "null"],
+            "description": "Email domain to match. Mutually exclusive with `email_address`."
+          },
+          "is_important": {
+            "type": "boolean",
+            "description": "Whether matching senders should be considered important."
+          }
+        }
+      },
+      "UpsertEmailFilterResponse": {
+        "type": "object",
+        "description": "Response body for upsert email filter.",
+        "required": ["filter"],
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/ApiEmailFilter"
           }
         }
       },

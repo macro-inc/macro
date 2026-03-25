@@ -411,3 +411,73 @@ export async function blockSenderWithToast(senderEmail: string) {
     }
   );
 }
+
+/**
+ * Marks a sender as signal via email filter and shows appropriate toasts with undo support.
+ */
+export async function markSenderSignalWithToast(senderEmail: string) {
+  const result = await emailClient.upsertEmailFilter({
+    email_address: senderEmail,
+    is_important: true,
+  });
+
+  if (isErr(result)) {
+    toast.failure('Failed to mark sender as signal', senderEmail);
+    return;
+  }
+
+  const filterId = result[1].filter.id;
+
+  toast.success(
+    'Sender marked as signal',
+    `Messages from ${senderEmail} will appear in Signal`,
+    {
+      text: 'Undo',
+      onClick: async () => {
+        const undoResult = await emailClient.deleteEmailFilter({
+          id: filterId,
+        });
+        if (isErr(undoResult)) {
+          toast.failure('Failed to undo', senderEmail);
+        } else {
+          toast.success('Sender filter removed');
+        }
+      },
+    }
+  );
+}
+
+/**
+ * Marks a sender as noise via email filter and shows appropriate toasts with undo support.
+ */
+export async function markSenderNoiseWithToast(senderEmail: string) {
+  const result = await emailClient.upsertEmailFilter({
+    email_address: senderEmail,
+    is_important: false,
+  });
+
+  if (isErr(result)) {
+    toast.failure('Failed to mark sender as noise', senderEmail);
+    return;
+  }
+
+  const filterId = result[1].filter.id;
+
+  toast.success(
+    'Sender marked as noise',
+    `Messages from ${senderEmail} will appear in Noise`,
+    {
+      text: 'Undo',
+      onClick: async () => {
+        const undoResult = await emailClient.deleteEmailFilter({
+          id: filterId,
+        });
+        if (isErr(undoResult)) {
+          toast.failure('Failed to undo', senderEmail);
+        } else {
+          toast.success('Sender filter removed');
+        }
+      },
+    }
+  );
+}

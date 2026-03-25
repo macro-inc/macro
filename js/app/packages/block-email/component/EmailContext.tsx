@@ -22,6 +22,8 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import {
   useArchiveThreadMutation,
   blockSenderWithToast,
+  markSenderSignalWithToast,
+  markSenderNoiseWithToast,
   useThreadQuery,
 } from '@queries/email/thread';
 import { emailKeys } from '@queries/email/keys';
@@ -103,6 +105,8 @@ export type EmailContextValues = {
 
   archiveThread: () => boolean;
   blockSender: () => boolean;
+  markSenderSignal: () => boolean;
+  markSenderNoise: () => boolean;
   initialLoadComplete: Accessor<boolean>;
   onInitialDataLoad: (callback: () => boolean) => void;
 };
@@ -373,6 +377,32 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return true;
   };
 
+  const getSenderEmail = (): string | undefined => {
+    const thread = threadQuery.data;
+    if (!thread?.messages?.length) return undefined;
+
+    const userEmail = currentUserEmail()?.toLowerCase();
+    return thread.messages.find(
+      (m) =>
+        m.from?.email &&
+        (!userEmail || m.from.email.toLowerCase() !== userEmail)
+    )?.from?.email;
+  };
+
+  const markSenderSignal = () => {
+    const senderEmail = getSenderEmail();
+    if (!senderEmail) return false;
+    markSenderSignalWithToast(senderEmail);
+    return true;
+  };
+
+  const markSenderNoise = () => {
+    const senderEmail = getSenderEmail();
+    if (!senderEmail) return false;
+    markSenderNoiseWithToast(senderEmail);
+    return true;
+  };
+
   const [messagesListRef, setMessagesListRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
@@ -492,6 +522,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           onRecipientsChange,
           archiveThread,
           blockSender,
+          markSenderSignal,
+          markSenderNoise,
           messagesContainerRef,
           messagesListRef,
           query: {
