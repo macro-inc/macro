@@ -65,7 +65,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
+    ) -> impl Future<Output = Result<TeamUserTier, RemoveUserFromTeamError>> + Send;
 
     ///Gets a team invite by id
     fn get_team_invite_by_id(

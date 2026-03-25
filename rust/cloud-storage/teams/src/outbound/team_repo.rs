@@ -13,6 +13,13 @@ use macro_user_id::{
 use sqlx::PgPool;
 use std::str::FromStr;
 
+/// utility fn for queries to create a sqlx err
+fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
+    sqlx::Error::TypeNotFound {
+        type_name: e.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod test;
 
@@ -31,6 +38,27 @@ impl TeamRepositoryImpl {
 }
 
 impl TeamRepositoryImpl {
+    /// Bumps the teams seat count by the quantity number (positive or negative)
+    async fn bump_seat_count<'t>(
+        transaction: &mut sqlx::Transaction<'t, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        quantity: i32,
+    ) -> Result<(), anyhow::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE team
+            SET seat_count = seat_count + $2
+            WHERE id = $1
+        "#,
+            team_id,
+            quantity
+        )
+        .execute(transaction.as_mut())
+        .await?;
+
+        Ok(())
+    }
+
     /// Gets the owner of a team
     async fn get_team_owner(
         &self,
@@ -71,7 +99,15 @@ impl TeamRepositoryImpl {
             team_name,
             user_id.as_ref(),
         )
-        .map(|row| Team::new(row.id, row.name, row.owner_id))
+        .try_map(|row| {
+            Ok(Team {
+                id: row.id,
+                name: row.name,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+            })
+        })
         .fetch_one(&mut *transaction)
         .await?;
 
@@ -271,19 +307,6 @@ impl TeamRepository for TeamRepositoryImpl {
             })
             .collect();
 
-        // Update the team seat count
-        sqlx::query!(
-            r#"
-            UPDATE team
-            SET seat_count = seat_count + $2
-            WHERE id = $1
-        "#,
-            team_id,
-            created_emails.len() as i64,
-        )
-        .execute(&mut *transaction)
-        .await?;
-
         transaction.commit().await?;
 
         Ok(created_emails)
@@ -293,7 +316,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<(), RemoveUserFromTeamError> {
+    ) -> Result<TeamUserTier, RemoveUserFromTeamError> {
         let owner_id = self.get_team_owner(team_id).await?;
 
         if user_id.as_ref().eq(owner_id.as_ref()) {
@@ -302,36 +325,27 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let mut transaction = self.pool.begin().await?;
 
-        let removed = sqlx::query!(
+        let row = sqlx::query!(
             r#"
             DELETE FROM team_user
             WHERE team_id = $1 AND user_id = $2
-        "#,
+            RETURNING tier AS "tier!: TeamUserTier"
+            "#,
             team_id,
             user_id.as_ref(),
         )
-        .execute(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await?;
 
-        if removed.rows_affected() == 0 {
-            return Err(RemoveUserFromTeamError::UserNotInTeam);
-        }
+        let tier = row
+            .map(|r| r.tier)
+            .ok_or(RemoveUserFromTeamError::UserNotInTeam)?;
 
-        // Update the team seat count
-        sqlx::query!(
-            r#"
-            UPDATE team
-            SET seat_count = seat_count - 1
-            WHERE id = $1
-            "#,
-            team_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
 
         transaction.commit().await?;
 
-        Ok(())
+        Ok(tier)
     }
 
     async fn get_team_invite_by_id(
@@ -376,9 +390,10 @@ impl TeamRepository for TeamRepositoryImpl {
         let result = sqlx::query!(
             r#"
             DELETE FROM team_invite
-            WHERE id = $1
+            WHERE id = $1 AND team_id = $2
             "#,
             team_invite_id,
+            team_id,
         )
         .execute(&mut *transaction)
         .await?;
@@ -386,18 +401,6 @@ impl TeamRepository for TeamRepositoryImpl {
         if result.rows_affected() == 0 {
             return Err(RemoveTeamInviteError::TeamInviteDoesNotExist);
         }
-
-        // Update the team seat count
-        sqlx::query!(
-            r#"
-            UPDATE team
-            SET seat_count = seat_count - 1
-            WHERE id = $1
-            "#,
-            team_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
 
         transaction.commit().await?;
 
@@ -445,7 +448,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                tier as "tier!: TeamUserTier"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -465,6 +469,7 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id,
                         role: row.team_role,
                         team_id: *team_id,
+                        tier: row.tier,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -492,7 +497,7 @@ impl TeamRepository for TeamRepositoryImpl {
         // Get user role from team invite
         let invite = sqlx::query!(
             r#"
-            SELECT team_role as "team_role!: TeamRole", team_id
+            SELECT team_role as "team_role!: TeamRole", team_id, tier as "tier!: TeamUserTier"
             FROM team_invite
             WHERE id = $1 AND email = $2
             "#,
@@ -505,16 +510,20 @@ impl TeamRepository for TeamRepositoryImpl {
         // Assign user to team_user
         let team_member = sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role)
-            VALUES ($1, $2, $3)
-            RETURNING user_id, team_role as "role!: TeamRole"
+            INSERT INTO team_user (team_id, user_id, team_role, tier)
+            VALUES ($1, $2, $3, $4)
+            RETURNING user_id, team_role as "role!: TeamRole", tier as "tier!: TeamUserTier", team_id
             "#,
             &invite.team_id,
             user_id.as_ref(),
             invite.team_role as _,
+            invite.tier as _,
         )
         .fetch_one(&mut *transaction)
         .await?;
+
+        // bump seat count
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_member.team_id, 1).await?;
 
         // Remove team invite
         sqlx::query!(
@@ -533,6 +542,7 @@ impl TeamRepository for TeamRepositoryImpl {
             user_id: user_id.clone().into_owned(),
             role: team_member.role,
             team_id: invite.team_id,
+            tier: team_member.tier,
         };
 
         Ok(team_member)
@@ -563,7 +573,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                tier as "tier!: TeamUserTier"
             FROM team_user
             WHERE team_id = $1 AND team_role NOT IN ('owner')
             "#,
@@ -583,6 +594,7 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id,
                         role: row.team_role,
                         team_id: *team_id,
+                        tier: row.tier,
                     })
                 } else {
                     Err(anyhow::anyhow!("unable to parse user id"))
@@ -645,14 +657,23 @@ impl TeamRepository for TeamRepositoryImpl {
             "#,
             team_id,
         )
-        .map(|row| Team::new(row.id, row.name, row.owner_id))
+        .try_map(|row| {
+            Ok(Team {
+                id: row.id,
+                name: row.name,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+            })
+        })
         .fetch_one(&self.pool)
         .await?;
 
         let members = sqlx::query!(
             r#"
             SELECT user_id,
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                tier as "tier!: TeamUserTier"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -669,6 +690,7 @@ impl TeamRepository for TeamRepositoryImpl {
                         user_id: id.into_owned(),
                         role: row.team_role,
                         team_id: *team_id,
+                        tier: row.tier,
                     })
                     .ok()
             })
@@ -687,7 +709,15 @@ impl TeamRepository for TeamRepositoryImpl {
             "#,
             user_id.as_ref(),
         )
-        .map(|row| Team::new(row.id, row.name, row.owner_id))
+        .try_map(|row| {
+            Ok(Team {
+                id: row.id,
+                name: row.name,
+                owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+            })
+        })
         .fetch_all(&self.pool)
         .await?;
 

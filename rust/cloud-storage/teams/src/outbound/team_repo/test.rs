@@ -82,7 +82,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     assert!(!result.id.to_string().is_empty());
     assert_eq!(result.name, "team1");
-    assert_eq!(result.owner_id, "macro|user@user.com");
+    assert_eq!(result.owner_id.0.as_ref(), "macro|user@user.com");
 
     // Create team with too large a name
     let err = team_repo
@@ -347,6 +347,41 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    // Invite 22222222... has tier = 'opus' in the fixture
+    let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+
+    let team_member = team_repo
+        .accept_team_invite(&team_invite_id, &user_id)
+        .await?;
+
+    assert_eq!(team_member.tier, TeamUserTier::Opus);
+
+    // Verify the tier persisted in team_user table
+    let row = sqlx::query!(
+        r#"
+        SELECT tier as "tier!: TeamUserTier"
+        FROM team_user
+        WHERE team_id = $1 AND user_id = $2
+        "#,
+        &team_member.team_id,
+        user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.tier, TeamUserTier::Opus);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_is_user_member_of_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
@@ -387,6 +422,46 @@ async fn test_get_team_members(pool: Pool<Postgres>) -> anyhow::Result<()> {
             .collect::<Vec<_>>(),
         results
     );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_bump_seat_count_positive(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let mut transaction = pool.begin().await?;
+    TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, 2).await?;
+    transaction.commit().await?;
+
+    let row = sqlx::query!(r#"SELECT seat_count FROM team WHERE id = $1"#, &team_id,)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.seat_count, 5); // 3 + 2
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_bump_seat_count_negative(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let mut transaction = pool.begin().await?;
+    TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, -1).await?;
+    transaction.commit().await?;
+
+    let row = sqlx::query!(r#"SELECT seat_count FROM team WHERE id = $1"#, &team_id,)
+        .fetch_one(&pool)
+        .await?;
+
+    assert_eq!(row.seat_count, 2); // 3 - 1
 
     Ok(())
 }

@@ -33,6 +33,16 @@ impl std::fmt::Display for TeamUserTier {
     }
 }
 
+impl From<TeamUserTier> for RoleId {
+    fn from(value: TeamUserTier) -> Self {
+        match value {
+            TeamUserTier::Haiku => RoleId::SubHaiku,
+            TeamUserTier::Sonnet => RoleId::SubSonnet,
+            TeamUserTier::Opus => RoleId::SubOpus,
+        }
+    }
+}
+
 impl TeamUserTier {
     /// Given a list of a users roles, this will try to grab the users respective
     /// team tier
@@ -87,6 +97,9 @@ pub struct TeamMember<'a> {
     pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
+    /// The tier of the team member
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub tier: TeamUserTier,
 }
 
 /// A team with its members
@@ -133,12 +146,13 @@ pub struct PatchTeamRequest {
 pub struct Team {
     pub(crate) id: uuid::Uuid,
     pub(crate) name: String,
-    pub(crate) owner_id: String,
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub(crate) owner_id: MacroUserIdStr<'static>,
 }
 
 impl Team {
     /// Creates a new Team
-    pub fn new(id: uuid::Uuid, name: String, owner_id: String) -> Self {
+    pub fn new(id: uuid::Uuid, name: String, owner_id: MacroUserIdStr<'static>) -> Self {
         Self { id, name, owner_id }
     }
 }
@@ -156,7 +170,7 @@ impl Team {
 
     /// The owner id of the team
     pub fn owner_id(&self) -> &str {
-        &self.owner_id
+        self.owner_id.as_ref()
     }
 }
 

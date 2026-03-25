@@ -177,54 +177,6 @@ where
             .invite_users_to_team(team_id, invited_by, emails)
             .await?;
 
-        if !invited.is_empty() {
-            let subscription_id = self
-                .team_repository
-                .get_team_subscription_id(team_id)
-                .await?;
-
-            // Increase the quantity of the subscription
-            if let Some(subscription_id) = subscription_id {
-                let subscription_id = stripe::SubscriptionId::from_str(&subscription_id)
-                    .map_err(|e| InviteUsersToTeamError::StorageLayerError(e.into()))?;
-
-                // Increment the quantity of the subscription by the number of emails
-                self.customer_repository
-                    .increase_subscription_quantity(&subscription_id, invited.len() as u64)
-                    .await?;
-            } else {
-                // Create new subscription
-                let customer_id = self
-                    .team_repository
-                    .get_stripe_customer_id(invited_by)
-                    .await?
-                    .ok_or(InviteUsersToTeamError::CustomerError(
-                        CustomerError::NoStripeCustomerId,
-                    ))?;
-
-                let subscription_id = self
-                    .customer_repository
-                    .create_subscription(CreateSubscriptionArgs {
-                        customer_id,
-                        quantity: invited.len() as u64,
-                        metadata: Some(
-                            vec![
-                                ("team_id".to_string(), team_id.to_string()),
-                                ("owner_id".to_string(), invited_by.as_ref().to_string()),
-                            ]
-                            .into_iter()
-                            .collect(),
-                        ),
-                    })
-                    .await?;
-
-                // Update team with the new subscription id
-                self.team_repository
-                    .update_team_subscription(team_id, &subscription_id)
-                    .await?;
-            }
-        }
-
         // Send notifications for new invites
         if !invited.is_empty() {
             let team_name = self.team_repository.get_team_name(team_id).await.ok();
@@ -256,13 +208,13 @@ where
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
-        let result = self
+        let tier = self
             .team_repository
             .remove_user_from_team(team_id, user_id)
             .await;
 
         // The user was part of the team and was removed
-        if result.is_ok() {
+        if let Ok(tier) = tier {
             self.team_channels_repository
                 .remove_team_member_from_channels(team_id, user_id)
                 .await?;
@@ -280,18 +232,18 @@ where
             } else {
                 return Err(RemoveUserFromTeamError::NoSubscription);
             }
+
+            if !self.team_repository.is_user_member_of_team(user_id).await? {
+                let roles = vec![RoleId::TeamSubscriber, RoleId::from(tier)];
+                let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(user_id, &roles)
+                    .await
+                    .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+            }
         }
 
-        if !self.team_repository.is_user_member_of_team(user_id).await? {
-            let roles = vec![RoleId::TeamSubscriber];
-            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
-            self.user_roles_and_permissions_service
-                .dangerous_remove_roles_from_user(user_id, &roles)
-                .await
-                .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
-        }
-
-        result
+        tier.map(|_| ())
     }
 
     async fn reject_invitation(
@@ -312,20 +264,6 @@ where
             .delete_team_invite(&team_invite.team_id, team_invite_id)
             .await?;
 
-        let subscription_id = self
-            .team_repository
-            .get_team_subscription_id(&team_invite.team_id)
-            .await?;
-
-        if let Some(subscription_id) = subscription_id {
-            // Decrement the quantity of the subscription
-            self.customer_repository
-                .decrease_subscription_quantity(&subscription_id, 1)
-                .await?;
-        } else {
-            return Err(TeamError::NoSubscription.into());
-        }
-
         Ok(())
     }
 
@@ -337,20 +275,6 @@ where
         self.team_repository
             .delete_team_invite(team_id, team_invite_id)
             .await?;
-
-        let subscription_id = self
-            .team_repository
-            .get_team_subscription_id(team_id)
-            .await?;
-
-        if let Some(subscription_id) = subscription_id {
-            // Decrement the quantity of the subscription
-            self.customer_repository
-                .decrease_subscription_quantity(&subscription_id, 1)
-                .await?;
-        } else {
-            return Err(TeamError::NoSubscription.into());
-        }
 
         Ok(())
     }
@@ -413,8 +337,9 @@ where
             .await
             .map_err(JoinTeamError::TeamError)?;
 
-        // subscribe the user to professional features from the TeamSubscriber role
-        let roles = vec![RoleId::TeamSubscriber];
+        // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
+        let roles = vec![RoleId::TeamSubscriber, RoleId::from(team_member.tier)];
+
         let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
 
         self.user_roles_and_permissions_service
@@ -425,6 +350,57 @@ where
         self.team_channels_repository
             .add_team_member_to_channels(&team_member.team_id, user_id)
             .await?;
+
+        let subscription_id = self
+            .team_repository
+            .get_team_subscription_id(&team_member.team_id)
+            .await?;
+
+        // Increase the quantity of the subscription
+        if let Some(subscription_id) = subscription_id {
+            let subscription_id = stripe::SubscriptionId::from_str(&subscription_id)
+                .map_err(|e| JoinTeamError::StorageLayerError(e.into()))?;
+
+            // Increment the quantity of the subscription by the number of emails
+            self.customer_repository
+                .increase_subscription_quantity(&subscription_id, 1)
+                .await?;
+        } else {
+            let team = self
+                .team_repository
+                .get_team_by_id(&team_member.team_id)
+                .await?;
+
+            // Create new subscription
+            let customer_id = self
+                .team_repository
+                .get_stripe_customer_id(&team.team.owner_id)
+                .await?
+                .ok_or(JoinTeamError::CustomerError(
+                    CustomerError::NoStripeCustomerId,
+                ))?;
+
+            let subscription_id = self
+                .customer_repository
+                .create_subscription(CreateSubscriptionArgs {
+                    customer_id,
+                    quantity: 1,
+                    metadata: Some(
+                        vec![
+                            ("team_id".to_string(), team.team.id.to_string()),
+                            ("owner_id".to_string(), team.team.owner_id.to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                })
+                .await?;
+
+            // Update team with the new subscription id
+            self.team_repository
+                .update_team_subscription(&team.team.id, &subscription_id)
+                .await?;
+        }
 
         Ok(team_member)
     }
@@ -439,8 +415,6 @@ where
             return Ok(());
         }
 
-        let members: Vec<MacroUserIdStr<'_>> = members.into_iter().map(|m| m.user_id).collect();
-
         // Ignore the current team
         let ignore_team_ids = vec![*team_id];
 
@@ -448,7 +422,14 @@ where
             .team_repository
             .bulk_is_member_of_other_team(
                 non_empty::NonEmpty::new(ignore_team_ids.as_slice()).unwrap(),
-                non_empty::NonEmpty::new(members.as_slice()).unwrap(),
+                non_empty::NonEmpty::new(
+                    members
+                        .iter()
+                        .map(|m| m.user_id.clone())
+                        .collect::<Vec<MacroUserIdStr<'_>>>()
+                        .as_slice(),
+                )
+                .unwrap(),
             )
             .await?;
 
@@ -456,15 +437,15 @@ where
         // Get all members that are not in the other team
         let members_to_revoke: Vec<_> = members
             .into_iter()
-            .filter(|m| !members_of_team.contains(m.as_ref()))
+            .filter(|m| !members_of_team.contains(m.user_id.as_ref()))
             .collect();
 
         // Revoke permissions for all members
-        let roles = vec![RoleId::TeamSubscriber];
-        let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
         for member in members_to_revoke {
+            let roles = vec![RoleId::TeamSubscriber, RoleId::from(member.tier)];
+            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
             self.user_roles_and_permissions_service
-                .dangerous_remove_roles_from_user(&member, &roles)
+                .dangerous_remove_roles_from_user(&member.user_id, &roles)
                 .await
                 .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
         }
