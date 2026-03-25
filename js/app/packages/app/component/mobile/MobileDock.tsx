@@ -6,7 +6,14 @@ import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedSlidersHorizontalIcon } from '@macro-icons/wide/animating/sliders-horizontal';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
-import { Accessor, type Component, createSignal, For, type JSX, Setter } from 'solid-js';
+import {
+  Accessor,
+  type Component,
+  createSignal,
+  For,
+  type JSX,
+  Setter,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Popover } from '@kobalte/core/popover';
 import { cn } from '@ui/utils/classname';
@@ -119,7 +126,7 @@ function MorePopover(props: {
         onTouchEnd={handleTouchEnd}
         iconClass={cn(
           'transition-transform duration-200 [perspective:200px]',
-          open() && '[transform:rotateX(180deg)]'
+          props.open() && '[transform:rotateX(180deg)]'
         )}
       />
       <Popover
