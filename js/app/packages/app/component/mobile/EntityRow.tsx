@@ -73,6 +73,11 @@ type EntityRowContextValue = {
   stateFor: (entityId: string) => EntityRowState;
   clearState: (entityId: string) => void;
   collapseEntity: (entityId: string) => Promise<void>;
+  registerRowHandler: (
+    entityId: string,
+    handlers: { onSwipeLeft?: () => void; onSwipeRight?: () => void }
+  ) => void;
+  unregisterRowHandler: (entityId: string) => void;
 };
 
 export const EntityRowContext = createContext<EntityRowContextValue>();
@@ -106,6 +111,11 @@ export function EntityRowProvider(
       return newState;
     });
   };
+  const customRowSwipeHandlers = new Map<
+    string,
+    { onSwipeLeft?: () => void; onSwipeRight?: () => void }
+  >();
+
   let touchState: SwipeTouchState = {
     startX: 0,
     startY: 0,
@@ -181,9 +191,15 @@ export function EntityRowProvider(
     if (!els) return;
     const direction = stateById()[entityId]?.direction;
     if (!direction) return;
-    const onSwipe =
-      direction === 'left' ? props.onSwipeLeft : props.onSwipeRight;
-    if (!onSwipe) return;
+    const defaultSwipeLeft = props.onSwipeLeft;
+    const defaultSwipeRight = props.onSwipeRight;
+    const swipeHandler =
+      direction === 'left'
+        ? (customRowSwipeHandlers.get(entityId)?.onSwipeLeft ??
+          (defaultSwipeLeft ? () => defaultSwipeLeft(entityId) : undefined))
+        : (customRowSwipeHandlers.get(entityId)?.onSwipeRight ??
+          (defaultSwipeRight ? () => defaultSwipeRight(entityId) : undefined));
+    if (!swipeHandler) return;
 
     // Cancel any pending animation frame
     if (rafId) cancelAnimationFrame(rafId);
@@ -194,7 +210,7 @@ export function EntityRowProvider(
     setState(entityId, { phase: 'triggered' });
 
     setTimeout(() => {
-      onSwipe(entityId);
+      swipeHandler();
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
 
     // If row has not been removed, reset it:
@@ -207,10 +223,14 @@ export function EntityRowProvider(
   };
 
   const canSwipeRight = (entityId: string) => {
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeRight !== undefined)
+      return true;
     if (!props.onSwipeRight) return false;
     return props.canSwipeRight ? props.canSwipeRight(entityId) : true;
   };
   const canSwipeLeft = (entityId: string) => {
+    if (customRowSwipeHandlers.get(entityId)?.onSwipeLeft !== undefined)
+      return true;
     if (!props.onSwipeLeft) return false;
     return props.canSwipeLeft ? props.canSwipeLeft(entityId) : true;
   };
@@ -404,6 +424,12 @@ export function EntityRowProvider(
       stateById()[entityId] ?? { phase: 'idle', direction: null },
     clearState: (entityId) => clearState(entityId),
     collapseEntity,
+    registerRowHandler: (entityId, handlers) => {
+      customRowSwipeHandlers.set(entityId, handlers);
+    },
+    unregisterRowHandler: (entityId) => {
+      customRowSwipeHandlers.delete(entityId);
+    },
   };
 
   return (
@@ -413,6 +439,9 @@ export function EntityRowProvider(
   );
 }
 
+/**
+ * Container for swipe gesture capabilities on touch devices.
+ */
 export function EntityRow(
   props: ParentProps<{
     entityId: string;
@@ -420,6 +449,8 @@ export function EntityRow(
     swipeLeftRevealedComponent?: JSX.Element;
     swipeLeftColor?: string;
     swipeRightColor?: string;
+    onSwipeLeft?: () => void;
+    onSwipeRight?: () => void;
   }>
 ) {
   const ctx = useContext(EntityRowContext);
@@ -429,6 +460,13 @@ export function EntityRow(
 
   const rowState = createMemo(() => ctx.stateFor(props.entityId));
 
+  createEffect(() => {
+    const { onSwipeLeft, onSwipeRight, entityId } = props;
+    if (!onSwipeLeft && !onSwipeRight) return;
+    ctx.registerRowHandler(entityId, { onSwipeLeft, onSwipeRight });
+    onCleanup(() => ctx.unregisterRowHandler(entityId));
+  });
+
   onCleanup(() => {
     ctx.clearState(props.entityId);
   });
@@ -437,7 +475,7 @@ export function EntityRow(
     <div
       data-swipe-row
       data-swipe-entity-id={props.entityId}
-      class="w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-[250ms] ease-in-out"
+      class="grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-[250ms] ease-in-out"
       classList={{
         'bg-transparent': rowState()?.phase === 'idle',
         [props.swipeLeftColor ?? 'bg-edge-muted']:
@@ -490,12 +528,12 @@ export function EntityRow(
       {/* Swipe Surface */}
       <div
         data-swipe-surface
-        class="relative min-h-0 z-[2] w-full select-none [touch-action:pan-y]"
+        class="relative min-h-0 h-full z-[2] w-full select-none [touch-action:pan-y]"
       >
         {/* Swipe Content */}
         <div
           data-swipe-content
-          class="w-full min-h-0 overflow-hidden flex items-center p-0 bg-panel"
+          class="w-full h-full min-h-0 overflow-hidden flex items-center p-0 bg-panel"
         >
           {props.children}
         </div>

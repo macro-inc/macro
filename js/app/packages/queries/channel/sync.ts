@@ -11,8 +11,11 @@ import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 import {
+  getTargetMessageState,
   insertMessageIntoTargetCaches,
+  removeMessageFromTargetCaches,
   replaceTargetAttachments,
+  replaceTargetMessageState,
   replaceTargetReactions,
   softInvalidateTargetCaches,
   resolveMessageTarget,
@@ -58,6 +61,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
   if (isExternalUpdate) {
     try {
       const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+
       queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
         if (!prev) return prev;
 
@@ -72,42 +76,53 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
       });
 
       if (ENABLE_NEW_CHANNELS()) {
-        const threadId = payload.thread_id;
-        if (threadId) {
-          const reply: ApiThreadReply = {
-            id: payload.id,
-            sender_id: payload.sender_id,
-            content: payload.content,
-            created_at: payload.created_at,
-            updated_at: payload.updated_at,
-            edited_at: payload.edited_at,
-            attachments: [],
-            reactions: [],
-          };
-          insertMessageIntoTargetCaches(
+        if (payload.deleted_at) {
+          removeMessageFromTargetCaches(
             payload.channel_id,
             resolveMessageTarget({
               channelId: payload.channel_id,
               messageId: payload.id,
-              threadId,
-            }),
-            reply
+              threadId: payload.thread_id ?? undefined,
+            })
           );
         } else {
-          insertMessageIntoTargetCaches(
+          const target = resolveMessageTarget({
+            channelId: payload.channel_id,
+            messageId: payload.id,
+            threadId: payload.thread_id ?? undefined,
+          });
+          const existingState = getTargetMessageState(
             payload.channel_id,
-            resolveMessageTarget({
-              channelId: payload.channel_id,
-              messageId: payload.id,
-            }),
-            {
+            target
+          );
+
+          if (existingState) {
+            replaceTargetMessageState(payload.channel_id, target, {
+              content: payload.content,
+              editedAt: payload.edited_at,
+              updatedAt: payload.updated_at,
+              attachments: existingState.attachments,
+            });
+          } else if (target.kind === 'thread_reply') {
+            const reply: ApiThreadReply = {
+              id: payload.id,
+              sender_id: payload.sender_id,
+              content: payload.content,
+              created_at: payload.created_at,
+              updated_at: payload.updated_at,
+              edited_at: payload.edited_at,
+              attachments: [],
+              reactions: [],
+            };
+            insertMessageIntoTargetCaches(payload.channel_id, target, reply);
+          } else {
+            insertMessageIntoTargetCaches(payload.channel_id, target, {
               id: payload.id,
               channel_id: payload.channel_id,
               sender_id: payload.sender_id,
               content: payload.content,
               created_at: payload.created_at,
               updated_at: payload.updated_at,
-              deleted_at: payload.deleted_at,
               edited_at: payload.edited_at,
               attachments: [],
               reactions: [],
@@ -116,8 +131,8 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
                 reply_count: 0,
                 latest_reply_at: null,
               },
-            }
-          );
+            });
+          }
         }
       }
     } catch (error) {

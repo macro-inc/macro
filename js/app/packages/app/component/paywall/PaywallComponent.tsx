@@ -1,24 +1,33 @@
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
-import IconCheck from '@icon/regular/check-circle.svg';
 import IconX from '@icon/regular/x.svg';
-import Dot from '@phosphor-icons/core/regular/dot.svg?component-solid';
-import { useHasTrialed } from '@core/context/user';
 import { stripeServiceClient } from '@service-stripe/client';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
 
-const guestFeatures = [
-  'Limited to 10 files and 10 AI messages',
-  'Can connect but not send emails',
-];
-
-const smartFeatures = [
-  'Unlimited files',
-  'Unlimited email',
-  'Unlimited AI',
-
-  // '300 AI messages per month'
+const PLANS = [
+  {
+    tier: 'haiku' as const,
+    name: 'Haiku',
+    price: 20,
+    description: "Access to Anthropic's fast, lightweight model",
+    calls: '1,000',
+  },
+  {
+    tier: 'sonnet' as const,
+    name: 'Sonnet',
+    price: 60,
+    description: "Access to Anthropic's balanced frontier model",
+    calls: '5,000',
+    popular: true,
+  },
+  {
+    tier: 'opus' as const,
+    name: 'Opus',
+    price: 120,
+    description: "Access to Anthropic's most capable model",
+    calls: 'Unlimited',
+  },
 ];
 
 interface PaywallComponent {
@@ -33,27 +42,19 @@ interface PaywallComponent {
 const PaywallComponent = (props: PaywallComponent) => {
   const analytics = useAnalytics();
 
-  const hasTrialedQuery = useHasTrialed();
-  const [hasTrialed, setHasTrialed] = createSignal(false);
-  const [selectedPlan, setSelectedPlan] = createSignal<'guest' | 'member'>(
-    'member'
-  );
+  const [selectedTier, setSelectedTier] = createSignal<string>('sonnet');
   const hasPaid = useHasPaidAccess();
 
-  onMount(() => {
-    if (hasTrialedQuery()) {
-      setHasTrialed(true);
-    }
-  });
-
-  const handleEarlyMember = async () => {
+  const handleCheckout = async (tier: string) => {
     try {
       await props.cb();
       const url = await stripeServiceClient.createCheckoutSession(
-        props.customType ? props.customType : (props.errorKey ?? undefined)
+        props.customType ? props.customType : (props.errorKey ?? undefined),
+        undefined,
+        tier
       );
       analytics.track('subscription_start', {
-        type: 'early_member',
+        type: tier,
         customType: props.customType,
         errorKey: props.errorKey,
       });
@@ -77,15 +78,7 @@ const PaywallComponent = (props: PaywallComponent) => {
       manageSubscription();
       return;
     }
-    if (selectedPlan() === 'guest') {
-      props.handleGuest?.();
-    } else {
-      handleEarlyMember();
-    }
-  };
-
-  const handlePlanSelect = (plan: 'guest' | 'member') => {
-    setSelectedPlan(plan);
+    handleCheckout(selectedTier());
   };
 
   return (
@@ -103,119 +96,66 @@ const PaywallComponent = (props: PaywallComponent) => {
           <div class="space-y-6 sm:space-y-8">
             <div class="text-center">
               <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
-                <Show when={hasTrialed()}>Become an Early Member</Show>
-                <Show when={!hasTrialed()}>
-                  Want to try Early Member for free?
-                </Show>
+                Choose your plan
               </h2>
               <Show when={props.errorKey}>
                 <p class="mb-4 text-failure-ink text-sm sm:text-base">
                   {PaywallMessages[props.errorKey as PaywallKey]}
                 </p>
               </Show>
-              {/* <Show when={!props.errorKey}>
-              <p class="mx-auto max-w-md text-ink text-sm sm:text-base">
-                <Show when={!hasTrialed()}>
-                  If you can afford it, we recommend starting a trial of Early
-                  Member for faster and better quality answers.
-                </Show>
-                <Show when={hasTrialed()}>
-                  If you can afford it, we recommend upgrading to Early Member
-                  for faster and better quality answers.
-                </Show>
-              </p>
-            </Show> */}
             </div>
           </div>
         </Show>
       </div>
 
-      {/* Plan Selection */}
       <div class="mx-auto mt-6 w-full max-w-2xl">
-        <div class="gap-3 sm:gap-4 grid grid-cols-1 sm:grid-cols-2">
-          {/* Guest AI */}
-          <button
-            inert={hasPaid()}
-            onClick={() => handlePlanSelect('guest')}
-            class={`p-4 sm:p-5 border transition-all duration-200 relative text-left flex flex-col  ${
-              selectedPlan() === 'guest'
-                ? 'border-ink bg-edge/15'
-                : 'border-edge hover:border-edge'
-            }`}
-          >
-            <div class="flex flex-col gap-3">
-              <div class="flex justify-between items-start">
-                <div>
-                  <div class="font-semibold text-ink text-base sm:text-lg">
-                    Guest
-                  </div>
-                  <Show when={!hasPaid()}>
-                    <div class="text-ink text-sm">
-                      Free (no credit card required)
+        <div class="gap-3 sm:gap-4 grid grid-cols-1 sm:grid-cols-3">
+          <For each={PLANS}>
+            {(plan) => (
+              <button
+                inert={hasPaid()}
+                onClick={() => setSelectedTier(plan.tier)}
+                class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
+                classList={{
+                  'border-accent ring-1 ring-accent bg-active':
+                    selectedTier() === plan.tier,
+                  'border-edge hover:border-edge': selectedTier() !== plan.tier,
+                }}
+                style={{ 'border-radius': '2px' }}
+              >
+                <div class="flex flex-col gap-3 w-full">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <div class="font-semibold text-ink text-base sm:text-lg">
+                        {plan.name}
+                      </div>
+                      <p class="text-sm text-ink/50 mt-0.5">
+                        {plan.description}
+                      </p>
                     </div>
+                    {selectedTier() === plan.tier && (
+                      <div class="bg-accent w-3 sm:w-4 h-3 sm:h-4 shrink-0"></div>
+                    )}
+                  </div>
+                  <div class="flex items-baseline gap-0.5">
+                    <span class="text-3xl font-bold text-ink">
+                      ${plan.price}
+                    </span>
+                    <span class="text-base text-ink/40">/mo</span>
+                  </div>
+                  <div class="text-sm text-ink/60">
+                    <span class="font-semibold text-ink">{plan.calls}</span> AI
+                    tool calls
+                  </div>
+                  <Show when={plan.popular}>
+                    <span class="text-[10px] font-semibold text-accent">
+                      Most popular
+                    </span>
                   </Show>
                 </div>
-                {selectedPlan() === 'guest' && (
-                  <div class="bg-ink w-3 sm:w-4 h-3 sm:h-4"></div>
-                )}
-              </div>
-              <ul class="space-y-2">
-                <For each={guestFeatures}>
-                  {(feature) => (
-                    <li class="flex items-center gap-2 text-ink text-sm">
-                      <IconCheck class="w-4 h-4 text-ink-muted shrink-0" />
-                      {feature}
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </div>
-          </button>
-
-          {/* Early Member */}
-          <button
-            inert={hasPaid()}
-            onClick={() => handlePlanSelect('member')}
-            class={`p-4 sm:p-5 border flex flex-col transition-all relative text-left ${
-              selectedPlan() === 'member'
-                ? 'border-ink bg-active'
-                : 'border-edge hover:border-edge'
-            }`}
-          >
-            <div class="flex flex-col gap-3">
-              <div class="flex justify-between items-start">
-                <div classList={{ 'flex items-center gap-1': hasTrialed() }}>
-                  <div class="font-semibold text-ink text-base sm:text-lg">
-                    Early Member
-                  </div>
-                  <div class="flex gap-1 items-center text-ink text-sm">
-                    <Show when={!hasTrialed()}>
-                      7 days free, then $20/month
-                    </Show>
-                    <Show when={hasTrialed()}>
-                      <div class="flex items-center justify-center w-[1ch] relative">
-                        <Dot class="h-8 shrink-0" />
-                      </div>
-                      <span>$20/month</span>
-                    </Show>
-                  </div>
-                </div>
-                {selectedPlan() === 'member' && (
-                  <div class="bg-ink w-3 sm:w-4 h-3 sm:h-4"></div>
-                )}
-              </div>
-              <ul class="space-y-2">
-                <For each={smartFeatures}>
-                  {(feature) => (
-                    <li class="flex items-center gap-2 text-ink text-sm">
-                      <IconCheck class="w-4 h-4 text-ink-muted shrink-0" />
-                      {feature}
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </div>
-          </button>
+              </button>
+            )}
+          </For>
         </div>
       </div>
 
@@ -223,19 +163,23 @@ const PaywallComponent = (props: PaywallComponent) => {
         <button
           onClick={handleContinue}
           class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
-            selectedPlan() === 'guest' || hasPaid()
+            hasPaid()
               ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
               : 'bg-accent text-page hover:bg-accent-ink'
           }`}
         >
           <Show when={!hasPaid()} fallback={'Manage Subscription'}>
-            <Show when={selectedPlan() === 'guest'}>Continue with Guest</Show>
-            <Show when={selectedPlan() === 'member'}>
-              <Show when={!hasTrialed()}>Start 7 day trial</Show>
-              <Show when={hasTrialed()}>Become an Early Member</Show>
-            </Show>
+            Get {PLANS.find((p) => p.tier === selectedTier())?.name}
           </Show>
         </button>
+        <Show when={!hasPaid() && props.handleGuest}>
+          <button
+            onClick={() => props.handleGuest?.()}
+            class="mt-3 text-xs text-ink/40 hover:text-ink/60 underline"
+          >
+            Continue with free plan
+          </button>
+        </Show>
       </div>
     </div>
   );

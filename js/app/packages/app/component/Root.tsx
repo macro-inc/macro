@@ -68,13 +68,13 @@ import {
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
+import { Signup } from './auth/Signup';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
-import Onboarding from './Onboarding';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { SuspenseContextComp } from './SuspenseContext';
 import { lazy } from 'solid-js';
@@ -208,7 +208,7 @@ function NotFound() {
   return '';
 }
 
-const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
+const { EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
   callbackPath: '/email-signup-callback',
   successPath: '/',
 });
@@ -252,7 +252,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: EmailSignUp,
+    component: Signup,
   },
   {
     path: CALLBACK_PATH,
@@ -294,14 +294,6 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
-  },
-  {
-    path: '/onboarding',
-    component: () => (
-      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
-        <Onboarding />
-      </div>
-    ),
   },
   {
     path: '/welcome',

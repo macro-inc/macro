@@ -6,6 +6,7 @@ import {
   itemToBlockName,
 } from '@core/constant/allBlocks';
 import { match } from 'ts-pattern';
+import { cn } from '@ui/utils/classname';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
@@ -367,15 +368,13 @@ export function EntityIcon(props: EntityIconProps) {
 
   return (
     <div
-      class={sizeClass()}
-      classList={{
-        'text-current': isMonochrome(),
-        [config().foreground]: !isMonochrome(),
-        [config().background]: props.useBackground && !isMonochrome(),
-        [config().background]: props.useBackground && isMonochrome(),
-        'p-[20%]': props.useBackground,
-        [`${props.class}`]: !!props.class,
-      }}
+      class={cn(
+        sizeClass(),
+        isMonochrome() ? 'text-current' : config().foreground,
+        props.useBackground && config().background,
+        props.useBackground && 'p-[20%]',
+        props.class
+      )}
     >
       <Dynamic component={icon()} />
     </div>

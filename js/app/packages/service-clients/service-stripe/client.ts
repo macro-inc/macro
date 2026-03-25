@@ -33,7 +33,11 @@ export const stripeServiceClient = {
    * Creates a checkout session
    * @returns The URL of the checkout session
    */
-  createCheckoutSession: async (type: string = '', discount?: string) => {
+  createCheckoutSession: async (
+    type: string = '',
+    discount?: string,
+    tier?: string
+  ) => {
     const gaClientId = await getGaClientId();
 
     const result = await authServiceClient.createCheckoutSession({
@@ -41,6 +45,7 @@ export const stripeServiceClient = {
       cancelUrl: `${window.location.origin}/app`,
       discount: discount ?? null,
       gaClientId: gaClientId ?? null,
+      tier,
     });
 
     if (!isOk(result)) {
