@@ -629,6 +629,20 @@
         ],
         "description": "ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at)"
       },
+      "DataType": {
+        "type": "string",
+        "description": "Data type for property values, determining storage and validation.",
+        "enum": [
+          "BOOLEAN",
+          "DATE",
+          "NUMBER",
+          "STRING",
+          "SELECT_NUMBER",
+          "SELECT_STRING",
+          "ENTITY",
+          "LINK"
+        ]
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -844,6 +858,13 @@
                     "description": "Metadata from the database. None if the document doesn't exist in the database."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (assignees, status, priority, etc.) for markdown documents."
               }
             }
           }
@@ -1198,6 +1219,38 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EntityReference": {
+        "type": "object",
+        "description": "Entity reference for entity-type property values.",
+        "required": ["entity_id", "entity_type"],
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "specific_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "Type of entity that can be referenced by entity properties.",
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
       },
       "ErrorResponse": {
         "type": "object",
@@ -1861,6 +1914,250 @@
             "description": "The score of the result"
           }
         }
+      },
+      "PropertyDefinition": {
+        "type": "object",
+        "description": "Property definition model (service representation).",
+        "required": [
+          "id",
+          "owner",
+          "display_name",
+          "data_type",
+          "is_multi_select",
+          "created_at",
+          "updated_at",
+          "is_system",
+          "is_metadata"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data_type": {
+            "$ref": "#/components/schemas/DataType"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_metadata": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer."
+          },
+          "is_multi_select": {
+            "type": "boolean"
+          },
+          "is_system": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system property (stored in DB)."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/PropertyOwner"
+          },
+          "specific_entity_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityType"
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PropertyOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-scoped property only",
+            "required": ["user_id", "scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Organization-scoped property only",
+            "required": ["organization_id", "scope"],
+            "properties": {
+              "organization_id": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["organization"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Both user and organization-scoped",
+            "required": ["user_id", "organization_id", "scope"],
+            "properties": {
+              "organization_id": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["user_and_organization"]
+              },
+              "user_id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user or org owner)",
+            "required": ["scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["system"]
+              }
+            }
+          }
+        ],
+        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+      },
+      "PropertyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Boolean"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["String"]
+              },
+              "value": {
+                "type": "string",
+                "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Date"]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["SelectOption"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["EntityReference"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityReference"
+                },
+                "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Link"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)"
+              }
+            }
+          }
+        ],
+        "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
       },
       "SearchHighlight": {
         "type": "object",
@@ -2817,6 +3114,28 @@
             ]
           }
         ]
+      },
+      "SoupProperty": {
+        "type": "object",
+        "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
+        "required": ["definition"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinition",
+            "description": "The property definition"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyValue",
+                "description": "The property value, if set"
+              }
+            ]
+          }
+        }
       },
       "TaskFilters": {
         "type": "object",
