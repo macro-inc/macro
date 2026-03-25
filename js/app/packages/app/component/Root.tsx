@@ -75,7 +75,6 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
-import Onboarding from './Onboarding';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { SuspenseContextComp } from './SuspenseContext';
 import { lazy } from 'solid-js';
@@ -253,7 +252,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/signup',
-    component: () => <Signup />,
+    component: Signup,
   },
   {
     path: CALLBACK_PATH,
@@ -295,14 +294,6 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
-  },
-  {
-    path: '/onboarding',
-    component: () => (
-      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
-        <Onboarding />
-      </div>
-    ),
   },
   {
     path: '/welcome',

@@ -323,11 +323,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'onboarding',
-    lazy(() => import('@app/component/Onboarding'))
-  );
-
-  registerComponent(
     'notifications-playground',
     lazy(() =>
       import('@notifications/components/Playground').then((m) => ({
