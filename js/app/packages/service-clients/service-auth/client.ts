@@ -402,6 +402,16 @@ export const authServiceClient = {
     );
   },
 
+  async sendReferralInvite(recipient: string) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/referral/send`, {
+        method: 'POST',
+        body: JSON.stringify({ recipient }),
+      }),
+      () => undefined
+    );
+  },
+
   // Stripe HTTP methods (replacing RPC calls)
   async createCheckoutSession(args: {
     successUrl: string;
