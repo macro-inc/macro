@@ -611,7 +611,7 @@ function MaybeEntityRow(props: {
 }) {
   const ctx = useContext(EntityRowContext);
   return (
-    <Show when={ctx} fallback={props.children}>
+    <Show when={isMobile() && ctx} fallback={props.children}>
       <EntityRow
         entityId={props.entityId}
         swipeLeftColor={props.config?.swipeLeftColor}
@@ -839,14 +839,18 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
-      class={cn('soup-list-entity @container/entity w-full relative group/narrow', {
-        'bg-accent/5': props.checked,
-        'hover:bg-hover/30':
-          !props.checked && !props.highlighted && !props.hovered,
-        'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
-        'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
-          props.highlighted && !isMobile(),
-      })}
+      class={cn(
+        'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
+        {
+          'min-h-10': !isMobile(),
+          'bg-accent/5': props.checked,
+          'hover:bg-hover/30':
+            !props.checked && !props.highlighted && !props.hovered,
+          'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
+          'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
+            props.highlighted && !isMobile(),
+        }
+      )}
       onMouseMove={props.onMouseMove}
     >
       <div
