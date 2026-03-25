@@ -65,6 +65,7 @@ import { getActionVerb } from '../extractors-notification/notification-descripti
 import type { NotificationType } from '@core/types';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { toast } from '@core/component/Toast/Toast';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import {
   type NotificationStack,
@@ -694,6 +695,7 @@ function StackRow(props: {
     void notificationSource.bulkMarkAsDone(
       getAllNotificationsFromGroup(props.stack)
     );
+    toast.success('Marked as done');
   };
 
   if (!ctx) {
