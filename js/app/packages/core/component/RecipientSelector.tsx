@@ -188,7 +188,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
                 <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
-                <p class={`truncate my-auto ${props.disabled ? 'italic' : ''}`}>
+                <p
+                  class={`ph-no-capture truncate my-auto ${props.disabled ? 'italic' : ''}`}
+                >
                   {contactInfo}
                 </p>
               </Combobox.ItemLabel>
@@ -204,7 +206,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                     targetType={item().data.channel_type || 'channel'}
                   />
                 </div>
-                <p class={'truncate my-auto'}>{item().data.name}</p>
+                <p class={'ph-no-capture truncate my-auto'}>
+                  {item().data.name}
+                </p>
               </Combobox.ItemLabel>
             );
           }}
@@ -469,7 +473,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           ? (props.placeholder ?? placeholderText())
           : undefined
       }
-      class="w-full text-sm offset-2"
+      class="ph-no-capture w-full text-sm offset-2"
       classList={{
         'border border-edge': !props.hideBorder,
         'py-2': !props.noPadding,

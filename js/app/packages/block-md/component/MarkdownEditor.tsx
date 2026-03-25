@@ -908,7 +908,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             });
           }}
           contentEditable={isContentEditable()}
-          class="w-full max-w-full"
+          class="ph-no-capture w-full max-w-full"
           classList={{
             'select-auto': !canEdit(),
             'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,

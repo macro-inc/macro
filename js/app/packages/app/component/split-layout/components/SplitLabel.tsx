@@ -22,19 +22,26 @@ import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { useRenameSplit } from './SplitModalContext';
+import { cn } from '@ui/utils/classname';
 
 export function StaticSplitLabel(props: {
   label: string;
   iconType?: EntityIconSelector;
   icon?: JSX.Element;
   badges?: JSX.Element;
+  class?: string;
 }) {
   const panel = useSplitPanelOrThrow();
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
   return (
-    <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
+    <div
+      class={cn(
+        'z-3 relative flex items-center gap-2 max-w-full h-full shrink',
+        props.class
+      )}
+    >
       <Show when={props.iconType}>
         <EntityIcon
           class="shrink-0"
@@ -164,7 +171,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

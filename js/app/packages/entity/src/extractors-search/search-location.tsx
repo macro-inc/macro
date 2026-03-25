@@ -24,7 +24,9 @@ export function SearchLocation(props: SearchLocationProps) {
 
   return (
     <Show when={locationText()}>
-      {(text) => <span class="text-ink-muted text-xs">{text()}</span>}
+      {(text) => (
+        <span class="ph-no-capture text-ink-muted text-xs">{text()}</span>
+      )}
     </Show>
   );
 }
