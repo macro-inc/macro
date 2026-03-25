@@ -35,10 +35,26 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import Upload from '@icon/regular/upload.svg';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { debounce } from '@solid-primitives/scheduled';
 
 function useHotkeyAnalytics(): void {
   const analytics = useAnalytics();
 
+  const track = (
+    description: string,
+    token: string | undefined,
+    key: string
+  ) => {
+    analytics.track('hotkey_use', {
+      action: description,
+      token,
+      key,
+    });
+  };
+
+  const debouncedTrack = debounce(track, 125);
+
+  let lastFired: string | undefined;
   useSubscribeToKeypress((context) => {
     // Only track when a command was actually executed
     if (!context.commandCaptured) return;
@@ -49,10 +65,16 @@ function useHotkeyAnalytics(): void {
         ? command.description()
         : command.description;
 
-    analytics.track('hotkey_use', {
-      action: description,
-      token: command.hotkeyToken,
-    });
+    const pressedKeysString = context.pressedKeysString;
+
+    // If we keep firing the same key, we can debounce the track call to avoid
+    // sending many of the same event (like for tab, j, k, etc.). Otherwise, we
+    // can just track normally for unique events
+    let trackFn = lastFired === pressedKeysString ? debouncedTrack : track;
+
+    trackFn(description, command.hotkeyToken, pressedKeysString);
+
+    lastFired = pressedKeysString;
   });
 }
 
