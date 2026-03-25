@@ -93,6 +93,7 @@ export function ChannelCompose() {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
+          class="ph-no-capture"
           label={channelName() || previewName()}
           iconType="channel"
           badges={[

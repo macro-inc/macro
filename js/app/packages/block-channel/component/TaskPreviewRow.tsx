@@ -78,10 +78,10 @@ function TaskPropertyRow(props: {
   return (
     <div class="flex items-center gap-2 text-sm py-1">
       <EntityIcon targetType="task" size="sm" class="flex-shrink-0" />
-      <span class="truncate flex-1 text-ink min-w-0">
+      <span class="ph-no-capture truncate flex-1 text-ink min-w-0">
         {props.task.title || '(empty)'}
       </span>
-      <div class="flex items-center gap-0.5 flex-shrink-0">
+      <div class="ph-no-capture flex items-center gap-0.5 flex-shrink-0">
         <For each={props.properties}>
           {(property) => (
             <PropertyValue
@@ -198,7 +198,9 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
       fallback={
         <div class="flex items-center gap-2 text-sm py-1 text-ink-muted">
           <EntityIcon targetType="task" size="sm" class="flex-shrink-0" />
-          <span class="truncate flex-1">{props.task.title || '(empty)'}</span>
+          <span class="ph-no-capture truncate flex-1">
+            {props.task.title || '(empty)'}
+          </span>
         </div>
       }
     >
