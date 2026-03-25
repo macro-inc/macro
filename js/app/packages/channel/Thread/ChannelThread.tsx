@@ -26,10 +26,7 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const fetchRepliesEnabled = deferredGate(
-    () => props.data().thread.reply_count > 0,
-    300
-  );
+  const fetchRepliesEnabled = deferredGate(hasReplies, 300);
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
