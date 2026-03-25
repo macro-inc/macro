@@ -11,7 +11,9 @@ export function EditedIndicator(props: EditedIndicatorProps) {
 
   return (
     <Show when={message().edited_at != null}>
-      <span class={cn('text-xs text-secondary-fg', props.class)}>(edited)</span>
+      <span class={cn('text-xs text-ink-placeholder', props.class)}>
+        (edited)
+      </span>
     </Show>
   );
 }

@@ -13,7 +13,7 @@ export function Timestamp(props: TimestampProps) {
   return (
     <span
       class={cn(
-        'text-xs text-secondary-fg',
+        'text-xs text-ink-placeholder',
         props.compact && 'leading-none',
         props.class
       )}

@@ -93,12 +93,12 @@ function RegularMessageLayout(props: {
       <Message.Slot placement="icon">
         <Message.SenderIcon />
       </Message.Slot>
-      <Message.Slot placement="header" class="flex items-center gap-2 min-w-0">
+      <Message.Slot placement="header" class="flex items-center gap-1 min-w-0">
         <Message.SenderName />
         <Message.EditedIndicator />
         <Message.Timestamp class="ml-auto" />
       </Message.Slot>
-      <Message.Slot placement="content" class="ph-no-capture mt-0.5">
+      <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
           channelId={props.channelId}
           messageEditor={props.messageEditor}
