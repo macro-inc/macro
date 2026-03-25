@@ -1,0 +1,255 @@
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+
+  # Walkthrough: clean and minimal
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  review_status: true
+  review_details: false
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  poem: false
+  in_progress_fortune: false
+
+  # Labels & reviewers: handled by existing CI workflows
+  suggested_labels: false
+  suggested_reviewers: false
+  auto_apply_labels: false
+  auto_assign_reviewers: false
+
+  # AI agent prompt in inline comments
+  enable_prompt_for_ai_agents: true
+
+  # Exclude generated/vendored/lock files from review
+  path_filters:
+    - "!**/.sqlx/**"
+    - "!**/bun.lock"
+    - "!**/pnpm-lock.yaml"
+    - "!**/Cargo.lock"
+    - "!**/target/**"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!js/app/packages/loro-mirror/**"
+    - "!js/app/packages/service-clients/src/generated/**"
+    - "!**/*.gen.ts"
+
+  # Path-specific review instructions
+  path_instructions:
+    - path: "rust/**/*.rs"
+      instructions: |
+        Rust review guidelines (from project conventions):
+        - Prefer `anyhow::bail!("msg")` over `Err(anyhow::anyhow!("msg"))` for early error returns.
+        - Use `#[tracing::instrument(err)]` on functions returning `Result`. Do NOT add `err` on functions returning `Option`, `()`, or non-Result types. Never include `level = "info"`.
+        - Log errors as `tracing::error!(error=?e, "msg")` — do not interpolate errors into the message string.
+        - Prefer `.inspect_err(|e| tracing::error!(error=?e, "msg"))` over `if let Err(e)` for logging.
+        - Tests go in a separate `test.rs` file in the same module directory, not inline `#[cfg(test)]` blocks.
+        - New crates must have `#![deny(missing_docs)]` in `lib.rs`.
+        - Use `Extension` extractors (not `State`) for axum handlers.
+
+    - path: "rust/**/*_db_client/**"
+      instructions: |
+        Database client review guidelines:
+        - Verify that any new/changed SQL queries have corresponding `.sqlx` cache updates (`just prepare_db`).
+        - Some table/column names are camelCased — ensure `SELECT "camelCase" as "snake_case"` aliasing is correct.
+        - Confirm migrations are reversible or have a clear rollback strategy.
+        - Check that tests are updated when table structures change.
+
+    - path: "js/app/**/*.{ts,tsx}"
+      instructions: |
+        Frontend review guidelines (from project conventions):
+        - Never use `any` — use proper types or `unknown` with type guards.
+        - All network calls to service clients MUST go through TanStack Query in the `queries` package. Do NOT call service clients directly from components or other packages.
+        - Use `match` from `ts-pattern` for exhaustive switch/case logic.
+        - Use semantic color tokens instead of raw Tailwind color classes.
+        - Check `solid-primitives` before writing custom reactive utilities.
+        - Avoid deprecated SolidJS APIs: `blockSignals`, `blockMemos`, `blockResources`, etc.
+        - Primitive UI components should be pure and prefer composition over complex global state/context.
+        - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (packages/core/component/LexicalMarkdown/version.ts).
+
+    - path: "infra/**/*.ts"
+      instructions: |
+        Infrastructure review guidelines:
+        - This is Pulumi IaC code. Verify that resource names follow existing naming conventions.
+        - Check that secrets are not hardcoded — they should come from Pulumi config or AWS Secrets Manager.
+        - Ensure stack outputs are documented and referenced correctly across stacks.
+
+    - path: "**/*.sql"
+      instructions: |
+        SQL review guidelines:
+        - Verify migrations are idempotent where possible (use IF NOT EXISTS, etc.).
+        - Check index strategy — composite indexes should match common query patterns.
+        - Confirm camelCased column names are handled correctly in Rust SQLx queries.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        CI/CD review guidelines:
+        - Verify that secrets are referenced correctly and not exposed in logs.
+        - Check for pinned action versions (use SHA, not tags).
+        - Ensure workflow triggers are appropriate (push vs PR vs manual).
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "wip"
+    labels: []
+    base_branches: []
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  pre_merge_checks:
+    docstrings:
+      mode: off
+    title:
+      mode: warning
+      requirements: "Title should follow conventional commits format (feat:, fix:, chore:, etc.) and be under 72 characters."
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+
+  # Only enable tools relevant to this repo's tech stack
+  tools:
+    # JS/TS: Biome is the primary linter (not ESLint)
+    biome:
+      enabled: true
+    eslint:
+      enabled: false
+    oxc:
+      enabled: false
+
+    # Rust
+    clippy:
+      enabled: true
+
+    # Shell & CI
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+
+    # Config files
+    yamllint:
+      enabled: true
+    hadolint:
+      enabled: true
+
+    # Security
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    osvScanner:
+      enabled: true
+
+    # GitHub integration
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+
+    # AST analysis
+    ast-grep:
+      essential_rules: true
+
+    # Disabled: not used in this repo
+    ruff:
+      enabled: false
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+    swiftlint:
+      enabled: false
+    phpstan:
+      enabled: false
+    phpmd:
+      enabled: false
+    phpcs:
+      enabled: false
+    golangci-lint:
+      enabled: false
+    checkov:
+      enabled: false
+    detekt:
+      enabled: false
+    flake8:
+      enabled: false
+    rubocop:
+      enabled: false
+    buf:
+      enabled: false
+    regal:
+      enabled: false
+    pmd:
+      enabled: false
+    clang:
+      enabled: false
+    cppcheck:
+      enabled: false
+    semgrep:
+      enabled: false
+    opengrep:
+      enabled: false
+    circleci:
+      enabled: false
+    sqlfluff:
+      enabled: false
+    prismaLint:
+      enabled: false
+    pylint:
+      enabled: false
+    shopifyThemeCheck:
+      enabled: false
+    luacheck:
+      enabled: false
+    brakeman:
+      enabled: false
+    dotenvLint:
+      enabled: false
+    htmlhint:
+      enabled: false
+    checkmake:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CLAUDE.md"
+      - "**/AGENTS.md"
+      - "**/.cursor/rules/*.mdc"
+      - "**/.cursor/commands/*.md"
+
+issue_enrichment:
+  auto_enrich:
+    enabled: false
