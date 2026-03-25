@@ -1,13 +1,13 @@
 import { Tooltip } from '@core/component/Tooltip';
-import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user';
 import { cn } from '@ui/utils/classname';
-import { createMemo, Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 
 type ReactionChipProps = {
   emoji: string;
   count: number;
   users: string[];
+  currentUserId: string | undefined;
   selected?: boolean;
   interactive?: boolean;
   onClick?: (event: MouseEvent) => void;
@@ -15,16 +15,23 @@ type ReactionChipProps = {
 
 /**
  * Format a list of user display names with Oxford comma style.
+ * Current user ("You") is always listed first regardless of input order.
  * e.g. "You", "You and Alice", "You, Alice, and Bob"
  */
 export function formatReactorNames(
   userIds: string[],
   currentUserId: string | undefined
 ): string {
-  const names = userIds.map((id) => {
-    if (id === currentUserId) return 'You';
-    return idToDisplayName(id);
-  });
+  if (userIds.length === 0) return '';
+
+  const ordered = [
+    ...userIds.filter((id) => id === currentUserId),
+    ...userIds.filter((id) => id !== currentUserId),
+  ];
+
+  const names = ordered.map((id) =>
+    id === currentUserId ? 'You' : idToDisplayName(id)
+  );
 
   if (names.length === 1) return names[0]!;
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -34,18 +41,31 @@ export function formatReactorNames(
   return `${allButLast.join(', ')}, and ${last}`;
 }
 
-export function ReactionChip(props: ReactionChipProps) {
-  const userId = useUserId();
-
-  const tooltipContent = createMemo(() => (
+function ReactionTooltipContent(props: {
+  users: string[];
+  currentUserId: string | undefined;
+  emoji: string;
+}): JSX.Element {
+  return (
     <span>
-      {formatReactorNames(props.users, userId() ?? undefined)} reacted with{' '}
+      {formatReactorNames(props.users, props.currentUserId)} reacted with{' '}
       <span class="text-md">{props.emoji}</span>
     </span>
-  ));
+  );
+}
 
+export function ReactionChip(props: ReactionChipProps) {
   return (
-    <Tooltip tooltip={tooltipContent()} placement="top">
+    <Tooltip
+      tooltip={
+        <ReactionTooltipContent
+          users={props.users}
+          currentUserId={props.currentUserId}
+          emoji={props.emoji}
+        />
+      }
+      placement="top"
+    >
       <button
         type="button"
         data-message-reaction-chip
@@ -58,6 +78,7 @@ export function ReactionChip(props: ReactionChipProps) {
               !props.selected && props.interactive,
             'border-edge-muted': !props.selected && !props.interactive,
             'cursor-default': !props.interactive,
+            'pointer-events-auto': !props.interactive,
           }
         )}
         disabled={!props.interactive}

@@ -78,6 +78,10 @@ describe('Reactions', () => {
 });
 
 describe('formatReactorNames', () => {
+  it('returns empty string for empty input', () => {
+    expect(formatReactorNames([], 'user-1')).toBe('');
+  });
+
   it('shows "You" when only the current user reacted', () => {
     expect(formatReactorNames(['user-1'], 'user-1')).toBe('You');
   });
@@ -110,5 +114,18 @@ describe('formatReactorNames', () => {
         'other-user'
       )
     ).toBe('alice@test.com and bob@test.com');
+  });
+
+  it('puts current user first regardless of input order', () => {
+    expect(
+      formatReactorNames(['macro|alice@test.com', 'user-1'], 'user-1')
+    ).toBe('You and alice@test.com');
+
+    expect(
+      formatReactorNames(
+        ['macro|alice@test.com', 'macro|bob@test.com', 'user-1'],
+        'user-1'
+      )
+    ).toBe('You, alice@test.com, and bob@test.com');
   });
 });
