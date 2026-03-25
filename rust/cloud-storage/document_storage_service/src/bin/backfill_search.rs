@@ -80,6 +80,9 @@ async fn main() -> anyhow::Result<()> {
             break;
         }
 
+        let first_created = documents.first().and_then(|d| d.created_at);
+        let last_created = documents.last().and_then(|d| d.created_at);
+
         total += documents.len();
 
         sqs_client
@@ -97,7 +100,12 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?;
 
-        println!("completed offset {offset} documents");
+        println!(
+            "completed batch: offset={offset} count={} created_at=[{} .. {}]",
+            documents.len(),
+            first_created.map_or("N/A".to_string(), |t| t.to_rfc3339()),
+            last_created.map_or("N/A".to_string(), |t| t.to_rfc3339()),
+        );
 
         offset += limit;
     }

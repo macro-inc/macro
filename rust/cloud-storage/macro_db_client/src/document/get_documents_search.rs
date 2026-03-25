@@ -24,7 +24,8 @@ pub async fn get_documents_for_search(
             d.id as document_id,
             d.owner as owner,
             d."fileType" as "file_type!",
-            COALESCE(db.id, di.id, dipdf.id) as "document_version_id!"
+            COALESCE(db.id, di.id, dipdf.id) as "document_version_id!",
+            d."createdAt"::timestamptz as "created_at"
         FROM
             "Document" d
         LEFT JOIN document_sub_type dst ON dst.document_id = d.id
@@ -89,6 +90,7 @@ pub async fn get_documents_for_search(
                     source: e.into(),
                 }
             })?,
+            created_at: row.created_at,
         })
     })
     .fetch_all(db)
