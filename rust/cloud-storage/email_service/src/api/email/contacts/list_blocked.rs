@@ -11,6 +11,9 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum ListBlockedError {
+    #[error("Insufficient Gmail permissions. Please re-authenticate to grant the required scope.")]
+    Forbidden,
+
     #[error("Gmail API error: {0}")]
     GmailError(String),
 
@@ -21,6 +24,7 @@ pub enum ListBlockedError {
 impl IntoResponse for ListBlockedError {
     fn into_response(self) -> Response {
         let status_code = match &self {
+            ListBlockedError::Forbidden => StatusCode::FORBIDDEN,
             ListBlockedError::GmailError(_) | ListBlockedError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -38,7 +42,10 @@ impl IntoResponse for ListBlockedError {
 
 impl From<GmailError> for ListBlockedError {
     fn from(e: GmailError) -> Self {
-        ListBlockedError::GmailError(e.to_string())
+        match e {
+            GmailError::Forbidden => ListBlockedError::Forbidden,
+            _ => ListBlockedError::GmailError(e.to_string()),
+        }
     }
 }
 
@@ -58,6 +65,7 @@ pub struct ListBlockedResponse {
     responses(
         (status = 200, body = ListBlockedResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]

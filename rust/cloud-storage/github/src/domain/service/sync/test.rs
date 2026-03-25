@@ -195,13 +195,42 @@ impl DocumentService for StubDocumentService {
 /// Stateful stub repo that tracks task IDs per github key.
 struct StubSyncRepo {
     tasks: Mutex<HashMap<String, HashSet<String>>>,
+    /// Maps github_user_id -> macro_id for installation event lookups.
+    github_links: Mutex<HashMap<String, String>>,
+    /// Maps macro_id -> team_ids for installation event lookups.
+    user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
+    /// Recorded installation-team association inserts: (installation_id, team_ids, installed_by).
+    installation_associations: Mutex<Vec<(String, Vec<uuid::Uuid>, String)>>,
 }
 
 impl StubSyncRepo {
     fn new() -> Self {
         Self {
             tasks: Mutex::new(HashMap::new()),
+            github_links: Mutex::new(HashMap::new()),
+            user_teams: Mutex::new(HashMap::new()),
+            installation_associations: Mutex::new(Vec::new()),
         }
+    }
+
+    fn with_github_link(self, github_user_id: &str, macro_id: &str) -> Self {
+        self.github_links
+            .lock()
+            .unwrap()
+            .insert(github_user_id.to_string(), macro_id.to_string());
+        self
+    }
+
+    fn with_user_teams(self, macro_id: &str, team_ids: Vec<uuid::Uuid>) -> Self {
+        self.user_teams
+            .lock()
+            .unwrap()
+            .insert(macro_id.to_string(), team_ids);
+        self
+    }
+
+    fn installation_associations(&self) -> Vec<(String, Vec<uuid::Uuid>, String)> {
+        self.installation_associations.lock().unwrap().clone()
     }
 }
 
@@ -250,6 +279,42 @@ impl GithubSyncRepo for StubSyncRepo {
             })
             .cloned()
             .collect())
+    }
+
+    async fn get_macro_id_by_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(self
+            .github_links
+            .lock()
+            .unwrap()
+            .get(github_user_id)
+            .cloned())
+    }
+
+    async fn get_user_team_ids(&self, macro_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
+        Ok(self
+            .user_teams
+            .lock()
+            .unwrap()
+            .get(macro_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn insert_installation_team_associations(
+        &self,
+        installation_id: &str,
+        team_ids: &[uuid::Uuid],
+        installed_by: &str,
+    ) -> Result<(), Self::Err> {
+        self.installation_associations.lock().unwrap().push((
+            installation_id.to_string(),
+            team_ids.to_vec(),
+            installed_by.to_string(),
+        ));
+        Ok(())
     }
 }
 
@@ -310,6 +375,23 @@ impl GithubSyncClient for StubSyncClient {
 
 fn make_sync_service() -> GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient> {
     make_sync_service_with_doc_service().0
+}
+
+fn make_sync_service_with_repo(
+    repo: StubSyncRepo,
+) -> GithubSyncServiceImpl<StubDocumentService, StubSyncRepo, StubSyncClient> {
+    let doc_service = Arc::new(StubDocumentService::new());
+    GithubSyncServiceImpl::new(
+        GithubSyncConfig {
+            webhook_secret: "test-webhook-secret".to_string(),
+            github_sync_app_url: "test".to_string(),
+            sync_app_pem: TEST_PEM.to_string(),
+            sync_app_client_id: "test-sync-app-client-id".to_string(),
+        },
+        doc_service,
+        repo,
+        StubSyncClient::new(),
+    )
 }
 
 fn make_sync_service_with_doc_service() -> (
@@ -1130,4 +1212,85 @@ async fn false_positive_macro_prefix_ignored() {
         doc_service.task_status_calls().is_empty(),
         "false positive macro- prefix should not trigger a status update"
     );
+}
+
+// ---------------------------------------------------------------------------
+// installation created
+// ---------------------------------------------------------------------------
+
+fn installation_created_event(sender_id: u64, installation_id: u64) -> ValidatedGithubWebhookEvent {
+    ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "installation": { "id": installation_id },
+            "sender": { "login": "testuser", "id": sender_id }
+        }),
+    )
+}
+
+#[tokio::test]
+async fn installation_created_associates_teams() {
+    let team_a: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let team_b: uuid::Uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap();
+
+    let repo = StubSyncRepo::new()
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_a, team_b]);
+
+    let service = make_sync_service_with_repo(repo);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let associations = service.repo.installation_associations();
+    assert_eq!(associations.len(), 1);
+    assert_eq!(associations[0].0, "99999");
+    assert_eq!(associations[0].1.len(), 2);
+    assert!(associations[0].1.contains(&team_a));
+    assert!(associations[0].1.contains(&team_b));
+    assert_eq!(associations[0].2, "macro|user@user.com");
+}
+
+#[tokio::test]
+async fn installation_created_no_github_link() {
+    let service = make_sync_service();
+    let event = installation_created_event(99999, 11111);
+
+    // No github link for sender — should succeed without inserting anything
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_associations().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_no_teams() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+    // user_teams is empty by default
+
+    let service = make_sync_service_with_repo(repo);
+    let event = installation_created_event(12345, 11111);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let associations = service.repo.installation_associations();
+    assert!(associations.is_empty());
+}
+
+#[tokio::test]
+async fn installation_deleted_is_skipped() {
+    let service = make_sync_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "deleted",
+            "installation": { "id": 12345 },
+            "sender": { "login": "testuser", "id": 12345 }
+        }),
+    );
+
+    // Should not error — just skips
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_associations().is_empty());
 }

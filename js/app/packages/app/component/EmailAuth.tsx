@@ -4,9 +4,10 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
-import { updateUserInfo } from '@queries/auth/user-info';
+import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { useNavigate } from '@solidjs/router';
 import { onMount, Suspense } from 'solid-js';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -44,7 +45,7 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 
   const onSuccessfulAuth = async () => {
     await updateUserAuth();
-    await updateUserInfo();
+    await invalidateAllAfterLogin();
     const channel = new BroadcastChannel('auth');
     channel.postMessage({ type: 'login-success' });
   };
@@ -66,9 +67,9 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onSuccess();
           return;
         }
-        toast.failure(
+        toast.alert(
           'Failed to connect email',
-          'Please email contact@macro.com'
+          'Select email permissions on sign-in to enable'
         );
         navigateToSuccess();
       });
@@ -85,6 +86,11 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 function EmailSignUp(props: EmailAuthParams) {
   const navigate = useNavigate();
   const { query: emailLinks } = useEmailLinks();
+  const analytics = useAnalytics();
+
+  onMount(() => {
+    analytics.pageView('signup');
+  });
 
   const withAppPrefix = (path: string) => `/app${path}`;
 

@@ -19,17 +19,15 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
 import type OpenAI from 'openai';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
-import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
-import type { GetChatPermissionsResponseV2 } from './generated/schemas/getChatPermissionsResponseV2';
+import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
-import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
+import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
-import type { SuccessResponse } from './generated/schemas/successResponse';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -109,7 +107,7 @@ export const cognitionApiServiceClient = {
     );
   },
 
-  async updateChatPermissions(args: PatchChatRequestV2 & WithChatId) {
+  async updateChatPermissions(args: PatchChatRequest & WithChatId) {
     const { chat_id, sharePermission } = args;
     return await dcsFetch(`/chats/${chat_id}`, {
       method: 'PATCH',
@@ -148,10 +146,7 @@ export const cognitionApiServiceClient = {
         method: 'POST',
         body: JSON.stringify({
           name: args.name,
-          model: args.model,
           projectId: args.projectId,
-          attachments: args.attachments,
-          isPersistent: args.isPersistent,
         }),
       }),
       (result) => result
@@ -175,7 +170,7 @@ export const cognitionApiServiceClient = {
   async getChatPermissions(args: { id: string }) {
     const { id } = args;
     return mapOk(
-      await dcsFetch<GetChatPermissionsResponseV2>(`/chats/${id}/permissions`, {
+      await dcsFetch<GetChatPermissionsResponse>(`/chats/${id}/permissions`, {
         method: 'GET',
       }),
       (result) => result.permissions
@@ -186,17 +181,14 @@ export const cognitionApiServiceClient = {
 
     setCachedInputStore(chat_id, undefined);
 
-    return mapOk(
-      await dcsFetch<EmptyResponse>(`/chats/${chat_id}/permanent`, {
-        method: 'DELETE',
-      }),
-      () => ({})
-    );
+    return await dcsFetch(`/chats/${chat_id}/permanent`, {
+      method: 'DELETE',
+    });
   },
   async revertDeleteChat(args: WithChatId) {
     const { chat_id } = args;
     return mapOk(
-      await dcsFetch<SuccessResponse>(`/chats/${chat_id}/revert_delete`, {
+      await dcsFetch<Success>(`/chats/${chat_id}/revert_delete`, {
         method: 'PUT',
       }),
       (result) => result

@@ -72,6 +72,7 @@ pub async fn get_channel_name_and_type(
             model::comms::ChannelType::DirectMessage => {
                 models_comms::channel::ChannelType::DirectMessage
             }
+            model::comms::ChannelType::Team => models_comms::channel::ChannelType::Team,
         },
         channel.name.as_deref(),
         &participants,

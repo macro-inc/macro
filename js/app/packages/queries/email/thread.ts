@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { optimisticUpdateSoupEntity } from '../soup/cache';
@@ -19,6 +20,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
@@ -269,6 +271,8 @@ type SendMessageParams = { message: ApiDraftInput };
 export function useSendMessageMutation(
   callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageParams>
 ) {
+  const analytics = useAnalytics();
+
   return useMutation(() => ({
     mutationFn: async (vars: SendMessageParams) =>
       await throwOnErr(
@@ -277,6 +281,7 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (data) => {
+          analytics.track('email_message_sent');
           const threadID = data.message.thread_db_id;
           if (threadID) {
             queryClient.invalidateQueries({
@@ -364,4 +369,45 @@ export function useUnscheduleMessageMutation(
       callbacks
     ),
   }));
+}
+
+/**
+ * Blocks a sender and shows appropriate toasts with undo support.
+ * Shared by the email thread view and soup context menu.
+ */
+export async function blockSenderWithToast(senderEmail: string) {
+  const result = await emailClient.blockSender({
+    email_address: senderEmail,
+  });
+
+  if (isErr(result)) {
+    if (result[0].some((e) => e.code === 'FORBIDDEN')) {
+      toast.failure(
+        'Insufficient permissions',
+        'Enable new email permissions on sign-in.',
+        5_000
+      );
+    } else {
+      toast.failure('Failed to block sender', senderEmail);
+    }
+    return;
+  }
+
+  toast.success(
+    'Sender blocked',
+    `All new messages will be trashed for ${senderEmail}`,
+    {
+      text: 'Undo',
+      onClick: async () => {
+        const undoResult = await emailClient.unblockSender({
+          email_address: senderEmail,
+        });
+        if (isErr(undoResult)) {
+          toast.failure('Failed to unblock sender', senderEmail);
+        } else {
+          toast.success('Sender unblocked');
+        }
+      },
+    }
+  );
 }

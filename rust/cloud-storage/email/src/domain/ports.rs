@@ -6,7 +6,7 @@ use crate::domain::models::{
     SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use std::collections::HashMap;
@@ -57,6 +57,11 @@ pub trait EmailRepo: Send + Sync + 'static {
         fusionauth_user_id: &str,
         macro_id: MacroUserIdStr<'_>,
         provider: UserProvider,
+    ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+
+    fn link_by_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
     /// Fetch a thread by its database ID (without messages).
@@ -201,6 +206,27 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<LinkLabel>, Self::Err>> + Send;
+
+    /// Delete unsent scheduled messages for a batch of draft message IDs.
+    fn delete_scheduled_messages_batch(
+        &self,
+        message_ids: &[Uuid],
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Update the project assignment for a thread. Pass `None` to remove from project.
+    /// Returns `false` if the thread was not found.
+    fn update_thread_project(
+        &self,
+        thread_id: Uuid,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the current project_id for a thread.
+    fn get_thread_project_id(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -217,6 +243,12 @@ pub trait EmailService: Send + Sync + 'static {
     fn get_link_by_auth_id_and_macro_id(
         &self,
         auth_id: &str,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
+
+    /// Fetch the email link for a user by their macro ID only.
+    fn get_link_by_macro_id(
+        &self,
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
@@ -265,6 +297,17 @@ pub trait EmailService: Send + Sync + 'static {
         label_id: Uuid,
         add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send;
+
+    /// Update the project assignment for a thread. Returns the old project_id.
+    ///
+    /// `thread_receipt` proves the caller has edit access to the thread.
+    /// `project_receipt` proves the caller has edit access to the target project.
+    /// Pass `None` to remove the thread from its current project.
+    fn update_thread_project(
+        &self,
+        thread_receipt: EntityAccessReceipt<EditAccessLevel>,
+        project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
+    ) -> impl Future<Output = Result<Option<String>, EmailErr>> + Send;
 }
 
 /// Port for modifying Gmail message labels via the provider API.
@@ -277,6 +320,43 @@ pub trait GmailLabelModifier: Send + Sync + 'static {
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+}
+
+/// Port for fetching a Gmail access token for a given email link.
+///
+/// The domain service receives the token as an opaque `&str`. This trait
+/// allows the toolset layer to resolve tokens without depending on axum.
+pub trait GmailTokenProvider: Send + Sync + 'static {
+    /// Fetch a Gmail OAuth access token for the given email link.
+    fn fetch_gmail_access_token(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+
+    /// Fetch a Gmail OAuth access token directly from the auth service,
+    /// bypassing the Redis cache for reads but still caching the result.
+    fn fetch_gmail_access_token_no_cache(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<String, EmailErr>> + Send;
+}
+
+/// No-op token provider for callers that don't need Gmail token resolution.
+#[derive(Clone)]
+pub struct NoOpGmailTokenProvider;
+
+impl GmailTokenProvider for NoOpGmailTokenProvider {
+    async fn fetch_gmail_access_token(&self, _link: &Link) -> Result<String, EmailErr> {
+        Err(EmailErr::ProviderErr(anyhow::anyhow!(
+            "Gmail token provider not configured"
+        )))
+    }
+
+    async fn fetch_gmail_access_token_no_cache(&self, _link: &Link) -> Result<String, EmailErr> {
+        Err(EmailErr::ProviderErr(anyhow::anyhow!(
+            "Gmail token provider not configured"
+        )))
+    }
 }
 
 /// No-op label modifier for callers that don't need Gmail label operations.

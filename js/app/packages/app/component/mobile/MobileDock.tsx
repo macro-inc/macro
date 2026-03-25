@@ -25,6 +25,7 @@ import { SearchState } from './mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { setCreateMenuOpen } from '../Launcher';
 import { useLocation } from '@solidjs/router';
+import { useAnalytics } from '@app/component/analytics-context';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 
 const ICON_ANIMATION_DURATION_MS = 500;
@@ -83,6 +84,7 @@ function MorePopover(props: {
   open: Accessor<boolean>;
   setOpen: Setter<boolean>;
 }) {
+  const analytics = useAnalytics();
   const { toggleSettings } = useSettingsState();
   const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
@@ -106,6 +108,7 @@ function MorePopover(props: {
       toggleSettings();
       props.setOpen(false);
     } else if (id === 'create') {
+      analytics.track('create_menu_open', { from: 'mobile_dock' });
       setCreateMenuOpen(true);
       props.setOpen(false);
     } else if (isListViewID(id)) {
@@ -169,6 +172,7 @@ function MorePopover(props: {
             )}
             onClick={() => {
               impactFeedback('light');
+              analytics.track('create_menu_open', { from: 'mobile_dock' });
               setCreateMenuOpen(true);
               props.setOpen(false);
             }}

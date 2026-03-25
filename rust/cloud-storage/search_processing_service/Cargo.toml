@@ -43,6 +43,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
+document_sub_type = { path = "../document_sub_type" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }
 model_file_type = { path = "../model_file_type" }

@@ -17,6 +17,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   Show,
   Switch,
   untrack,
@@ -125,9 +126,13 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
+    // Open links in a new tab instead of navigating the current one
+    for (const a of messageDiv.querySelectorAll('a[href]')) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    }
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'var(--cursor-auto)';
-    messageDiv.style.overflow = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });
@@ -208,6 +213,75 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       '--macro-email-img-display',
       shouldHide ? 'none' : 'initial'
     );
+  });
+
+  // Scale down wide HTML emails to fit the container width (like Gmail on mobile)
+  createEffect(() => {
+    const container = host();
+    // Re-run when source changes
+    source();
+
+    const clearScale = () => {
+      const root = container.shadowRoot;
+      if (!root) return;
+      const messageDiv = root.querySelector('div');
+      if (messageDiv instanceof HTMLElement) {
+        messageDiv.style.zoom = '';
+        messageDiv.style.overflow = '';
+      }
+    };
+
+    if (!props.isBodyExpanded()) {
+      clearScale();
+      return;
+    }
+
+    const applyScale = () => {
+      const root = container.shadowRoot;
+      if (!root) return;
+      const messageDiv = root.querySelector('div');
+      if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
+
+      // Reset any previous scaling before measuring
+      messageDiv.style.zoom = '';
+      messageDiv.style.overflow = '';
+
+      const containerWidth = container.clientWidth;
+      const contentWidth = messageDiv.scrollWidth;
+
+      if (containerWidth > 0 && contentWidth > containerWidth) {
+        const scale = containerWidth / contentWidth;
+        // Use zoom instead of transform: scale() so that backgrounds,
+        // borders, and layout all shrink together without clipping.
+        messageDiv.style.zoom = `${scale}`;
+      } else {
+        messageDiv.style.overflow = 'auto';
+      }
+    };
+
+    // Re-run on container resize (e.g. orientation change, split resize)
+    const resizeObserver = new ResizeObserver(() => applyScale());
+    resizeObserver.observe(container);
+
+    // Re-run when images inside the shadow DOM finish loading
+    const root = container.shadowRoot;
+    const images = root ? Array.from(root.querySelectorAll('img')) : [];
+    const onImageLoad = () => applyScale();
+    for (const img of images) {
+      if (!img.complete) {
+        img.addEventListener('load', onImageLoad);
+      }
+    }
+
+    // Initial measurement after layout
+    requestAnimationFrame(() => applyScale());
+
+    onCleanup(() => {
+      resizeObserver.disconnect();
+      for (const img of images) {
+        img.removeEventListener('load', onImageLoad);
+      }
+    });
   });
 
   return (

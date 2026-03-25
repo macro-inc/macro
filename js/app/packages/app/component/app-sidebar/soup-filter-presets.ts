@@ -9,6 +9,25 @@ import {
 } from '@app/component/next-soup/filters/inbox-query-filters';
 import type { ListView } from '@app/constants/list-views';
 import type { SoupBody } from '@queries/soup/items';
+import { SharedEmailFilter } from '@service-storage/generated/schemas';
+
+/** Shared query filters for the "Signal" tab across Inbox and Email views. */
+export const SIGNAL_QUERY_FILTERS = {
+  email_filters: {
+    importance: true as const,
+    shared: SharedEmailFilter.exclude,
+  },
+  emailView: 'inbox' as const,
+};
+
+/** Shared query filters for the "Noise" tab across Inbox and Email views. */
+export const NOISE_QUERY_FILTERS = {
+  email_filters: {
+    importance: false as const,
+    shared: SharedEmailFilter.exclude,
+  },
+  emailView: 'inbox' as const,
+};
 
 export type SoupFiltersPreset = {
   queryFilters: SoupBody;
@@ -39,27 +58,34 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {
     default: 'signal',
     tabs: {
-      signal: () => ({
-        queryFilters: {
-          ...applyInboxQueryFilters({
-            document_filters: { is_email_attachment: false },
-          }),
-          emailView: 'inbox',
-        },
-        clientFilters: { and: ['signal', 'not-done'] },
-      }),
-      noise: () => ({
-        queryFilters: {
-          ...applyOtherQueryFilters({
-            document_filters: { is_email_attachment: false },
-          }),
-          emailView: 'inbox',
-        },
-        clientFilters: { and: ['noise', 'not-done'] },
-      }),
+      signal: () => {
+        const filters = applyInboxQueryFilters({
+          document_filters: { is_email_attachment: false },
+        });
+        return {
+          queryFilters: {
+            ...filters,
+            ...SIGNAL_QUERY_FILTERS,
+          },
+          clientFilters: { and: ['signal', 'not-done'] },
+        };
+      },
+      noise: () => {
+        const filters = applyOtherQueryFilters({
+          document_filters: { is_email_attachment: false },
+        });
+        return {
+          queryFilters: {
+            ...filters,
+            ...NOISE_QUERY_FILTERS,
+          },
+          clientFilters: { and: ['noise', 'not-done'] },
+        };
+      },
       all: () => ({
         queryFilters: {
           document_filters: { is_email_attachment: false },
+          email_filters: { shared: SharedEmailFilter.include },
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
@@ -95,20 +121,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       important: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: true },
+          ...SIGNAL_QUERY_FILTERS,
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
-          email_filters: { importance: false },
+          ...NOISE_QUERY_FILTERS,
         },
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({
         queryFilters: {
           ...QUERY_FILTERS.email,
+          email_filters: { shared: SharedEmailFilter.exclude },
           emailView: 'drafts',
         },
         clientFilters: { and: ['email-drafts'] },
@@ -118,12 +145,31 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.email,
-            email_filters: { senders: [ctx.email] },
+            email_filters: {
+              senders: [ctx.email],
+              shared: SharedEmailFilter.exclude,
+            },
             emailView: 'sent',
           },
           clientFilters: { and: ['email', 'no-drafts'] },
         };
       },
+      shared: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          email_filters: { shared: SharedEmailFilter.only },
+          emailView: 'all',
+        },
+        clientFilters: { and: ['email'] },
+      }),
+      all: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.email,
+          email_filters: { shared: SharedEmailFilter.include },
+          emailView: 'all',
+        },
+        clientFilters: { and: ['email'] },
+      }),
     },
   },
   documents: {
@@ -133,19 +179,44 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           queryFilters: {
-            ...QUERY_FILTERS.document,
-            document_filters: { owners: [ctx.userId] },
+            ...QUERY_FILTERS.documentAndFile,
+            document_filters: {
+              ...QUERY_FILTERS.documentAndFile.document_filters,
+              is_email_attachment: false,
+              owners: [ctx.userId],
+            },
+            project_filters: { project_ids: EXCLUDE },
           },
-          clientFilters: { and: ['document'] },
+          clientFilters: { and: ['not-task'] },
         };
       },
       shared: () => ({
-        queryFilters: QUERY_FILTERS.document,
-        clientFilters: { and: ['document', 'shared-entity'] },
+        queryFilters: {
+          ...QUERY_FILTERS.documentAndFile,
+          document_filters: {
+            ...QUERY_FILTERS.documentAndFile.document_filters,
+            is_email_attachment: false,
+          },
+          project_filters: { project_ids: EXCLUDE },
+        },
+        clientFilters: { and: ['not-task', 'shared-entity'] },
+      }),
+      attachments: () => ({
+        queryFilters: {
+          ...QUERY_FILTERS.documentAndFile,
+          document_filters: {
+            is_email_attachment: true,
+          },
+          project_filters: { project_ids: EXCLUDE },
+        },
+        clientFilters: { and: ['not-task'] },
       }),
       all: () => ({
-        queryFilters: QUERY_FILTERS.document,
-        clientFilters: { and: ['document'] },
+        queryFilters: {
+          ...QUERY_FILTERS.documentAndFile,
+          project_filters: { project_ids: EXCLUDE },
+        },
+        clientFilters: { and: ['not-task'] },
       }),
     },
   },
@@ -157,9 +228,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.task,
-            document_filters: { owners: [ctx.userId] },
+            document_filters: {
+              ...QUERY_FILTERS.task.document_filters,
+              owners: [ctx.userId],
+            },
           },
-          clientFilters: { and: ['task', 'assigned-to'] },
+          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
         };
       },
       'created-by-me': (ctx) => {
@@ -167,9 +241,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         return {
           queryFilters: {
             ...QUERY_FILTERS.task,
-            document_filters: { owners: [ctx.userId] },
+            document_filters: {
+              ...QUERY_FILTERS.task.document_filters,
+              owners: [ctx.userId],
+            },
           },
-          clientFilters: { and: ['task'] },
+          clientFilters: { and: ['task', 'active-task'] },
         };
       },
       all: () => ({
@@ -198,50 +275,31 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  files: {
+  folders: {
     default: 'owned',
     tabs: {
       owned: (ctx) => {
         if (!ctx.userId) return undefined;
         return {
           queryFilters: {
-            ...QUERY_FILTERS.file,
-            document_filters: {
-              ...QUERY_FILTERS.file.document_filters,
-              is_email_attachment: false,
-              owners: [ctx.userId],
-            },
+            channel_filters: { channel_ids: EXCLUDE },
+            chat_filters: { chat_ids: EXCLUDE },
+            email_filters: { recipients: EXCLUDE },
+            document_filters: { document_ids: EXCLUDE },
             project_filters: { owners: [ctx.userId] },
           },
-          clientFilters: { and: ['file-folder'] },
+          clientFilters: {},
         };
       },
-      shared: () => ({
-        queryFilters: {
-          ...QUERY_FILTERS.file,
-          document_filters: {
-            ...QUERY_FILTERS.file.document_filters,
-            is_email_attachment: false,
-          },
-        },
-        clientFilters: { and: ['file-folder', 'shared-entity'] },
-      }),
-      attachments: () => ({
-        queryFilters: {
-          ...QUERY_FILTERS.file,
-          document_filters: {
-            is_email_attachment: true,
-          },
-          project_filters: { project_ids: EXCLUDE },
-        },
-        clientFilters: { and: ['file-folder'] },
-      }),
       all: () => ({
         queryFilters: {
-          ...QUERY_FILTERS.file,
+          channel_filters: { channel_ids: EXCLUDE },
+          chat_filters: { chat_ids: EXCLUDE },
+          email_filters: { recipients: EXCLUDE },
+          document_filters: { document_ids: EXCLUDE },
           project_filters: {},
         },
-        clientFilters: { and: ['file-folder'] },
+        clientFilters: {},
       }),
     },
   },
@@ -259,7 +317,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
 };
 
 /** Views whose default tab requires user context */
-type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'files';
+type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'folders';
 
 /** Views whose default tab works without user context */
 type ContextOptionalView = Exclude<ListView, ContextRequiredView>;

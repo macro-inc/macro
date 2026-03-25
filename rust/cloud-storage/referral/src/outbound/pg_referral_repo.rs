@@ -87,6 +87,22 @@ impl ReferralRepo for PgReferralRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> Result<Option<ReferralCode>, Self::Err> {
+        let referrer_id: Option<uuid::Uuid> = sqlx::query!(
+            "SELECT referrer_id FROM referral_tracking WHERE referred_id = $1",
+            referred_user_id
+        )
+        .map(|r| r.referrer_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(referrer_id.map(|id| ReferralCode(self.short_uuid_converter.from_uuid(&id))))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn complete_referral<'a>(
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
@@ -115,7 +131,7 @@ impl ReferralRepo for PgReferralRepo {
             r#"
             UPDATE referral_tracking
             SET status = 'complete'
-            WHERE referrer_id = $1 and referred_id = $2"#,
+            WHERE referrer_id = $1 AND referred_id = $2 AND status != 'complete'"#,
             &referrer_id,
             &referred_id
         )
@@ -147,5 +163,32 @@ impl ReferralRepo for PgReferralRepo {
         .map(|s| s.stripe_customer_id)
         .fetch_one(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_sender_info<'a>(
+        &self,
+        user_id: &MacroUserId<Lowercase<'a>>,
+    ) -> Result<(Option<String>, Option<String>), Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                CASE
+                    WHEN mui.profile_picture IS NOT NULL AND mui.profile_picture != ''
+                    THEN mui.profile_picture
+                    ELSE NULL
+                END AS "profile_picture_url?: String",
+                NULLIF(TRIM(CONCAT_WS(' ', NULLIF(first_name, 'N/A'), NULLIF(last_name, 'N/A'))), '') AS "display_name?: String"
+            FROM macro_user_info mui
+            JOIN "User" u ON u.macro_user_id = mui.macro_user_id
+            WHERE u.id = $1
+            "#,
+            user_id.as_ref()
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|r| (r.profile_picture_url, r.display_name));
+
+        Ok(row.unwrap_or((None, None)))
     }
 }

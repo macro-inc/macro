@@ -3,7 +3,7 @@ use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{EmailFilters, ast::ExpandErr};
+use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr};
 
 /// Possible email values in the ast
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,12 +27,16 @@ pub enum EmailLiteral {
     Recipient(Email),
     /// This value filters by email thread ID
     ThreadId(Uuid),
+    /// This value filters by project ID
+    ProjectId(String),
     /// This node value filters by email importance. false short-circuits to match nothing.
     Importance(bool),
     /// This node value filters by notification done state for emails.
     NotificationDone(bool),
     /// This node value filters by notification seen state for emails.
     NotificationSeen(bool),
+    /// Controls whether shared email threads are included in results.
+    Shared(SharedEmailFilter),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {
@@ -44,10 +48,12 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            project_ids,
             importance,
             notification_filters,
             include_labels: _,
             exclude_labels: _,
+            shared,
         } = input;
 
         fn map_email(s: String) -> Email {
@@ -79,6 +85,10 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(|s| Uuid::parse_str(s))
             .try_expand(|r| r.map(EmailLiteral::ThreadId), Expr::or)?;
 
+        let project_id_nodes = project_ids
+            .into_iter()
+            .expand(EmailLiteral::ProjectId, Expr::or);
+
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
         let notification_done_node = notification_filters
             .done
@@ -86,6 +96,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         let notification_seen_node = notification_filters
             .seen
             .map(|seen| Expr::Literal(EmailLiteral::NotificationSeen(seen)));
+        let shared_node = if shared.is_default() {
+            None
+        } else {
+            Some(Expr::Literal(EmailLiteral::Shared(shared)))
+        };
 
         Ok([
             sender_nodes,
@@ -93,9 +108,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc_nodes,
             recipient_nodes,
             thread_id_nodes,
+            project_id_nodes,
             importance_node,
             notification_done_node,
             notification_seen_node,
+            shared_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

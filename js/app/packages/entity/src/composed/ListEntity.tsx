@@ -53,7 +53,6 @@ import { createEntityDraggable } from '../utils/draggable';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
 import { DraftBadge, InviteBadge, SharedBadge } from '../components/Badges';
-import { DisplayName } from '../components/DisplayName';
 import { useIsShared } from '../utils/shared';
 import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
 import {
@@ -78,6 +77,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { isMobile } from '@core/mobile/isMobile';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { DisplayName } from '@entity/components/DisplayName';
 
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 

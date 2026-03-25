@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM \"Pin\" WHERE \"pinnedItemId\" = $1 AND \"pinnedItemType\" = 'chat'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba3ab3dc338552f6b794ab5405655fe673e71f02106e9792cc4cac40f69b9176"
+}

@@ -2,7 +2,12 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    email::EmailStr,
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
+use std::future::Future;
 
 use crate::domain::models::{ReferralCode, ReferralError};
 
@@ -36,11 +41,24 @@ pub trait ReferralRepo: Send + Sync + 'static {
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Gets the referral code of the user who referred the given user, if any
+    fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<ReferralCode>, Self::Err>> + Send;
+
     /// Gets the referrs customer id using their code
     fn get_referrers_customer_id(
         &self,
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Gets the sender's profile picture URL and display name in a single query.
+    /// Returns `(profile_picture_url, display_name)`, either of which may be `None`.
+    fn get_sender_info<'a>(
+        &self,
+        user_id: &MacroUserId<Lowercase<'a>>,
+    ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
 }
 
 /// Repository to handle applying discounts to the referrer when a referral is
@@ -75,6 +93,12 @@ pub trait ReferralService: Send + Sync + 'static {
         referral_code: &ReferralCode,
     ) -> impl Future<Output = Result<(), ReferralError>> + Send;
 
+    /// Gets the referral code of the user who referred the given user, if any
+    fn get_referred_by(
+        &self,
+        referred_user_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<ReferralCode>, ReferralError>> + Send;
+
     /// Processes a referral
     /// - tracks the referral
     /// - assigns the discount to the referrers' stripe
@@ -82,5 +106,12 @@ pub trait ReferralService: Send + Sync + 'static {
         &self,
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
+    ) -> impl Future<Output = Result<(), ReferralError>> + Send;
+
+    /// Send a referral to an external user via email
+    fn send_referral_invite(
+        &self,
+        sending_user: MacroUserIdStr<'_>,
+        recipient: EmailStr<'static>,
     ) -> impl Future<Output = Result<(), ReferralError>> + Send;
 }

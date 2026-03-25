@@ -1,5 +1,5 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { withAnalytics } from '@coparse/analytics';
 import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { useHasPaidAccess } from '@core/auth/license';
 import { ActionSequence } from '@core/component/FormControls/ActionSequence';
@@ -12,7 +12,7 @@ import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createEffect, onCleanup, Show } from 'solid-js';
 
 export default function Onboarding() {
-  const { track, TrackingEvents } = withAnalytics();
+  const analytics = useAnalytics();
 
   const authenticated = useIsAuthenticated();
   const connected = useEmailLinksStatus();
@@ -39,7 +39,6 @@ export default function Onboarding() {
   function complete() {
     // Redirect on completion
     if (localStorage.getItem('new_user_onboarding')) {
-      track(TrackingEvents.ONBOARDING.COMPLETE);
       localStorage.removeItem('new_user_onboarding');
     }
     return navigate(DEFAULT_ROUTE);
@@ -60,7 +59,7 @@ export default function Onboarding() {
   createEffect(() => {
     const subscriptionSuccess = searchParams.subscriptionSuccess;
     if (subscriptionSuccess === 'true') {
-      track(TrackingEvents.ONBOARDING.SUBSCRIBE.CHECKOUT_SUCCESS);
+      analytics.track('subscription_success');
       updateUserInfo();
     }
   });
@@ -98,27 +97,26 @@ export default function Onboarding() {
 
   // ALSO AUTHS!
   const connectInbox = async () => {
-    track(TrackingEvents.ONBOARDING.GMAIL.CONNECT_START);
     try {
       await connectEmail();
     } catch (error) {
-      track(TrackingEvents.ONBOARDING.GMAIL.CONNECT_FAILURE, { ...error });
       console.error(error);
     }
 
-    if (connected()) track(TrackingEvents.ONBOARDING.GMAIL.CONNECT_SUCCESS);
     await updateUserAuth();
     if (subscribed()) complete();
   };
 
   const handlePayment = async () => {
     try {
-      track(TrackingEvents.ONBOARDING.SUBSCRIBE.CHECKOUT_START);
+      analytics.track('subscription_start', {
+        type: 'new_subscription',
+        customType: 'New subscription',
+      });
       const url =
         await stripeServiceClient.createCheckoutSession('New subscription');
       window.location.href = url;
     } catch (error) {
-      track(TrackingEvents.ONBOARDING.SUBSCRIBE.CHECKOUT_FAILURE, { ...error });
       console.error(error);
     }
   };

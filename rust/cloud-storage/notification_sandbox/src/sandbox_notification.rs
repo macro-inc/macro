@@ -48,7 +48,7 @@ impl NotificationExtEmail for SandboxNotification {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
-        RateLimitKey::from_str_hashed("sandbox")
+        RateLimitKey::from_str_hashed(&"sandbox")
     }
 }
 

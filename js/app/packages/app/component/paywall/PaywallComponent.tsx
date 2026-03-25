@@ -6,6 +6,7 @@ import Dot from '@phosphor-icons/core/regular/dot.svg?component-solid';
 import { useHasTrialed } from '@core/context/user';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createSignal, For, onMount, Show } from 'solid-js';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const guestFeatures = [
   'Limited to 10 files and 10 AI messages',
@@ -30,6 +31,8 @@ interface PaywallComponent {
 }
 
 const PaywallComponent = (props: PaywallComponent) => {
+  const analytics = useAnalytics();
+
   const hasTrialedQuery = useHasTrialed();
   const [hasTrialed, setHasTrialed] = createSignal(false);
   const [selectedPlan, setSelectedPlan] = createSignal<'guest' | 'member'>(
@@ -49,6 +52,11 @@ const PaywallComponent = (props: PaywallComponent) => {
       const url = await stripeServiceClient.createCheckoutSession(
         props.customType ? props.customType : (props.errorKey ?? undefined)
       );
+      analytics.track('subscription_start', {
+        type: 'early_member',
+        customType: props.customType,
+        errorKey: props.errorKey,
+      });
       window.location.href = url;
     } catch (error) {
       console.error(error);

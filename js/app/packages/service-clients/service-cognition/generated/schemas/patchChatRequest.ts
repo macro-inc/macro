@@ -4,12 +4,17 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { PatchChatRequestModel } from './patchChatRequestModel';
 import type { PatchChatRequestName } from './patchChatRequestName';
 import type { PatchChatRequestProjectId } from './patchChatRequestProjectId';
+import type { PatchChatRequestSharePermission } from './patchChatRequestSharePermission';
 
+/**
+ * Request body for patching a chat.
+ */
 export interface PatchChatRequest {
-  model?: PatchChatRequestModel;
+  /** New name for the chat. */
   name?: PatchChatRequestName;
+  /** New project ID for the chat. Empty string clears the project. */
   projectId?: PatchChatRequestProjectId;
+  sharePermission?: PatchChatRequestSharePermission;
 }

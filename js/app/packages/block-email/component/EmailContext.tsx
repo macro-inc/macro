@@ -9,7 +9,7 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import {
@@ -21,6 +21,7 @@ import { whenSettled } from '@core/util/whenSettled';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import {
   useArchiveThreadMutation,
+  blockSenderWithToast,
   useThreadQuery,
 } from '@queries/email/thread';
 import { emailKeys } from '@queries/email/keys';
@@ -101,6 +102,7 @@ export type EmailContextValues = {
   };
 
   archiveThread: () => boolean;
+  blockSender: () => boolean;
   initialLoadComplete: Accessor<boolean>;
   onInitialDataLoad: (callback: () => boolean) => void;
 };
@@ -352,6 +354,25 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return true;
   };
 
+  const currentUserEmail = useEmail();
+
+  const blockSender = () => {
+    const thread = threadQuery.data;
+    if (!thread?.messages?.length) return false;
+
+    const userEmail = currentUserEmail()?.toLowerCase();
+    const senderEmail = thread.messages.find(
+      (m) =>
+        m.from?.email &&
+        (!userEmail || m.from.email.toLowerCase() !== userEmail)
+    )?.from?.email;
+
+    if (!senderEmail) return false;
+
+    blockSenderWithToast(senderEmail);
+    return true;
+  };
+
   const [messagesListRef, setMessagesListRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
@@ -470,6 +491,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          blockSender,
           messagesContainerRef,
           messagesListRef,
           query: {

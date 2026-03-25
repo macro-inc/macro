@@ -20,7 +20,7 @@ const PRIORITY_LABELS = [
   },
   {
     key: 'IMPORTANT',
-    label: 'Important',
+    label: 'Signal',
     defaultValue: false,
   },
 ];

@@ -1,7 +1,10 @@
 <div align="center">
 <a target="_blank" href="https://macro.com">
-<img width="1417" height="433" alt="Frame 1597878967" src="https://github.com/user-attachments/assets/83a5213b-a5e1-4b35-9bd6-bbfcf29ffce5" />
+<img width="1414" height="314" alt="Frame 2 (1)" src="https://github.com/user-attachments/assets/48250880-b1cf-4e18-bcaf-f314be1d1bfb" />
 </a>
+
+
+  
 <p align="center">
   Extremely fast email, messaging, tasks and docs @linked together in one system.
 </div>

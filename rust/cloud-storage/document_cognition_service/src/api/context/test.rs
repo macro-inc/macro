@@ -205,11 +205,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channels_service,
     ));
 
-    let ingress_queue = SqsIngressQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
-        "test-notification-ingress-queue".to_string(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress::new(ingress_queue));
+    let ingress_queue = SqsIngressQueue {
+        client: aws_sdk_sqs::Client::from_conf(sqs_config),
+        queue_url: "test-notification-ingress-queue".to_string(),
+    };
+    let notification_ingress_service = Arc::new(SqsNotificationIngress {
+        queue: ingress_queue,
+    });
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()
@@ -247,13 +249,41 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         test_lexical_client,
     );
 
+    let search_service_client = Arc::new(search_service_client);
+    let scribe = Arc::new(content_client);
+
+    // Build properties tool context
+    let properties_service = properties::PropertiesServiceImpl::new(
+        properties::PropertiesPgRepo::new(pool.clone()),
+        Some(properties::PermissionServiceImpl::new(pool.clone())),
+        Some(ai_tools::NoOpNotificationService),
+    );
+    let properties_tool_context =
+        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+
+    let memory_tool_context = ai_tools::ToolServiceContext {
+        search_service_client: search_service_client.clone(),
+        email_service_client: email_service_client_external.clone(),
+        scribe: scribe.clone(),
+        soup_service: soup_service.clone(),
+        document_tool_context: document_tool_context.clone(),
+        properties_tool_context: properties_tool_context.clone(),
+    };
+    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
+    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
+        pool.clone(),
+        memory_repo,
+        memory_tool_context,
+        ai_tools::all_tools(),
+    ));
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         comms_service_client,
-        search_service_client: Arc::new(search_service_client),
-        scribe: Arc::new(content_client),
+        search_service_client,
+        scribe,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
@@ -263,6 +293,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         soup_service,
         stream_repo: MockStreamRepo::new(),
         document_tool_context,
+        memory_service,
+        properties_tool_context,
     };
     Arc::new(api_context)
 }

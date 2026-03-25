@@ -19,26 +19,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route(
             "/passwordless",
-            post(passwordless::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::tracking::attach_ip_context_handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        middleware::rate_limit::passwordless::handler,
-                    )),
-            ),
+            post(passwordless::handler).layer(ServiceBuilder::new().layer(
+                axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    middleware::rate_limit::passwordless::handler,
+                ),
+            )),
         )
         .route(
             "/password",
-            post(password::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::tracking::attach_ip_context_handler,
-                    ))
-                    .layer(CookieManagerLayer::new()),
-            ),
+            post(password::handler).layer(ServiceBuilder::new().layer(CookieManagerLayer::new())),
         )
         .route(
             "/apple",

@@ -21,6 +21,10 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  GetEntityProperties: {
+    call: types.GetEntityProperties;
+    response: types.GetEntityPropertiesResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
@@ -32,6 +36,10 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SetEntityProperty: {
+    call: types.SetEntityProperty;
+    response: types.SetEntityPropertyResponse;
+  };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;
@@ -56,6 +64,10 @@ const toolParserMap = {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
   },
+  GetEntityProperties: {
+    call: schemas.GetEntityProperties,
+    response: schemas.GetEntityPropertiesResponse,
+  },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
@@ -73,6 +85,10 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  SetEntityProperty: {
+    call: schemas.SetEntityProperty,
+    response: schemas.SetEntityPropertyResponse,
+  },
   text_editor_code_execution: {
     call: schemas.TextEditorCodeExecutionToolCall,
     response: schemas.TextEditorCodeExecutionResponse,
@@ -108,6 +124,10 @@ type ToolDataMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  GetEntityProperties: {
+    call: types.GetEntityProperties;
+    response: types.GetEntityPropertiesResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
@@ -119,6 +139,10 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  SetEntityProperty: {
+    call: types.SetEntityProperty;
+    response: types.SetEntityPropertyResponse;
+  };
   text_editor_code_execution: {
     call: types.TextEditorCodeExecutionToolCall;
     response: types.TextEditorCodeExecutionResponse;

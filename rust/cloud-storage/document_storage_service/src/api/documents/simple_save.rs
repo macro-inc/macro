@@ -14,7 +14,7 @@ use axum::{
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
-    document::{DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key},
+    document::{DocumentBasic, FileType, FileTypeExt, build_extensionless_document_key},
     response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -114,11 +114,10 @@ pub async fn handler(
         }
     };
 
-    let key = build_cloud_storage_bucket_document_key(
+    let key = build_extensionless_document_key(
         document.owner.as_ref(),
         &document.document_id,
         document.document_version_id,
-        Some(file_type.as_str()),
     );
 
     if let Err(e) = state.s3_client.upload_document(&key, file_content).await {

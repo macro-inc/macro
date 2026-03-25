@@ -7,8 +7,9 @@ use model::{
 };
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, CommonChannelMetadata, DeviceType, DocumentMentionMetadata,
-    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata, UserUnsubscribe,
+    ChannelReplyMetadata, CommentedOnDocumentMetadata, CommonChannelMetadata, DeviceType,
+    DocumentMentionMetadata, InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
+    RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
 };
 use utoipa::OpenApi;
 
@@ -73,6 +74,8 @@ use crate::{
                         ChannelMentionMetadata,
                         ChannelReplyMetadata,
                         DocumentMentionMetadata,
+                        RepliedToDocumentCommentThreadMetadata,
+                        CommentedOnDocumentMetadata,
 
                         // v2 typed notifications
                         model_notifications::NotifEvent,

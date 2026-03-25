@@ -4,6 +4,7 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use futures::StreamExt;
+use macro_middleware::tracking::ClientIp;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::error::Error;
@@ -98,6 +99,7 @@ pub struct ProxyParams {
 pub async fn proxy_request_handler(
     Query(params): Query<ProxyParams>,
     State(http_client): State<reqwest::Client>,
+    _ip: ClientIp,
 ) -> Result<Response, ProxyError> {
     let validated_url = validate_url(&params.url)?;
     assert_not_internal(&validated_url).await?;

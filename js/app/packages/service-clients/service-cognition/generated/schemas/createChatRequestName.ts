@@ -5,4 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Optional name for the chat.
+ */
 export type CreateChatRequestName = string | null;

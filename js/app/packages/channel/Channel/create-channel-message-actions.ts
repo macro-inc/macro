@@ -13,6 +13,7 @@ import {
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
 } from '../Thread/utils/message-actions';
+import { useAnalytics } from '@app/component/analytics-context';
 
 type AddReactionInput = {
   channelId: string;
@@ -79,6 +80,8 @@ const emptyReplyHandler: MessageActionHandler = () => undefined;
 export function createChannelMessageActions(
   options: CreateChannelMessageActionsOptions
 ): (message: MessageData) => MessageActions {
+  const analytics = useAnalytics();
+
   const effects = {
     ...createDefaultEffects(),
     ...options.effects,
@@ -105,6 +108,11 @@ export function createChannelMessageActions(
               (targetMessage as MessageData & { thread_id?: string | null })
                 .thread_id ?? undefined;
             const hasReaction = hasReactionFromUser(liveMessage, emoji, userId);
+
+            analytics.track('channel_reaction', {
+              emoji,
+              action: hasReaction ? 'remove' : 'add',
+            });
 
             if (hasReaction) {
               options.removeReaction({

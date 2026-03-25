@@ -74,5 +74,4 @@ export type CanvasData = ExtractLoadType<(typeof definition)['load']>;
 
 export type CanvasSpec = {
   exportCanvas: () => Promise<Canvas>;
-  renderMermaid: (args: { code: string }) => Promise<void>;
 };

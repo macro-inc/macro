@@ -44,8 +44,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         email::outbound::GmailTokenProviderImpl,
     >();
 
+    let hex_thread_project_routes =
+        email::inbound::thread_project_router(state.email_thread_state.clone());
+
     Router::new()
         .merge(required_link_routes)
         .merge(hex_thread_routes)
         .merge(hex_thread_labels_routes)
+        .merge(hex_thread_project_routes)
 }

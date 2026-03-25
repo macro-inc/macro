@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelInviteMetadata } from './channelInviteMetadata';
+
 import type { NotifEventOneOfSevenTag } from './notifEventOneOfSevenTag';
+import type { RepliedToDocumentCommentThreadMetadata } from './repliedToDocumentCommentThreadMetadata';
 
 /**
- * The user was invited to a channel.
+ * Someone replied to a document comment thread the user participated in.
  */
 export type NotifEventOneOfSeven = {
-  /** The user was invited to a channel. */
-  content: ChannelInviteMetadata;
+  /** Someone replied to a document comment thread the user participated in. */
+  content: RepliedToDocumentCommentThreadMetadata;
   tag: NotifEventOneOfSevenTag;
 };

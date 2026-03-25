@@ -7,6 +7,7 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
+use super::model::EntityPropertyInfo;
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
@@ -44,6 +45,13 @@ pub trait PropertiesService: Send + Sync + 'static {
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Get all properties attached to an entity, with definitions, values, and options.
+    fn get_entity_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, PropertiesErr>> + Send;
 
     /// Get a property value for an entity by property definition ID.
     /// Returns `None` if the property is not attached to the entity.

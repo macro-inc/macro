@@ -132,6 +132,7 @@ pub(crate) async fn important_preview_cursor(
                isk.effective_ts as "sort_ts!",
                isk.created_at as "created_at!",
                isk.updated_at as "updated_at!",
+               t.project_id,
                isk.viewed_at as "viewed_at?",
                isk.is_draft as "is_draft!",
                -- It's the important view - all threads here are important
@@ -140,10 +141,12 @@ pub(crate) async fn important_preview_cursor(
                isk.snippet as "snippet?",
                c.email_address AS "sender_email?",
                COALESCE(isk.from_name, c.name) AS "sender_name?",
-               c.sfs_photo_url as "sender_photo_url?"
+               c.sfs_photo_url as "sender_photo_url?",
+               el.macro_id AS "owner_id!"
         FROM ImportantWithSortKey isk
         JOIN email_threads t ON isk.thread_id = t.id
         LEFT JOIN email_contacts c ON isk.from_contact_id = c.id
+        JOIN email_links el ON t.link_id = el.id
         WHERE
             ($3::timestamptz IS NULL) OR (isk.effective_ts, isk.thread_id) < ($3::timestamptz, $4::uuid)
         ORDER BY isk.effective_ts DESC, isk.thread_id DESC

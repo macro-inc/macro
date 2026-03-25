@@ -14,6 +14,7 @@ use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -98,6 +99,12 @@ async fn edit_project_v2(
     id: String,
     req: PatchProjectRequestV2,
 ) -> Result<(), (StatusCode, String)> {
+    if let Some(name) = req.name.as_ref()
+        && name.graphemes(true).count() > 100
+    {
+        return Err((StatusCode::BAD_REQUEST, "name too long".to_string()));
+    }
+
     // Need to ensure we are not nesting the project
     if let Some(project_parent_id) = req.project_parent_id.as_ref() {
         if users_access_level != AccessLevel::Owner {

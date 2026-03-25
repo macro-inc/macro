@@ -1,6 +1,9 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedSlidersIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSlidersIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   const maskId = createUniqueId();
 
   return (
@@ -12,7 +15,7 @@ export const AnimatedSlidersIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-sliders-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-sliders-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated sliders icon</title>*/}
       <style>{`

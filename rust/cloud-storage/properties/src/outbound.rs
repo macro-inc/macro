@@ -1,3 +1,4 @@
+pub mod entity_properties_get_query;
 pub mod entity_property_queries;
 pub mod notification_service;
 pub mod permission_service;

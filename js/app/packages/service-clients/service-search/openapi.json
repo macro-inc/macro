@@ -218,6 +218,10 @@
             },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
+          "team_id": {
+            "type": ["string", "null"],
+            "description": "Channel team ID to search within. Empty to ignore team filtering."
+          },
           "thread_ids": {
             "type": "array",
             "items": {
@@ -922,6 +926,13 @@
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
           },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Empty to ignore project filtering."
+          },
           "recipients": {
             "type": "array",
             "items": {
@@ -935,6 +946,10 @@
               "type": "string"
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedEmailFilter",
+            "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
           }
         }
       },
@@ -1908,6 +1923,11 @@
             "description": "List containing results from a request"
           }
         }
+      },
+      "SharedEmailFilter": {
+        "type": "string",
+        "description": "Controls whether shared email threads are included in results.",
+        "enum": ["exclude", "include", "only"]
       },
       "SimpleChannelSearchReponseBaseItem": {
         "type": "object",

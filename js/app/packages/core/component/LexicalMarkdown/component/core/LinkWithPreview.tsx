@@ -40,6 +40,7 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
           debouncedSetPreviewOpen(false);
         }}
         draggable={false}
+        rel="noopener"
       >
         {props.children}
       </a>

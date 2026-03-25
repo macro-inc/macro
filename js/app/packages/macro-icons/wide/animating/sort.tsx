@@ -1,4 +1,7 @@
-export const AnimatedSortIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSortIcon = (props: {
+  triggerAnimation?: boolean;
+  class?: string;
+}) => {
   return (
     <svg
       width="100%"
@@ -8,7 +11,7 @@ export const AnimatedSortIcon = (props: { triggerAnimation?: boolean }) => {
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
-      class={`animated-sort-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-sort-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated sort icon</title>*/}
       <style>{`

@@ -14,6 +14,7 @@ import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
+  BlockSenderResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -135,6 +136,19 @@ export const emailClient = {
         }
       ),
       (result) => result
+    );
+  },
+  async updateThreadProject(args: {
+    thread_id: string;
+    projectId: string | null;
+  }) {
+    const { thread_id, projectId } = args;
+    return emailFetch<{ oldProjectId: string | null }>(
+      `/email/threads/${thread_id}/project`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ projectId }),
+      }
     );
   },
   async flagArchived(args: { value: boolean; id: string }) {
@@ -321,5 +335,20 @@ export const emailClient = {
       }),
       (result) => result
     );
+  },
+  async blockSender(args: { email_address: string }) {
+    return mapOk(
+      await emailFetch<BlockSenderResponse>('/email/contacts/block', {
+        method: 'POST',
+        body: JSON.stringify({ email_address: args.email_address }),
+      }),
+      (result) => result
+    );
+  },
+  async unblockSender(args: { email_address: string }) {
+    return emailFetch('/email/contacts/unblock', {
+      method: 'POST',
+      body: JSON.stringify({ email_address: args.email_address }),
+    });
   },
 };

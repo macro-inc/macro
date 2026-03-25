@@ -5,6 +5,7 @@ use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfill
 use crate::api::email::contacts::block_sender::{BlockSenderRequest, BlockSenderResponse};
 use crate::api::email::contacts::list::ListContactsResponse;
 use crate::api::email::contacts::list_blocked::ListBlockedResponse;
+use crate::api::email::contacts::unblock_sender::UnblockSenderRequest;
 use crate::api::email::drafts::add_attachment::{
     AddDraftAttachmentRequest, AddDraftAttachmentResponse,
 };
@@ -27,7 +28,10 @@ use ::email::inbound::{
     CreateDraftResponse as HexCreateDraftResponse, GetPreviewsCursorParams, GetThreadResponse,
     SendMessageRequest as HexSendMessageRequest, SendMessageResponse as HexSendMessageResponse,
 };
-use ::email::inbound::{UpdateThreadLabelRequest, UpdateThreadLabelsResponse};
+use ::email::inbound::{
+    UpdateThreadLabelRequest, UpdateThreadLabelsResponse, UpdateThreadProjectRequest,
+    UpdateThreadProjectResponse,
+};
 use model::response::EmptyResponse;
 use models_email::api::settings::Settings;
 use models_email::email::service;
@@ -72,6 +76,7 @@ use utoipa::OpenApi;
         inbound::update_thread_labels_handler,
         inbound::cursor_handler,
         inbound::get_thread_handler,
+        inbound::update_thread_project_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
@@ -118,6 +123,8 @@ use utoipa::OpenApi;
             ArchiveThreadRequest,
             UpdateThreadLabelRequest,
             UpdateThreadLabelsResponse,
+            UpdateThreadProjectRequest,
+            UpdateThreadProjectResponse,
             ThreadPreviewCursor,
             GetThreadResponse,
             ApiThread,
@@ -138,6 +145,7 @@ use utoipa::OpenApi;
             ContactInfoWithInteraction,
             BlockSenderRequest,
             BlockSenderResponse,
+            UnblockSenderRequest,
             ListBlockedResponse,
             // Sort/filter types
             ApiSortMethod,

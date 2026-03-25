@@ -2,38 +2,77 @@ import {
   VIEW_TAB_PRESETS,
   type PresetContext,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import { runCreateAction } from '@app/component/Launcher';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import {
-  type ListViewCreateActionId,
-  type ListViewCreateOptionId,
-  getListViewCreateOptions,
-} from '@app/component/list-view-create';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { useUserContext } from '@core/context/user';
-import { openFilePicker } from '@core/util/upload';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import {
   batch,
   createMemo,
   For,
   Match,
   type ParentComponent,
-  Show,
   Switch,
 } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
-import { Button } from '@ui/components/Button';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+
+type TabItem = { value: string; label: string };
+
+/** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
+type TabbedListView = Extract<
+  ListView,
+  'inbox' | 'agents' | 'mail' | 'documents' | 'tasks' | 'channels' | 'folders'
+>;
+
+/** Tab definitions for each list view. */
+export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
+  inbox: [
+    { value: 'signal', label: 'Signal' },
+    { value: 'noise', label: 'Noise' },
+    { value: 'all', label: 'All' },
+  ],
+  agents: [
+    { value: 'owned', label: 'Owned' },
+    { value: 'running', label: 'Running' },
+    { value: 'shared', label: 'Shared' },
+  ],
+  mail: [
+    { value: 'important', label: 'Signal' },
+    { value: 'noise', label: 'Noise' },
+    { value: 'sent', label: 'Sent' },
+    { value: 'drafts', label: 'Drafts' },
+    { value: 'shared', label: 'Shared' },
+    { value: 'all', label: 'All' },
+  ],
+  documents: [
+    { value: 'owned', label: 'Owned' },
+    { value: 'shared', label: 'Shared' },
+    { value: 'attachments', label: 'Attachments' },
+    { value: 'all', label: 'All' },
+  ],
+  tasks: [
+    { value: 'assigned-to-me', label: 'Assigned' },
+    { value: 'created-by-me', label: 'Created' },
+    { value: 'all', label: 'All' },
+  ],
+  channels: [
+    { value: 'recent', label: 'Recent' },
+    { value: 'people', label: 'People' },
+    { value: 'teams', label: 'Teams' },
+  ],
+  folders: [
+    { value: 'owned', label: 'Owned' },
+    { value: 'all', label: 'All' },
+  ],
+};
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -85,243 +124,80 @@ export const useApplyPreset = () => {
 export const SoupViewTabs = () => {
   const listView = useCurrentListView();
 
-  const isComponentListView = (view: ListView) => {
-    return listView() === view;
-  };
-
   return (
     <Switch>
-      <Match when={isComponentListView('inbox')}>
-        <InboxTabs />
-      </Match>
-      <Match when={isComponentListView('agents')}>
-        <AgentsTabs />
-      </Match>
-      <Match when={isComponentListView('mail')}>
-        <MailTabs />
-      </Match>
-      <Match when={isComponentListView('documents')}>
-        <DocumentsTabs />
-      </Match>
-      <Match when={isComponentListView('tasks')}>
-        <TasksTabs />
-      </Match>
-      <Match when={isComponentListView('channels')}>
-        <ChannelsTabs />
-      </Match>
-      <Match when={isComponentListView('files')}>
-        <FilesTabs />
-      </Match>
+      <For each={Object.keys(VIEW_TAB_LISTS) as TabbedListView[]}>
+        {(v) => (
+          <Match when={listView() === v}>
+            <ViewTabs view={v} />
+          </Match>
+        )}
+      </For>
     </Switch>
   );
 };
 
-export const SoupViewCreateButton = () => {
+const ViewTabs = (props: { view: TabbedListView }) => {
+  const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
+  const list = () => VIEW_TAB_LISTS[props.view];
+
+  return (
+    <div>
+      <SegmentedControl
+        list={list()}
+        value={activeTab()}
+        defaultValue={VIEW_TAB_PRESETS[props.view].default}
+        onChange={(value) => applyTabPreset(props.view, value)}
+      />
+    </div>
+  );
+};
+
+/** Compact dropdown variant of tabs, used when the header is too narrow for the full segmented control. */
+export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
-  const handleFileUpload = useHandleFileUpload();
-  const options = createMemo(() => {
+  const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
+
+  const list = createMemo(() => {
     const view = listView();
-    if (!view) return [];
-    return getListViewCreateOptions(view);
+    if (!view || !(view in VIEW_TAB_LISTS)) return [];
+    return VIEW_TAB_LISTS[view as TabbedListView];
   });
 
-  const primaryOption = createMemo(() => options()[0]);
-
-  const handleSelect = (optionId: ListViewCreateOptionId) => {
-    if (optionId === 'import') {
-      openFilePicker({ multiple: true }, async (files) => {
-        await handleFileUpload(files, false);
-      });
-      return;
-    }
-
-    runCreateAction(optionId as ListViewCreateActionId);
-  };
+  const activeLabel = createMemo(() => {
+    const tab = activeTab();
+    return list().find((item) => item.value === tab)?.label ?? list()[0]?.label;
+  });
 
   return (
-    <Show when={primaryOption()}>
-      {(option) => (
-        <Show
-          when={options().length > 1}
-          fallback={
-            <Button
-              variant="secondary"
-              size="sm"
-              class="rounded-xs whitespace-nowrap px-3"
-              onClick={() => handleSelect(option().id)}
-            >
-              {option().label}
-            </Button>
-          }
-        >
-          <DropdownMenu placement="bottom-start" gutter={4}>
-            <DropdownMenu.Trigger
-              as={Button}
-              variant="secondary"
-              size="sm"
-              class="rounded-xs whitespace-nowrap px-3"
-            >
-              <span>{option().label}</span>
-              <ChevronDownIcon class="size-3" />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenuContent class="z-action-menu min-w-[160px]">
-                <For each={options()}>
-                  {(item) => (
-                    <MenuItem
-                      text={item.label}
-                      onClick={() => handleSelect(item.id)}
-                    />
-                  )}
-                </For>
-              </DropdownMenuContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu>
-        </Show>
-      )}
-    </Show>
-  );
-};
-
-const InboxTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'signal', label: 'Signal' },
-          { value: 'noise', label: 'Noise' },
-          { value: 'all', label: 'All' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.inbox.default}
-        onChange={(value) => applyTabPreset('inbox', value)}
-      />
-    </div>
-  );
-};
-
-const AgentsTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'owned', label: 'Owned' },
-          { value: 'running', label: 'Running' },
-          { value: 'shared', label: 'Shared' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.agents.default}
-        onChange={(value) => applyTabPreset('agents', value)}
-      />
-    </div>
-  );
-};
-
-const MailTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'important', label: 'Important' },
-          { value: 'noise', label: 'Noise' },
-          { value: 'drafts', label: 'Drafts' },
-          { value: 'sent', label: 'Sent' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.mail.default}
-        onChange={(value) => applyTabPreset('mail', value)}
-      />
-    </div>
-  );
-};
-
-const DocumentsTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'owned', label: 'Owned' },
-          { value: 'shared', label: 'Shared' },
-          { value: 'all', label: 'All' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.documents.default}
-        onChange={(value) => applyTabPreset('documents', value)}
-      />
-    </div>
-  );
-};
-
-const TasksTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'assigned-to-me', label: 'Assigned' },
-          { value: 'created-by-me', label: 'Created' },
-          { value: 'all', label: 'All' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.tasks.default}
-        onChange={(value) => applyTabPreset('tasks', value)}
-      />
-    </div>
-  );
-};
-
-const ChannelsTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'recent', label: 'Recent' },
-          { value: 'people', label: 'People' },
-          { value: 'teams', label: 'Teams' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.channels.default}
-        onChange={(value) => applyTabPreset('channels', value)}
-      />
-    </div>
-  );
-};
-
-const FilesTabs = () => {
-  const { applyTabPreset } = useApplyPreset();
-  const { activeTab } = useSoupView();
-
-  return (
-    <div>
-      <SegmentedControl
-        list={[
-          { value: 'owned', label: 'Owned' },
-          { value: 'shared', label: 'Shared' },
-          { value: 'attachments', label: 'Attachments' },
-          { value: 'all', label: 'All' },
-        ]}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS.files.default}
-        onChange={(value) => applyTabPreset('files', value)}
-      />
-    </div>
+    <DropdownMenu placement="bottom-start" gutter={4}>
+      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+        <span class="truncate">{activeLabel()}</span>
+        <ChevronDownIcon class="size-3 shrink-0" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
+          <For each={list()}>
+            {(item) => (
+              <DropdownMenu.Item
+                class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                classList={{
+                  'font-semibold': activeTab() === item.value,
+                }}
+                onSelect={() => {
+                  const view = listView();
+                  if (view) applyTabPreset(view, item.value);
+                }}
+              >
+                {item.label}
+              </DropdownMenu.Item>
+            )}
+          </For>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
   );
 };
 
@@ -338,7 +214,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="size-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
+      class="h-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={onChange}
@@ -359,7 +235,7 @@ export const SegmentedControl: ParentComponent<
                   class="border-r border-edge-muted last:border-r-0"
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                  <KSegmentedControl.ItemLabel class="relative text-ink-muted size-full px-2 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-ink/10 hover:text-ink hover:bg-ink/15 data-[checked]:hover:bg-ink/20 transition-colors duration-150 block">
+                  <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150 block">
                     {itemLabel()}
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>

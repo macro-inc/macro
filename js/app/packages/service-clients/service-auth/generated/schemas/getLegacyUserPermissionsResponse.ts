@@ -23,6 +23,8 @@ export interface GetLegacyUserPermissionsResponse {
   name?: GetLegacyUserPermissionsResponseName;
   /** The permissions the user has */
   permissions: string[];
+  /** The referral code for the user */
+  referralCode: string;
   /** Whether the user has completed the tutorial */
   tutorialComplete: boolean;
   /** The user id */

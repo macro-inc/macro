@@ -410,6 +410,7 @@ export const mapSoupPageToEntityList: (
             name: item.data.name || 'Email Thread',
             frecencyScore: item.frecency_score,
             viewedAt: item.data.viewedAt,
+            projectId: item.data.projectId ?? undefined,
             participants,
             hasIcsAttachment,
             attachments,

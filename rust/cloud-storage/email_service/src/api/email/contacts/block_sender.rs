@@ -17,6 +17,9 @@ pub enum BlockSenderError {
     #[error("Sender is already blocked")]
     AlreadyBlocked,
 
+    #[error("Insufficient Gmail permissions. Please re-authenticate to grant the required scope.")]
+    Forbidden,
+
     #[error("Gmail API error: {0}")]
     GmailError(String),
 
@@ -29,6 +32,7 @@ impl IntoResponse for BlockSenderError {
         let status_code = match &self {
             BlockSenderError::Validation(_) => StatusCode::BAD_REQUEST,
             BlockSenderError::AlreadyBlocked => StatusCode::CONFLICT,
+            BlockSenderError::Forbidden => StatusCode::FORBIDDEN,
             BlockSenderError::GmailError(_) | BlockSenderError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -48,6 +52,7 @@ impl From<GmailError> for BlockSenderError {
     fn from(e: GmailError) -> Self {
         match e {
             GmailError::Conflict(_) => BlockSenderError::AlreadyBlocked,
+            GmailError::Forbidden => BlockSenderError::Forbidden,
             _ => BlockSenderError::GmailError(e.to_string()),
         }
     }
@@ -78,6 +83,7 @@ pub struct BlockSenderResponse {
         (status = 201, body = BlockSenderResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )

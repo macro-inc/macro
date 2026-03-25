@@ -26,12 +26,7 @@
   },
   "dependencies": {
     "@macro/tauri": "workspace:*",
-    "@tauri-apps/plugin-log": "^2.7.1",
-    "@types/three": "^0.178.0",
-    "core": "workspace:*",
-    "mermaid": "^11.6.0",
-    "overlayscrollbars-solid": "^0.5.5",
-    "three": "^0.178.0"
+    "core": "workspace:*"
   },
   "devDependencies": {
     "@datadog/datadog-ci": "^3.7.0",

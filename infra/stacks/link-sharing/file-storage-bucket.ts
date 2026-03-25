@@ -45,6 +45,7 @@ export const attachPolicyToBucket = ({
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
   documentCognitionRoleArn,
+  mcpServerRoleArn,
 }: {
   cloudfrontDistributionArn: pulumi.Output<string>;
   bucket: pulumi.Output<GetStorageBucketResult>;
@@ -59,6 +60,7 @@ export const attachPolicyToBucket = ({
   bulkUploadLambdaRoleArn: pulumi.Output<string>;
   convertServiceRoleArn: pulumi.Output<string>;
   documentCognitionRoleArn: pulumi.Output<string>;
+  mcpServerRoleArn: pulumi.Output<string>;
 }) => {
   const groupName = config.require('adminGroupName');
 
@@ -88,6 +90,7 @@ export const attachPolicyToBucket = ({
         bulkUploadLambdaRoleArn,
         convertServiceRoleArn,
         documentCognitionRoleArn,
+        mcpServerRoleArn,
       ];
     });
 
@@ -216,6 +219,20 @@ export const attachPolicyToBucket = ({
         Effect: 'Allow',
         Principal: {
           AWS: documentCognitionRoleArn,
+        },
+        Action: [
+          's3:ListBucket',
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+        ],
+        Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
+      },
+      {
+        Sid: 'AllowAccessForMcpServer',
+        Effect: 'Allow',
+        Principal: {
+          AWS: mcpServerRoleArn,
         },
         Action: [
           's3:ListBucket',

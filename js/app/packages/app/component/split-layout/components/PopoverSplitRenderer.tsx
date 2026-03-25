@@ -99,6 +99,7 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
+    headerCollapser: { register: () => () => {} },
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(

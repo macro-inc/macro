@@ -33,7 +33,7 @@ import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
-import IconShared from '@icon/regular/share.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';

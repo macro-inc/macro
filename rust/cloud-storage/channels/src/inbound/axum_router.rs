@@ -499,6 +499,10 @@ pub struct ApiMessageAttachment {
     entity_type: String,
     /// Entity id.
     entity_id: String,
+    /// Width (for images).
+    width: Option<i32>,
+    /// Height (for images).
+    height: Option<i32>,
     /// When the attachment was created.
     created_at: DateTime<Utc>,
 }
@@ -509,6 +513,8 @@ impl From<MessageAttachment> for ApiMessageAttachment {
             id: a.id,
             entity_type: a.entity_type,
             entity_id: a.entity_id,
+            width: a.width,
+            height: a.height,
             created_at: a.created_at,
         }
     }

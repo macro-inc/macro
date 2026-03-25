@@ -4,7 +4,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE;
 use models_email::gmail::AttachmentGetResponse;
 
-#[tracing::instrument(skip(client, access_token))]
+#[tracing::instrument(skip(client, access_token), err)]
 pub async fn get_attachment_data(
     client: &GmailClient,
     access_token: &str,

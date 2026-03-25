@@ -1,9 +1,11 @@
 mod create_document_text;
 pub mod document_text_parts;
+mod get_document_file_type;
 
 use lambda_runtime::tracing;
 #[allow(unused_imports)]
 use mockall::automock;
+use model::document::FileType;
 
 #[cfg(not(test))]
 pub use DBClient as DB;
@@ -24,7 +26,7 @@ impl DBClient {
         Self { inner }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn create_document_text(
         &self,
         document_id: &str,
@@ -40,7 +42,7 @@ impl DBClient {
         .await
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn insert_references(
         &self,
         references: &Vec<TextReference>,
@@ -48,6 +50,14 @@ impl DBClient {
     ) -> anyhow::Result<()> {
         document_text_parts::insert_pdf_references(self.inner.clone(), references, document_id)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_document_file_type(
+        &self,
+        document_id: &str,
+    ) -> anyhow::Result<Option<FileType>> {
+        get_document_file_type::get_document_file_type(&self.inner, document_id).await
     }
 }
 
@@ -60,7 +70,7 @@ mod tests {
     async fn test_createdoc_text() {
         let mock = DB::default();
         let data = String::new();
-        let r = mock
+        let _r = mock
             .create_document_text("document-id", data.as_str(), 0)
             .await;
     }

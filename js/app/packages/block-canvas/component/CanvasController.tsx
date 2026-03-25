@@ -1,5 +1,4 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
-import { useRenderMermaid } from '@block-canvas/util/mermaid';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -37,7 +36,6 @@ import StackPlus from '@phosphor-icons/core/regular/stack-plus.svg?component-sol
 import { createCallback } from '@solid-primitives/rootless';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import { usePinch } from 'solid-gesture';
@@ -161,15 +159,6 @@ export function handleDelete() {
   });
 }
 
-export const renderMermaid = createCallback(async (args: { code: string }) => {
-  try {
-    await renderMermaid(args);
-  } catch (err) {
-    console.error(err);
-    toast.failure('Failed to render Mermaid diagram.');
-  }
-});
-
 export function CanvasController(props: ParentProps) {
   const scopeId = blockHotkeyScopeSignal.get;
   const canEdit = useCanEdit();
@@ -196,7 +185,6 @@ export function CanvasController(props: ParentProps) {
   const createGroup = useCreateGroup();
   const deleteGroup = useDeleteGroup();
   const deleteSelection = handleDelete();
-  const renderMermaid = useRenderMermaid();
   const blockId = useBlockId();
   const [middleMousePressed] = middleMousePressedSignal;
   const [handlersByTool] = handlersByToolSignal;
@@ -225,7 +213,6 @@ export function CanvasController(props: ParentProps) {
   const blockHandle = blockHandleSignal.get;
 
   createMethodRegistration(blockHandle, {
-    renderMermaid: async ({ code }: { code: string }) => renderMermaid(code),
     exportCanvas: async () => {
       const canvas = exportCanvasData();
       return canvas;

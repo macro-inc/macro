@@ -8,6 +8,9 @@ pub enum GmailError {
     #[error("Unauthorized: The access token is invalid or expired (401)")]
     Unauthorized,
 
+    #[error("Forbidden: Insufficient permissions (403)")]
+    Forbidden,
+
     #[error("HTTP Request Error: {0}")]
     HttpRequest(String),
 

@@ -18,7 +18,8 @@ struct DigestTemplate {
 
 struct NotifPreview {
     created_at: DateTime<Utc>,
-    message: String,
+    title: String,
+    body: String,
 }
 
 impl NotifPreview {
@@ -30,7 +31,8 @@ impl NotifPreview {
         let body = v.notification_metadata.format_body(v.sender_id)?;
         Ok(NotifPreview {
             created_at: v.created_at.unwrap_or(Utc::now()),
-            message: format!("{title} - {body}"),
+            title,
+            body,
         })
     }
 }
@@ -95,6 +97,6 @@ impl NotificationExtEmail for EmailDigestNotification {
 
     fn rate_limit_key(&self) -> RateLimitKey {
         // NB: this key is currently intentionally shared across all users out of an abundance of caution to limit over-sending on SES
-        RateLimitKey::from_str_hashed(Self::TYPE_NAME)
+        RateLimitKey::from_str_hashed(&Self::TYPE_NAME)
     }
 }

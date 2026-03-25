@@ -6,6 +6,6 @@
  */
 
 /**
- * The time the chat was last updated
+ * The time the chat was last updated.
  */
 export type ChatResponseUpdatedAt = string | null;

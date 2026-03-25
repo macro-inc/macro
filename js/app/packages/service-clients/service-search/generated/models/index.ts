@@ -8,6 +8,7 @@
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';
+export * from './channelFiltersTeamId';
 export * from './channelMetadata';
 export * from './channelMetadataInteractedAt';
 export * from './channelMetadataViewedAt';
@@ -130,6 +131,7 @@ export * from './searchHighlightSender';
 export * from './searchHighlightUserId';
 export * from './searchOn';
 export * from './searchResponse';
+export * from './sharedEmailFilter';
 export * from './simpleChannelSearchReponseBaseItem';
 export * from './simpleChannelSearchReponseBaseItemHumanReadableTimestamp';
 export * from './simpleChannelSearchReponseBaseItemHumanReadableTimestampOrgId';

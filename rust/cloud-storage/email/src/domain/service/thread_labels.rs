@@ -143,6 +143,25 @@ where
                 let err = anyhow::Error::from(e);
                 tracing::error!(error=?err, "failed to update message starred status");
             }
+
+            // When trashing a thread, cancel any pending scheduled sends for drafts
+            if add && provider_label_id == system_labels::TRASH {
+                let draft_message_ids: Vec<_> = messages
+                    .iter()
+                    .filter(|m| m.is_draft && successful_ids.contains(&m.db_id))
+                    .map(|m| m.db_id)
+                    .collect();
+
+                if !draft_message_ids.is_empty()
+                    && let Err(e) = self
+                        .email_repo
+                        .delete_scheduled_messages_batch(&draft_message_ids, link.id)
+                        .await
+                {
+                    let err = anyhow::Error::from(e);
+                    tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
+                }
+            }
         }
 
         successful_ids.sort();

@@ -1,6 +1,13 @@
 import { type Accessor, type JSX, createSignal } from 'solid-js';
 import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
+import {
+  createScrollIntentTracker,
+  type ScrollDirection,
+} from '@core/util/scroll-intent';
+
+const BASE_ITEM_SIZE: number = 64;
+const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
 
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
@@ -32,6 +39,13 @@ export type ThreadListNavigation = {
   navigatePrevious: () => boolean;
   navigateNext: () => boolean;
   isNearBottom: () => boolean;
+  /**
+   * Signal that a user-initiated navigation is about to cause a
+   * programmatic scroll. Call this before `scrollToId` etc. from
+   * hotkey handlers so the resulting scroll is treated as user-driven
+   * for pagination purposes.
+   */
+  markUserIntent: (direction: ScrollDirection) => void;
 };
 
 export type ThreadListScrollState = {
@@ -57,14 +71,7 @@ type ThreadListProps = {
 
 const NEAR_TOP_THRESHOLD = 800;
 const NEAR_BOTTOM_THRESHOLD = 50;
-const EXPLICIT_SCROLL_INTENT_WINDOW_MS = 250;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
-
-type ScrollDirection = 'up' | 'down';
-type ExplicitScrollIntent = {
-  direction: ScrollDirection;
-  at: number;
-};
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
   tag: 'bottom',
@@ -74,32 +81,9 @@ export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
 
-export function isExplicitScrollDown(
-  delta: number,
-  intent: ExplicitScrollIntent | undefined,
-  now = Date.now()
-): boolean {
-  if (delta <= 0) return false;
-  if (!intent) return false;
-  if (intent.direction !== 'down') return false;
-  return now - intent.at <= EXPLICIT_SCROLL_INTENT_WINDOW_MS;
-}
-
-export function accumulateExplicitScrollDownDistance(
-  previousDistance: number,
-  delta: number,
-  intent: ExplicitScrollIntent | undefined,
-  now = Date.now()
-): number {
-  if (!isExplicitScrollDown(delta, intent, now)) return 0;
-  return previousDistance + delta;
-}
-
-export function hasExplicitScrollDownGesture(distance: number): boolean {
-  return distance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
-}
-
-function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
+export function getTargetAlign(
+  target: ThreadListScrollTarget
+): ScrollAlignment {
   if (target.align) return target.align;
   switch (target.tag) {
     case 'top':
@@ -108,7 +92,7 @@ function getTargetAlign(target: ThreadListScrollTarget): ScrollAlignment {
       return 'end';
     case 'index':
     case 'id':
-      return 'nearest';
+      return 'center';
   }
 }
 
@@ -121,16 +105,9 @@ export function ThreadList(props: ThreadListProps) {
   let nearTopFired = false;
   let nearBottomFired = false;
   let previousScrollOffset: number | undefined;
-  let explicitScrollIntent: ExplicitScrollIntent | undefined;
   let explicitScrollDownDistance = 0;
-  let previousTouchY: number | undefined;
 
-  const markExplicitScrollIntent = (direction: ScrollDirection) => {
-    explicitScrollIntent = {
-      direction,
-      at: Date.now(),
-    };
-  };
+  const scrollIntent = createScrollIntentTracker();
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
     const keys = props.keys();
@@ -225,24 +202,25 @@ export function ThreadList(props: ThreadListProps) {
     },
 
     isNearBottom,
+
+    markUserIntent: scrollIntent.markUserIntent,
   });
 
   function scrollOnMount(handle: VirtualizerHandle) {
     const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-    requestAnimationFrame(() => {
-      scrollToTarget(handle, target);
-      requestAnimationFrame(() => {
-        // Run a second pass after layout settles to avoid partial initial anchoring.
-        scrollToTarget(handle, target);
-        setDidInitialScroll(true);
-        emitScrollState(handle, false);
-      });
-    });
+    scrollToTarget(handle, target);
+    setDidInitialScroll(true);
+    emitScrollState(handle, false);
   }
 
   const handleScroll = () => {
     const handle = virtualHandle();
-    if (!handle) return;
+    if (!handle) {
+      console.warn(
+        'Channel.ThreadList: handle scroll but the handle is undefined'
+      );
+      return;
+    }
 
     const distanceFromTop = handle.scrollOffset;
     const distanceFromBottom =
@@ -256,28 +234,39 @@ export function ThreadList(props: ThreadListProps) {
 
     if (previousScrollOffset !== undefined) {
       const delta = handle.scrollOffset - previousScrollOffset;
-      explicitScrollDownDistance = accumulateExplicitScrollDownDistance(
-        explicitScrollDownDistance,
-        delta,
-        explicitScrollIntent
-      );
-      nextIsScrollingDown = hasExplicitScrollDownGesture(
-        explicitScrollDownDistance
-      );
+      // Accumulate downward scroll distance only during user interaction
+      // and only when the user is scrolling down. Used by the scroll-to-bottom overlay.
+      if (
+        scrollIntent.isUserInteracting() &&
+        delta > 0 &&
+        scrollIntent.lastDirection() === 'down'
+      ) {
+        explicitScrollDownDistance += delta;
+      } else {
+        explicitScrollDownDistance = 0;
+      }
+      nextIsScrollingDown =
+        explicitScrollDownDistance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
     }
     previousScrollOffset = handle.scrollOffset;
     emitScrollState(handle, nextIsScrollingDown);
 
     if (!didInitialScroll()) return;
 
-    if (nearTop && !nearTopFired) {
+    // Only trigger pagination callbacks when the user is actively
+    // interacting with the scroll surface. This prevents synthetic
+    // scroll events from the virtualizer (content resizes, layout
+    // reflows, shift adjustments) from incorrectly loading more pages.
+    const hasUserIntent = scrollIntent.isUserInteracting();
+
+    if (nearTop && !nearTopFired && hasUserIntent) {
       nearTopFired = true;
       props.onScrollNearTop?.();
     } else if (!nearTop) {
       nearTopFired = false;
     }
 
-    if (nearBottom && !nearBottomFired) {
+    if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
     } else if (!nearBottom) {
@@ -288,29 +277,7 @@ export function ThreadList(props: ThreadListProps) {
   return (
     <div
       ref={scrollRef}
-      onWheel={(event) => {
-        if (event.deltaY === 0) return;
-        markExplicitScrollIntent(event.deltaY > 0 ? 'down' : 'up');
-      }}
-      onTouchStart={(event) => {
-        previousTouchY = event.touches.item(0)?.clientY;
-      }}
-      onTouchMove={(event) => {
-        const nextTouchY = event.touches.item(0)?.clientY;
-        if (nextTouchY === undefined || previousTouchY === undefined) return;
-
-        const deltaY = previousTouchY - nextTouchY;
-        if (deltaY !== 0) {
-          markExplicitScrollIntent(deltaY > 0 ? 'down' : 'up');
-        }
-        previousTouchY = nextTouchY;
-      }}
-      onTouchEnd={() => {
-        previousTouchY = undefined;
-      }}
-      onTouchCancel={() => {
-        previousTouchY = undefined;
-      }}
+      {...scrollIntent.handlers}
       style={{
         width: '100%',
         'overflow-y': 'auto',
@@ -320,6 +287,7 @@ export function ThreadList(props: ThreadListProps) {
         'flex-direction': 'column',
       }}
     >
+      <div style={{ 'flex-grow': 1 }} />
       <Virtualizer
         ref={(ref) => {
           if (!ref) return;
@@ -330,6 +298,8 @@ export function ThreadList(props: ThreadListProps) {
           scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
+        itemSize={BASE_ITEM_SIZE}
+        bufferSize={BASE_BUFFER_SIZE}
         data={props.keys()}
         onScroll={handleScroll}
         shift={props.shift?.() ?? false}

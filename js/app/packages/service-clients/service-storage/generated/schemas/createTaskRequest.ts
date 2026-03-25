@@ -15,6 +15,9 @@ export interface CreateTaskRequest {
   projectId?: CreateTaskRequestProjectId;
   /** Optional property values to set on the task. */
   propertyValues?: CreateTaskRequestPropertyValues;
+  /** Whether to share the task with your team or not
+Defaults to true */
+  shareWithTeam?: boolean;
   /** The name of the task. */
   taskName: string;
 }

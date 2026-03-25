@@ -10,6 +10,8 @@ import * as path from 'node:path';
 import { $, write } from 'bun';
 import { type Service, services } from './services';
 
+const MAX_CONCURRENCY = 6;
+
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
@@ -31,20 +33,29 @@ const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../package
 // Parse arguments
 const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--check');
 
-// Build all OpenAPI binaries in a single cargo invocation (parallelized internally by cargo)
-async function buildOpenApiBinaries(crateNames: string[], rustCloudStorageDir = getRustCloudStorageDir()): Promise<void> {
+// Build OpenAPI binaries. In CI (--check), batches to MAX_CONCURRENCY to limit resource usage.
+async function buildOpenApiBinaries(crateNames: string[], { checkMode = false, rustCloudStorageDir = getRustCloudStorageDir() } = {}): Promise<void> {
   if (crateNames.length === 0) return;
 
-  const packageArgs = crateNames.flatMap(crate => ['-p', crate]);
-  const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
+  const batchSize = checkMode ? MAX_CONCURRENCY : crateNames.length;
 
-  // Also build the DCS models binary if document_cognition_service is included
-  if (crateNames.includes('document_cognition_service')) {
-    binArgs.push('--bin', 'document_cognition_service_models');
+  for (let i = 0; i < crateNames.length; i += batchSize) {
+    const batch = crateNames.slice(i, i + batchSize);
+    const packageArgs = batch.flatMap(crate => ['-p', crate]);
+    const binArgs = batch.flatMap(crate => ['--bin', `${crate}_openapi`]);
+
+    // Also build the DCS models binary if document_cognition_service is included
+    if (batch.includes('document_cognition_service')) {
+      binArgs.push('--bin', 'document_cognition_service_models');
+    }
+
+    if (batchSize < crateNames.length) {
+      console.log(`Building batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(crateNames.length / batchSize)} (${batch.length} crates)...`);
+    } else {
+      console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
+    }
+    await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
   }
-
-  console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
-  await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
   console.log('Build complete.\n');
 }
 
@@ -170,7 +181,7 @@ async function main() {
   console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
 
   // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
-  await buildOpenApiBinaries(crateNames);
+  await buildOpenApiBinaries(crateNames, { checkMode });
 
   // Phase 2: Run binaries and generate TypeScript in parallel
   console.log('Generating TypeScript clients in parallel...\n');

@@ -13,4 +13,5 @@ export const ChannelType = {
   organization: 'organization',
   private: 'private',
   direct_message: 'direct_message',
+  team: 'team',
 } as const;

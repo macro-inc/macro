@@ -11,6 +11,12 @@ export const deletedKeys = createQueryKeys('deleted', {
   list: null,
 });
 
+export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
+  document: (documentId: string) => ({
+    queryKey: [documentId],
+  }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

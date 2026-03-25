@@ -41,14 +41,10 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new().nest(
         "/proxy",
         proxy::router().layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::tracking::attach_ip_context_handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
+            ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
+                state.jwt_args.clone(),
+                macro_middleware::auth::decode_jwt::handler,
+            )),
         ),
     )
 }

@@ -6,6 +6,9 @@ pub mod auth;
 #[cfg(feature = "auth_rate_limit")]
 pub mod passwordless_rate_limit;
 
+#[cfg(feature = "auth_rate_limit")]
+pub mod create_user_rate_limit;
+
 #[cfg(feature = "notification_rate_limit")]
 pub mod notification_rate_limit;
 

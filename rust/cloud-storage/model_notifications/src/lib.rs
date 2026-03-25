@@ -168,6 +168,12 @@ define_notif_event!(
         /// User was mentioned in a comment in a document
         MentionedInDocumentComment(MentionedInDocumentCommentMetadata),
 
+        /// Someone replied to a document comment thread the user participated in.
+        RepliedToDocumentCommentThread(RepliedToDocumentCommentThreadMetadata),
+
+        /// Someone commented on a document the user owns.
+        CommentedOnDocument(CommentedOnDocumentMetadata),
+
         /// The user was invited to a channel.
         ChannelInvite(ChannelInviteMetadata),
 
@@ -206,6 +212,8 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::MentionedInDocumentComment(mentioned_in_document_comment_metadata) => {
                 mentioned_in_document_comment_metadata.format_title(sender_id)
             }
+            NotifEvent::RepliedToDocumentCommentThread(m) => m.format_title(sender_id),
+            NotifEvent::CommentedOnDocument(m) => m.format_title(sender_id),
             NotifEvent::ChannelInvite(channel_invite_metadata) => {
                 channel_invite_metadata.format_title(sender_id)
             }
@@ -242,6 +250,8 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::MentionedInDocumentComment(mentioned_in_document_comment_metadata) => {
                 mentioned_in_document_comment_metadata.format_body(sender_id)
             }
+            NotifEvent::RepliedToDocumentCommentThread(m) => m.format_body(sender_id),
+            NotifEvent::CommentedOnDocument(m) => m.format_body(sender_id),
             NotifEvent::ChannelInvite(channel_invite_metadata) => {
                 channel_invite_metadata.format_body(sender_id)
             }

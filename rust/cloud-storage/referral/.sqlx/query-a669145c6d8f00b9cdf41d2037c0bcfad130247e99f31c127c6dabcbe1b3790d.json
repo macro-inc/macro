@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE referral_tracking\n            SET status = 'complete'\n            WHERE referrer_id = $1 AND referred_id = $2 AND status != 'complete'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a669145c6d8f00b9cdf41d2037c0bcfad130247e99f31c127c6dabcbe1b3790d"
+}

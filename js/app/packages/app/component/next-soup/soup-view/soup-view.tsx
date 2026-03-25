@@ -1,4 +1,3 @@
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import {
@@ -32,6 +31,7 @@ import {
 } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -44,6 +44,8 @@ import {
 } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -68,7 +70,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useUserId } from '@core/context/user';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
@@ -80,15 +82,17 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
-  SoupViewCreateButton,
   SoupViewTabs,
+  CollapsedSoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { isListViewID } from '@app/constants/list-views';
+import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
+import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
+import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import {
@@ -97,6 +101,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -172,30 +177,33 @@ export const SoupView = (props: SoupViewProps) => {
     soup.filters.set(props.initialClientFilters);
   });
 
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
+  const component = createMemo(() => {
+    const content = panel.handle.content();
 
-  const togglePreview = () => {
-    const currentPreview = soup.previewEntity();
-    if (currentPreview) {
-      soup.setPreviewEntity(undefined);
-      return;
-    }
+    if (content.type !== 'component') return;
 
-    const focused = soup.focus.id();
+    return content.id;
+  });
 
-    if (!focused) return;
-
-    soup.setPreviewEntity(focused);
+  const isComponentListView = (listView: ListView) => {
+    return component() === listView;
   };
 
-  registerHotkey({
-    hotkey: 'space',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Toggle preview',
-    keyDownHandler: () => {
-      togglePreview();
-      return true;
-    },
+  const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
+
+  const isMailView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'mail';
+  });
+
+  const emailLinksQuery = useEmailLinksQuery();
+  const hasLinkError = createMemo(() => {
+    if (!isMailView()) return false;
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
   });
 
   return (
@@ -210,39 +218,85 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
-              <div class="h-full flex gap-3 items-center">
+              <div
+                class={cn('h-full flex gap-3 items-center', {
+                  'shrink-0': !narrowSearchExpanded(),
+                  'flex-1 min-w-0': narrowSearchExpanded(),
+                })}
+              >
                 <Show when={!isMobile()}>
-                  <h1 class="font-medium text-ink-muted select-none text-sm">
+                  <h1 class="font-medium text-ink-muted select-none text-sm shrink-0">
                     {props.viewName}
                   </h1>
-                  {/*<ChevronRightIcon class="size-4 text-ink-muted select-none" />*/}
                 </Show>
-
-                <SoupViewTabs />
-                <SoupViewCreateButton />
+                <Show when={!narrowSearchExpanded()}>
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    expanded={
+                      <div classList={{ 'pr-1': isMobile() }}>
+                        <SoupViewTabs />
+                      </div>
+                    }
+                    collapsed={<CollapsedSoupViewTabs />}
+                  />
+                  <SoupViewCreateButton />
+                </Show>
+                <Show when={narrowSearchExpanded()}>
+                  <div class="flex-1 min-w-0">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus
+                      onDismiss={() => setNarrowSearchExpanded(false)}
+                    />
+                  </div>
+                </Show>
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <Tooltip
-                tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-              >
-                <Button
-                  variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                  size="icon-sm"
-                  class="rounded-xs [&_svg]:size-4"
-                  onClick={togglePreview}
-                  onMouseEnter={() => setPreviewBtnHovering(true)}
-                  onMouseLeave={() => setPreviewBtnHovering(false)}
-                >
-                  <AnimatedPreviewIcon
-                    triggerAnimation={previewBtnHovering()}
-                  />
-                </Button>
-              </Tooltip>
+              <Show when={!isComponentListView('search')}>
+                <CollapsibleHeaderItem
+                  id="search"
+                  priority={0}
+                  onCollapsedChange={(isCollapsed) => {
+                    if (!isCollapsed) setNarrowSearchExpanded(false);
+                  }}
+                  expanded={
+                    <div class="w-52">
+                      <SoupSearchbar variant="secondary" />
+                    </div>
+                  }
+                  collapsed={
+                    <Show when={!narrowSearchExpanded()}>
+                      <Tooltip
+                        tooltip={
+                          <LabelAndHotKey label="Search" shortcut="⌘F" />
+                        }
+                      >
+                        <Button
+                          variant="ghost"
+                          class="p-1 rounded-xs"
+                          onClick={() => setNarrowSearchExpanded(true)}
+                        >
+                          <SearchIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </Show>
+                  }
+                />
+              </Show>
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
-          <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Show when={hasLinkError()}>
+            <EmailPermissionsBanner />
+          </Show>
+          <div
+            class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full"
+            classList={{
+              'pointer-events-none opacity-10': hasLinkError(),
+            }}
+          >
             <Suspense>
               <SoupViewFileDropzone>
                 <SoupViewList />

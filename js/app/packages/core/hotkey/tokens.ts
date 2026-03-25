@@ -90,6 +90,7 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    blockSender: 'email.blockSender',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',
@@ -206,6 +207,7 @@ export const TOKENS = {
     moveUp: 'channel.moveUp',
     moveDown: 'channel.moveDown',
     editMessage: 'channel.editMessage',
+    deleteMessage: 'channel.deleteMessage',
     replyToMessage: 'channel.replyToMessage',
     expandThread: 'channel.expandThread',
     collapseThread: 'channel.collapseThread',
@@ -221,6 +223,7 @@ export const TOKENS = {
     threadCollapse: 'channel.threadCollapse',
     threadReply: 'channel.threadReply',
     threadEditReply: 'channel.threadEditReply',
+    threadDeleteReply: 'channel.threadDeleteReply',
   },
 
   // drawer

@@ -121,6 +121,7 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         channel_type: args.channel_type.into(),
         org_id: args.org_id,
         participants: args.channel_members,
+        team_id: None,
     };
 
     let channel_id = ctx.db.create_channel(options).await?;

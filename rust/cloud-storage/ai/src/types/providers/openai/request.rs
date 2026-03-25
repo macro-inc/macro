@@ -61,7 +61,11 @@ impl ChatCompletionRequest {
 
         CreateChatCompletionRequestArgs::default()
             .stream(stream)
-            .model(self.model.to_string())
+            .model(format!(
+                "{}/{}",
+                self.model.to_provider_model_string().0,
+                self.model
+            ))
             .messages(self.openai_messages())
             .response_format(response_format)
             .build()

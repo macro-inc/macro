@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+document_storage_service_client = { path = "../document_storage_service_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
