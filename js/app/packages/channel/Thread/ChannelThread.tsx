@@ -3,6 +3,7 @@ import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ChannelMessage } from '../Message';
 import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useUserId } from '@core/context/user';
+import { deferredGate } from '@core/util/debounce';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
@@ -25,8 +26,10 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const fetchRepliesEnabled = () => props.data().thread.reply_count > 0;
-
+  const fetchRepliesEnabled = deferredGate(
+    () => props.data().thread.reply_count > 0,
+    300
+  );
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
   const repliesQuery = useThreadRepliesQuery(
