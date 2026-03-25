@@ -179,6 +179,28 @@ impl NotificationRepository for MockNotifRepo {
     ) -> Result<String, Report> {
         unimplemented!()
     }
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        _: &str,
+        _: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+    ) -> Result<std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>, Report>
+    {
+        unimplemented!()
+    }
+    async fn get_notification_type_preferences(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
+        unimplemented!()
+    }
+    async fn set_notification_type_preference(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &str,
+        _: bool,
+    ) -> Result<(), Report> {
+        unimplemented!()
+    }
 }
 
 /// Mock SNS endpoint manager that only implements delete_endpoint.

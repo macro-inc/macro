@@ -245,6 +245,17 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     }
 }
 
+/// A user's preference for a specific notification type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationTypePreference {
+    /// The user who owns this preference.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The notification event type (e.g. "channel_message_send").
+    pub notification_event_type: String,
+    /// Whether this notification type is enabled.
+    pub enabled: bool,
+}
+
 /// Trait that all notification types must implement.
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The type name of this notification.

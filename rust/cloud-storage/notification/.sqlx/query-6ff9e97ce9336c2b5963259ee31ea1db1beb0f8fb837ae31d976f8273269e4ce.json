@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id FROM user_notification_type_preference\n            WHERE notification_event_type = $1 AND enabled = false AND user_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ff9e97ce9336c2b5963259ee31ea1db1beb0f8fb837ae31d976f8273269e4ce"
+}

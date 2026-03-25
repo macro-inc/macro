@@ -21,8 +21,8 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
     DeviceEndpoint, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    NotificationTypePreference, SendNotificationRequestBuilder, UserNotificationRow,
+    android::FCMMessage, apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -193,6 +193,27 @@ pub trait NotificationRepository: Send + Sync + 'static {
     fn delete_device_by_endpoint(
         &self,
         endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Get users (from the given set) who have disabled the specified notification type.
+    fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Get all notification type preferences for a user.
+    fn get_notification_type_preferences(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<NotificationTypePreference>, Report>> + Send;
+
+    /// Set a user's preference for a notification type (upsert).
+    fn set_notification_type_preference(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+        enabled: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

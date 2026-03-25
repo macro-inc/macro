@@ -17,7 +17,8 @@ use crate::domain::models::request::{
     SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, NotificationTypeName, UserNotificationRow,
+    DeviceEndpoint, Notification, NotificationResult, NotificationTypePreference,
+    NotificationTypeName, UserNotificationRow,
 };
 use crate::domain::ports::{
     NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
@@ -116,6 +117,20 @@ pub trait NotificationReader: Send + Sync + 'static {
         device_token: &str,
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Get all notification type preferences for a user.
+    fn get_notification_type_preferences(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<NotificationTypePreference>, Report>> + Send;
+
+    /// Set a user's preference for a specific notification type.
+    fn set_notification_type_preference(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+        enabled: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -238,15 +253,19 @@ where
         req: SendNotificationRequest<'a, T, U>,
     ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
         let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
+        let notification_type = req.req.notification.tag.as_ref();
 
         // Fetch all filter data upfront
-        let (muted_users, unsubscribed_users) = tokio::try_join!(
+        let (muted_users, unsubscribed_users, type_disabled_users) = tokio::try_join!(
             self.repository.get_muted_users(&recipient_ids),
             self.repository
                 .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
+            self.repository
+                .get_users_with_type_disabled(notification_type, &recipient_ids),
         )?;
 
-        let (out, _excluded) = req.update_recipients(muted_users, unsubscribed_users);
+        let (out, _excluded) =
+            req.update_recipients(muted_users, unsubscribed_users, type_disabled_users);
         Ok(out)
     }
 
@@ -706,5 +725,27 @@ where
         self.sns_endpoint.delete_endpoint(&endpoint).await?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_notification_type_preferences(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<NotificationTypePreference>, Report> {
+        self.repository
+            .get_notification_type_preferences(user_id)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_notification_type_preference(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+        enabled: bool,
+    ) -> Result<(), Report> {
+        self.repository
+            .set_notification_type_preference(user_id, notification_event_type, enabled)
+            .await
     }
 }

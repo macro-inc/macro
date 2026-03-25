@@ -28,6 +28,8 @@ pub enum ExclusionReason {
     MutedNotifications,
     /// The recipient has unsubscribed from notifications for this item.
     UnsubscribedFromItem,
+    /// The recipient has disabled this notification type.
+    DisabledNotificationType,
 }
 
 impl ExclusionReason {
@@ -37,6 +39,7 @@ impl ExclusionReason {
             ExclusionReason::IsSender => "User is the sender",
             ExclusionReason::MutedNotifications => "User has muted notifications",
             ExclusionReason::UnsubscribedFromItem => "User has unsubscribed from this item",
+            ExclusionReason::DisabledNotificationType => "User has disabled this notification type",
         }
     }
 }

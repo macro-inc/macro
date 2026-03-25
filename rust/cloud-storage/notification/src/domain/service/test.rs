@@ -339,6 +339,30 @@ impl NotificationRepository for MockRepository {
     async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        _notification_event_type: &str,
+        _user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        Ok(HashSet::new())
+    }
+
+    async fn get_notification_type_preferences(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
+        Ok(vec![])
+    }
+
+    async fn set_notification_type_preference(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _notification_event_type: &str,
+        _enabled: bool,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -500,6 +524,34 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
         (**self).delete_device_by_endpoint(endpoint_arn).await
+    }
+
+    async fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self)
+            .get_users_with_type_disabled(notification_event_type, user_ids)
+            .await
+    }
+
+    async fn get_notification_type_preferences(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::NotificationTypePreference>, Report> {
+        (**self).get_notification_type_preferences(user_id).await
+    }
+
+    async fn set_notification_type_preference(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+        enabled: bool,
+    ) -> Result<(), Report> {
+        (**self)
+            .set_notification_type_preference(user_id, notification_event_type, enabled)
+            .await
     }
 }
 
