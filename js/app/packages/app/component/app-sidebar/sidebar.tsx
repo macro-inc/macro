@@ -40,6 +40,7 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 
 interface SidebarItem {
   id: ListView;
@@ -151,6 +152,31 @@ export const registerSidebarHotkeys = ({
     activateCommandScopeId: GO_TO_COMMAND_SCOPE,
     hide: true,
     registrationType: 'add',
+  });
+
+  const registeredGoToKeys = new Set<ValidHotkey>([
+    ...SIDEBAR_LINKS.filter((link) => !link.standaloneHotkey).map(
+      (link) => link.hotkey
+    ),
+  ]);
+
+  // When the go to command scope is active, we want to prevent
+  // other default hotkeys from running. So doing "g" + some key
+  // not part of the sidebar hotkeys, won't fire the command
+  // for the key
+  useHotkeyInterceptor((context) => {
+    if (context.eventType !== 'keydown' || !hotkeyVisible()) return false;
+
+    if (
+      context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
+      registeredGoToKeys.has(context.pressedKeysString)
+    ) {
+      return false;
+    }
+
+    resetHotkeysState();
+
+    return true;
   });
 
   registerHotkey({
