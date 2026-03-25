@@ -134,3 +134,77 @@ where
         })
     }
 }
+
+/// Extractor that verifies the user has a specific permission, exposing the
+/// user context so the handler doesn't need to extract it again.
+pub struct TeamPremiumUserExtractor<TS: TeamService> {
+    /// The authenticated user context, available for use by the handler.
+    pub user_context: MacroUserExtractor,
+    _ts: PhantomData<TS>,
+}
+
+/// Errors from premium user extraction
+#[derive(Debug, thiserror::Error)]
+pub enum PremiumUserErr {
+    /// User context failed to extract
+    #[error("Internal server error")]
+    UserContextErr,
+    /// Failed to fetch permissions
+    #[error("Failed to fetch permissions")]
+    InternalErr(#[from] crate::domain::model::TeamError),
+    /// User does not have the required permission
+    #[error("User does not have the required permission")]
+    MissingPermission,
+}
+
+impl IntoResponse for PremiumUserErr {
+    fn into_response(self) -> Response {
+        let err = Json(ErrorResponse {
+            message: &self.to_string(),
+        });
+        match self {
+            PremiumUserErr::UserContextErr | PremiumUserErr::InternalErr(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, err)
+            }
+            PremiumUserErr::MissingPermission => (StatusCode::FORBIDDEN, err),
+        }
+        .into_response()
+    }
+}
+
+use roles_and_permissions::domain::model::PermissionId;
+
+/// The permission ID required to create a team.
+const CREATE_TEAM_PERMISSION: PermissionId = PermissionId::ReadProfessionalFeatures;
+
+impl<S, TS> FromRequestParts<S> for TeamPremiumUserExtractor<TS>
+where
+    TeamRouterState<TS>: FromRef<S>,
+    S: Send + Sync + Clone + 'static,
+    TS: TeamService,
+{
+    type Rejection = PremiumUserErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let router_state = TeamRouterState::<TS>::from_ref(state);
+
+        let user_context: MacroUserExtractor = parts
+            .extract()
+            .await
+            .map_err(|_| PremiumUserErr::UserContextErr)?;
+
+        let permissions: std::collections::HashSet<PermissionId> = router_state
+            .service
+            .get_team_user_permissions(&user_context.macro_user_id)
+            .await?;
+
+        if !permissions.contains(&CREATE_TEAM_PERMISSION) {
+            return Err(PremiumUserErr::MissingPermission);
+        }
+
+        Ok(Self {
+            user_context,
+            _ts: PhantomData,
+        })
+    }
+}

@@ -544,4 +544,15 @@ where
     ) -> Result<Option<TeamRole>, TeamError> {
         self.team_repository.get_team_role(team_id, user_id).await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError> {
+        self.user_roles_and_permissions_service
+            .get_user_permissions(user_id)
+            .await
+            .map_err(|e| TeamError::StorageLayerError(e.into()))
+    }
 }

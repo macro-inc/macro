@@ -1,5 +1,7 @@
 //! Contains the domain logic for teams
 
+use std::collections::HashSet;
+
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
@@ -286,4 +288,12 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamRole>, TeamError>> + Send;
+
+    /// Gets the team users permissions
+    fn get_team_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<
+        Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
+    > + Send;
 }
